@@ -24,7 +24,8 @@ This repo runs a local ContextHub MVP that exposes MCP tools (Cursor / Claude Co
    - `npm run smoke-test`
 6. Connect Cursor AI:
    - add MCP server URL: `http://localhost:3000/mcp`
-   - ensure Cursor tool calls include `workspace_token` = your `.env` `CONTEXT_HUB_WORKSPACE_TOKEN`
+   - by default (`MCP_AUTH_ENABLED=false`) you do NOT need to send `workspace_token`
+   - if you set `MCP_AUTH_ENABLED=true`, then send `workspace_token` = your `.env` `CONTEXT_HUB_WORKSPACE_TOKEN`
 
 For step-by-step setup (including Cursor MCP configuration), see: [`docs/QUICKSTART.md`](docs/QUICKSTART.md).
 
@@ -42,6 +43,7 @@ This server exposes:
 ## Troubleshooting
 
 - `Unauthorized: invalid workspace_token`
+  - occurs only when `MCP_AUTH_ENABLED=true`
   - Cursor tool arguments used the wrong token, or the server was started with an older `.env`.
 - Embedding `dimension mismatch`
   - Set `EMBEDDINGS_DIM=1024` and use the matching default model `mixedbread-ai/text-embedding-mxbai-embed-large-v1`.

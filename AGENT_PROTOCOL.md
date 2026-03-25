@@ -9,10 +9,11 @@
 ```
 MCP endpoint:  http://localhost:3000/mcp   (Streamable HTTP / POST)
 project_id:    free-context-hub
-workspace_token: read from .env → key: CONTEXT_HUB_WORKSPACE_TOKEN
+workspace_token: optional; required only if `MCP_AUTH_ENABLED=true` → key: CONTEXT_HUB_WORKSPACE_TOKEN
 ```
 
-All tool calls require `workspace_token` and `project_id` as parameters.
+All tool calls require `project_id` as a parameter.
+`workspace_token` is optional and only needed when `MCP_AUTH_ENABLED=true`.
 
 ---
 
@@ -45,7 +46,7 @@ Do NOT load WHITEPAPER.md unless answering an architectural question unanswered 
 ### `index_project`
 ```
 When:   After significant code changes, or at start of a fresh environment.
-Params: project_id, root (directory path), workspace_token
+Params: project_id, root (directory path), workspace_token (optional; required only if `MCP_AUTH_ENABLED=true`)
         options: { lines_per_chunk?: number, embedding_batch_size?: number }
 Returns: { status: "ok"|"error", files_indexed, duration_ms, errors[] }
 ```
@@ -53,7 +54,7 @@ Returns: { status: "ok"|"error", files_indexed, duration_ms, errors[] }
 ### `search_code`
 ```
 When:   BEFORE using Grep/Glob/Read to find code. Always try this first.
-Params: project_id, query (natural language), workspace_token
+Params: project_id, query (natural language), workspace_token (optional; required only if `MCP_AUTH_ENABLED=true`)
         filters?: { path_glob? }   limit?: number   debug?: boolean
 Returns: { matches: [{ path, start_line, end_line, snippet, score, match_type }], explanations[] }
 Rule:   If matches.length > 0, use those snippets. Only read full file if more context needed.
@@ -62,7 +63,7 @@ Rule:   If matches.length > 0, use those snippets. Only read full file if more c
 ### `get_preferences`
 ```
 When:   Session start (mandatory). Also call if unsure about any team preference.
-Params: project_id, workspace_token
+Params: project_id, workspace_token (optional; required only if `MCP_AUTH_ENABLED=true`)
 Returns: { preferences: [{ lesson_id, lesson_type, title, content, tags, source_refs }] }
 Note:   Returns all lessons tagged "preference-*". Read every item.
 ```
@@ -70,7 +71,7 @@ Note:   Returns all lessons tagged "preference-*". Read every item.
 ### `add_lesson`
 ```
 When:   See Self-Report Protocol (section 4).
-Params: workspace_token
+Params: workspace_token (optional; required only if `MCP_AUTH_ENABLED=true`)
         lesson_payload: {
           project_id, lesson_type, title, content,
           tags?: string[],  source_refs?: string[],  captured_by?: string,
@@ -83,7 +84,7 @@ Returns: { status: "ok", lesson_id }
 ### `check_guardrails`
 ```
 When:   BEFORE: git push, deploy, schema migration, deleting data, force-push.
-Params: workspace_token
+Params: workspace_token (optional; required only if `MCP_AUTH_ENABLED=true`)
         action_context: { action: string, project_id: string }
 Returns: { pass: boolean, rules_checked, needs_confirmation?, prompt?, matched_rules? }
 Rule:   If pass=false → show prompt to user, do NOT proceed without explicit approval.
@@ -93,7 +94,7 @@ Rule:   If pass=false → show prompt to user, do NOT proceed without explicit a
 ### `delete_workspace`
 ```
 When:   ONLY on explicit user instruction.
-Params: project_id, workspace_token
+Params: project_id, workspace_token (optional; required only if `MCP_AUTH_ENABLED=true`)
 Returns: { status, deleted, deleted_project_id }
 Warning: Deletes ALL data (lessons, chunks, guardrails) for the project. Irreversible.
 ```

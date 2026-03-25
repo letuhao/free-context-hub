@@ -22,7 +22,7 @@ Run these steps in order at the start of EVERY session:
 
 Do NOT load `WHITEPAPER.md` unless there is an architectural question not answered by the docs above.
 
-To get `workspace_token`: read `.env` and extract `CONTEXT_HUB_WORKSPACE_TOKEN`.
+`workspace_token` is optional and only needed when `MCP_AUTH_ENABLED=true` (key: `CONTEXT_HUB_WORKSPACE_TOKEN`).
 
 ---
 
@@ -111,7 +111,7 @@ If any architectural decisions were made during the session, call `add_lesson` B
 ```
 project_id:    free-context-hub
 mcp_url:       http://localhost:3000/mcp
-workspace_token: read from .env → CONTEXT_HUB_WORKSPACE_TOKEN
+workspace_token: optional; required only if `MCP_AUTH_ENABLED=true` → CONTEXT_HUB_WORKSPACE_TOKEN
 db:            PostgreSQL + pgvector (vector dim: 1024)
 embedding:     mxbai-embed-large-v1 via LM Studio (localhost:1234)
 ```

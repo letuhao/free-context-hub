@@ -14,7 +14,7 @@
   - M02 (Ingestion/Indexing) có discovery + ignore/secret-aware + chunk theo dòng + embedding + ghi `chunks`/`files`.
   - M03 (Retrieval) có semantic search (pgvector cosine via `<=>`) + filter `path_glob`.
   - M05 (Guardrails) có trigger match (exact + regex dạng `/.../`) + audit log.
-  - M01 (MCP Interface) có 6 tools và auth theo `workspace_token`:
+  - M01 (MCP Interface) có 6 tools và auth theo `workspace_token` (chỉ khi `MCP_AUTH_ENABLED=true`):
     `index_project`, `search_code`, `get_preferences`, `add_lesson`, `check_guardrails`, `delete_workspace`.
 - `docker-compose.yml` + migration `migrations/0001_init.sql` đã được thêm và chạy được.
 - Tool response format đã được mở rộng theo parameter `output_format` trong `[src/index.ts](src/index.ts)` để hỗ trợ nhiều model/client:
@@ -28,7 +28,7 @@
 3. Blocker hiện tại (environment wiring)
    - `npm run smoke-test` đôi lúc fail với:
      `MCP error -32602: Unauthorized: invalid workspace_token`
-   - Nguyên nhân hiện tại: MCP server đang chạy nền có thể đang dùng `CONTEXT_HUB_WORKSPACE_TOKEN` khác với token trong `.env` (smoke-test luôn đọc token từ `.env`).
+   - Nguyên nhân hiện tại (khi `MCP_AUTH_ENABLED=true`): MCP server đang chạy nền có thể đang dùng `CONTEXT_HUB_WORKSPACE_TOKEN` khác với token trong `.env` (smoke-test luôn đọc token từ `.env`).
 
 4. Backlog V1 (non-blocking): debug field misleading
    - `src/services/guardrails.ts` trả `rules_checked: 0` trong nhánh “có rules nhưng không match trigger”.
@@ -38,13 +38,13 @@
 - Các fixes MVP cho indexing đã được áp dụng:
   - M02 reorder: embed/chunks trước, chỉ update `files` + delete/insert chunks khi embedding thành công.
   - Incremental guard: nếu `files.content_hash` không đổi thì chỉ skip khi `chunks` đã tồn tại.
-- Fix immediate cho blocker hiện tại (token mismatch):
+- Fix immediate cho blocker hiện tại (token mismatch khi auth bật):
   - Restart MCP server đang chạy nền để nó đọc đúng `CONTEXT_HUB_WORKSPACE_TOKEN` từ `.env`.
   - Sau restart, chạy lại `npm run smoke-test` để xác nhận auth/integration ổn định.
 
 ## Notes
 - Docs embedding model đã được đồng bộ với code/schema đang dùng: `mixedbread-ai/text-embedding-mxbai-embed-large-v1` (1024 dims).
-- DEC-003 (chunking line-based) và DEC-004 (bearer token auth) hiện đã được ghi “resolved” nhất quán giữa `SESSION_PATCH.md` và các docs context.
+- DEC-003 (chunking line-based) và DEC-004 (bearer token auth) hiện đã được ghi “resolved” nhất quán giữa `SESSION_PATCH.md` và các docs context (auth bật/tắt qua `MCP_AUTH_ENABLED`).
 
 ## Success Criteria (DoD retrieval verification)
 - Chạy lại `npm run smoke-test` và kỳ vọng:

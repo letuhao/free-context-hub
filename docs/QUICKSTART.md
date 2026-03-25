@@ -33,7 +33,8 @@ copy .env.example .env
 
 Edit `.env` and ensure:
 
-- `CONTEXT_HUB_WORKSPACE_TOKEN` is set (this token is required for every MCP tool call)
+  - `MCP_AUTH_ENABLED=false` (default) to NOT require `workspace_token` on MCP tool calls
+  - If you set `MCP_AUTH_ENABLED=true`, then `CONTEXT_HUB_WORKSPACE_TOKEN` must be set
 - `EMBEDDINGS_BASE_URL` points to your embeddings server (default: `http://127.0.0.1:1234`)
 - `EMBEDDINGS_MODEL` matches the DB embedding dimension (current MVP default is `mixedbread-ai/text-embedding-mxbai-embed-large-v1` with `EMBEDDINGS_DIM=1024`)
 
@@ -82,19 +83,18 @@ Cursor connects to MCP servers via configuration.
    - Transport: Streamable HTTP (if you need to pick)
 3. Restart Cursor after adding the server (Cursor caches MCP configs).
 
-### Important: `workspace_token` is required per tool call
+### Important: `workspace_token` is optional (required only if auth enabled)
 
-This repo validates the token inside tool arguments (it is checked by `assertWorkspaceToken()` in the MCP server).
+This repo validates the token inside tool arguments (it is checked by `assertWorkspaceToken()` in the MCP server) only when `MCP_AUTH_ENABLED=true`.
 
 So when Cursor calls any tool, the arguments must include:
 
-- `workspace_token`: your `.env` value of `CONTEXT_HUB_WORKSPACE_TOKEN`
+-- `workspace_token` (optional): your `.env` value of `CONTEXT_HUB_WORKSPACE_TOKEN` (required only if `MCP_AUTH_ENABLED=true`)
 
 Example arguments (shape):
 
 ```json
 {
-  "workspace_token": "YOUR_CONTEXT_HUB_WORKSPACE_TOKEN",
   "project_id": "demo-project-A",
   "root": "D:/your/repo"
 }
@@ -104,7 +104,7 @@ Example arguments (shape):
 
 `index_project`
 
-- `workspace_token`
+- `workspace_token` (optional; required only if `MCP_AUTH_ENABLED=true`)
 - `project_id`
 - `root`
 - `options.lines_per_chunk` (default: `120`)
@@ -112,7 +112,7 @@ Example arguments (shape):
 
 `search_code`
 
-- `workspace_token`
+- `workspace_token` (optional; required only if `MCP_AUTH_ENABLED=true`)
 - `project_id`
 - `query`
 - `filters.path_glob` (optional)
@@ -120,12 +120,12 @@ Example arguments (shape):
 
 `get_preferences`
 
-- `workspace_token`
+- `workspace_token` (optional; required only if `MCP_AUTH_ENABLED=true`)
 - `project_id`
 
 `add_lesson`
 
-- `workspace_token`
+- `workspace_token` (optional; required only if `MCP_AUTH_ENABLED=true`)
 - `lesson_payload.project_id`
 - `lesson_payload.lesson_type` (`decision | preference | guardrail | workaround | general_note`)
 - `lesson_payload.title`
@@ -136,19 +136,20 @@ Example arguments (shape):
 
 `check_guardrails`
 
-- `workspace_token`
+- `workspace_token` (optional; required only if `MCP_AUTH_ENABLED=true`)
 - `action_context.action` (e.g. `git push`)
 - `action_context.project_id` (or `action_context.workspace`)
 
 `delete_workspace`
 
-- `workspace_token`
+- `workspace_token` (optional; required only if `MCP_AUTH_ENABLED=true`)
 - `project_id`
 
 ## Troubleshooting
 
 ### `Unauthorized: invalid workspace_token`
 
+- occurs only when `MCP_AUTH_ENABLED=true`
 - Your Cursor config or tool arguments use the wrong token.
 - Ensure `CONTEXT_HUB_WORKSPACE_TOKEN` matches the token you pass as `workspace_token`.
 - If the server was started with an older `.env`, restart the MCP server.

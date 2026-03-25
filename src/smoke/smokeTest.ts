@@ -49,7 +49,9 @@ function extractFirstTextJson(result: any) {
 }
 
 async function main() {
-  const token = getEnvOrThrow('CONTEXT_HUB_WORKSPACE_TOKEN');
+  const mcpAuthEnabled = (process.env.MCP_AUTH_ENABLED ?? 'false').toLowerCase() === 'true';
+  const token = mcpAuthEnabled ? getEnvOrThrow('CONTEXT_HUB_WORKSPACE_TOKEN') : undefined;
+  const tokenArgs = mcpAuthEnabled ? { workspace_token: token as string } : {};
   const projectIdA = process.env.SMOKE_PROJECT_ID_A ?? 'demo-project-A';
   const projectIdB = process.env.SMOKE_PROJECT_ID_B ?? 'demo-project-B';
   const root = process.env.SMOKE_ROOT ?? process.cwd();
@@ -85,7 +87,7 @@ async function main() {
       params: {
         name: 'index_project',
         arguments: {
-          workspace_token: token,
+          ...tokenArgs,
           project_id: projectIdA,
           root,
           options: {
@@ -107,7 +109,7 @@ async function main() {
       params: {
         name: 'index_project',
         arguments: {
-          workspace_token: token,
+          ...tokenArgs,
           project_id: projectIdB,
           root,
           options: {
@@ -129,7 +131,7 @@ async function main() {
       params: {
         name: 'search_code',
         arguments: {
-          workspace_token: token,
+          ...tokenArgs,
           project_id: projectIdA,
           query: 'guardrails',
           filters: { path_glob: 'docs/**/*.md' },
@@ -149,7 +151,7 @@ async function main() {
       params: {
         name: 'search_code',
         arguments: {
-          workspace_token: token,
+          ...tokenArgs,
           project_id: projectIdB,
           query: 'guardrails',
           filters: { path_glob: 'docs/**/*.md' },
@@ -177,7 +179,7 @@ async function main() {
       params: {
         name: 'add_lesson',
         arguments: {
-          workspace_token: token,
+          ...tokenArgs,
           lesson_payload: {
             project_id: projectIdA,
             lesson_type: 'preference',
@@ -199,7 +201,7 @@ async function main() {
       params: {
         name: 'add_lesson',
         arguments: {
-          workspace_token: token,
+          ...tokenArgs,
           lesson_payload: {
             project_id: projectIdB,
             lesson_type: 'preference',
@@ -221,7 +223,7 @@ async function main() {
       params: {
         name: 'get_preferences',
         arguments: {
-          workspace_token: token,
+          ...tokenArgs,
           project_id: projectIdA,
         },
       },
@@ -238,7 +240,7 @@ async function main() {
       params: {
         name: 'get_preferences',
         arguments: {
-          workspace_token: token,
+          ...tokenArgs,
           project_id: projectIdB,
         },
       },
@@ -263,7 +265,7 @@ async function main() {
       params: {
         name: 'add_lesson',
         arguments: {
-          workspace_token: token,
+          ...tokenArgs,
           lesson_payload: {
             project_id: projectIdA,
             lesson_type: 'guardrail',
@@ -289,7 +291,7 @@ async function main() {
       params: {
         name: 'check_guardrails',
         arguments: {
-          workspace_token: token,
+          ...tokenArgs,
           action_context: { action: 'git push', workspace: projectIdA },
         },
       },
@@ -306,7 +308,7 @@ async function main() {
       params: {
         name: 'delete_workspace',
         arguments: {
-          workspace_token: token,
+          ...tokenArgs,
           project_id: projectIdA,
         },
       },
@@ -321,7 +323,7 @@ async function main() {
       params: {
         name: 'get_preferences',
         arguments: {
-          workspace_token: token,
+          ...tokenArgs,
           project_id: projectIdA,
         },
       },
@@ -342,7 +344,7 @@ async function main() {
       params: {
         name: 'get_preferences',
         arguments: {
-          workspace_token: token,
+          ...tokenArgs,
           project_id: projectIdB,
         },
       },
@@ -363,7 +365,7 @@ async function main() {
       params: {
         name: 'search_code',
         arguments: {
-          workspace_token: token,
+          ...tokenArgs,
           project_id: projectIdA,
           query: 'guardrails',
           filters: { path_glob: 'docs/**/*.md' },
@@ -387,7 +389,7 @@ async function main() {
       params: {
         name: 'search_code',
         arguments: {
-          workspace_token: token,
+          ...tokenArgs,
           project_id: projectIdB,
           query: 'guardrails',
           filters: { path_glob: 'docs/**/*.md' },

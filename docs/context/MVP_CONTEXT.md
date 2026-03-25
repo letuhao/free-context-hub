@@ -37,7 +37,7 @@ MCP layer wraps all. Retrieval is query-only. Guardrails are last enforcer.
 | ID | Decision Needed | Status |
 |---|---|---|
 | DEC-003 | Chunking strategy: file-boundary vs AST-aware semantic chunks | resolved (MVP uses line-based chunks; `lines_per_chunk` configurable) |
-| DEC-004 | Auth mechanism for MCP workspace tokens | resolved (bearer token via `CONTEXT_HUB_WORKSPACE_TOKEN`) |
+| DEC-004 | Auth mechanism for MCP workspace tokens | resolved (token via `CONTEXT_HUB_WORKSPACE_TOKEN`, optional by default via `MCP_AUTH_ENABLED`) |
 
 ## Risk Register (open only)
 | ID | Risk | Severity | Mitigation |

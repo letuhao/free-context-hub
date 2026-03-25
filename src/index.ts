@@ -50,9 +50,11 @@ function formatToolResponse<T>(
   };
 }
 
-function assertWorkspaceToken(token: string) {
+function assertWorkspaceToken(token?: string) {
   const env = getEnv();
-  if (token !== env.CONTEXT_HUB_WORKSPACE_TOKEN) {
+  if (!env.MCP_AUTH_ENABLED) return;
+
+  if (!token || token !== env.CONTEXT_HUB_WORKSPACE_TOKEN) {
     // MCP clients will surface this as a tool error.
     throw new McpError(ErrorCode.InvalidParams, 'Unauthorized: invalid workspace_token');
   }
@@ -73,7 +75,10 @@ function createMcpToolsServer() {
     {
       description: 'Idempotent project indexing: discovers files, chunks, embeds, and stores vectors.',
       inputSchema: z.object({
-        workspace_token: z.string().describe('MVP workspace token'),
+        workspace_token: z
+          .string()
+          .optional()
+          .describe('MVP workspace token (required only if MCP_AUTH_ENABLED=true)'),
         project_id: z.string().describe('Project identifier (scoped memory)').min(1),
         root: z.string().describe('Root directory path to index').min(1),
         output_format: OutputFormatSchema.default('auto_both'),
@@ -114,7 +119,7 @@ function createMcpToolsServer() {
     {
       description: 'Semantic code search over indexed chunks using vector similarity.',
       inputSchema: z.object({
-        workspace_token: z.string(),
+        workspace_token: z.string().optional(),
         project_id: z.string().min(1),
         query: z.string().min(1),
         filters: z
@@ -159,7 +164,7 @@ function createMcpToolsServer() {
     {
       description: 'Fetch preference lessons (tags: preference-*) for a project.',
       inputSchema: z.object({
-        workspace_token: z.string(),
+        workspace_token: z.string().optional(),
         project_id: z.string().min(1),
         output_format: OutputFormatSchema.default('auto_both'),
       }),
@@ -193,7 +198,7 @@ function createMcpToolsServer() {
     {
       description: 'Capture a decision/preference/guardrail/workaround/general_note as a durable lesson.',
       inputSchema: z.object({
-        workspace_token: z.string(),
+        workspace_token: z.string().optional(),
         lesson_payload: z.object({
           project_id: z.string().min(1),
           lesson_type: z.enum(['decision', 'preference', 'guardrail', 'workaround', 'general_note']),
@@ -230,7 +235,7 @@ function createMcpToolsServer() {
     {
       description: 'Evaluate guardrails before risky actions.',
       inputSchema: z.object({
-        workspace_token: z.string(),
+        workspace_token: z.string().optional(),
         action_context: z
           .object({
             // Some clients might use `workspace` as the project identifier.
@@ -275,7 +280,7 @@ function createMcpToolsServer() {
     {
       description: 'Delete all ContextHub data for the given project_id (lessons, chunks, guardrails, etc.).',
       inputSchema: z.object({
-        workspace_token: z.string(),
+        workspace_token: z.string().optional(),
         project_id: z.string().min(1),
         output_format: OutputFormatSchema.default('auto_both'),
       }),

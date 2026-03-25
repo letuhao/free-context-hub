@@ -25,7 +25,7 @@ npm run smoke-test
 ## Known Issues (non-blocking, post-MVP backlog)
 - `rules_checked: 0` when rules exist but none matched → misleading, should be `checked.length` (see M05 brief)
 - DEC-003 (chunking strategy) resolved by default: line-based, 120 lines/chunk, configurable via `lines_per_chunk`
-- DEC-004 (auth mechanism) resolved: bearer token via `CONTEXT_HUB_WORKSPACE_TOKEN` env var
+- DEC-004 (auth mechanism) resolved: bearer token via `CONTEXT_HUB_WORKSPACE_TOKEN` env var (optional by default via `MCP_AUTH_ENABLED`)
 
 ## Context to Load This Session
 - Tier 0: `docs/context/PROJECT_INVARIANTS.md`
