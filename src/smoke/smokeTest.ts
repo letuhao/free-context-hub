@@ -26,7 +26,8 @@ function extractFirstTextJson(result: any) {
 
 async function main() {
   const token = getEnvOrThrow('CONTEXT_HUB_WORKSPACE_TOKEN');
-  const projectId = process.env.SMOKE_PROJECT_ID ?? 'demo-project';
+  const projectIdA = process.env.SMOKE_PROJECT_ID_A ?? 'demo-project-A';
+  const projectIdB = process.env.SMOKE_PROJECT_ID_B ?? 'demo-project-B';
   const root = process.env.SMOKE_ROOT ?? process.cwd();
   const serverUrl = process.env.MCP_SERVER_URL ?? 'http://localhost:3000/mcp';
 
@@ -53,14 +54,15 @@ async function main() {
   }
 
   console.log('[smoke] index_project...');
-  const indexedResult = await client.request(
+  console.log(`[smoke] index_project(A=${projectIdA})...`);
+  const indexedResultA = await client.request(
     {
       method: 'tools/call',
       params: {
         name: 'index_project',
         arguments: {
           workspace_token: token,
-          project_id: projectId,
+          project_id: projectIdA,
           root,
           options: {
             lines_per_chunk: 120,
@@ -71,18 +73,40 @@ async function main() {
     },
     CallToolResultSchema,
   );
-  const indexedJson = extractFirstTextJson(indexedResult);
-  console.log('[smoke] index_project result:', indexedJson);
+  const indexedJsonA = extractFirstTextJson(indexedResultA);
+  console.log('[smoke] index_project(A) result:', indexedJsonA);
 
-  console.log('[smoke] search_code...');
-  const searchResult = await client.request(
+  console.log(`[smoke] index_project(B=${projectIdB})...`);
+  const indexedResultB = await client.request(
+    {
+      method: 'tools/call',
+      params: {
+        name: 'index_project',
+        arguments: {
+          workspace_token: token,
+          project_id: projectIdB,
+          root,
+          options: {
+            lines_per_chunk: 120,
+            embedding_batch_size: 8,
+          },
+        },
+      },
+    },
+    CallToolResultSchema,
+  );
+  const indexedJsonB = extractFirstTextJson(indexedResultB);
+  console.log('[smoke] index_project(B) result:', indexedJsonB);
+
+  console.log('[smoke] search_code (before delete)...');
+  const searchResultA = await client.request(
     {
       method: 'tools/call',
       params: {
         name: 'search_code',
         arguments: {
           workspace_token: token,
-          project_id: projectId,
+          project_id: projectIdA,
           query: 'guardrails',
           filters: { path_glob: 'docs/**/*.md' },
           limit: 3,
@@ -91,10 +115,38 @@ async function main() {
     },
     CallToolResultSchema,
   );
-  const searchJson = extractFirstTextJson(searchResult);
-  console.log('[smoke] search_code matches:', searchJson.matches?.length ?? 0);
+  const searchJsonA = extractFirstTextJson(searchResultA);
+  const matchesBeforeA = searchJsonA.matches?.length ?? 0;
+  console.log('[smoke] search_code matches (A):', matchesBeforeA);
 
-  console.log('[smoke] add_lesson (preference)...');
+  const searchResultB = await client.request(
+    {
+      method: 'tools/call',
+      params: {
+        name: 'search_code',
+        arguments: {
+          workspace_token: token,
+          project_id: projectIdB,
+          query: 'guardrails',
+          filters: { path_glob: 'docs/**/*.md' },
+          limit: 3,
+        },
+      },
+    },
+    CallToolResultSchema,
+  );
+  const searchJsonB = extractFirstTextJson(searchResultB);
+  const matchesBeforeB = searchJsonB.matches?.length ?? 0;
+  console.log('[smoke] search_code matches (B):', matchesBeforeB);
+
+  if (matchesBeforeA === 0) {
+    throw new Error(`Precondition failed: search_code matches for project A is 0 (projectIdA=${projectIdA})`);
+  }
+  if (matchesBeforeB === 0) {
+    throw new Error(`Precondition failed: search_code matches for project B is 0 (projectIdB=${projectIdB})`);
+  }
+
+  console.log('[smoke] add_lesson (preference) for A...');
   await client.request(
     {
       method: 'tools/call',
@@ -103,7 +155,7 @@ async function main() {
         arguments: {
           workspace_token: token,
           lesson_payload: {
-            project_id: projectId,
+            project_id: projectIdA,
             lesson_type: 'preference',
             title: 'Use TypeScript',
             content: 'We use strict TypeScript for all services.',
@@ -116,24 +168,7 @@ async function main() {
     CallToolResultSchema,
   );
 
-  console.log('[smoke] get_preferences...');
-  const prefsResult = await client.request(
-    {
-      method: 'tools/call',
-      params: {
-        name: 'get_preferences',
-        arguments: {
-          workspace_token: token,
-          project_id: projectId,
-        },
-      },
-    },
-    CallToolResultSchema,
-  );
-  const prefsJson = extractFirstTextJson(prefsResult);
-  console.log('[smoke] preferences:', prefsJson.preferences?.length ?? 0);
-
-  console.log('[smoke] add_lesson (guardrail)...');
+  console.log('[smoke] add_lesson (preference) for B...');
   await client.request(
     {
       method: 'tools/call',
@@ -142,7 +177,71 @@ async function main() {
         arguments: {
           workspace_token: token,
           lesson_payload: {
-            project_id: projectId,
+            project_id: projectIdB,
+            lesson_type: 'preference',
+            title: 'Use PostgreSQL',
+            content: 'We store metadata in PostgreSQL.',
+            tags: ['preference-postgres'],
+            source_refs: ['smoke-test'],
+          },
+        },
+      },
+    },
+    CallToolResultSchema,
+  );
+
+  console.log('[smoke] get_preferences (before delete)...');
+  const prefsResultA = await client.request(
+    {
+      method: 'tools/call',
+      params: {
+        name: 'get_preferences',
+        arguments: {
+          workspace_token: token,
+          project_id: projectIdA,
+        },
+      },
+    },
+    CallToolResultSchema,
+  );
+  const prefsJsonA = extractFirstTextJson(prefsResultA);
+  const prefsCountBeforeA = prefsJsonA.preferences?.length ?? 0;
+  console.log('[smoke] preferences (A):', prefsCountBeforeA);
+
+  const prefsResultB = await client.request(
+    {
+      method: 'tools/call',
+      params: {
+        name: 'get_preferences',
+        arguments: {
+          workspace_token: token,
+          project_id: projectIdB,
+        },
+      },
+    },
+    CallToolResultSchema,
+  );
+  const prefsJsonB = extractFirstTextJson(prefsResultB);
+  const prefsCountBeforeB = prefsJsonB.preferences?.length ?? 0;
+  console.log('[smoke] preferences (B):', prefsCountBeforeB);
+
+  if (prefsCountBeforeA === 0) {
+    throw new Error(`Precondition failed: get_preferences for project A is empty (projectIdA=${projectIdA})`);
+  }
+  if (prefsCountBeforeB === 0) {
+    throw new Error(`Precondition failed: get_preferences for project B is empty (projectIdB=${projectIdB})`);
+  }
+
+  console.log('[smoke] add_lesson (guardrail) for A...');
+  await client.request(
+    {
+      method: 'tools/call',
+      params: {
+        name: 'add_lesson',
+        arguments: {
+          workspace_token: token,
+          lesson_payload: {
+            project_id: projectIdA,
             lesson_type: 'guardrail',
             title: 'No push without tests',
             content: 'Do not push without running tests.',
@@ -159,7 +258,7 @@ async function main() {
     CallToolResultSchema,
   );
 
-  console.log('[smoke] check_guardrails...');
+  console.log('[smoke] check_guardrails for A...');
   const guardResult = await client.request(
     {
       method: 'tools/call',
@@ -167,7 +266,7 @@ async function main() {
         name: 'check_guardrails',
         arguments: {
           workspace_token: token,
-          action_context: { action: 'git push', workspace: projectId },
+          action_context: { action: 'git push', workspace: projectIdA },
         },
       },
     },
@@ -176,7 +275,7 @@ async function main() {
   const guardJson = extractFirstTextJson(guardResult);
   console.log('[smoke] check_guardrails result:', guardJson);
 
-  console.log('[smoke] delete_workspace...');
+  console.log('[smoke] delete_workspace (only for A)...');
   await client.request(
     {
       method: 'tools/call',
@@ -184,43 +283,64 @@ async function main() {
         name: 'delete_workspace',
         arguments: {
           workspace_token: token,
-          project_id: projectId,
+          project_id: projectIdA,
         },
       },
     },
     CallToolResultSchema,
   );
 
-  console.log('[smoke] get_preferences after delete (expect 0)...');
-  const prefsAfterResult = await client.request(
+  console.log('[smoke] get_preferences after delete (A expect 0)...');
+  const prefsAfterResultA = await client.request(
     {
       method: 'tools/call',
       params: {
         name: 'get_preferences',
         arguments: {
           workspace_token: token,
-          project_id: projectId,
+          project_id: projectIdA,
         },
       },
     },
     CallToolResultSchema,
   );
-  const prefsAfterJson = extractFirstTextJson(prefsAfterResult);
-  const prefsCountAfter = prefsAfterJson.preferences?.length ?? 0;
-  console.log('[smoke] preferences after delete:', prefsCountAfter);
-  if (prefsCountAfter !== 0) {
-    throw new Error(`delete_workspace did not fully clear lessons for project_id=${projectId}`);
+  const prefsAfterJsonA = extractFirstTextJson(prefsAfterResultA);
+  const prefsCountAfterA = prefsAfterJsonA.preferences?.length ?? 0;
+  console.log('[smoke] preferences after delete (A):', prefsCountAfterA);
+  if (prefsCountAfterA !== 0) {
+    throw new Error(`delete_workspace did not fully clear lessons for projectIdA=${projectIdA}`);
   }
 
-  console.log('[smoke] search_code after delete (expect matches=0)...');
-  const searchAfterResult = await client.request(
+  console.log('[smoke] get_preferences after delete (B should remain >0)...');
+  const prefsAfterResultB = await client.request(
+    {
+      method: 'tools/call',
+      params: {
+        name: 'get_preferences',
+        arguments: {
+          workspace_token: token,
+          project_id: projectIdB,
+        },
+      },
+    },
+    CallToolResultSchema,
+  );
+  const prefsAfterJsonB = extractFirstTextJson(prefsAfterResultB);
+  const prefsCountAfterB = prefsAfterJsonB.preferences?.length ?? 0;
+  console.log('[smoke] preferences after delete (B):', prefsCountAfterB);
+  if (prefsCountAfterB === 0) {
+    throw new Error(`delete_workspace incorrectly cleared lessons for projectIdB=${projectIdB}`);
+  }
+
+  console.log('[smoke] search_code after delete (A expect matches=0)...');
+  const searchAfterResultA = await client.request(
     {
       method: 'tools/call',
       params: {
         name: 'search_code',
         arguments: {
           workspace_token: token,
-          project_id: projectId,
+          project_id: projectIdA,
           query: 'guardrails',
           filters: { path_glob: 'docs/**/*.md' },
           limit: 3,
@@ -229,11 +349,35 @@ async function main() {
     },
     CallToolResultSchema,
   );
-  const searchAfterJson = extractFirstTextJson(searchAfterResult);
-  const matchesAfter = searchAfterJson.matches?.length ?? 0;
-  console.log('[smoke] matches after delete:', matchesAfter);
-  if (matchesAfter !== 0) {
-    throw new Error(`delete_workspace did not fully clear chunks for project_id=${projectId}`);
+  const searchAfterJsonA = extractFirstTextJson(searchAfterResultA);
+  const matchesAfterA = searchAfterJsonA.matches?.length ?? 0;
+  console.log('[smoke] matches after delete (A):', matchesAfterA);
+  if (matchesAfterA !== 0) {
+    throw new Error(`delete_workspace did not fully clear chunks for projectIdA=${projectIdA}`);
+  }
+
+  console.log('[smoke] search_code after delete (B should remain >0)...');
+  const searchAfterResultB = await client.request(
+    {
+      method: 'tools/call',
+      params: {
+        name: 'search_code',
+        arguments: {
+          workspace_token: token,
+          project_id: projectIdB,
+          query: 'guardrails',
+          filters: { path_glob: 'docs/**/*.md' },
+          limit: 3,
+        },
+      },
+    },
+    CallToolResultSchema,
+  );
+  const searchAfterJsonB = extractFirstTextJson(searchAfterResultB);
+  const matchesAfterB = searchAfterJsonB.matches?.length ?? 0;
+  console.log('[smoke] matches after delete (B):', matchesAfterB);
+  if (matchesAfterB === 0) {
+    throw new Error(`delete_workspace incorrectly cleared chunks for projectIdB=${projectIdB}`);
   }
 
   await transport.close();

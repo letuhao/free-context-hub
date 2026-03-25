@@ -257,8 +257,6 @@ async function main() {
   const env = getEnv();
   await applyMigrations();
 
-  const server = createMcpToolsServer();
-
   const app = createMcpExpressApp();
   const transports: Record<string, StreamableHTTPServerTransport> = {};
 
@@ -272,6 +270,9 @@ async function main() {
       if (sessionId && transports[String(sessionId)]) {
         transport = transports[String(sessionId)];
       } else if (!sessionId && isInitializeRequest(req.body)) {
+        // MCP SDK requires a Protocol/McpServer instance to be connected to a single transport.
+        // For each new initialization (new transport/session), create a fresh server instance.
+        const server = createMcpToolsServer();
         transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: () => randomUUID(),
           enableJsonResponse: useJsonResponse,
@@ -295,7 +296,7 @@ async function main() {
 
       await transport.handleRequest(req as any, res as any, req.body);
     } catch (error) {
-      console.error('[mcp] error', error);
+      console.log('[mcp] error', error);
       if (!res.headersSent) {
         res.status(500).json({
           jsonrpc: '2.0',
