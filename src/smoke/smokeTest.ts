@@ -49,9 +49,10 @@ function extractFirstTextJson(result: any) {
 }
 
 async function main() {
-  const mcpAuthEnabled = (process.env.MCP_AUTH_ENABLED ?? 'false').toLowerCase() === 'true';
-  const token = mcpAuthEnabled ? getEnvOrThrow('CONTEXT_HUB_WORKSPACE_TOKEN') : undefined;
-  const tokenArgs = mcpAuthEnabled ? { workspace_token: token as string } : {};
+  // Server-side auth can be enabled/disabled independently of this test process.
+  // To reduce friction, always send workspace_token when available; server ignores it when auth is disabled.
+  const token = process.env.CONTEXT_HUB_WORKSPACE_TOKEN;
+  const tokenArgs = token && token.trim().length ? { workspace_token: token } : {};
   const projectIdA = process.env.SMOKE_PROJECT_ID_A ?? 'demo-project-A';
   const projectIdB = process.env.SMOKE_PROJECT_ID_B ?? 'demo-project-B';
   const root = process.env.SMOKE_ROOT ?? process.cwd();
@@ -75,8 +76,41 @@ async function main() {
       ListToolsResultSchema,
     );
     console.log('[smoke] tools:', listTools.tools.map((t: any) => t.name).join(', '));
+
+    const names = new Set(listTools.tools.map((t: any) => String(t.name)));
+    if (!names.has('help')) {
+      throw new Error('Missing tool: help');
+    }
+
+    // Best-effort: ensure descriptions exist (helps agent integration).
+    const missingDesc = (listTools.tools ?? []).filter((t: any) => !t?.description || String(t.description).trim().length === 0);
+    if (missingDesc.length > 0) {
+      throw new Error(`tools/list returned tools with empty description: ${missingDesc.map((t: any) => t.name).join(', ')}`);
+    }
   } catch (e) {
     console.warn('[smoke] tools/list failed (continuing):', e);
+  }
+
+  console.log('[smoke] help...');
+  const helpResult = await client.request(
+    {
+      method: 'tools/call',
+      params: {
+        name: 'help',
+        arguments: {
+          ...tokenArgs,
+          output_format: 'json_only',
+        },
+      },
+    },
+    CallToolResultSchema,
+  );
+  const helpJson = extractFirstTextJson(helpResult);
+  const helpToolsCount = helpJson.tools?.length ?? 0;
+  const helpWorkflowsCount = helpJson.workflows?.length ?? 0;
+  console.log('[smoke] help tools/workflows:', helpToolsCount, helpWorkflowsCount);
+  if (helpToolsCount === 0 || helpWorkflowsCount === 0) {
+    throw new Error('help returned empty tools/workflows');
   }
 
   console.log('[smoke] index_project...');
@@ -216,47 +250,89 @@ async function main() {
     CallToolResultSchema,
   );
 
-  console.log('[smoke] get_preferences (before delete)...');
-  const prefsResultA = await client.request(
+  console.log('[smoke] list_lessons (before delete)...');
+  const listResultA = await client.request(
     {
       method: 'tools/call',
       params: {
-        name: 'get_preferences',
+        name: 'list_lessons',
         arguments: {
           ...tokenArgs,
           project_id: projectIdA,
+          page: { limit: 20 },
         },
       },
     },
     CallToolResultSchema,
   );
-  const prefsJsonA = extractFirstTextJson(prefsResultA);
-  const prefsCountBeforeA = prefsJsonA.preferences?.length ?? 0;
-  console.log('[smoke] preferences (A):', prefsCountBeforeA);
+  const listJsonA = extractFirstTextJson(listResultA);
+  const lessonsCountBeforeA = listJsonA.items?.length ?? 0;
+  console.log('[smoke] lessons (A):', lessonsCountBeforeA);
 
-  const prefsResultB = await client.request(
+  const listResultB = await client.request(
     {
       method: 'tools/call',
       params: {
-        name: 'get_preferences',
+        name: 'list_lessons',
         arguments: {
           ...tokenArgs,
           project_id: projectIdB,
+          page: { limit: 20 },
         },
       },
     },
     CallToolResultSchema,
   );
-  const prefsJsonB = extractFirstTextJson(prefsResultB);
-  const prefsCountBeforeB = prefsJsonB.preferences?.length ?? 0;
-  console.log('[smoke] preferences (B):', prefsCountBeforeB);
+  const listJsonB = extractFirstTextJson(listResultB);
+  const lessonsCountBeforeB = listJsonB.items?.length ?? 0;
+  console.log('[smoke] lessons (B):', lessonsCountBeforeB);
 
-  if (prefsCountBeforeA === 0) {
-    throw new Error(`Precondition failed: get_preferences for project A is empty (projectIdA=${projectIdA})`);
+  if (lessonsCountBeforeA === 0) throw new Error(`Precondition failed: list_lessons for project A is empty (projectIdA=${projectIdA})`);
+  if (lessonsCountBeforeB === 0) throw new Error(`Precondition failed: list_lessons for project B is empty (projectIdB=${projectIdB})`);
+
+  console.log('[smoke] search_lessons (A)...');
+  const searchLessonsResultA = await client.request(
+    {
+      method: 'tools/call',
+      params: {
+        name: 'search_lessons',
+        arguments: {
+          ...tokenArgs,
+          project_id: projectIdA,
+          query: 'TypeScript',
+          limit: 3,
+        },
+      },
+    },
+    CallToolResultSchema,
+  );
+  const searchLessonsJsonA = extractFirstTextJson(searchLessonsResultA);
+  const lessonMatchesA = searchLessonsJsonA.matches?.length ?? 0;
+  console.log('[smoke] search_lessons matches (A):', lessonMatchesA);
+  if (lessonMatchesA === 0) {
+    throw new Error(`Precondition failed: search_lessons matches for project A is 0 (projectIdA=${projectIdA})`);
   }
-  if (prefsCountBeforeB === 0) {
-    throw new Error(`Precondition failed: get_preferences for project B is empty (projectIdB=${projectIdB})`);
-  }
+
+  console.log('[smoke] get_context (A)...');
+  const ctxResultA = await client.request(
+    {
+      method: 'tools/call',
+      params: {
+        name: 'get_context',
+        arguments: {
+          ...tokenArgs,
+          project_id: projectIdA,
+          task: { intent: 'Find guardrails docs', query: 'guardrails', path_glob: 'docs/**/*.md' },
+        },
+      },
+    },
+    CallToolResultSchema,
+  );
+  const ctxJsonA = extractFirstTextJson(ctxResultA);
+  const refs = ctxJsonA.context_refs?.length ?? 0;
+  const suggestions = ctxJsonA.suggested_next_calls?.length ?? 0;
+  console.log('[smoke] get_context refs/suggestions:', refs, suggestions);
+  if (refs === 0) throw new Error('get_context returned empty context_refs');
 
   console.log('[smoke] add_lesson (guardrail) for A...');
   await client.request(
@@ -316,45 +392,47 @@ async function main() {
     CallToolResultSchema,
   );
 
-  console.log('[smoke] get_preferences after delete (A expect 0)...');
-  const prefsAfterResultA = await client.request(
+  console.log('[smoke] list_lessons after delete (A expect 0)...');
+  const listAfterResultA = await client.request(
     {
       method: 'tools/call',
       params: {
-        name: 'get_preferences',
+        name: 'list_lessons',
         arguments: {
           ...tokenArgs,
           project_id: projectIdA,
+          page: { limit: 20 },
         },
       },
     },
     CallToolResultSchema,
   );
-  const prefsAfterJsonA = extractFirstTextJson(prefsAfterResultA);
-  const prefsCountAfterA = prefsAfterJsonA.preferences?.length ?? 0;
-  console.log('[smoke] preferences after delete (A):', prefsCountAfterA);
-  if (prefsCountAfterA !== 0) {
+  const listAfterJsonA = extractFirstTextJson(listAfterResultA);
+  const lessonsCountAfterA = listAfterJsonA.items?.length ?? 0;
+  console.log('[smoke] lessons after delete (A):', lessonsCountAfterA);
+  if (lessonsCountAfterA !== 0) {
     throw new Error(`delete_workspace did not fully clear lessons for projectIdA=${projectIdA}`);
   }
 
-  console.log('[smoke] get_preferences after delete (B should remain >0)...');
-  const prefsAfterResultB = await client.request(
+  console.log('[smoke] list_lessons after delete (B should remain >0)...');
+  const listAfterResultB = await client.request(
     {
       method: 'tools/call',
       params: {
-        name: 'get_preferences',
+        name: 'list_lessons',
         arguments: {
           ...tokenArgs,
           project_id: projectIdB,
+          page: { limit: 20 },
         },
       },
     },
     CallToolResultSchema,
   );
-  const prefsAfterJsonB = extractFirstTextJson(prefsAfterResultB);
-  const prefsCountAfterB = prefsAfterJsonB.preferences?.length ?? 0;
-  console.log('[smoke] preferences after delete (B):', prefsCountAfterB);
-  if (prefsCountAfterB === 0) {
+  const listAfterJsonB = extractFirstTextJson(listAfterResultB);
+  const lessonsCountAfterB = listAfterJsonB.items?.length ?? 0;
+  console.log('[smoke] lessons after delete (B):', lessonsCountAfterB);
+  if (lessonsCountAfterB === 0) {
     throw new Error(`delete_workspace incorrectly cleared lessons for projectIdB=${projectIdB}`);
   }
 

@@ -21,6 +21,10 @@ const EnvSchema = z.object({
   // Optional unless MCP_AUTH_ENABLED=true.
   CONTEXT_HUB_WORKSPACE_TOKEN: z.string().min(1, 'CONTEXT_HUB_WORKSPACE_TOKEN is required').optional(),
 
+  // When provided, MCP tools may omit project_id and fallback to this default.
+  // If a tool allows missing project_id and this env is missing, the tool returns Bad Request.
+  DEFAULT_PROJECT_ID: z.string().min(1).optional(),
+
   MCP_PORT: z.coerce.number().int().positive().optional().default(3000),
 
   // Vector dimension must match the embedding model configured above.

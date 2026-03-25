@@ -65,7 +65,7 @@ export async function checkGuardrails(projectId: string, actionContext: ActionCo
       [projectId, null, JSON.stringify(actionContext), true, false, null, 'no_trigger_matched'],
     );
 
-    return { pass: true, rules_checked: 0 };
+    return { pass: true, rules_checked: checked.length };
   }
 
   // MVP: any matched guardrail requires confirmation based on its verification method.

@@ -33,11 +33,14 @@ For step-by-step setup (including Cursor MCP configuration), see: [`docs/QUICKST
 
 This server exposes:
 
+- `help` (start here: parameter docs + workflows + tool-call templates)
 - `index_project`
 - `search_code`
-- `get_preferences`
+- `list_lessons`
+- `search_lessons`
 - `add_lesson`
 - `check_guardrails`
+- `get_context`
 - `delete_workspace`
 
 ## Troubleshooting

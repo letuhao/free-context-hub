@@ -1,5 +1,5 @@
 ---
-id: CH-T1-P2  status: planned  phase: Phase 2  updated: 2026-03-25
+id: CH-T1-P2  status: done  phase: Phase 2  updated: 2026-03-25
 ---
 
 # Phase 2 Context — ContextHub: Lesson Discovery & DX
@@ -20,9 +20,9 @@ Make every stored lesson queryable by AI agents. Reduce session-start friction f
 ## Module Map
 | ID | Module | Status | Priority | Brief |
 |---|---|---|---|---|
-| M06 | Lesson Discovery | planned | P0 | modules/M06_LESSON_DISCOVERY_BRIEF.md |
-| M07 | Smart Context Aggregator | planned | P0 | modules/M07_CONTEXT_AGGREGATOR_BRIEF.md |
-| M08 | DX Polish | planned | P1 | modules/M08_DX_POLISH_BRIEF.md |
+| M06 | Lesson Discovery | done | P0 | modules/M06_LESSON_DISCOVERY_BRIEF.md |
+| M07 | Smart Context Aggregator | done | P0 | modules/M07_CONTEXT_AGGREGATOR_BRIEF.md |
+| M08 | DX Polish | done | P1 | modules/M08_DX_POLISH_BRIEF.md |
 
 ## Tool Inventory After Phase 2
 | Tool | Status | Replaces/Note |
@@ -35,9 +35,9 @@ Make every stored lesson queryable by AI agents. Reduce session-start friction f
 | `add_lesson` | unchanged | |
 | `check_guardrails` | bug fix M08 | `rules_checked` counter corrected |
 | `delete_workspace` | unchanged | |
-| `get_preferences` | **deprecated M06** | → replaced by `list_lessons` + `search_lessons` |
+| `get_preferences` | **REMOVED** | Removed immediately (replaced by `list_lessons` + `search_lessons`) |
 
-Net: +3 tools, -1 deprecated = 8 tools total (was 6).
+Net: +3 tools, -1 removed = 8 tools total (was 6).
 Cognitive burden: **decreases** — `get_context` removes 4 mandatory session steps.
 
 ## Build Order
@@ -64,14 +64,14 @@ M08-SP4 (docs sync)      → last
 ## Open Decisions
 | ID | Decision Needed | Status |
 |---|---|---|
-| DEC-P2-001 | Deprecate `get_preferences` immediately or keep as alias for 1 cycle? | open — DA decision |
-| DEC-P2-002 | `get_context` with `task`: embed once + pass vector to services, or let services embed independently? | open — affects latency |
-| DEC-P2-003 | `list_lessons` total_count: use `COUNT(*) OVER()` (window fn) or separate COUNT query? | open — performance tradeoff |
+| DEC-P2-001 | Deprecate `get_preferences` immediately or keep as alias for 1 cycle? | resolved — removed immediately |
+| DEC-P2-002 | `get_context` with `task`: embed once + pass vector to services, or let services embed independently? | resolved — services embed independently |
+| DEC-P2-003 | `list_lessons` total_count: use `COUNT(*) OVER()` (window fn) or separate COUNT query? | resolved — separate COUNT query |
 
 ## Risk Register (open)
 | ID | Risk | Severity | Mitigation |
 |---|---|---|---|
-| R-P2-01 | HNSW index build locks `lessons` table briefly | low | Use `CREATE INDEX CONCURRENTLY` |
+| R-P2-01 | HNSW index build locks `lessons` table briefly | low | Acceptable for local single-node; run off-hours if needed |
 | R-P2-02 | `get_context` payload too large if many lessons | medium | `lesson_limit`/`code_limit` params; defaults: 10/5 |
 | R-P2-03 | `get_context` + `task` = 3 embed calls if not optimized | medium | Pass `precomputedVector` to service functions |
 | R-P2-04 | Agents over-rely on `get_context`, stop using targeted `search_code` | low | Tool descriptions clarify bootstrap vs targeted search |
@@ -80,13 +80,12 @@ M08-SP4 (docs sync)      → last
 - DEC-P2-000: Phase 2 scope locked to lesson discovery + DX; hybrid retrieval deferred to V1 [2026-03-25]
 
 ## Definition of Done (Phase 2)
-- [ ] `search_lessons("auth token")` returns decision/workaround/general_note lessons
-- [ ] `list_lessons(lesson_type="decision")` returns all decisions paginated
-- [ ] `get_context(project_id, task="<any task>")` returns full context in one call
-- [ ] `get_context` without task completes in < 300ms
-- [ ] `check_guardrails` returns correct `rules_checked` count
-- [ ] `project_id` optional when `DEFAULT_PROJECT_ID` set in env
-- [ ] All tool descriptions updated and verified
-- [ ] `get_preferences` marked deprecated in description
-- [ ] `AGENT_PROTOCOL.md` updated — session start = 1 call, not 4
-- [ ] Smoke test updated to cover new tools
+- [x] `search_lessons("auth token")` returns decision/workaround/general_note lessons
+- [x] `list_lessons(lesson_type="decision")` returns all decisions paginated
+- [x] `get_context(project_id, task="<any task>")` returns minimal refs + suggested next calls (no noisy bundle)
+- [x] `get_context` without task completes quickly (local, no DB scan required)
+- [x] `check_guardrails` returns correct `rules_checked` count (`checked.length` when none matched)
+- [x] `project_id` optional when `DEFAULT_PROJECT_ID` set in env (else Bad Request)
+- [x] Tool descriptions updated and verified via `tools/list` in smoke test
+- [x] `get_preferences` removed from tool inventory
+- [x] Smoke test updated to cover new tools

@@ -12,7 +12,9 @@ project_id:    free-context-hub
 workspace_token: optional; required only if `MCP_AUTH_ENABLED=true` → key: CONTEXT_HUB_WORKSPACE_TOKEN
 ```
 
-All tool calls require `project_id` as a parameter.
+First call (recommended): `help` — learn tool parameters + sample workflows.
+
+`project_id` is required for some tools and optional for others when `DEFAULT_PROJECT_ID` is set.
 `workspace_token` is optional and only needed when `MCP_AUTH_ENABLED=true`.
 
 ---
@@ -23,11 +25,12 @@ All tool calls require `project_id` as a parameter.
 
 | Step | Action | Why |
 |---|---|---|
-| 1 | Read `docs/sessions/SESSION_PATCH.md` | Know where we left off |
-| 2 | Read `docs/context/PROJECT_INVARIANTS.md` | Load immutable constraints |
-| 3 | Read `docs/context/MVP_CONTEXT.md` | Load current phase status |
-| 4 | Call `get_preferences(project_id)` | Load persistent team knowledge from DB |
-| 5 | Read `docs/context/modules/<MODULE>_BRIEF.md` | Only if working on that module |
+| 1 | Call `get_context(task?)` | Bootstrap minimal refs + suggested next tool calls |
+| 2 | (Optional) Read `docs/sessions/SESSION_PATCH.md` | If you need exact “where we left off” details |
+| 3 | (Optional) Read Tier docs from `context_refs` | Only if needed; avoid loading everything |
+| 4 | Call `search_lessons(query)` | Load relevant prior decisions/preferences/guardrails |
+| 5 | Call `search_code(query)` | Find code locations by intent |
+| 6 | Read `docs/context/modules/<MODULE>_BRIEF.md` | Only if patching that module |
 
 Do NOT load WHITEPAPER.md unless answering an architectural question unanswered above.
 
@@ -42,6 +45,14 @@ Do NOT load WHITEPAPER.md unless answering an architectural question unanswered 
 ---
 
 ## 3. Tool Reference
+
+### `help`
+```
+When:   First call for any agent integrating with this server.
+Params: workspace_token (optional; required only if MCP_AUTH_ENABLED=true)
+        output_format
+Returns: JSON help: tool inventory, parameter docs, sample workflows, tool-call templates.
+```
 
 ### `index_project`
 ```
@@ -60,15 +71,30 @@ Returns: { matches: [{ path, start_line, end_line, snippet, score, match_type }]
 Rule:   If matches.length > 0, use those snippets. Only read full file if more context needed.
 ```
 
-### `get_preferences`
+### `list_lessons`
 ```
-When:   Session start (mandatory). Also call if unsure about any team preference.
-Params: project_id, workspace_token (optional; required only if `MCP_AUTH_ENABLED=true`)
-Returns: { preferences: [{ lesson_id, lesson_type, title, content, tags, source_refs }] }
-Note:   Returns ALL lessons with ANY tag matching "preference-*" — regardless of lesson_type.
-        This means decisions, workarounds, general_notes are also returned if tagged "preference-*".
-        MVP limitation: lessons WITHOUT a "preference-*" tag are NOT queryable by agents.
-        Workaround: tag any lesson "preference-<topic>" to ensure agent visibility.
+When:   You need to browse lessons by type/tags and paginate through them.
+Params: project_id (optional if DEFAULT_PROJECT_ID is set), workspace_token (optional; required only if MCP_AUTH_ENABLED=true)
+        filters?: { lesson_type?, tags_any? }  page?: { limit?, after? }
+Returns: { items: Lesson[], next_cursor?, total_count }
+```
+
+### `search_lessons`
+```
+When:   You need to find decisions/preferences/guardrails/workarounds by intent.
+Params: project_id (optional if DEFAULT_PROJECT_ID is set), query, workspace_token (optional; required only if MCP_AUTH_ENABLED=true)
+        filters?: { lesson_type?, tags_any? }  limit?: number
+Returns: { matches: [{ lesson_id, lesson_type, title, content_snippet, tags, score }], explanations[] }
+Rule:   Use this instead of reading many docs at session start.
+```
+
+### `get_context`
+```
+When:   Session start bootstrap (recommended) or when you want suggested next tool calls.
+Params: project_id (optional if DEFAULT_PROJECT_ID is set), workspace_token (optional; required only if MCP_AUTH_ENABLED=true)
+        task?: { intent, query?, path_glob? }
+Returns: { project_id, context_refs[], suggested_next_calls[], notes[] }
+Rule:   This tool does NOT bundle large content; it returns refs + suggestions to reduce noise.
 ```
 
 ### `add_lesson`
@@ -207,7 +233,7 @@ Need to find code?
 ## 7. Quick Reference Card
 
 ```
-Session start:  read(SESSION_PATCH) → read(T0) → read(T1) → get_preferences()
+Session start:  get_context(task?) → search_lessons(query) → search_code(query)
 Finding code:   search_code() before Grep/Read
 Before push:    check_guardrails({action: "git push", project_id})
 Decision made:  add_lesson(type: "decision")

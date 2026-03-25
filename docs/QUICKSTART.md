@@ -6,11 +6,14 @@ This guide gets your local ContextHub MVP running (Postgres + embeddings) and co
 
 - MCP endpoint: `POST http://localhost:3000/mcp`
 - Tools:
+  - `help` (parameter docs + workflows + tool-call templates)
   - `index_project`
   - `search_code`
-  - `get_preferences`
+  - `list_lessons`
+  - `search_lessons`
   - `add_lesson`
   - `check_guardrails`
+  - `get_context`
   - `delete_workspace`
 - Project-scoped persistent memory + semantic code search (pgvector)
 
@@ -83,6 +86,22 @@ Cursor connects to MCP servers via configuration.
    - Transport: Streamable HTTP (if you need to pick)
 3. Restart Cursor after adding the server (Cursor caches MCP configs).
 
+### Recommended first call: `help`
+
+Call `help` once so the agent can learn all tool parameters and sample workflows.
+
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "help",
+    "arguments": {
+      "output_format": "json_pretty"
+    }
+  }
+}
+```
+
 ### Important: `workspace_token` is optional (required only if auth enabled)
 
 This repo validates the token inside tool arguments (it is checked by `assertWorkspaceToken()` in the MCP server) only when `MCP_AUTH_ENABLED=true`.
@@ -118,10 +137,20 @@ Example arguments (shape):
 - `filters.path_glob` (optional)
 - `limit` (optional)
 
-`get_preferences`
+`list_lessons`
 
 - `workspace_token` (optional; required only if `MCP_AUTH_ENABLED=true`)
-- `project_id`
+- `project_id` (optional; uses `DEFAULT_PROJECT_ID` when omitted)
+- `filters` (optional)
+- `page` (optional; cursor pagination)
+
+`search_lessons`
+
+- `workspace_token` (optional; required only if `MCP_AUTH_ENABLED=true`)
+- `project_id` (optional; uses `DEFAULT_PROJECT_ID` when omitted)
+- `query`
+- `filters` (optional)
+- `limit` (optional)
 
 `add_lesson`
 

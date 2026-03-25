@@ -14,11 +14,11 @@ Source of truth for architecture: `WHITEPAPER.md`. Source of truth for current s
 
 Run these steps in order at the start of EVERY session:
 
-1. **Read** `docs/sessions/SESSION_PATCH.md` → understand where we left off and what's next
-2. **Read** `docs/context/PROJECT_INVARIANTS.md` → load Tier 0 constraints (immutable rules)
-3. **Read** `docs/context/MVP_CONTEXT.md` → load Tier 1 phase status and open decisions
-4. **Call** `get_preferences` with `project_id: "free-context-hub"` → load persistent team lessons
-5. **Read** the relevant module brief from `docs/context/modules/` ONLY if working on that module
+1. **Call** `help` → learn tool parameters + sample workflows (1-time per environment)
+2. **Call** `get_context` (with `task.intent` + optional `task.query/path_glob`) → bootstrap minimal refs + suggested next calls
+3. **Call** `search_lessons` → load relevant prior decisions/preferences/guardrails for the task
+4. **Call** `search_code` → find relevant code locations by intent
+5. **Read** the relevant module brief from `docs/context/modules/` ONLY if patching that module
 
 Do NOT load `WHITEPAPER.md` unless there is an architectural question not answered by the docs above.
 
@@ -39,11 +39,25 @@ Examples of when to call:
 - "where do we write chunks?" → `search_code(query: "chunk embedding storage write")`
 - "find the guardrail trigger logic" → `search_code(query: "trigger match guardrail rule")`
 
-### `get_preferences` — call at session start
+### `help` — call first (agent onboarding)
 ```
-When: session start (mandatory) + any time you're unsure about team preferences
-How:  get_preferences(project_id: "free-context-hub")
-Why:  returns ALL lessons tagged preference-* — constraints the team has committed to
+When: first time an agent connects to this MCP server
+How:  help(output_format: "json_pretty")
+Why:  provides parameter docs + sample workflows + tool-call templates
+```
+
+### `get_context` — bootstrap session start
+```
+When: session start (recommended)
+How:  get_context(task: {intent: "...", query?: "...", path_glob?: "src/**/*.ts"})
+Why:  returns refs + suggested next tool calls (no noisy bundle)
+```
+
+### `search_lessons` / `list_lessons` — use instead of get_preferences
+```
+When: find previous decisions/preferences/guardrails/workarounds by intent OR browse lessons
+How:  search_lessons(query: "...") or list_lessons(filters/page)
+Why:  lessons are now queryable by semantic search across all types
 ```
 
 ### `add_lesson` — call after any significant decision
@@ -97,7 +111,7 @@ If any architectural decisions were made during the session, call `add_lesson` B
 
 | Situation | Load |
 |---|---|
-| Any session start | SESSION_PATCH.md + PROJECT_INVARIANTS.md + MVP_CONTEXT.md + get_preferences() |
+| Any session start | help() (once) + get_context() + search_lessons() + search_code() |
 | Working on specific module | + relevant MODULE_BRIEF.md |
 | Architectural question | + WHITEPAPER.md (specific section only) |
 | Finding code | search_code() first, then Read if needed |
