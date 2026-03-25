@@ -1,5 +1,5 @@
 ---
-id: CH-M02  status: not-started  phase: MVP  depends-on: M04(schema)  updated: 2026-03-25
+id: CH-M02  status: done  phase: MVP  depends-on: M04(schema)  updated: 2026-03-25
 ---
 
 # Module Brief: M02 — Ingestion / Indexing Service
@@ -28,11 +28,11 @@ Returns: `{ status: "ok"|"error", files_indexed, duration_ms, errors[] }`
 ## Sub-phases
 | SP | Scope | Status |
 |---|---|---|
-| SP-1 | File discovery + ignore rule engine | not-started |
-| SP-2 | Chunking strategy (pending DEC-003) | not-started |
-| SP-3 | Embedding generation (pending DEC-002) | not-started |
-| SP-4 | Storage write to pgvector/SQLite | not-started |
-| SP-5 | Incremental re-indexing (hash-based diff) | not-started |
+| SP-1 | File discovery + ignore rule engine | done |
+| SP-2 | Chunking strategy (line-based, configurable `lines_per_chunk`) | done |
+| SP-3 | Embedding generation (`mxbai-embed-large-v1`, batch configurable) | done |
+| SP-4 | Storage write to pgvector | done |
+| SP-5 | Incremental re-indexing (hash-based, reorder: embed first, write on success) | done |
 
 ## Risks (open)
 - R-M02-01: Large repos may exceed memory with naive in-memory chunking [medium]
@@ -40,5 +40,5 @@ Returns: `{ status: "ok"|"error", files_indexed, duration_ms, errors[] }`
 
 ## Recent Decisions
 - DEC-002: Embedding = OpenAI-compatible API; `base_url` configurable → LM Studio default [2026-03-25]
-- DEC-embedding-model: `nomic-embed-text-v1.5` as default (8192 ctx, code-capable, 4GB RAM) [2026-03-25]
-- (DEC-003 chunking strategy still open — blocks SP-2)
+- DEC-embedding-model: `mixedbread-ai/text-embedding-mxbai-embed-large-v1` as default (8192 ctx, code-capable, 4GB+ RAM target) [2026-03-25]
+- DEC-003: Chunking strategy resolved by default: line-based, file-boundary chunks (default `lines_per_chunk=120`) [2026-03-25]

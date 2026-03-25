@@ -40,6 +40,21 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
 
   // OpenAI-compatible APIs typically preserve order. If index exists, we respect it.
   const ordered = [...json.data].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
-  return ordered.map(d => d.embedding);
+
+  const expectedDim = env.EMBEDDINGS_DIM;
+  const embeddings = ordered.map(d => d.embedding);
+  for (let i = 0; i < embeddings.length; i++) {
+    const dim = embeddings[i]?.length ?? 0;
+    if (!dim) {
+      throw new Error(`[embedTexts] Missing embedding for input #${i}`);
+    }
+    if (dim !== expectedDim) {
+      throw new Error(
+        `[embedTexts] Embedding dimension mismatch: got=${dim} expected=${expectedDim} (model=${env.EMBEDDINGS_MODEL}). Update EMBEDDINGS_DIM to match the embedding model.`,
+      );
+    }
+  }
+
+  return embeddings;
 }
 

@@ -11,11 +11,11 @@ and tested end-to-end with at least one MCP client (Claude Code or Cursor).
 ## Module Map
 | ID | Module | Status | Priority | Brief |
 |---|---|---|---|---|
-| M01 | MCP Interface Layer | not-started | P0 | modules/M01_MCP_INTERFACE_BRIEF.md |
-| M02 | Ingestion / Indexing Service | not-started | P0 | modules/M02_INDEXING_BRIEF.md |
-| M03 | Retrieval Service | not-started | P0 | modules/M03_RETRIEVAL_BRIEF.md |
-| M04 | Persistent Memory (Lessons) | not-started | P0 | modules/M04_LESSONS_BRIEF.md |
-| M05 | Guardrails Engine | not-started | P1 | modules/M05_GUARDRAILS_BRIEF.md |
+| M01 | MCP Interface Layer | **done** | P0 | modules/M01_MCP_INTERFACE_BRIEF.md |
+| M02 | Ingestion / Indexing Service | **done** | P0 | modules/M02_INDEXING_BRIEF.md |
+| M03 | Retrieval Service | **done** | P0 | modules/M03_RETRIEVAL_BRIEF.md |
+| M04 | Persistent Memory (Lessons) | **done** | P0 | modules/M04_LESSONS_BRIEF.md |
+| M05 | Guardrails Engine | **done** | P1 | modules/M05_GUARDRAILS_BRIEF.md |
 
 ## Recommended Build Order
 ```
@@ -27,7 +27,7 @@ MCP layer wraps all. Retrieval is query-only. Guardrails are last enforcer.
 ## Active Constraints
 - Language: **TypeScript** + `@modelcontextprotocol/sdk`
 - Embedding provider: **OpenAI-compatible API** (configurable base URL) — default target: LM Studio local
-- Recommended embedding model: `nomic-embed-text-v1.5` (see PROJECT_INVARIANTS for rationale)
+- Embedding model: `mxbai-embed-large-v1` @ 1024 dims (hardcoded in DB schema — do NOT change without migration)
 - PostgreSQL + pgvector is default — SQLite for dev/test only
 - All MCP responses must be structured JSON
 - Secret exclusion active by default on every `index_project` call
@@ -36,8 +36,8 @@ MCP layer wraps all. Retrieval is query-only. Guardrails are last enforcer.
 ## Open Decisions
 | ID | Decision Needed | Status |
 |---|---|---|
-| DEC-003 | Chunking strategy: file-boundary vs AST-aware semantic chunks | open |
-| DEC-004 | Auth mechanism for MCP workspace tokens | open |
+| DEC-003 | Chunking strategy: file-boundary vs AST-aware semantic chunks | resolved (MVP uses line-based chunks; `lines_per_chunk` configurable) |
+| DEC-004 | Auth mechanism for MCP workspace tokens | resolved (bearer token via `CONTEXT_HUB_WORKSPACE_TOKEN`) |
 
 ## Risk Register (open only)
 | ID | Risk | Severity | Mitigation |
@@ -54,12 +54,14 @@ MCP layer wraps all. Retrieval is query-only. Guardrails are last enforcer.
 - DEC-LCA: Adopt Lean Context Architecture for all project documentation [2026-03-25]
 
 ## Definition of Done (MVP)
-- [ ] All 5 MCP tools functional and tested
-- [ ] Index → Search round-trip returns relevant snippets
-- [ ] Lessons persist across MCP client restarts
-- [ ] At least 1 guardrail enforced end-to-end
-- [ ] Docker Compose deployment works on fresh machine
-- [ ] Secret exclusion verified (`.env` files not indexed)
+- [x] All 5 MCP tools functional and tested (6 tools — `delete_workspace` bonus)
+- [x] Index → Search round-trip returns relevant snippets
+- [x] Lessons persist across MCP client restarts
+- [x] At least 1 guardrail enforced end-to-end
+- [x] Docker Compose deployment works on fresh machine
+- [x] Secret exclusion verified (`.env` files not indexed)
+
+**MVP DoD: 6/6 complete.**
 
 ## Observability Targets (MVP)
 - Indexing: last_run, files_processed, error_count

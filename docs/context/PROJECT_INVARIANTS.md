@@ -28,8 +28,8 @@ and semantic code understanding. For small teams. No hosted SaaS dependency.
 | Storage (dev/test) | SQLite with pluggable vector strategy |
 | Transport | MCP protocol (JSON-RPC over stdio/SSE) |
 | Embedding API | OpenAI-compatible HTTP API (configurable `base_url` + `api_key`) |
-| Embedding model (default) | `nomic-embed-text-v1.5` — 768 dims, 8192 ctx, code-capable |
-| Embedding model (upgrade) | `mxbai-embed-large-v1` — 1024 dims, higher MTEB score, needs 8GB+ |
+| Embedding model (default) | `mxbai-embed-large-v1` — 1024 dims, #1 MTEB, matches DB schema |
+| Embedding dims | **1024** — hardcoded in DB schema (`vector(1024)`), must match model |
 | Self-host target | LM Studio (serves OpenAI-compatible `/v1/embeddings`) |
 | Deployment target | Single-node Docker Compose or local machine |
 | Secret exclusion | `.env`, `*.key`, credential files — excluded by default, no opt-in |

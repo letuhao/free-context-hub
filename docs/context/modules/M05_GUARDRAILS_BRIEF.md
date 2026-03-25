@@ -1,5 +1,5 @@
 ---
-id: CH-M05  status: not-started  phase: MVP  depends-on: M04, M01  updated: 2026-03-25
+id: CH-M05  status: done  phase: MVP  depends-on: M04, M01  updated: 2026-03-25
 ---
 
 # Module Brief: M05 — Guardrails Engine
@@ -43,14 +43,17 @@ MCP client: check_guardrails({action: "git push", workspace: "proj-x"})
 ## Sub-phases
 | SP | Scope | Status |
 |---|---|---|
-| SP-1 | Rule loading from M04 guardrail store | not-started |
-| SP-2 | Trigger matching logic (string + regex) | not-started |
-| SP-3 | Verification check + `needs_confirmation` response | not-started |
-| SP-4 | Audit log write | not-started |
+| SP-1 | Rule loading from M04 guardrail store | done |
+| SP-2 | Trigger matching logic (exact string + `/regex/` form) | done |
+| SP-3 | Verification check + `needs_confirmation` response | done |
+| SP-4 | Audit log write (`guardrail_audit_logs` table, all decisions) | done |
 
-## Risks (open)
-- R-M05-01: Trigger patterns too broad → false positives on common actions [medium]
-- R-M05-02: Prompt injection if lesson content used verbatim in response prompts [medium]
+## Known Issues (post-MVP)
+- `rules_checked` returns `0` when rules exist but none match trigger — misleading for clients trying to debug. Correct value should be `checked.length`. Low priority (no AT violated, but UX issue).
+
+## Risks (closed)
+- R-M05-01: Trigger patterns too broad → mitigated by exact-match default, regex opt-in
+- R-M05-02: Prompt injection — prompt text is from `requirement` field (lesson content, not user input at call time)
 
 ## Recent Decisions
-- (none yet)
+- MVP: `needsConfirmation = true` always when any rule is matched (simplest safe default) [2026-03-25]

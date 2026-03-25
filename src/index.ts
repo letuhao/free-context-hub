@@ -5,7 +5,7 @@ import * as z from 'zod/v4';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js';
-import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
+import { ErrorCode, McpError, isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 
 import { getEnv } from './env.js';
 import { applyMigrations } from './db/applyMigrations.js';
@@ -16,11 +16,45 @@ import { checkGuardrails } from './services/guardrails.js';
 
 dotenv.config();
 
+const OutputFormatSchema = z.enum(['auto_both', 'json_only', 'json_pretty', 'summary_only']);
+type OutputFormat = z.infer<typeof OutputFormatSchema>;
+
+function formatToolResponse<T>(
+  result: T,
+  summary: string,
+  output_format: OutputFormat,
+) {
+  const jsonMin = JSON.stringify(result);
+  const jsonPretty = JSON.stringify(result, null, 2);
+
+  let text: string;
+  switch (output_format) {
+    case 'json_only':
+      text = jsonMin;
+      break;
+    case 'json_pretty':
+      text = jsonPretty;
+      break;
+    case 'summary_only':
+      text = summary;
+      break;
+    case 'auto_both':
+    default:
+      text = `${summary}\n${jsonMin}`;
+      break;
+  }
+
+  return {
+    content: [{ type: 'text' as const, text }],
+    structuredContent: result,
+  };
+}
+
 function assertWorkspaceToken(token: string) {
   const env = getEnv();
   if (token !== env.CONTEXT_HUB_WORKSPACE_TOKEN) {
     // MCP clients will surface this as a tool error.
-    throw new Error('Unauthorized: invalid workspace_token');
+    throw new McpError(ErrorCode.InvalidParams, 'Unauthorized: invalid workspace_token');
   }
 }
 
@@ -42,6 +76,7 @@ function createMcpToolsServer() {
         workspace_token: z.string().describe('MVP workspace token'),
         project_id: z.string().describe('Project identifier (scoped memory)').min(1),
         root: z.string().describe('Root directory path to index').min(1),
+        output_format: OutputFormatSchema.default('auto_both'),
         options: z
           .object({
             lines_per_chunk: z.number().int().positive().optional(),
@@ -61,7 +96,7 @@ function createMcpToolsServer() {
         ),
       }),
     },
-    async ({ workspace_token, project_id, root, options }) => {
+    async ({ workspace_token, project_id, root, output_format, options }) => {
       assertWorkspaceToken(workspace_token);
       const result = await indexProject({
         projectId: project_id,
@@ -69,7 +104,8 @@ function createMcpToolsServer() {
         linesPerChunk: options?.lines_per_chunk,
         embeddingBatchSize: options?.embedding_batch_size,
       });
-      return { content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result };
+      const summary = `index_project: status=${result.status}, files_indexed=${result.files_indexed}, duration_ms=${result.duration_ms}`;
+      return formatToolResponse(result, summary, output_format);
     },
   );
 
@@ -88,6 +124,7 @@ function createMcpToolsServer() {
           .optional(),
         limit: z.number().int().positive().optional(),
         debug: z.boolean().optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
       }),
       outputSchema: z.object({
         matches: z.array(
@@ -103,7 +140,7 @@ function createMcpToolsServer() {
         explanations: z.array(z.string()),
       }),
     },
-    async ({ workspace_token, project_id, query, filters, limit, debug }) => {
+    async ({ workspace_token, project_id, query, filters, limit, debug, output_format }) => {
       assertWorkspaceToken(workspace_token);
       const result = await searchCode({
         projectId: project_id,
@@ -112,7 +149,8 @@ function createMcpToolsServer() {
         limit,
         debug,
       });
-      return { content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result };
+      const summary = `search_code: matches=${result.matches.length}`;
+      return formatToolResponse(result, summary, output_format);
     },
   );
 
@@ -123,6 +161,7 @@ function createMcpToolsServer() {
       inputSchema: z.object({
         workspace_token: z.string(),
         project_id: z.string().min(1),
+        output_format: OutputFormatSchema.default('auto_both'),
       }),
       outputSchema: z.object({
         preferences: z.array(
@@ -140,11 +179,12 @@ function createMcpToolsServer() {
         ),
       }),
     },
-    async ({ workspace_token, project_id }) => {
+    async ({ workspace_token, project_id, output_format }) => {
       assertWorkspaceToken(workspace_token);
       const preferences = await getPreferences(project_id);
       const result = { preferences };
-      return { content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result };
+      const summary = `get_preferences: preferences=${preferences.length}`;
+      return formatToolResponse(result, summary, output_format);
     },
   );
 
@@ -170,16 +210,18 @@ function createMcpToolsServer() {
             })
             .optional(),
         }),
+        output_format: OutputFormatSchema.default('auto_both'),
       }),
       outputSchema: z.object({
         status: z.enum(['ok', 'error']).default('ok'),
         lesson_id: z.string(),
       }),
     },
-    async ({ workspace_token, lesson_payload }) => {
+    async ({ workspace_token, lesson_payload, output_format }) => {
       assertWorkspaceToken(workspace_token);
       const result = await addLesson(lesson_payload as any);
-      return { content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result };
+      const summary = `add_lesson: lesson_id=${result.lesson_id ?? '(unknown)'}`;
+      return formatToolResponse(result, summary, output_format);
     },
   );
 
@@ -197,6 +239,7 @@ function createMcpToolsServer() {
             workspace: z.string().optional(),
           })
           .passthrough(),
+        output_format: OutputFormatSchema.default('auto_both'),
       }),
       outputSchema: z.object({
         pass: z.boolean(),
@@ -214,7 +257,7 @@ function createMcpToolsServer() {
           .optional(),
       }),
     },
-    async ({ workspace_token, action_context }) => {
+    async ({ workspace_token, action_context, output_format }) => {
       assertWorkspaceToken(workspace_token);
       const projectId = action_context.project_id ?? action_context.workspace;
       if (!projectId) {
@@ -222,7 +265,8 @@ function createMcpToolsServer() {
       }
 
       const result = await checkGuardrails(String(projectId), action_context);
-      return { content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result };
+      const summary = `check_guardrails: pass=${result.pass}, rules_checked=${result.rules_checked}`;
+      return formatToolResponse(result, summary, output_format);
     },
   );
 
@@ -233,6 +277,7 @@ function createMcpToolsServer() {
       inputSchema: z.object({
         workspace_token: z.string(),
         project_id: z.string().min(1),
+        output_format: OutputFormatSchema.default('auto_both'),
       }),
       outputSchema: z.object({
         status: z.enum(['ok', 'error']),
@@ -240,13 +285,11 @@ function createMcpToolsServer() {
         deleted_project_id: z.string(),
       }),
     },
-    async ({ workspace_token, project_id }) => {
+    async ({ workspace_token, project_id, output_format }) => {
       assertWorkspaceToken(workspace_token);
       const result = await deleteWorkspace(project_id);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result) }],
-        structuredContent: result,
-      };
+      const summary = `delete_workspace: deleted=${result.deleted}, project_id=${result.deleted_project_id}`;
+      return formatToolResponse(result, summary, output_format);
     },
   );
 

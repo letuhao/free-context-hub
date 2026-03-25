@@ -21,7 +21,31 @@ function extractFirstTextJson(result: any) {
   if (typeof firstText !== 'string') {
     throw new Error(`Tool result did not contain text content; got: ${JSON.stringify(content)}`);
   }
-  return JSON.parse(firstText);
+
+  // Default `output_format=auto_both` may prefix summary text.
+  // Extract the first JSON object/array substring and parse it.
+  const raw = firstText.trim();
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const firstObj = raw.indexOf('{');
+    const firstArr = raw.indexOf('[');
+    let start = -1;
+    if (firstObj >= 0 && firstArr >= 0) start = Math.min(firstObj, firstArr);
+    else start = firstObj >= 0 ? firstObj : firstArr;
+
+    const lastObj = raw.lastIndexOf('}');
+    const lastArr = raw.lastIndexOf(']');
+    let end = -1;
+    if (lastObj >= 0 && lastArr >= 0) end = Math.max(lastObj, lastArr);
+    else end = lastObj >= 0 ? lastObj : lastArr;
+
+    if (start >= 0 && end >= start) {
+      return JSON.parse(raw.slice(start, end + 1));
+    }
+
+    throw new Error(`Failed to parse JSON from tool content.text: ${raw.slice(0, 200)}`);
+  }
 }
 
 async function main() {

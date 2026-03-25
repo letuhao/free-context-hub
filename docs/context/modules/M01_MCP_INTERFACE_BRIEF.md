@@ -1,5 +1,5 @@
 ---
-id: CH-M01  status: not-started  phase: MVP  depends-on: M04  updated: 2026-03-25
+id: CH-M01  status: done  phase: MVP  depends-on: M04  updated: 2026-03-25
 ---
 
 # Module Brief: M01 — MCP Interface Layer
@@ -30,11 +30,13 @@ OUT: Business logic (delegated to M02–M05), REST API, any UI
 ## Sub-phases
 | SP | Scope | Status |
 |---|---|---|
-| SP-1 | Server scaffold + tool registration stubs | not-started |
-| SP-2 | Tool routing to module services (mock responses) | not-started |
-| SP-3 | Workspace token auth middleware | not-started |
-| SP-4 | Integration wiring to live M02, M03, M04, M05 | not-started |
-| SP-5 | Smoke test: full round-trip with MCP client | not-started |
+| SP-1 | Server scaffold + tool registration stubs | done |
+| SP-2 | Tool routing to module services | done |
+| SP-3 | Workspace token auth middleware | done |
+| SP-4 | Integration wiring to live M02, M03, M04, M05 | done |
+| SP-5 | Smoke test: full round-trip with MCP client | done |
+
+Note: 6 tools shipped (bonus `delete_workspace` beyond original 5 in whitepaper).
 
 ## Risks (open)
 - R-M01-01: MCP spec still evolving — pin `@modelcontextprotocol/sdk` version explicitly [medium]

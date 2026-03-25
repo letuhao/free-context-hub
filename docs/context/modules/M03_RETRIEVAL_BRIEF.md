@@ -1,5 +1,5 @@
 ---
-id: CH-M03  status: not-started  phase: MVP  depends-on: M02  updated: 2026-03-25
+id: CH-M03  status: done  phase: MVP  depends-on: M02  updated: 2026-03-25
 ---
 
 # Module Brief: M03 — Retrieval Service
@@ -43,10 +43,10 @@ Response schema:
 ## Sub-phases
 | SP | Scope | Status |
 |---|---|---|
-| SP-1 | pgvector cosine similarity query | not-started |
-| SP-2 | Top-k selection + score normalization | not-started |
-| SP-3 | Path/language filter support | not-started |
-| SP-4 | Debug mode (explanations field populated) | not-started |
+| SP-1 | pgvector cosine similarity query (`<=>` operator) | done |
+| SP-2 | Top-k selection + score | done |
+| SP-3 | `path_glob` filter support | done |
+| SP-4 | Debug mode (explanations field — returns empty array, MVP) | done |
 
 ## Risks (open)
 - R-M03-01: Retrieval quality inherits embedding quality from M02 [high — shared with M02]

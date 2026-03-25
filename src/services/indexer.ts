@@ -95,25 +95,14 @@ export async function indexProject({ projectId, root, linesPerChunk, embeddingBa
           continue; // unchanged + vectors already present
         }
       }
-
-      // Upsert file metadata.
-      await pool.query(
-        `INSERT INTO files(project_id, root, path, content_hash, last_indexed_at)
-         VALUES ($1, $2, $3, $4, now())
-         ON CONFLICT (project_id, root, path)
-         DO UPDATE SET content_hash=EXCLUDED.content_hash, last_indexed_at=now();`,
-        [projectId, resolvedRoot, fileRel, contentHash],
-      );
-
-      // Recreate chunks for this file (simple MVP approach).
-      await pool.query(
-        `DELETE FROM chunks WHERE project_id=$1 AND root=$2 AND file_path=$3;`,
-        [projectId, resolvedRoot, fileRel],
-      );
-
       const text = buf.toString('utf8');
       const chunks = chunkTextByLines(text, chunkLines);
       if (chunks.length === 0) continue;
+
+      // IMPORTANT: embed FIRST, then update DB.
+      // This prevents "sticky" state where we updated `files.content_hash`
+      // and deleted old chunks, but embeddings failed (auth/dimension mismatch).
+      const embeddedChunks: Array<{ chunk: (typeof chunks)[number]; embedding: number[] }> = [];
 
       // Embed chunks in small batches.
       for (let i = 0; i < chunks.length; i += batchSize) {
@@ -124,8 +113,37 @@ export async function indexProject({ projectId, root, linesPerChunk, embeddingBa
           const c = slice[j];
           const embedding = vectors[j];
           if (!embedding || embedding.length === 0) continue;
+          embeddedChunks.push({ chunk: c, embedding });
+        }
+      }
 
-          await pool.query(
+      if (embeddedChunks.length === 0) {
+        // Nothing to persist.
+        continue;
+      }
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        // Upsert file metadata.
+        await client.query(
+          `INSERT INTO files(project_id, root, path, content_hash, last_indexed_at)
+           VALUES ($1, $2, $3, $4, now())
+           ON CONFLICT (project_id, root, path)
+           DO UPDATE SET content_hash=EXCLUDED.content_hash, last_indexed_at=now();`,
+          [projectId, resolvedRoot, fileRel, contentHash],
+        );
+
+        // Recreate chunks for this file (simple MVP approach).
+        await client.query(
+          `DELETE FROM chunks WHERE project_id=$1 AND root=$2 AND file_path=$3;`,
+          [projectId, resolvedRoot, fileRel],
+        );
+
+        // Insert new chunk vectors.
+        for (const { chunk: c, embedding } of embeddedChunks) {
+          await client.query(
             `INSERT INTO chunks(
               project_id, root, file_path, start_line, end_line, content, embedding
             ) VALUES ($1,$2,$3,$4,$5,$6,$7::vector);`,
@@ -140,9 +158,15 @@ export async function indexProject({ projectId, root, linesPerChunk, embeddingBa
             ],
           );
         }
-      }
 
-      filesIndexed += 1;
+        await client.query('COMMIT');
+        filesIndexed += 1;
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
     } catch (err) {
       errors.push({
         path: fileRel,

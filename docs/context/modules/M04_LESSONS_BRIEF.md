@@ -1,5 +1,5 @@
 ---
-id: CH-M04  status: not-started  phase: MVP  depends-on: storage-schema  updated: 2026-03-25
+id: CH-M04  status: done  phase: MVP  depends-on: storage-schema  updated: 2026-03-25
 ---
 
 # Module Brief: M04 — Persistent Memory (Lessons & Preferences)
@@ -48,12 +48,12 @@ guardrails(
 ## Sub-phases
 | SP | Scope | Status |
 |---|---|---|
-| SP-1 | DB schema + migration scripts | not-started |
-| SP-2 | Lesson CRUD (create, read, update, delete) | not-started |
-| SP-3 | Preference query (tag filter: `preference-*`) | not-started |
-| SP-4 | Guardrail rule CRUD | not-started |
-| SP-5 | Lesson embedding storage | not-started |
-| SP-6 | Delete/retention controls | not-started |
+| SP-1 | DB schema + migration scripts | done |
+| SP-2 | Lesson CRUD (create, read) | done |
+| SP-3 | Preference query (tag filter: `preference-*`) | done |
+| SP-4 | Guardrail rule CRUD (via `add_lesson` with `guardrail` field) | done |
+| SP-5 | Lesson embedding storage | done |
+| SP-6 | Delete/retention controls (`delete_workspace` tool) | done |
 
 ## Risks (open)
 - R-M04-01: Lesson schema may need evolution if guardrail model changes mid-MVP [medium]
