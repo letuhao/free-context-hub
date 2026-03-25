@@ -1,5 +1,16 @@
 import * as z from 'zod/v4';
 
+function parseBooleanEnv(v: unknown): boolean | undefined {
+  if (v === undefined || v === null) return undefined;
+  if (typeof v === 'boolean') return v;
+  if (typeof v === 'number') return v !== 0;
+  const s = String(v).trim().toLowerCase();
+  if (s === '') return undefined;
+  if (['true', '1', 'yes', 'y', 'on'].includes(s)) return true;
+  if (['false', '0', 'no', 'n', 'off'].includes(s)) return false;
+  return undefined;
+}
+
 const EnvSchema = z.object({
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
 
@@ -15,7 +26,9 @@ const EnvSchema = z.object({
 
   // When enabled, every MCP tool call must include `workspace_token` matching `CONTEXT_HUB_WORKSPACE_TOKEN`.
   // When disabled (default), `workspace_token` becomes optional for easier agent compliance.
-  MCP_AUTH_ENABLED: z.coerce.boolean().optional().default(false),
+  MCP_AUTH_ENABLED: z
+    .preprocess(v => parseBooleanEnv(v), z.boolean().optional())
+    .default(false),
 
   // Single MVP workspace token for all MCP tool calls.
   // Optional unless MCP_AUTH_ENABLED=true.

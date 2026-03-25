@@ -19,6 +19,36 @@ dotenv.config();
 const OutputFormatSchema = z.enum(['auto_both', 'json_only', 'json_pretty', 'summary_only']);
 type OutputFormat = z.infer<typeof OutputFormatSchema>;
 
+function maskDatabaseUrl(databaseUrl: string) {
+  try {
+    const u = new URL(databaseUrl);
+    if (u.password) u.password = '***';
+    if (u.username) u.username = u.username; // keep username
+    return u.toString();
+  } catch {
+    // Fallback: remove anything that looks like "://user:pass@"
+    return databaseUrl.replace(/:\/\/([^:@\/\s]+):([^@\/\s]+)@/g, '://$1:***@');
+  }
+}
+
+function logStartupEnvSummary() {
+  const env = getEnv();
+  const safe = {
+    MCP_PORT: env.MCP_PORT,
+    MCP_AUTH_ENABLED: env.MCP_AUTH_ENABLED,
+    DEFAULT_PROJECT_ID: env.DEFAULT_PROJECT_ID ?? null,
+    DATABASE_URL: maskDatabaseUrl(env.DATABASE_URL),
+    EMBEDDINGS_BASE_URL: env.EMBEDDINGS_BASE_URL,
+    EMBEDDINGS_MODEL: env.EMBEDDINGS_MODEL,
+    EMBEDDINGS_DIM: env.EMBEDDINGS_DIM,
+    CHUNK_LINES: env.CHUNK_LINES,
+    // Never print secrets (token / API key)
+    CONTEXT_HUB_WORKSPACE_TOKEN: env.CONTEXT_HUB_WORKSPACE_TOKEN ? '[set]' : '[not set]',
+    EMBEDDINGS_API_KEY: env.EMBEDDINGS_API_KEY ? '[set]' : '[not set]',
+  };
+  console.log('[env]', JSON.stringify(safe));
+}
+
 function formatToolResponse<T>(
   result: T,
   summary: string,
@@ -758,6 +788,7 @@ function createMcpToolsServer() {
 
 async function main() {
   const env = getEnv();
+  logStartupEnvSummary();
   await applyMigrations();
 
   const app = createMcpExpressApp();
