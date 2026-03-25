@@ -63,6 +63,8 @@ MCP layer wraps all. Retrieval is query-only. Guardrails are last enforcer.
 
 **MVP DoD: 6/6 complete.**
 
+> Next: Phase 2 plan → `docs/context/PHASE2_CONTEXT.md`
+
 ## Observability Targets (MVP)
 - Indexing: last_run, files_processed, error_count
 - Search: latency p50/p95

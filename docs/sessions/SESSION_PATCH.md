@@ -1,35 +1,33 @@
 ---
-id: CH-T3  date: 2026-03-25  module: MVP-done  phase: MVP
+id: CH-T3  date: 2026-03-25  module: Phase2-planning  phase: Phase 2
 ---
 
 # Session Patch — 2026-03-25
 
 ## Where We Are
-Phase: MVP · Status: **FUNCTIONALLY COMPLETE** — 6/6 DoD items met
-Last completed: BA/PM review confirms all 5 modules implemented and smoke-tested
-Next: Fix operational blocker → run final smoke test → declare MVP done
+Phase: MVP complete · Phase 2: planned, not started
+Last completed: Phase 2 design — M06/M07/M08 module briefs + PHASE2_CONTEXT.md created
+Next: DA decision on DEC-P2-001 (deprecate `get_preferences` immediately or alias?), then start M08-SP1
 
-## Open Blockers
-| ID | Blocker | Action |
-|---|---|---|
-| OPS-001 | Running MCP server has stale token — `smoke-test` fails with Unauthorized | Restart server |
-
-Fix:
-```bash
-# Kill stale server, then restart with current .env
-npm run dev   # or: node dist/index.js
-# Then:
-npm run smoke-test
+## Recommended First Step
+**M08-SP1** — fix `rules_checked` bug in [guardrails.ts:68](src/services/guardrails.ts#L68).
+One-line change, zero dependencies, ships immediately:
+```typescript
+// Change:  return { pass: true, rules_checked: 0 };
+// To:      return { pass: true, rules_checked: checked.length };
 ```
 
-## Known Issues (non-blocking, post-MVP backlog)
-- `rules_checked: 0` when rules exist but none matched → misleading, should be `checked.length` (see M05 brief)
-- DEC-003 (chunking strategy) resolved by default: line-based, 120 lines/chunk, configurable via `lines_per_chunk`
-- DEC-004 (auth mechanism) resolved: bearer token via `CONTEXT_HUB_WORKSPACE_TOKEN` env var (optional by default via `MCP_AUTH_ENABLED`)
+## Open Decisions
+| ID | Decision | Blocks |
+|---|---|---|
+| DEC-P2-001 | Deprecate `get_preferences` immediately or keep as alias for 1 cycle? | M06-SP4 |
+| DEC-P2-002 | `get_context` + task: single embed → pass precomputedVector, or let services embed independently? | M07-SP2 latency |
+| DEC-P2-003 | `list_lessons` total_count: window function vs separate COUNT query? | M06-SP1 |
+
+## Open Blocker (MVP - operational)
+- OPS-001: Stale server process may hold wrong `CONTEXT_HUB_WORKSPACE_TOKEN` → restart before smoke-test
 
 ## Context to Load This Session
 - Tier 0: `docs/context/PROJECT_INVARIANTS.md`
-- Tier 1: `docs/context/MVP_CONTEXT.md`
-- Tier 2: only load specific module brief if patching that module
-
-WHITEPAPER.md không cần load — tất cả actionable context đã trong tiers.
+- Tier 1: `docs/context/PHASE2_CONTEXT.md`  ← use this now, not MVP_CONTEXT
+- Tier 2 (if implementing): `docs/context/modules/M08_DX_POLISH_BRIEF.md` (start here)

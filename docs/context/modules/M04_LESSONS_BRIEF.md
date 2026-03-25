@@ -55,8 +55,28 @@ guardrails(
 | SP-5 | Lesson embedding storage | done |
 | SP-6 | Delete/retention controls (`delete_workspace` tool) | done |
 
+## V1 Gap — `search_lessons` tool missing
+
+**Problem discovered**: `general_note`, `decision`, `workaround` lessons stored via `add_lesson`
+are NOT queryable by agents. `get_preferences()` only returns `preference-*` tagged lessons.
+All other lesson types are write-only in MVP — stored with embeddings but no read path.
+
+**Workaround (now)**: Add tag `preference-<topic>` to any lesson you want agents to read.
+
+**Proper fix (V1)**: Add `search_lessons(query, lesson_type?, limit?)` tool:
+```sql
+SELECT lesson_id, lesson_type, title, content, tags
+FROM lessons
+WHERE project_id = $1
+  AND ($3 IS NULL OR lesson_type = $3)
+ORDER BY embedding <=> $2::vector
+LIMIT $4;
+```
+No schema change needed — embedding already exists in lessons table.
+
 ## Risks (open)
-- R-M04-01: Lesson schema may need evolution if guardrail model changes mid-MVP [medium]
+- R-M04-01: `general_note`/`decision`/`workaround` lessons are write-only for agents (no query tool) [high for V1]
 
 ## Recent Decisions
-- (none yet — this is the first module to implement)
+- MVP: lesson retrieval limited to `preference-*` tag filter via `get_preferences()` [2026-03-25]
+- Workaround confirmed: tag any lesson with `preference-<topic>` to make it agent-readable now [2026-03-25]

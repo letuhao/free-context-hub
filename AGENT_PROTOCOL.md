@@ -65,7 +65,10 @@ Rule:   If matches.length > 0, use those snippets. Only read full file if more c
 When:   Session start (mandatory). Also call if unsure about any team preference.
 Params: project_id, workspace_token (optional; required only if `MCP_AUTH_ENABLED=true`)
 Returns: { preferences: [{ lesson_id, lesson_type, title, content, tags, source_refs }] }
-Note:   Returns all lessons tagged "preference-*". Read every item.
+Note:   Returns ALL lessons with ANY tag matching "preference-*" — regardless of lesson_type.
+        This means decisions, workarounds, general_notes are also returned if tagged "preference-*".
+        MVP limitation: lessons WITHOUT a "preference-*" tag are NOT queryable by agents.
+        Workaround: tag any lesson "preference-<topic>" to ensure agent visibility.
 ```
 
 ### `add_lesson`
