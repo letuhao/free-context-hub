@@ -12,10 +12,16 @@ project_id:    free-context-hub
 workspace_token: optional; required only if `MCP_AUTH_ENABLED=true` → key: CONTEXT_HUB_WORKSPACE_TOKEN
 ```
 
-First call (recommended): `help` — learn tool parameters + sample workflows.
+`project_id` is required for some tools and optional for others when `DEFAULT_PROJECT_ID` is set in the server environment.
 
-`project_id` is required for some tools and optional for others when `DEFAULT_PROJECT_ID` is set.
-`workspace_token` is optional and only needed when `MCP_AUTH_ENABLED=true`.
+`workspace_token` is optional when `MCP_AUTH_ENABLED=false` (default). If auth is enabled, every `tools/call` must include a valid token.
+
+**Boolean env note:** In `.env`, use `MCP_AUTH_ENABLED=false` (not quoted garbage). The server logs `[env]` on startup — confirm `MCP_AUTH_ENABLED` matches what you expect.
+
+First calls (recommended):
+
+1. `help` — tool inventory, parameter docs, sample workflows, templates (once per environment or when the server changes).
+2. `get_context(task?)` — minimal refs + `project_snapshot` (when available) + suggested next tool calls.
 
 ---
 
@@ -25,12 +31,13 @@ First call (recommended): `help` — learn tool parameters + sample workflows.
 
 | Step | Action | Why |
 |---|---|---|
-| 1 | Call `get_context(task?)` | Bootstrap minimal refs + suggested next tool calls |
-| 2 | (Optional) Read `docs/sessions/SESSION_PATCH.md` | If you need exact “where we left off” details |
-| 3 | (Optional) Read Tier docs from `context_refs` | Only if needed; avoid loading everything |
-| 4 | Call `search_lessons(query)` | Load relevant prior decisions/preferences/guardrails |
-| 5 | Call `search_code(query)` | Find code locations by intent |
-| 6 | Read `docs/context/modules/<MODULE>_BRIEF.md` | Only if patching that module |
+| 1 | Call `help` (e.g. `output_format: "json_pretty"`) | Onboarding: parameters + workflows |
+| 2 | Call `get_context(task?)` | Refs + optional pre-built `project_snapshot` + suggested next calls |
+| 3 | (Optional) Call `get_project_summary` | Read the full snapshot text in one shot (no embedding call) if you need more than the snippet in `get_context` |
+| 4 | (Optional) Read `docs/sessions/SESSION_PATCH.md` | Exact “where we left off” |
+| 5 | Call `search_lessons(query)` | Prior decisions/preferences/guardrails by intent |
+| 6 | Call `search_code(query)` | Code locations by intent |
+| 7 | Read `docs/context/modules/<MODULE>_BRIEF.md` | Only if patching that module |
 
 Do NOT load WHITEPAPER.md unless answering an architectural question unanswered above.
 
@@ -48,10 +55,10 @@ Do NOT load WHITEPAPER.md unless answering an architectural question unanswered 
 
 ### `help`
 ```
-When:   First call for any agent integrating with this server.
+When:   First integration with this server, or after server/tool changes.
 Params: workspace_token (optional; required only if MCP_AUTH_ENABLED=true)
-        output_format
-Returns: JSON help: tool inventory, parameter docs, sample workflows, tool-call templates.
+        output_format: auto_both | json_only | json_pretty | summary_only
+Returns: JSON: server info, auth rules, project_id rules, tools[], workflows[], tool_call_templates[], troubleshooting[].
 ```
 
 ### `index_project`
@@ -60,6 +67,7 @@ When:   After significant code changes, or at start of a fresh environment.
 Params: project_id, root (directory path), workspace_token (optional; required only if `MCP_AUTH_ENABLED=true`)
         options: { lines_per_chunk?: number, embedding_batch_size?: number }
 Returns: { status: "ok"|"error", files_indexed, duration_ms, errors[] }
+Note:   Rebuilds the per-project snapshot text used by get_project_summary (Phase 3).
 ```
 
 ### `search_code`
@@ -73,28 +81,61 @@ Rule:   If matches.length > 0, use those snippets. Only read full file if more c
 
 ### `list_lessons`
 ```
-When:   You need to browse lessons by type/tags and paginate through them.
-Params: project_id (optional if DEFAULT_PROJECT_ID is set), workspace_token (optional; required only if MCP_AUTH_ENABLED=true)
-        filters?: { lesson_type?, tags_any? }  page?: { limit?, after? }
+When:   Browse lessons by type/tags/status with cursor pagination.
+Params: project_id (optional if DEFAULT_PROJECT_ID is set), workspace_token (optional; required only if `MCP_AUTH_ENABLED=true`)
+        filters?: { lesson_type?, tags_any?, status? }   page?: { limit?, after? }
 Returns: { items: Lesson[], next_cursor?, total_count }
+Note:   Phase 3 items may include summary, quick_action, status, superseded_by.
 ```
 
 ### `search_lessons`
 ```
-When:   You need to find decisions/preferences/guardrails/workarounds by intent.
-Params: project_id (optional if DEFAULT_PROJECT_ID is set), query, workspace_token (optional; required only if MCP_AUTH_ENABLED=true)
-        filters?: { lesson_type?, tags_any? }  limit?: number
-Returns: { matches: [{ lesson_id, lesson_type, title, content_snippet, tags, score }], explanations[] }
-Rule:   Use this instead of reading many docs at session start.
+When:   Find decisions/preferences/guardrails/workarounds by intent.
+Params: project_id (optional if DEFAULT_PROJECT_ID is set), query, workspace_token (optional; required only if `MCP_AUTH_ENABLED=true`)
+        filters?: { lesson_type?, tags_any?, include_all_statuses? }  limit?: number
+Returns: { matches: [{ lesson_id, lesson_type, title, content_snippet, tags, score, status? }], explanations[] }
+Rule:   Default excludes superseded/archived unless filters.include_all_statuses=true.
+        Snippet prefers distilled summary when present (Phase 3).
 ```
 
 ### `get_context`
 ```
 When:   Session start bootstrap (recommended) or when you want suggested next tool calls.
-Params: project_id (optional if DEFAULT_PROJECT_ID is set), workspace_token (optional; required only if MCP_AUTH_ENABLED=true)
+Params: project_id (optional if DEFAULT_PROJECT_ID is set), workspace_token (optional; required only if `MCP_AUTH_ENABLED=true`)
         task?: { intent, query?, path_glob? }
-Returns: { project_id, context_refs[], suggested_next_calls[], notes[] }
-Rule:   This tool does NOT bundle large content; it returns refs + suggestions to reduce noise.
+Returns: { project_id, context_refs[], project_snapshot?, suggested_next_calls[], notes[] }
+Rule:   Does NOT bundle huge content; may include a snapshot string when the project has been indexed or has lessons.
+```
+
+### `get_project_summary`
+```
+When:   You want the full pre-built project briefing (Phase 3).
+Params: project_id (optional if DEFAULT_PROJECT_ID is set), workspace_token (optional; required only if `MCP_AUTH_ENABLED=true`)
+Returns: { project_id, body, updated_hint? }
+Rule:   No embedding call — fast read from project_snapshots. Rebuilt on add_lesson / index_project.
+```
+
+### `reflect`
+```
+When:   You want an LLM synthesis across retrieved lessons for a topic (Phase 3).
+Params: project_id (optional if DEFAULT_PROJECT_ID is set), topic, workspace_token (optional; required only if `MCP_AUTH_ENABLED=true`)
+Returns: { project_id, topic, answer, warning?, retrieved_lessons }
+Rule:   Requires DISTILLATION_ENABLED=true and a valid DISTILLATION_MODEL on the server. If disabled, answer may be empty and warning explains why.
+```
+
+### `compress_context`
+```
+When:   Shrink long pasted text via the configured chat model (Phase 3).
+Params: text, max_output_chars?, workspace_token (optional; required only if `MCP_AUTH_ENABLED=true`)
+Returns: { compressed, warning? }
+Rule:   With DISTILLATION_ENABLED=false, returns truncated original text + warning (no LLM call).
+```
+
+### `update_lesson_status`
+```
+When:   Mark a lesson draft/active/superseded/archived or link supersession (Phase 3).
+Params: project_id (optional if DEFAULT_PROJECT_ID is set), lesson_id, status, superseded_by?, workspace_token (optional)
+Returns: { status: "ok"|"error", error? }
 ```
 
 ### `add_lesson`
@@ -107,14 +148,16 @@ Params: workspace_token (optional; required only if `MCP_AUTH_ENABLED=true`)
           guardrail?: { trigger, requirement, verification_method }
         }
 lesson_type values: decision | preference | guardrail | workaround | general_note
-Returns: { status: "ok", lesson_id }
+Returns: { status: "ok", lesson_id, summary?, quick_action?, distillation?, conflict_suggestions?, guardrail_inserted? }
+Note:   Phase 3 may distill summary/quick_action when DISTILLATION_ENABLED=true; on failure lesson may be stored as draft.
+        conflict_suggestions lists semantically similar existing lessons (suggest-only; does not auto-supersede).
 ```
 
 ### `check_guardrails`
 ```
 When:   BEFORE: git push, deploy, schema migration, deleting data, force-push.
 Params: workspace_token (optional; required only if `MCP_AUTH_ENABLED=true`)
-        action_context: { action: string, project_id: string }
+        action_context: { action: string, project_id?: string, workspace?: string }
 Returns: { pass: boolean, rules_checked, needs_confirmation?, prompt?, matched_rules? }
 Rule:   If pass=false → show prompt to user, do NOT proceed without explicit approval.
         Never skip this call for the listed action types.
@@ -125,7 +168,7 @@ Rule:   If pass=false → show prompt to user, do NOT proceed without explicit a
 When:   ONLY on explicit user instruction.
 Params: project_id, workspace_token (optional; required only if `MCP_AUTH_ENABLED=true`)
 Returns: { status, deleted, deleted_project_id }
-Warning: Deletes ALL data (lessons, chunks, guardrails) for the project. Irreversible.
+Warning: Deletes ALL data (lessons, chunks, guardrails, project snapshot) for the project. Irreversible.
 ```
 
 ---
@@ -233,9 +276,11 @@ Need to find code?
 ## 7. Quick Reference Card
 
 ```
-Session start:  get_context(task?) → search_lessons(query) → search_code(query)
+Session start:  help → get_context(task?) → [get_project_summary?] → search_lessons(query) → search_code(query)
 Finding code:   search_code() before Grep/Read
+Deep recall:    reflect(topic) if distillation enabled; else search_lessons + read lessons
 Before push:    check_guardrails({action: "git push", project_id})
 Decision made:  add_lesson(type: "decision")
+Lifecycle:      update_lesson_status when superseding or archiving a lesson
 Session end:    add_lesson() for any decisions → overwrite SESSION_PATCH.md
 ```

@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { embedTexts } from './embedder.js';
 import { getDbPool } from '../db/client.js';
+import { rebuildProjectSnapshot } from './snapshot.js';
 import { loadIgnorePatternsFromRoot } from '../utils/ignore.js';
 import { chunkTextByLines } from '../utils/chunker.js';
 import { sha256Hex } from '../utils/hash.js';
@@ -174,6 +175,10 @@ export async function indexProject({ projectId, root, linesPerChunk, embeddingBa
       });
     }
   }
+
+  await rebuildProjectSnapshot(projectId).catch(err => {
+    console.error('[indexer] rebuildProjectSnapshot failed:', err instanceof Error ? err.message : err);
+  });
 
   const duration_ms = Date.now() - startedAt;
   const status: IndexProjectResult['status'] = errors.length ? 'error' : 'ok';

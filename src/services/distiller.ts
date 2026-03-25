@@ -1,0 +1,175 @@
+import { getEnv } from '../env.js';
+
+function chatBaseUrl(): string {
+  const env = getEnv();
+  return (env.DISTILLATION_BASE_URL?.trim() || env.EMBEDDINGS_BASE_URL).replace(/\/$/, '');
+}
+
+function chatHeaders(): Record<string, string> {
+  const env = getEnv();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const key = env.DISTILLATION_API_KEY ?? env.EMBEDDINGS_API_KEY;
+  if (key) headers.Authorization = `Bearer ${key}`;
+  return headers;
+}
+
+function extractJsonObject(text: string): any {
+  const raw = String(text ?? '').trim();
+  const first = raw.indexOf('{');
+  const last = raw.lastIndexOf('}');
+  if (first >= 0 && last > first) {
+    return JSON.parse(raw.slice(first, last + 1));
+  }
+  throw new Error('No JSON object found in model output');
+}
+
+async function chatCompletion(params: {
+  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+  max_tokens?: number;
+  temperature?: number;
+  timeoutMs: number;
+}): Promise<string> {
+  const env = getEnv();
+  const model = env.DISTILLATION_MODEL;
+  if (!model) throw new Error('DISTILLATION_MODEL is not configured');
+
+  const base = chatBaseUrl().endsWith('/') ? chatBaseUrl() : `${chatBaseUrl()}/`;
+  const url = new URL('v1/chat/completions', base).toString();
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), params.timeoutMs);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: chatHeaders(),
+      signal: ac.signal,
+      body: JSON.stringify({
+        model,
+        messages: params.messages,
+        temperature: params.temperature ?? 0.2,
+        max_tokens: params.max_tokens ?? 600,
+      }),
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      throw new Error(`[chat] HTTP ${res.status}: ${txt}`);
+    }
+    const json = (await res.json()) as any;
+    const content = json?.choices?.[0]?.message?.content;
+    if (typeof content !== 'string' || !content.trim()) {
+      throw new Error('[chat] Missing choices[0].message.content');
+    }
+    return content;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+export type DistillLessonResult = {
+  summary: string;
+  quick_action: string;
+};
+
+/** Heuristic: longer lessons need more completion budget so JSON is not truncated. */
+function distillMaxTokens(title: string, content: string): number {
+  const n = title.length + content.length;
+  return Math.min(2500, Math.max(500, Math.ceil(n / 2.5)));
+}
+
+export async function distillLesson(input: { title: string; content: string }): Promise<DistillLessonResult> {
+  const env = getEnv();
+  const system =
+    'You are a careful context engineer. Output ONLY valid JSON with keys "summary" and "quick_action". ' +
+    'Rules: summary must be <= 150 words. quick_action must be <= 10 short lines, imperative, no markdown fences. ' +
+    'The JSON must be parseable.';
+  const user =
+    `TITLE:\n${input.title}\n\nBODY:\n${input.content}\n\n` +
+    `Return JSON like: {"summary":"...","quick_action":"..."}`;
+
+  const out = await chatCompletion({
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ],
+    max_tokens: distillMaxTokens(input.title, input.content),
+    temperature: 0.2,
+    timeoutMs: env.DISTILLATION_TIMEOUT_MS,
+  });
+
+  const parsed = extractJsonObject(out) as any;
+  const summary = String(parsed?.summary ?? '').trim();
+  const quick_action = String(parsed?.quick_action ?? '').trim();
+  if (!summary || !quick_action) {
+    throw new Error('Distillation JSON missing summary/quick_action');
+  }
+  return { summary, quick_action };
+}
+
+export async function reflectOnTopic(input: { topic: string; bullets: string[] }): Promise<{ answer: string; warning?: string }> {
+  const env = getEnv();
+  if (!env.DISTILLATION_ENABLED) {
+    return { answer: '', warning: 'DISTILLATION_ENABLED=false (enable distillation to use reflect)' };
+  }
+
+  const ctx = input.bullets.length ? input.bullets.join('\n') : '(no retrieved lessons)';
+  const system =
+    'You are a senior engineer. Answer concisely using ONLY the provided lesson bullets as evidence. ' +
+    'If evidence is insufficient, say what is missing.';
+  const user = `TOPIC:\n${input.topic}\n\nLESSON BULLETS:\n${ctx}\n\nAnswer in <= 20 sentences.`;
+
+  const reflectBudget = Math.min(2000, Math.max(700, Math.ceil((input.topic.length + ctx.length) / 3)));
+
+  try {
+    const out = await chatCompletion({
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+      ],
+      max_tokens: reflectBudget,
+      temperature: 0.3,
+      timeoutMs: env.REFLECT_TIMEOUT_MS,
+    });
+    return { answer: out.trim() };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { answer: '', warning: msg };
+  }
+}
+
+export async function compressText(input: { text: string; maxOutputChars?: number }): Promise<{ compressed: string; warning?: string }> {
+  const env = getEnv();
+  const maxOut = Math.min(Math.max(input.maxOutputChars ?? 4000, 200), 32_000);
+
+  if (!env.DISTILLATION_ENABLED) {
+    const t = String(input.text ?? '');
+    return {
+      compressed: t.length > maxOut ? `${t.slice(0, maxOut)}…` : t,
+      warning: 'DISTILLATION_ENABLED=false; returned truncated original text instead of LLM compression',
+    };
+  }
+
+  const system =
+    'Compress the user text while preserving decisions, constraints, and actionable steps. Remove redundancy.';
+  const user = `MAX_OUTPUT_CHARS: ${maxOut}\n\nTEXT:\n${input.text}`;
+
+  try {
+    const out = await chatCompletion({
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+      ],
+      max_tokens: Math.min(1200, Math.ceil(maxOut / 3)),
+      temperature: 0.1,
+      timeoutMs: env.DISTILLATION_TIMEOUT_MS,
+    });
+    let compressed = out.trim();
+    if (compressed.length > maxOut) compressed = compressed.slice(0, maxOut) + '…';
+    return { compressed };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const t = String(input.text ?? '');
+    return {
+      compressed: t.length > maxOut ? `${t.slice(0, maxOut)}…` : t,
+      warning: msg,
+    };
+  }
+}

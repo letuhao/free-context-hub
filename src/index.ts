@@ -11,8 +11,10 @@ import { getEnv } from './env.js';
 import { applyMigrations } from './db/applyMigrations.js';
 import { indexProject } from './services/indexer.js';
 import { searchCode } from './services/retriever.js';
-import { addLesson, deleteWorkspace, listLessons, searchLessons } from './services/lessons.js';
+import { addLesson, deleteWorkspace, listLessons, searchLessons, updateLessonStatus } from './services/lessons.js';
 import { checkGuardrails } from './services/guardrails.js';
+import { getProjectSnapshotBody } from './services/snapshot.js';
+import { compressText, reflectOnTopic } from './services/distiller.js';
 
 dotenv.config();
 
@@ -45,6 +47,9 @@ function logStartupEnvSummary() {
     // Never print secrets (token / API key)
     CONTEXT_HUB_WORKSPACE_TOKEN: env.CONTEXT_HUB_WORKSPACE_TOKEN ? '[set]' : '[not set]',
     EMBEDDINGS_API_KEY: env.EMBEDDINGS_API_KEY ? '[set]' : '[not set]',
+    DISTILLATION_ENABLED: env.DISTILLATION_ENABLED,
+    DISTILLATION_BASE_URL: env.DISTILLATION_BASE_URL ?? null,
+    DISTILLATION_MODEL: env.DISTILLATION_MODEL ?? null,
   };
   console.log('[env]', JSON.stringify(safe));
 }
@@ -172,7 +177,17 @@ function createMcpToolsServer() {
 
       const endpoint = `http://localhost:${env.MCP_PORT}/mcp`;
       const requiredFor = ['index_project', 'search_code', 'add_lesson', 'delete_workspace'];
-      const optionalFor = ['list_lessons', 'search_lessons', 'get_context', 'check_guardrails', 'help'];
+      const optionalFor = [
+        'list_lessons',
+        'search_lessons',
+        'get_context',
+        'check_guardrails',
+        'help',
+        'update_lesson_status',
+        'get_project_summary',
+        'reflect',
+        'compress_context',
+      ];
 
       const tokenNote = env.MCP_AUTH_ENABLED
         ? 'workspace_token is required for every tools/call.'
@@ -206,6 +221,7 @@ function createMcpToolsServer() {
             { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
             { path: 'filters.lesson_type', required: false, notes: 'Optional lesson type filter.' },
             { path: 'filters.tags_any', required: false, notes: 'Any-overlap tag filter.' },
+            { path: 'filters.status', required: false, notes: 'Optional lifecycle filter (draft/active/superseded/archived).' },
             { path: 'page.limit', required: false, notes: 'Default: 20 (max 100).' },
             { path: 'page.after', required: false, notes: 'Cursor from previous response.' },
           ],
@@ -218,6 +234,7 @@ function createMcpToolsServer() {
             { path: 'query', required: true, notes: 'Natural language query.' },
             { path: 'filters.lesson_type', required: false, notes: 'Optional lesson type filter.' },
             { path: 'filters.tags_any', required: false, notes: 'Optional tags filter.' },
+            { path: 'filters.include_all_statuses', required: false, notes: 'Include superseded/archived when true.' },
             { path: 'limit', required: false, notes: 'Top-k results (default 10, max 50).' },
           ],
         },
@@ -248,6 +265,37 @@ function createMcpToolsServer() {
             { path: 'task.intent', required: false, notes: 'High-level intent (used for suggestions).' },
             { path: 'task.query', required: false, notes: 'Optional query string for suggestions.' },
             { path: 'task.path_glob', required: false, notes: 'Optional path filter for suggested search_code.' },
+          ],
+        },
+        {
+          name: 'update_lesson_status',
+          purpose: 'Set lesson lifecycle status and optional supersession link.',
+          key_parameters: [
+            { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
+            { path: 'lesson_id', required: true, notes: 'Lesson UUID.' },
+            { path: 'status', required: true, notes: 'draft|active|superseded|archived.' },
+            { path: 'superseded_by', required: false, notes: 'Replacement lesson UUID when superseding.' },
+          ],
+        },
+        {
+          name: 'get_project_summary',
+          purpose: 'Read the pre-built project snapshot text (fast).',
+          key_parameters: [{ path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' }],
+        },
+        {
+          name: 'reflect',
+          purpose: 'LLM synthesis over retrieved lessons for a topic (requires distillation enabled).',
+          key_parameters: [
+            { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
+            { path: 'topic', required: true, notes: 'Topic/question string.' },
+          ],
+        },
+        {
+          name: 'compress_context',
+          purpose: 'Compress arbitrary text using the configured chat model (optional).',
+          key_parameters: [
+            { path: 'text', required: true, notes: 'Input text.' },
+            { path: 'max_output_chars', required: false, notes: 'Soft output cap.' },
           ],
         },
         {
@@ -500,6 +548,10 @@ function createMcpToolsServer() {
               .optional()
               .describe('Optional lesson type filter.'),
             tags_any: z.array(z.string().min(1)).optional().describe('Optional tags-any filter (overlap).'),
+            status: z
+              .enum(['draft', 'active', 'superseded', 'archived'])
+              .optional()
+              .describe('Optional lifecycle status filter (Phase 3).'),
           })
           .optional(),
         page: z
@@ -523,6 +575,10 @@ function createMcpToolsServer() {
             created_at: z.any(),
             updated_at: z.any(),
             captured_by: z.string().nullable(),
+            summary: z.string().nullable().optional(),
+            quick_action: z.string().nullable().optional(),
+            status: z.enum(['draft', 'active', 'superseded', 'archived']).optional(),
+            superseded_by: z.string().nullable().optional(),
           }),
         ),
         next_cursor: z.string().optional(),
@@ -536,7 +592,7 @@ function createMcpToolsServer() {
         projectId,
         limit: page?.limit,
         after: page?.after,
-        filters: filters as any,
+        filters: filters as { lesson_type?: any; tags_any?: string[]; status?: any },
       });
       const summary = `list_lessons: items=${result.items.length}, total_count=${result.total_count}`;
       return formatToolResponse(result, summary, output_format);
@@ -562,6 +618,10 @@ function createMcpToolsServer() {
               .optional()
               .describe('Optional lesson type filter.'),
             tags_any: z.array(z.string().min(1)).optional().describe('Optional tags-any filter (overlap).'),
+            include_all_statuses: z
+              .boolean()
+              .optional()
+              .describe('When true, include superseded/archived lessons. Default: false (Phase 3).'),
           })
           .optional(),
         limit: z.number().int().positive().optional().describe('Max number of matches to return (default: 10; max: 50).'),
@@ -576,6 +636,7 @@ function createMcpToolsServer() {
             content_snippet: z.string(),
             tags: z.array(z.string()),
             score: z.number(),
+            status: z.enum(['draft', 'active', 'superseded', 'archived']).optional(),
           }),
         ),
         explanations: z.array(z.string()),
@@ -588,7 +649,7 @@ function createMcpToolsServer() {
         projectId,
         query,
         limit,
-        filters: filters as any,
+        filters: filters as { lesson_type?: any; tags_any?: string[]; include_all_statuses?: boolean },
       });
       const summary = `search_lessons: matches=${result.matches.length}`;
       return formatToolResponse(result, summary, output_format);
@@ -624,6 +685,24 @@ function createMcpToolsServer() {
       outputSchema: z.object({
         status: z.enum(['ok', 'error']).default('ok'),
         lesson_id: z.string(),
+        summary: z.string().nullable().optional(),
+        quick_action: z.string().nullable().optional(),
+        guardrail_inserted: z.boolean().optional(),
+        distillation: z
+          .object({
+            status: z.enum(['skipped', 'ok', 'failed']),
+            reason: z.string().optional(),
+          })
+          .optional(),
+        conflict_suggestions: z
+          .array(
+            z.object({
+              lesson_id: z.string(),
+              title: z.string(),
+              similarity: z.number(),
+            }),
+          )
+          .optional(),
       }),
     },
     async ({ workspace_token, lesson_payload, output_format }) => {
@@ -702,6 +781,7 @@ function createMcpToolsServer() {
       outputSchema: z.object({
         project_id: z.string(),
         context_refs: z.array(z.string()),
+        project_snapshot: z.string().nullable().optional(),
         suggested_next_calls: z.array(
           z.object({
             tool: z.string(),
@@ -723,9 +803,17 @@ function createMcpToolsServer() {
         'docs/sessions/SESSION_PATCH.md',
       ];
 
+      const project_snapshot = await getProjectSnapshotBody(pid);
+
       const suggested_next_calls: Array<{ tool: string; arguments: any; reason: string }> = [];
       const q = task?.query ?? task?.intent ?? '';
       const pathGlob = task?.path_glob;
+
+      suggested_next_calls.push({
+        tool: 'get_project_summary',
+        arguments: { workspace_token, project_id: pid },
+        reason: 'Read the pre-built project snapshot (fast, no embedding call).',
+      });
 
       if (q.trim().length) {
         suggested_next_calls.push({
@@ -754,8 +842,140 @@ function createMcpToolsServer() {
       notes.push(`embeddings_dim=${env.EMBEDDINGS_DIM}`);
       notes.push('get_context returns refs + suggested tool calls; it does not bundle large content.');
 
-      const result = { project_id: pid, context_refs, suggested_next_calls, notes };
+      const result = { project_id: pid, context_refs, project_snapshot, suggested_next_calls, notes };
       const summary = `get_context: project_id=${pid}, refs=${context_refs.length}, suggestions=${suggested_next_calls.length}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'update_lesson_status',
+    {
+      description: 'Update lifecycle status for a lesson (draft/active/superseded/archived) and optional supersession link.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional().describe('Workspace token (required only if MCP_AUTH_ENABLED=true).'),
+        project_id: z
+          .string()
+          .min(1)
+          .optional()
+          .describe('Project identifier. Optional if DEFAULT_PROJECT_ID is set; otherwise required.'),
+        lesson_id: z.string().min(1).describe('Lesson UUID to update.'),
+        status: z.enum(['draft', 'active', 'superseded', 'archived']).describe('New lifecycle status.'),
+        superseded_by: z.string().min(1).optional().describe('Optional replacement lesson UUID when superseding.'),
+        output_format: OutputFormatSchema.default('auto_both').describe('Response format: auto_both | json_only | json_pretty | summary_only.'),
+      }),
+      outputSchema: z.object({
+        status: z.enum(['ok', 'error']),
+        error: z.string().optional(),
+      }),
+    },
+    async ({ workspace_token, project_id, lesson_id, status, superseded_by, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const pid = resolveProjectIdOrThrow(project_id);
+      const result = await updateLessonStatus({
+        projectId: pid,
+        lessonId: lesson_id,
+        status: status as any,
+        supersededBy: superseded_by,
+      });
+      const summary = `update_lesson_status: status=${result.status}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'get_project_summary',
+    {
+      description: 'Return the pre-built project snapshot text (no embedding call).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional().describe('Workspace token (required only if MCP_AUTH_ENABLED=true).'),
+        project_id: z
+          .string()
+          .min(1)
+          .optional()
+          .describe('Project identifier. Optional if DEFAULT_PROJECT_ID is set; otherwise required.'),
+        output_format: OutputFormatSchema.default('auto_both').describe('Response format: auto_both | json_only | json_pretty | summary_only.'),
+      }),
+      outputSchema: z.object({
+        project_id: z.string(),
+        body: z.string(),
+        updated_hint: z.string().optional(),
+      }),
+    },
+    async ({ workspace_token, project_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const pid = resolveProjectIdOrThrow(project_id);
+      const body = (await getProjectSnapshotBody(pid)) ?? '';
+      const result = { project_id: pid, body, updated_hint: 'Snapshot rebuilds on add_lesson and index_project.' };
+      const summary = `get_project_summary: chars=${body.length}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'reflect',
+    {
+      description: 'LLM synthesis across retrieved lessons for a topic (requires DISTILLATION_ENABLED=true).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional().describe('Workspace token (required only if MCP_AUTH_ENABLED=true).'),
+        project_id: z
+          .string()
+          .min(1)
+          .optional()
+          .describe('Project identifier. Optional if DEFAULT_PROJECT_ID is set; otherwise required.'),
+        topic: z.string().min(1).describe('Topic/question to reflect on.'),
+        output_format: OutputFormatSchema.default('auto_both').describe('Response format: auto_both | json_only | json_pretty | summary_only.'),
+      }),
+      outputSchema: z.object({
+        project_id: z.string(),
+        topic: z.string(),
+        answer: z.string(),
+        warning: z.string().optional(),
+        retrieved_lessons: z.number().int().nonnegative(),
+      }),
+    },
+    async ({ workspace_token, project_id, topic, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const pid = resolveProjectIdOrThrow(project_id);
+      const retrieved = await searchLessons({
+        projectId: pid,
+        query: topic,
+        limit: 12,
+        filters: { include_all_statuses: false },
+      });
+      const bullets = retrieved.matches.map(m => `- ${m.title}: ${m.content_snippet}`);
+      const synth = await reflectOnTopic({ topic, bullets });
+      const result = {
+        project_id: pid,
+        topic,
+        answer: synth.answer,
+        warning: synth.warning,
+        retrieved_lessons: retrieved.matches.length,
+      };
+      const summary = `reflect: retrieved=${retrieved.matches.length}, answered=${Boolean(synth.answer).toString()}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'compress_context',
+    {
+      description: 'Compress arbitrary text using the configured chat model (optional; respects DISTILLATION_ENABLED).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional().describe('Workspace token (required only if MCP_AUTH_ENABLED=true).'),
+        text: z.string().min(1).describe('Text to compress.'),
+        max_output_chars: z.number().int().positive().optional().describe('Soft cap for output size (default: 4000).'),
+        output_format: OutputFormatSchema.default('auto_both').describe('Response format: auto_both | json_only | json_pretty | summary_only.'),
+      }),
+      outputSchema: z.object({
+        compressed: z.string(),
+        warning: z.string().optional(),
+      }),
+    },
+    async ({ workspace_token, text, max_output_chars, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const result = await compressText({ text, maxOutputChars: max_output_chars });
+      const summary = `compress_context: out_chars=${result.compressed.length}`;
       return formatToolResponse(result, summary, output_format);
     },
   );

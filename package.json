@@ -12,7 +12,8 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "migrate": "tsx src/db/migrate.ts",
-    "smoke-test": "tsx src/smoke/smokeTest.ts"
+    "smoke-test": "tsx src/smoke/smokeTest.ts",
+    "distill-probe": "tsx src/smoke/distillProbe.ts"
   },
   "repository": {
     "type": "git",

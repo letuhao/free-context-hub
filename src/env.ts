@@ -45,12 +45,29 @@ const EnvSchema = z.object({
 
   // Chunking: number of lines per chunk for MVP.
   CHUNK_LINES: z.coerce.number().int().positive().optional().default(120),
+
+  // Phase 3: OpenAI-compatible chat for distillation / reflect / compress (defaults to embeddings base URL).
+  DISTILLATION_ENABLED: z
+    .preprocess(v => parseBooleanEnv(v), z.boolean().optional())
+    .default(false),
+  DISTILLATION_BASE_URL: z.string().min(1).optional(),
+  DISTILLATION_API_KEY: z.string().optional(),
+  DISTILLATION_MODEL: z.string().min(1).optional(),
+  DISTILLATION_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(12_000),
+  REFLECT_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(5000),
 }).superRefine((val, ctx) => {
   if (val.MCP_AUTH_ENABLED && (!val.CONTEXT_HUB_WORKSPACE_TOKEN || val.CONTEXT_HUB_WORKSPACE_TOKEN.length === 0)) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['CONTEXT_HUB_WORKSPACE_TOKEN'],
       message: 'CONTEXT_HUB_WORKSPACE_TOKEN is required when MCP_AUTH_ENABLED=true',
+    });
+  }
+  if (val.DISTILLATION_ENABLED && (!val.DISTILLATION_MODEL || !val.DISTILLATION_MODEL.trim())) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['DISTILLATION_MODEL'],
+      message: 'DISTILLATION_MODEL is required when DISTILLATION_ENABLED=true',
     });
   }
 });

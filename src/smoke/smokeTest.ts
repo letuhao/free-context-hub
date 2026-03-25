@@ -78,8 +78,25 @@ async function main() {
     console.log('[smoke] tools:', listTools.tools.map((t: any) => t.name).join(', '));
 
     const names = new Set(listTools.tools.map((t: any) => String(t.name)));
-    if (!names.has('help')) {
-      throw new Error('Missing tool: help');
+    const requiredTools = [
+      'help',
+      'index_project',
+      'search_code',
+      'list_lessons',
+      'search_lessons',
+      'add_lesson',
+      'check_guardrails',
+      'get_context',
+      'delete_workspace',
+      'update_lesson_status',
+      'get_project_summary',
+      'reflect',
+      'compress_context',
+    ];
+    for (const n of requiredTools) {
+      if (!names.has(n)) {
+        throw new Error(`Missing tool: ${n}`);
+      }
     }
 
     // Best-effort: ensure descriptions exist (helps agent integration).
@@ -289,6 +306,68 @@ async function main() {
 
   if (lessonsCountBeforeA === 0) throw new Error(`Precondition failed: list_lessons for project A is empty (projectIdA=${projectIdA})`);
   if (lessonsCountBeforeB === 0) throw new Error(`Precondition failed: list_lessons for project B is empty (projectIdB=${projectIdB})`);
+
+  console.log('[smoke] get_project_summary (A)...');
+  const summaryAResult = await client.request(
+    {
+      method: 'tools/call',
+      params: {
+        name: 'get_project_summary',
+        arguments: {
+          ...tokenArgs,
+          project_id: projectIdA,
+          output_format: 'json_only',
+        },
+      },
+    },
+    CallToolResultSchema,
+  );
+  const summaryAJson = extractFirstTextJson(summaryAResult);
+  const summaryChars = String(summaryAJson.body ?? '').length;
+  console.log('[smoke] get_project_summary chars (A):', summaryChars);
+  if (summaryChars === 0) {
+    throw new Error('get_project_summary returned empty body unexpectedly');
+  }
+
+  console.log('[smoke] compress_context...');
+  const compressResult = await client.request(
+    {
+      method: 'tools/call',
+      params: {
+        name: 'compress_context',
+        arguments: {
+          ...tokenArgs,
+          text: 'This is a long repeated note. '.repeat(20),
+          max_output_chars: 400,
+          output_format: 'json_only',
+        },
+      },
+    },
+    CallToolResultSchema,
+  );
+  const compressJson = extractFirstTextJson(compressResult);
+  if (!compressJson.compressed || String(compressJson.compressed).length === 0) {
+    throw new Error('compress_context returned empty compressed text');
+  }
+
+  console.log('[smoke] reflect (A)...');
+  const reflectResult = await client.request(
+    {
+      method: 'tools/call',
+      params: {
+        name: 'reflect',
+        arguments: {
+          ...tokenArgs,
+          project_id: projectIdA,
+          topic: 'TypeScript preferences',
+          output_format: 'json_only',
+        },
+      },
+    },
+    CallToolResultSchema,
+  );
+  const reflectJson = extractFirstTextJson(reflectResult);
+  console.log('[smoke] reflect answer chars:', String(reflectJson.answer ?? '').length, 'warning:', reflectJson.warning ?? '');
 
   console.log('[smoke] search_lessons (A)...');
   const searchLessonsResultA = await client.request(
