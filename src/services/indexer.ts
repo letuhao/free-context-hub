@@ -79,7 +79,21 @@ export async function indexProject({ projectId, root, linesPerChunk, embeddingBa
       );
 
       if (existing.rowCount && existing.rows[0]?.content_hash === contentHash) {
-        continue; // unchanged
+        // Incremental guard:
+        // If a previous indexing run failed after updating `files.content_hash`
+        // (e.g., embeddings auth 401) we might have deleted chunks but left no vectors.
+        // Only skip if chunks already exist for this file.
+        const chunkExists = await pool.query(
+          `SELECT 1
+           FROM chunks
+           WHERE project_id=$1 AND root=$2 AND file_path=$3
+           LIMIT 1;`,
+          [projectId, resolvedRoot, fileRel],
+        );
+
+        if (chunkExists.rowCount && chunkExists.rowCount > 0) {
+          continue; // unchanged + vectors already present
+        }
       }
 
       // Upsert file metadata.

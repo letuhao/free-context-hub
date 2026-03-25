@@ -105,3 +105,32 @@ export async function getPreferences(projectId: string) {
   }));
 }
 
+export async function deleteWorkspace(projectId: string) {
+  const pool = getDbPool();
+
+  await pool.query('BEGIN');
+  try {
+    // Delete in child-first order (no FKs in MVP schema, but keeps intent clear).
+    await pool.query(`DELETE FROM guardrail_audit_logs WHERE project_id=$1`, [projectId]);
+    await pool.query(`DELETE FROM guardrails WHERE project_id=$1`, [projectId]);
+    await pool.query(`DELETE FROM chunks WHERE project_id=$1`, [projectId]);
+    await pool.query(`DELETE FROM files WHERE project_id=$1`, [projectId]);
+    await pool.query(`DELETE FROM lessons WHERE project_id=$1`, [projectId]);
+    const deletedProjects = await pool.query(`DELETE FROM projects WHERE project_id=$1`, [projectId]);
+    await pool.query('COMMIT');
+
+    return {
+      status: 'ok' as const,
+      deleted: (deletedProjects.rowCount ?? 0) > 0,
+      deleted_project_id: projectId,
+    };
+  } catch (err) {
+    await pool.query('ROLLBACK');
+    return {
+      status: 'error' as const,
+      deleted: false,
+      deleted_project_id: projectId,
+    };
+  }
+}
+

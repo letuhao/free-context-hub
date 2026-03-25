@@ -176,6 +176,66 @@ async function main() {
   const guardJson = extractFirstTextJson(guardResult);
   console.log('[smoke] check_guardrails result:', guardJson);
 
+  console.log('[smoke] delete_workspace...');
+  await client.request(
+    {
+      method: 'tools/call',
+      params: {
+        name: 'delete_workspace',
+        arguments: {
+          workspace_token: token,
+          project_id: projectId,
+        },
+      },
+    },
+    CallToolResultSchema,
+  );
+
+  console.log('[smoke] get_preferences after delete (expect 0)...');
+  const prefsAfterResult = await client.request(
+    {
+      method: 'tools/call',
+      params: {
+        name: 'get_preferences',
+        arguments: {
+          workspace_token: token,
+          project_id: projectId,
+        },
+      },
+    },
+    CallToolResultSchema,
+  );
+  const prefsAfterJson = extractFirstTextJson(prefsAfterResult);
+  const prefsCountAfter = prefsAfterJson.preferences?.length ?? 0;
+  console.log('[smoke] preferences after delete:', prefsCountAfter);
+  if (prefsCountAfter !== 0) {
+    throw new Error(`delete_workspace did not fully clear lessons for project_id=${projectId}`);
+  }
+
+  console.log('[smoke] search_code after delete (expect matches=0)...');
+  const searchAfterResult = await client.request(
+    {
+      method: 'tools/call',
+      params: {
+        name: 'search_code',
+        arguments: {
+          workspace_token: token,
+          project_id: projectId,
+          query: 'guardrails',
+          filters: { path_glob: 'docs/**/*.md' },
+          limit: 3,
+        },
+      },
+    },
+    CallToolResultSchema,
+  );
+  const searchAfterJson = extractFirstTextJson(searchAfterResult);
+  const matchesAfter = searchAfterJson.matches?.length ?? 0;
+  console.log('[smoke] matches after delete:', matchesAfter);
+  if (matchesAfter !== 0) {
+    throw new Error(`delete_workspace did not fully clear chunks for project_id=${projectId}`);
+  }
+
   await transport.close();
   console.log('[smoke] done');
 }

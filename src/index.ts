@@ -11,7 +11,7 @@ import { getEnv } from './env.js';
 import { applyMigrations } from './db/applyMigrations.js';
 import { indexProject } from './services/indexer.js';
 import { searchCode } from './services/retriever.js';
-import { addLesson, getPreferences } from './services/lessons.js';
+import { addLesson, deleteWorkspace, getPreferences } from './services/lessons.js';
 import { checkGuardrails } from './services/guardrails.js';
 
 dotenv.config();
@@ -223,6 +223,30 @@ function createMcpToolsServer() {
 
       const result = await checkGuardrails(String(projectId), action_context);
       return { content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result };
+    },
+  );
+
+  server.registerTool(
+    'delete_workspace',
+    {
+      description: 'Delete all ContextHub data for the given project_id (lessons, chunks, guardrails, etc.).',
+      inputSchema: z.object({
+        workspace_token: z.string(),
+        project_id: z.string().min(1),
+      }),
+      outputSchema: z.object({
+        status: z.enum(['ok', 'error']),
+        deleted: z.boolean(),
+        deleted_project_id: z.string(),
+      }),
+    },
+    async ({ workspace_token, project_id }) => {
+      assertWorkspaceToken(workspace_token);
+      const result = await deleteWorkspace(project_id);
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result) }],
+        structuredContent: result,
+      };
     },
   );
 
