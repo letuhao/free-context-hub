@@ -1,0 +1,39 @@
+---
+description: Use ContextHub MCP tools with a fixed session workflow and project defaults
+alwaysApply: true
+---
+
+# ContextHub MCP — agent workflow
+
+Use the **ContextHub** MCP server (HTTP `http://localhost:3000/mcp` or your configured URL). Prefer these tools over ad-hoc memory when the server is available.
+
+## Defaults (do not re-ask the user every time)
+
+- **`project_id`**: Omit when the server has `DEFAULT_PROJECT_ID` in its `.env` / Docker `env_file`. If you must pass it explicitly, use the project convention (this repo: `free-context-hub`; confirm in `AGENT_PROTOCOL.md` if unsure).
+- **`workspace_token`**: Omit when `MCP_AUTH_ENABLED=false`. Pass only when the server enforces auth.
+
+## Session start — run in order
+
+1. **`help`** — `output_format: json_pretty` (once per environment or after server/tool changes).
+2. **`get_context`** — optional `task: { intent, query?, path_glob? }` for refs + `suggested_next_calls`.
+3. **`get_project_summary`** — only if you need the full snapshot text (fast, no embedding).
+4. **`search_lessons`** — intent-based prior decisions / preferences / guardrails.
+5. **`search_code`** — intent-based code locations **before** heavy Grep/Glob/Read; read full files only when snippets are not enough.
+
+Optional: read `docs/sessions/SESSION_PATCH.md` for where the last session left off. Do not default to loading large architecture docs unless `get_context` + lesson/code search are insufficient.
+
+## During work
+
+- After material code exploration, **`search_code`** again with refined queries when useful.
+- Before risky actions (push, delete data), use **`check_guardrails`** with `action_context.action` and project scope.
+- **`index_project`** when the indexed tree is stale and the server can see the `root` path (Docker may need that path bind-mounted).
+
+## Session end
+
+- **`add_lesson`** for each durable decision, preference, guardrail, or workaround worth reusing.
+- Update **`docs/sessions/SESSION_PATCH.md`** with current state when the session moved the project forward.
+
+## Discipline
+
+- Follow this sequence at **session start** unless the user explicitly asks for a one-off action that skips context.
+- Prefer **structured tool outputs** over guessing file locations when ContextHub is reachable.

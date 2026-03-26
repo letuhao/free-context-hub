@@ -176,8 +176,12 @@ function createMcpToolsServer() {
       const env = getEnv();
 
       const endpoint = `http://localhost:${env.MCP_PORT}/mcp`;
-      const requiredFor = ['index_project', 'search_code', 'add_lesson', 'delete_workspace'];
+      const requiredFor: string[] = [];
       const optionalFor = [
+        'index_project',
+        'search_code',
+        'add_lesson',
+        'delete_workspace',
         'list_lessons',
         'search_lessons',
         'get_context',
@@ -198,7 +202,7 @@ function createMcpToolsServer() {
           name: 'index_project',
           purpose: 'Index files under a root into chunks + embeddings (idempotent).',
           key_parameters: [
-            { path: 'project_id', required: true, notes: 'Project scope for stored chunks.' },
+            { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID from server env if omitted.' },
             { path: 'root', required: true, notes: 'Root directory to index.' },
             { path: 'options.lines_per_chunk', required: false, notes: 'Default: 120.' },
             { path: 'options.embedding_batch_size', required: false, notes: 'Default: 8.' },
@@ -208,7 +212,7 @@ function createMcpToolsServer() {
           name: 'search_code',
           purpose: 'Semantic search over indexed code chunks (pgvector).',
           key_parameters: [
-            { path: 'project_id', required: true, notes: 'Search within a single project scope.' },
+            { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
             { path: 'query', required: true, notes: 'Natural language query.' },
             { path: 'filters.path_glob', required: false, notes: "Optional filter, e.g. 'src/**/*.ts'." },
             { path: 'limit', required: false, notes: 'Top-k results (default 10).' },
@@ -242,7 +246,7 @@ function createMcpToolsServer() {
           name: 'add_lesson',
           purpose: 'Persist a durable lesson; optionally also creates a guardrail rule.',
           key_parameters: [
-            { path: 'lesson_payload.project_id', required: true, notes: 'Project scope.' },
+            { path: 'lesson_payload.project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
             { path: 'lesson_payload.lesson_type', required: true, notes: 'decision|preference|guardrail|workaround|general_note.' },
             { path: 'lesson_payload.title', required: true, notes: 'Short label.' },
             { path: 'lesson_payload.content', required: true, notes: 'Full content (embedded).' },
@@ -254,7 +258,11 @@ function createMcpToolsServer() {
           purpose: 'Evaluate guardrails for a proposed action; returns pass/fail + confirmation prompt.',
           key_parameters: [
             { path: 'action_context.action', required: true, notes: "Action string, e.g. 'git push'." },
-            { path: 'action_context.project_id|workspace', required: true, notes: 'Project identifier for loading rules.' },
+            {
+              path: 'action_context.project_id|workspace',
+              required: false,
+              notes: 'Optional; uses DEFAULT_PROJECT_ID if both are omitted.',
+            },
           ],
         },
         {
@@ -301,7 +309,9 @@ function createMcpToolsServer() {
         {
           name: 'delete_workspace',
           purpose: 'Delete all stored data for a project_id (lessons, chunks, guardrails, logs).',
-          key_parameters: [{ path: 'project_id', required: true, notes: 'Project to delete.' }],
+          key_parameters: [
+            { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
+          ],
         },
       ];
 
@@ -427,7 +437,8 @@ function createMcpToolsServer() {
           required_for: requiredFor,
           optional_for: optionalFor,
           default_env: 'DEFAULT_PROJECT_ID',
-          missing_behavior: 'InvalidParams (Bad Request) if project_id missing and DEFAULT_PROJECT_ID not set.',
+          missing_behavior:
+            'InvalidParams if neither project_id nor DEFAULT_PROJECT_ID is set. When DEFAULT_PROJECT_ID is set, all tools may omit project_id.',
         },
         tools,
         workflows,
@@ -450,7 +461,11 @@ function createMcpToolsServer() {
           .string()
           .optional()
           .describe('MVP workspace token (required only if MCP_AUTH_ENABLED=true)'),
-        project_id: z.string().min(1).describe('Project identifier for scoping stored vectors/metadata (required).'),
+        project_id: z
+          .string()
+          .min(1)
+          .optional()
+          .describe('Project identifier for scoping stored vectors. Optional if DEFAULT_PROJECT_ID is set on the server.'),
         root: z.string().min(1).describe('Root directory path to index (absolute or relative to server process cwd).'),
         output_format: OutputFormatSchema.default('auto_both').describe('Response format: auto_both | json_only | json_pretty | summary_only.'),
         options: z
@@ -474,8 +489,9 @@ function createMcpToolsServer() {
     },
     async ({ workspace_token, project_id, root, output_format, options }) => {
       assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
       const result = await indexProject({
-        projectId: project_id,
+        projectId,
         root,
         linesPerChunk: options?.lines_per_chunk,
         embeddingBatchSize: options?.embedding_batch_size,
@@ -491,7 +507,11 @@ function createMcpToolsServer() {
       description: 'Semantic code search over indexed chunks using vector similarity.',
       inputSchema: z.object({
         workspace_token: z.string().optional().describe('Workspace token (required only if MCP_AUTH_ENABLED=true).'),
-        project_id: z.string().min(1).describe('Project identifier to search within (required).'),
+        project_id: z
+          .string()
+          .min(1)
+          .optional()
+          .describe('Project identifier to search within. Optional if DEFAULT_PROJECT_ID is set on the server.'),
         query: z.string().min(1).describe('Natural language query to embed and search against.'),
         filters: z
           .object({
@@ -518,8 +538,9 @@ function createMcpToolsServer() {
     },
     async ({ workspace_token, project_id, query, filters, limit, debug, output_format }) => {
       assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
       const result = await searchCode({
-        projectId: project_id,
+        projectId,
         query,
         pathGlob: filters?.path_glob,
         limit,
@@ -663,7 +684,11 @@ function createMcpToolsServer() {
       inputSchema: z.object({
         workspace_token: z.string().optional().describe('Workspace token (required only if MCP_AUTH_ENABLED=true).'),
         lesson_payload: z.object({
-          project_id: z.string().min(1).describe('Project identifier for scoping this lesson (required).'),
+          project_id: z
+            .string()
+            .min(1)
+            .optional()
+            .describe('Project identifier for scoping this lesson. Optional if DEFAULT_PROJECT_ID is set on the server.'),
           lesson_type: z
             .enum(['decision', 'preference', 'guardrail', 'workaround', 'general_note'])
             .describe('Lesson type (required).'),
@@ -707,7 +732,8 @@ function createMcpToolsServer() {
     },
     async ({ workspace_token, lesson_payload, output_format }) => {
       assertWorkspaceToken(workspace_token);
-      const result = await addLesson(lesson_payload as any);
+      const projectId = resolveProjectIdOrThrow(lesson_payload.project_id);
+      const result = await addLesson({ ...lesson_payload, project_id: projectId } as any);
       const summary = `add_lesson: lesson_id=${result.lesson_id ?? '(unknown)'}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -747,12 +773,10 @@ function createMcpToolsServer() {
     },
     async ({ workspace_token, action_context, output_format }) => {
       assertWorkspaceToken(workspace_token);
-      const projectId = action_context.project_id ?? action_context.workspace;
-      if (!projectId) {
-        throw new Error('Missing project identifier in action_context (expected project_id or workspace)');
-      }
+      const explicit = action_context.project_id ?? action_context.workspace;
+      const projectId = explicit && String(explicit).trim() ? String(explicit) : resolveProjectIdOrThrow(undefined);
 
-      const result = await checkGuardrails(String(projectId), action_context);
+      const result = await checkGuardrails(projectId, action_context);
       const summary = `check_guardrails: pass=${result.pass}, rules_checked=${result.rules_checked}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -986,7 +1010,11 @@ function createMcpToolsServer() {
       description: 'Delete all ContextHub data for the given project_id (lessons, chunks, guardrails, etc.).',
       inputSchema: z.object({
         workspace_token: z.string().optional().describe('Workspace token (required only if MCP_AUTH_ENABLED=true).'),
-        project_id: z.string().min(1).describe('Project identifier to delete (required).'),
+        project_id: z
+          .string()
+          .min(1)
+          .optional()
+          .describe('Project identifier to delete. Optional if DEFAULT_PROJECT_ID is set on the server.'),
         output_format: OutputFormatSchema.default('auto_both').describe('Response format: auto_both | json_only | json_pretty | summary_only.'),
       }),
       outputSchema: z.object({
@@ -997,7 +1025,8 @@ function createMcpToolsServer() {
     },
     async ({ workspace_token, project_id, output_format }) => {
       assertWorkspaceToken(workspace_token);
-      const result = await deleteWorkspace(project_id);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      const result = await deleteWorkspace(projectId);
       const summary = `delete_workspace: deleted=${result.deleted}, project_id=${result.deleted_project_id}`;
       return formatToolResponse(result, summary, output_format);
     },
