@@ -19,8 +19,7 @@ This guide gets your local ContextHub MVP running (Postgres + embeddings) and co
 
 ## Prerequisites
 
-- Node.js (for running the MCP server)
-- Docker (for Postgres)
+- Docker (for Postgres + MCP server)
 - LM Studio (or any OpenAI-compatible embeddings server) serving `POST /v1/embeddings`
 
 ## Step 1: Configure environment
@@ -41,13 +40,35 @@ Edit `.env` and ensure:
 - `EMBEDDINGS_BASE_URL` points to your embeddings server (default: `http://127.0.0.1:1234`)
 - `EMBEDDINGS_MODEL` matches the DB embedding dimension (current MVP default is `mixedbread-ai/text-embedding-mxbai-embed-large-v1` with `EMBEDDINGS_DIM=1024`)
 
-## Step 2: Start Postgres (Docker)
+## Step 2: Start Postgres + MCP server (Docker)
 
 ```bash
 docker compose up -d
 ```
 
-Postgres listens on `localhost:5432`.
+Postgres listens on `localhost:5432`. MCP listens on `http://localhost:3000/mcp`.
+
+If you run LM Studio on your host machine (recommended), the MCP container will reach it via `host.docker.internal`.
+
+If you see an npm error like `self-signed certificate in certificate chain` while building the MCP image, set `NPM_STRICT_SSL=false` in your environment (Compose already defaults it to false) or bake your corporate CA into the image.
+
+### Corporate CA certificate profile (recommended)
+
+If your network uses a corporate MITM certificate (for example `certs/personal_kas.cer` in this repo), you can run the MCP container with that CA installed into the container trust store:
+
+```bash
+# Stop the non-CA MCP container if it's running (port conflict on 3000):
+docker compose stop mcp
+
+# Start DB + the CA-enabled MCP server:
+docker compose --profile corp-ca up -d --build db mcp-ca
+```
+
+This profile builds a special image target that:
+
+- installs the cert into Alpine's system trust store
+- sets `npm config cafile` so `npm ci` works with strict SSL enabled
+- sets `NODE_EXTRA_CA_CERTS` for runtime HTTPS calls
 
 ## Step 3: Start embeddings server (LM Studio)
 
@@ -57,9 +78,9 @@ In LM Studio:
 - Use the embedding model configured in `.env` (default: `mixedbread-ai/text-embedding-mxbai-embed-large-v1`)
 - If your embeddings server requires an API key, set `EMBEDDINGS_API_KEY` in `.env`
 
-## Step 4: Run the MCP server
+## Step 4: (Optional) Run the MCP server without Docker
 
-In another terminal:
+If you prefer to run only Postgres in Docker and run MCP on your host:
 
 ```bash
 npm install

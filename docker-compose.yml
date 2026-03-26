@@ -10,6 +10,87 @@ services:
     volumes:
       - contexthub_pgdata:/var/lib/postgresql/data
 
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: base
+      args:
+        # If you hit "self-signed certificate in certificate chain" during image build,
+        # set this to "false" (dev-only) or bake your corporate CA into the image.
+        NPM_STRICT_SSL: ${NPM_STRICT_SSL:-false}
+    depends_on:
+      - db
+    env_file:
+      - .env
+    environment:
+      # Inside Compose, reach Postgres via service name.
+      DATABASE_URL: postgresql://contexthub:contexthub@db:5432/contexthub
+      # If you run LM Studio on the host, containers must use host.docker.internal.
+      EMBEDDINGS_BASE_URL: ${EMBEDDINGS_BASE_URL:-http://host.docker.internal:1234}
+      MCP_PORT: ${MCP_PORT:-3000}
+      # Future phase: store index artifacts / caches here.
+      INDEX_STORAGE_ROOT: /data/index
+      # Future phase (optional): S3-compatible object storage for snapshots/artifacts.
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_REGION: ${S3_REGION:-}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-}
+    ports:
+      - "3000:3000"
+    volumes:
+      - contexthub_mcpdata:/data
+
+  # MCP server with corporate CA installed into container trust store.
+  # Start with: docker compose --profile corp-ca up -d --build db mcp-ca
+  mcp-ca:
+    profiles: ["corp-ca"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: with-ca
+      args:
+        # With the CA installed, you can keep strict SSL enabled.
+        NPM_STRICT_SSL: ${NPM_STRICT_SSL:-true}
+    depends_on:
+      - db
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://contexthub:contexthub@db:5432/contexthub
+      EMBEDDINGS_BASE_URL: ${EMBEDDINGS_BASE_URL:-http://host.docker.internal:1234}
+      MCP_PORT: ${MCP_PORT:-3000}
+      INDEX_STORAGE_ROOT: /data/index
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_REGION: ${S3_REGION:-}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-}
+    ports:
+      - "3000:3000"
+    volumes:
+      - contexthub_mcpdata:/data
+
+  # Optional S3-compatible storage (MinIO) for future indexing phases.
+  # Start with: docker compose --profile s3 up -d
+  minio:
+    image: minio/minio:RELEASE.2025-01-20T14-49-07Z
+    profiles: ["s3"]
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - contexthub_minio_data:/data
+
 volumes:
   contexthub_pgdata:
+  contexthub_mcpdata:
+  contexthub_minio_data:
 
