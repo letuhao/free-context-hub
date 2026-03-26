@@ -245,21 +245,43 @@ Safety evaluation:
 - Ensure guardrails never silently allow risky actions without required verification steps.
 
 ## Roadmap
-### MVP (Core)
+
+### Phase 1-2: Core MVP
 - MCP interface (index/search/preferences/lessons)
 - Local indexing with ignore rules and secret exclusion
 - Semantic search returning structured snippets (vector-first)
 - Lesson capture + basic guardrails enforcement (project-scoped)
-- Minimal dashboard/CLI output (optional but useful)
 
-### V1 (Team Value Boost)
-- Improved hybrid retrieval and reranking
-- Dependency-aware context expansion (lightweight)
+### Phase 3: Knowledge Distillation
+- LLM-powered lessons distillation (Phase 3)
+- Semantic reflection and context compression
+- Project snapshots and automated briefings
 
-### V2 (Advanced)
-- Full knowledge graph linking lessons to code references
-- Impact analysis and broader risk previews
-- More robust guardrail verification (CI integration)
+### Phase 4: Advanced Indexing & Knowledge Graph
+- Code index building and **Knowledge Graph Building**
+- Entity relationship mapping (Class/Function/Dependency)
+- Linking lessons to specific code symbols
+
+### Phase 5: Automation & Git Intelligence
+- Automation knowledge building: auto-collect data from git commits
+- Semantic commit analysis to update lessons/guardrails
+- Historical context reconstruction
+
+### Phase 6-7: Communication & Visualization
+- **Multi-Agent Knowledge**: Collect knowledge from inter-agent and agent-to-builder communications.
+- **Interaction GUI**: Visual hub for humans to inspect and browse the knowledge graph.
+
+### Phase 8-9: Human Interface & Multi-Format
+- **Human-in-the-loop**: Allow users to correct knowledge and add new insights interactively.
+- **Expanded Ingestion**: Support for PDF, DOCX, Excel, and Image files.
+
+### Phase 10-11: Insights & Integration
+- **RAG to Insight**: Convert complex knowledge into human-readable text and diagrams on demand.
+- **VS Code Extension**: Deep integration into the Visual Studio Code ecosystem.
+
+### Phase 12: Knowledge Portability
+- **Exchange Hub**: Import/Export knowledge to/from other team-hosted ContextHubs or infrastructure.
+- Standardized knowledge interchange format.
 
 ## Appendix: Relationship to Inspiration Projects
 ContextStream inspiration:

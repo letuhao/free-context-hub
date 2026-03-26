@@ -1,84 +1,113 @@
-# free-context-hub
+# 🧠 free-context-hub
 
-Self-hosted "persistent memory + semantic code search + guardrails" for MCP-enabled AI tools.
+> **Self-hosted "persistent memory + semantic code search + guardrails" for MCP-enabled AI tools.**
 
-This repo runs a local ContextHub MVP that exposes MCP tools (Cursor / Claude Code) so your assistant can:
+`free-context-hub` is a local ContextHub that empowers your AI assistants (Cursor, Claude Code, etc.) with long-term memory, deep codebase understanding, and safety guardrails—all running on your hardware.
 
-- Index your repo into pgvector embeddings
-- Search code by intent (`search_code`)
-- Persist lessons/preferences per `project_id`
-- Apply lightweight guardrails before risky actions
+---
 
-## Quickstart (run locally)
+## ✨ Key Features
 
-1. Configure environment:
-   - `copy .env.example .env`
-2. Start Postgres (pgvector):
-   - `docker compose up -d`
-3. Start your embeddings server (LM Studio):
-   - must serve `POST /v1/embeddings`
-4. Run the MCP server:
-   - `npm install`
-   - `npm run dev`
-5. Verify everything works:
-   - `npm run smoke-test`
-6. Connect Cursor AI:
-   - add MCP server URL: `http://localhost:3000/mcp`
-   - by default (`MCP_AUTH_ENABLED=false`) you do NOT need to send `workspace_token`
-   - if you set `MCP_AUTH_ENABLED=true`, then send `workspace_token` = your `.env` `CONTEXT_HUB_WORKSPACE_TOKEN`
+- 📂 **Semantic Indexing**: Index your repositories into `pgvector` for intent-based search.
+- 🔍 **Intent Search**: Find code by what it *does*, not just what it *says* (`search_code`).
+- 🧠 **Persistent Lessons**: Decisions, preferences, and workarounds stay across sessions.
+- 🛡️ **Smart Guardrails**: Apply lightweight safety checks before risky actions.
+- 🔬 **Phase 3 Distillation**: (Optional) Use local LLMs to summarize and reflect on your team's knowledge.
 
-For step-by-step setup (including Cursor MCP configuration), see: [`docs/QUICKSTART.md`](docs/QUICKSTART.md).
+---
 
-## Self-hosted models (embeddings + context builder)
+## 🚀 Quickstart (Run Locally)
 
-ContextHub expects an **OpenAI-compatible** HTTP API. With [LM Studio](https://lmstudio.ai/) (or any compatible server), you typically run **two roles** on the same host: embeddings for indexing/search, and (optionally) a **chat** model for Phase 3 distillation, `reflect`, and `compress_context`.
+1.  **Configure Environment**:
+    ```bash
+    copy .env.example .env
+    ```
+2.  **Start Infrastructure**:
+    ```bash
+    docker compose up -d
+    ```
+    *(Requires Docker for Postgres + pgvector)*
+3.  **Start Embeddings Server**:
+    Ensure [LM Studio](https://lmstudio.ai/) or a compatible server is running and serving `POST /v1/embeddings`.
+4.  **Launch ContextHub**:
+    ```bash
+    npm install
+    npm run dev
+    ```
+5.  **Verify Setup**:
+    ```bash
+    npm run smoke-test
+    ```
+6.  **Connect Cursor AI**:
+    Add the MCP server URL in Cursor settings: `http://localhost:3000/mcp`.
+    *(Defaults to no auth; set `MCP_AUTH_ENABLED=true` in `.env` if needed.)*
 
-### Embeddings (indexed code + lesson vectors)
+Detailed setup guide: [`docs/QUICKSTART.md`](docs/QUICKSTART.md).
 
-| Setting | Default in `.env.example` | Notes |
-| --- | --- | --- |
-| `EMBEDDINGS_MODEL` | `mixedbread-ai/text-embedding-mxbai-embed-large-v1` | **1024 dimensions** — matches the Postgres `vector(1024)` schema and `EMBEDDINGS_DIM=1024`. |
-| `EMBEDDINGS_DIM` | `1024` | Must match the model output; mismatch causes startup/index errors. |
+---
 
-Stick to this embedding model unless you change the DB schema and `EMBEDDINGS_DIM` to match another model’s output size.
+## 🤖 Self-Hosted Models
 
-### Context builder (chat — Phase 3, optional)
+ContextHub uses OpenAI-compatible APIs. We recommend running **two roles** (can be the same LM Studio instance):
 
-Set `DISTILLATION_ENABLED=true` and point `DISTILLATION_MODEL` at a **chat** model served from the same OpenAI-compatible base URL (often the same LM Studio server as embeddings: `DISTILLATION_BASE_URL` defaults to `EMBEDDINGS_BASE_URL`).
+### 1. Embeddings (Indexing & Search)
+- **Model**: `mixedbread-ai/text-embedding-mxbai-embed-large-v1` (Default)
+- **Dimensions**: `1024` (Must match `EMBEDDINGS_DIM` in `.env`)
 
-Reasonable **local** choices (names vary by how you imported the GGUF in LM Studio):
+### 2. Context Builder (Distillation & Reflection)
+Enable by setting `DISTILLATION_ENABLED=true`.
 
-| Style | Example model ids (illustrative) | When to use |
-| --- | --- | --- |
-| Code-biased | `qwen2.5-coder-7b-instruct`, `qwen2.5-coder-14b-instruct` | Summaries, `reflect`, and guardrail-adjacent text tied to the repo. |
-| General instruct | `qwen2.5-7b-instruct`, `qwen2.5-14b-instruct`, `meta-llama-3.1-8b-instruct` | Broader lesson distillation and compression. |
-| Smaller / faster | `mistral-7b-instruct`, `phi-4` (if available in your stack) | Lower latency; shorter `summary` / `quick_action` quality. |
+| Model Type | Recommended Models | Best Use Case |
+| :--- | :--- | :--- |
+| **Code-Focused** | `qwen2.5-coder-7b/14b` | Architecture summaries & `reflect` |
+| **Generalist** | `qwen2.5-7b`, `llama-3.1-8b` | Lesson distillation & compression |
+| **Lightweight** | `phi-4`, `mistral-7b` | Low-latency summaries |
 
-Use enough **RAM/VRAM** for the chat model you load; if the chat server is slow or unavailable, Phase 3 falls back (e.g. lessons stored as `draft` without distilled fields — see `docs/context/PHASE3_CONTEXT.md`).
+---
 
-## MCP Tools
+## 🛠️ MCP Toolset
 
-This server exposes:
+Exposed tools for your AI agent:
 
-- `help` (start here: parameter docs + workflows + tool-call templates)
-- `index_project`
-- `search_code`
-- `list_lessons`
-- `search_lessons`
-- `add_lesson`
-- `check_guardrails`
-- `get_context`
-- `delete_workspace`
-- Phase 3 (optional): `update_lesson_status`, `get_project_summary`, `reflect`, `compress_context`
+- 🆘 `help`: Tool discovery & sample workflows.
+- 🏗️ `index_project`: Full repository indexing.
+- 🔍 `search_code`: Semantic retrieval of code snippets.
+- 📚 `list_lessons` / `search_lessons`: Access persistent memory.
+- ✍️ `add_lesson`: Capture new decisions or guardrails.
+- 👮 `check_guardrails`: Pre-action safety verification.
+- 🏗️ `get_context`: Bootstrap session with project state.
+- 🔄 `update_lesson_status`: Manage lesson lifecycle (Phase 3).
+- 📋 `get_project_summary`: Get a full project briefing (Phase 3).
+- 🧠 `reflect`: LLM-synthesized answers from lessons (Phase 3).
+- 🗜️ `compress_context`: Chat-based text compression (Phase 3).
+- 🧨 `delete_workspace`: Wipe project data.
 
-Call the `help` tool for the authoritative list, parameters, and workflows.
+---
 
-## Troubleshooting
+## 🗺️ Roadmap
 
-- `Unauthorized: invalid workspace_token`
-  - occurs only when `MCP_AUTH_ENABLED=true`
-  - Cursor tool arguments used the wrong token, or the server was started with an older `.env`.
-- Embedding `dimension mismatch`
-  - Set `EMBEDDINGS_DIM=1024` and use the matching default model `mixedbread-ai/text-embedding-mxbai-embed-large-v1`.
-- LM Studio embeddings `401 Unauthorized`
-  - Set `EMBEDDINGS_API_KEY` in `.env` (only if your embeddings endpoint requires it).
+We are currently in **Phase 3**. Here is our path forward:
+
+- [x] **Phase 1-2**: MVP Core (Indexing, Search, Lessons, Guardrails).
+- [x] **Phase 3**: Knowledge Distillation & Reflection (LLM-powered).
+- [ ] **Phase 4**: Advanced Code Indexing & **Knowledge Graph Building**.
+- [ ] **Phase 5**: **Automation Knowledge Building**: Auto-collecting insights from Git commits.
+- [ ] **Phase 6**: **Multi-Agent Knowledge**: Collecting knowledge from inter-agent communications.
+- [ ] **Phase 7**: **Interactive GUI**: A visual interface for humans to explore the knowledge base.
+- [ ] **Phase 8**: **Human-in-the-loop**: Interactive correction and manual knowledge injection.
+- [ ] **Phase 9**: **Multi-format Support**: PDF, DOCX, XLSX, and Image ingestion.
+- [ ] **Phase 10**: **RAG to Insight**: Converting raw knowledge into human-readable text and diagrams.
+- [ ] **Phase 11**: **IDE Native**: Deep integration with Visual Studio Code.
+- [ ] **Phase 12**: **Knowledge Portability**: Import/Export knowledge to/from other infrastructure.
+
+---
+
+## 🔧 Troubleshooting
+
+- **`Unauthorized: invalid workspace_token`**: Occurs if `MCP_AUTH_ENABLED=true` but the token is missing/wrong. Restart the server after `.env` changes.
+- **`dimension mismatch`**: Ensure `EMBEDDINGS_DIM=1024` matches your model's output.
+- **`401 Unauthorized` (LM Studio)**: Check `EMBEDDINGS_API_KEY` in your `.env`.
+
+---
+
+MIT License • [Whitepaper](WHITEPAPER.md) • [Agent Protocol](AGENT_PROTOCOL.md)
