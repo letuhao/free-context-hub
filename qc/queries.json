@@ -1,0 +1,404 @@
+{
+  "version": "2026-03-27",
+  "project_id_suggested": "qc-free-context-hub",
+  "notes": [
+    "Golden query set for RAG quality evaluation (file-level ground truth).",
+    "Each query specifies expected target_files and optional must_keywords for quick sanity checks.",
+    "Run via src/qc/ragQcRunner.ts (MCP-driven)."
+  ],
+  "queries": [
+    {
+      "id": "auth-workspace-token-validate",
+      "group": "mcp-auth",
+      "query": "Where is workspace_token validated for MCP tool calls?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/index.ts"],
+      "must_keywords": ["assertWorkspaceToken", "workspace_token", "MCP_AUTH_ENABLED"]
+    },
+    {
+      "id": "mcp-streamable-http-endpoint",
+      "group": "mcp-server",
+      "query": "Where is the MCP HTTP endpoint implemented and what routes are exposed?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/index.ts"],
+      "must_keywords": ["/mcp", "app.post", "Streamable"]
+    },
+    {
+      "id": "index-project-main-pipeline",
+      "group": "indexing",
+      "query": "How does index_project discover files, chunk them, embed, and write to Postgres?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/services/indexer.ts", "src/services/embedder.ts"],
+      "must_keywords": ["fast-glob", "chunks", "embedTexts", "pgvector"]
+    },
+    {
+      "id": "ignore-rules-loading",
+      "group": "indexing",
+      "query": "Where do ignore patterns come from and what default ignores are applied?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/utils/ignore.ts", "src/services/indexer.ts"],
+      "must_keywords": ["ignore", ".git", "node_modules"]
+    },
+    {
+      "id": "embedding-request-shape",
+      "group": "embeddings",
+      "query": "How does the embeddings client call /v1/embeddings and validate dimensions?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/services/embedder.ts"],
+      "must_keywords": ["/v1/embeddings", "EMBEDDINGS_DIM", "dimension mismatch"]
+    },
+    {
+      "id": "project-snapshot-rebuild",
+      "group": "snapshots",
+      "query": "Where is the project snapshot rebuilt and when does it update?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/services/snapshot.ts", "src/services/indexer.ts", "src/services/lessons.ts"],
+      "must_keywords": ["project_snapshots", "rebuild", "updated"]
+    },
+    {
+      "id": "kg-bootstrap",
+      "group": "kg",
+      "query": "How is the Neo4j Knowledge Graph bootstrapped on startup and schema ensured?",
+      "path_glob": "src/kg/**/*.ts",
+      "target_files": ["src/kg/bootstrap.ts", "src/kg/schema.ts", "src/kg/client.ts"],
+      "must_keywords": ["KG_ENABLED", "ensureKgSchema", "neo4j-driver"]
+    },
+    {
+      "id": "kg-upsert-from-indexer",
+      "group": "kg",
+      "query": "Where is file graph upsert triggered during indexing?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/services/indexer.ts", "src/kg/upsert.ts"],
+      "must_keywords": ["upsertFileGraphFromDisk", "KG"]
+    },
+    {
+      "id": "kg-ts-morph-extractor",
+      "group": "kg",
+      "query": "How do we extract TypeScript/JavaScript symbols and edges using ts-morph?",
+      "path_glob": "src/kg/**/*.ts",
+      "target_files": ["src/kg/extractor/tsMorphExtractor.ts"],
+      "must_keywords": ["ts-morph", "extract", "Symbol"]
+    },
+    {
+      "id": "kg-query-tools",
+      "group": "kg",
+      "query": "Where are the KG MCP tools implemented (search_symbols, neighbors, trace path, lesson impact)?",
+      "path_glob": "src/kg/**/*.ts",
+      "target_files": ["src/kg/query.ts"],
+      "must_keywords": ["searchSymbols", "getSymbolNeighbors", "traceDependencyPath", "getLessonImpact"]
+    },
+    {
+      "id": "lessons-storage-and-search",
+      "group": "lessons",
+      "query": "Where are lessons stored and how does search_lessons retrieve matches?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/services/lessons.ts"],
+      "must_keywords": ["lessons", "search", "embedding"]
+    },
+    {
+      "id": "guardrails-check",
+      "group": "guardrails",
+      "query": "How does check_guardrails evaluate rules and return prompts?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/services/guardrails.ts", "src/index.ts"],
+      "must_keywords": ["checkGuardrails", "pass", "needs_confirmation"]
+    },
+    {
+      "id": "git-ingest-core",
+      "group": "git",
+      "query": "How does ingest_git_history parse git log/diff and upsert commits + files?",
+      "path_glob": "src/services/*.ts",
+      "target_files": ["src/services/gitIntelligence.ts", "src/services/gitCommitFileParse.ts"],
+      "must_keywords": ["git", "git_commits", "git_commit_files", "parse"]
+    },
+    {
+      "id": "git-deleted-files-handling",
+      "group": "git",
+      "query": "How are deleted files represented during commit ingestion (D change kind) and why aren't they dropped?",
+      "path_glob": "src/services/*.ts",
+      "target_files": ["src/services/gitCommitFileParse.ts"],
+      "must_keywords": ["changeKind", "D", "Deleted"]
+    },
+    {
+      "id": "git-proposal-upsert-idempotent",
+      "group": "git",
+      "query": "Where is idempotent draft proposal upsert implemented for suggest_lessons_from_commits?",
+      "path_glob": "src/services/*.ts",
+      "target_files": ["src/services/gitLessonProposalUpsert.ts", "src/services/gitIntelligence.ts"],
+      "must_keywords": ["ON CONFLICT", "git_lesson_proposals", "draft"]
+    },
+    {
+      "id": "repo-source-config",
+      "group": "sources",
+      "query": "How is remote git source configuration stored and retrieved?",
+      "path_glob": "src/services/*.ts",
+      "target_files": ["src/services/repoSources.ts"],
+      "must_keywords": ["project_sources", "configureProjectSource", "remote_git"]
+    },
+    {
+      "id": "prepare-repo-clone-fetch-checkout",
+      "group": "sources",
+      "query": "How does prepare_repo clone/fetch/checkout and record last_sync_commit?",
+      "path_glob": "src/services/*.ts",
+      "target_files": ["src/services/repoSources.ts"],
+      "must_keywords": ["git clone", "fetch", "checkout", "rev-parse"]
+    },
+    {
+      "id": "s3-source-artifacts",
+      "group": "sources",
+      "query": "How are source artifacts synced to S3 and materialized back to disk (git bundle)?",
+      "path_glob": "src/services/*.ts",
+      "target_files": ["src/services/sourceArtifacts.ts"],
+      "must_keywords": ["S3", "bundle", "PutObject", "GetObject"]
+    },
+    {
+      "id": "job-queue-postgres-claim",
+      "group": "queue",
+      "query": "How are async jobs stored and claimed from Postgres (SKIP LOCKED)?",
+      "path_glob": "src/services/*.ts",
+      "target_files": ["src/services/jobQueue.ts"],
+      "must_keywords": ["async_jobs", "SKIP LOCKED", "claim"]
+    },
+    {
+      "id": "job-queue-rabbitmq",
+      "group": "queue",
+      "query": "How does RabbitMQ publishing work and how does the worker consume messages?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/services/jobQueue.ts", "src/worker.ts"],
+      "must_keywords": ["rabbitmq", "assertQueue", "consume", "ack"]
+    },
+    {
+      "id": "job-executor-dispatch",
+      "group": "queue",
+      "query": "Where does the worker dispatch job types to prepareRepo/ingestGitHistory/indexProject?",
+      "path_glob": "src/services/*.ts",
+      "target_files": ["src/services/jobExecutor.ts"],
+      "must_keywords": ["executeByType", "repo.sync", "git.ingest", "index.run"]
+    },
+    {
+      "id": "workspace-scan-porcelain",
+      "group": "workspace",
+      "query": "How does scan_workspace detect modified/untracked/staged files in a local git workspace?",
+      "path_glob": "src/services/*.ts",
+      "target_files": ["src/services/workspaceTracker.ts"],
+      "must_keywords": ["git status", "--porcelain", "untracked"]
+    },
+    {
+      "id": "env-schema-queue-s3",
+      "group": "config",
+      "query": "Where are QUEUE_* and S3_* environment variables validated?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/env.ts"],
+      "must_keywords": ["QUEUE_ENABLED", "RABBITMQ_URL", "S3_BUCKET"]
+    },
+    {
+      "id": "migrations-git-intelligence",
+      "group": "db",
+      "query": "Which migration creates git intelligence tables and draft proposal uniqueness?",
+      "path_glob": "migrations/*.sql",
+      "target_files": ["migrations/0005_git_intelligence.sql", "migrations/0007_git_lesson_proposals_draft_unique.sql"],
+      "must_keywords": ["git_commits", "git_commit_files", "uq_git_lesson_proposals"]
+    },
+    {
+      "id": "migrations-sources-jobs",
+      "group": "db",
+      "query": "Which migration creates project_sources, project_workspaces, workspace_deltas, async_jobs?",
+      "path_glob": "migrations/*.sql",
+      "target_files": ["migrations/0006_sources_and_jobs.sql"],
+      "must_keywords": ["project_sources", "async_jobs"]
+    },
+    {
+      "id": "tool-output-formatting",
+      "group": "mcp-server",
+      "query": "How does the server format MCP tool responses (json_only/summary_only/auto_both)?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/utils/outputFormat.ts", "src/index.ts"],
+      "must_keywords": ["output_format", "json_only", "summary_only"]
+    },
+    {
+      "id": "output-format-parser-smoke",
+      "group": "mcp-server",
+      "query": "Where do our clients parse MCP tool outputs that may contain summary+json (auto_both)?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/smoke/smokeTest.ts", "src/smoke/phase5WorkerValidation.ts"],
+      "must_keywords": ["parse", "JSON"]
+    },
+    {
+      "id": "env-boolean-parser",
+      "group": "config",
+      "query": "How are boolean environment variables parsed safely?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/env.ts"],
+      "must_keywords": ["parseBooleanEnv"]
+    },
+    {
+      "id": "mcp-tool-registrations",
+      "group": "mcp-server",
+      "query": "Where are MCP tools registered and which modules implement them?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/index.ts"],
+      "must_keywords": ["registerTool"]
+    },
+    {
+      "id": "db-migrations-apply",
+      "group": "db",
+      "query": "How does the server apply SQL migrations on startup?",
+      "path_glob": "src/db/*.ts",
+      "target_files": ["src/db/applyMigrations.ts"],
+      "must_keywords": ["applyMigrations", "migrations"]
+    },
+    {
+      "id": "db-pool-singleton",
+      "group": "db",
+      "query": "Where is the Postgres connection pool created and reused?",
+      "path_glob": "src/db/*.ts",
+      "target_files": ["src/db/client.ts"],
+      "must_keywords": ["new Pool", "DATABASE_URL"]
+    },
+    {
+      "id": "guardrails-storage",
+      "group": "guardrails",
+      "query": "Where are guardrails stored and how are triggers matched?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/services/guardrails.ts"],
+      "must_keywords": ["trigger", "regex"]
+    },
+    {
+      "id": "lessons-distillation-enabled",
+      "group": "lessons",
+      "query": "Where does distillation affect lesson creation, summary, and conflict suggestions?",
+      "path_glob": "src/services/*.ts",
+      "target_files": ["src/services/lessons.ts", "src/services/distiller.ts"],
+      "must_keywords": ["DISTILLATION_ENABLED", "summary"]
+    },
+    {
+      "id": "distiller-commit-suggestion-schema",
+      "group": "distillation",
+      "query": "How do we validate LLM output schema for commit-to-lesson suggestions?",
+      "path_glob": "src/services/*.ts",
+      "target_files": ["src/services/distiller.ts"],
+      "must_keywords": ["zod", "safeParse"]
+    },
+    {
+      "id": "job-correlation-filter",
+      "group": "queue",
+      "query": "How does list_jobs filter by correlation_id and why is it important for per-run reporting?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/services/jobQueue.ts", "src/index.ts"],
+      "must_keywords": ["correlation_id"]
+    },
+    {
+      "id": "rabbitmq-queue-assert-bind",
+      "group": "queue",
+      "query": "Where do we assert/bind RabbitMQ queues and what routing keys are used?",
+      "path_glob": "src/services/*.ts",
+      "target_files": ["src/services/jobQueue.ts"],
+      "must_keywords": ["assertQueue", "bindQueue", "routingKey"]
+    },
+    {
+      "id": "worker-rabbitmq-consumer",
+      "group": "queue",
+      "query": "How does the worker start a RabbitMQ consumer and ack/nack messages?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/worker.ts"],
+      "must_keywords": ["consume", "ack", "nack"]
+    },
+    {
+      "id": "worker-fallback-postgres-polling",
+      "group": "queue",
+      "query": "Does the worker still poll Postgres as a fallback and where is that loop implemented?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/worker.ts", "src/services/jobExecutor.ts"],
+      "must_keywords": ["runNextJob", "idle"]
+    },
+    {
+      "id": "repo-sync-fanout",
+      "group": "queue",
+      "query": "When repo.sync succeeds, where do we enqueue git.ingest and index.run and propagate correlation_id?",
+      "path_glob": "src/services/*.ts",
+      "target_files": ["src/services/jobExecutor.ts"],
+      "must_keywords": ["repo.sync", "enqueueJob"]
+    },
+    {
+      "id": "project-sources-schema",
+      "group": "sources",
+      "query": "What is the schema for project_sources and how does it support remote_git and local_workspace?",
+      "path_glob": "migrations/*.sql",
+      "target_files": ["migrations/0006_sources_and_jobs.sql"],
+      "must_keywords": ["project_sources", "remote_git", "local_workspace"]
+    },
+    {
+      "id": "workspace-deltas-schema",
+      "group": "workspace",
+      "query": "What table stores workspace deltas and what fields capture modified/untracked/staged files?",
+      "path_glob": "migrations/*.sql",
+      "target_files": ["migrations/0006_sources_and_jobs.sql"],
+      "must_keywords": ["workspace_deltas"]
+    },
+    {
+      "id": "scan-workspace-delta-index",
+      "group": "workspace",
+      "query": "How does scan_workspace optionally trigger delta indexing?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/services/workspaceTracker.ts", "src/index.ts"],
+      "must_keywords": ["run_delta_index", "indexProject"]
+    },
+    {
+      "id": "delete-workspace-cascades",
+      "group": "storage",
+      "query": "When delete_workspace is called, which tables are cleared for phase 5/6 features?",
+      "path_glob": "src/services/*.ts",
+      "target_files": ["src/services/lessons.ts"],
+      "must_keywords": ["async_jobs", "project_sources"]
+    },
+    {
+      "id": "kg-ids-deterministic",
+      "group": "kg",
+      "query": "How are deterministic IDs generated for KG nodes and symbols?",
+      "path_glob": "src/kg/**/*.ts",
+      "target_files": ["src/kg/ids.ts"],
+      "must_keywords": ["sha256"]
+    },
+    {
+      "id": "kg-linker-lessons",
+      "group": "kg",
+      "query": "How are lessons linked to code symbols in Neo4j and what heuristics are used?",
+      "path_glob": "src/kg/**/*.ts",
+      "target_files": ["src/kg/linker.ts"],
+      "must_keywords": ["lesson", "symbol"]
+    },
+    {
+      "id": "kg-project-graph-delete",
+      "group": "kg",
+      "query": "How do we delete graph data for a project (cleanup)?",
+      "path_glob": "src/kg/**/*.ts",
+      "target_files": ["src/kg/projectGraph.ts"],
+      "must_keywords": ["delete", "project"]
+    },
+    {
+      "id": "git-impact-analysis",
+      "group": "git",
+      "query": "How does analyze_commit_impact combine changed files with KG symbol/lesson links?",
+      "path_glob": "src/services/*.ts",
+      "target_files": ["src/services/gitIntelligence.ts"],
+      "must_keywords": ["analyzeCommitImpact"]
+    },
+    {
+      "id": "git-link-commit-to-lesson",
+      "group": "git",
+      "query": "How does link_commit_to_lesson update lesson source_refs and refresh symbol links?",
+      "path_glob": "src/services/*.ts",
+      "target_files": ["src/services/gitIntelligence.ts"],
+      "must_keywords": ["linkCommitToLesson", "source_refs"]
+    },
+    {
+      "id": "git-proposal-sanitization",
+      "group": "git",
+      "query": "Where do we sanitize source_refs to avoid [object Object] and ensure determinism?",
+      "path_glob": "src/services/*.ts",
+      "target_files": ["src/services/gitIntelligence.ts", "src/services/distiller.ts"],
+      "must_keywords": ["normalizeSourceRefs", "safeParse"]
+    }
+  ]
+}
+

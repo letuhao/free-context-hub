@@ -650,6 +650,9 @@ function createMcpToolsServer() {
         filters: z
           .object({
             path_glob: z.string().min(1).optional().describe("Optional path glob filter (stored paths are POSIX-like). Example: 'src/**/*.ts'."),
+            include_tests: z.boolean().optional().describe('When true, include *.test.ts and __tests__ paths (default: false).'),
+            lexical_boost: z.boolean().optional().describe('When true, apply lightweight lexical boosting (default: true).'),
+            kg_assist: z.boolean().optional().describe('When true and KG_ENABLED=true, use KG symbol search to boost relevant files (default: false).'),
           })
           .optional(),
         limit: z.number().int().positive().optional().describe('Max number of matches to return (default: 10).'),
@@ -677,6 +680,9 @@ function createMcpToolsServer() {
         projectId,
         query,
         pathGlob: filters?.path_glob,
+        includeTests: filters?.include_tests,
+        lexicalBoost: filters?.lexical_boost,
+        kgAssist: filters?.kg_assist,
         limit,
         debug,
       });

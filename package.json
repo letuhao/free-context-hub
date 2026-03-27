@@ -17,6 +17,7 @@
     "smoke-test": "tsx src/smoke/smokeTest.ts",
     "bench:phase5": "tsx src/smoke/phase5ValidationBenchmark.ts",
     "validate:phase5-worker": "tsx src/smoke/phase5WorkerValidation.ts",
+    "qc:rag": "tsx src/qc/ragQcRunner.ts",
     "ci:mock-embeddings": "node scripts/ci-mock-embeddings.mjs",
     "distill-probe": "tsx src/smoke/distillProbe.ts"
   },
