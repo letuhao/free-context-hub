@@ -272,6 +272,19 @@ Safety evaluation:
 - Graph-assisted impact: `analyze_commit_impact` reuses Phase 4 symbol/lesson links when `KG_ENABLED=true`
 - Fallback: when `GIT_INGEST_ENABLED=false`, Phase 5 tools return graceful warnings and do not affect Phase 1–4
 
+### Phase 5 Hardening Addendum
+- Correlation-scoped queue reporting: `list_jobs` supports filtering by `correlation_id` so one run window can be reported deterministically; worker fan-out jobs inherit parent correlation.
+- Operational smoke coverage: dedicated optional smoke block validates `prepare_repo`, `enqueue_job`, `run_next_job`, and `scan_workspace` in one execution path.
+- Deep worker validation: `validate:phase5-worker` now checks clone/sync evidence, queue-chain completion (`repo.sync -> git.ingest -> index.run`), retrieval quality, and DB-side proof (`chunks`, `files`, `git_commits`).
+- Continuous verification: scheduled CI workflow runs Phase 5 worker validation periodically against `https://github.com/letuhao/free-context-hub` with a mock embeddings service for stable, reproducible runtime checks.
+
+**Acceptance Criteria (Release Checklist)**
+- `list_jobs(correlation_id=...)` returns only jobs in that run window; `repo.sync` child jobs (`git.ingest`, `index.run`) share the same correlation id.
+- `prepare_repo` succeeds for the target repository and returns a non-empty `last_sync_commit` and valid `repo_root`.
+- Worker pipeline completes with `repo.sync -> git.ingest -> index.run` all reaching `succeeded` within the configured timeout.
+- Validation evidence exists in storage: `git_commits > 0`, `files > 0`, and `chunks > 0` for the validated `project_id`.
+- CI scheduled workflow (`phase5-worker-validation`) passes and produces a machine-readable validation artifact with all gates marked pass.
+
 ### Phase 6-7: Communication & Visualization
 - **Multi-Agent Knowledge**: Collect knowledge from inter-agent and agent-to-builder communications.
 - **Interaction GUI**: Visual hub for humans to inspect and browse the knowledge graph.
