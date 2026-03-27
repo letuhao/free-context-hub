@@ -2,6 +2,8 @@ FROM node:23-alpine AS base
 
 WORKDIR /app
 
+RUN apk add --no-cache git
+
 COPY package.json package-lock.json* ./
 ARG NPM_STRICT_SSL=true
 # Some networks MITM HTTPS with a custom CA and break npm inside containers.
@@ -25,6 +27,8 @@ RUN for f in /usr/local/share/ca-certificates/*.cer; do mv "$f" "${f%.cer}.crt";
 FROM ca-base AS with-ca
 
 WORKDIR /app
+
+RUN apk add --no-cache git
 
 COPY package.json package-lock.json* ./
 ARG NPM_STRICT_SSL=true

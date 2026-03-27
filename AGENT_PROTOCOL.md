@@ -162,6 +162,44 @@ Returns: { lesson?, linked_symbols[], affected_files[], rationale, warning? }
 Rule:   Populated when lessons were written with `source_refs` pointing at indexed paths (optionally `src/file.ts:MySymbol`).
 ```
 
+### `ingest_git_history` (Phase 5)
+```
+When:   Ingest git commits/files into ContextHub for automation memory.
+Params: project_id (optional if DEFAULT_PROJECT_ID is set), root, since?, max_commits?, workspace_token (optional)
+Returns: { status, run_id?, commits_seen, commits_upserted, files_upserted, warning?, error? }
+Rule:   Requires GIT_INGEST_ENABLED=true. When disabled, returns skipped + warning (no side effects).
+```
+
+### `list_commits` / `get_commit` (Phase 5)
+```
+When:   Read ingested commit history and changed file details.
+Params: list_commits(project_id?, limit?) | get_commit(project_id?, sha)
+Returns: commit metadata and changed files (for get_commit).
+```
+
+### `suggest_lessons_from_commits` (Phase 5)
+```
+When:   Generate draft lesson proposals from commit context.
+Params: project_id?, commit_shas?, limit?, workspace_token (optional)
+Returns: { proposals[] } where each proposal is draft-only and reviewable.
+Rule:   Uses distillation when DISTILLATION_ENABLED=true; otherwise heuristic fallback.
+```
+
+### `link_commit_to_lesson` (Phase 5)
+```
+When:   Attach commit refs/file refs into an existing lesson and refresh symbol links.
+Params: project_id?, commit_sha, lesson_id, workspace_token (optional)
+Returns: { status, linked_refs, warning?, error? }
+```
+
+### `analyze_commit_impact` (Phase 5)
+```
+When:   Analyze affected files/symbols/related lessons for a commit.
+Params: project_id?, commit_sha, limit?, workspace_token (optional)
+Returns: { commit_sha, affected_files[], affected_symbols[], related_lessons[], warning? }
+Rule:   If KG_ENABLED=false, returns file-only impact + warning.
+```
+
 ### `update_lesson_status`
 ```
 When:   Mark a lesson draft/active/superseded/archived or link supersession (Phase 3).

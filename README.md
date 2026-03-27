@@ -81,17 +81,20 @@ Exposed tools for your AI agent:
 - 🧠 `reflect`: LLM-synthesized answers from lessons (Phase 3).
 - 🗜️ `compress_context`: Chat-based text compression (Phase 3).
 - 🧨 `delete_workspace`: Wipe project data.
+- 🧾 `ingest_git_history` / `list_commits` / `get_commit`: Git intelligence ingestion + retrieval (Phase 5).
+- 📝 `suggest_lessons_from_commits` / `link_commit_to_lesson`: Draft lesson automation from commit context (Phase 5).
+- 🧭 `analyze_commit_impact`: Commit impact over Phase 4 symbol/lesson graph (Phase 5).
 
 ---
 
 ## 🗺️ Roadmap
 
-We are currently in **Phase 3**. Here is our path forward:
+We are currently in **Phase 5**. Here is our path forward:
 
 - [x] **Phase 1-2**: MVP Core (Indexing, Search, Lessons, Guardrails).
 - [x] **Phase 3**: Knowledge Distillation & Reflection (LLM-powered).
-- [ ] **Phase 4**: Advanced Code Indexing & **Knowledge Graph Building**.
-- [ ] **Phase 5**: **Automation Knowledge Building**: Auto-collecting insights from Git commits.
+- [x] **Phase 4**: Advanced Code Indexing & **Knowledge Graph Building**.
+- [x] **Phase 5**: **Automation Knowledge Building**: Auto-collecting insights from Git commits.
 - [ ] **Phase 6**: **Multi-Agent Knowledge**: Collecting knowledge from inter-agent communications.
 - [ ] **Phase 7**: **Interactive GUI**: A visual interface for humans to explore the knowledge base.
 - [ ] **Phase 8**: **Human-in-the-loop**: Interactive correction and manual knowledge injection.

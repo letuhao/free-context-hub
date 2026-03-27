@@ -63,6 +63,12 @@ const EnvSchema = z.object({
   NEO4J_URI: z.string().min(1).optional().default('bolt://127.0.0.1:7687'),
   NEO4J_USERNAME: z.string().min(1).optional().default('neo4j'),
   NEO4J_PASSWORD: z.string().min(1).optional().default('neo4jpassword'),
+
+  // Phase 5: optional git intelligence automation.
+  GIT_INGEST_ENABLED: z
+    .preprocess(v => parseBooleanEnv(v), z.boolean().optional())
+    .default(false),
+  GIT_MAX_COMMITS_PER_RUN: z.coerce.number().int().positive().optional().default(200),
 }).superRefine((val, ctx) => {
   if (val.MCP_AUTH_ENABLED && (!val.CONTEXT_HUB_WORKSPACE_TOKEN || val.CONTEXT_HUB_WORKSPACE_TOKEN.length === 0)) {
     ctx.addIssue({

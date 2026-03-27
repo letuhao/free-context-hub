@@ -17,6 +17,14 @@ import { getProjectSnapshotBody } from './services/snapshot.js';
 import { compressText, reflectOnTopic } from './services/distiller.js';
 import { bootstrapKgIfEnabled } from './kg/bootstrap.js';
 import { getLessonImpact, getSymbolNeighbors, searchSymbols, traceDependencyPath } from './kg/query.js';
+import {
+  analyzeCommitImpact,
+  getCommit,
+  ingestGitHistory,
+  linkCommitToLesson,
+  listCommits,
+  suggestLessonsFromCommits,
+} from './services/gitIntelligence.js';
 
 dotenv.config();
 
@@ -55,6 +63,8 @@ function logStartupEnvSummary() {
     KG_ENABLED: env.KG_ENABLED,
     NEO4J_URI: env.NEO4J_URI,
     NEO4J_USERNAME: env.NEO4J_USERNAME ? '[set]' : '[not set]',
+    GIT_INGEST_ENABLED: env.GIT_INGEST_ENABLED,
+    GIT_MAX_COMMITS_PER_RUN: env.GIT_MAX_COMMITS_PER_RUN,
   };
   console.log('[env]', JSON.stringify(safe));
 }
@@ -200,6 +210,12 @@ function createMcpToolsServer() {
         'get_symbol_neighbors',
         'trace_dependency_path',
         'get_lesson_impact',
+        'ingest_git_history',
+        'list_commits',
+        'get_commit',
+        'suggest_lessons_from_commits',
+        'link_commit_to_lesson',
+        'analyze_commit_impact',
       ];
 
       const tokenNote = env.MCP_AUTH_ENABLED
@@ -358,6 +374,59 @@ function createMcpToolsServer() {
             { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
             { path: 'lesson_id', required: true, notes: 'Lesson UUID.' },
             { path: 'limit', required: false, notes: 'Cap linked symbols (default 50).' },
+          ],
+        },
+        {
+          name: 'ingest_git_history',
+          purpose: 'Ingest git commits/files into Postgres for automation memory (Phase 5).',
+          key_parameters: [
+            { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
+            { path: 'root', required: true, notes: 'Repository root path on server host/container.' },
+            { path: 'since', required: false, notes: 'Optional git --since expression.' },
+            { path: 'max_commits', required: false, notes: 'Optional cap (default from env).' },
+          ],
+        },
+        {
+          name: 'list_commits',
+          purpose: 'List ingested commits for a project.',
+          key_parameters: [
+            { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
+            { path: 'limit', required: false, notes: 'Max results (default 20).' },
+          ],
+        },
+        {
+          name: 'get_commit',
+          purpose: 'Get one ingested commit with changed files.',
+          key_parameters: [
+            { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
+            { path: 'sha', required: true, notes: 'Git commit SHA.' },
+          ],
+        },
+        {
+          name: 'suggest_lessons_from_commits',
+          purpose: 'Create draft lesson proposals from ingested commits (Phase 5).',
+          key_parameters: [
+            { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
+            { path: 'commit_shas', required: false, notes: 'Optional SHA list; defaults to latest commits.' },
+            { path: 'limit', required: false, notes: 'Proposal count cap.' },
+          ],
+        },
+        {
+          name: 'link_commit_to_lesson',
+          purpose: 'Attach commit refs/files into an existing lesson and refresh symbol links.',
+          key_parameters: [
+            { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
+            { path: 'commit_sha', required: true, notes: 'Git commit SHA.' },
+            { path: 'lesson_id', required: true, notes: 'Existing lesson UUID.' },
+          ],
+        },
+        {
+          name: 'analyze_commit_impact',
+          purpose: 'Analyze commit impact using changed files and KG symbol/lesson links.',
+          key_parameters: [
+            { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
+            { path: 'commit_sha', required: true, notes: 'Git commit SHA.' },
+            { path: 'limit', required: false, notes: 'Result cap for symbols/lessons.' },
           ],
         },
       ];
@@ -1229,6 +1298,237 @@ function createMcpToolsServer() {
       const pid = resolveProjectIdOrThrow(project_id);
       const result = await getLessonImpact({ projectId: pid, lessonId: lesson_id, limit });
       const summary = `get_lesson_impact: linked_symbols=${result.linked_symbols.length}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'ingest_git_history',
+    {
+      description: 'Ingest git history (commits/files) into ContextHub storage (Phase 5).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        root: z.string().min(1),
+        since: z.string().min(1).optional(),
+        max_commits: z.number().int().positive().optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.enum(['ok', 'error', 'skipped']),
+        run_id: z.string().optional(),
+        commits_seen: z.number().int().nonnegative(),
+        commits_upserted: z.number().int().nonnegative(),
+        files_upserted: z.number().int().nonnegative(),
+        warning: z.string().optional(),
+        error: z.string().optional(),
+      }),
+    },
+    async ({ workspace_token, project_id, root, since, max_commits, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const pid = resolveProjectIdOrThrow(project_id);
+      const result = await ingestGitHistory({
+        projectId: pid,
+        root,
+        since,
+        maxCommits: max_commits,
+      });
+      const summary = `ingest_git_history: status=${result.status}, commits=${result.commits_upserted}, files=${result.files_upserted}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'list_commits',
+    {
+      description: 'List ingested git commits for a project (Phase 5).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        limit: z.number().int().positive().optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        items: z.array(
+          z.object({
+            sha: z.string(),
+            parent_shas: z.array(z.string()),
+            author_name: z.string(),
+            author_email: z.string(),
+            committed_at: z.any(),
+            message: z.string(),
+            summary: z.string().nullable().optional(),
+            ingested_at: z.any(),
+          }),
+        ),
+        warning: z.string().optional(),
+      }),
+    },
+    async ({ workspace_token, project_id, limit, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const pid = resolveProjectIdOrThrow(project_id);
+      const result = await listCommits({ projectId: pid, limit });
+      const summary = `list_commits: items=${result.items.length}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'get_commit',
+    {
+      description: 'Get one ingested git commit and its changed files (Phase 5).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        sha: z.string().min(1),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        commit: z
+          .object({
+            sha: z.string(),
+            parent_shas: z.array(z.string()),
+            author_name: z.string(),
+            author_email: z.string(),
+            committed_at: z.any(),
+            message: z.string(),
+            summary: z.string().nullable().optional(),
+            ingested_at: z.any(),
+          })
+          .nullable(),
+        files: z.array(
+          z.object({
+            file_path: z.string(),
+            change_kind: z.string(),
+            additions: z.number().nullable().optional(),
+            deletions: z.number().nullable().optional(),
+          }),
+        ),
+        warning: z.string().optional(),
+      }),
+    },
+    async ({ workspace_token, project_id, sha, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const pid = resolveProjectIdOrThrow(project_id);
+      const result = await getCommit({ projectId: pid, sha });
+      const summary = `get_commit: found=${Boolean(result.commit).toString()}, files=${result.files.length}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'suggest_lessons_from_commits',
+    {
+      description: 'Generate and persist draft lesson proposals from ingested commits (Phase 5).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        commit_shas: z.array(z.string().min(1)).optional(),
+        limit: z.number().int().positive().optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        proposals: z.array(
+          z.object({
+            proposal_id: z.string(),
+            commit_sha: z.string(),
+            lesson_type: z.enum(['decision', 'preference', 'guardrail', 'workaround', 'general_note']),
+            title: z.string(),
+            content: z.string(),
+            tags: z.array(z.string()),
+            source_refs: z.array(z.string()),
+            rationale: z.string(),
+            status: z.literal('draft'),
+          }),
+        ),
+        warning: z.string().optional(),
+      }),
+    },
+    async ({ workspace_token, project_id, commit_shas, limit, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const pid = resolveProjectIdOrThrow(project_id);
+      const result = await suggestLessonsFromCommits({
+        projectId: pid,
+        commitShas: commit_shas,
+        limit,
+      });
+      const summary = `suggest_lessons_from_commits: proposals=${result.proposals.length}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'link_commit_to_lesson',
+    {
+      description: 'Attach commit refs/files to an existing lesson and refresh symbol links (Phase 5).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        commit_sha: z.string().min(1),
+        lesson_id: z.string().min(1),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.enum(['ok', 'error', 'skipped']),
+        linked_refs: z.number().int().nonnegative(),
+        warning: z.string().optional(),
+        error: z.string().optional(),
+      }),
+    },
+    async ({ workspace_token, project_id, commit_sha, lesson_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const pid = resolveProjectIdOrThrow(project_id);
+      const result = await linkCommitToLesson({
+        projectId: pid,
+        commitSha: commit_sha,
+        lessonId: lesson_id,
+      });
+      const summary = `link_commit_to_lesson: status=${result.status}, linked_refs=${result.linked_refs}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'analyze_commit_impact',
+    {
+      description: 'Analyze commit impact (files, symbols, related lessons) using Phase 4 KG links.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        commit_sha: z.string().min(1),
+        limit: z.number().int().positive().optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        commit_sha: z.string(),
+        affected_files: z.array(z.string()),
+        affected_symbols: z.array(
+          z.object({
+            symbol_id: z.string(),
+            name: z.string(),
+            kind: z.string(),
+            file_path: z.string(),
+          }),
+        ),
+        related_lessons: z.array(
+          z.object({
+            lesson_id: z.string(),
+            title: z.string(),
+            edge: z.string(),
+          }),
+        ),
+        warning: z.string().optional(),
+      }),
+    },
+    async ({ workspace_token, project_id, commit_sha, limit, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const pid = resolveProjectIdOrThrow(project_id);
+      const result = await analyzeCommitImpact({
+        projectId: pid,
+        commitSha: commit_sha,
+        limit,
+      });
+      const summary = `analyze_commit_impact: files=${result.affected_files.length}, symbols=${result.affected_symbols.length}, lessons=${result.related_lessons.length}`;
       return formatToolResponse(result, summary, output_format);
     },
   );
