@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { getEnv } from '../env.js';
 import { getDbPool } from '../db/client.js';
+import { linkLessonToSymbols, upsertLessonNode } from '../kg/linker.js';
+import { deleteProjectGraph } from '../kg/projectGraph.js';
 import { embedTexts } from './embedder.js';
 import { distillLesson } from './distiller.js';
 import { rebuildProjectSnapshot } from './snapshot.js';
@@ -179,6 +181,20 @@ export async function addLesson(payload: LessonPayload): Promise<AddLessonResult
       null,
     ],
   );
+
+  await upsertLessonNode({
+    projectId: payload.project_id,
+    lessonId,
+    title: payload.title,
+    lessonType: payload.lesson_type,
+  }).catch(() => {});
+
+  await linkLessonToSymbols({
+    projectId: payload.project_id,
+    lessonId,
+    lessonType: payload.lesson_type,
+    sourceRefs: sourceRefs,
+  }).catch(() => {});
 
   let guardrail_inserted = false;
   if (payload.lesson_type === 'guardrail' || payload.guardrail) {
@@ -457,6 +473,10 @@ export async function deleteWorkspace(projectId: string) {
     await pool.query(`DELETE FROM lessons WHERE project_id=$1`, [projectId]);
     const deletedProjects = await pool.query(`DELETE FROM projects WHERE project_id=$1`, [projectId]);
     await pool.query('COMMIT');
+
+    await deleteProjectGraph(projectId).catch(err => {
+      console.warn('[delete_workspace] deleteProjectGraph failed:', err instanceof Error ? err.message : err);
+    });
 
     return {
       status: 'ok' as const,

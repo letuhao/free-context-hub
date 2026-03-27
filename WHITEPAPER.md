@@ -258,9 +258,12 @@ Safety evaluation:
 - Project snapshots and automated briefings
 
 ### Phase 4: Advanced Indexing & Knowledge Graph
-- Code index building and **Knowledge Graph Building**
-- Entity relationship mapping (Class/Function/Dependency)
-- Linking lessons to specific code symbols
+- **Neo4j 5.x** optional backend (`KG_ENABLED`); TS/JS extraction via **ts-morph** during `index_project`
+- Deterministic node ids + idempotent `MERGE` upserts (Project/File/Symbol/Lesson)
+- Code edges: `DECLARES`, `CALLS`, `IMPORTS`, `EXTENDS`, `IMPLEMENTS`
+- Lesson edges from `add_lesson`: `MENTIONS`, `CONSTRAINS` (guardrails), `PREFERS` (preferences) — driven by `source_refs` paths (optional `path:Symbol`)
+- MCP tools: `search_symbols`, `get_symbol_neighbors`, `trace_dependency_path`, `get_lesson_impact`
+- **Fallback:** when `KG_ENABLED=false`, graph ingest/query is skipped with explicit warnings; Phase 1–3 flows remain unchanged
 
 ### Phase 5: Automation & Git Intelligence
 - Automation knowledge building: auto-collect data from git commits

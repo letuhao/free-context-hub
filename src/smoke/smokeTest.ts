@@ -92,6 +92,10 @@ async function main() {
       'get_project_summary',
       'reflect',
       'compress_context',
+      'search_symbols',
+      'get_symbol_neighbors',
+      'trace_dependency_path',
+      'get_lesson_impact',
     ];
     for (const n of requiredTools) {
       if (!names.has(n)) {
@@ -368,6 +372,120 @@ async function main() {
   );
   const reflectJson = extractFirstTextJson(reflectResult);
   console.log('[smoke] reflect answer chars:', String(reflectJson.answer ?? '').length, 'warning:', reflectJson.warning ?? '');
+
+  console.log('[smoke] kg tools (best-effort)...');
+  const kgEnabled = String(process.env.KG_ENABLED ?? '').toLowerCase() === 'true';
+  if (kgEnabled) {
+    const symSearch = await client.request(
+      {
+        method: 'tools/call',
+        params: {
+          name: 'search_symbols',
+          arguments: {
+            ...tokenArgs,
+            project_id: projectIdA,
+            query: 'index',
+            limit: 5,
+            output_format: 'json_only',
+          },
+        },
+      },
+      CallToolResultSchema,
+    );
+    const symJson = extractFirstTextJson(symSearch);
+    const firstSym = symJson.matches?.[0]?.symbol_id as string | undefined;
+    console.log('[smoke] search_symbols matches:', symJson.matches?.length ?? 0);
+
+    if (firstSym) {
+      const neigh = await client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'get_symbol_neighbors',
+            arguments: {
+              ...tokenArgs,
+              project_id: projectIdA,
+              symbol_id: firstSym,
+              depth: 1,
+              limit: 20,
+              output_format: 'json_only',
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+      const neighJson = extractFirstTextJson(neigh);
+      console.log('[smoke] get_symbol_neighbors:', neighJson.neighbors?.length ?? 0);
+
+      const secondSym = symJson.matches?.[1]?.symbol_id as string | undefined;
+      if (secondSym) {
+        const trace = await client.request(
+          {
+            method: 'tools/call',
+            params: {
+              name: 'trace_dependency_path',
+              arguments: {
+                ...tokenArgs,
+                project_id: projectIdA,
+                from_symbol_id: firstSym,
+                to_symbol_id: secondSym,
+                max_hops: 12,
+                output_format: 'json_only',
+              },
+            },
+          },
+          CallToolResultSchema,
+        );
+        const traceJson = extractFirstTextJson(trace);
+        console.log('[smoke] trace_dependency_path found:', traceJson.found);
+      }
+    }
+
+    const addForKg = await client.request(
+      {
+        method: 'tools/call',
+        params: {
+          name: 'add_lesson',
+          arguments: {
+            ...tokenArgs,
+            lesson_payload: {
+              project_id: projectIdA,
+              lesson_type: 'decision',
+              title: 'KG link smoke',
+              content: 'Links to a file in this repo for graph testing.',
+              tags: ['kg-smoke'],
+              source_refs: ['src/index.ts'],
+            },
+          },
+        },
+      },
+      CallToolResultSchema,
+    );
+    const addKgJson = extractFirstTextJson(addForKg);
+    const lessonIdKg = String(addKgJson.lesson_id ?? '');
+    if (lessonIdKg) {
+      const impact = await client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'get_lesson_impact',
+            arguments: {
+              ...tokenArgs,
+              project_id: projectIdA,
+              lesson_id: lessonIdKg,
+              limit: 20,
+              output_format: 'json_only',
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+      const impactJson = extractFirstTextJson(impact);
+      console.log('[smoke] get_lesson_impact linked_symbols:', impactJson.linked_symbols?.length ?? 0);
+    }
+  } else {
+    console.log('[smoke] KG_ENABLED!=true; skipping Neo4j graph assertions');
+  }
 
   console.log('[smoke] search_lessons (A)...');
   const searchLessonsResultA = await client.request(

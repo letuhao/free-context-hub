@@ -15,11 +15,12 @@ This guide gets your local ContextHub MVP running (Postgres + embeddings) and co
   - `check_guardrails`
   - `get_context`
   - `delete_workspace`
+  - Phase 4 (optional Neo4j graph, `KG_ENABLED=true`): `search_symbols`, `get_symbol_neighbors`, `trace_dependency_path`, `get_lesson_impact`
 - Project-scoped persistent memory + semantic code search (pgvector)
 
 ## Prerequisites
 
-- Docker (for Postgres + MCP server)
+- Docker (for Postgres + MCP server; Neo4j is included for Phase 4 graph features)
 - LM Studio (or any OpenAI-compatible embeddings server) serving `POST /v1/embeddings`
 
 ## Step 1: Configure environment
@@ -39,6 +40,7 @@ Edit `.env` and ensure:
   - If you set `MCP_AUTH_ENABLED=true`, then `CONTEXT_HUB_WORKSPACE_TOKEN` must be set
 - `EMBEDDINGS_BASE_URL` points to your embeddings server (default: `http://127.0.0.1:1234`)
 - `EMBEDDINGS_MODEL` matches the DB embedding dimension (current MVP default is `mixedbread-ai/text-embedding-mxbai-embed-large-v1` with `EMBEDDINGS_DIM=1024`)
+- Phase 4 graph (optional): set `KG_ENABLED=true` and point `NEO4J_URI` / `NEO4J_USERNAME` / `NEO4J_PASSWORD` at your Neo4j Bolt endpoint (Compose defaults: `bolt://neo4j:7687` inside the stack, `bolt://127.0.0.1:7687` from the host). When `KG_ENABLED=false`, the server skips graph ingest/query and Phase 1–3 tools behave as before.
 
 ## Step 2: Start Postgres + MCP server (Docker)
 
@@ -46,7 +48,14 @@ Edit `.env` and ensure:
 docker compose up -d
 ```
 
-Postgres listens on `localhost:5432`. MCP listens on `http://localhost:3000/mcp`.
+Postgres listens on `localhost:5432`. Neo4j Browser/Bolt: `http://localhost:7474` / `bolt://localhost:7687`. MCP listens on `http://localhost:3000/mcp`.
+
+### Phase 4 Neo4j troubleshooting
+
+- **Symptoms:** `[kg] schema bootstrap failed` or graph tools return `warning` about KG disabled.
+- **Checks:** `docker compose ps` shows `neo4j` healthy; `.env` has `KG_ENABLED=true` and credentials matching `NEO4J_AUTH` in Compose (`NEO4J_USERNAME` / `NEO4J_PASSWORD`).
+- **From host MCP process:** use `bolt://127.0.0.1:7687` (not `neo4j:7687` unless you run MCP inside the Compose network).
+- **Smoke:** run `npm run smoke-test` with `KG_ENABLED=true` to exercise `search_symbols` / `get_symbol_neighbors` / `trace_dependency_path` / `get_lesson_impact` (best-effort block).
 
 If you run LM Studio on your host machine (recommended), the MCP container will reach it via `host.docker.internal`.
 

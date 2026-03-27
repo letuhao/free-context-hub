@@ -37,6 +37,7 @@ First calls (recommended):
 | 4 | (Optional) Read `docs/sessions/SESSION_PATCH.md` | Exact “where we left off” |
 | 5 | Call `search_lessons(query)` | Prior decisions/preferences/guardrails by intent |
 | 6 | Call `search_code(query)` | Code locations by intent |
+| 6b | (Optional, Phase 4) Call `search_symbols` / `get_symbol_neighbors` | When `KG_ENABLED=true` and you need symbol-level graph navigation |
 | 7 | Read `docs/context/modules/<MODULE>_BRIEF.md` | Only if patching that module |
 
 Do NOT load WHITEPAPER.md unless answering an architectural question unanswered above.
@@ -129,6 +130,36 @@ When:   Shrink long pasted text via the configured chat model (Phase 3).
 Params: text, max_output_chars?, workspace_token (optional; required only if `MCP_AUTH_ENABLED=true`)
 Returns: { compressed, warning? }
 Rule:   With DISTILLATION_ENABLED=false, returns truncated original text + warning (no LLM call).
+```
+
+### `search_symbols` (Phase 4)
+```
+When:   You need structured symbol lookup (TS/JS) after indexing; complements vector `search_code`.
+Params: project_id (optional if DEFAULT_PROJECT_ID is set), query (substring), limit?, workspace_token (optional)
+Returns: { matches: [{ symbol_id, name, kind, file_path, score }], warning? }
+Rule:   Requires KG_ENABLED=true + Neo4j reachable + successful `index_project` graph ingest. If disabled, matches=[] and warning explains why.
+```
+
+### `get_symbol_neighbors` (Phase 4)
+```
+When:   Explore local graph around a known symbol_id (from search_symbols or docs).
+Params: project_id (optional if DEFAULT_PROJECT_ID is set), symbol_id, depth?, limit?, workspace_token (optional)
+Returns: { center, neighbors[], edges[], warning? }
+```
+
+### `trace_dependency_path` (Phase 4)
+```
+When:   Ask whether two symbols are connected via the extracted dependency/call/import graph.
+Params: project_id (optional if DEFAULT_PROJECT_ID is set), from_symbol_id, to_symbol_id, max_hops?, workspace_token (optional)
+Returns: { found, path_nodes[], path_edges[], hops, warning? }
+```
+
+### `get_lesson_impact` (Phase 4)
+```
+When:   Understand which code symbols/files a lesson may touch via graph links.
+Params: project_id (optional if DEFAULT_PROJECT_ID is set), lesson_id, limit?, workspace_token (optional)
+Returns: { lesson?, linked_symbols[], affected_files[], rationale, warning? }
+Rule:   Populated when lessons were written with `source_refs` pointing at indexed paths (optionally `src/file.ts:MySymbol`).
 ```
 
 ### `update_lesson_status`

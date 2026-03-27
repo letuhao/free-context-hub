@@ -7,6 +7,7 @@ import { rebuildProjectSnapshot } from './snapshot.js';
 import { loadIgnorePatternsFromRoot } from '../utils/ignore.js';
 import { chunkTextByLines } from '../utils/chunker.js';
 import { sha256Hex } from '../utils/hash.js';
+import { upsertFileGraphFromDisk } from '../kg/upsert.js';
 
 export type IndexProjectResult = {
   status: 'ok' | 'error';
@@ -162,6 +163,15 @@ export async function indexProject({ projectId, root, linesPerChunk, embeddingBa
 
         await client.query('COMMIT');
         filesIndexed += 1;
+
+        const graph = await upsertFileGraphFromDisk({
+          projectId,
+          rootAbs: resolvedRoot,
+          fileRel,
+        });
+        if (graph.status === 'error') {
+          console.warn(`[indexer] kg upsert failed for ${fileRel}: ${graph.message}`);
+        }
       } catch (err) {
         await client.query('ROLLBACK');
         throw err;

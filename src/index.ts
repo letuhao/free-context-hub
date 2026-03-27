@@ -15,6 +15,8 @@ import { addLesson, deleteWorkspace, listLessons, searchLessons, updateLessonSta
 import { checkGuardrails } from './services/guardrails.js';
 import { getProjectSnapshotBody } from './services/snapshot.js';
 import { compressText, reflectOnTopic } from './services/distiller.js';
+import { bootstrapKgIfEnabled } from './kg/bootstrap.js';
+import { getLessonImpact, getSymbolNeighbors, searchSymbols, traceDependencyPath } from './kg/query.js';
 
 dotenv.config();
 
@@ -50,6 +52,9 @@ function logStartupEnvSummary() {
     DISTILLATION_ENABLED: env.DISTILLATION_ENABLED,
     DISTILLATION_BASE_URL: env.DISTILLATION_BASE_URL ?? null,
     DISTILLATION_MODEL: env.DISTILLATION_MODEL ?? null,
+    KG_ENABLED: env.KG_ENABLED,
+    NEO4J_URI: env.NEO4J_URI,
+    NEO4J_USERNAME: env.NEO4J_USERNAME ? '[set]' : '[not set]',
   };
   console.log('[env]', JSON.stringify(safe));
 }
@@ -107,7 +112,7 @@ function createMcpToolsServer() {
     {
       name: 'contexthub-self-hosted',
       version: '0.1.0',
-      description: 'Self-hosted ContextHub MVP (index/search/lessons/guardrails)',
+      description: 'Self-hosted ContextHub (index/search/lessons/guardrails + optional Phase 4 Neo4j graph)',
     },
     {},
   );
@@ -191,6 +196,10 @@ function createMcpToolsServer() {
         'get_project_summary',
         'reflect',
         'compress_context',
+        'search_symbols',
+        'get_symbol_neighbors',
+        'trace_dependency_path',
+        'get_lesson_impact',
       ];
 
       const tokenNote = env.MCP_AUTH_ENABLED
@@ -311,6 +320,44 @@ function createMcpToolsServer() {
           purpose: 'Delete all stored data for a project_id (lessons, chunks, guardrails, logs).',
           key_parameters: [
             { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
+          ],
+        },
+        {
+          name: 'search_symbols',
+          purpose: 'Search TS/JS symbols in the Neo4j graph (Phase 4; requires KG_ENABLED=true).',
+          key_parameters: [
+            { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
+            { path: 'query', required: true, notes: 'Substring match against symbol name / FQN.' },
+            { path: 'limit', required: false, notes: 'Default 10.' },
+          ],
+        },
+        {
+          name: 'get_symbol_neighbors',
+          purpose: 'Expand a symbol neighborhood in the Neo4j graph (depth 1..4).',
+          key_parameters: [
+            { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
+            { path: 'symbol_id', required: true, notes: 'Deterministic symbol id from search_symbols / indexing.' },
+            { path: 'depth', required: false, notes: 'Default 1.' },
+            { path: 'limit', required: false, notes: 'Default 40.' },
+          ],
+        },
+        {
+          name: 'trace_dependency_path',
+          purpose: 'Shortest path between two symbols (same project) in the Neo4j graph.',
+          key_parameters: [
+            { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
+            { path: 'from_symbol_id', required: true, notes: 'Start symbol id.' },
+            { path: 'to_symbol_id', required: true, notes: 'End symbol id.' },
+            { path: 'max_hops', required: false, notes: 'Upper bound for shortestPath (default 12).' },
+          ],
+        },
+        {
+          name: 'get_lesson_impact',
+          purpose: 'Show lesson-to-symbol links and impacted files from the Neo4j graph.',
+          key_parameters: [
+            { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
+            { path: 'lesson_id', required: true, notes: 'Lesson UUID.' },
+            { path: 'limit', required: false, notes: 'Cap linked symbols (default 50).' },
           ],
         },
       ];
@@ -1032,6 +1079,160 @@ function createMcpToolsServer() {
     },
   );
 
+  server.registerTool(
+    'search_symbols',
+    {
+      description: 'Search TS/JS symbols in the Neo4j knowledge graph (Phase 4).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional().describe('Workspace token (required only if MCP_AUTH_ENABLED=true).'),
+        project_id: z.string().min(1).optional().describe('Project identifier (optional if DEFAULT_PROJECT_ID is set).'),
+        query: z.string().min(1).describe('Search string (substring match).'),
+        limit: z.number().int().positive().optional().describe('Max matches (default 10).'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        matches: z.array(
+          z.object({
+            symbol_id: z.string(),
+            name: z.string(),
+            kind: z.string(),
+            file_path: z.string(),
+            score: z.number(),
+          }),
+        ),
+        warning: z.string().optional(),
+      }),
+    },
+    async ({ workspace_token, project_id, query, limit, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const pid = resolveProjectIdOrThrow(project_id);
+      const result = await searchSymbols({ projectId: pid, query, limit });
+      const summary = `search_symbols: matches=${result.matches.length}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'get_symbol_neighbors',
+    {
+      description: 'Return a symbol neighborhood (nodes + immediate edges) from Neo4j.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        symbol_id: z.string().min(1),
+        depth: z.number().int().positive().optional(),
+        limit: z.number().int().positive().optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        center: z
+          .object({
+            symbol_id: z.string(),
+            name: z.string(),
+            kind: z.string(),
+            file_path: z.string(),
+            score: z.number(),
+          })
+          .nullable(),
+        neighbors: z.array(
+          z.object({
+            id: z.string(),
+            name: z.string(),
+            kind: z.string(),
+            file_path: z.string(),
+            depth: z.number(),
+            labels: z.array(z.string()),
+          }),
+        ),
+        edges: z.array(z.object({ from: z.string(), to: z.string(), type: z.string() })),
+        warning: z.string().optional(),
+      }),
+    },
+    async ({ workspace_token, project_id, symbol_id, depth, limit, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const pid = resolveProjectIdOrThrow(project_id);
+      const result = await getSymbolNeighbors({ projectId: pid, symbolId: symbol_id, depth, limit });
+      const summary = `get_symbol_neighbors: neighbors=${result.neighbors.length}, edges=${result.edges.length}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'trace_dependency_path',
+    {
+      description: 'Find a shortest path between two symbols in Neo4j (same project).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        from_symbol_id: z.string().min(1),
+        to_symbol_id: z.string().min(1),
+        max_hops: z.number().int().positive().optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        found: z.boolean(),
+        path_nodes: z.array(z.object({ id: z.string(), name: z.string(), kind: z.string(), file_path: z.string() })),
+        path_edges: z.array(z.object({ from: z.string(), to: z.string(), type: z.string() })),
+        hops: z.number(),
+        warning: z.string().optional(),
+      }),
+    },
+    async ({ workspace_token, project_id, from_symbol_id, to_symbol_id, max_hops, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const pid = resolveProjectIdOrThrow(project_id);
+      const result = await traceDependencyPath({
+        projectId: pid,
+        fromSymbolId: from_symbol_id,
+        toSymbolId: to_symbol_id,
+        maxHops: max_hops,
+      });
+      const summary = `trace_dependency_path: found=${result.found}, hops=${result.hops}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'get_lesson_impact',
+    {
+      description: 'Summarize lesson-to-symbol links and impacted files from Neo4j.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        lesson_id: z.string().min(1),
+        limit: z.number().int().positive().optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        lesson: z
+          .object({
+            lesson_id: z.string(),
+            title: z.string(),
+            lesson_type: z.string(),
+          })
+          .nullable(),
+        linked_symbols: z.array(
+          z.object({
+            symbol_id: z.string(),
+            name: z.string(),
+            kind: z.string(),
+            file_path: z.string(),
+            edge: z.string(),
+          }),
+        ),
+        affected_files: z.array(z.string()),
+        rationale: z.string(),
+        warning: z.string().optional(),
+      }),
+    },
+    async ({ workspace_token, project_id, lesson_id, limit, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const pid = resolveProjectIdOrThrow(project_id);
+      const result = await getLessonImpact({ projectId: pid, lessonId: lesson_id, limit });
+      const summary = `get_lesson_impact: linked_symbols=${result.linked_symbols.length}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
   return server;
 }
 
@@ -1039,6 +1240,9 @@ async function main() {
   const env = getEnv();
   logStartupEnvSummary();
   await applyMigrations();
+  await bootstrapKgIfEnabled().catch(err => {
+    console.error('[kg] bootstrap failed:', err instanceof Error ? err.message : err);
+  });
 
   const app = createMcpExpressApp();
   const transports: Record<string, StreamableHTTPServerTransport> = {};

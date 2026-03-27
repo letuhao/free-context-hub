@@ -1,33 +1,25 @@
 ---
-id: CH-T3  date: 2026-03-25  module: Phase2-planning  phase: Phase 2
+id: CH-T4  date: 2026-03-27  module: Phase4-KG  phase: Phase 4
 ---
 
-# Session Patch — 2026-03-25
+# Session Patch — 2026-03-27
 
 ## Where We Are
-Phase: MVP complete · Phase 2: planned, not started
-Last completed: Phase 2 design — M06/M07/M08 module briefs + PHASE2_CONTEXT.md created
-Next: DA decision on DEC-P2-001 (deprecate `get_preferences` immediately or alias?), then start M08-SP1
+Phase: **Phase 4 (Knowledge Graph) Wave A+B implemented** — Neo4j + ts-morph ingest, lesson↔symbol linking, MCP graph tools, docs.
 
-## Recommended First Step
-**M08-SP1** — fix `rules_checked` bug in [guardrails.ts:68](src/services/guardrails.ts#L68).
-One-line change, zero dependencies, ships immediately:
-```typescript
-// Change:  return { pass: true, rules_checked: 0 };
-// To:      return { pass: true, rules_checked: checked.length };
-```
+## Completed This Session
+- Docker Compose: `neo4j` service; `.env.example` + `src/env.ts`: `KG_ENABLED`, `NEO4J_*`
+- `src/kg/*`: client, schema bootstrap, ts-morph extractor, idempotent upsert, queries, lesson linker, project graph delete
+- `index_project` → graph upsert for TS/JS files (non-fatal on failure)
+- MCP tools: `search_symbols`, `get_symbol_neighbors`, `trace_dependency_path`, `get_lesson_impact`
+- `add_lesson` → Neo4j Lesson node + edges from `source_refs`; `delete_workspace` clears graph data after PG commit
+- Smoke test: optional KG block when `KG_ENABLED=true`
+- Docs: `docs/QUICKSTART.md`, `WHITEPAPER.md`, `AGENT_PROTOCOL.md`, `CLAUDE.md`
 
-## Open Decisions
-| ID | Decision | Blocks |
-|---|---|---|
-| DEC-P2-001 | Deprecate `get_preferences` immediately or keep as alias for 1 cycle? | M06-SP4 |
-| DEC-P2-002 | `get_context` + task: single embed → pass precomputedVector, or let services embed independently? | M07-SP2 latency |
-| DEC-P2-003 | `list_lessons` total_count: window function vs separate COUNT query? | M06-SP1 |
+## Next
+- Run `docker compose up -d` with Neo4j healthy; set `KG_ENABLED=true` and verify Bolt from host vs container (`bolt://127.0.0.1:7687` vs `bolt://neo4j:7687`)
+- Re-`index_project` with KG on to populate symbols; tune extractor (cross-file resolution, call graph) as needed
 
-## Open Blocker (MVP - operational)
-- OPS-001: Stale server process may hold wrong `CONTEXT_HUB_WORKSPACE_TOKEN` → restart before smoke-test
-
-## Context to Load This Session
-- Tier 0: `docs/context/PROJECT_INVARIANTS.md`
-- Tier 1: `docs/context/PHASE2_CONTEXT.md`  ← use this now, not MVP_CONTEXT
-- Tier 2 (if implementing): `docs/context/modules/M08_DX_POLISH_BRIEF.md` (start here)
+## Open Blockers / Risks
+- Graph extraction is best-effort for TS/JS; path aliases (`@/`) are not resolved
+- `get_lesson_impact` reads Lesson from Neo4j only (lessons created while `KG_ENABLED=false` may show empty until re-added or linked)

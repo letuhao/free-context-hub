@@ -40,6 +40,14 @@ Examples of when to call:
 - "where do we write chunks?" → `search_code(query: "chunk embedding storage write")`
 - "find the guardrail trigger logic" → `search_code(query: "trigger match guardrail rule")`
 
+### Phase 4 graph tools (`search_symbols`, `get_symbol_neighbors`, `trace_dependency_path`, `get_lesson_impact`)
+```
+When: KG_ENABLED=true on the server, after index_project, and you need symbol-level structure (imports/calls) or lesson-to-code impact.
+How:  search_symbols(query) → pick symbol_id → get_symbol_neighbors(symbol_id) / trace_dependency_path(from,to)
+      get_lesson_impact(lesson_id) after lessons with source_refs.
+Why: complements vector search_code; returns empty + warning when KG is disabled (never blocks Phase 1–3 tools).
+```
+
 ### `help` — call first (agent onboarding)
 ```
 When: first time an agent connects to this MCP server (or after tool changes)
@@ -160,4 +168,6 @@ db:               PostgreSQL + pgvector (vector dim: 1024)
 embedding:        mixedbread-ai/text-embedding-mxbai-embed-large-v1 (see README / .env.example)
 phase_3_chat:     optional OpenAI-compatible /v1/chat/completions for distill + reflect + compress
                   (DISTILLATION_ENABLED, DISTILLATION_MODEL, DISTILLATION_BASE_URL defaults to EMBEDDINGS_BASE_URL)
+phase_4_graph:    optional Neo4j 5.x (KG_ENABLED, NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD)
+                  TS/JS symbol graph + lesson links; tools noop with warning when disabled
 ```

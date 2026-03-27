@@ -55,6 +55,14 @@ const EnvSchema = z.object({
   DISTILLATION_MODEL: z.string().min(1).optional(),
   DISTILLATION_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(12_000),
   REFLECT_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(5000),
+
+  // Phase 4: optional Neo4j graph store.
+  KG_ENABLED: z
+    .preprocess(v => parseBooleanEnv(v), z.boolean().optional())
+    .default(false),
+  NEO4J_URI: z.string().min(1).optional().default('bolt://127.0.0.1:7687'),
+  NEO4J_USERNAME: z.string().min(1).optional().default('neo4j'),
+  NEO4J_PASSWORD: z.string().min(1).optional().default('neo4jpassword'),
 }).superRefine((val, ctx) => {
   if (val.MCP_AUTH_ENABLED && (!val.CONTEXT_HUB_WORKSPACE_TOKEN || val.CONTEXT_HUB_WORKSPACE_TOKEN.length === 0)) {
     ctx.addIssue({
@@ -69,6 +77,29 @@ const EnvSchema = z.object({
       path: ['DISTILLATION_MODEL'],
       message: 'DISTILLATION_MODEL is required when DISTILLATION_ENABLED=true',
     });
+  }
+  if (val.KG_ENABLED) {
+    if (!val.NEO4J_URI || !val.NEO4J_URI.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['NEO4J_URI'],
+        message: 'NEO4J_URI is required when KG_ENABLED=true',
+      });
+    }
+    if (!val.NEO4J_USERNAME || !val.NEO4J_USERNAME.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['NEO4J_USERNAME'],
+        message: 'NEO4J_USERNAME is required when KG_ENABLED=true',
+      });
+    }
+    if (!val.NEO4J_PASSWORD || !val.NEO4J_PASSWORD.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['NEO4J_PASSWORD'],
+        message: 'NEO4J_PASSWORD is required when KG_ENABLED=true',
+      });
+    }
   }
 });
 
