@@ -96,6 +96,8 @@ Notes:
 3. **Worker**: run `run_next_job` (or a dedicated worker process) until jobs complete; use `list_jobs` with `correlation_id` to audit.
 4. **Human gate**: `list_generated_documents` with `doc_status: "draft"`, then `promote_generated_document` to set `metadata.status` to `active`.
 
+Kiểm chứng đầy đủ (project `phase6-qc-free-context-hub`, correlation_id, assert DB): [docs/phase6-verification.md](phase6-verification.md).
+
 ### Phase 6 smoke (optional)
 
 Requires `SMOKE_QUEUE_TOOLS=true` + `SMOKE_PHASE6=true` (same `npm run smoke-test` session). After indexing, enqueues `quality.eval` and asserts a `doc_key` in the result; checks that `promote_generated_document` is registered.

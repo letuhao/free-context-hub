@@ -31,9 +31,13 @@ async function startRabbitConsumer(queueName: string) {
         jobId = String(msg.properties?.messageId ?? '');
       }
       const corr = String(msg.properties?.correlationId ?? '');
-      logger.info({ job_id: jobId || null, correlation_id: corr || null }, 'rabbitmq message received');
+      logger.info(
+        { event: 'rabbitmq_job_delivery', job_id: jobId || null, correlation_id: corr || null },
+        'rabbitmq message received',
+      );
       try {
         if (jobId) {
+          logger.info({ event: 'worker_invoke_runJobById', job_id: jobId }, 'rabbitmq invoking runJobById');
           await runJobById(jobId);
         }
         ch.ack(msg);

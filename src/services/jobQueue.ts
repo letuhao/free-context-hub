@@ -15,7 +15,8 @@ export type JobType =
   | 'faq.build'
   | 'raptor.build'
   | 'knowledge.loop.shallow'
-  | 'knowledge.loop.deep';
+  | 'knowledge.loop.deep'
+  | 'knowledge.memory.build';
 
 type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'dead_letter';
 

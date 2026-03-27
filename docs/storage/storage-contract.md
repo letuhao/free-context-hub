@@ -35,8 +35,8 @@ This project uses a DB-first storage model for generated RAG artifacts.
   - Canonical: `benchmark_artifact` audit row (`phase6/shallow/*`, metadata often `status: draft`)
   - Downstream: FAQ/RAPTOR builders + single `index.run`
 - `knowledge.loop.deep`
-  - Canonical: `benchmark_artifact` per eval round (`quality_eval/deep-*`) + summary (`phase6/deep/summary/*`)
-  - Bounded rounds: `index.run` + `quality.eval` until gates pass or `max_rounds`
+  - Canonical: `benchmark_artifact` per eval round (`quality_eval/deep-*`) + summary (`phase6/deep/summary/*`) + optional LLM builder memory (`phase6/builder_memory/*`, `metadata.kind=builder_memory`)
+  - Bounded rounds: optional FAQ/RAPTOR on round 1; optional builder memory on round 1; then `index.run` + `quality.eval` until gates pass or `max_rounds`
 - `index.run`
   - Indexes filesystem content and generated DB documents into `chunks`
   - Synthetic paths: `generated/<doc_type>/<doc_key>.md`

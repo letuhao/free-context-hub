@@ -155,6 +155,22 @@ const EnvSchema = z.object({
     .default(false),
   /** Stored benchmark_artifact doc_key for baseline JSON (quality eval). */
   PHASE6_BASELINE_DOC_KEY: z.string().min(1).optional().default('quality_eval/baseline'),
+  /** When true, deep loop round 1 may synthesize a large builder-memory artifact (uses BUILDER_AGENT_* or DISTILLATION_*). */
+  PHASE6_BUILDER_MEMORY_ENABLED: z
+    .preprocess(v => parseBooleanEnv(v), z.boolean().optional())
+    .default(true),
+  /** Estimated LOC above this uses hierarchical builder memory in deep loop (unless disabled). 0 = only `payload.large_repo`. */
+  PHASE6_LARGE_REPO_LOC_THRESHOLD: z.coerce.number().int().min(0).optional().default(500_000),
+  /** Max directory/language shards for `knowledge.memory.build` and inline large-repo path. */
+  MEMORY_BUILD_MAX_SHARDS: z.coerce.number().int().positive().optional().default(50),
+  MEMORY_BUILD_SHARD_MAX_FILES: z.coerce.number().int().positive().optional().default(32),
+  MEMORY_BUILD_SHARD_MAX_CHARS: z.coerce.number().int().positive().optional().default(80_000),
+  MEMORY_BUILD_SHARD_MAX_FILE_CHARS: z.coerce.number().int().positive().optional().default(6000),
+  MEMORY_BUILD_MODULE_MAX_INPUT_CHARS: z.coerce.number().int().positive().optional().default(100_000),
+  MEMORY_BUILD_GLOBAL_MAX_INPUT_CHARS: z.coerce.number().int().positive().optional().default(120_000),
+  MEMORY_BUILD_LEAF_MAX_TOKENS: z.coerce.number().int().positive().optional().default(4096),
+  MEMORY_BUILD_MODULE_MAX_TOKENS: z.coerce.number().int().positive().optional().default(6144),
+  MEMORY_BUILD_GLOBAL_MAX_TOKENS: z.coerce.number().int().positive().optional().default(8192),
 }).superRefine((val, ctx) => {
   if (val.MCP_AUTH_ENABLED && (!val.CONTEXT_HUB_WORKSPACE_TOKEN || val.CONTEXT_HUB_WORKSPACE_TOKEN.length === 0)) {
     ctx.addIssue({

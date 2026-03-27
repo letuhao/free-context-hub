@@ -6,6 +6,8 @@ import { indexProject } from './indexer.js';
 import { buildFaq } from './faqBuilder.js';
 import { buildRaptorSummaries } from './raptorBuilder.js';
 import { upsertGeneratedDocument } from './generatedDocs.js';
+import { buildProjectMemoryArtifact } from './builderMemory.js';
+import { buildLargeRepoProjectMemory, shouldUseLargeRepoBuilderMemory } from './builderMemoryLarge.js';
 import { runQualityEvalAndPersist } from './qcEval.js';
 import { prepareRepo } from './repoSources.js';
 import { scanWorkspaceChanges } from './workspaceTracker.js';
@@ -103,6 +105,21 @@ async function executeByType(
     case 'quality.eval': {
       if (!projectId) throw new Error('project_id is required for quality.eval');
       const env = getEnv();
+      logger.info(
+        {
+          event: 'phase6_boundary',
+          phase: 'quality.eval',
+          project_id: projectId,
+          correlation_id: chainCorrelation ?? null,
+          source_job_id: sourceJobId ?? null,
+          payload: {
+            queries_path: String(payload.queries_path ?? env.PHASE6_EVAL_QUERIES_PATH),
+            set_baseline: payload.set_baseline === true,
+            hybrid_mode: payload.hybrid_mode,
+          },
+        },
+        'phase6 quality.eval start',
+      );
       const queriesPath = String(payload.queries_path ?? env.PHASE6_EVAL_QUERIES_PATH);
       const hybridMode: 'off' | 'lexical' =
         payload.hybrid_mode === 'lexical' ? 'lexical' : env.RETRIEVAL_HYBRID_ENABLED ? 'lexical' : 'off';
@@ -141,6 +158,21 @@ async function executeByType(
     case 'knowledge.loop.shallow': {
       if (!projectId) throw new Error('project_id is required for knowledge.loop.shallow');
       const env = getEnv();
+      logger.info(
+        {
+          event: 'phase6_boundary',
+          phase: 'shallow',
+          project_id: projectId,
+          correlation_id: chainCorrelation ?? null,
+          source_job_id: sourceJobId ?? null,
+          payload: {
+            root: String(payload.root ?? ''),
+            run_faq: payload.run_faq !== false,
+            run_raptor: payload.run_raptor !== false,
+          },
+        },
+        'phase6 shallow start',
+      );
       if (!env.PHASE6_KNOWLEDGE_LOOP_ENABLED) {
         logger.info({ correlation_id: chainCorrelation }, 'phase6 shallow skipped');
         return { status: 'ok', skipped: true, reason: 'PHASE6_KNOWLEDGE_LOOP_ENABLED=false' };
@@ -194,6 +226,25 @@ async function executeByType(
     case 'knowledge.loop.deep': {
       if (!projectId) throw new Error('project_id is required for knowledge.loop.deep');
       const env = getEnv();
+      logger.info(
+        {
+          event: 'phase6_boundary',
+          phase: 'deep',
+          project_id: projectId,
+          correlation_id: chainCorrelation ?? null,
+          source_job_id: sourceJobId ?? null,
+          payload: {
+            root: String(payload.root ?? ''),
+            max_rounds: Math.min(Math.max(Number(payload.max_rounds ?? 3), 1), 5),
+            run_shallow: payload.run_shallow !== false,
+            run_faq: payload.run_faq !== false,
+            run_raptor: payload.run_raptor !== false,
+            builder_memory: payload.builder_memory !== false,
+            large_repo: payload.large_repo === true,
+          },
+        },
+        'phase6 deep start',
+      );
       if (!env.PHASE6_KNOWLEDGE_LOOP_ENABLED) {
         logger.info({ correlation_id: chainCorrelation }, 'phase6 deep skipped');
         return { status: 'ok', skipped: true, reason: 'PHASE6_KNOWLEDGE_LOOP_ENABLED=false' };
@@ -223,6 +274,50 @@ async function executeByType(
               correlationId: chainCorrelation,
             });
           }
+        }
+        if (round === 1 && payload.builder_memory !== false && env.PHASE6_BUILDER_MEMORY_ENABLED) {
+          const useLarge = await shouldUseLargeRepoBuilderMemory({
+            root,
+            largeRepoPayload: payload.large_repo === true,
+          });
+          const bm = useLarge
+            ? await buildLargeRepoProjectMemory({
+                projectId,
+                root,
+                correlationId: chainCorrelation,
+                sourceJobId,
+                strategy: payload.memory_strategy === 'language' ? 'language' : 'directory',
+                maxShards:
+                  payload.memory_max_shards !== undefined ? Number(payload.memory_max_shards) : undefined,
+                runId: payload.memory_run_id ? String(payload.memory_run_id) : undefined,
+                resumeFromShardIndex:
+                  payload.memory_resume_from_shard_index !== undefined
+                    ? Number(payload.memory_resume_from_shard_index)
+                    : undefined,
+              })
+            : await buildProjectMemoryArtifact({
+                projectId,
+                root,
+                correlationId: chainCorrelation,
+                sourceJobId,
+              });
+          logger.info(
+            {
+              event: 'phase6_builder_memory',
+              project_id: projectId,
+              round,
+              mode: useLarge ? 'large_repo' : 'single_pass',
+              status: bm.status,
+              doc_key:
+                bm && 'global_doc_key' in bm && bm.global_doc_key
+                  ? bm.global_doc_key
+                  : 'doc_key' in bm
+                    ? bm.doc_key ?? null
+                    : null,
+              reason: bm.reason ?? null,
+            },
+            'phase6 deep builder memory step',
+          );
         }
         await indexProject({ projectId, root });
         const evalResult = await runQualityEvalAndPersist({
@@ -332,6 +427,31 @@ async function executeByType(
       });
       return res as unknown as Record<string, unknown>;
     }
+    case 'knowledge.memory.build': {
+      if (!projectId) throw new Error('project_id is required for knowledge.memory.build');
+      const root = String(payload.root ?? '');
+      if (!root) throw new Error('payload.root is required');
+      const res = await buildLargeRepoProjectMemory({
+        projectId,
+        root,
+        correlationId: chainCorrelation,
+        sourceJobId,
+        runId: payload.run_id ? String(payload.run_id) : undefined,
+        strategy: payload.strategy === 'language' ? 'language' : 'directory',
+        maxShards: payload.max_shards !== undefined ? Number(payload.max_shards) : undefined,
+        resumeFromShardIndex:
+          payload.resume_from_shard_index !== undefined ? Number(payload.resume_from_shard_index) : undefined,
+      });
+      if (res.status === 'ok') {
+        await enqueueJob({
+          project_id: projectId,
+          job_type: 'index.run',
+          payload: { root },
+          correlation_id: chainCorrelation,
+        });
+      }
+      return res as unknown as Record<string, unknown>;
+    }
     default:
       throw new Error(`Unsupported job type: ${String(jobType)}`);
   }
@@ -348,8 +468,21 @@ export async function runNextJob(queueName = 'default'): Promise<{
   if (!job) return { status: 'idle' };
   try {
     const started = Date.now();
+    const phase6Types = new Set<JobType>([
+      'quality.eval',
+      'knowledge.loop.shallow',
+      'knowledge.loop.deep',
+      'knowledge.memory.build',
+    ]);
     logger.info(
-      { job_id: job.job_id, job_type: job.job_type, project_id: job.project_id, correlation_id: job.correlation_id },
+      {
+        event: 'job_execute_begin',
+        job_id: job.job_id,
+        job_type: job.job_type,
+        project_id: job.project_id,
+        correlation_id: job.correlation_id,
+        phase6: phase6Types.has(job.job_type),
+      },
       'job started',
     );
     const result = await executeByType(job.job_type, job.project_id, job.payload, job.correlation_id, job.job_id);
@@ -385,8 +518,21 @@ export async function runJobById(jobId: string): Promise<{
   if (!job) return { status: 'idle' };
   try {
     const started = Date.now();
+    const phase6Types = new Set<JobType>([
+      'quality.eval',
+      'knowledge.loop.shallow',
+      'knowledge.loop.deep',
+      'knowledge.memory.build',
+    ]);
     logger.info(
-      { job_id: job.job_id, job_type: job.job_type, project_id: job.project_id, correlation_id: job.correlation_id },
+      {
+        event: 'job_execute_begin',
+        job_id: job.job_id,
+        job_type: job.job_type,
+        project_id: job.project_id,
+        correlation_id: job.correlation_id,
+        phase6: phase6Types.has(job.job_type),
+      },
       'job started by id',
     );
     const result = await executeByType(job.job_type, job.project_id, job.payload, job.correlation_id, job.job_id);

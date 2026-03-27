@@ -1985,6 +1985,7 @@ function createMcpToolsServer() {
           'raptor.build',
           'knowledge.loop.shallow',
           'knowledge.loop.deep',
+          'knowledge.memory.build',
         ]),
         payload: z.record(z.string(), z.unknown()).optional(),
         correlation_id: z.string().optional(),
