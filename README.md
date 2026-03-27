@@ -91,6 +91,21 @@ Recommended QA generation choices:
 > But for ranking/QA style outputs, **instruct/general models usually behave more stably** than coder-only models.
 > Practical recommendation: start with one shared model, measure `qc:rag` delta + latency, then decide if splitting models is worth it.
 
+### 5. Hybrid Retrieval (Optional, safe rollout)
+Hybrid retrieval expands `search_code` candidates with a lexical side-channel before ranking.
+
+Default is OFF. Enable by either:
+- per-call opt-in: `search_code.filters.hybrid_mode="lexical"`
+- environment toggle: `RETRIEVAL_HYBRID_ENABLED=true`
+
+Controls:
+- `RETRIEVAL_HYBRID_LEXICAL_LIMIT` (default `12`): cap lexical candidate expansion size.
+
+Recommended rollout:
+1. keep global env OFF,
+2. enable per-call only for target groups (`mcp-server`, `config`, `retrieval`),
+3. compare QC artifacts (`recall@3`, `MRR`, `p95`) across at least 2 runs before broader enablement.
+
 ---
 
 ## 🛠️ MCP Toolset

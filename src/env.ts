@@ -78,6 +78,12 @@ const EnvSchema = z.object({
   REDIS_RETRIEVAL_TTL_SECONDS: z.coerce.number().int().positive().optional().default(900),
   REDIS_RERANK_TTL_SECONDS: z.coerce.number().int().positive().optional().default(7200),
 
+  // Production rollout: opt-in hybrid retrieval (semantic + lexical candidate expansion).
+  RETRIEVAL_HYBRID_ENABLED: z
+    .preprocess(v => parseBooleanEnv(v), z.boolean().optional())
+    .default(false),
+  RETRIEVAL_HYBRID_LEXICAL_LIMIT: z.coerce.number().int().positive().optional().default(12),
+
   // Phase 4: optional Neo4j graph store.
   KG_ENABLED: z
     .preprocess(v => parseBooleanEnv(v), z.boolean().optional())

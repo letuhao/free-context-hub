@@ -14,11 +14,13 @@ export type SearchCodeParams = {
   includeTests?: boolean;
   includeSmoke?: boolean;
   preferPaths?: string[];
+  qcNoCap?: boolean;
   rerankMode?: 'off' | 'llm';
   lexicalBoost?: boolean;
   kgAssist?: boolean;
   limit?: number;
   debug?: boolean;
+  hybridMode?: 'off' | 'lexical';
 };
 
 export type SearchCodeResult = {
@@ -83,6 +85,18 @@ function extractLexicalTokens(query: string): string[] {
   if (/(embeddings|vector|pgvector)/.test(lower)) {
     tokens.push('embed', 'embedTexts', 'EMBEDDINGS', 'pgvector');
   }
+  if (/(output_format|auto_both|summary_only|json_only)/.test(lower)) {
+    tokens.push('output_format', 'auto_both', 'summary_only', 'json_only', 'formatToolResponse');
+  }
+  if (/(health|health endpoint)/.test(lower)) {
+    tokens.push('health', 'app.get', '/health');
+  }
+  if (/(dotenv|envschema|parsebooleanenv|default_project_id)/.test(lower)) {
+    tokens.push('dotenv', 'EnvSchema', 'parseBooleanEnv', 'DEFAULT_PROJECT_ID', 'resolveProjectIdOrThrow');
+  }
+  if (/(search_code|retriev|lexical|kg|boost)/.test(lower)) {
+    tokens.push('searchCode', 'lexicalBoost', 'kgAssist', 'pathPriorBoost', 'extractLexicalTokens');
+  }
 
   // Normalize + de-dupe.
   const normalized = tokens
@@ -122,6 +136,23 @@ function pathPriorBoost(filePath: string, preferPaths: string[]): { boost: numbe
   return { boost, hits };
 }
 
+function inferIntentPriors(query: string): string[] {
+  const q = query.toLowerCase();
+  const priors: string[] = [];
+
+  if (/(mcp|endpoint|route|registertool|output_format|auto_both|health)/.test(q)) {
+    priors.push('src/index.ts', 'src/utils/outputFormat.ts', 'src/smoke/smokeTest.ts', 'src/smoke/phase5WorkerValidation.ts');
+  }
+  if (/(env|dotenv|default_project_id|workspace_token|parsebooleanenv|config|queue_|s3_|embeddings_)/.test(q)) {
+    priors.push('src/env.ts', 'src/index.ts');
+  }
+  if (/(search_code|retriev|lexical|kg|boost|path_glob|__tests__|smoke)/.test(q)) {
+    priors.push('src/services/retriever.ts');
+  }
+
+  return Array.from(new Set(priors));
+}
+
 function lexicalScore(tokens: string[], haystack: string): number {
   if (!tokens.length) return 0;
   const s = haystack.toLowerCase();
@@ -130,6 +161,22 @@ function lexicalScore(tokens: string[], haystack: string): number {
     if (s.includes(t.toLowerCase())) hits += 1;
   }
   return hits / tokens.length; // 0..1
+}
+
+function escapeLikePattern(input: string): string {
+  return input.replace(/[%_\\]/g, '\\$&');
+}
+
+function dedupeMatches(matches: SearchCodeResult['matches']): SearchCodeResult['matches'] {
+  const seen = new Set<string>();
+  const out: SearchCodeResult['matches'] = [];
+  for (const m of matches) {
+    const key = `${m.path}:${m.start_line}:${m.end_line}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(m);
+  }
+  return out;
 }
 
 const RerankOrderSchema = z.object({
@@ -230,11 +277,13 @@ export async function searchCode({
   includeTests,
   includeSmoke,
   preferPaths,
+  qcNoCap,
   rerankMode,
   lexicalBoost,
   kgAssist,
   limit,
   debug,
+  hybridMode,
 }: SearchCodeParams): Promise<SearchCodeResult> {
   const env = getEnv();
   const cacheVersion = await getProjectCacheVersion(projectId).catch(() => 1);
@@ -250,6 +299,7 @@ export async function searchCode({
     `is=${Boolean(includeSmoke)}`,
     `kg=${Boolean(kgAssist)}`,
     `lex=${lexicalBoost !== false}`,
+    `hybrid=${hybridMode ?? 'off'}`,
     `k=${topK}`,
   ]);
 
@@ -308,6 +358,55 @@ export async function searchCode({
   const res = await pool.query(sql, params);
 
   const tokens = lexicalBoost === false ? [] : extractLexicalTokens(query);
+  const hybridEnabled = (hybridMode ?? 'off') === 'lexical' || env.RETRIEVAL_HYBRID_ENABLED;
+  const lexicalLimit = Math.max(1, env.RETRIEVAL_HYBRID_LEXICAL_LIMIT);
+  let lexicalRows: any[] = [];
+  const hybridStarted = Date.now();
+  if (hybridEnabled && tokens.length) {
+    const lexicalParams: any[] = [projectId, vector];
+    let whereLex = `c.project_id = $1`;
+    if (!wantsTests) {
+      whereLex += ` AND c.file_path NOT LIKE '%.test.ts' AND c.file_path NOT LIKE '%/__tests__/%'`;
+    }
+    if (!wantsSmoke) {
+      whereLex += ` AND c.file_path NOT LIKE 'src/smoke/%'`;
+    }
+    if (pathGlob && pathGlob.trim().length) {
+      const like = globToSqlLike(pathGlob);
+      lexicalParams.push(like);
+      whereLex += ` AND c.file_path LIKE $${lexicalParams.length}`;
+    }
+    const tokenLike = tokens
+      .map(t => t.trim())
+      .filter(Boolean)
+      .slice(0, 12)
+      .map(t => `%${escapeLikePattern(t)}%`);
+    if (tokenLike.length) {
+      lexicalParams.push(tokenLike);
+      const arrIdx = lexicalParams.length;
+      whereLex += ` AND EXISTS (
+        SELECT 1
+        FROM unnest($${arrIdx}::text[]) AS tok
+        WHERE c.file_path ILIKE tok ESCAPE '\\'
+           OR c.content ILIKE tok ESCAPE '\\'
+      )`;
+      lexicalParams.push(lexicalLimit);
+      const lexicalSql = `
+        SELECT
+          c.file_path,
+          c.start_line,
+          c.end_line,
+          c.content,
+          GREATEST(0, 1 - (c.embedding <=> $2::vector)) AS score
+        FROM chunks c
+        WHERE ${whereLex}
+        ORDER BY c.embedding <=> $2::vector
+        LIMIT $${lexicalParams.length};
+      `;
+      const lexicalRes = await pool.query(lexicalSql, lexicalParams);
+      lexicalRows = lexicalRes.rows ?? [];
+    }
+  }
   const kgFiles = new Set<string>();
   if (kgAssist) {
     try {
@@ -332,8 +431,10 @@ export async function searchCode({
     }
   }
 
-  const priors = (preferPaths ?? []).filter(p => typeof p === 'string' && p.trim().length).slice(0, 12);
-  const matches: SearchCodeResult['matches'] = (res.rows ?? []).map((r: any) => {
+  const explicitPriors = (preferPaths ?? []).filter(p => typeof p === 'string' && p.trim().length);
+  const intentPriors = inferIntentPriors(query);
+  const priors = Array.from(new Set([...explicitPriors, ...intentPriors])).slice(0, 16);
+  const toMatch = (r: any): SearchCodeResult['matches'][number] => {
     const filePath = String(r.file_path);
     const content = String(r.content);
     const snippet = makeSnippet(content, maxChars);
@@ -353,14 +454,18 @@ export async function searchCode({
       score: boosted,
       match_type: 'semantic',
     };
-  });
+  };
+  const semanticMatches: SearchCodeResult['matches'] = (res.rows ?? []).map(toMatch);
+  const lexicalMatches: SearchCodeResult['matches'] = lexicalRows.map(toMatch);
+  const matches: SearchCodeResult['matches'] = dedupeMatches([...semanticMatches, ...lexicalMatches]);
+  const hybridLatencyMs = Date.now() - hybridStarted;
 
   // Re-rank after boosting.
   matches.sort((a, b) => b.score - a.score);
 
   // File-level aggregation rerank (stability + reduce repeated-chunk spam).
   // - Compute per-file score from best chunk + lexical(path) and keep at most N chunks per file.
-  const maxPerFile = 2;
+  const maxPerFile = qcNoCap ? Number.MAX_SAFE_INTEGER : 2;
   const perFile: Record<string, { best: number; chunks: SearchCodeResult['matches'] }> = {};
   for (const m of matches) {
     const key = m.path;
@@ -436,10 +541,18 @@ export async function searchCode({
     if (pathGlob) explanations.push(`pathGlob=${pathGlob}`);
     explanations.push(`includeTests=${Boolean(includeTests)}`);
     explanations.push(`includeSmoke=${Boolean(includeSmoke)}`);
-    if (priors.length) explanations.push(`preferPaths=${priors.join(',')}`);
+    if (explicitPriors.length) explanations.push(`preferPaths=${explicitPriors.join(',')}`);
+    if (intentPriors.length) explanations.push(`intentPriors=${intentPriors.join(',')}`);
     explanations.push(`lexicalBoost=${lexicalBoost !== false}`);
+    explanations.push(`hybridEnabled=${hybridEnabled}`);
+    explanations.push(`hybridMode=${hybridMode ?? 'off'}`);
+    explanations.push(`hybridLexicalLimit=${lexicalLimit}`);
+    explanations.push(`lexicalCandidates=${lexicalMatches.length}`);
+    explanations.push(`mergedCandidates=${matches.length}`);
+    explanations.push(`hybridLatencyMs=${hybridLatencyMs}`);
     explanations.push(`kgAssist=${Boolean(kgAssist)} kgFiles=${kgFiles.size}`);
     explanations.push(`fileRerank=maxPerFile:${maxPerFile} files:${fileScores.length}`);
+    explanations.push(`qcNoCap=${Boolean(qcNoCap)}`);
     explanations.push(`rerankMode=${mode}`);
   }
 
