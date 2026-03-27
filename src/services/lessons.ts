@@ -465,6 +465,10 @@ export async function deleteWorkspace(projectId: string) {
 
   await pool.query('BEGIN');
   try {
+    await pool.query(`DELETE FROM workspace_deltas WHERE project_id=$1`, [projectId]);
+    await pool.query(`DELETE FROM project_workspaces WHERE project_id=$1`, [projectId]);
+    await pool.query(`DELETE FROM project_sources WHERE project_id=$1`, [projectId]);
+    await pool.query(`DELETE FROM async_jobs WHERE project_id=$1`, [projectId]);
     await pool.query(`DELETE FROM git_lesson_proposals WHERE project_id=$1`, [projectId]);
     await pool.query(`DELETE FROM git_commit_files WHERE project_id=$1`, [projectId]);
     await pool.query(`DELETE FROM git_commits WHERE project_id=$1`, [projectId]);

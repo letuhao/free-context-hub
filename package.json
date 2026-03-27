@@ -9,11 +9,13 @@
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "worker": "tsx src/worker.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "migrate": "tsx src/db/migrate.ts",
     "test": "tsx --test src/services/gitCommitFileParse.test.ts src/services/gitLessonProposalUpsert.test.ts",
     "smoke-test": "tsx src/smoke/smokeTest.ts",
+    "bench:phase5": "tsx src/smoke/phase5ValidationBenchmark.ts",
     "distill-probe": "tsx src/smoke/distillProbe.ts"
   },
   "repository": {
@@ -29,6 +31,8 @@
   "homepage": "https://github.com/letuhao/free-context-hub#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
+    "@types/amqplib": "^0.10.8",
+    "amqplib": "^0.10.9",
     "dotenv": "^17.3.1",
     "fast-glob": "^3.3.3",
     "neo4j-driver": "^6.0.1",

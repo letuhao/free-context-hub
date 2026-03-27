@@ -69,6 +69,21 @@ const EnvSchema = z.object({
     .preprocess(v => parseBooleanEnv(v), z.boolean().optional())
     .default(false),
   GIT_MAX_COMMITS_PER_RUN: z.coerce.number().int().positive().optional().default(200),
+
+  // Async pipeline / queue worker.
+  QUEUE_ENABLED: z
+    .preprocess(v => parseBooleanEnv(v), z.boolean().optional())
+    .default(false),
+  QUEUE_BACKEND: z.enum(['postgres', 'rabbitmq']).optional().default('postgres'),
+  JOB_QUEUE_NAME: z.string().min(1).optional().default('default'),
+  RABBITMQ_URL: z.string().optional(),
+  RABBITMQ_EXCHANGE: z.string().min(1).optional().default('contexthub.jobs'),
+
+  // Repo/workspace source modes.
+  REPO_CACHE_ROOT: z.string().min(1).optional().default('/data/repos'),
+  WORKSPACE_SCAN_ENABLED: z
+    .preprocess(v => parseBooleanEnv(v), z.boolean().optional())
+    .default(false),
 }).superRefine((val, ctx) => {
   if (val.MCP_AUTH_ENABLED && (!val.CONTEXT_HUB_WORKSPACE_TOKEN || val.CONTEXT_HUB_WORKSPACE_TOKEN.length === 0)) {
     ctx.addIssue({
@@ -106,6 +121,13 @@ const EnvSchema = z.object({
         message: 'NEO4J_PASSWORD is required when KG_ENABLED=true',
       });
     }
+  }
+  if (val.QUEUE_ENABLED && val.QUEUE_BACKEND === 'rabbitmq' && (!val.RABBITMQ_URL || !val.RABBITMQ_URL.trim())) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['RABBITMQ_URL'],
+      message: 'RABBITMQ_URL is required when QUEUE_ENABLED=true and QUEUE_BACKEND=rabbitmq',
+    });
   }
 });
 

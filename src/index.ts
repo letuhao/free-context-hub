@@ -25,6 +25,10 @@ import {
   listCommits,
   suggestLessonsFromCommits,
 } from './services/gitIntelligence.js';
+import { configureProjectSource, getProjectSource, prepareRepo } from './services/repoSources.js';
+import { enqueueJob, listJobs } from './services/jobQueue.js';
+import { runNextJob } from './services/jobExecutor.js';
+import { listWorkspaceRoots, registerWorkspaceRoot, scanWorkspaceChanges } from './services/workspaceTracker.js';
 
 dotenv.config();
 
@@ -65,6 +69,13 @@ function logStartupEnvSummary() {
     NEO4J_USERNAME: env.NEO4J_USERNAME ? '[set]' : '[not set]',
     GIT_INGEST_ENABLED: env.GIT_INGEST_ENABLED,
     GIT_MAX_COMMITS_PER_RUN: env.GIT_MAX_COMMITS_PER_RUN,
+    QUEUE_ENABLED: env.QUEUE_ENABLED,
+    QUEUE_BACKEND: env.QUEUE_BACKEND,
+    JOB_QUEUE_NAME: env.JOB_QUEUE_NAME,
+    RABBITMQ_URL: env.RABBITMQ_URL ? '[set]' : '[not set]',
+    RABBITMQ_EXCHANGE: env.RABBITMQ_EXCHANGE,
+    REPO_CACHE_ROOT: env.REPO_CACHE_ROOT,
+    WORKSPACE_SCAN_ENABLED: env.WORKSPACE_SCAN_ENABLED,
   };
   console.log('[env]', JSON.stringify(safe));
 }
@@ -1529,6 +1540,309 @@ function createMcpToolsServer() {
         limit,
       });
       const summary = `analyze_commit_impact: files=${result.affected_files.length}, symbols=${result.affected_symbols.length}, lessons=${result.related_lessons.length}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'configure_project_source',
+    {
+      description: 'Configure project source mode: remote_git or local_workspace.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        source_type: z.enum(['remote_git', 'local_workspace']),
+        git_url: z.string().min(1).optional(),
+        default_ref: z.string().min(1).optional(),
+        repo_root: z.string().min(1).optional(),
+        enabled: z.boolean().optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.literal('ok'),
+        project_id: z.string(),
+        source_type: z.enum(['remote_git', 'local_workspace']),
+      }),
+    },
+    async ({ workspace_token, project_id, source_type, git_url, default_ref, repo_root, enabled, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const pid = resolveProjectIdOrThrow(project_id);
+      const result = await configureProjectSource({
+        projectId: pid,
+        sourceType: source_type,
+        gitUrl: git_url,
+        defaultRef: default_ref,
+        repoRoot: repo_root,
+        enabled,
+      });
+      const summary = `configure_project_source: project_id=${result.project_id}, source_type=${result.source_type}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'prepare_repo',
+    {
+      description: 'Clone/fetch/checkout remote repository into server cache and persist source metadata.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        git_url: z.string().min(1),
+        ref: z.string().min(1).optional(),
+        depth: z.number().int().positive().optional(),
+        cache_root: z.string().min(1).optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.enum(['ok', 'error']),
+        project_id: z.string(),
+        repo_root: z.string(),
+        resolved_ref: z.string().optional(),
+        last_sync_commit: z.string().optional(),
+        error: z.string().optional(),
+      }),
+    },
+    async ({ workspace_token, project_id, git_url, ref, depth, cache_root, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const pid = resolveProjectIdOrThrow(project_id);
+      const env = getEnv();
+      const result = await prepareRepo({
+        projectId: pid,
+        gitUrl: git_url,
+        ref,
+        depth,
+        cacheRoot: cache_root ?? env.REPO_CACHE_ROOT,
+      });
+      const summary = `prepare_repo: status=${result.status}, repo_root=${result.repo_root}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'get_project_source',
+    {
+      description: 'Read configured source mode details for a project.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        source_type: z.enum(['remote_git', 'local_workspace']).default('remote_git'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        source: z
+          .object({
+            project_id: z.string(),
+            source_type: z.enum(['remote_git', 'local_workspace']),
+            git_url: z.string().nullable(),
+            default_ref: z.string(),
+            repo_root: z.string().nullable(),
+            enabled: z.boolean(),
+          })
+          .nullable(),
+      }),
+    },
+    async ({ workspace_token, project_id, source_type, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const pid = resolveProjectIdOrThrow(project_id);
+      const source = await getProjectSource(pid, source_type);
+      const result = { source };
+      const summary = `get_project_source: found=${Boolean(source).toString()}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'register_workspace_root',
+    {
+      description: 'Register one local workspace root for a project (multi-workspace mode).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        root_path: z.string().min(1),
+        active: z.boolean().optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.literal('ok'),
+        workspace_id: z.string(),
+        project_id: z.string(),
+        root_path: z.string(),
+      }),
+    },
+    async ({ workspace_token, project_id, root_path, active, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const pid = resolveProjectIdOrThrow(project_id);
+      const result = await registerWorkspaceRoot({ projectId: pid, rootPath: root_path, active });
+      const summary = `register_workspace_root: workspace_id=${result.workspace_id}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'list_workspace_roots',
+    {
+      description: 'List workspace roots configured for a project.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        items: z.array(
+          z.object({
+            workspace_id: z.string(),
+            root_path: z.string(),
+            is_active: z.boolean(),
+            updated_at: z.any(),
+          }),
+        ),
+      }),
+    },
+    async ({ workspace_token, project_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const pid = resolveProjectIdOrThrow(project_id);
+      const result = await listWorkspaceRoots(pid);
+      const summary = `list_workspace_roots: items=${result.items.length}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'scan_workspace',
+    {
+      description: 'Scan local workspace git status (modified/untracked/staged) and optionally run delta indexing.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        root_path: z.string().min(1),
+        run_delta_index: z.boolean().optional().default(false),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.enum(['ok', 'error']),
+        root_path: z.string(),
+        modified_files: z.array(z.string()),
+        untracked_files: z.array(z.string()),
+        staged_files: z.array(z.string()),
+        delta_id: z.string().optional(),
+        index_result: z
+          .object({
+            status: z.enum(['ok', 'error']),
+            files_indexed: z.number().int(),
+            duration_ms: z.number().int(),
+            errors: z.array(z.object({ path: z.string(), message: z.string() })),
+          })
+          .optional(),
+        error: z.string().optional(),
+      }),
+    },
+    async ({ workspace_token, project_id, root_path, run_delta_index, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const pid = resolveProjectIdOrThrow(project_id);
+      const result = await scanWorkspaceChanges({
+        projectId: pid,
+        rootPath: root_path,
+        runDeltaIndex: run_delta_index,
+      });
+      const summary = `scan_workspace: status=${result.status}, modified=${result.modified_files.length}, untracked=${result.untracked_files.length}, staged=${result.staged_files.length}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'enqueue_job',
+    {
+      description: 'Enqueue async job for worker pipeline (RabbitMQ/Postgres backend).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        job_type: z.enum(['repo.sync', 'workspace.scan', 'workspace.delta_index', 'index.run', 'git.ingest', 'quality.eval', 'knowledge.refresh']),
+        payload: z.record(z.string(), z.unknown()).optional(),
+        correlation_id: z.string().optional(),
+        queue_name: z.string().min(1).optional(),
+        max_attempts: z.number().int().positive().optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.literal('queued'),
+        job_id: z.string(),
+        backend: z.enum(['postgres', 'rabbitmq']),
+      }),
+    },
+    async ({ workspace_token, project_id, job_type, payload, correlation_id, queue_name, max_attempts, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const pid = project_id ? resolveProjectIdOrThrow(project_id) : undefined;
+      const result = await enqueueJob({
+        project_id: pid,
+        job_type,
+        payload: payload ?? {},
+        correlation_id,
+        queue_name,
+        max_attempts,
+      });
+      const summary = `enqueue_job: job_id=${result.job_id}, backend=${result.backend}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'list_jobs',
+    {
+      description: 'List async worker jobs and statuses.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        status: z.enum(['queued', 'running', 'succeeded', 'failed', 'dead_letter']).optional(),
+        limit: z.number().int().positive().optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        items: z.array(
+          z.object({
+            job_id: z.string(),
+            project_id: z.string().nullable(),
+            job_type: z.string(),
+            status: z.enum(['queued', 'running', 'succeeded', 'failed', 'dead_letter']),
+            attempts: z.number().int(),
+            max_attempts: z.number().int(),
+            queued_at: z.any(),
+            started_at: z.any(),
+            finished_at: z.any(),
+            error_message: z.string().nullable(),
+          }),
+        ),
+      }),
+    },
+    async ({ workspace_token, project_id, status, limit, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const pid = project_id ? resolveProjectIdOrThrow(project_id) : undefined;
+      const result = await listJobs({ projectId: pid, status, limit });
+      const summary = `list_jobs: items=${result.items.length}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'run_next_job',
+    {
+      description: 'Run one queued job immediately (useful for local/dev without long-running worker process).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        queue_name: z.string().min(1).optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.enum(['idle', 'ok', 'error']),
+        job_id: z.string().optional(),
+        job_type: z.string().optional(),
+        result: z.record(z.string(), z.unknown()).optional(),
+        error: z.string().optional(),
+      }),
+    },
+    async ({ workspace_token, queue_name, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const result = await runNextJob(queue_name);
+      const summary = `run_next_job: status=${result.status}`;
       return formatToolResponse(result, summary, output_format);
     },
   );
