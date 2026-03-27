@@ -24,6 +24,13 @@ Optional environment variables:
 - Run `faq.build` worker job to regenerate `docs/faq/*`.
 - Run `raptor.build` worker job to regenerate `docs/.raptor/*`.
 - Run `qc:rag` to regenerate QC artifacts/reports.
+- Run worker job `quality.eval` (or `npm run qc:rag` for the harness) to refresh production retrieval metrics stored as `benchmark_artifact` rows.
+
+## Phase 6 rollback / baseline
+
+- **Baseline row:** `quality.eval` with `set_baseline: true` overwrites the `benchmark_artifact` at `doc_key` `quality_eval/baseline` (configurable via `PHASE6_BASELINE_DOC_KEY`). To “rollback” a baseline, upsert that row from a previous JSON snapshot (copy `content` from an older `quality_eval/<timestamp>` row) or delete the row and re-run.
+- **Shallow/deep artifacts:** `phase6/shallow/*` and `phase6/deep/summary/*` are audit rows; safe to delete from `generated_documents` if you no longer need them (canonical FAQ/RAPTOR content remains in other `doc_type` rows or filesystem exports).
+- **Draft promotion:** Phase 6 loop artifacts may carry `metadata.status: draft`; `promote_generated_document` sets `active` without deleting history.
 
 ## Suggested git hygiene
 

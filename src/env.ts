@@ -69,6 +69,21 @@ const EnvSchema = z.object({
   QA_AGENT_MODEL: z.string().min(1).optional(),
   QA_AGENT_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(12_000),
 
+  // Optional dedicated Builder/QC/Judge agent model endpoints for Phase 6+ loops.
+  // All are optional and may fallback to DISTILLATION_* (then EMBEDDINGS_* in callers).
+  BUILDER_AGENT_BASE_URL: z.string().min(1).optional(),
+  BUILDER_AGENT_API_KEY: z.string().optional(),
+  BUILDER_AGENT_MODEL: z.string().min(1).optional(),
+  BUILDER_AGENT_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(12_000),
+  QC_AGENT_BASE_URL: z.string().min(1).optional(),
+  QC_AGENT_API_KEY: z.string().optional(),
+  QC_AGENT_MODEL: z.string().min(1).optional(),
+  QC_AGENT_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(12_000),
+  JUDGE_AGENT_BASE_URL: z.string().min(1).optional(),
+  JUDGE_AGENT_API_KEY: z.string().optional(),
+  JUDGE_AGENT_MODEL: z.string().min(1).optional(),
+  JUDGE_AGENT_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(12_000),
+
   // Phase 7: optional Redis cache for retrieval + rerank.
   REDIS_ENABLED: z
     .preprocess(v => parseBooleanEnv(v), z.boolean().optional())
@@ -123,6 +138,23 @@ const EnvSchema = z.object({
   S3_FORCE_PATH_STYLE: z
     .preprocess(v => parseBooleanEnv(v), z.boolean().optional())
     .default(true),
+
+  // Phase 6: active knowledge loop + production QC eval gates (opt-in for automated loops).
+  PHASE6_KNOWLEDGE_LOOP_ENABLED: z
+    .preprocess(v => parseBooleanEnv(v), z.boolean().optional())
+    .default(false),
+  PHASE6_MIN_RECALL_AT3: z.coerce.number().optional().default(0),
+  PHASE6_MIN_RECALL_DELTA: z.coerce.number().optional().default(0),
+  /** 0 = disabled. When set, candidate totals.p95_ms must be <= this value. */
+  PHASE6_MAX_P95_MS: z.coerce.number().int().min(0).optional().default(0),
+  /** Comma-separated group names: when a baseline artifact exists, recall@3 must not drop vs baseline for these groups. */
+  PHASE6_NO_REGRESS_GROUPS: z.string().optional().default(''),
+  PHASE6_EVAL_QUERIES_PATH: z.string().min(1).optional().default('qc/queries.json'),
+  PHASE6_EVAL_KG_ASSIST: z
+    .preprocess(v => parseBooleanEnv(v), z.boolean().optional())
+    .default(false),
+  /** Stored benchmark_artifact doc_key for baseline JSON (quality eval). */
+  PHASE6_BASELINE_DOC_KEY: z.string().min(1).optional().default('quality_eval/baseline'),
 }).superRefine((val, ctx) => {
   if (val.MCP_AUTH_ENABLED && (!val.CONTEXT_HUB_WORKSPACE_TOKEN || val.CONTEXT_HUB_WORKSPACE_TOKEN.length === 0)) {
     ctx.addIssue({

@@ -812,6 +812,57 @@ async function main() {
     if (String(scan.status) === 'error') {
       throw new Error(`scan_workspace failed: ${String(scan.error ?? '')}`);
     }
+
+    const smokePhase6 = String(process.env.SMOKE_PHASE6 ?? '').toLowerCase() === 'true';
+    if (smokePhase6) {
+      const corr6 = randomUUID();
+      await client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'enqueue_job',
+            arguments: {
+              ...tokenArgs,
+              project_id: projectIdA,
+              job_type: 'quality.eval',
+              payload: { queries_path: 'qc/queries.json' },
+              correlation_id: corr6,
+              output_format: 'json_only',
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+      let evalOutcome: { doc_key?: string } | null = null;
+      for (let i = 0; i < 60; i++) {
+        const r = extractFirstTextJson(
+          await client.request(
+            {
+              method: 'tools/call',
+              params: {
+                name: 'run_next_job',
+                arguments: { ...tokenArgs, output_format: 'json_only' },
+              },
+            },
+            CallToolResultSchema,
+          ),
+        );
+        if (String(r.status) === 'idle') break;
+        if (String(r.job_type) === 'quality.eval' && r.result && typeof (r.result as { doc_key?: string }).doc_key === 'string') {
+          evalOutcome = r.result as { doc_key: string };
+          break;
+        }
+      }
+      if (!evalOutcome?.doc_key) {
+        throw new Error('SMOKE_PHASE6: expected quality.eval to produce result.doc_key');
+      }
+      console.log('[smoke] phase6 quality.eval doc_key:', evalOutcome.doc_key);
+      const listTools3 = await client.request({ method: 'tools/list', params: {} }, ListToolsResultSchema);
+      const names3 = new Set(listTools3.tools.map((t: any) => String(t.name)));
+      if (!names3.has('promote_generated_document')) {
+        throw new Error('SMOKE_PHASE6: missing promote_generated_document tool');
+      }
+    }
   } else {
     console.log('[smoke] SMOKE_QUEUE_TOOLS!=true; skipping prepare_repo / enqueue_job / run_next_job / scan_workspace');
   }

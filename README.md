@@ -141,13 +141,14 @@ We are currently in **Phase 5**. Here is our path forward:
 - [x] **Phase 3**: Knowledge Distillation & Reflection (LLM-powered).
 - [x] **Phase 4**: Advanced Code Indexing & **Knowledge Graph Building**.
 - [x] **Phase 5**: **Automation Knowledge Building**: Auto-collecting insights from Git commits.
-- [ ] **Phase 6**: **Multi-Agent Knowledge**: Collecting knowledge from inter-agent communications.
-- [ ] **Phase 7**: **Interactive GUI**: A visual interface for humans to explore the knowledge base.
-- [ ] **Phase 8**: **Human-in-the-loop**: Interactive correction and manual knowledge injection.
-- [ ] **Phase 9**: **Multi-format Support**: PDF, DOCX, XLSX, and Image ingestion.
-- [ ] **Phase 10**: **RAG to Insight**: Converting raw knowledge into human-readable text and diagrams.
-- [ ] **Phase 11**: **IDE Native**: Deep integration with Visual Studio Code.
-- [ ] **Phase 12**: **Knowledge Portability**: Import/Export knowledge to/from other infrastructure.
+- [ ] **Phase 6**: **Active Knowledge & Deep Learning Loop**: Eval-driven retrieval improvement (QC-gated, bounded recursion); see [WHITEPAPER.md](WHITEPAPER.md).
+- [ ] **Phase 7**: **Multi-Agent Knowledge**: Collecting knowledge from inter-agent communications.
+- [ ] **Phase 8**: **Interactive GUI**: A visual interface for humans to explore the knowledge base.
+- [ ] **Phase 9**: **Human-in-the-loop**: Interactive correction and manual knowledge injection.
+- [ ] **Phase 10**: **Multi-format Support**: PDF, DOCX, XLSX, and Image ingestion.
+- [ ] **Phase 11**: **RAG to Insight**: Converting raw knowledge into human-readable text and diagrams.
+- [ ] **Phase 12**: **IDE Native**: Deep integration with Visual Studio Code.
+- [ ] **Phase 13**: **Knowledge Portability**: Import/Export knowledge to/from other infrastructure.
 
 ---
 

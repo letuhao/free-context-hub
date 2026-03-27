@@ -30,7 +30,7 @@ import { configureProjectSource, getProjectSource, prepareRepo } from './service
 import { enqueueJob, listJobs } from './services/jobQueue.js';
 import { runNextJob } from './services/jobExecutor.js';
 import { listWorkspaceRoots, registerWorkspaceRoot, scanWorkspaceChanges } from './services/workspaceTracker.js';
-import { getGeneratedDocument, listGeneratedDocuments } from './services/generatedDocs.js';
+import { getGeneratedDocument, listGeneratedDocuments, promoteGeneratedDocument } from './services/generatedDocs.js';
 
 const logger = createModuleLogger('mcp');
 
@@ -240,6 +240,7 @@ function createMcpToolsServer() {
         'analyze_commit_impact',
         'list_generated_documents',
         'get_generated_document',
+        'promote_generated_document',
       ];
 
       const tokenNote = env.MCP_AUTH_ENABLED
@@ -297,6 +298,7 @@ function createMcpToolsServer() {
           key_parameters: [
             { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
             { path: 'doc_type', required: false, notes: 'Optional filter: faq|raptor|qc_report|qc_artifact|benchmark_artifact.' },
+            { path: 'doc_status', required: false, notes: "Optional: 'draft' | 'active' (filters metadata.status)." },
             { path: 'limit', required: false, notes: 'Default 100, max 1000.' },
             { path: 'include_content', required: false, notes: 'Include full content when true (default false).' },
           ],
@@ -309,6 +311,16 @@ function createMcpToolsServer() {
             { path: 'doc_id', required: false, notes: 'Preferred direct lookup key.' },
             { path: 'doc_type', required: false, notes: 'Required with doc_key when doc_id is omitted.' },
             { path: 'doc_key', required: false, notes: 'Required with doc_type when doc_id is omitted.' },
+          ],
+        },
+        {
+          name: 'promote_generated_document',
+          purpose: 'Promote a draft generated document to active (sets metadata.status=active).',
+          key_parameters: [
+            { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
+            { path: 'doc_id', required: false, notes: 'Lookup by id, or use doc_type + doc_key.' },
+            { path: 'doc_type', required: false, notes: 'With doc_key when doc_id omitted.' },
+            { path: 'doc_key', required: false, notes: 'With doc_type when doc_id omitted.' },
           ],
         },
         {
@@ -875,6 +887,7 @@ function createMcpToolsServer() {
         workspace_token: z.string().optional(),
         project_id: z.string().min(1).optional(),
         doc_type: z.enum(['faq', 'raptor', 'qc_report', 'qc_artifact', 'benchmark_artifact']).optional(),
+        doc_status: z.enum(['draft', 'active']).optional().describe("Filter by metadata.status ('active' = not draft)."),
         include_content: z.boolean().optional().default(false),
         limit: z.number().int().positive().optional(),
         output_format: OutputFormatSchema.default('auto_both'),
@@ -894,12 +907,13 @@ function createMcpToolsServer() {
         ),
       }),
     },
-    async ({ workspace_token, project_id, doc_type, include_content, limit, output_format }) => {
+    async ({ workspace_token, project_id, doc_type, doc_status, include_content, limit, output_format }) => {
       assertWorkspaceToken(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       const items = await listGeneratedDocuments({
         projectId,
         docType: doc_type,
+        docStatus: doc_status,
         includeContent: include_content,
         limit: Math.min(Math.max(limit ?? 100, 1), 1000),
       });
@@ -954,6 +968,40 @@ function createMcpToolsServer() {
       });
       const result = { item };
       const summary = `get_generated_document: found=${Boolean(item).toString()}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'promote_generated_document',
+    {
+      description: 'Promote a draft generated document to active (metadata.status). Human gate for Phase 6 artifacts.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        doc_id: z.string().optional(),
+        doc_type: z.enum(['faq', 'raptor', 'qc_report', 'qc_artifact', 'benchmark_artifact']).optional(),
+        doc_key: z.string().optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        doc_id: z.string(),
+        promoted: z.boolean(),
+      }),
+    },
+    async ({ workspace_token, project_id, doc_id, doc_type, doc_key, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      if (!doc_id && (!doc_type || !doc_key)) {
+        throw new McpError(ErrorCode.InvalidParams, 'Provide doc_id or both doc_type + doc_key');
+      }
+      const result = await promoteGeneratedDocument({
+        projectId,
+        docId: doc_id,
+        docType: doc_type,
+        docKey: doc_key,
+      });
+      const summary = `promote_generated_document: doc_id=${result.doc_id}`;
       return formatToolResponse(result, summary, output_format);
     },
   );
@@ -1935,6 +1983,8 @@ function createMcpToolsServer() {
           'knowledge.refresh',
           'faq.build',
           'raptor.build',
+          'knowledge.loop.shallow',
+          'knowledge.loop.deep',
         ]),
         payload: z.record(z.string(), z.unknown()).optional(),
         correlation_id: z.string().optional(),

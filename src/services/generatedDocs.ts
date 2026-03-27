@@ -50,6 +50,8 @@ export async function listGeneratedDocuments(params: {
   docType?: GeneratedDocType;
   limit?: number;
   includeContent?: boolean;
+  /** When set, filter by metadata.status (`draft` vs not-draft treated as active). */
+  docStatus?: 'draft' | 'active';
 }): Promise<
   Array<{
     doc_id: string;
@@ -79,7 +81,15 @@ export async function listGeneratedDocuments(params: {
      LIMIT $${values.length}`,
     values,
   );
-  return (res.rows ?? []).map((r: any) => ({
+  let rows = res.rows ?? [];
+  if (params.docStatus) {
+    rows = rows.filter((r: any) => {
+      const st = (r.metadata as Record<string, unknown> | undefined)?.status;
+      if (params.docStatus === 'draft') return st === 'draft';
+      return st !== 'draft';
+    });
+  }
+  return rows.map((r: any) => ({
     doc_id: String(r.doc_id),
     doc_type: String(r.doc_type) as GeneratedDocType,
     doc_key: String(r.doc_key),
@@ -164,6 +174,29 @@ export async function getGeneratedDocument(params: {
     created_at: r.created_at,
     updated_at: r.updated_at,
   };
+}
+
+/** Promote a generated document from draft to active (metadata.status). No-op if already active. */
+export async function promoteGeneratedDocument(input: {
+  projectId: string;
+  docId?: string;
+  docType?: GeneratedDocType;
+  docKey?: string;
+}): Promise<{ doc_id: string; promoted: boolean }> {
+  const row = await getGeneratedDocument({
+    projectId: input.projectId,
+    docId: input.docId,
+    docType: input.docType,
+    docKey: input.docKey,
+  });
+  if (!row) throw new Error('generated document not found');
+  const meta = { ...row.metadata, status: 'active', promoted_at: new Date().toISOString() };
+  const pool = getDbPool();
+  await pool.query(
+    `UPDATE generated_documents SET metadata=$3::jsonb, updated_at=now() WHERE project_id=$1 AND doc_id=$2`,
+    [input.projectId, row.doc_id, JSON.stringify(meta)],
+  );
+  return { doc_id: row.doc_id, promoted: true };
 }
 
 export async function recordGeneratedExport(input: { docId: string; exportPath: string; content: string }): Promise<void> {

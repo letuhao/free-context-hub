@@ -11,6 +11,7 @@ At a high level, ContextHub provides:
 - Vector-first semantic code search (with optional hybrid later) for fast retrieval of relevant context
 - Lightweight, always-on guardrails derived from lessons
 - Local indexing and secure retrieval (with explicit ignore rules)
+- A future **Phase 6** path for **eval-driven active knowledge improvement** (optional, gated by quality metrics; see Roadmap)
 
 ContextHub is inspired by ContextStream's "persistent memory + semantic code search + guardrails" concept. For reference, see ContextStream's product description: https://contextstream.io/ .
 
@@ -40,6 +41,8 @@ Large products solve this via hosted persistent memory and indexing, but small t
    - One-node deployment for the team; minimal external dependencies
 5. Keep MVP scope intentionally small
    - Focus on core retrieval and guardrail workflows; defer advanced graph analysis and deep analytics
+6. (Roadmap) Support **controlled knowledge improvement loops** (Phase 6)
+   - Improve retrieval usefulness using benchmarks and explicit promotion rules, without abandoning auditability
 
 ## Non-Goals (MVP Scope Limits)
 - Full dependency impact analysis across the entire repo (deferred to later versions)
@@ -285,19 +288,64 @@ Safety evaluation:
 - Validation evidence exists in storage: `git_commits > 0`, `files > 0`, and `chunks > 0` for the validated `project_id`.
 - CI scheduled workflow (`phase5-worker-validation`) passes and produces a machine-readable validation artifact with all gates marked pass.
 
-### Phase 6-7: Communication & Visualization
+### Phase 6: Active Knowledge & Deep Learning Loop
+
+Phases 1–5 are primarily **passive learning**: index source, build vectors, optionally ingest git and upsert a knowledge graph—knowledge reflects what is already in the repository and its history. Phase 6 adds a **controlled improvement loop** so teams can raise retrieval quality (recall, MRR, usefulness) without giving up provenance and audit trails.
+
+**Motivation**
+
+- Passive indexing misses “implicit” context: canonical entrypoints, naming conventions, and intent that engineers know but that do not surface strongly in embeddings alone.
+- Cold starts and mid-project pivots leave RAG weak until large bodies of code or docs exist.
+- Phase 6 targets measurable uplift (e.g. golden-set recall@k, MRR, latency budgets) while keeping every promoted artifact traceable.
+
+**Actors**
+
+- **Coder / IDE agent:** proposes facts, lesson drafts, and structured `source_refs` (paths, optional symbols/commits); may attach confidence or scope.
+- **Builder agent:** aggregates candidates into durable artifacts (e.g. FAQ/RAPTOR-style summaries, synthetic indexed paths), triggers re-indexing through existing pipelines.
+- **QC agent:** runs curated evaluations (golden queries, `qc:rag`-style harnesses), compares before/after metrics, and checks regressions on defined failure clusters.
+- **Judge / gate:** rule-based thresholds plus fixed budgets—not self-grading LLM loops alone; human review remains optional for sensitive promotions.
+
+**Data & lifecycle**
+
+- Lessons and generated knowledge follow explicit lifecycle states (e.g. `draft` → `active` → `superseded` / `archived`) aligned with Phase 3 lesson semantics.
+- Canonical storage remains **DB-first** for generated artifacts where applicable, with optional filesystem exports; see `docs/storage/storage-contract.md`.
+- Provenance is mandatory for promotion: `source_refs` and, where available, links to Phase 4 symbols or Phase 5 commits.
+
+**Worker model: shallow pass → deep pass**
+
+- **Shallow pass:** after `index_project` or on a schedule—enqueue digest jobs (FAQ/RAPTOR generation, snapshot refresh), index synthetic document paths, bump retrieval cache as today.
+- **Deep pass (bounded recursion):** up to *N* rounds per run. Each round: Builder proposes candidates → incremental index → QC measures deltas → accept only if metrics improve within gates and critical clusters do not regress; otherwise discard, keep draft, or rollback.
+- **Early stop:** marginal gain below epsilon, time/token budget exhausted, or hard QC failure.
+
+**Acceptance & safety gates**
+
+- Example gates: minimum delta on `recall@k` / MRR, p95 latency ceiling, and no worsening on named query groups (e.g. server entrypoints, config) without a mitigation path.
+- Optional human approval for promoting high-impact `draft` content to `active`.
+
+**Risks & mitigations**
+
+- **Feedback loops that reinforce errors:** version artifacts, retain A/B or run-scoped artifacts, support rollback to last-known-good.
+- **Overfitting to internal benchmarks:** diversify golden sets and re-run evaluations on a cadence.
+- **Cost:** async workers, Redis-backed retrieval/rerank caching where enabled, and strict caps on recursion depth and candidate volume.
+
+**Relationship to later phases**
+
+- **Phase 7–8:** Multi-agent communication and a GUI make it easier to review drafts and inspect graph impact before promotion.
+- **Phase 9–10:** Human-in-the-loop editing and multi-format ingestion widen the surface of facts the deep loop can safely absorb.
+
+### Phase 7-8: Communication & Visualization
 - **Multi-Agent Knowledge**: Collect knowledge from inter-agent and agent-to-builder communications.
 - **Interaction GUI**: Visual hub for humans to inspect and browse the knowledge graph.
 
-### Phase 8-9: Human Interface & Multi-Format
+### Phase 9-10: Human Interface & Multi-Format
 - **Human-in-the-loop**: Allow users to correct knowledge and add new insights interactively.
 - **Expanded Ingestion**: Support for PDF, DOCX, Excel, and Image files.
 
-### Phase 10-11: Insights & Integration
+### Phase 11-12: Insights & Integration
 - **RAG to Insight**: Convert complex knowledge into human-readable text and diagrams on demand.
 - **VS Code Extension**: Deep integration into the Visual Studio Code ecosystem.
 
-### Phase 12: Knowledge Portability
+### Phase 13: Knowledge Portability
 - **Exchange Hub**: Import/Export knowledge to/from other team-hosted ContextHubs or infrastructure.
 - Standardized knowledge interchange format.
 

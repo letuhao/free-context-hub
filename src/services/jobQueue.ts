@@ -13,7 +13,9 @@ export type JobType =
   | 'quality.eval'
   | 'knowledge.refresh'
   | 'faq.build'
-  | 'raptor.build';
+  | 'raptor.build'
+  | 'knowledge.loop.shallow'
+  | 'knowledge.loop.deep';
 
 type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'dead_letter';
 

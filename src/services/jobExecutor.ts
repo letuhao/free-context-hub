@@ -1,8 +1,12 @@
+import path from 'node:path';
+
 import { analyzeCommitImpact, ingestGitHistory } from './gitIntelligence.js';
 import { claimNextQueuedJob, claimQueuedJobById, completeJob, enqueueJob, failJob, type JobType } from './jobQueue.js';
 import { indexProject } from './indexer.js';
 import { buildFaq } from './faqBuilder.js';
 import { buildRaptorSummaries } from './raptorBuilder.js';
+import { upsertGeneratedDocument } from './generatedDocs.js';
+import { runQualityEvalAndPersist } from './qcEval.js';
 import { prepareRepo } from './repoSources.js';
 import { scanWorkspaceChanges } from './workspaceTracker.js';
 import { getEnv } from '../env.js';
@@ -96,8 +100,197 @@ async function executeByType(
       if (!commitSha) return { status: 'ok', skipped: true, reason: 'commit_sha not provided' };
       return (await analyzeCommitImpact({ projectId, commitSha, limit: payload.limit ? Number(payload.limit) : undefined })) as unknown as Record<string, unknown>;
     }
-    case 'quality.eval':
-      return { status: 'ok', skipped: true, reason: 'quality.eval is handled by benchmark harness' };
+    case 'quality.eval': {
+      if (!projectId) throw new Error('project_id is required for quality.eval');
+      const env = getEnv();
+      const queriesPath = String(payload.queries_path ?? env.PHASE6_EVAL_QUERIES_PATH);
+      const hybridMode: 'off' | 'lexical' =
+        payload.hybrid_mode === 'lexical' ? 'lexical' : env.RETRIEVAL_HYBRID_ENABLED ? 'lexical' : 'off';
+      const setBaseline = payload.set_baseline === true;
+      const baselineDocKey = payload.baseline_doc_key ? String(payload.baseline_doc_key) : undefined;
+      const { artifact, gate, baseline, doc_key } = await runQualityEvalAndPersist({
+        projectId,
+        env,
+        queriesPath: path.resolve(queriesPath),
+        hybridMode,
+        sourceJobId,
+        correlationId: chainCorrelation,
+        setBaseline,
+        baselineDocKey,
+      });
+      logger.info(
+        {
+          job_type: 'quality.eval',
+          correlation_id: chainCorrelation,
+          gate_result: gate.pass,
+          gate_reason: gate.reason,
+        },
+        'phase6 quality eval',
+      );
+      return {
+        status: 'ok',
+        doc_key,
+        gate_pass: gate.pass,
+        gate_reason: gate.reason,
+        gate_details: gate.details,
+        totals: artifact.totals,
+        fail_clusters: artifact.fail_clusters,
+        baseline_present: Boolean(baseline),
+      };
+    }
+    case 'knowledge.loop.shallow': {
+      if (!projectId) throw new Error('project_id is required for knowledge.loop.shallow');
+      const env = getEnv();
+      if (!env.PHASE6_KNOWLEDGE_LOOP_ENABLED) {
+        logger.info({ correlation_id: chainCorrelation }, 'phase6 shallow skipped');
+        return { status: 'ok', skipped: true, reason: 'PHASE6_KNOWLEDGE_LOOP_ENABLED=false' };
+      }
+      const root = String(payload.root ?? '');
+      if (!root) throw new Error('payload.root is required');
+      const runFaq = payload.run_faq !== false;
+      const runRaptor = payload.run_raptor !== false;
+      const parts: Record<string, unknown> = {};
+      if (runFaq) {
+        parts.faq = await buildFaq({
+          projectId,
+          root,
+          sourceJobId,
+          correlationId: chainCorrelation,
+        });
+      }
+      if (runRaptor) {
+        parts.raptor = await buildRaptorSummaries({
+          projectId,
+          root,
+          pathGlob: payload.path_glob ? String(payload.path_glob) : undefined,
+          maxLevels: payload.max_levels ? Number(payload.max_levels) : undefined,
+          sourceJobId,
+          correlationId: chainCorrelation,
+        });
+      }
+      const idx = await indexProject({ projectId, root });
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const shallowKey = `phase6/shallow/${stamp}`;
+      await upsertGeneratedDocument({
+        projectId,
+        docType: 'benchmark_artifact',
+        docKey: shallowKey,
+        title: `Phase6 shallow ${stamp}`,
+        content: JSON.stringify({ parts, index: idx }, null, 2),
+        metadata: {
+          phase6: true,
+          kind: 'shallow_loop',
+          run_faq: runFaq,
+          run_raptor: runRaptor,
+          correlation_id: chainCorrelation ?? null,
+          status: 'draft',
+        },
+        sourceJobId,
+        correlationId: chainCorrelation,
+      });
+      logger.info({ correlation_id: chainCorrelation, shallow_doc_key: shallowKey }, 'phase6 shallow complete');
+      return { status: 'ok', index: idx, shallow_doc_key: shallowKey };
+    }
+    case 'knowledge.loop.deep': {
+      if (!projectId) throw new Error('project_id is required for knowledge.loop.deep');
+      const env = getEnv();
+      if (!env.PHASE6_KNOWLEDGE_LOOP_ENABLED) {
+        logger.info({ correlation_id: chainCorrelation }, 'phase6 deep skipped');
+        return { status: 'ok', skipped: true, reason: 'PHASE6_KNOWLEDGE_LOOP_ENABLED=false' };
+      }
+      const root = String(payload.root ?? '');
+      if (!root) throw new Error('payload.root is required');
+      const maxRounds = Math.min(Math.max(Number(payload.max_rounds ?? 3), 1), 5);
+      const queriesPath = String(payload.queries_path ?? env.PHASE6_EVAL_QUERIES_PATH);
+      const hybridMode: 'off' | 'lexical' =
+        payload.hybrid_mode === 'lexical' ? 'lexical' : env.RETRIEVAL_HYBRID_ENABLED ? 'lexical' : 'off';
+      const parentRunId = payload.parent_run_id ? String(payload.parent_run_id) : 'run';
+      let lastGate: { pass: boolean; reason: string } | null = null;
+      let acceptedRound = 0;
+
+      for (let round = 1; round <= maxRounds; round++) {
+        if (payload.run_shallow !== false && round === 1) {
+          if (payload.run_faq !== false) {
+            await buildFaq({ projectId, root, sourceJobId, correlationId: chainCorrelation });
+          }
+          if (payload.run_raptor !== false) {
+            await buildRaptorSummaries({
+              projectId,
+              root,
+              pathGlob: payload.path_glob ? String(payload.path_glob) : undefined,
+              maxLevels: payload.max_levels ? Number(payload.max_levels) : undefined,
+              sourceJobId,
+              correlationId: chainCorrelation,
+            });
+          }
+        }
+        await indexProject({ projectId, root });
+        const evalResult = await runQualityEvalAndPersist({
+          projectId,
+          env,
+          queriesPath: path.resolve(queriesPath),
+          hybridMode,
+          sourceJobId,
+          correlationId: chainCorrelation,
+          setBaseline: false,
+          docKeySuffix: `deep-${parentRunId}-r${round}-${Date.now()}`,
+        });
+        lastGate = { pass: evalResult.gate.pass, reason: evalResult.gate.reason };
+        logger.info(
+          {
+            job_type: 'knowledge.loop.deep',
+            correlation_id: chainCorrelation,
+            round,
+            max_rounds: maxRounds,
+            gate_result: evalResult.gate.pass,
+            gate_reason: evalResult.gate.reason,
+            parent_run_id: parentRunId,
+          },
+          'phase6 deep round',
+        );
+        if (evalResult.gate.pass) {
+          acceptedRound = round;
+          break;
+        }
+      }
+
+      const summaryStamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const summaryKey = `phase6/deep/summary/${summaryStamp}`;
+      await upsertGeneratedDocument({
+        projectId,
+        docType: 'benchmark_artifact',
+        docKey: summaryKey,
+        title: `Phase6 deep summary ${summaryStamp}`,
+        content: JSON.stringify(
+          {
+            max_rounds: maxRounds,
+            accepted_round: acceptedRound,
+            last_gate: lastGate,
+            parent_run_id: parentRunId,
+          },
+          null,
+          2,
+        ),
+        metadata: {
+          phase6: true,
+          kind: 'deep_loop_summary',
+          correlation_id: chainCorrelation ?? null,
+          status: 'draft',
+        },
+        sourceJobId,
+        correlationId: chainCorrelation,
+      });
+
+      return {
+        status: 'ok',
+        max_rounds: maxRounds,
+        accepted_round: acceptedRound,
+        gate_pass: lastGate?.pass ?? false,
+        gate_reason: lastGate?.reason,
+        summary_doc_key: summaryKey,
+        parent_run_id: parentRunId,
+      };
+    }
     case 'faq.build': {
       if (!projectId) throw new Error('project_id is required for faq.build');
       const root = String(payload.root ?? '');
@@ -161,7 +354,17 @@ export async function runNextJob(queueName = 'default'): Promise<{
     );
     const result = await executeByType(job.job_type, job.project_id, job.payload, job.correlation_id, job.job_id);
     await completeJob(job.job_id);
-    logger.info({ job_id: job.job_id, job_type: job.job_type, duration_ms: Date.now() - started }, 'job finished');
+    logger.info(
+      {
+        job_id: job.job_id,
+        job_type: job.job_type,
+        duration_ms: Date.now() - started,
+        correlation_id: job.correlation_id,
+        gate_result: typeof result.gate_pass === 'boolean' ? result.gate_pass : undefined,
+        accepted_round: typeof result.accepted_round === 'number' ? result.accepted_round : undefined,
+      },
+      'job finished',
+    );
     return { status: 'ok', job_id: job.job_id, job_type: job.job_type, result };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -188,7 +391,17 @@ export async function runJobById(jobId: string): Promise<{
     );
     const result = await executeByType(job.job_type, job.project_id, job.payload, job.correlation_id, job.job_id);
     await completeJob(job.job_id);
-    logger.info({ job_id: job.job_id, job_type: job.job_type, duration_ms: Date.now() - started }, 'job finished by id');
+    logger.info(
+      {
+        job_id: job.job_id,
+        job_type: job.job_type,
+        duration_ms: Date.now() - started,
+        correlation_id: job.correlation_id,
+        gate_result: typeof result.gate_pass === 'boolean' ? result.gate_pass : undefined,
+        accepted_round: typeof result.accepted_round === 'number' ? result.accepted_round : undefined,
+      },
+      'job finished by id',
+    );
     return { status: 'ok', job_id: job.job_id, job_type: job.job_type, result };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

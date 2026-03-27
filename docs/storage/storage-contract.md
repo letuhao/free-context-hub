@@ -28,9 +28,15 @@ This project uses a DB-first storage model for generated RAG artifacts.
   - Canonical: `generated_documents` (`doc_type='raptor'`)
   - Derived export: `docs/.raptor/**` + `generated_exports`
   - Downstream indexing: `index.run` (includes generated docs indexing)
-- `quality.eval` / QC scripts
-  - Canonical: `generated_documents` (`doc_type='qc_artifact' | 'qc_report' | 'benchmark_artifact'`)
-  - Derived export: `docs/qc/**`, `docs/benchmarks/**`
+- `quality.eval` (worker) / `qc:rag` (QC harness)
+  - Worker: `benchmark_artifact` JSON (`quality_eval/*`, optional baseline `quality_eval/baseline`)
+  - Harness: `generated_documents` (`doc_type='qc_artifact' | 'qc_report'`) plus filesystem `docs/qc/**`
+- `knowledge.loop.shallow`
+  - Canonical: `benchmark_artifact` audit row (`phase6/shallow/*`, metadata often `status: draft`)
+  - Downstream: FAQ/RAPTOR builders + single `index.run`
+- `knowledge.loop.deep`
+  - Canonical: `benchmark_artifact` per eval round (`quality_eval/deep-*`) + summary (`phase6/deep/summary/*`)
+  - Bounded rounds: `index.run` + `quality.eval` until gates pass or `max_rounds`
 - `index.run`
   - Indexes filesystem content and generated DB documents into `chunks`
   - Synthetic paths: `generated/<doc_type>/<doc_key>.md`

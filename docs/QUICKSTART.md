@@ -18,7 +18,7 @@ This guide gets your local ContextHub MVP running (Postgres + embeddings) and co
   - Phase 4 (optional Neo4j graph, `KG_ENABLED=true`): `search_symbols`, `get_symbol_neighbors`, `trace_dependency_path`, `get_lesson_impact`
   - Phase 5 (optional Git intelligence, `GIT_INGEST_ENABLED=true`): `ingest_git_history`, `list_commits`, `get_commit`, `suggest_lessons_from_commits`, `link_commit_to_lesson`, `analyze_commit_impact`
   - Worker/queue/source tools: `configure_project_source`, `prepare_repo`, `enqueue_job`, `list_jobs`, `run_next_job`, `register_workspace_root`, `scan_workspace`
-- Generated-doc audit tools: `list_generated_documents`, `get_generated_document`
+- Generated-doc audit tools: `list_generated_documents`, `get_generated_document`, `promote_generated_document` (draft → active)
 - Project-scoped persistent memory + semantic code search (pgvector)
 - DB-first generated artifacts (`generated_documents`) for FAQ/RAPTOR/QC, with optional filesystem exports
 
@@ -85,6 +85,20 @@ Notes:
 - The smoke block enqueues a job with a generated `correlation_id`.
 - It then calls `run_next_job` and verifies `list_jobs` filtered by that `correlation_id`.
 - It also checks `register_workspace_root` + `scan_workspace`.
+
+### Phase 6 — knowledge loop + quality eval (optional)
+
+1. **Set env** (see `.env.example`): `PHASE6_KNOWLEDGE_LOOP_ENABLED=true` to allow worker jobs `knowledge.loop.shallow` and `knowledge.loop.deep` (otherwise they return `skipped: true`). Tune `PHASE6_*` gate variables when comparing `quality.eval` runs to a baseline.
+2. **Enqueue jobs** via MCP `enqueue_job`:
+   - `knowledge.loop.shallow` — payload: `{ "root": "<repo root>", "run_faq": true, "run_raptor": true }` — runs FAQ + RAPTOR builders, then a single `index.run`, and writes a `benchmark_artifact` row (metadata `status: draft`).
+   - `knowledge.loop.deep` — payload: `{ "root": "<root>", "max_rounds": 3, "queries_path": "qc/queries.json" }` — optional first-round shallow build, then `index.run` + `quality.eval` each round until gates pass or max rounds.
+   - `quality.eval` — payload: `{ "queries_path": "qc/queries.json", "set_baseline": true }` (optional) — production retrieval metrics vs golden set; persists `benchmark_artifact` under `quality_eval/<timestamp>` and can pin baseline at `quality_eval/baseline`.
+3. **Worker**: run `run_next_job` (or a dedicated worker process) until jobs complete; use `list_jobs` with `correlation_id` to audit.
+4. **Human gate**: `list_generated_documents` with `doc_status: "draft"`, then `promote_generated_document` to set `metadata.status` to `active`.
+
+### Phase 6 smoke (optional)
+
+Requires `SMOKE_QUEUE_TOOLS=true` + `SMOKE_PHASE6=true` (same `npm run smoke-test` session). After indexing, enqueues `quality.eval` and asserts a `doc_key` in the result; checks that `promote_generated_document` is registered.
 
 ### Phase 4 Neo4j troubleshooting
 

@@ -8,24 +8,10 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { getDbPool } from '../db/client.js';
+import type { GoldenSet } from './goldenTypes.js';
+import { keywordHit, mrr, normalizePath, recallAtK } from './goldenTypes.js';
 
 dotenv.config();
-
-type GoldenQuery = {
-  id: string;
-  group: string;
-  query: string;
-  path_glob?: string;
-  target_files: string[];
-  must_keywords?: string[];
-};
-
-type GoldenSet = {
-  version: string;
-  project_id_suggested?: string;
-  notes?: string[];
-  queries: GoldenQuery[];
-};
 
 const execFileAsync = promisify(execFile);
 
@@ -53,25 +39,6 @@ async function callTool(client: Client, name: string, args: Record<string, unkno
     CallToolResultSchema,
   );
   return extractJson(out);
-}
-
-function normalizePath(p: string) {
-  return p.replace(/\\/g, '/').replace(/^\.?\//, '');
-}
-
-function recallAtK(foundRanks: number[], k: number) {
-  return foundRanks.some(r => r > 0 && r <= k) ? 1 : 0;
-}
-
-function mrr(foundRanks: number[]) {
-  const best = Math.min(...foundRanks.filter(r => r > 0));
-  if (!Number.isFinite(best)) return 0;
-  return 1 / best;
-}
-
-function keywordHit(snippet: string, must: string[]) {
-  const s = snippet.toLowerCase();
-  return must.every(k => s.includes(k.toLowerCase()));
 }
 
 function qcPreferPathsByGroup(group: string): string[] {
