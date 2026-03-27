@@ -30,6 +30,7 @@ import { configureProjectSource, getProjectSource, prepareRepo } from './service
 import { enqueueJob, listJobs } from './services/jobQueue.js';
 import { runNextJob } from './services/jobExecutor.js';
 import { listWorkspaceRoots, registerWorkspaceRoot, scanWorkspaceChanges } from './services/workspaceTracker.js';
+import { getGeneratedDocument, listGeneratedDocuments } from './services/generatedDocs.js';
 
 const logger = createModuleLogger('mcp');
 
@@ -237,6 +238,8 @@ function createMcpToolsServer() {
         'suggest_lessons_from_commits',
         'link_commit_to_lesson',
         'analyze_commit_impact',
+        'list_generated_documents',
+        'get_generated_document',
       ];
 
       const tokenNote = env.MCP_AUTH_ENABLED
@@ -286,6 +289,26 @@ function createMcpToolsServer() {
             { path: 'filters.tags_any', required: false, notes: 'Optional tags filter.' },
             { path: 'filters.include_all_statuses', required: false, notes: 'Include superseded/archived when true.' },
             { path: 'limit', required: false, notes: 'Top-k results (default 10, max 50).' },
+          ],
+        },
+        {
+          name: 'list_generated_documents',
+          purpose: 'List DB-first generated artifacts (FAQ/RAPTOR/QC/benchmarks) for audit.',
+          key_parameters: [
+            { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
+            { path: 'doc_type', required: false, notes: 'Optional filter: faq|raptor|qc_report|qc_artifact|benchmark_artifact.' },
+            { path: 'limit', required: false, notes: 'Default 100, max 1000.' },
+            { path: 'include_content', required: false, notes: 'Include full content when true (default false).' },
+          ],
+        },
+        {
+          name: 'get_generated_document',
+          purpose: 'Get one generated artifact by doc_id or (doc_type + doc_key).',
+          key_parameters: [
+            { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
+            { path: 'doc_id', required: false, notes: 'Preferred direct lookup key.' },
+            { path: 'doc_type', required: false, notes: 'Required with doc_key when doc_id is omitted.' },
+            { path: 'doc_key', required: false, notes: 'Required with doc_type when doc_id is omitted.' },
           ],
         },
         {
@@ -830,6 +853,97 @@ function createMcpToolsServer() {
         filters: filters as { lesson_type?: any; tags_any?: string[]; include_all_statuses?: boolean },
       });
       const summary = `search_lessons: matches=${result.matches.length}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'list_generated_documents',
+    {
+      description: 'List generated documents stored canonically in Postgres for audit.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        doc_type: z.enum(['faq', 'raptor', 'qc_report', 'qc_artifact', 'benchmark_artifact']).optional(),
+        include_content: z.boolean().optional().default(false),
+        limit: z.number().int().positive().optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        items: z.array(
+          z.object({
+            doc_id: z.string(),
+            doc_type: z.enum(['faq', 'raptor', 'qc_report', 'qc_artifact', 'benchmark_artifact']),
+            doc_key: z.string(),
+            title: z.string().nullable(),
+            path_hint: z.string().nullable(),
+            content: z.string(),
+            metadata: z.record(z.string(), z.unknown()),
+            updated_at: z.any(),
+          }),
+        ),
+      }),
+    },
+    async ({ workspace_token, project_id, doc_type, include_content, limit, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      const items = await listGeneratedDocuments({
+        projectId,
+        docType: doc_type,
+        includeContent: include_content,
+        limit: Math.min(Math.max(limit ?? 100, 1), 1000),
+      });
+      const result = { items };
+      const summary = `list_generated_documents: items=${items.length}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'get_generated_document',
+    {
+      description: 'Get one generated document by doc_id or by (doc_type + doc_key).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        doc_id: z.string().optional(),
+        doc_type: z.enum(['faq', 'raptor', 'qc_report', 'qc_artifact', 'benchmark_artifact']).optional(),
+        doc_key: z.string().optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        item: z
+          .object({
+            doc_id: z.string(),
+            project_id: z.string(),
+            doc_type: z.enum(['faq', 'raptor', 'qc_report', 'qc_artifact', 'benchmark_artifact']),
+            doc_key: z.string(),
+            source_job_id: z.string().nullable(),
+            correlation_id: z.string().nullable(),
+            title: z.string().nullable(),
+            path_hint: z.string().nullable(),
+            content: z.string(),
+            metadata: z.record(z.string(), z.unknown()),
+            created_at: z.any(),
+            updated_at: z.any(),
+          })
+          .nullable(),
+      }),
+    },
+    async ({ workspace_token, project_id, doc_id, doc_type, doc_key, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      if (!doc_id && (!doc_type || !doc_key)) {
+        throw new McpError(ErrorCode.InvalidParams, 'Provide doc_id or both doc_type + doc_key');
+      }
+      const item = await getGeneratedDocument({
+        projectId,
+        docId: doc_id,
+        docType: doc_type,
+        docKey: doc_key,
+      });
+      const result = { item };
+      const summary = `get_generated_document: found=${Boolean(item).toString()}`;
       return formatToolResponse(result, summary, output_format);
     },
   );
