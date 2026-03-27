@@ -200,6 +200,16 @@ Returns: { commit_sha, affected_files[], affected_symbols[], related_lessons[], 
 Rule:   If KG_ENABLED=false, returns file-only impact + warning.
 ```
 
+### `prepare_repo` / `enqueue_job` / `list_jobs` / `run_next_job` / `scan_workspace` (Worker pipeline)
+```
+When:   You need async source sync + git/index automation with queue execution.
+Params: enqueue_job(project_id?, job_type, payload?, correlation_id?, queue_name?, max_attempts?)
+        list_jobs(project_id?, correlation_id?, status?, limit?)
+        run_next_job(queue_name?)
+Rule:   Always pass a run-scoped correlation_id when validating/reporting one execution window.
+        Child jobs spawned by repo.sync/workspace.scan inherit the same correlation_id.
+```
+
 ### `update_lesson_status`
 ```
 When:   Mark a lesson draft/active/superseded/archived or link supersession (Phase 3).
@@ -302,7 +312,10 @@ At session end, overwrite `docs/sessions/SESSION_PATCH.md` with this structure:
 
 ```markdown
 ---
-id: CH-T3  date: YYYY-MM-DD  module: <current-module>  phase: MVP
+id: CH-T3
+date: YYYY-MM-DD
+module: <current-module>
+phase: MVP
 ---
 
 # Session Patch — YYYY-MM-DD

@@ -17,6 +17,7 @@ This guide gets your local ContextHub MVP running (Postgres + embeddings) and co
   - `delete_workspace`
   - Phase 4 (optional Neo4j graph, `KG_ENABLED=true`): `search_symbols`, `get_symbol_neighbors`, `trace_dependency_path`, `get_lesson_impact`
   - Phase 5 (optional Git intelligence, `GIT_INGEST_ENABLED=true`): `ingest_git_history`, `list_commits`, `get_commit`, `suggest_lessons_from_commits`, `link_commit_to_lesson`, `analyze_commit_impact`
+  - Worker/queue/source tools: `configure_project_source`, `prepare_repo`, `enqueue_job`, `list_jobs`, `run_next_job`, `register_workspace_root`, `scan_workspace`
 - Project-scoped persistent memory + semantic code search (pgvector)
 
 ## Prerequisites
@@ -64,6 +65,24 @@ $env:SMOKE_ROOT='/app'
 $env:SMOKE_GIT_ROOT='/workspace'
 npm run smoke-test
 ```
+
+### Smoke block for worker/source tools (optional)
+
+Use this when you want quick verification for `prepare_repo`, queue execution, and workspace scan:
+
+```bash
+# Windows PowerShell (example)
+$env:SMOKE_QUEUE_TOOLS='true'
+$env:SMOKE_GIT_ROOT='/workspace'
+$env:SMOKE_PREPARE_GIT_URL='https://github.com/letuhao/free-context-hub'
+$env:SMOKE_PREPARE_GIT_REF='main'
+npm run smoke-test
+```
+
+Notes:
+- The smoke block enqueues a job with a generated `correlation_id`.
+- It then calls `run_next_job` and verifies `list_jobs` filtered by that `correlation_id`.
+- It also checks `register_workspace_root` + `scan_workspace`.
 
 ### Phase 4 Neo4j troubleshooting
 
@@ -120,6 +139,19 @@ npm run smoke-test
 ```
 
 This verifies tool round-trips end-to-end (index -> search -> lessons -> guardrails -> project isolation).
+
+For deep async validation (worker chain + clone + git ingest + index quality), run:
+
+```bash
+npm run validate:phase5-worker
+```
+
+The validator now enforces gates for:
+- clone/sync success (`prepare_repo` + resolved commit),
+- queue chain (`repo.sync -> git.ingest -> index.run`) scoped by `correlation_id`,
+- DB evidence (`chunks`, `files`, `git_commits`),
+- retrieval quality (`list_commits`, `get_commit`, `search_code`),
+- optional workspace scan mode.
 
 ## Step 6: Connect Cursor AI (MCP)
 

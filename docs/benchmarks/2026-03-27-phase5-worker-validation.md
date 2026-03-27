@@ -22,10 +22,14 @@
 ## Gate Results
 
 - `prepare_repo_ok`: pass
+- `clone_has_commit`: pass
 - `s3_sync_ok`: pass
 - `queue_chain_ok`: pass
+- `correlation_scope_ok`: pass
 - `commits_available`: pass
 - `search_has_hits`: pass
+- `db_index_built`: pass
+- `db_git_ingested`: pass
 
 Overall verdict: **PASS**
 
@@ -61,6 +65,6 @@ Overall verdict: **PASS**
 
 ## Next Actions
 
-- Optional: add a CI job to run `validate:phase5-worker` nightly and archive JSON artifacts.
-- Optional: tune queue polling/report logic to evaluate only jobs created in current correlation window.
+- CI now includes scheduled workflow `phase5-worker-validation.yml` to run `validate:phase5-worker` periodically.
+- Queue reporting now scopes by `correlation_id` to isolate one run window.
 

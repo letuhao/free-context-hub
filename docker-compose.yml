@@ -71,6 +71,8 @@ services:
       WORKSPACE_SCAN_ENABLED: ${WORKSPACE_SCAN_ENABLED:-false}
     ports:
       - "3000:3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - contexthub_mcpdata:/data
       - ./:/workspace:ro
@@ -107,6 +109,8 @@ services:
       REPO_CACHE_ROOT: ${REPO_CACHE_ROOT:-/data/repos}
       SOURCE_STORAGE_MODE: ${SOURCE_STORAGE_MODE:-local}
       WORKSPACE_SCAN_ENABLED: ${WORKSPACE_SCAN_ENABLED:-false}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - contexthub_mcpdata:/data
       - ./:/workspace:ro

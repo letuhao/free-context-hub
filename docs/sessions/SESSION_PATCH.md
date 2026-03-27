@@ -22,6 +22,12 @@ Phase: **Phase 5 (Automation & Git Intelligence) implemented** — git ingest st
 - Docker dependency: added `git` package to image and workspace read-only mount (`/workspace`) for containerized git ingestion
 - Smoke test extended with Phase 5 assertions (`SMOKE_GIT_ROOT`) and verified pass
 - Docs updated: `README.md`, `docs/QUICKSTART.md`, `AGENT_PROTOCOL.md`, `WHITEPAPER.md`
+- Production hardening:
+  - `list_jobs` supports filtering by `correlation_id` for per-run reporting.
+  - Worker chain propagation keeps correlation across child jobs (`repo.sync`/`workspace.scan` fan-out).
+  - `smokeTest` now has dedicated optional block for `prepare_repo`, `enqueue_job`, `run_next_job`, `scan_workspace`.
+  - `validate:phase5-worker` deep checks now include clone evidence, DB index/git counts, and correlation-scoped queue gates.
+  - Added scheduled CI workflow `.github/workflows/phase5-worker-validation.yml` + mock embeddings server script.
 
 ## Next
 - Harden commit diff parsing for rename/copy edge cases (large repos, binary-only commits)

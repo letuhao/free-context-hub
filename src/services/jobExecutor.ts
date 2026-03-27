@@ -5,7 +5,13 @@ import { prepareRepo } from './repoSources.js';
 import { scanWorkspaceChanges } from './workspaceTracker.js';
 import { getEnv } from '../env.js';
 
-async function executeByType(jobType: JobType, projectId: string | null, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+async function executeByType(
+  jobType: JobType,
+  projectId: string | null,
+  payload: Record<string, unknown>,
+  correlationId: string | null,
+): Promise<Record<string, unknown>> {
+  const chainCorrelation = correlationId ?? undefined;
   switch (jobType) {
     case 'repo.sync': {
       if (!projectId) throw new Error('project_id is required for repo.sync');
@@ -26,11 +32,13 @@ async function executeByType(jobType: JobType, projectId: string | null, payload
         project_id: projectId,
         job_type: 'git.ingest',
         payload: { root: res.repo_root, since: payload.since ?? null, max_commits: payload.max_commits ?? null },
+        correlation_id: chainCorrelation,
       });
       await enqueueJob({
         project_id: projectId,
         job_type: 'index.run',
         payload: { root: res.repo_root },
+        correlation_id: chainCorrelation,
       });
       return res as unknown as Record<string, unknown>;
     }
@@ -60,11 +68,13 @@ async function executeByType(jobType: JobType, projectId: string | null, payload
         project_id: projectId,
         job_type: 'workspace.delta_index',
         payload: { root },
+        correlation_id: chainCorrelation,
       });
       await enqueueJob({
         project_id: projectId,
         job_type: 'knowledge.refresh',
         payload: { root },
+        correlation_id: chainCorrelation,
       });
       return scan as unknown as Record<string, unknown>;
     }
@@ -97,7 +107,7 @@ export async function runNextJob(queueName = 'default'): Promise<{
   const job = await claimNextQueuedJob(queueName);
   if (!job) return { status: 'idle' };
   try {
-    const result = await executeByType(job.job_type, job.project_id, job.payload);
+    const result = await executeByType(job.job_type, job.project_id, job.payload, job.correlation_id);
     await completeJob(job.job_id);
     return { status: 'ok', job_id: job.job_id, job_type: job.job_type, result };
   } catch (err) {

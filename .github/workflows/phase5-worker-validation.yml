@@ -1,0 +1,77 @@
+# Periodic end-to-end validation: queue worker chain, git ingest, index, search (public clone).
+# Requires: Docker, mock embeddings on host:1234, Postgres + MCP + worker containers.
+
+name: Phase 5 worker validation
+
+on:
+  schedule:
+    # Weekly Monday 06:00 UTC
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: phase5-worker-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start mock embeddings server
+        run: |
+          node scripts/ci-mock-embeddings.mjs &
+          sleep 2
+          curl -sf http://127.0.0.1:1234/v1/embeddings -X POST -H 'Content-Type: application/json' \
+            -d '{"model":"mock","input":"x"}' | head -c 200
+          echo
+
+      - name: Write CI .env
+        run: |
+          cp .env.example .env
+          sed -i 's|^EMBEDDINGS_BASE_URL=.*|EMBEDDINGS_BASE_URL=http://host.docker.internal:1234|' .env
+          sed -i 's|^QUEUE_ENABLED=.*|QUEUE_ENABLED=true|' .env
+          sed -i 's|^GIT_INGEST_ENABLED=.*|GIT_INGEST_ENABLED=true|' .env
+          sed -i 's|^KG_ENABLED=.*|KG_ENABLED=false|' .env
+          sed -i 's|^SOURCE_STORAGE_MODE=.*|SOURCE_STORAGE_MODE=local|' .env
+
+      - name: Docker Compose up
+        run: docker compose up -d --build db mcp worker
+
+      - name: Wait for MCP
+        run: |
+          for i in $(seq 1 90); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/mcp || echo "000")
+            if [ "$code" = "405" ] || [ "$code" = "200" ]; then
+              echo "mcp ready (HTTP $code)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "MCP did not become ready in time"
+          docker compose logs --no-color mcp | tail -n 80
+          exit 1
+
+      - name: Run phase5 worker validation
+        env:
+          MCP_SERVER_URL: http://localhost:3000/mcp
+          VALIDATE_PROJECT_ID: gha-phase5-worker
+          VALIDATE_GIT_URL: https://github.com/letuhao/free-context-hub
+          VALIDATE_GIT_REF: main
+          VALIDATE_WORKSPACE_ROOT: /workspace
+          SOURCE_STORAGE_MODE: local
+        run: npm run validate:phase5-worker
+
+      - name: Docker Compose logs on failure
+        if: failure()
+        run: docker compose logs --no-color

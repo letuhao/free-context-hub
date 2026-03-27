@@ -84,6 +84,7 @@ Exposed tools for your AI agent:
 - 🧾 `ingest_git_history` / `list_commits` / `get_commit`: Git intelligence ingestion + retrieval (Phase 5).
 - 📝 `suggest_lessons_from_commits` / `link_commit_to_lesson`: Draft lesson automation from commit context (Phase 5).
 - 🧭 `analyze_commit_impact`: Commit impact over Phase 4 symbol/lesson graph (Phase 5).
+- 🔁 Worker automation + queue/source tools: `prepare_repo`, `enqueue_job`, `list_jobs` (with `correlation_id` filter), `run_next_job`, `scan_workspace`.
 
 ---
 
@@ -110,6 +111,7 @@ We are currently in **Phase 5**. Here is our path forward:
 - **`Unauthorized: invalid workspace_token`**: Occurs if `MCP_AUTH_ENABLED=true` but the token is missing/wrong. Restart the server after `.env` changes.
 - **`dimension mismatch`**: Ensure `EMBEDDINGS_DIM=1024` matches your model's output.
 - **`401 Unauthorized` (LM Studio)**: Check `EMBEDDINGS_API_KEY` in your `.env`.
+- **`validate:phase5-worker` reports mixed jobs**: pass `correlation_id` into `enqueue_job` and query `list_jobs` with the same `correlation_id`.
 
 ---
 

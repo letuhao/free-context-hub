@@ -81,6 +81,7 @@ export async function claimNextQueuedJob(queueName = 'default'): Promise<{
   payload: Record<string, unknown>;
   attempts: number;
   max_attempts: number;
+  correlation_id: string | null;
 } | null> {
   const pool = getDbPool();
   const res = await pool.query(
@@ -96,7 +97,7 @@ export async function claimNextQueuedJob(queueName = 'default'): Promise<{
      SET status='running', attempts=j.attempts + 1, started_at=now()
      FROM next_job
      WHERE j.job_id = next_job.job_id
-     RETURNING j.job_id, j.project_id, j.job_type, j.payload, j.attempts, j.max_attempts`,
+     RETURNING j.job_id, j.project_id, j.job_type, j.payload, j.attempts, j.max_attempts, j.correlation_id`,
     [queueName],
   );
   if (!res.rowCount) return null;
@@ -108,6 +109,7 @@ export async function claimNextQueuedJob(queueName = 'default'): Promise<{
     payload: (row.payload ?? {}) as Record<string, unknown>,
     attempts: Number(row.attempts ?? 0),
     max_attempts: Number(row.max_attempts ?? 3),
+    correlation_id: row.correlation_id != null ? String(row.correlation_id) : null,
   };
 }
 
@@ -143,6 +145,7 @@ export async function failJob(jobId: string, attempts: number, maxAttempts: numb
 
 export async function listJobs(params: {
   projectId?: string;
+  correlationId?: string;
   status?: JobStatus;
   limit?: number;
 }): Promise<{
@@ -150,6 +153,7 @@ export async function listJobs(params: {
     job_id: string;
     project_id: string | null;
     job_type: JobType;
+    correlation_id: string | null;
     status: JobStatus;
     attempts: number;
     max_attempts: number;
@@ -167,13 +171,17 @@ export async function listJobs(params: {
     values.push(params.projectId);
     clauses.push(`project_id=$${values.length}`);
   }
+  if (params.correlationId) {
+    values.push(params.correlationId);
+    clauses.push(`correlation_id=$${values.length}`);
+  }
   if (params.status) {
     values.push(params.status);
     clauses.push(`status=$${values.length}`);
   }
   values.push(limit);
   const res = await pool.query(
-    `SELECT job_id, project_id, job_type, status, attempts, max_attempts, queued_at, started_at, finished_at, error_message
+    `SELECT job_id, project_id, job_type, correlation_id, status, attempts, max_attempts, queued_at, started_at, finished_at, error_message
      FROM async_jobs
      WHERE ${clauses.join(' AND ')}
      ORDER BY queued_at DESC

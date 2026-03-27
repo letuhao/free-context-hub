@@ -1806,10 +1806,12 @@ function createMcpToolsServer() {
   server.registerTool(
     'list_jobs',
     {
-      description: 'List async worker jobs and statuses.',
+      description:
+        'List async worker jobs and statuses. Optional correlation_id scopes rows to one enqueue/run (child jobs from repo.sync/workspace.scan share the parent correlation).',
       inputSchema: z.object({
         workspace_token: z.string().optional(),
         project_id: z.string().min(1).optional(),
+        correlation_id: z.string().min(1).optional(),
         status: z.enum(['queued', 'running', 'succeeded', 'failed', 'dead_letter']).optional(),
         limit: z.number().int().positive().optional(),
         output_format: OutputFormatSchema.default('auto_both'),
@@ -1820,6 +1822,7 @@ function createMcpToolsServer() {
             job_id: z.string(),
             project_id: z.string().nullable(),
             job_type: z.string(),
+            correlation_id: z.string().nullable(),
             status: z.enum(['queued', 'running', 'succeeded', 'failed', 'dead_letter']),
             attempts: z.number().int(),
             max_attempts: z.number().int(),
@@ -1831,10 +1834,10 @@ function createMcpToolsServer() {
         ),
       }),
     },
-    async ({ workspace_token, project_id, status, limit, output_format }) => {
+    async ({ workspace_token, project_id, correlation_id, status, limit, output_format }) => {
       assertWorkspaceToken(workspace_token);
       const pid = project_id ? resolveProjectIdOrThrow(project_id) : undefined;
-      const result = await listJobs({ projectId: pid, status, limit });
+      const result = await listJobs({ projectId: pid, correlationId: correlation_id, status, limit });
       const summary = `list_jobs: items=${result.items.length}`;
       return formatToolResponse(result, summary, output_format);
     },

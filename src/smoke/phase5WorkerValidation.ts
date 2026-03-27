@@ -1,7 +1,9 @@
 import * as dotenv from 'dotenv';
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
+import { getDbPool } from '../db/client.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
@@ -49,6 +51,7 @@ async function main() {
   const outputDir = path.resolve(process.env.VALIDATE_OUTPUT_DIR ?? 'docs/benchmarks/artifacts');
   const workspaceRoot = process.env.VALIDATE_WORKSPACE_ROOT;
   const started = Date.now();
+  const runCorrelationId = process.env.VALIDATE_CORRELATION_ID ?? randomUUID();
 
   const client = new Client({ name: 'phase5-worker-validation', version: '0.1.0' }, { capabilities: {} });
   const transport = new StreamableHTTPClientTransport(new URL(serverUrl), {});
@@ -83,9 +86,10 @@ async function main() {
       project_id: projectId,
       job_type: 'repo.sync',
       payload: { git_url: gitUrl, ref, source_storage_mode: sourceStorageMode },
+      correlation_id: runCorrelationId,
       output_format: 'json_only',
     });
-    mark('enqueue_job.repo_sync', enq);
+    mark('enqueue_job.repo_sync', { ...enq, correlation_id: runCorrelationId });
 
     const pollDeadline = Date.now() + 120_000;
     let lastJobs: any = { items: [] };
@@ -93,6 +97,7 @@ async function main() {
       lastJobs = await callTool(client, 'list_jobs', {
         ...tokenArgs,
         project_id: projectId,
+        correlation_id: runCorrelationId,
         limit: 50,
         output_format: 'json_only',
       });
@@ -103,7 +108,7 @@ async function main() {
       if (hasRepoSyncOk && hasIngestOk && hasIndexOk) break;
       await sleep(2000);
     }
-    mark('list_jobs.poll', lastJobs);
+    mark('list_jobs.poll', { correlation_id: runCorrelationId, ...lastJobs });
 
     const commits = await callTool(client, 'list_commits', {
       ...tokenArgs,
@@ -212,26 +217,61 @@ async function main() {
       });
     }
 
+    const pool = getDbPool();
+    const chunkRow = await pool.query(`SELECT COUNT(*)::int AS c FROM chunks WHERE project_id = $1`, [projectId]);
+    const commitRow = await pool.query(`SELECT COUNT(*)::int AS c FROM git_commits WHERE project_id = $1`, [projectId]);
+    const filesRow = await pool.query(`SELECT COUNT(*)::int AS c FROM files WHERE project_id = $1`, [projectId]);
+    const dbChunks = Number(chunkRow.rows?.[0]?.c ?? 0);
+    const dbGitCommits = Number(commitRow.rows?.[0]?.c ?? 0);
+    const dbFiles = Number(filesRow.rows?.[0]?.c ?? 0);
+
+    const chainItems = (lastJobs.items ?? []) as Array<any>;
+    const chainRepoOk = chainItems.some(i => i.job_type === 'repo.sync' && i.status === 'succeeded');
+    const chainIngestOk = chainItems.some(i => i.job_type === 'git.ingest' && i.status === 'succeeded');
+    const chainIndexOk = chainItems.some(i => i.job_type === 'index.run' && i.status === 'succeeded');
+    const allSameCorrelation = chainItems.length
+      ? chainItems.every(i => i.correlation_id === runCorrelationId)
+      : false;
+    const s3Expected = sourceStorageMode === 's3' || sourceStorageMode === 'hybrid';
+    const s3SyncGate = s3Expected ? Boolean(prepared.s3_sync?.uploaded ?? false) : true;
+
     const report = {
       generated_at: new Date().toISOString(),
+      correlation_id: runCorrelationId,
       project_id: projectId,
       git_url: gitUrl,
       ref,
       source_storage_mode: sourceStorageMode,
       duration_ms: Date.now() - started,
+      clone_and_sync: {
+        prepare_repo_status: prepared.status,
+        repo_root: prepared.repo_root,
+        last_sync_commit: prepared.last_sync_commit,
+        resolved_ref: prepared.resolved_ref,
+      },
       gates: {
         prepare_repo_ok: prepared.status === 'ok',
-        s3_sync_ok: Boolean(prepared.s3_sync?.uploaded ?? false),
-        queue_chain_ok: (lastJobs.items ?? []).some((i: any) => i.job_type === 'repo.sync' && i.status === 'succeeded')
-          && (lastJobs.items ?? []).some((i: any) => i.job_type === 'git.ingest' && i.status === 'succeeded')
-          && (lastJobs.items ?? []).some((i: any) => i.job_type === 'index.run' && i.status === 'succeeded'),
+        clone_has_commit: Boolean(prepared.last_sync_commit && String(prepared.last_sync_commit).length >= 7),
+        s3_sync_ok: s3SyncGate,
+        queue_chain_ok: chainRepoOk && chainIngestOk && chainIndexOk,
+        correlation_scope_ok: chainItems.length >= 3 && allSameCorrelation,
         commits_available: (commits.items?.length ?? 0) > 0,
         search_has_hits: search.filter(s => s.matches > 0).length >= 3,
+        db_index_built: dbChunks > 0 && dbFiles > 0,
+        db_git_ingested: dbGitCommits > 0,
       },
       metrics: {
         commits_count: commits.items?.length ?? 0,
         first_commit_files: oneCommit.files?.length ?? 0,
         search,
+        db_chunks: dbChunks,
+        db_files_indexed: dbFiles,
+        db_git_commits: dbGitCommits,
+        job_chain: chainItems.map((i: any) => ({
+          job_type: i.job_type,
+          status: i.status,
+          correlation_id: i.correlation_id,
+        })),
       },
       workspace,
       timeline,
@@ -242,6 +282,15 @@ async function main() {
     const outJson = path.join(outputDir, `${stamp}-phase5-worker-validation.json`);
     await fs.writeFile(outJson, JSON.stringify(report, null, 2), 'utf8');
     console.log(`[phase5-validate] report written: ${outJson}`);
+
+    const g = report.gates;
+    const failed = Object.entries(g).filter(([, v]) => !v).map(([k]) => k);
+    if (failed.length) {
+      console.error(`[phase5-validate] FAIL gates: ${failed.join(', ')}`);
+      process.exitCode = 1;
+    } else {
+      console.log('[phase5-validate] PASS all gates');
+    }
   } finally {
     await client.close().catch(() => {});
   }

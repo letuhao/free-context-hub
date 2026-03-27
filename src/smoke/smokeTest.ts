@@ -1,4 +1,5 @@
 import * as dotenv from 'dotenv';
+import { randomUUID } from 'node:crypto';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import {
@@ -644,6 +645,175 @@ async function main() {
     }
   } else {
     console.log('[smoke] GIT_INGEST_ENABLED!=true; skipping phase 5 git intelligence assertions');
+  }
+
+  console.log('[smoke] queue / source tools (optional)...');
+  const smokeQueueTools = String(process.env.SMOKE_QUEUE_TOOLS ?? '').toLowerCase() === 'true';
+  if (smokeQueueTools) {
+    const queueToolNames = [
+      'configure_project_source',
+      'prepare_repo',
+      'enqueue_job',
+      'list_jobs',
+      'run_next_job',
+      'register_workspace_root',
+      'scan_workspace',
+    ];
+    const listTools2 = await client.request({ method: 'tools/list', params: {} }, ListToolsResultSchema);
+    const names2 = new Set(listTools2.tools.map((t: any) => String(t.name)));
+    for (const n of queueToolNames) {
+      if (!names2.has(n)) throw new Error(`SMOKE_QUEUE_TOOLS: missing tool ${n}`);
+    }
+
+    const runCorrelation = randomUUID();
+    const prepareUrl = process.env.SMOKE_PREPARE_GIT_URL || '';
+    if (prepareUrl) {
+      const ref = process.env.SMOKE_PREPARE_GIT_REF ?? 'main';
+      await client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'configure_project_source',
+            arguments: {
+              ...tokenArgs,
+              project_id: projectIdA,
+              source_type: 'remote_git',
+              git_url: prepareUrl,
+              default_ref: ref,
+              output_format: 'json_only',
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+      const prep = extractFirstTextJson(
+        await client.request(
+          {
+            method: 'tools/call',
+            params: {
+              name: 'prepare_repo',
+              arguments: {
+                ...tokenArgs,
+                project_id: projectIdA,
+                git_url: prepareUrl,
+                ref,
+                output_format: 'json_only',
+              },
+            },
+          },
+          CallToolResultSchema,
+        ),
+      );
+      console.log('[smoke] prepare_repo status:', prep.status, 'repo_root:', prep.repo_root);
+      if (String(prep.status) === 'error') {
+        throw new Error(`prepare_repo failed: ${String(prep.error ?? '')}`);
+      }
+    }
+
+    await client.request(
+      {
+        method: 'tools/call',
+        params: {
+          name: 'enqueue_job',
+          arguments: {
+            ...tokenArgs,
+            project_id: projectIdA,
+            job_type: 'index.run',
+            payload: { root: gitRoot },
+            correlation_id: runCorrelation,
+            output_format: 'json_only',
+          },
+        },
+      },
+      CallToolResultSchema,
+    );
+
+    for (let i = 0; i < 60; i++) {
+      const r = extractFirstTextJson(
+        await client.request(
+          {
+            method: 'tools/call',
+            params: {
+              name: 'run_next_job',
+              arguments: { ...tokenArgs, output_format: 'json_only' },
+            },
+          },
+          CallToolResultSchema,
+        ),
+      );
+      if (String(r.status) === 'idle') break;
+      if (String(r.status) === 'error') {
+        console.warn('[smoke] run_next_job error:', r.error);
+      }
+    }
+
+    const listCorr = extractFirstTextJson(
+      await client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'list_jobs',
+            arguments: {
+              ...tokenArgs,
+              project_id: projectIdA,
+              correlation_id: runCorrelation,
+              limit: 20,
+              output_format: 'json_only',
+            },
+          },
+        },
+        CallToolResultSchema,
+      ),
+    );
+    const items = (listCorr.items ?? []) as Array<{ job_type: string; status: string; correlation_id?: string }>;
+    const indexOk = items.some(i => i.job_type === 'index.run' && i.status === 'succeeded');
+    if (!indexOk) {
+      throw new Error(`SMOKE_QUEUE_TOOLS: expected index.run succeeded for correlation_id=${runCorrelation}, got: ${JSON.stringify(items)}`);
+    }
+    if (items.length && !items.every(i => !i.correlation_id || i.correlation_id === runCorrelation)) {
+      throw new Error('SMOKE_QUEUE_TOOLS: list_jobs correlation filter returned unrelated correlation_id');
+    }
+
+    await client.request(
+      {
+        method: 'tools/call',
+        params: {
+          name: 'register_workspace_root',
+          arguments: {
+            ...tokenArgs,
+            project_id: projectIdA,
+            root_path: gitRoot,
+            active: true,
+            output_format: 'json_only',
+          },
+        },
+      },
+      CallToolResultSchema,
+    );
+    const scan = extractFirstTextJson(
+      await client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'scan_workspace',
+            arguments: {
+              ...tokenArgs,
+              project_id: projectIdA,
+              root_path: gitRoot,
+              run_delta_index: false,
+              output_format: 'json_only',
+            },
+          },
+        },
+        CallToolResultSchema,
+      ),
+    );
+    console.log('[smoke] scan_workspace status:', scan.status, 'modified:', scan.modified_files?.length ?? 0);
+    if (String(scan.status) === 'error') {
+      throw new Error(`scan_workspace failed: ${String(scan.error ?? '')}`);
+    }
+  } else {
+    console.log('[smoke] SMOKE_QUEUE_TOOLS!=true; skipping prepare_repo / enqueue_job / run_next_job / scan_workspace');
   }
 
   console.log('[smoke] search_lessons (A)...');
