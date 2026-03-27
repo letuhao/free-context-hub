@@ -31,6 +31,13 @@ services:
       - "5672:5672"
       - "15672:15672"
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - contexthub_redis_data:/data
+
   mcp:
     build:
       context: .
@@ -44,6 +51,7 @@ services:
       - db
       - neo4j
       - rabbitmq
+      - redis
     env_file:
       - .env
     environment:
@@ -69,6 +77,11 @@ services:
       REPO_CACHE_ROOT: ${REPO_CACHE_ROOT:-/data/repos}
       SOURCE_STORAGE_MODE: ${SOURCE_STORAGE_MODE:-local}
       WORKSPACE_SCAN_ENABLED: ${WORKSPACE_SCAN_ENABLED:-false}
+      REDIS_ENABLED: ${REDIS_ENABLED:-false}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      REDIS_PREFIX: ${REDIS_PREFIX:-contexthub}
+      REDIS_RETRIEVAL_TTL_SECONDS: ${REDIS_RETRIEVAL_TTL_SECONDS:-900}
+      REDIS_RERANK_TTL_SECONDS: ${REDIS_RERANK_TTL_SECONDS:-7200}
     ports:
       - "3000:3000"
     extra_hosts:
@@ -88,6 +101,7 @@ services:
       - db
       - neo4j
       - rabbitmq
+      - redis
     env_file:
       - .env
     command: npm run worker
@@ -109,6 +123,11 @@ services:
       REPO_CACHE_ROOT: ${REPO_CACHE_ROOT:-/data/repos}
       SOURCE_STORAGE_MODE: ${SOURCE_STORAGE_MODE:-local}
       WORKSPACE_SCAN_ENABLED: ${WORKSPACE_SCAN_ENABLED:-false}
+      REDIS_ENABLED: ${REDIS_ENABLED:-false}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      REDIS_PREFIX: ${REDIS_PREFIX:-contexthub}
+      REDIS_RETRIEVAL_TTL_SECONDS: ${REDIS_RETRIEVAL_TTL_SECONDS:-900}
+      REDIS_RERANK_TTL_SECONDS: ${REDIS_RERANK_TTL_SECONDS:-7200}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -130,6 +149,7 @@ services:
       - db
       - neo4j
       - rabbitmq
+      - redis
     env_file:
       - .env
     environment:
@@ -151,6 +171,11 @@ services:
       REPO_CACHE_ROOT: ${REPO_CACHE_ROOT:-/data/repos}
       SOURCE_STORAGE_MODE: ${SOURCE_STORAGE_MODE:-local}
       WORKSPACE_SCAN_ENABLED: ${WORKSPACE_SCAN_ENABLED:-false}
+      REDIS_ENABLED: ${REDIS_ENABLED:-false}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      REDIS_PREFIX: ${REDIS_PREFIX:-contexthub}
+      REDIS_RETRIEVAL_TTL_SECONDS: ${REDIS_RETRIEVAL_TTL_SECONDS:-900}
+      REDIS_RERANK_TTL_SECONDS: ${REDIS_RERANK_TTL_SECONDS:-7200}
     ports:
       - "3000:3000"
     volumes:
@@ -160,7 +185,7 @@ services:
   # Optional S3-compatible storage (MinIO) for future indexing phases.
   # Start with: docker compose --profile s3 up -d
   minio:
-    image: minio/minio:RELEASE.2025-01-20T14-49-07Z
+    image: minio/minio:latest
     #profiles: ["s3"]
     command: server /data --console-address ":9001"
     environment:
@@ -177,4 +202,5 @@ volumes:
   contexthub_neo4j_data:
   contexthub_mcpdata:
   contexthub_minio_data:
+  contexthub_redis_data:
 

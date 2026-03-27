@@ -651,8 +651,17 @@ function createMcpToolsServer() {
           .object({
             path_glob: z.string().min(1).optional().describe("Optional path glob filter (stored paths are POSIX-like). Example: 'src/**/*.ts'."),
             include_tests: z.boolean().optional().describe('When true, include *.test.ts and __tests__ paths (default: false).'),
+            include_smoke: z.boolean().optional().describe('When true, include src/smoke/* paths (default: false).'),
+            prefer_paths: z
+              .array(z.string().min(1))
+              .optional()
+              .describe("Optional list of preferred path globs to boost (MVP examples: 'src/index.ts', 'src/services/**')."),
             lexical_boost: z.boolean().optional().describe('When true, apply lightweight lexical boosting (default: true).'),
             kg_assist: z.boolean().optional().describe('When true and KG_ENABLED=true, use KG symbol search to boost relevant files (default: false).'),
+            rerank_mode: z
+              .enum(['off', 'llm'])
+              .optional()
+              .describe('Optional rerank mode for online interactive queries (default: off).'),
           })
           .optional(),
         limit: z.number().int().positive().optional().describe('Max number of matches to return (default: 10).'),
@@ -681,6 +690,9 @@ function createMcpToolsServer() {
         query,
         pathGlob: filters?.path_glob,
         includeTests: filters?.include_tests,
+        includeSmoke: filters?.include_smoke,
+        preferPaths: filters?.prefer_paths,
+        rerankMode: filters?.rerank_mode,
         lexicalBoost: filters?.lexical_boost,
         kgAssist: filters?.kg_assist,
         limit,

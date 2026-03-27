@@ -8,6 +8,7 @@ import { loadIgnorePatternsFromRoot } from '../utils/ignore.js';
 import { chunkTextByLines } from '../utils/chunker.js';
 import { sha256Hex } from '../utils/hash.js';
 import { upsertFileGraphFromDisk } from '../kg/upsert.js';
+import { bumpProjectCacheVersion } from './cacheVersions.js';
 
 export type IndexProjectResult = {
   status: 'ok' | 'error';
@@ -185,6 +186,8 @@ export async function indexProject({ projectId, root, linesPerChunk, embeddingBa
       });
     }
   }
+
+  await bumpProjectCacheVersion(projectId).catch(() => {});
 
   await rebuildProjectSnapshot(projectId).catch(err => {
     console.error('[indexer] rebuildProjectSnapshot failed:', err instanceof Error ? err.message : err);

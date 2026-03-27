@@ -77,6 +77,13 @@ async function main() {
   const projectId = process.env.QC_PROJECT_ID ?? 'qc-free-context-hub';
   const queriesPath = process.env.QC_QUERIES_PATH ?? 'qc/queries.json';
   const outDir = path.resolve(process.env.QC_OUTPUT_DIR ?? 'docs/qc/artifacts');
+  const qcRerankMode = (process.env.QC_RERANK_MODE ?? 'off') as 'off' | 'llm';
+  const qcRerankGroups = new Set(
+    (process.env.QC_RERANK_GROUPS ?? 'mcp-server,mcp-auth,config,embeddings,indexing')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean),
+  );
 
   const raw = await fs.readFile(path.resolve(queriesPath), 'utf8');
   const golden = JSON.parse(raw) as GoldenSet;
@@ -94,14 +101,15 @@ async function main() {
       const group = String(q.group ?? '');
       const autoKgAssistGroups = new Set(['kg', 'queue', 'mcp-server']);
       const kgAssist = autoKgAssistGroups.has(group);
+      const rerankMode = qcRerankMode !== 'off' && qcRerankGroups.has(group) ? qcRerankMode : 'off';
       const out = await callTool(client, 'search_code', {
         ...tokenArgs,
         project_id: projectId,
         query: q.query,
         filters: q.path_glob
-          ? { path_glob: q.path_glob, kg_assist: kgAssist }
+          ? { path_glob: q.path_glob, kg_assist: kgAssist, rerank_mode: rerankMode }
           : kgAssist
-            ? { kg_assist: true }
+            ? { kg_assist: true, rerank_mode: rerankMode }
             : undefined,
         limit: 10,
         output_format: 'json_only',
@@ -181,6 +189,8 @@ async function main() {
   mdLines.push(`# RAG QC Report — ${new Date().toISOString()}`);
   mdLines.push('');
   mdLines.push(`- project_id: \`${projectId}\``);
+  mdLines.push(`- qc_rerank_mode: \`${qcRerankMode}\``);
+  mdLines.push(`- qc_rerank_groups: \`${Array.from(qcRerankGroups).join(',')}\``);
   mdLines.push(`- queries: \`${results.length}\``);
   mdLines.push(`- recall@3: \`${artifact.totals.recall_at_3.toFixed(3)}\``);
   mdLines.push(`- MRR: \`${artifact.totals.mrr.toFixed(3)}\``);

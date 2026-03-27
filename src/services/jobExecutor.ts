@@ -1,6 +1,8 @@
 import { analyzeCommitImpact, ingestGitHistory } from './gitIntelligence.js';
 import { claimNextQueuedJob, claimQueuedJobById, completeJob, enqueueJob, failJob, type JobType } from './jobQueue.js';
 import { indexProject } from './indexer.js';
+import { buildFaq } from './faqBuilder.js';
+import { buildRaptorSummaries } from './raptorBuilder.js';
 import { prepareRepo } from './repoSources.js';
 import { scanWorkspaceChanges } from './workspaceTracker.js';
 import { getEnv } from '../env.js';
@@ -92,6 +94,43 @@ async function executeByType(
     }
     case 'quality.eval':
       return { status: 'ok', skipped: true, reason: 'quality.eval is handled by benchmark harness' };
+    case 'faq.build': {
+      if (!projectId) throw new Error('project_id is required for faq.build');
+      const root = String(payload.root ?? '');
+      if (!root) throw new Error('payload.root is required');
+      const res = await buildFaq({
+        projectId,
+        root,
+        modules: Array.isArray(payload.modules) ? (payload.modules as any[]).map(s => String(s)) : undefined,
+        maxItems: payload.max_items ? Number(payload.max_items) : undefined,
+        outputTarget: payload.output_target ? (String(payload.output_target) as any) : undefined,
+      });
+      await enqueueJob({
+        project_id: projectId,
+        job_type: 'index.run',
+        payload: { root },
+        correlation_id: chainCorrelation,
+      });
+      return res as unknown as Record<string, unknown>;
+    }
+    case 'raptor.build': {
+      if (!projectId) throw new Error('project_id is required for raptor.build');
+      const root = String(payload.root ?? '');
+      if (!root) throw new Error('payload.root is required');
+      const res = await buildRaptorSummaries({
+        projectId,
+        root,
+        pathGlob: payload.path_glob ? String(payload.path_glob) : undefined,
+        maxLevels: payload.max_levels ? Number(payload.max_levels) : undefined,
+      });
+      await enqueueJob({
+        project_id: projectId,
+        job_type: 'index.run',
+        payload: { root },
+        correlation_id: chainCorrelation,
+      });
+      return res as unknown as Record<string, unknown>;
+    }
     default:
       throw new Error(`Unsupported job type: ${String(jobType)}`);
   }

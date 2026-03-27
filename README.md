@@ -63,6 +63,32 @@ Enable by setting `DISTILLATION_ENABLED=true`.
 | **Generalist** | `qwen2.5-7b`, `llama-3.1-8b` | Lesson distillation & compression |
 | **Lightweight** | `phi-4`, `mistral-7b` | Low-latency summaries |
 
+### 3. Rerank Model (Optional, online for `search_code`)
+Enable by calling `search_code` with `filters.rerank_mode="llm"` and configure:
+- `RERANK_MODEL` (required for dedicated rerank; otherwise uses `DISTILLATION_MODEL`)
+- `RERANK_BASE_URL`, `RERANK_API_KEY` (optional overrides)
+
+Recommended rerank-oriented choices:
+- **Best quality / enough VRAM**: `Qwen/Qwen2.5-14B-Instruct`
+- **Balanced latency/quality**: `Qwen/Qwen2.5-7B-Instruct`
+- **Low-resource**: `Mistral-7B-Instruct`, `Phi-4`
+
+### 4. QA Agent Model (Optional, worker jobs `faq.build` / `raptor.build`)
+Configure:
+- `QA_AGENT_MODEL` (if omitted, fallback to `DISTILLATION_MODEL`)
+- `QA_AGENT_BASE_URL`, `QA_AGENT_API_KEY` (optional overrides)
+
+Recommended QA generation choices:
+- **Balanced**: `Qwen/Qwen2.5-7B-Instruct`
+- **Higher quality**: `Qwen/Qwen2.5-14B-Instruct`
+- **Low-resource**: `Phi-4` / `Mistral-7B-Instruct`
+
+> Can I use `qwen/qwen2.5-coder-14b` for rerank + QA to save PC resources?
+>
+> Yes, you can run one shared model for both to simplify setup. It works and is often good enough for code-heavy corpora.
+> But for ranking/QA style outputs, **instruct/general models usually behave more stably** than coder-only models.
+> Practical recommendation: start with one shared model, measure `qc:rag` delta + latency, then decide if splitting models is worth it.
+
 ---
 
 ## 🛠️ MCP Toolset

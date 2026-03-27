@@ -56,6 +56,28 @@ const EnvSchema = z.object({
   DISTILLATION_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(12_000),
   REFLECT_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(5000),
 
+  // Optional dedicated rerank model endpoint (fallbacks to DISTILLATION_* then EMBEDDINGS_*).
+  RERANK_BASE_URL: z.string().min(1).optional(),
+  RERANK_API_KEY: z.string().optional(),
+  RERANK_MODEL: z.string().min(1).optional(),
+  RERANK_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(1800),
+  RERANK_CACHE_TTL_SECONDS: z.coerce.number().int().positive().optional().default(3600),
+
+  // Optional dedicated QA agent model endpoint for FAQ/RAPTOR synthesis.
+  QA_AGENT_BASE_URL: z.string().min(1).optional(),
+  QA_AGENT_API_KEY: z.string().optional(),
+  QA_AGENT_MODEL: z.string().min(1).optional(),
+  QA_AGENT_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(12_000),
+
+  // Phase 7: optional Redis cache for retrieval + rerank.
+  REDIS_ENABLED: z
+    .preprocess(v => parseBooleanEnv(v), z.boolean().optional())
+    .default(false),
+  REDIS_URL: z.string().min(1).optional().default('redis://redis:6379'),
+  REDIS_PREFIX: z.string().min(1).optional().default('contexthub'),
+  REDIS_RETRIEVAL_TTL_SECONDS: z.coerce.number().int().positive().optional().default(900),
+  REDIS_RERANK_TTL_SECONDS: z.coerce.number().int().positive().optional().default(7200),
+
   // Phase 4: optional Neo4j graph store.
   KG_ENABLED: z
     .preprocess(v => parseBooleanEnv(v), z.boolean().optional())

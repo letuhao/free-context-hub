@@ -398,6 +398,150 @@
       "path_glob": "src/services/*.ts",
       "target_files": ["src/services/gitIntelligence.ts", "src/services/distiller.ts"],
       "must_keywords": ["normalizeSourceRefs", "safeParse"]
+    },
+    {
+      "id": "mcp-health-endpoint",
+      "group": "mcp-server",
+      "query": "Where is the health endpoint implemented and what does it return?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/index.ts"],
+      "must_keywords": ["health"]
+    },
+    {
+      "id": "mcp-output-format-default",
+      "group": "mcp-server",
+      "query": "What is the default output_format behavior and how is auto_both constructed?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/utils/outputFormat.ts"],
+      "must_keywords": ["auto_both", "summary"]
+    },
+    {
+      "id": "config-default-project-id",
+      "group": "config",
+      "query": "How does DEFAULT_PROJECT_ID work and where is it applied when project_id is omitted?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/index.ts", "src/env.ts"],
+      "must_keywords": ["DEFAULT_PROJECT_ID", "resolveProjectIdOrThrow"]
+    },
+    {
+      "id": "config-env-loading-dotenv",
+      "group": "config",
+      "query": "Where do we load .env and validate environment variables at startup?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/env.ts"],
+      "must_keywords": ["dotenv", "EnvSchema"]
+    },
+    {
+      "id": "config-embeddings-base-url",
+      "group": "embeddings",
+      "query": "Where is EMBEDDINGS_BASE_URL used to call the OpenAI-compatible embeddings API?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/services/embedder.ts", "src/env.ts"],
+      "must_keywords": ["EMBEDDINGS_BASE_URL", "Authorization"]
+    },
+    {
+      "id": "config-embeddings-api-key",
+      "group": "embeddings",
+      "query": "Where is EMBEDDINGS_API_KEY read and sent to the embeddings server?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/services/embedder.ts", "src/env.ts"],
+      "must_keywords": ["EMBEDDINGS_API_KEY", "Authorization"]
+    },
+    {
+      "id": "config-distillation-enabled",
+      "group": "distillation",
+      "query": "Where do we gate LLM distillation with DISTILLATION_ENABLED?",
+      "path_glob": "src/services/*.ts",
+      "target_files": ["src/services/distiller.ts", "src/services/lessons.ts"],
+      "must_keywords": ["DISTILLATION_ENABLED"]
+    },
+    {
+      "id": "config-kg-enabled",
+      "group": "kg",
+      "query": "Where is KG_ENABLED validated and how do KG tools behave when disabled?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/env.ts", "src/kg/query.ts"],
+      "must_keywords": ["KG_ENABLED", "warning"]
+    },
+    {
+      "id": "auth-tool-wrapper",
+      "group": "mcp-auth",
+      "query": "Where is assertWorkspaceToken called for each MCP tool and what error does it throw?",
+      "path_glob": "src/index.ts",
+      "target_files": ["src/index.ts"],
+      "must_keywords": ["assertWorkspaceToken"]
+    },
+    {
+      "id": "auth-workspace-token-env",
+      "group": "mcp-auth",
+      "query": "Where is the workspace token configured (CONTEXT_HUB_WORKSPACE_TOKEN) and checked?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/env.ts", "src/index.ts"],
+      "must_keywords": ["CONTEXT_HUB_WORKSPACE_TOKEN"]
+    },
+    {
+      "id": "indexer-chunk-size-config",
+      "group": "indexing",
+      "query": "Where are chunk sizes/overlap configured for indexing (and what defaults are used)?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/services/indexer.ts"],
+      "must_keywords": ["chunk", "overlap"]
+    },
+    {
+      "id": "retriever-search-code-boosts",
+      "group": "retrieval",
+      "query": "Where is search_code implemented and how do semantic/lexical/KG boosts combine?",
+      "path_glob": "src/services/*.ts",
+      "target_files": ["src/services/retriever.ts"],
+      "must_keywords": ["lexical", "kg", "boost"]
+    },
+    {
+      "id": "retriever-default-excludes",
+      "group": "retrieval",
+      "query": "What default excludes are applied in search_code (tests, __tests__, smoke)?",
+      "path_glob": "src/services/*.ts",
+      "target_files": ["src/services/retriever.ts"],
+      "must_keywords": ["__tests__", "src/smoke"]
+    },
+    {
+      "id": "queue-backend-selection",
+      "group": "queue",
+      "query": "Where is the queue backend selected (postgres vs rabbitmq) and what env vars control it?",
+      "path_glob": "src/**/*.ts",
+      "target_files": ["src/env.ts", "src/services/jobQueue.ts"],
+      "must_keywords": ["QUEUE_BACKEND", "rabbitmq"]
+    },
+    {
+      "id": "queue-job-types",
+      "group": "queue",
+      "query": "Where are job types enumerated and dispatched?",
+      "path_glob": "src/services/*.ts",
+      "target_files": ["src/services/jobExecutor.ts", "src/services/jobQueue.ts"],
+      "must_keywords": ["JobType", "executeByType"]
+    },
+    {
+      "id": "smoke-queue-tools-block",
+      "group": "smoke",
+      "query": "Where is the smoke test block for queue/source tools (prepare_repo, enqueue_job, run_next_job, scan_workspace)?",
+      "path_glob": "src/smoke/*.ts",
+      "target_files": ["src/smoke/smokeTest.ts"],
+      "must_keywords": ["SMOKE_QUEUE_TOOLS", "enqueue_job"]
+    },
+    {
+      "id": "ci-phase5-worker-validation-workflow",
+      "group": "ci",
+      "query": "Where is the GitHub Actions workflow that runs validate:phase5-worker on a schedule?",
+      "path_glob": ".github/workflows/*.yml",
+      "target_files": [".github/workflows/phase5-worker-validation.yml"],
+      "must_keywords": ["schedule", "validate:phase5-worker"]
+    },
+    {
+      "id": "ci-mock-embeddings-server",
+      "group": "ci",
+      "query": "Where is the CI mock embeddings server implemented and what API does it expose?",
+      "path_glob": "scripts/*.mjs",
+      "target_files": ["scripts/ci-mock-embeddings.mjs"],
+      "must_keywords": ["/v1/embeddings"]
     }
   ]
 }

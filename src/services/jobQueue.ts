@@ -11,7 +11,9 @@ export type JobType =
   | 'index.run'
   | 'git.ingest'
   | 'quality.eval'
-  | 'knowledge.refresh';
+  | 'knowledge.refresh'
+  | 'faq.build'
+  | 'raptor.build';
 
 type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'dead_letter';
 
