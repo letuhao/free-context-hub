@@ -1,6 +1,9 @@
 import { getEnv } from '../env.js';
 import { getNeo4jDriver } from './client.js';
 import { ensureKgSchema } from './schema.js';
+import { createModuleLogger } from '../utils/logger.js';
+
+const logger = createModuleLogger('kg.bootstrap');
 
 export async function bootstrapKgIfEnabled(): Promise<void> {
   const env = getEnv();
@@ -8,14 +11,14 @@ export async function bootstrapKgIfEnabled(): Promise<void> {
 
   const driver = getNeo4jDriver();
   if (!driver) {
-    console.warn('[kg] KG_ENABLED=true but Neo4j driver is unavailable');
+    logger.warn({ kg_enabled: env.KG_ENABLED }, 'Neo4j driver is unavailable while KG is enabled');
     return;
   }
 
   const session = driver.session();
   try {
     await ensureKgSchema(session);
-    console.log('[kg] schema constraints ensured');
+    logger.info({}, 'kg schema constraints ensured');
   } finally {
     await session.close();
   }

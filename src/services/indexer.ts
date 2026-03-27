@@ -9,6 +9,9 @@ import { chunkTextByLines } from '../utils/chunker.js';
 import { sha256Hex } from '../utils/hash.js';
 import { upsertFileGraphFromDisk } from '../kg/upsert.js';
 import { bumpProjectCacheVersion } from './cacheVersions.js';
+import { createModuleLogger } from '../utils/logger.js';
+
+const logger = createModuleLogger('indexer');
 
 export type IndexProjectResult = {
   status: 'ok' | 'error';
@@ -171,7 +174,7 @@ export async function indexProject({ projectId, root, linesPerChunk, embeddingBa
           fileRel,
         });
         if (graph.status === 'error') {
-          console.warn(`[indexer] kg upsert failed for ${fileRel}: ${graph.message}`);
+          logger.warn({ project_id: projectId, file: fileRel, message: graph.message }, 'kg upsert failed');
         }
       } catch (err) {
         await client.query('ROLLBACK');
@@ -190,7 +193,10 @@ export async function indexProject({ projectId, root, linesPerChunk, embeddingBa
   await bumpProjectCacheVersion(projectId).catch(() => {});
 
   await rebuildProjectSnapshot(projectId).catch(err => {
-    console.error('[indexer] rebuildProjectSnapshot failed:', err instanceof Error ? err.message : err);
+    logger.error(
+      { project_id: projectId, error: err instanceof Error ? err.message : String(err) },
+      'rebuildProjectSnapshot failed',
+    );
   });
 
   const duration_ms = Date.now() - startedAt;

@@ -8,6 +8,7 @@ import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js
 import { ErrorCode, McpError, isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 
 import { getEnv } from './env.js';
+import { createModuleLogger } from './utils/logger.js';
 import { applyMigrations } from './db/applyMigrations.js';
 import { indexProject } from './services/indexer.js';
 import { searchCode } from './services/retriever.js';
@@ -29,6 +30,8 @@ import { configureProjectSource, getProjectSource, prepareRepo } from './service
 import { enqueueJob, listJobs } from './services/jobQueue.js';
 import { runNextJob } from './services/jobExecutor.js';
 import { listWorkspaceRoots, registerWorkspaceRoot, scanWorkspaceChanges } from './services/workspaceTracker.js';
+
+const logger = createModuleLogger('mcp');
 
 dotenv.config();
 
@@ -84,7 +87,7 @@ function logStartupEnvSummary() {
     S3_SECRET_ACCESS_KEY: env.S3_SECRET_ACCESS_KEY ? '[set]' : '[not set]',
     S3_FORCE_PATH_STYLE: env.S3_FORCE_PATH_STYLE,
   };
-  console.log('[env]', JSON.stringify(safe));
+  logger.info({ env: safe }, 'startup env summary');
 }
 
 function formatToolResponse<T>(
@@ -1906,7 +1909,7 @@ async function main() {
   logStartupEnvSummary();
   await applyMigrations();
   await bootstrapKgIfEnabled().catch(err => {
-    console.error('[kg] bootstrap failed:', err instanceof Error ? err.message : err);
+    logger.error({ error: err instanceof Error ? err.message : String(err) }, 'kg bootstrap failed');
   });
 
   const app = createMcpExpressApp();
@@ -1948,7 +1951,7 @@ async function main() {
 
       await transport.handleRequest(req as any, res as any, req.body);
     } catch (error) {
-      console.log('[mcp] error', error);
+      logger.error({ error }, 'mcp request error');
       if (!res.headersSent) {
         res.status(500).json({
           jsonrpc: '2.0',
@@ -1967,7 +1970,7 @@ async function main() {
 
   const port = env.MCP_PORT;
   app.listen(port, () => {
-    console.log(`[mcp] ContextHub MCP server listening on :${port} (/mcp)`);
+    logger.info({ port, path: '/mcp' }, 'ContextHub MCP server listening');
   });
 
   process.on('SIGINT', async () => {
@@ -1985,7 +1988,7 @@ async function main() {
 }
 
 main().catch(err => {
-  console.error('Fatal startup error:', err);
+  logger.fatal({ error: err instanceof Error ? err.message : String(err) }, 'Fatal startup error');
   process.exit(1);
 });
 
