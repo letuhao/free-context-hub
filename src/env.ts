@@ -79,6 +79,19 @@ const EnvSchema = z.object({
   BUILDER_MEMORY_SAMPLE_MAX_FILE_CHARS: z.coerce.number().int().positive().optional().default(6000),
   /** Total character budget for the concatenated repo sample. */
   BUILDER_MEMORY_SAMPLE_MAX_TOTAL_CHARS: z.coerce.number().int().positive().optional().default(90_000),
+  /**
+   * Single-pass builder memory: max repo-sample characters per **map** LLM call (split on `--- FILE:` blocks).
+   * Set >= SAMPLE_MAX_TOTAL_CHARS to keep one-shot synthesis (legacy behavior).
+   */
+  BUILDER_MEMORY_MAP_CHUNK_MAX_CHARS: z.coerce.number().int().positive().optional().default(28_000),
+  /** `max_tokens` for each map call (partial notes). */
+  BUILDER_MEMORY_MAP_MAX_TOKENS: z.coerce.number().int().positive().optional().default(2048),
+  /** Parallel map calls (1 = sequential). */
+  BUILDER_MEMORY_MAP_CONCURRENCY: z.coerce.number().int().positive().optional().default(2),
+  /** Max combined partial-note characters per merge LLM call; larger inputs are merged in batches. */
+  BUILDER_MEMORY_MERGE_MAX_INPUT_CHARS: z.coerce.number().int().positive().optional().default(56_000),
+  /** `max_tokens` for merge step(s). */
+  BUILDER_MEMORY_MERGE_MAX_TOKENS: z.coerce.number().int().positive().optional().default(4096),
 
   /** Manifest / LOC scan: ignore files larger than this (bytes). */
   MANIFEST_MAX_FILE_BYTES: z.coerce.number().int().positive().optional().default(2_000_000),
@@ -150,7 +163,8 @@ const EnvSchema = z.object({
   BUILDER_AGENT_BASE_URL: z.string().min(1).optional(),
   BUILDER_AGENT_API_KEY: z.string().optional(),
   BUILDER_AGENT_MODEL: z.string().min(1).optional(),
-  BUILDER_AGENT_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(12_000),
+  /** Single-pass / hierarchical builder memory chat; large repo samples need well above 12s on local LLMs. */
+  BUILDER_AGENT_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(120_000),
   QC_AGENT_BASE_URL: z.string().min(1).optional(),
   QC_AGENT_API_KEY: z.string().optional(),
   QC_AGENT_MODEL: z.string().min(1).optional(),

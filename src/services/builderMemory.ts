@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import fg from 'fast-glob';
 
-import { getEnv } from '../env.js';
+import { getEnv, type Env } from '../env.js';
 import { upsertGeneratedDocument } from './generatedDocs.js';
 import { createModuleLogger } from '../utils/logger.js';
 
@@ -189,13 +189,212 @@ export async function builderChatCompletion(input: {
   }
 }
 
-async function synthesizeMemory(repoSample: string): Promise<string | null> {
+/** Split concatenated `--- FILE: ...` sample into chunks that fit the model context per map call. */
+function splitRepoSampleIntoChunks(sample: string, maxChunkChars: number): string[] {
+  if (sample.length <= maxChunkChars) return [sample];
+  const blocks = sample.split(/\n\n(?=--- FILE:)/g).filter(Boolean);
+  const chunks: string[] = [];
+  let buf = '';
+  const flush = () => {
+    if (buf.trim()) chunks.push(buf);
+    buf = '';
+  };
+  for (const block of blocks) {
+    const b = block.trimEnd();
+    if (!b) continue;
+    if (b.length > maxChunkChars) {
+      flush();
+      for (let i = 0; i < b.length; i += maxChunkChars) {
+        chunks.push(b.slice(i, i + maxChunkChars));
+      }
+      continue;
+    }
+    const sep = buf ? '\n\n' : '';
+    if (buf.length + sep.length + b.length <= maxChunkChars) {
+      buf = buf ? buf + sep + b : b;
+    } else {
+      flush();
+      buf = b;
+    }
+  }
+  flush();
+  return chunks.length ? chunks : [sample.slice(0, maxChunkChars)];
+}
+
+async function parallelMapLimit<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker(): Promise<void> {
+    for (;;) {
+      const i = next++;
+      if (i >= items.length) return;
+      results[i] = await fn(items[i], i);
+    }
+  }
+  const n = Math.min(Math.max(1, limit), items.length);
+  await Promise.all(Array.from({ length: n }, () => worker()));
+  return results;
+}
+
+/** One map step: notes from a repo slice (fits context window). */
+async function mapChunkToPartialNotes(chunk: string, index: number, total: number, mapMaxTokens: number): Promise<string | null> {
+  const system =
+    `You extract repository facts from slice ${index + 1} of ${total} (chunked for context limits). ` +
+    'Output concise Markdown: bullet lists of paths, symbols, imports, MCP/tools/jobs if visible, config, risks. ' +
+    'No full document yet — another step will merge slices.';
+  const user = `Repository slice:\n\n${chunk}`;
+  return builderChatCompletion({ system, user, maxTokens: mapMaxTokens });
+}
+
+function clampPartialForMerge(p: string, maxChars: number): string {
+  if (p.length <= maxChars) return p;
+  return `${p.slice(0, Math.max(0, maxChars - 80))}\n\n[… truncated …]`;
+}
+
+/** Group partials so each batch stays under merge input budget. */
+function batchPartialsForMerge(partials: string[], maxInputChars: number): string[][] {
+  const batches: string[][] = [];
+  let cur: string[] = [];
+  let len = 0;
+  const overhead = 24;
+  for (const raw of partials) {
+    const p = raw.trim();
+    if (!p) continue;
+    const add = p.length + (cur.length ? overhead : 0);
+    if (cur.length && len + add > maxInputChars) {
+      batches.push(cur);
+      cur = [p];
+      len = p.length;
+    } else {
+      cur.push(p);
+      len += add;
+    }
+  }
+  if (cur.length) batches.push(cur);
+  return batches;
+}
+
+/** Merge several partial notes into one block (intermediate or final). */
+async function mergeNoteBatch(
+  batch: string[],
+  mergeMaxTokens: number,
+  intermediate: boolean,
+  maxPartialChars: number,
+): Promise<string | null> {
+  const safe = batch.map(p => clampPartialForMerge(p, maxPartialChars));
+  const system = intermediate
+    ? 'You merge partial repository notes into one coherent Markdown section. Deduplicate; keep paths and symbols. Intermediate merge.'
+    : 'You merge partial repository notes into one coherent Markdown document. Deduplicate; preserve structure.';
+  const user = `Notes (${batch.length} parts):\n\n${safe.join('\n\n---\n\n')}`;
+  return builderChatCompletion({ system, user, maxTokens: mergeMaxTokens });
+}
+
+/** Reduce partials to one string (may take multiple merge rounds if inputs are large). */
+async function reducePartialsToOne(
+  partials: string[],
+  maxInputChars: number,
+  mergeMaxTokens: number,
+): Promise<string | null> {
+  const cleaned = partials.map(p => p.trim()).filter(Boolean);
+  if (!cleaned.length) return null;
+  if (cleaned.length === 1) return cleaned[0];
+  let layer = cleaned;
+  let round = 0;
+  const maxRounds = 32;
+  while (layer.length > 1 && round < maxRounds) {
+    round += 1;
+    const batches = batchPartialsForMerge(layer, maxInputChars);
+    // If every partial is too large to co-pack, batching yields one item per batch → no progress unless we pair-merge.
+    if (batches.length === layer.length && batches.every(b => b.length === 1)) {
+      const perSide = Math.max(2000, Math.floor(maxInputChars / 2) - 400);
+      const next: string[] = [];
+      for (let i = 0; i < layer.length; i += 2) {
+        const a = layer[i];
+        const b = layer[i + 1];
+        if (b === undefined) {
+          next.push(clampPartialForMerge(a, maxInputChars));
+          continue;
+        }
+        const pair = [clampPartialForMerge(a, perSide), clampPartialForMerge(b, perSide)];
+        const m = await mergeNoteBatch(pair, mergeMaxTokens, true, perSide);
+        if (!m) return null;
+        next.push(m);
+      }
+      layer = next;
+      continue;
+    }
+    const next: string[] = [];
+    for (const batch of batches) {
+      if (batch.length === 1) {
+        next.push(batch[0]);
+      } else {
+        const per = Math.max(2000, Math.floor(maxInputChars / batch.length) - 200);
+        const m = await mergeNoteBatch(batch, mergeMaxTokens, true, per);
+        if (!m) return null;
+        next.push(m);
+      }
+    }
+    layer = next;
+  }
+  if (layer.length > 1) {
+    const per = Math.max(2000, Math.floor(maxInputChars / layer.length) - 200);
+    const fallback = await mergeNoteBatch(
+      layer,
+      mergeMaxTokens,
+      true,
+      per,
+    );
+    return fallback;
+  }
+  return layer[0] ?? null;
+}
+
+/** Single-shot full document (small repo sample). */
+async function synthesizeMemoryOneShot(repoSample: string, mergeMaxTokens: number): Promise<string | null> {
   const system =
     'You are a senior software engineer doing a deep read of a repository. ' +
     'Produce structured project memory for downstream RAG: sections Overview, Architecture, KeyEntrypoints, ' +
     'McpAndJobs, Phase6KnowledgeLoop, RisksAndGaps. Use concrete file paths and symbols. Markdown, no code fences around the whole output.';
   const user = `Repository sample (truncated):\n\n${repoSample}\n\nWrite the full memory document now.`;
-  return builderChatCompletion({ system, user, maxTokens: 4096 });
+  return builderChatCompletion({ system, user, maxTokens: mergeMaxTokens });
+}
+
+/** Final polish: structured memory from consolidated notes (after map-reduce). */
+async function synthesizeMemoryFromMergedNotes(mergedNotes: string, mergeMaxTokens: number): Promise<string | null> {
+  const system =
+    'You are a senior software engineer. You are given consolidated notes from a chunked scan of a repository. ' +
+    'Produce structured project memory for downstream RAG: sections Overview, Architecture, KeyEntrypoints, ' +
+    'McpAndJobs, Phase6KnowledgeLoop, RisksAndGaps. Use concrete file paths and symbols. Markdown, no code fences around the whole output.';
+  const user = `Consolidated notes:\n\n${mergedNotes}\n\nWrite the full memory document now.`;
+  return builderChatCompletion({ system, user, maxTokens: mergeMaxTokens });
+}
+
+async function synthesizeMemoryChunked(sample: string, env: Env): Promise<string | null> {
+  const maxChunk = env.BUILDER_MEMORY_MAP_CHUNK_MAX_CHARS;
+  const chunks = splitRepoSampleIntoChunks(sample, maxChunk);
+  if (chunks.length === 1) {
+    return synthesizeMemoryOneShot(chunks[0], env.BUILDER_MEMORY_MERGE_MAX_TOKENS);
+  }
+
+  logger.info(
+    {
+      map_chunks: chunks.length,
+      map_concurrency: env.BUILDER_MEMORY_MAP_CONCURRENCY,
+      map_chunk_max_chars: maxChunk,
+    },
+    'builder_memory: map-reduce (multiple LLM calls)',
+  );
+
+  const partials = await parallelMapLimit(chunks, env.BUILDER_MEMORY_MAP_CONCURRENCY, (chunk, i) =>
+    mapChunkToPartialNotes(chunk, i, chunks.length, env.BUILDER_MEMORY_MAP_MAX_TOKENS),
+  );
+  const ok = partials.filter((p): p is string => typeof p === 'string' && p.trim().length > 0);
+  if (!ok.length) return null;
+
+  const merged = await reducePartialsToOne(ok, env.BUILDER_MEMORY_MERGE_MAX_INPUT_CHARS, env.BUILDER_MEMORY_MERGE_MAX_TOKENS);
+  if (!merged) return null;
+
+  return synthesizeMemoryFromMergedNotes(merged, env.BUILDER_MEMORY_MERGE_MAX_TOKENS);
 }
 
 /** Deep-loop step: LLM synthesizes a large “project memory” artifact; indexed on next index.run. */
@@ -217,7 +416,7 @@ export async function buildProjectMemoryArtifact(input: {
   if (!sample.trim()) {
     return { status: 'skipped', reason: 'empty_repo_sample' };
   }
-  const memory = await synthesizeMemory(sample);
+  const memory = await synthesizeMemoryChunked(sample, env);
   if (!memory) {
     logger.warn(
       {
