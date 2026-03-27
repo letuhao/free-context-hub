@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { addLesson } from './lessons.js';
+import { recordGeneratedExport, upsertGeneratedDocument } from './generatedDocs.js';
 import { qaAnswerFromEvidence } from './qaAgent.js';
 import { searchCode } from './retriever.js';
 import { createModuleLogger } from '../utils/logger.js';
@@ -21,6 +22,8 @@ export async function buildFaq(input: {
   modules?: string[];
   maxItems?: number;
   outputTarget?: OutputTarget;
+  sourceJobId?: string;
+  correlationId?: string;
 }): Promise<{ status: 'ok'; written_files: string[]; items: number }> {
   const startedAt = Date.now();
   const outTarget: OutputTarget = (input.outputTarget ?? 'both') as OutputTarget;
@@ -87,6 +90,32 @@ export async function buildFaq(input: {
 
       lines.push(`## Q: ${mdEscape(it.q)}`);
       lines.push('');
+
+      const docKey = `${group}/${idx + 1}-${Buffer.from(it.q).toString('base64url').slice(0, 24)}`;
+      const canonicalMd = [
+        `# FAQ item — ${group}`,
+        '',
+        `## Q`,
+        it.q,
+        '',
+        answer ? `## Answer\n${mdEscape(answer)}\n` : '',
+        '## Evidence',
+        ...top.map(m => `- ${m.path} (${m.start_line}-${m.end_line}, score ${m.score.toFixed(3)})`),
+        '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+      await upsertGeneratedDocument({
+        projectId: input.projectId,
+        docType: 'faq',
+        docKey,
+        title: `FAQ: ${it.q}`.slice(0, 160),
+        pathHint: `docs/faq/${group}.md`,
+        content: canonicalMd,
+        metadata: { group, question: it.q, evidence_paths: cites },
+        sourceJobId: input.sourceJobId,
+        correlationId: input.correlationId,
+      });
       lines.push(`**Evidence files**: ${cites.map(c => `\`${c}\``).join(', ') || '(none)'}`);
       lines.push('');
       if (answer) {
@@ -117,8 +146,26 @@ export async function buildFaq(input: {
 
     if (outTarget === 'docs' || outTarget === 'both') {
       const outPath = path.join(docsDir, `${group}.md`);
-      await fs.writeFile(outPath, lines.join('\n'), 'utf8');
+      const groupDoc = lines.join('\n');
+      await fs.writeFile(outPath, groupDoc, 'utf8');
       written.push(outPath);
+      await upsertGeneratedDocument({
+        projectId: input.projectId,
+        docType: 'faq',
+        docKey: `group/${group}`,
+        title: `FAQ group ${group}`,
+        pathHint: `docs/faq/${group}.md`,
+        content: groupDoc,
+        metadata: { group, kind: 'group_render' },
+        sourceJobId: input.sourceJobId,
+        correlationId: input.correlationId,
+      }).then(({ doc_id }) =>
+        recordGeneratedExport({
+          docId: doc_id,
+          exportPath: outPath.replace(/\\/g, '/'),
+          content: groupDoc,
+        }),
+      );
       logger.info({ group, path: outPath }, 'faq document written');
     }
     logger.info({ group }, 'faq group completed');

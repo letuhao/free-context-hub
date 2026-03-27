@@ -18,6 +18,7 @@
     "bench:phase5": "tsx src/smoke/phase5ValidationBenchmark.ts",
     "validate:phase5-worker": "tsx src/smoke/phase5WorkerValidation.ts",
     "qc:rag": "tsx src/qc/ragQcRunner.ts",
+    "backfill:generated-docs": "tsx src/scripts/backfillGeneratedDocs.ts",
     "ci:mock-embeddings": "node scripts/ci-mock-embeddings.mjs",
     "distill-probe": "tsx src/smoke/distillProbe.ts"
   },

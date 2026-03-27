@@ -4,6 +4,7 @@ import path from 'node:path';
 import fg from 'fast-glob';
 
 import { compressText } from './distiller.js';
+import { recordGeneratedExport, upsertGeneratedDocument } from './generatedDocs.js';
 import { qaSummarize } from './qaAgent.js';
 import { createModuleLogger } from '../utils/logger.js';
 
@@ -22,6 +23,8 @@ export async function buildRaptorSummaries(input: {
   root: string;
   pathGlob?: string;
   maxLevels?: number;
+  sourceJobId?: string;
+  correlationId?: string;
 }): Promise<{ status: 'ok'; written_files: string[]; files_scanned: number }> {
   const startedAt = Date.now();
   const maxLevels = Math.max(1, Math.min(Number(input.maxLevels ?? 2), 3));
@@ -54,7 +57,19 @@ export async function buildRaptorSummaries(input: {
     const outAbs = path.join(absRoot, outRel);
     await fs.mkdir(path.dirname(outAbs), { recursive: true });
     const md = `# RAPTOR L1 summary — ${toPosix(rel)}\n\nProject: \`${input.projectId}\`\n\n${summary}\n`;
+    const upserted = await upsertGeneratedDocument({
+      projectId: input.projectId,
+      docType: 'raptor',
+      docKey: `level1/${safeSlug(rel)}`,
+      title: `RAPTOR L1 ${toPosix(rel)}`,
+      pathHint: outRel,
+      content: md,
+      metadata: { level: 1, source_relpath: toPosix(rel) },
+      sourceJobId: input.sourceJobId,
+      correlationId: input.correlationId,
+    });
     await fs.writeFile(outAbs, md, 'utf8');
+    await recordGeneratedExport({ docId: upserted.doc_id, exportPath: outRel, content: md });
     written.push(toPosix(outRel));
     fileSummaries.push({ rel: toPosix(rel), summary });
   }
@@ -81,7 +96,19 @@ export async function buildRaptorSummaries(input: {
       const outAbs = path.join(absRoot, outRel);
       await fs.mkdir(path.dirname(outAbs), { recursive: true });
       const md = `# RAPTOR L2 directory summary — ${dir}\n\nProject: \`${input.projectId}\`\n\n${compressed.compressed.trim()}\n`;
+      const upserted = await upsertGeneratedDocument({
+        projectId: input.projectId,
+        docType: 'raptor',
+        docKey: `level2/${safeSlug(`${dir}.md`)}`,
+        title: `RAPTOR L2 ${dir}`,
+        pathHint: outRel,
+        content: md,
+        metadata: { level: 2, directory: dir, items: items.length },
+        sourceJobId: input.sourceJobId,
+        correlationId: input.correlationId,
+      });
       await fs.writeFile(outAbs, md, 'utf8');
+      await recordGeneratedExport({ docId: upserted.doc_id, exportPath: outRel, content: md });
       written.push(toPosix(outRel));
     }
   }

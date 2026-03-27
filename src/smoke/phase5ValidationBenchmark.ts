@@ -6,6 +6,7 @@ import { ingestGitHistory } from '../services/gitIntelligence.js';
 import { indexProject } from '../services/indexer.js';
 import { searchCode } from '../services/retriever.js';
 import { scanWorkspaceChanges } from '../services/workspaceTracker.js';
+import { getDbPool } from '../db/client.js';
 
 dotenv.config();
 
@@ -80,6 +81,24 @@ async function main() {
   await fs.mkdir(outDir, { recursive: true });
   const file = path.join(outDir, `${new Date().toISOString().replace(/[:.]/g, '-')}-phase5-validation.json`);
   await fs.writeFile(file, JSON.stringify(out, null, 2), 'utf8');
+  const rel = file.replace(/\\/g, '/').replace(`${process.cwd().replace(/\\/g, '/')}/`, '');
+  const pool = getDbPool();
+  for (const item of items) {
+    await pool.query(
+      `INSERT INTO generated_documents(project_id, doc_type, doc_key, title, path_hint, content, metadata, updated_at)
+       VALUES ($1,'benchmark_artifact',$2,$3,$4,$5,$6::jsonb, now())
+       ON CONFLICT (project_id, doc_type, doc_key)
+       DO UPDATE SET title=EXCLUDED.title, path_hint=EXCLUDED.path_hint, content=EXCLUDED.content, metadata=EXCLUDED.metadata, updated_at=now()`,
+      [
+        String(item.project_id),
+        `phase5-validation/${path.basename(file)}`,
+        `Phase5 validation benchmark ${path.basename(file)}`,
+        rel,
+        JSON.stringify(out, null, 2),
+        JSON.stringify({ total_duration_ms: out.total_duration_ms, generated_at: out.generated_at }),
+      ],
+    );
+  }
   console.log(`[bench] wrote ${file}`);
 }
 

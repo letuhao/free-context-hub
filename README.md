@@ -44,6 +44,8 @@
 
 Detailed setup guide: [`docs/QUICKSTART.md`](docs/QUICKSTART.md).
 
+Storage policy guide: [`docs/storage/storage-contract.md`](docs/storage/storage-contract.md).
+
 ---
 
 ## 🤖 Self-Hosted Models
@@ -111,6 +113,7 @@ Exposed tools for your AI agent:
 - 📝 `suggest_lessons_from_commits` / `link_commit_to_lesson`: Draft lesson automation from commit context (Phase 5).
 - 🧭 `analyze_commit_impact`: Commit impact over Phase 4 symbol/lesson graph (Phase 5).
 - 🔁 Worker automation + queue/source tools: `prepare_repo`, `enqueue_job`, `list_jobs` (with `correlation_id` filter), `run_next_job`, `scan_workspace`.
+- 🗃️ DB-first generated artifacts: FAQ/RAPTOR/QC outputs are canonical in Postgres (`generated_documents`) and optionally exported to filesystem.
 
 ---
 

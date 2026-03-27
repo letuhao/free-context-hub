@@ -5,6 +5,7 @@ import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
+import { getDbPool } from '../db/client.js';
 
 dotenv.config();
 
@@ -218,7 +219,36 @@ async function main() {
 
   const outMd = path.join(path.resolve('docs/qc'), `${stamp}-qc-report.md`);
   await fs.mkdir(path.dirname(outMd), { recursive: true });
-  await fs.writeFile(outMd, mdLines.join('\n'), 'utf8');
+  const reportMd = mdLines.join('\n');
+  await fs.writeFile(outMd, reportMd, 'utf8');
+
+  const pool = getDbPool();
+  await pool.query(
+    `INSERT INTO generated_documents(project_id, doc_type, doc_key, title, path_hint, content, metadata, updated_at)
+     VALUES ($1,'qc_artifact',$2,$3,$4,$5,$6::jsonb, now())
+     ON CONFLICT (project_id, doc_type, doc_key)
+     DO UPDATE SET title=EXCLUDED.title, path_hint=EXCLUDED.path_hint, content=EXCLUDED.content, metadata=EXCLUDED.metadata, updated_at=now()`,
+    [projectId, `artifact/${stamp}`, `QC artifact ${stamp}`, normalizePath(path.relative(process.cwd(), outJson)), JSON.stringify(artifact, null, 2), JSON.stringify(artifact)],
+  );
+  await pool.query(
+    `INSERT INTO generated_documents(project_id, doc_type, doc_key, title, path_hint, content, metadata, updated_at)
+     VALUES ($1,'qc_report',$2,$3,$4,$5,$6::jsonb, now())
+     ON CONFLICT (project_id, doc_type, doc_key)
+     DO UPDATE SET title=EXCLUDED.title, path_hint=EXCLUDED.path_hint, content=EXCLUDED.content, metadata=EXCLUDED.metadata, updated_at=now()`,
+    [
+      projectId,
+      `report/${stamp}`,
+      `QC report ${stamp}`,
+      normalizePath(path.relative(process.cwd(), outMd)),
+      reportMd,
+      JSON.stringify({
+        totals: artifact.totals,
+        golden_version: golden.version,
+        qc_rerank_mode: qcRerankMode,
+        qc_rerank_groups: Array.from(qcRerankGroups),
+      }),
+    ],
+  );
 
   console.log(`[qc] wrote ${outJson}`);
   console.log(`[qc] wrote ${outMd}`);

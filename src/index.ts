@@ -615,6 +615,8 @@ function createMcpToolsServer() {
       outputSchema: z.object({
         status: z.enum(['ok', 'error']),
         files_indexed: z.number().int().nonnegative(),
+        generated_docs_indexed: z.number().int().nonnegative().optional(),
+        generated_chunks_indexed: z.number().int().nonnegative().optional(),
         duration_ms: z.number().int().nonnegative(),
         errors: z.array(
           z.object({
@@ -1770,6 +1772,8 @@ function createMcpToolsServer() {
           .object({
             status: z.enum(['ok', 'error']),
             files_indexed: z.number().int(),
+            generated_docs_indexed: z.number().int().optional(),
+            generated_chunks_indexed: z.number().int().optional(),
             duration_ms: z.number().int(),
             errors: z.array(z.object({ path: z.string(), message: z.string() })),
           })

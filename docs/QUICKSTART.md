@@ -19,6 +19,7 @@ This guide gets your local ContextHub MVP running (Postgres + embeddings) and co
   - Phase 5 (optional Git intelligence, `GIT_INGEST_ENABLED=true`): `ingest_git_history`, `list_commits`, `get_commit`, `suggest_lessons_from_commits`, `link_commit_to_lesson`, `analyze_commit_impact`
   - Worker/queue/source tools: `configure_project_source`, `prepare_repo`, `enqueue_job`, `list_jobs`, `run_next_job`, `register_workspace_root`, `scan_workspace`
 - Project-scoped persistent memory + semantic code search (pgvector)
+- DB-first generated artifacts (`generated_documents`) for FAQ/RAPTOR/QC, with optional filesystem exports
 
 ## Prerequisites
 
@@ -55,7 +56,7 @@ Postgres listens on `localhost:5432`. Neo4j Browser/Bolt: `http://localhost:7474
 
 ### Phase 5 Git ingestion in Docker
 
-- The `mcp` container mounts workspace as read-only at `/workspace`.
+- The `mcp` and `worker` containers mount workspace at `/workspace` for indexing + generated export flows.
 - Use `root=/workspace` when calling `ingest_git_history` against dockerized MCP.
 - Smoke example for Docker runtime:
 
@@ -92,6 +93,10 @@ Notes:
 - **Smoke:** run `npm run smoke-test` with `KG_ENABLED=true` to exercise `search_symbols` / `get_symbol_neighbors` / `trace_dependency_path` / `get_lesson_impact` (best-effort block).
 
 If you run LM Studio on your host machine (recommended), the MCP container will reach it via `host.docker.internal`.
+
+Storage governance references:
+- `docs/storage/storage-contract.md`
+- `docs/storage/generated-cleanup.md`
 
 If you see an npm error like `self-signed certificate in certificate chain` while building the MCP image, set `NPM_STRICT_SSL=false` in your environment (Compose already defaults it to false) or bake your corporate CA into the image.
 

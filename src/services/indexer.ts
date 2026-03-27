@@ -10,12 +10,15 @@ import { sha256Hex } from '../utils/hash.js';
 import { upsertFileGraphFromDisk } from '../kg/upsert.js';
 import { bumpProjectCacheVersion } from './cacheVersions.js';
 import { createModuleLogger } from '../utils/logger.js';
+import { indexGeneratedDocuments } from './generatedIndexer.js';
 
 const logger = createModuleLogger('indexer');
 
 export type IndexProjectResult = {
   status: 'ok' | 'error';
   files_indexed: number;
+  generated_docs_indexed?: number;
+  generated_chunks_indexed?: number;
   duration_ms: number;
   errors: Array<{ path: string; message: string }>;
 };
@@ -190,6 +193,23 @@ export async function indexProject({ projectId, root, linesPerChunk, embeddingBa
     }
   }
 
+  const generated = await indexGeneratedDocuments({
+    projectId,
+    root: resolvedRoot,
+    linesPerChunk: chunkLines,
+    embeddingBatchSize: batchSize,
+  }).catch(err => ({
+    status: 'error' as const,
+    docs_indexed: 0,
+    chunks_indexed: 0,
+    errors: [{ doc_key: 'generated', message: err instanceof Error ? err.message : String(err) }],
+  }));
+  if (generated.errors.length) {
+    for (const e of generated.errors) {
+      errors.push({ path: `generated/${e.doc_key}`, message: e.message });
+    }
+  }
+
   await bumpProjectCacheVersion(projectId).catch(() => {});
 
   await rebuildProjectSnapshot(projectId).catch(err => {
@@ -201,6 +221,13 @@ export async function indexProject({ projectId, root, linesPerChunk, embeddingBa
 
   const duration_ms = Date.now() - startedAt;
   const status: IndexProjectResult['status'] = errors.length ? 'error' : 'ok';
-  return { status, files_indexed: filesIndexed, duration_ms, errors };
+  return {
+    status,
+    files_indexed: filesIndexed,
+    generated_docs_indexed: generated.docs_indexed,
+    generated_chunks_indexed: generated.chunks_indexed,
+    duration_ms,
+    errors,
+  };
 }
 

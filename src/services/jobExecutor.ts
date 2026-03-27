@@ -15,6 +15,7 @@ async function executeByType(
   projectId: string | null,
   payload: Record<string, unknown>,
   correlationId: string | null,
+  sourceJobId?: string,
 ): Promise<Record<string, unknown>> {
   const chainCorrelation = correlationId ?? undefined;
   switch (jobType) {
@@ -107,6 +108,8 @@ async function executeByType(
         modules: Array.isArray(payload.modules) ? (payload.modules as any[]).map(s => String(s)) : undefined,
         maxItems: payload.max_items ? Number(payload.max_items) : undefined,
         outputTarget: payload.output_target ? (String(payload.output_target) as any) : undefined,
+        sourceJobId,
+        correlationId: chainCorrelation,
       });
       await enqueueJob({
         project_id: projectId,
@@ -125,6 +128,8 @@ async function executeByType(
         root,
         pathGlob: payload.path_glob ? String(payload.path_glob) : undefined,
         maxLevels: payload.max_levels ? Number(payload.max_levels) : undefined,
+        sourceJobId,
+        correlationId: chainCorrelation,
       });
       await enqueueJob({
         project_id: projectId,
@@ -154,7 +159,7 @@ export async function runNextJob(queueName = 'default'): Promise<{
       { job_id: job.job_id, job_type: job.job_type, project_id: job.project_id, correlation_id: job.correlation_id },
       'job started',
     );
-    const result = await executeByType(job.job_type, job.project_id, job.payload, job.correlation_id);
+    const result = await executeByType(job.job_type, job.project_id, job.payload, job.correlation_id, job.job_id);
     await completeJob(job.job_id);
     logger.info({ job_id: job.job_id, job_type: job.job_type, duration_ms: Date.now() - started }, 'job finished');
     return { status: 'ok', job_id: job.job_id, job_type: job.job_type, result };
@@ -181,7 +186,7 @@ export async function runJobById(jobId: string): Promise<{
       { job_id: job.job_id, job_type: job.job_type, project_id: job.project_id, correlation_id: job.correlation_id },
       'job started by id',
     );
-    const result = await executeByType(job.job_type, job.project_id, job.payload, job.correlation_id);
+    const result = await executeByType(job.job_type, job.project_id, job.payload, job.correlation_id, job.job_id);
     await completeJob(job.job_id);
     logger.info({ job_id: job.job_id, job_type: job.job_type, duration_ms: Date.now() - started }, 'job finished by id');
     return { status: 'ok', job_id: job.job_id, job_type: job.job_type, result };
