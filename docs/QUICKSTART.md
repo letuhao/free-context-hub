@@ -18,6 +18,7 @@ This guide gets your local ContextHub MVP running (Postgres + embeddings) and co
   - Phase 4 (optional Neo4j graph, `KG_ENABLED=true`): `search_symbols`, `get_symbol_neighbors`, `trace_dependency_path`, `get_lesson_impact`
   - Phase 5 (optional Git intelligence, `GIT_INGEST_ENABLED=true`): `ingest_git_history`, `list_commits`, `get_commit`, `suggest_lessons_from_commits`, `link_commit_to_lesson`, `analyze_commit_impact`
   - Worker/queue/source tools: `configure_project_source`, `prepare_repo`, `enqueue_job`, `list_jobs`, `run_next_job`, `register_workspace_root`, `scan_workspace`
+- Generated-doc audit tools: `list_generated_documents`, `get_generated_document`
 - Project-scoped persistent memory + semantic code search (pgvector)
 - DB-first generated artifacts (`generated_documents`) for FAQ/RAPTOR/QC, with optional filesystem exports
 
@@ -244,6 +245,21 @@ Example arguments (shape):
 - `lesson_payload.tags` (optional)
 - `lesson_payload.source_refs` (optional)
 - `lesson_payload.guardrail` (optional; for guardrail lessons)
+
+`list_generated_documents`
+
+- `workspace_token` (optional; required only if `MCP_AUTH_ENABLED=true`)
+- `project_id` (optional; uses `DEFAULT_PROJECT_ID` when omitted)
+- `doc_type` (optional; `faq | raptor | qc_report | qc_artifact | benchmark_artifact`)
+- `include_content` (optional; default `false`)
+- `limit` (optional; default `100`, max `1000`)
+
+`get_generated_document`
+
+- `workspace_token` (optional; required only if `MCP_AUTH_ENABLED=true`)
+- `project_id` (optional; uses `DEFAULT_PROJECT_ID` when omitted)
+- `doc_id` (optional, preferred lookup)
+- or `doc_type` + `doc_key` (required pair when `doc_id` is omitted)
 
 `check_guardrails`
 

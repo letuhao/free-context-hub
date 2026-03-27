@@ -112,6 +112,7 @@ Exposed tools for your AI agent:
 - 🧾 `ingest_git_history` / `list_commits` / `get_commit`: Git intelligence ingestion + retrieval (Phase 5).
 - 📝 `suggest_lessons_from_commits` / `link_commit_to_lesson`: Draft lesson automation from commit context (Phase 5).
 - 🧭 `analyze_commit_impact`: Commit impact over Phase 4 symbol/lesson graph (Phase 5).
+- 🗂️ `list_generated_documents` / `get_generated_document`: Audit DB-first generated artifacts (FAQ/RAPTOR/QC/benchmark) directly from MCP.
 - 🔁 Worker automation + queue/source tools: `prepare_repo`, `enqueue_job`, `list_jobs` (with `correlation_id` filter), `run_next_job`, `scan_workspace`.
 - 🗃️ DB-first generated artifacts: FAQ/RAPTOR/QC outputs are canonical in Postgres (`generated_documents`) and optionally exported to filesystem.
 
