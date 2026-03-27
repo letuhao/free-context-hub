@@ -1369,6 +1369,7 @@ function createMcpToolsServer() {
       outputSchema: z.object({
         items: z.array(
           z.object({
+            project_id: z.string().optional(),
             sha: z.string(),
             parent_shas: z.array(z.string()),
             author_name: z.string(),
@@ -1404,6 +1405,7 @@ function createMcpToolsServer() {
       outputSchema: z.object({
         commit: z
           .object({
+            project_id: z.string().optional(),
             sha: z.string(),
             parent_shas: z.array(z.string()),
             author_name: z.string(),

@@ -42,6 +42,21 @@ function routingKey(jobType: JobType): string {
   return `jobs.${jobType.replace(/\./g, '_')}`;
 }
 
+function queueNameFor(queueName: string): string {
+  return `contexthub.${queueName}`;
+}
+
+async function ensureRabbitQueue(queueName: string): Promise<void> {
+  const env = getEnv();
+  const ch = await getRabbit();
+  if (!ch) return;
+  const exchange = env.RABBITMQ_EXCHANGE || 'contexthub.jobs';
+  const q = queueNameFor(queueName);
+  await ch.assertQueue(q, { durable: true });
+  // Bind all job types for this project queue.
+  await ch.bindQueue(q, exchange, 'jobs.#');
+}
+
 export async function enqueueJob(input: QueuePayload): Promise<{ status: 'queued'; job_id: string; backend: 'postgres' | 'rabbitmq' }> {
   const pool = getDbPool();
   const jobId = randomUUID();
@@ -59,6 +74,7 @@ export async function enqueueJob(input: QueuePayload): Promise<{ status: 'queued
   if (env.QUEUE_ENABLED && env.QUEUE_BACKEND === 'rabbitmq') {
     const ch = await getRabbit();
     if (ch) {
+      await ensureRabbitQueue(queueName);
       const exchange = env.RABBITMQ_EXCHANGE || 'contexthub.jobs';
       const body = Buffer.from(JSON.stringify({ job_id: jobId, project_id: input.project_id ?? null, job_type: input.job_type }));
       ch.publish(exchange, routingKey(input.job_type), body, {
@@ -111,6 +127,43 @@ export async function claimNextQueuedJob(queueName = 'default'): Promise<{
     max_attempts: Number(row.max_attempts ?? 3),
     correlation_id: row.correlation_id != null ? String(row.correlation_id) : null,
   };
+}
+
+export async function claimQueuedJobById(jobId: string): Promise<{
+  job_id: string;
+  project_id: string | null;
+  job_type: JobType;
+  payload: Record<string, unknown>;
+  attempts: number;
+  max_attempts: number;
+  correlation_id: string | null;
+} | null> {
+  const pool = getDbPool();
+  const res = await pool.query(
+    `UPDATE async_jobs j
+     SET status='running', attempts=j.attempts + 1, started_at=now()
+     WHERE j.job_id=$1 AND j.status='queued' AND j.available_at <= now()
+     RETURNING j.job_id, j.project_id, j.job_type, j.payload, j.attempts, j.max_attempts, j.correlation_id`,
+    [jobId],
+  );
+  if (!res.rowCount) return null;
+  const row = res.rows[0] as any;
+  return {
+    job_id: String(row.job_id),
+    project_id: row.project_id ? String(row.project_id) : null,
+    job_type: String(row.job_type) as JobType,
+    payload: (row.payload ?? {}) as Record<string, unknown>,
+    attempts: Number(row.attempts ?? 0),
+    max_attempts: Number(row.max_attempts ?? 3),
+    correlation_id: row.correlation_id != null ? String(row.correlation_id) : null,
+  };
+}
+
+export async function getRabbitConsumerChannel(queueName = 'default'): Promise<{ ch: any; queue: string } | null> {
+  const ch = await getRabbit();
+  if (!ch) return null;
+  await ensureRabbitQueue(queueName);
+  return { ch, queue: queueNameFor(queueName) };
 }
 
 export async function completeJob(jobId: string): Promise<void> {

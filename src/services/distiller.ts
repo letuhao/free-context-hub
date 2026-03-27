@@ -1,4 +1,5 @@
 import { getEnv } from '../env.js';
+import * as z from 'zod/v4';
 
 function chatBaseUrl(): string {
   const env = getEnv();
@@ -183,6 +184,15 @@ export type CommitLessonSuggestion = {
   rationale: string;
 };
 
+const CommitLessonSuggestionSchema = z.object({
+  lesson_type: z.enum(['decision', 'preference', 'guardrail', 'workaround', 'general_note']),
+  title: z.string().min(1),
+  content: z.string().min(1),
+  tags: z.array(z.string().min(1)),
+  source_refs: z.array(z.string().min(1)).transform(refs => refs.filter(s => !/^\[object\b/i.test(s.trim()))),
+  rationale: z.string().min(1).optional().default('LLM synthesized from commit message and changed files.'),
+});
+
 export async function suggestLessonFromCommit(input: {
   sha: string;
   message: string;
@@ -196,7 +206,8 @@ export async function suggestLessonFromCommit(input: {
   const system =
     'You are an engineering memory assistant. Convert commit context into a reusable lesson draft. ' +
     'Output ONLY valid JSON with keys: lesson_type,title,content,tags,source_refs,rationale. ' +
-    'lesson_type must be one of decision|preference|guardrail|workaround|general_note.';
+    'lesson_type must be one of decision|preference|guardrail|workaround|general_note. ' +
+    'tags MUST be an array of strings. source_refs MUST be an array of strings (file paths and git:<sha>), never objects.';
   const user =
     `COMMIT_SHA: ${input.sha}\n` +
     `COMMIT_MESSAGE:\n${input.message}\n\n` +
@@ -213,30 +224,21 @@ export async function suggestLessonFromCommit(input: {
     timeoutMs: env.DISTILLATION_TIMEOUT_MS,
   });
 
-  const parsed = extractJsonObject(out) as any;
-  const lesson_type = String(parsed?.lesson_type ?? '').trim();
-  const allowed = new Set(['decision', 'preference', 'guardrail', 'workaround', 'general_note']);
-  if (!allowed.has(lesson_type)) {
-    throw new Error('invalid lesson_type in commit suggestion');
-  }
-  const title = String(parsed?.title ?? '').trim();
-  const content = String(parsed?.content ?? '').trim();
-  const rationale = String(parsed?.rationale ?? '').trim();
-  if (!title || !content) {
-    throw new Error('missing title/content in commit suggestion');
+  const parsed = extractJsonObject(out) as unknown;
+  const validated = CommitLessonSuggestionSchema.safeParse(parsed);
+  if (!validated.success) {
+    const issues = validated.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ');
+    throw new Error(`invalid commit suggestion schema: ${issues}`);
   }
 
-  const rawTags = Array.isArray(parsed?.tags) ? parsed.tags : [];
-  const tags = rawTags.map((t: any) => String(t).trim()).filter(Boolean);
-  const refs = Array.isArray(parsed?.source_refs) ? parsed.source_refs.map((x: any) => String(x).trim()).filter(Boolean) : [];
-  const source_refs = Array.from(new Set([`git:${input.sha}`, ...refs]));
+  const source_refs = Array.from(new Set([`git:${input.sha}`, ...validated.data.source_refs]));
 
   return {
-    lesson_type: lesson_type as CommitLessonSuggestion['lesson_type'],
-    title,
-    content,
-    tags,
+    lesson_type: validated.data.lesson_type,
+    title: validated.data.title.trim(),
+    content: validated.data.content.trim(),
+    tags: validated.data.tags.map(t => t.trim()).filter(Boolean),
     source_refs,
-    rationale: rationale || 'LLM synthesized from commit message and changed files.',
+    rationale: String(validated.data.rationale ?? '').trim() || 'LLM synthesized from commit message and changed files.',
   };
 }

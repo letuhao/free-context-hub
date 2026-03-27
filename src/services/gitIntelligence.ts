@@ -290,6 +290,26 @@ async function heuristicLessonForCommit(commit: { sha: string; message: string; 
   };
 }
 
+function normalizeSourceRefs(input: unknown[]): string[] {
+  const out: string[] = [];
+  for (const x of input) {
+    if (typeof x === 'string') {
+      const s = x.trim();
+      // Defensive: LLMs sometimes emit JS default stringification like "[object Object]".
+      if (s && !/^\[object\b/i.test(s)) out.push(s);
+      continue;
+    }
+    if (x && typeof x === 'object') {
+      const anyX = x as any;
+      const cand = [anyX.file_path, anyX.path, anyX.ref, anyX.uri]
+        .map((v: any) => (typeof v === 'string' ? v.trim() : ''))
+        .find(Boolean);
+      if (cand) out.push(String(cand));
+    }
+  }
+  return out;
+}
+
 export async function suggestLessonsFromCommits(params: {
   projectId: string;
   commitShas?: string[];
@@ -353,7 +373,9 @@ export async function suggestLessonsFromCommits(params: {
           title: llm.title,
           content: llm.content,
           tags: llm.tags,
-          source_refs: llm.source_refs,
+          // Defensive: ensure source_refs are always strings (paths/refs), never objects.
+          // Always include git:<sha> + changed file paths from DB for determinism.
+          source_refs: Array.from(new Set([`git:${heur.commit_sha}`, ...files, ...normalizeSourceRefs((llm as any).source_refs ?? [])])),
           rationale: llm.rationale,
         };
       } catch {

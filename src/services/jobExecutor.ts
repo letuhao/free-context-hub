@@ -1,5 +1,5 @@
 import { analyzeCommitImpact, ingestGitHistory } from './gitIntelligence.js';
-import { claimNextQueuedJob, completeJob, enqueueJob, failJob, type JobType } from './jobQueue.js';
+import { claimNextQueuedJob, claimQueuedJobById, completeJob, enqueueJob, failJob, type JobType } from './jobQueue.js';
 import { indexProject } from './indexer.js';
 import { prepareRepo } from './repoSources.js';
 import { scanWorkspaceChanges } from './workspaceTracker.js';
@@ -107,12 +107,40 @@ export async function runNextJob(queueName = 'default'): Promise<{
   const job = await claimNextQueuedJob(queueName);
   if (!job) return { status: 'idle' };
   try {
+    const started = Date.now();
+    console.log(`[worker] job start id=${job.job_id} type=${job.job_type} project=${job.project_id ?? 'null'} corr=${job.correlation_id ?? 'null'}`);
     const result = await executeByType(job.job_type, job.project_id, job.payload, job.correlation_id);
     await completeJob(job.job_id);
+    console.log(`[worker] job done  id=${job.job_id} type=${job.job_type} ms=${Date.now() - started}`);
     return { status: 'ok', job_id: job.job_id, job_type: job.job_type, result };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await failJob(job.job_id, job.attempts, job.max_attempts, message);
+    console.error(`[worker] job error id=${job.job_id} type=${job.job_type} msg=${message}`);
+    return { status: 'error', job_id: job.job_id, job_type: job.job_type, error: message };
+  }
+}
+
+export async function runJobById(jobId: string): Promise<{
+  status: 'idle' | 'ok' | 'error';
+  job_id?: string;
+  job_type?: JobType;
+  result?: Record<string, unknown>;
+  error?: string;
+}> {
+  const job = await claimQueuedJobById(jobId);
+  if (!job) return { status: 'idle' };
+  try {
+    const started = Date.now();
+    console.log(`[worker] job start id=${job.job_id} type=${job.job_type} project=${job.project_id ?? 'null'} corr=${job.correlation_id ?? 'null'}`);
+    const result = await executeByType(job.job_type, job.project_id, job.payload, job.correlation_id);
+    await completeJob(job.job_id);
+    console.log(`[worker] job done  id=${job.job_id} type=${job.job_type} ms=${Date.now() - started}`);
+    return { status: 'ok', job_id: job.job_id, job_type: job.job_type, result };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await failJob(job.job_id, job.attempts, job.max_attempts, message);
+    console.error(`[worker] job error id=${job.job_id} type=${job.job_type} msg=${message}`);
     return { status: 'error', job_id: job.job_id, job_type: job.job_type, error: message };
   }
 }
