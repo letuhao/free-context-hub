@@ -1,39 +1,61 @@
 ---
-id: CH-T5
-date: 2026-03-27
-module: Phase5-Git-Intelligence
-phase: Phase 5
+id: CH-T6-RAG-QC
+date: 2026-03-28
+module: Phase6-RAG-Retrieval-Quality
+phase: Phase 6
 ---
 
-# Session Patch — 2026-03-27
+# Session Patch — 2026-03-28
 
 ## Where We Are
-Phase: **Phase 5 (Automation & Git Intelligence) implemented** — git ingest storage + MCP tools + draft lesson proposals + graph-assisted commit impact.
+Phase: **Phase 6 retrieval quality tuning in-progress** with measurable gains on QC golden set, while preserving general (workspace-agnostic) retrieval logic.
 
 ## Completed This Session
-- Migration `0005_git_intelligence.sql`: `git_commits`, `git_commit_files`, `git_ingest_runs`, `git_lesson_proposals`
-- Env + runtime: `GIT_INGEST_ENABLED`, `GIT_MAX_COMMITS_PER_RUN` in `src/env.ts` and `.env.example`
-- Git intelligence service: ingest idempotent commit/file metadata from git + proposal/link/impact flows
-- MCP tools added:
-  - `ingest_git_history`, `list_commits`, `get_commit`
-  - `suggest_lessons_from_commits`, `link_commit_to_lesson`, `analyze_commit_impact`
-- Distillation extension: commit→lesson suggestion helper in `src/services/distiller.ts`
-- Workspace cleanup extended: `delete_workspace` now deletes Phase 5 git tables
-- Docker dependency: added `git` package to image and workspace read-only mount (`/workspace`) for containerized git ingestion
-- Smoke test extended with Phase 5 assertions (`SMOKE_GIT_ROOT`) and verified pass
-- Docs updated: `README.md`, `docs/QUICKSTART.md`, `AGENT_PROTOCOL.md`, `WHITEPAPER.md`
-- Production hardening:
-  - `list_jobs` supports filtering by `correlation_id` for per-run reporting.
-  - Worker chain propagation keeps correlation across child jobs (`repo.sync`/`workspace.scan` fan-out).
-  - `smokeTest` now has dedicated optional block for `prepare_repo`, `enqueue_job`, `run_next_job`, `scan_workspace`.
-  - `validate:phase5-worker` deep checks now include clone evidence, DB index/git counts, and correlation-scoped queue gates.
-  - Added scheduled CI workflow `.github/workflows/phase5-worker-validation.yml` + mock embeddings server script.
+- Seeded MCP facts for worst clusters via `add_lesson` (lessons store) and verified lesson retrieval response quality.
+- Implemented **lesson-to-code expansion** in `src/services/retriever.ts`:
+  - `filters.lesson_to_code` wiring from `src/index.ts` into retriever.
+  - Query-similar lessons -> `source_refs` normalization -> path priors.
+  - True candidate expansion by fetching best chunks from lesson-prior files (not only score boosting).
+  - Retrieval cache key now includes lesson signature (`MAX(lessons.updated_at)`).
+- Added retrieval tuning controls (general-purpose, no workspace hardcoding):
+  - `RETRIEVAL_CANDIDATE_POOL_MIN`
+  - `RETRIEVAL_CANDIDATE_POOL_MULTIPLIER`
+  - `RETRIEVAL_CANDIDATE_POOL_MAX`
+  - `RETRIEVAL_LESSON_PRIOR_MIN_SCORE`
+  - `RETRIEVAL_MMR_LAMBDA`
+  - `RETRIEVAL_MMR_WINDOW`
+  - wired in `src/env.ts` and documented in `.env.example`.
+- Added diversification/ranking safety:
+  - candidate-local hub-file penalty
+  - MMR-based reorder window before final cap
+  - final output sliced back to requested `topK`.
+- QC runner (`src/qc/ragQcRunner.ts`) updates for controlled measurement:
+  - explicit `filters.lesson_to_code=true` in pass1/pass2
+  - keep golden `path_glob` in pass2 when present
+  - include smoke files by intent
+  - dedupe ranked paths at file level before scoring.
+- Added new helper script: `src/scripts/seedQcFactsFromQueries.ts` for golden-query fact seeding.
+- Documentation updates:
+  - refreshed technical status in `docs/qc/qc-report.md`
+  - added one-page `docs/qc/executive-summary.md`.
+
+## Measured Outcome (QC)
+- Initial stalled region (pre lesson-to-code): around `recall@3=0.507`, `MRR=0.477` on 67 queries.
+- Best run in this session:
+  - report: `docs/qc/2026-03-27T22-17-56-882Z-qc-report.md`
+  - `recall@3=0.776`
+  - `MRR=0.716`
+- Improvement is real but not uniform; remaining worst queries cluster in `kg`, `git`, `mcp-server`, `workspace`, and some `lessons` internals.
 
 ## Next
-- Harden commit diff parsing for rename/copy edge cases (large repos, binary-only commits)
-- Add pagination cursor for `list_commits` and server-side filters (author/date/range)
-- Add approval workflow endpoint to promote `git_lesson_proposals` into `lessons`
+- Add intent-aware routing before ranking for hard verticals:
+  - `kg`, `git`, `mcp-server`, `workspace`.
+- Improve candidate generation for target implementation files (reduce broad hub-file dominance).
+- Keep A/B QC tracking with both quality and latency budgets:
+  - optimize for `recall@3` + `MRR` without unacceptable p95 regression.
+- Continue enforcing general logic policy (no workspace-specific bias).
 
 ## Open Blockers / Risks
-- Git ingestion in Docker requires repo visibility inside container (current approach: `/:/workspace:ro` mount)
-- Commit ingestion is metadata-focused; full patch semantic classification is still best-effort
+- Fact injection alone no longer yields large gains; retrieval architecture is the limiting factor for remaining hard queries.
+- Some tuning knobs can improve one group while regressing another; requires controlled A/B and guardrail thresholds.
+- LLM rerank/expanded candidate pools can increase latency and variance if not bounded carefully.

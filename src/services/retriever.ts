@@ -526,7 +526,7 @@ export async function searchCode({
     where += ` AND c.file_path NOT LIKE '%.test.ts' AND c.file_path NOT LIKE '%/__tests__/%'`;
   }
 
-  const wantsSmoke = Boolean(includeSmoke) || /(^|\/)src\/smoke\//.test(pg);
+  const wantsSmoke = Boolean(includeSmoke) || /(^|\/)src\/smoke\//.test(pg) || /\bsmoke\b/i.test(query);
   if (!wantsSmoke) {
     where += ` AND c.file_path NOT LIKE 'src/smoke/%'`;
   }

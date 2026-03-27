@@ -354,8 +354,10 @@ async function main() {
       const queryAnchors = deriveAnchorsFromQuery({ query: q.query, group });
       const groupPriors = qcPreferPathsByGroup(group);
       const preferPaths = Array.from(new Set([...queryAnchors, ...groupPriors]));
+      const isSmokeQuery = /smoke/i.test(String(q.id ?? '')) || /smoke/i.test(String(q.query ?? ''));
       const filtersPass1: Record<string, unknown> = {};
       if (q.path_glob) filtersPass1.path_glob = q.path_glob;
+      if (isSmokeQuery) filtersPass1.include_smoke = true;
       filtersPass1.lesson_to_code = true;
       if (kgAssist) filtersPass1.kg_assist = true;
       if (rerankMode !== 'off') filtersPass1.rerank_mode = rerankMode;
@@ -378,10 +380,14 @@ async function main() {
       const filtersPass2: Record<string, unknown> = {};
       if (hardPass2.pathGlob) {
         filtersPass2.path_glob = hardPass2.pathGlob;
+      } else if (q.path_glob) {
+        // Keep golden-set scope as primary constraint for fair and stable evaluation.
+        filtersPass2.path_glob = q.path_glob;
       } else if (anchorPathGlob) {
         filtersPass2.path_glob = anchorPathGlob;
       }
       if (preferPaths.length) filtersPass2.prefer_paths = preferPaths;
+      if (isSmokeQuery) filtersPass2.include_smoke = true;
       filtersPass2.lesson_to_code = true;
       if (kgAssist) filtersPass2.kg_assist = true;
       if (rerankMode !== 'off') filtersPass2.rerank_mode = rerankMode;
@@ -428,7 +434,7 @@ async function main() {
         query: q.query,
         matches: preSorted,
       });
-      const rankedPaths = matches.map(m => normalizePath(String(m.path ?? '')));
+      const rankedPaths = Array.from(new Set(matches.map(m => normalizePath(String(m.path ?? '')))));
       const ranks = target
         .map(tf => rankedPaths.findIndex(p => p === tf))
         .map(i => (i >= 0 ? i + 1 : 0));
@@ -450,7 +456,7 @@ async function main() {
         top_paths: rankedPaths.slice(0, 10),
         qc_prefer_paths: preferPaths,
         qc_query_anchors: queryAnchors,
-        qc_anchor_path_glob: (hardPass2.pathGlob ?? anchorPathGlob) ?? null,
+        qc_anchor_path_glob: (hardPass2.pathGlob ?? q.path_glob ?? anchorPathGlob) ?? null,
         qc_pass2_limit: pass2Limit,
         qc_pass1_candidates: matchesRaw1.length,
         qc_pass2_candidates: matchesRaw2.length,

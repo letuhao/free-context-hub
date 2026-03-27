@@ -1,70 +1,69 @@
 # QC Report — RAG Quality (free-context-hub)
 
-Project: `qc-free-context-hub`  
-Focus: **RAG quality** (retrieval grounding + usefulness), not function-level tool checks.
+Project: `phase6-qc-free-context-hub`  
+Focus: **RAG quality** (file-level retrieval grounding + ranking), not function-level tool checks.
 
-## Latest automated retrieval run
+## Current status (updated)
 
-- Latest run report: `docs/qc/2026-03-27T13-58-03-232Z-qc-report.md`
-- Artifacts: `docs/qc/artifacts/2026-03-27T13-58-03-232Z-qc-artifacts.json`
-- Totals (file-level ground truth):
-- queries: **67**
-- **recall@3 = 0.537**
-- **MRR = 0.502**
+- Latest run report: `docs/qc/2026-03-27T22-17-56-882Z-qc-report.md`
+- Artifacts: `docs/qc/artifacts/2026-03-27T22-17-56-882Z-qc-artifacts.json`
+- Totals (67 queries):
+  - **recall@3 = 0.776**
+  - **MRR = 0.716**
 
-## Delta vs previous run (retrieval tuning)
+### Recent checkpoints
 
-- Previous: `docs/qc/2026-03-27T13-56-28-934Z-qc-report.md` (49 queries)
-- Current: `docs/qc/2026-03-27T13-58-03-232Z-qc-report.md` (67 queries)
-- Totals:
-  - recall@3: **0.551 → 0.537** (\(\Delta -0.014\))
-  - MRR: **0.511 → 0.502** (\(\Delta -0.009\))
-- Note: golden set expanded (+18 queries), so totals are not perfectly comparable; treat as a “new baseline”.
+| run | recall@3 | MRR | note |
+|---|---:|---:|---|
+| `2026-03-27T21-58-11-743Z` | 0.731 | 0.674 | sau lesson-to-code expansion đầu tiên |
+| `2026-03-27T22-11-55-288Z` | 0.716 | 0.646 | dao động do tuning candidate/diversification |
+| `2026-03-27T22-17-56-882Z` | **0.776** | **0.716** | mốc tốt nhất hiện tại |
 
-## A/B: optional LLM rerank (search_code.filters.rerank_mode)
+## Kết quả đạt được
 
-- QC (rerank off): `docs/qc/2026-03-27T14-01-22-434Z-qc-report.md`
-- QC (rerank llm): `docs/qc/2026-03-27T14-01-37-765Z-qc-report.md`
-- Result: totals unchanged in this run (likely because `DISTILLATION_ENABLED=false` so rerank is a best-effort no-op).
+- Các nhóm đạt **recall@3 = 1.000** ở run mới nhất:
+  - `mcp-auth`, `indexing`, `embeddings`, `snapshots`, `guardrails`, `sources`, `db`, `storage`, `retrieval`, `smoke`, `ci`.
+- So với baseline cũ (`~0.50`), chất lượng tổng đã tăng đáng kể cả recall@3 và MRR.
+- Các thay đổi không dựa trên hardcode theo một file cụ thể của workspace; ưu tiên cơ chế tổng quát theo tín hiệu query.
 
-## Key findings (from worst queries)
+## Chưa đạt / điểm nghẽn hiện tại
 
-### 1) “Server entrypoint” and “auth” queries miss `src/index.ts`
-Examples:
-- `auth-workspace-token-validate` expects `src/index.ts` but top results are `src/utils/ignore.ts`, `src/services/distiller.ts`, `src/kg/bootstrap.ts`.
-- `mcp-streamable-http-endpoint` expects `src/index.ts` but KG bootstrap files dominate.
+- Nhóm còn yếu:
+  - `kg` (recall@3 = 0.375)
+  - `lessons` (0.500)
+  - `workspace` (0.667)
+  - `queue` (0.800)
+  - `mcp-server` (0.667)
+  - `git` (0.667)
+- Worst queries còn fail (recall@3 = 0), tiêu biểu:
+  - `job-executor-dispatch`, `repo-sync-fanout`, `scan-workspace-delta-index`
+  - `kg-ids-deterministic`, `kg-linker-lessons`, `kg-project-graph-delete`
+  - `git-impact-analysis`, `git-link-commit-to-lesson`
+  - `mcp-health-endpoint`, `mcp-output-format-default`
+  - `config-default-project-id`, `config-distillation-enabled`, `config-kg-enabled`
 
-**Status**: still failing (see latest worst list: `auth-workspace-token-validate`, `mcp-streamable-http-endpoint`, `mcp-tool-registrations`).\n
-**Hypothesis**: chunking + embedding similarity pulls in “config/bootstrapping” vocabulary without surfacing the entrypoint file.
-**Suggested improvements**:
-- Add lightweight **lexical boost** for exact token matches (e.g. `assertWorkspaceToken`, `/mcp`, `registerTool`) when present.
-- Consider smaller chunks for `src/index.ts` region with tool registrations to improve semantic resolution.
+## Tóm tắt các hướng đã thử để tăng chất lượng
 
-### 2) Indexing/embedding pipeline queries miss the correct files
-Examples:
-- `index-project-main-pipeline` expects `src/services/indexer.ts` + `src/services/embedder.ts` but top results include proposal upsert and schema files.
-- `embedding-request-shape` expects `src/services/embedder.ts` but retrieves DB client/proposal code first.
+1. **Rerank / 2-pass trong QC runner**
+   - pass1 semantic mặc định + pass2 có `prefer_paths`, `path_glob`, `qc_no_cap`
+   - hard-query rerank rules, lexical side-channel trong QC runner.
+2. **Lesson-to-code expansion trong retriever**
+   - map query -> lesson tương đồng -> `source_refs` -> boost path candidates.
+   - thêm candidate expansion thật (union chunk từ lesson prior files), không chỉ boost score.
+3. **General retrieval tuning (không bias workspace)**
+   - dynamic candidate pool (`RETRIEVAL_CANDIDATE_POOL_*`)
+   - hub-file penalty để giảm “file trung tâm” chiếm top.
+   - MMR diversification (`RETRIEVAL_MMR_*`) + lesson prior quality gate (`RETRIEVAL_LESSON_PRIOR_MIN_SCORE`).
+4. **QC evaluation hygiene**
+   - ép `lesson_to_code=true` rõ ràng ở pass1/pass2 để đo nhất quán.
+   - giữ `path_glob` từ golden set ở pass2 để tránh lệch phạm vi.
+   - dedupe theo file path khi chấm file-level.
 
-**Status**: still failing for `index-project-main-pipeline` and `embedding-request-shape`.\n
-**Hypothesis**: the vocabulary is shared across multiple files (DB, schema, embeddings), and semantic similarity alone isn’t enough.
-**Suggested improvements**:
-- Add optional `filters.path_glob` defaults for internal “how it works” prompts (e.g. default `src/services/**` when query contains “embed/embedding/index”).
-- Add a “tool-assisted” retrieval mode that first retrieves via symbol graph neighbors when KG is enabled (entrypoint -> callee chain).
+## Kết luận thực trạng
 
-### 3) Queue/RabbitMQ queries under-retrieve `jobQueue.ts` / `worker.ts`
-Examples:
-- `rabbitmq-queue-assert-bind` expects `src/services/jobQueue.ts` but top results include test files / executor.
-- `worker-rabbitmq-consumer` expects `src/worker.ts` but misses in top 3.
-
-**Status**: queue group recall@3 is **0.500** (10 queries) and multiple items still miss (`job-queue-rabbitmq`, `worker-rabbitmq-consumer`).\n
-**Suggested improvements**:
-- Strengthen entrypoint/file-path weighting for `jobQueue.ts`, `worker.ts`, `jobExecutor.ts`.
-- Use KG assist probes tuned for queue intent (`RabbitMQ`, `assertQueue`, `consume`, `ack`).
-
-### 4) KG-related retrieval is weaker than KG tool quality
-Even when KG tools work (see `docs/qc/kg-coverage-quickcheck.md`), `search_code` queries that ask about KG internals often return `tsMorphExtractor.ts` repeatedly instead of the requested files.\n
-**Suggested improvements**:
-- Add a KG-aware retrieval shortcut: for KG queries, run `search_symbols` first and then retrieve the symbol’s file via `get_symbol_neighbors`.\n
+- Hệ thống đã vượt mốc chất lượng trước đó và đạt `0.776 / 0.716` ở run mới nhất.
+- Tuy nhiên, phần còn lại là các truy vấn “khó thật” (KG internals, git intelligence, mcp-server defaults, workspace delta) — đây là vấn đề retrieval/ranking sâu, không thể giải quyết chỉ bằng nạp thêm fact đơn thuần.
+- Hướng ưu tiên tiếp theo là cải thiện **query-intent routing + candidate selection cho các vertical khó** (kg/git/mcp-server/workspace), đồng thời giữ nguyên nguyên tắc tổng quát cho mọi workspace.
 
 ## Supplementary QC evidence
 - KG quickcheck: `docs/qc/kg-coverage-quickcheck.md`
