@@ -18,6 +18,7 @@ export type SearchCodeParams = {
   rerankMode?: 'off' | 'llm';
   lexicalBoost?: boolean;
   kgAssist?: boolean;
+  lessonToCode?: boolean;
   limit?: number;
   debug?: boolean;
   hybridMode?: 'off' | 'lexical';
@@ -121,7 +122,11 @@ function globToRegExp(glob: string): RegExp {
   return new RegExp(`^${finalRe}$`, 'i');
 }
 
-function pathPriorBoost(filePath: string, preferPaths: string[]): { boost: number; hits: string[] } {
+function pathPriorBoost(
+  filePath: string,
+  preferPaths: string[],
+  options?: { perHit?: number; cap?: number },
+): { boost: number; hits: string[] } {
   if (!preferPaths.length) return { boost: 0, hits: [] };
   const hits: string[] = [];
   for (const p of preferPaths) {
@@ -131,8 +136,10 @@ function pathPriorBoost(filePath: string, preferPaths: string[]): { boost: numbe
       // ignore invalid globs
     }
   }
+  const perHit = options?.perHit ?? 0.1;
+  const cap = options?.cap ?? 0.2;
   // Cap the contribution to keep scores stable.
-  const boost = Math.min(0.2, hits.length * 0.1);
+  const boost = Math.min(cap, hits.length * perHit);
   return { boost, hits };
 }
 
@@ -153,6 +160,106 @@ function inferIntentPriors(query: string): string[] {
   return Array.from(new Set(priors));
 }
 
+function normalizeSourceRefToRepoPath(ref: string): string | undefined {
+  let s = String(ref ?? '').trim();
+  if (!s) return undefined;
+  if (/^git:/i.test(s)) return undefined;
+
+  s = s.replace(/\\/g, '/');
+  s = s.replace(/#L\d+(?:-L?\d+)?$/i, '').replace(/[?#].*$/, '');
+
+  if (/^https?:\/\//i.test(s)) {
+    try {
+      const u = new URL(s);
+      s = decodeURIComponent(u.pathname || '');
+    } catch {
+      // best-effort fallback below
+    }
+  }
+
+  s = s.replace(/^\/+/, '').replace(/^\.\//, '');
+  const direct = /^(src|migrations)\//i.test(s) ? s : '';
+  if (!direct) {
+    const m = s.match(/(?:^|\/)((?:src|migrations)\/[^#?\s]+)/i);
+    s = m?.[1] ?? '';
+  }
+
+  if (!s || !s.includes('/')) return undefined;
+  return s;
+}
+
+function allowsBySearchFilters(params: {
+  filePath: string;
+  pathGlob?: string;
+  includeTests: boolean;
+  includeSmoke: boolean;
+}): boolean {
+  const p = params.filePath;
+  if (!params.includeTests && (p.endsWith('.test.ts') || p.includes('/__tests__/'))) return false;
+  if (!params.includeSmoke && p.startsWith('src/smoke/')) return false;
+  const g = (params.pathGlob ?? '').trim();
+  if (!g) return true;
+  try {
+    return globToRegExp(g).test(p);
+  } catch {
+    return true;
+  }
+}
+
+async function fetchLessonPathPriors(params: {
+  projectId: string;
+  vector: string;
+  pool: ReturnType<typeof getDbPool>;
+  pathGlob?: string;
+  includeTests: boolean;
+  includeSmoke: boolean;
+  lessonLimit: number;
+  maxPaths: number;
+  minScore: number;
+}): Promise<string[]> {
+  const res = await params.pool.query(
+    `SELECT *
+     FROM (
+       SELECT l.source_refs, GREATEST(0, 1 - (l.embedding <=> $2::vector)) AS score
+       FROM lessons l
+       WHERE l.project_id=$1
+         AND l.status NOT IN ('superseded', 'archived')
+         AND COALESCE(array_length(l.source_refs, 1), 0) > 0
+       ORDER BY l.embedding <=> $2::vector
+       LIMIT $3
+     ) x
+     WHERE x.score >= $4
+     ORDER BY x.score DESC`,
+    [params.projectId, params.vector, params.lessonLimit, params.minScore],
+  );
+
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const row of res.rows ?? []) {
+    const refs = Array.isArray((row as any).source_refs) ? ((row as any).source_refs as unknown[]) : [];
+    for (const raw of refs) {
+      if (typeof raw !== 'string') continue;
+      const p = normalizeSourceRefToRepoPath(raw);
+      if (!p) continue;
+      if (
+        !allowsBySearchFilters({
+          filePath: p,
+          pathGlob: params.pathGlob,
+          includeTests: params.includeTests,
+          includeSmoke: params.includeSmoke,
+        })
+      ) {
+        continue;
+      }
+      if (seen.has(p)) continue;
+      seen.add(p);
+      out.push(p);
+      if (out.length >= params.maxPaths) return out;
+    }
+  }
+  return out;
+}
+
 function lexicalScore(tokens: string[], haystack: string): number {
   if (!tokens.length) return 0;
   const s = haystack.toLowerCase();
@@ -161,6 +268,76 @@ function lexicalScore(tokens: string[], haystack: string): number {
     if (s.includes(t.toLowerCase())) hits += 1;
   }
   return hits / tokens.length; // 0..1
+}
+
+function candidatePoolSize(topK: number, env: ReturnType<typeof getEnv>): number {
+  const minPool = Math.max(topK, env.RETRIEVAL_CANDIDATE_POOL_MIN);
+  const mulPool = Math.max(topK, topK * env.RETRIEVAL_CANDIDATE_POOL_MULTIPLIER);
+  const raw = Math.max(minPool, mulPool);
+  return Math.max(topK, Math.min(env.RETRIEVAL_CANDIDATE_POOL_MAX, raw));
+}
+
+function hubFilePenalty(chunkCountForFile: number): number {
+  if (chunkCountForFile <= 2) return 0;
+  // Candidate-local penalty for overly broad hub files.
+  return Math.min(0.18, Math.log2(chunkCountForFile) * 0.05);
+}
+
+function tokenizeForMmr(path: string, snippet: string): Set<string> {
+  const src = `${path} ${snippet}`.toLowerCase();
+  const toks = src.match(/[a-z0-9_]{4,}/g) ?? [];
+  return new Set(toks.slice(0, 200));
+}
+
+function jaccard(a: Set<string>, b: Set<string>): number {
+  if (!a.size || !b.size) return 0;
+  let inter = 0;
+  for (const x of a) if (b.has(x)) inter += 1;
+  const union = a.size + b.size - inter;
+  return union > 0 ? inter / union : 0;
+}
+
+function mmrReorder(
+  input: SearchCodeResult['matches'],
+  lambda: number,
+  windowSize: number,
+): SearchCodeResult['matches'] {
+  if (input.length <= 2) return input;
+  const n = Math.min(input.length, Math.max(2, windowSize));
+  const head = input.slice(0, n);
+  const tail = input.slice(n);
+
+  const feats = head.map(h => tokenizeForMmr(h.path, h.snippet));
+  const maxScore = Math.max(...head.map(h => h.score), 1e-9);
+  const rel = head.map(h => h.score / maxScore);
+
+  const remaining = new Set<number>(head.map((_, i) => i));
+  const selected: number[] = [];
+
+  while (remaining.size) {
+    let bestIdx = -1;
+    let bestVal = -Infinity;
+    for (const i of remaining) {
+      let maxSim = 0;
+      let sameFile = 0;
+      for (const j of selected) {
+        if (head[i]?.path === head[j]?.path) sameFile = 1;
+        const sim = jaccard(feats[i]!, feats[j]!);
+        if (sim > maxSim) maxSim = sim;
+      }
+      const novelty = 1 - Math.max(maxSim, sameFile);
+      const mmr = lambda * rel[i]! + (1 - lambda) * novelty;
+      if (mmr > bestVal) {
+        bestVal = mmr;
+        bestIdx = i;
+      }
+    }
+    if (bestIdx < 0) break;
+    selected.push(bestIdx);
+    remaining.delete(bestIdx);
+  }
+
+  return [...selected.map(i => head[i]!), ...tail];
 }
 
 function escapeLikePattern(input: string): string {
@@ -281,13 +458,32 @@ export async function searchCode({
   rerankMode,
   lexicalBoost,
   kgAssist,
+  lessonToCode,
   limit,
   debug,
   hybridMode,
 }: SearchCodeParams): Promise<SearchCodeResult> {
   const env = getEnv();
+  const pool = getDbPool();
   const cacheVersion = await getProjectCacheVersion(projectId).catch(() => 1);
+  const useLessonToCode = lessonToCode !== false;
+  let lessonsSig = '0';
+  if (useLessonToCode) {
+    try {
+      const sres = await pool.query(
+        `SELECT COALESCE(EXTRACT(EPOCH FROM MAX(updated_at))::bigint, 0) AS ts
+         FROM lessons
+         WHERE project_id=$1
+           AND status NOT IN ('superseded', 'archived');`,
+        [projectId],
+      );
+      lessonsSig = String((sres.rows?.[0] as any)?.ts ?? '0');
+    } catch {
+      lessonsSig = '0';
+    }
+  }
   const topK = limit ?? 10;
+  const poolK = candidatePoolSize(topK, env);
 
   const retrievalCacheKey = redisKey([
     'search_code',
@@ -298,9 +494,12 @@ export async function searchCode({
     `it=${Boolean(includeTests)}`,
     `is=${Boolean(includeSmoke)}`,
     `kg=${Boolean(kgAssist)}`,
+    `l2c=${useLessonToCode}`,
+    `lsig=${lessonsSig}`,
     `lex=${lexicalBoost !== false}`,
     `hybrid=${hybridMode ?? 'off'}`,
     `k=${topK}`,
+    `poolK=${poolK}`,
   ]);
 
   if (!debug) {
@@ -310,7 +509,6 @@ export async function searchCode({
     }
   }
 
-  const pool = getDbPool();
   const vec = (await embedTexts([query]))[0];
   if (!vec) {
     return { matches: [], explanations: [] };
@@ -341,7 +539,7 @@ export async function searchCode({
   }
 
   const limitParamIndex = pathGlob && pathGlob.trim().length ? 4 : 3;
-  params.push(topK); // becomes $3 (no pathGlob) OR $4 (with pathGlob)
+  params.push(poolK); // becomes $3 (no pathGlob) OR $4 (with pathGlob)
 
   const sql = `
     SELECT
@@ -433,7 +631,46 @@ export async function searchCode({
 
   const explicitPriors = (preferPaths ?? []).filter(p => typeof p === 'string' && p.trim().length);
   const intentPriors = inferIntentPriors(query);
-  const priors = Array.from(new Set([...explicitPriors, ...intentPriors])).slice(0, 16);
+  const lessonPriors = useLessonToCode
+    ? await fetchLessonPathPriors({
+        projectId,
+        vector,
+        pool,
+        pathGlob,
+        includeTests: wantsTests,
+        includeSmoke: wantsSmoke,
+        lessonLimit: 8,
+        maxPaths: 12,
+        minScore: env.RETRIEVAL_LESSON_PRIOR_MIN_SCORE,
+      }).catch(() => [])
+    : [];
+  // True expansion: pull best chunk per lesson-prior file into candidate pool.
+  let lessonRows: any[] = [];
+  if (useLessonToCode && lessonPriors.length) {
+    try {
+      const expansionLimit = Math.max(1, Math.min(24, lessonPriors.length));
+      const expanded = await pool.query(
+        `SELECT * FROM (
+           SELECT DISTINCT ON (c.file_path)
+             c.file_path,
+             c.start_line,
+             c.end_line,
+             c.content,
+             GREATEST(0, 1 - (c.embedding <=> $2::vector)) AS score
+           FROM chunks c
+           WHERE c.project_id = $1
+             AND c.file_path = ANY($3::text[])
+           ORDER BY c.file_path, c.embedding <=> $2::vector
+         ) x
+         ORDER BY x.score DESC
+         LIMIT $4;`,
+        [projectId, vector, lessonPriors, expansionLimit],
+      );
+      lessonRows = expanded.rows ?? [];
+    } catch {
+      lessonRows = [];
+    }
+  }
   const toMatch = (r: any): SearchCodeResult['matches'][number] => {
     const filePath = String(r.file_path);
     const content = String(r.content);
@@ -444,8 +681,10 @@ export async function searchCode({
     const lexBody = tokens.length ? lexicalScore(tokens, content) : 0;
     const lex = Math.min(1, 0.75 * lexPath + 0.25 * lexBody);
     const kg = kgFiles.size && kgFiles.has(filePath) ? 0.25 : 0;
-    const prior = pathPriorBoost(filePath, priors);
-    const boosted = Math.min(1, sem + 0.25 * lex + kg + prior.boost);
+    const priorExplicit = pathPriorBoost(filePath, explicitPriors, { perHit: 0.1, cap: 0.2 });
+    const priorLesson = pathPriorBoost(filePath, lessonPriors, { perHit: 0.18, cap: 0.54 });
+    const priorIntent = pathPriorBoost(filePath, intentPriors, { perHit: 0.08, cap: 0.16 });
+    const boosted = Math.min(1, sem + 0.25 * lex + kg + priorExplicit.boost + priorLesson.boost + priorIntent.boost);
     return {
       path: filePath,
       start_line: Number(r.start_line),
@@ -457,17 +696,29 @@ export async function searchCode({
   };
   const semanticMatches: SearchCodeResult['matches'] = (res.rows ?? []).map(toMatch);
   const lexicalMatches: SearchCodeResult['matches'] = lexicalRows.map(toMatch);
-  const matches: SearchCodeResult['matches'] = dedupeMatches([...semanticMatches, ...lexicalMatches]);
+  const lessonExpandedMatches: SearchCodeResult['matches'] = lessonRows.map(toMatch);
+  const matches: SearchCodeResult['matches'] = dedupeMatches([...semanticMatches, ...lexicalMatches, ...lessonExpandedMatches]);
+  const chunkFreq = new Map<string, number>();
+  for (const m of matches) {
+    chunkFreq.set(m.path, (chunkFreq.get(m.path) ?? 0) + 1);
+  }
+  const debiasedMatches: SearchCodeResult['matches'] = matches.map(m => {
+    const penalty = hubFilePenalty(chunkFreq.get(m.path) ?? 1);
+    return { ...m, score: Math.max(0, m.score - penalty) };
+  });
   const hybridLatencyMs = Date.now() - hybridStarted;
 
   // Re-rank after boosting.
-  matches.sort((a, b) => b.score - a.score);
+  debiasedMatches.sort((a, b) => b.score - a.score);
+  const mmrLambda = Math.min(1, Math.max(0, env.RETRIEVAL_MMR_LAMBDA));
+  const mmrWindow = Math.max(2, env.RETRIEVAL_MMR_WINDOW);
+  const mmrMatches = mmrReorder(debiasedMatches, mmrLambda, mmrWindow);
 
   // File-level aggregation rerank (stability + reduce repeated-chunk spam).
   // - Compute per-file score from best chunk + lexical(path) and keep at most N chunks per file.
   const maxPerFile = qcNoCap ? Number.MAX_SAFE_INTEGER : 2;
   const perFile: Record<string, { best: number; chunks: SearchCodeResult['matches'] }> = {};
-  for (const m of matches) {
+  for (const m of mmrMatches) {
     const key = m.path;
     const entry = (perFile[key] ??= { best: 0, chunks: [] });
     entry.best = Math.max(entry.best, m.score);
@@ -483,7 +734,7 @@ export async function searchCode({
   const fileRank = new Map<string, number>();
   fileScores.forEach((f, i) => fileRank.set(f.path, i));
 
-  matches.sort((a, b) => {
+  mmrMatches.sort((a, b) => {
     const ra = fileRank.get(a.path) ?? Number.MAX_SAFE_INTEGER;
     const rb = fileRank.get(b.path) ?? Number.MAX_SAFE_INTEGER;
     if (ra !== rb) return ra - rb;
@@ -493,7 +744,7 @@ export async function searchCode({
   // Enforce per-file cap.
   const seenPerFile = new Map<string, number>();
   const capped: typeof matches = [];
-  for (const m of matches) {
+  for (const m of mmrMatches) {
     const n = (seenPerFile.get(m.path) ?? 0) + 1;
     seenPerFile.set(m.path, n);
     if (n <= maxPerFile) capped.push(m);
@@ -542,13 +793,21 @@ export async function searchCode({
     explanations.push(`includeTests=${Boolean(includeTests)}`);
     explanations.push(`includeSmoke=${Boolean(includeSmoke)}`);
     if (explicitPriors.length) explanations.push(`preferPaths=${explicitPriors.join(',')}`);
+    if (lessonPriors.length) explanations.push(`lessonToCodePriors=${lessonPriors.join(',')}`);
+    explanations.push('priorBoostWeights=explicit(0.1/0.2),lesson(0.18/0.54),intent(0.08/0.16)');
+    explanations.push(`lessonToCode=${useLessonToCode} lessonsSig=${lessonsSig}`);
     if (intentPriors.length) explanations.push(`intentPriors=${intentPriors.join(',')}`);
     explanations.push(`lexicalBoost=${lexicalBoost !== false}`);
     explanations.push(`hybridEnabled=${hybridEnabled}`);
     explanations.push(`hybridMode=${hybridMode ?? 'off'}`);
     explanations.push(`hybridLexicalLimit=${lexicalLimit}`);
+    explanations.push(`candidatePoolK=${poolK}`);
     explanations.push(`lexicalCandidates=${lexicalMatches.length}`);
+    explanations.push(`lessonExpansionCandidates=${lessonExpandedMatches.length}`);
+    explanations.push(`lessonPriorMinScore=${env.RETRIEVAL_LESSON_PRIOR_MIN_SCORE}`);
     explanations.push(`mergedCandidates=${matches.length}`);
+    explanations.push('hubPenaltyMax=0.18');
+    explanations.push(`mmrLambda=${mmrLambda} mmrWindow=${mmrWindow}`);
     explanations.push(`hybridLatencyMs=${hybridLatencyMs}`);
     explanations.push(`kgAssist=${Boolean(kgAssist)} kgFiles=${kgFiles.size}`);
     explanations.push(`fileRerank=maxPerFile:${maxPerFile} files:${fileScores.length}`);
@@ -556,7 +815,7 @@ export async function searchCode({
     explanations.push(`rerankMode=${mode}`);
   }
 
-  const result = { matches: reranked, explanations };
+  const result = { matches: reranked.slice(0, topK), explanations };
   if (!debug) {
     await redisSetJson(retrievalCacheKey, result, env.REDIS_RETRIEVAL_TTL_SECONDS).catch(() => {});
   }

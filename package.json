@@ -27,6 +27,7 @@
     "verify:phase6:qc:builder-memory:compose": "docker compose exec -T -w /app mcp env QC_VERIFY_REPO_ROOT=/workspace npm run verify:phase6:qc:builder-memory",
     "enqueue:knowledge.memory.build": "tsx src/scripts/enqueueKnowledgeMemoryBuild.ts",
     "enqueue:knowledge.memory.build:compose": "docker compose exec -T -w /app mcp env QC_VERIFY_REPO_ROOT=/workspace npm run enqueue:knowledge.memory.build",
+    "seed:qc-worst15-lessons": "tsx src/scripts/seedQcWorst15Lessons.ts",
     "verify:phase6:audit": "tsx src/scripts/phase6AuditCorrelation.ts",
     "verify:phase6:lesson-probe": "tsx src/scripts/phase6LessonProbe.ts",
     "qc:rag:phase6": "tsx src/scripts/qcRagPhase6.ts",

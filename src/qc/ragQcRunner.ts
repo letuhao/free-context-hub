@@ -30,13 +30,24 @@ function extractJson(result: any) {
   }
 }
 
-async function callTool(client: Client, name: string, args: Record<string, unknown>) {
+function resolveMcpToolTimeoutMs(qcRerankMode: 'off' | 'llm'): number {
+  const raw = process.env.QC_MCP_TOOL_TIMEOUT_MS?.trim();
+  if (raw) {
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 5000) return n;
+  }
+  // Default SDK timeout is 60s; LLM rerank often exceeds that.
+  return qcRerankMode === 'llm' ? 180_000 : 60_000;
+}
+
+async function callTool(client: Client, name: string, args: Record<string, unknown>, timeoutMs: number) {
   const out = await client.request(
     {
       method: 'tools/call',
       params: { name, arguments: args },
     },
     CallToolResultSchema,
+    { timeout: timeoutMs },
   );
   return extractJson(out);
 }
@@ -321,6 +332,7 @@ async function main() {
       .map(s => s.trim())
       .filter(Boolean),
   );
+  const mcpToolTimeoutMs = resolveMcpToolTimeoutMs(qcRerankMode);
 
   const raw = await fs.readFile(path.resolve(queriesPath), 'utf8');
   const golden = JSON.parse(raw) as GoldenSet;
@@ -344,16 +356,22 @@ async function main() {
       const preferPaths = Array.from(new Set([...queryAnchors, ...groupPriors]));
       const filtersPass1: Record<string, unknown> = {};
       if (q.path_glob) filtersPass1.path_glob = q.path_glob;
+      filtersPass1.lesson_to_code = true;
       if (kgAssist) filtersPass1.kg_assist = true;
       if (rerankMode !== 'off') filtersPass1.rerank_mode = rerankMode;
-      const outPass1 = await callTool(client, 'search_code', {
-        ...tokenArgs,
-        project_id: projectId,
-        query: q.query,
-        filters: Object.keys(filtersPass1).length ? filtersPass1 : undefined,
-        limit: 10,
-        output_format: 'json_only',
-      });
+      const outPass1 = await callTool(
+        client,
+        'search_code',
+        {
+          ...tokenArgs,
+          project_id: projectId,
+          query: q.query,
+          filters: Object.keys(filtersPass1).length ? filtersPass1 : undefined,
+          limit: 10,
+          output_format: 'json_only',
+        },
+        mcpToolTimeoutMs,
+      );
 
       const anchorPathGlob = inferAnchorPathGlob({ group, query: q.query });
       const hardPass2 = qcHardQueryPass2Config(String(q.id ?? ''));
@@ -364,6 +382,7 @@ async function main() {
         filtersPass2.path_glob = anchorPathGlob;
       }
       if (preferPaths.length) filtersPass2.prefer_paths = preferPaths;
+      filtersPass2.lesson_to_code = true;
       if (kgAssist) filtersPass2.kg_assist = true;
       if (rerankMode !== 'off') filtersPass2.rerank_mode = rerankMode;
       // QC-only: explicitly remove per-file cap to test candidate bottleneck hypothesis.
@@ -371,14 +390,19 @@ async function main() {
       const pass2Limit = hardPass2.limit ?? 10;
       const outPass2 =
         Object.keys(filtersPass2).length > 0
-          ? await callTool(client, 'search_code', {
-              ...tokenArgs,
-              project_id: projectId,
-              query: q.query,
-              filters: filtersPass2,
-              limit: pass2Limit,
-              output_format: 'json_only',
-            })
+          ? await callTool(
+              client,
+              'search_code',
+              {
+                ...tokenArgs,
+                project_id: projectId,
+                query: q.query,
+                filters: filtersPass2,
+                limit: pass2Limit,
+                output_format: 'json_only',
+              },
+              mcpToolTimeoutMs,
+            )
           : { matches: [] };
 
       const matchesRaw1 = (outPass1.matches ?? []) as Array<{ path: string; snippet: string }>;
@@ -464,6 +488,9 @@ async function main() {
     project_id: projectId,
     server_url: serverUrl,
     golden_version: golden.version,
+    qc_rerank_mode: qcRerankMode,
+    qc_rerank_groups: Array.from(qcRerankGroups),
+    qc_mcp_tool_timeout_ms: mcpToolTimeoutMs,
     totals: {
       n: results.length,
       recall_at_3: results.reduce((a, r) => a + r.recall_at_3, 0) / Math.max(1, results.length),
@@ -483,6 +510,7 @@ async function main() {
   mdLines.push(`- project_id: \`${projectId}\``);
   mdLines.push(`- qc_rerank_mode: \`${qcRerankMode}\``);
   mdLines.push(`- qc_rerank_groups: \`${Array.from(qcRerankGroups).join(',')}\``);
+  mdLines.push(`- qc_mcp_tool_timeout_ms: \`${mcpToolTimeoutMs}\``);
   mdLines.push(`- queries: \`${results.length}\``);
   mdLines.push(`- recall@3: \`${artifact.totals.recall_at_3.toFixed(3)}\``);
   mdLines.push(`- MRR: \`${artifact.totals.mrr.toFixed(3)}\``);
@@ -537,6 +565,7 @@ async function main() {
         golden_version: golden.version,
         qc_rerank_mode: qcRerankMode,
         qc_rerank_groups: Array.from(qcRerankGroups),
+        qc_mcp_tool_timeout_ms: mcpToolTimeoutMs,
       }),
     ],
   );

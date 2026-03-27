@@ -125,6 +125,18 @@ const EnvSchema = z.object({
 
   /** search_code: substring snippet length in results. */
   RETRIEVAL_SNIPPET_MAX_CHARS: z.coerce.number().int().positive().optional().default(400),
+  /** search_code: candidate pool size lower bound before ranking (higher = better recall, slower). */
+  RETRIEVAL_CANDIDATE_POOL_MIN: z.coerce.number().int().positive().optional().default(40),
+  /** search_code: candidate pool multiplier relative to requested topK. */
+  RETRIEVAL_CANDIDATE_POOL_MULTIPLIER: z.coerce.number().int().positive().optional().default(6),
+  /** search_code: hard cap for candidate pool to bound latency/cost. */
+  RETRIEVAL_CANDIDATE_POOL_MAX: z.coerce.number().int().positive().optional().default(200),
+  /** search_code: minimum semantic score for lessons used as source_ref priors. */
+  RETRIEVAL_LESSON_PRIOR_MIN_SCORE: z.coerce.number().min(0).max(1).optional().default(0.62),
+  /** search_code: MMR trade-off between relevance (1.0) and diversity (0.0). */
+  RETRIEVAL_MMR_LAMBDA: z.coerce.number().min(0).max(1).optional().default(0.82),
+  /** search_code: number of top candidates to apply MMR diversification on. */
+  RETRIEVAL_MMR_WINDOW: z.coerce.number().int().positive().optional().default(80),
   /** LLM rerank JSON completion budget. */
   RERANK_LLM_MAX_TOKENS: z.coerce.number().int().positive().optional().default(250),
 

@@ -734,6 +734,10 @@ function createMcpToolsServer() {
               .describe('QC-only debug flag: disable per-file cap in retriever ranking (not for normal production usage).'),
             lexical_boost: z.boolean().optional().describe('When true, apply lightweight lexical boosting (default: true).'),
             kg_assist: z.boolean().optional().describe('When true and KG_ENABLED=true, use KG symbol search to boost relevant files (default: false).'),
+            lesson_to_code: z
+              .boolean()
+              .optional()
+              .describe('When true, expand query via semantically similar lesson source_refs and boost those code paths (default: true).'),
             rerank_mode: z
               .enum(['off', 'llm'])
               .optional()
@@ -776,6 +780,7 @@ function createMcpToolsServer() {
         rerankMode: filters?.rerank_mode,
         lexicalBoost: filters?.lexical_boost,
         kgAssist: filters?.kg_assist,
+        lessonToCode: filters?.lesson_to_code,
         hybridMode: filters?.hybrid_mode,
         limit,
         debug,
