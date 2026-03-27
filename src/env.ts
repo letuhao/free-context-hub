@@ -81,9 +81,20 @@ const EnvSchema = z.object({
 
   // Repo/workspace source modes.
   REPO_CACHE_ROOT: z.string().min(1).optional().default('/data/repos'),
+  SOURCE_STORAGE_MODE: z.enum(['local', 's3', 'hybrid']).optional().default('local'),
   WORKSPACE_SCAN_ENABLED: z
     .preprocess(v => parseBooleanEnv(v), z.boolean().optional())
     .default(false),
+
+  // S3-compatible object storage (used by source artifacts in s3/hybrid mode).
+  S3_ENDPOINT: z.string().optional(),
+  S3_REGION: z.string().optional().default('us-east-1'),
+  S3_BUCKET: z.string().optional(),
+  S3_ACCESS_KEY_ID: z.string().optional(),
+  S3_SECRET_ACCESS_KEY: z.string().optional(),
+  S3_FORCE_PATH_STYLE: z
+    .preprocess(v => parseBooleanEnv(v), z.boolean().optional())
+    .default(true),
 }).superRefine((val, ctx) => {
   if (val.MCP_AUTH_ENABLED && (!val.CONTEXT_HUB_WORKSPACE_TOKEN || val.CONTEXT_HUB_WORKSPACE_TOKEN.length === 0)) {
     ctx.addIssue({
@@ -127,6 +138,14 @@ const EnvSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ['RABBITMQ_URL'],
       message: 'RABBITMQ_URL is required when QUEUE_ENABLED=true and QUEUE_BACKEND=rabbitmq',
+    });
+  }
+  if ((val.SOURCE_STORAGE_MODE === 's3' || val.SOURCE_STORAGE_MODE === 'hybrid')
+    && (!val.S3_ENDPOINT || !val.S3_BUCKET || !val.S3_ACCESS_KEY_ID || !val.S3_SECRET_ACCESS_KEY)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['SOURCE_STORAGE_MODE'],
+      message: 'S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY are required when SOURCE_STORAGE_MODE is s3/hybrid',
     });
   }
 });

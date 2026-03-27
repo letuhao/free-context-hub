@@ -4,6 +4,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 import { getDbPool } from '../db/client.js';
+import { materializeRepoFromS3, syncSourceArtifactToS3 } from './sourceArtifacts.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -57,15 +58,24 @@ export async function prepareRepo(params: {
   cacheRoot: string;
   ref?: string;
   depth?: number;
+  sourceStorageMode?: 'local' | 's3' | 'hybrid';
 }): Promise<{
   status: 'ok' | 'error';
   project_id: string;
   repo_root: string;
   resolved_ref?: string;
   last_sync_commit?: string;
+  source_storage_mode?: 'local' | 's3' | 'hybrid';
+  s3_sync?: {
+    uploaded: boolean;
+    artifact_key?: string;
+    metadata_key?: string;
+    warning?: string;
+  };
   error?: string;
 }> {
   const ref = (params.ref ?? 'main').trim() || 'main';
+  const sourceStorageMode = params.sourceStorageMode ?? 'local';
   const safeProject = params.projectId.replace(/[^\w.-]+/g, '_');
   const repoRoot = path.resolve(params.cacheRoot, safeProject);
   try {
@@ -80,12 +90,20 @@ export async function prepareRepo(params: {
     }
 
     if (!isExisting) {
-      const parent = path.dirname(repoRoot);
-      await fs.mkdir(parent, { recursive: true });
-      const cloneArgs = ['clone'];
-      if (params.depth && params.depth > 0) cloneArgs.push(`--depth=${Math.trunc(params.depth)}`);
-      cloneArgs.push(params.gitUrl, repoRoot);
-      await execFileAsync('git', cloneArgs, { maxBuffer: 12 * 1024 * 1024 });
+      const restored = await materializeRepoFromS3({
+        projectId: params.projectId,
+        ref,
+        repoRoot,
+        mode: sourceStorageMode,
+      });
+      if (!restored.restored) {
+        const parent = path.dirname(repoRoot);
+        await fs.mkdir(parent, { recursive: true });
+        const cloneArgs = ['clone'];
+        if (params.depth && params.depth > 0) cloneArgs.push(`--depth=${Math.trunc(params.depth)}`);
+        cloneArgs.push(params.gitUrl, repoRoot);
+        await execFileAsync('git', cloneArgs, { maxBuffer: 12 * 1024 * 1024 });
+      }
     } else {
       await runGit(repoRoot, ['remote', 'set-url', 'origin', params.gitUrl]);
       await runGit(repoRoot, ['fetch', '--all', '--tags']);
@@ -94,6 +112,13 @@ export async function prepareRepo(params: {
     await runGit(repoRoot, ['checkout', ref]);
     await runGit(repoRoot, ['pull', '--ff-only', 'origin', ref]).catch(() => {});
     const commit = (await runGit(repoRoot, ['rev-parse', 'HEAD'])).trim();
+    const s3Sync = await syncSourceArtifactToS3({
+      projectId: params.projectId,
+      ref,
+      commitSha: commit,
+      repoRoot,
+      mode: sourceStorageMode,
+    });
 
     await configureProjectSource({
       projectId: params.projectId,
@@ -110,12 +135,15 @@ export async function prepareRepo(params: {
       repo_root: repoRoot,
       resolved_ref: ref,
       last_sync_commit: commit || undefined,
+      source_storage_mode: sourceStorageMode,
+      s3_sync: s3Sync,
     };
   } catch (err) {
     return {
       status: 'error',
       project_id: params.projectId,
       repo_root: repoRoot,
+      source_storage_mode: sourceStorageMode,
       error: err instanceof Error ? err.message : String(err),
     };
   }

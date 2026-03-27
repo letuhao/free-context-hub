@@ -16,6 +16,7 @@
     "test": "tsx --test src/services/gitCommitFileParse.test.ts src/services/gitLessonProposalUpsert.test.ts",
     "smoke-test": "tsx src/smoke/smokeTest.ts",
     "bench:phase5": "tsx src/smoke/phase5ValidationBenchmark.ts",
+    "validate:phase5-worker": "tsx src/smoke/phase5WorkerValidation.ts",
     "distill-probe": "tsx src/smoke/distillProbe.ts"
   },
   "repository": {
@@ -30,6 +31,7 @@
   },
   "homepage": "https://github.com/letuhao/free-context-hub#readme",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1018.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@types/amqplib": "^0.10.8",
     "amqplib": "^0.10.9",

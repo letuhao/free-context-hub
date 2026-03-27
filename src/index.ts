@@ -75,7 +75,14 @@ function logStartupEnvSummary() {
     RABBITMQ_URL: env.RABBITMQ_URL ? '[set]' : '[not set]',
     RABBITMQ_EXCHANGE: env.RABBITMQ_EXCHANGE,
     REPO_CACHE_ROOT: env.REPO_CACHE_ROOT,
+    SOURCE_STORAGE_MODE: env.SOURCE_STORAGE_MODE,
     WORKSPACE_SCAN_ENABLED: env.WORKSPACE_SCAN_ENABLED,
+    S3_ENDPOINT: env.S3_ENDPOINT ?? null,
+    S3_REGION: env.S3_REGION ?? null,
+    S3_BUCKET: env.S3_BUCKET ?? null,
+    S3_ACCESS_KEY_ID: env.S3_ACCESS_KEY_ID ? '[set]' : '[not set]',
+    S3_SECRET_ACCESS_KEY: env.S3_SECRET_ACCESS_KEY ? '[set]' : '[not set]',
+    S3_FORCE_PATH_STYLE: env.S3_FORCE_PATH_STYLE,
   };
   console.log('[env]', JSON.stringify(safe));
 }
@@ -1591,6 +1598,7 @@ function createMcpToolsServer() {
         ref: z.string().min(1).optional(),
         depth: z.number().int().positive().optional(),
         cache_root: z.string().min(1).optional(),
+        source_storage_mode: z.enum(['local', 's3', 'hybrid']).optional(),
         output_format: OutputFormatSchema.default('auto_both'),
       }),
       outputSchema: z.object({
@@ -1599,10 +1607,19 @@ function createMcpToolsServer() {
         repo_root: z.string(),
         resolved_ref: z.string().optional(),
         last_sync_commit: z.string().optional(),
+        source_storage_mode: z.enum(['local', 's3', 'hybrid']).optional(),
+        s3_sync: z
+          .object({
+            uploaded: z.boolean(),
+            artifact_key: z.string().optional(),
+            metadata_key: z.string().optional(),
+            warning: z.string().optional(),
+          })
+          .optional(),
         error: z.string().optional(),
       }),
     },
-    async ({ workspace_token, project_id, git_url, ref, depth, cache_root, output_format }) => {
+    async ({ workspace_token, project_id, git_url, ref, depth, cache_root, source_storage_mode, output_format }) => {
       assertWorkspaceToken(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       const env = getEnv();
@@ -1612,6 +1629,7 @@ function createMcpToolsServer() {
         ref,
         depth,
         cacheRoot: cache_root ?? env.REPO_CACHE_ROOT,
+        sourceStorageMode: source_storage_mode ?? env.SOURCE_STORAGE_MODE,
       });
       const summary = `prepare_repo: status=${result.status}, repo_root=${result.repo_root}`;
       return formatToolResponse(result, summary, output_format);

@@ -1,0 +1,426 @@
+{
+  "generated_at": "2026-03-27T12:34:28.571Z",
+  "project_id": "bench-free-context-hub",
+  "git_url": "https://github.com/letuhao/free-context-hub",
+  "ref": "main",
+  "source_storage_mode": "hybrid",
+  "duration_ms": 44543,
+  "gates": {
+    "prepare_repo_ok": true,
+    "s3_sync_ok": true,
+    "queue_chain_ok": true,
+    "commits_available": true,
+    "search_has_hits": true
+  },
+  "metrics": {
+    "commits_count": 5,
+    "first_commit_files": 12,
+    "search": [
+      {
+        "query": "queue worker",
+        "duration_ms": 45,
+        "matches": 5
+      },
+      {
+        "query": "prepare_repo",
+        "duration_ms": 38,
+        "matches": 5
+      },
+      {
+        "query": "ingest_git_history",
+        "duration_ms": 43,
+        "matches": 5
+      },
+      {
+        "query": "workspace scan",
+        "duration_ms": 41,
+        "matches": 5
+      },
+      {
+        "query": "project_sources",
+        "duration_ms": 40,
+        "matches": 5
+      }
+    ]
+  },
+  "workspace": {
+    "reg": {
+      "status": "ok",
+      "workspace_id": "ffb9994b-c0d9-48aa-baf3-c013a236c743",
+      "project_id": "bench-free-context-hub",
+      "root_path": "/workspace"
+    },
+    "scan": {
+      "status": "ok",
+      "root_path": "/workspace",
+      "modified_files": [
+        ".cursor/rules/contexthub-mcp-workflow.mdc",
+        ".dockerignore",
+        ".env.example",
+        ".gitignore",
+        "AGENT_PROTOCOL.md",
+        "Dockerfile",
+        "LICENSE",
+        "README.md",
+        "WHITEPAPER.md",
+        "docker-compose.yml",
+        "docs/QUICKSTART.md",
+        "docs/sessions/SESSION_PATCH.md",
+        "migrations/0005_git_intelligence.sql",
+        "migrations/0006_sources_and_jobs.sql",
+        "package.json",
+        "src/env.ts",
+        "src/index.ts",
+        "src/kg/bootstrap.ts",
+        "src/kg/client.ts",
+        "src/kg/extractor/tsMorphExtractor.ts",
+        "src/kg/ids.ts",
+        "src/kg/linker.ts",
+        "src/kg/projectGraph.ts",
+        "src/kg/query.ts",
+        "src/kg/schema.ts",
+        "src/kg/upsert.ts",
+        "src/services/distiller.ts",
+        "src/services/gitCommitFileParse.test.ts",
+        "src/services/gitCommitFileParse.ts",
+        "src/services/gitIntelligence.ts",
+        "src/services/gitLessonProposalUpsert.test.ts",
+        "src/services/gitLessonProposalUpsert.ts",
+        "src/services/jobExecutor.ts",
+        "src/services/jobQueue.ts",
+        "src/services/lessons.ts",
+        "src/services/repoSources.ts",
+        "src/services/workspaceTracker.ts",
+        "src/smoke/phase5ValidationBenchmark.ts",
+        "src/smoke/smokeTest.ts",
+        "src/worker.ts",
+        "tsconfig.json",
+        "docs/benchmarks/",
+        "migrations/0007_git_lesson_proposals_draft_unique.sql",
+        "src/services/sourceArtifacts.ts",
+        "src/smoke/phase5WorkerValidation.ts"
+      ],
+      "untracked_files": [
+        "docs/benchmarks/",
+        "migrations/0007_git_lesson_proposals_draft_unique.sql",
+        "src/services/sourceArtifacts.ts",
+        "src/smoke/phase5WorkerValidation.ts"
+      ],
+      "staged_files": [],
+      "delta_id": "7ac130ba-68f4-45f8-998c-75303d745298",
+      "index_result": {
+        "status": "ok",
+        "files_indexed": 121,
+        "duration_ms": 30843,
+        "errors": []
+      }
+    }
+  },
+  "timeline": [
+    {
+      "step": "configure_project_source",
+      "at": "2026-03-27T12:33:44.145Z",
+      "data": {
+        "status": "ok",
+        "project_id": "bench-free-context-hub",
+        "source_type": "remote_git"
+      }
+    },
+    {
+      "step": "prepare_repo",
+      "at": "2026-03-27T12:33:45.807Z",
+      "data": {
+        "status": "ok",
+        "project_id": "bench-free-context-hub",
+        "repo_root": "/data/repos/bench-free-context-hub",
+        "resolved_ref": "main",
+        "last_sync_commit": "752562a83ca49067a191ca699608d7d69064a2da",
+        "source_storage_mode": "hybrid",
+        "s3_sync": {
+          "uploaded": true,
+          "artifact_key": "source-artifacts/bench-free-context-hub/main/repo.bundle",
+          "metadata_key": "source-artifacts/bench-free-context-hub/main/latest.json"
+        }
+      }
+    },
+    {
+      "step": "enqueue_job.repo_sync",
+      "at": "2026-03-27T12:33:45.814Z",
+      "data": {
+        "status": "queued",
+        "job_id": "4628041d-1a8d-4f60-901f-16cc5c97c848",
+        "backend": "rabbitmq"
+      }
+    },
+    {
+      "step": "list_jobs.poll",
+      "at": "2026-03-27T12:33:45.818Z",
+      "data": {
+        "items": [
+          {
+            "job_id": "4628041d-1a8d-4f60-901f-16cc5c97c848",
+            "project_id": "bench-free-context-hub",
+            "job_type": "repo.sync",
+            "status": "queued",
+            "attempts": 0,
+            "max_attempts": 3,
+            "queued_at": "2026-03-27T12:33:46.431Z",
+            "started_at": null,
+            "finished_at": null,
+            "error_message": null
+          },
+          {
+            "job_id": "d38a664e-5b5e-447f-ae9c-8ed95f73efe6",
+            "project_id": "bench-free-context-hub",
+            "job_type": "index.run",
+            "status": "succeeded",
+            "attempts": 1,
+            "max_attempts": 3,
+            "queued_at": "2026-03-27T12:33:17.064Z",
+            "started_at": "2026-03-27T12:33:18.076Z",
+            "finished_at": "2026-03-27T12:33:18.138Z",
+            "error_message": null
+          },
+          {
+            "job_id": "7bfea2aa-fb1d-43f0-9dff-38c993271516",
+            "project_id": "bench-free-context-hub",
+            "job_type": "git.ingest",
+            "status": "succeeded",
+            "attempts": 1,
+            "max_attempts": 3,
+            "queued_at": "2026-03-27T12:33:17.061Z",
+            "started_at": "2026-03-27T12:33:17.121Z",
+            "finished_at": "2026-03-27T12:33:18.023Z",
+            "error_message": null
+          },
+          {
+            "job_id": "1d94d2d5-615c-4740-a539-134beed25269",
+            "project_id": "bench-free-context-hub",
+            "job_type": "repo.sync",
+            "status": "succeeded",
+            "attempts": 1,
+            "max_attempts": 3,
+            "queued_at": "2026-03-27T12:33:14.940Z",
+            "started_at": "2026-03-27T12:33:15.568Z",
+            "finished_at": "2026-03-27T12:33:17.067Z",
+            "error_message": null
+          },
+          {
+            "job_id": "d7689ec4-6787-4f37-928a-52fa58ad006f",
+            "project_id": "bench-free-context-hub",
+            "job_type": "index.run",
+            "status": "succeeded",
+            "attempts": 1,
+            "max_attempts": 3,
+            "queued_at": "2026-03-27T12:32:43.935Z",
+            "started_at": "2026-03-27T12:32:44.960Z",
+            "finished_at": "2026-03-27T12:32:45.033Z",
+            "error_message": null
+          },
+          {
+            "job_id": "491c3470-c026-4d61-a7c6-b695bbe1702e",
+            "project_id": "bench-free-context-hub",
+            "job_type": "git.ingest",
+            "status": "succeeded",
+            "attempts": 1,
+            "max_attempts": 3,
+            "queued_at": "2026-03-27T12:32:43.919Z",
+            "started_at": "2026-03-27T12:32:43.991Z",
+            "finished_at": "2026-03-27T12:32:44.907Z",
+            "error_message": null
+          },
+          {
+            "job_id": "3a5b1f50-89ca-4c31-bdd0-ab6bc7cf118b",
+            "project_id": "bench-free-context-hub",
+            "job_type": "repo.sync",
+            "status": "succeeded",
+            "attempts": 1,
+            "max_attempts": 3,
+            "queued_at": "2026-03-27T12:32:42.932Z",
+            "started_at": "2026-03-27T12:32:43.743Z",
+            "finished_at": "2026-03-27T12:32:43.938Z",
+            "error_message": null
+          },
+          {
+            "job_id": "332fb792-64b6-477d-aa94-faea0a37f933",
+            "project_id": "bench-free-context-hub",
+            "job_type": "index.run",
+            "status": "succeeded",
+            "attempts": 1,
+            "max_attempts": 3,
+            "queued_at": "2026-03-27T12:31:41.364Z",
+            "started_at": "2026-03-27T12:31:42.433Z",
+            "finished_at": "2026-03-27T12:31:42.495Z",
+            "error_message": null
+          },
+          {
+            "job_id": "e42e22d3-fc1c-4b9c-83a2-efd45a5a6809",
+            "project_id": "bench-free-context-hub",
+            "job_type": "git.ingest",
+            "status": "succeeded",
+            "attempts": 1,
+            "max_attempts": 3,
+            "queued_at": "2026-03-27T12:31:41.358Z",
+            "started_at": "2026-03-27T12:31:41.420Z",
+            "finished_at": "2026-03-27T12:31:42.380Z",
+            "error_message": null
+          },
+          {
+            "job_id": "72f5f167-65bf-46ec-8309-11f5e99a8116",
+            "project_id": "bench-free-context-hub",
+            "job_type": "repo.sync",
+            "status": "succeeded",
+            "attempts": 1,
+            "max_attempts": 3,
+            "queued_at": "2026-03-27T12:31:39.303Z",
+            "started_at": "2026-03-27T12:31:39.828Z",
+            "finished_at": "2026-03-27T12:31:41.367Z",
+            "error_message": null
+          },
+          {
+            "job_id": "c29fcfe6-90ea-4b95-b6f6-7164502b88f0",
+            "project_id": "bench-free-context-hub",
+            "job_type": "index.run",
+            "status": "succeeded",
+            "attempts": 1,
+            "max_attempts": 3,
+            "queued_at": "2026-03-27T12:30:30.143Z",
+            "started_at": "2026-03-27T12:30:31.129Z",
+            "finished_at": "2026-03-27T12:30:41.839Z",
+            "error_message": null
+          },
+          {
+            "job_id": "8b55ebd4-a86d-48bd-a102-2e24a037a2f7",
+            "project_id": "bench-free-context-hub",
+            "job_type": "git.ingest",
+            "status": "succeeded",
+            "attempts": 1,
+            "max_attempts": 3,
+            "queued_at": "2026-03-27T12:30:30.127Z",
+            "started_at": "2026-03-27T12:30:30.200Z",
+            "finished_at": "2026-03-27T12:30:31.076Z",
+            "error_message": null
+          },
+          {
+            "job_id": "16375311-0ec8-429f-a982-a57ccdaca23b",
+            "project_id": "bench-free-context-hub",
+            "job_type": "repo.sync",
+            "status": "succeeded",
+            "attempts": 1,
+            "max_attempts": 3,
+            "queued_at": "2026-03-27T12:30:29.002Z",
+            "started_at": "2026-03-27T12:30:29.946Z",
+            "finished_at": "2026-03-27T12:30:30.147Z",
+            "error_message": null
+          }
+        ]
+      }
+    },
+    {
+      "step": "list_commits",
+      "at": "2026-03-27T12:33:45.822Z",
+      "data": {
+        "count": 5
+      }
+    },
+    {
+      "step": "get_commit",
+      "at": "2026-03-27T12:33:45.827Z",
+      "data": {
+        "sha": "752562a83ca49067a191ca699608d7d69064a2da",
+        "files": 12
+      }
+    },
+    {
+      "step": "search_code.batch",
+      "at": "2026-03-27T12:33:46.034Z",
+      "data": [
+        {
+          "query": "queue worker",
+          "duration_ms": 45,
+          "matches": 5
+        },
+        {
+          "query": "prepare_repo",
+          "duration_ms": 38,
+          "matches": 5
+        },
+        {
+          "query": "ingest_git_history",
+          "duration_ms": 43,
+          "matches": 5
+        },
+        {
+          "query": "workspace scan",
+          "duration_ms": 41,
+          "matches": 5
+        },
+        {
+          "query": "project_sources",
+          "duration_ms": 40,
+          "matches": 5
+        }
+      ]
+    },
+    {
+      "step": "suggest_lessons_from_commits",
+      "at": "2026-03-27T12:33:54.591Z",
+      "data": {
+        "proposals": 1
+      }
+    },
+    {
+      "step": "add_lesson",
+      "at": "2026-03-27T12:33:57.288Z",
+      "data": {
+        "status": "ok",
+        "lesson_id": "63e94da2-9b67-4067-93cd-f6a2acab5415",
+        "guardrail_inserted": false,
+        "summary": "A temporary lesson has been created for phase5 worker validation. This resource is intended to help workers understand the requirements and processes involved in the validation phase.",
+        "quick_action": "Review the lesson materials thoroughly.,Identify key points related to validation criteria.,Practice applying these criteria to sample scenarios.,Ensure all questions or uncertainties are addressed with your supervisor.,Complete any required quizzes or assessments as outlined in the lesson.,Keep notes on important details for future reference.,Discuss the lesson content with colleagues to reinforce understanding.,Stay updated with any changes or additional resources provided by your team.,Seek feedback from peers or mentors on your comprehension of the material.,Prepare to implement validation procedures effectively in upcoming tasks.",
+        "distillation": {
+          "status": "ok"
+        },
+        "conflict_suggestions": [
+          {
+            "lesson_id": "a23a1480-e7d8-4f47-a66f-85fcdd0c0938",
+            "title": "Validation lesson link",
+            "similarity": 1
+          },
+          {
+            "lesson_id": "7eb1df99-2589-42ba-9ff3-1c21d5c6ff50",
+            "title": "Validation lesson link",
+            "similarity": 1
+          }
+        ]
+      }
+    },
+    {
+      "step": "link_commit_to_lesson",
+      "at": "2026-03-27T12:33:57.385Z",
+      "data": {
+        "status": "ok",
+        "linked_refs": 13
+      }
+    },
+    {
+      "step": "analyze_commit_impact",
+      "at": "2026-03-27T12:33:57.399Z",
+      "data": {
+        "files": 12,
+        "symbols": 50,
+        "lessons": 3
+      }
+    },
+    {
+      "step": "workspace_mode",
+      "at": "2026-03-27T12:34:28.571Z",
+      "data": {
+        "workspace_id": "ffb9994b-c0d9-48aa-baf3-c013a236c743",
+        "modified": 45,
+        "untracked": 4,
+        "staged": 0
+      }
+    }
+  ]
+}

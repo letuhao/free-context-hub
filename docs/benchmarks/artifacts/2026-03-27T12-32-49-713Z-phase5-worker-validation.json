@@ -1,0 +1,260 @@
+{
+  "generated_at": "2026-03-27T12:32:49.712Z",
+  "project_id": "bench-free-context-hub",
+  "git_url": "https://github.com/letuhao/free-context-hub",
+  "ref": "main",
+  "source_storage_mode": "hybrid",
+  "duration_ms": 9287,
+  "gates": {
+    "prepare_repo_ok": true,
+    "s3_sync_ok": true,
+    "queue_chain_ok": true,
+    "commits_available": true,
+    "search_has_hits": true
+  },
+  "metrics": {
+    "commits_count": 5,
+    "first_commit_files": 12,
+    "search": [
+      {
+        "query": "queue worker",
+        "duration_ms": 66,
+        "matches": 5
+      },
+      {
+        "query": "prepare_repo",
+        "duration_ms": 38,
+        "matches": 5
+      },
+      {
+        "query": "ingest_git_history",
+        "duration_ms": 44,
+        "matches": 5
+      },
+      {
+        "query": "workspace scan",
+        "duration_ms": 45,
+        "matches": 5
+      },
+      {
+        "query": "project_sources",
+        "duration_ms": 39,
+        "matches": 5
+      }
+    ]
+  },
+  "workspace": null,
+  "timeline": [
+    {
+      "step": "configure_project_source",
+      "at": "2026-03-27T12:32:40.570Z",
+      "data": {
+        "status": "ok",
+        "project_id": "bench-free-context-hub",
+        "source_type": "remote_git"
+      }
+    },
+    {
+      "step": "prepare_repo",
+      "at": "2026-03-27T12:32:42.282Z",
+      "data": {
+        "status": "ok",
+        "project_id": "bench-free-context-hub",
+        "repo_root": "/data/repos/bench-free-context-hub",
+        "resolved_ref": "main",
+        "last_sync_commit": "752562a83ca49067a191ca699608d7d69064a2da",
+        "source_storage_mode": "hybrid",
+        "s3_sync": {
+          "uploaded": true,
+          "artifact_key": "source-artifacts/bench-free-context-hub/main/repo.bundle",
+          "metadata_key": "source-artifacts/bench-free-context-hub/main/latest.json"
+        }
+      }
+    },
+    {
+      "step": "enqueue_job.repo_sync",
+      "at": "2026-03-27T12:32:42.307Z",
+      "data": {
+        "status": "queued",
+        "job_id": "3a5b1f50-89ca-4c31-bdd0-ab6bc7cf118b",
+        "backend": "rabbitmq"
+      }
+    },
+    {
+      "step": "list_jobs.poll",
+      "at": "2026-03-27T12:32:42.312Z",
+      "data": {
+        "items": [
+          {
+            "job_id": "3a5b1f50-89ca-4c31-bdd0-ab6bc7cf118b",
+            "project_id": "bench-free-context-hub",
+            "job_type": "repo.sync",
+            "status": "queued",
+            "attempts": 0,
+            "max_attempts": 3,
+            "queued_at": "2026-03-27T12:32:42.932Z",
+            "started_at": null,
+            "finished_at": null,
+            "error_message": null
+          },
+          {
+            "job_id": "332fb792-64b6-477d-aa94-faea0a37f933",
+            "project_id": "bench-free-context-hub",
+            "job_type": "index.run",
+            "status": "succeeded",
+            "attempts": 1,
+            "max_attempts": 3,
+            "queued_at": "2026-03-27T12:31:41.364Z",
+            "started_at": "2026-03-27T12:31:42.433Z",
+            "finished_at": "2026-03-27T12:31:42.495Z",
+            "error_message": null
+          },
+          {
+            "job_id": "e42e22d3-fc1c-4b9c-83a2-efd45a5a6809",
+            "project_id": "bench-free-context-hub",
+            "job_type": "git.ingest",
+            "status": "succeeded",
+            "attempts": 1,
+            "max_attempts": 3,
+            "queued_at": "2026-03-27T12:31:41.358Z",
+            "started_at": "2026-03-27T12:31:41.420Z",
+            "finished_at": "2026-03-27T12:31:42.380Z",
+            "error_message": null
+          },
+          {
+            "job_id": "72f5f167-65bf-46ec-8309-11f5e99a8116",
+            "project_id": "bench-free-context-hub",
+            "job_type": "repo.sync",
+            "status": "succeeded",
+            "attempts": 1,
+            "max_attempts": 3,
+            "queued_at": "2026-03-27T12:31:39.303Z",
+            "started_at": "2026-03-27T12:31:39.828Z",
+            "finished_at": "2026-03-27T12:31:41.367Z",
+            "error_message": null
+          },
+          {
+            "job_id": "c29fcfe6-90ea-4b95-b6f6-7164502b88f0",
+            "project_id": "bench-free-context-hub",
+            "job_type": "index.run",
+            "status": "succeeded",
+            "attempts": 1,
+            "max_attempts": 3,
+            "queued_at": "2026-03-27T12:30:30.143Z",
+            "started_at": "2026-03-27T12:30:31.129Z",
+            "finished_at": "2026-03-27T12:30:41.839Z",
+            "error_message": null
+          },
+          {
+            "job_id": "8b55ebd4-a86d-48bd-a102-2e24a037a2f7",
+            "project_id": "bench-free-context-hub",
+            "job_type": "git.ingest",
+            "status": "succeeded",
+            "attempts": 1,
+            "max_attempts": 3,
+            "queued_at": "2026-03-27T12:30:30.127Z",
+            "started_at": "2026-03-27T12:30:30.200Z",
+            "finished_at": "2026-03-27T12:30:31.076Z",
+            "error_message": null
+          },
+          {
+            "job_id": "16375311-0ec8-429f-a982-a57ccdaca23b",
+            "project_id": "bench-free-context-hub",
+            "job_type": "repo.sync",
+            "status": "succeeded",
+            "attempts": 1,
+            "max_attempts": 3,
+            "queued_at": "2026-03-27T12:30:29.002Z",
+            "started_at": "2026-03-27T12:30:29.946Z",
+            "finished_at": "2026-03-27T12:30:30.147Z",
+            "error_message": null
+          }
+        ]
+      }
+    },
+    {
+      "step": "list_commits",
+      "at": "2026-03-27T12:32:42.317Z",
+      "data": {
+        "count": 5
+      }
+    },
+    {
+      "step": "get_commit",
+      "at": "2026-03-27T12:32:42.325Z",
+      "data": {
+        "sha": "752562a83ca49067a191ca699608d7d69064a2da",
+        "files": 12
+      }
+    },
+    {
+      "step": "search_code.batch",
+      "at": "2026-03-27T12:32:42.557Z",
+      "data": [
+        {
+          "query": "queue worker",
+          "duration_ms": 66,
+          "matches": 5
+        },
+        {
+          "query": "prepare_repo",
+          "duration_ms": 38,
+          "matches": 5
+        },
+        {
+          "query": "ingest_git_history",
+          "duration_ms": 44,
+          "matches": 5
+        },
+        {
+          "query": "workspace scan",
+          "duration_ms": 45,
+          "matches": 5
+        },
+        {
+          "query": "project_sources",
+          "duration_ms": 39,
+          "matches": 5
+        }
+      ]
+    },
+    {
+      "step": "suggest_lessons_from_commits",
+      "at": "2026-03-27T12:32:47.126Z",
+      "data": {
+        "proposals": 1
+      }
+    },
+    {
+      "step": "add_lesson",
+      "at": "2026-03-27T12:32:49.557Z",
+      "data": {
+        "status": "ok",
+        "lesson_id": "a23a1480-e7d8-4f47-a66f-85fcdd0c0938",
+        "guardrail_inserted": false,
+        "summary": "A temporary lesson has been created for phase5 worker validation. This lesson likely contains important information or guidelines to ensure that workers in this phase are properly validated.",
+        "quick_action": "Review the temporary lesson thoroughly.,Identify key points related to worker validation.,Ensure all relevant workers have access to the lesson.,Schedule a training session if necessary.,Monitor compliance with the validation guidelines.,Update the lesson as needed based on feedback.,Document any issues or concerns encountered during validation.,Report progress and findings to the relevant stakeholders.,Plan for regular updates to the lesson content.,Keep records of all validations performed.",
+        "distillation": {
+          "status": "ok"
+        }
+      }
+    },
+    {
+      "step": "link_commit_to_lesson",
+      "at": "2026-03-27T12:32:49.677Z",
+      "data": {
+        "status": "ok",
+        "linked_refs": 13
+      }
+    },
+    {
+      "step": "analyze_commit_impact",
+      "at": "2026-03-27T12:32:49.711Z",
+      "data": {
+        "files": 12,
+        "symbols": 50,
+        "lessons": 1
+      }
+    }
+  ]
+}

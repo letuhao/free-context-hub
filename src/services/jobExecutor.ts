@@ -3,11 +3,13 @@ import { claimNextQueuedJob, completeJob, enqueueJob, failJob, type JobType } fr
 import { indexProject } from './indexer.js';
 import { prepareRepo } from './repoSources.js';
 import { scanWorkspaceChanges } from './workspaceTracker.js';
+import { getEnv } from '../env.js';
 
 async function executeByType(jobType: JobType, projectId: string | null, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
   switch (jobType) {
     case 'repo.sync': {
       if (!projectId) throw new Error('project_id is required for repo.sync');
+      const env = getEnv();
       const gitUrl = String(payload.git_url ?? '');
       const cacheRoot = String(payload.cache_root ?? './.repo-cache');
       if (!gitUrl) throw new Error('payload.git_url is required');
@@ -17,6 +19,7 @@ async function executeByType(jobType: JobType, projectId: string | null, payload
         cacheRoot,
         ref: payload.ref ? String(payload.ref) : undefined,
         depth: payload.depth ? Number(payload.depth) : undefined,
+        sourceStorageMode: (payload.source_storage_mode ? String(payload.source_storage_mode) : env.SOURCE_STORAGE_MODE) as any,
       });
       if (res.status !== 'ok') throw new Error(res.error ?? 'repo.sync failed');
       await enqueueJob({
