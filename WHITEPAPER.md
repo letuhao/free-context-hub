@@ -266,9 +266,11 @@ Safety evaluation:
 - **Fallback:** when `KG_ENABLED=false`, graph ingest/query is skipped with explicit warnings; Phase 1–3 flows remain unchanged
 
 ### Phase 5: Automation & Git Intelligence
-- Automation knowledge building: auto-collect data from git commits
-- Semantic commit analysis to update lessons/guardrails
-- Historical context reconstruction
+- Postgres-backed git ingestion tables (`git_commits`, `git_commit_files`, `git_ingest_runs`) with idempotent upsert by `project_id + sha`
+- MCP tools: `ingest_git_history`, `list_commits`, `get_commit` for read/write automation flow
+- Draft automation: `suggest_lessons_from_commits` + `link_commit_to_lesson` (review-first, no forced auto-activation)
+- Graph-assisted impact: `analyze_commit_impact` reuses Phase 4 symbol/lesson links when `KG_ENABLED=true`
+- Fallback: when `GIT_INGEST_ENABLED=false`, Phase 5 tools return graceful warnings and do not affect Phase 1–4
 
 ### Phase 6-7: Communication & Visualization
 - **Multi-Agent Knowledge**: Collect knowledge from inter-agent and agent-to-builder communications.

@@ -1,25 +1,33 @@
 ---
-id: CH-T4  date: 2026-03-27  module: Phase4-KG  phase: Phase 4
+id: CH-T5
+date: 2026-03-27
+module: Phase5-Git-Intelligence
+phase: Phase 5
 ---
 
 # Session Patch — 2026-03-27
 
 ## Where We Are
-Phase: **Phase 4 (Knowledge Graph) Wave A+B implemented** — Neo4j + ts-morph ingest, lesson↔symbol linking, MCP graph tools, docs.
+Phase: **Phase 5 (Automation & Git Intelligence) implemented** — git ingest storage + MCP tools + draft lesson proposals + graph-assisted commit impact.
 
 ## Completed This Session
-- Docker Compose: `neo4j` service; `.env.example` + `src/env.ts`: `KG_ENABLED`, `NEO4J_*`
-- `src/kg/*`: client, schema bootstrap, ts-morph extractor, idempotent upsert, queries, lesson linker, project graph delete
-- `index_project` → graph upsert for TS/JS files (non-fatal on failure)
-- MCP tools: `search_symbols`, `get_symbol_neighbors`, `trace_dependency_path`, `get_lesson_impact`
-- `add_lesson` → Neo4j Lesson node + edges from `source_refs`; `delete_workspace` clears graph data after PG commit
-- Smoke test: optional KG block when `KG_ENABLED=true`
-- Docs: `docs/QUICKSTART.md`, `WHITEPAPER.md`, `AGENT_PROTOCOL.md`, `CLAUDE.md`
+- Migration `0005_git_intelligence.sql`: `git_commits`, `git_commit_files`, `git_ingest_runs`, `git_lesson_proposals`
+- Env + runtime: `GIT_INGEST_ENABLED`, `GIT_MAX_COMMITS_PER_RUN` in `src/env.ts` and `.env.example`
+- Git intelligence service: ingest idempotent commit/file metadata from git + proposal/link/impact flows
+- MCP tools added:
+  - `ingest_git_history`, `list_commits`, `get_commit`
+  - `suggest_lessons_from_commits`, `link_commit_to_lesson`, `analyze_commit_impact`
+- Distillation extension: commit→lesson suggestion helper in `src/services/distiller.ts`
+- Workspace cleanup extended: `delete_workspace` now deletes Phase 5 git tables
+- Docker dependency: added `git` package to image and workspace read-only mount (`/workspace`) for containerized git ingestion
+- Smoke test extended with Phase 5 assertions (`SMOKE_GIT_ROOT`) and verified pass
+- Docs updated: `README.md`, `docs/QUICKSTART.md`, `AGENT_PROTOCOL.md`, `WHITEPAPER.md`
 
 ## Next
-- Run `docker compose up -d` with Neo4j healthy; set `KG_ENABLED=true` and verify Bolt from host vs container (`bolt://127.0.0.1:7687` vs `bolt://neo4j:7687`)
-- Re-`index_project` with KG on to populate symbols; tune extractor (cross-file resolution, call graph) as needed
+- Harden commit diff parsing for rename/copy edge cases (large repos, binary-only commits)
+- Add pagination cursor for `list_commits` and server-side filters (author/date/range)
+- Add approval workflow endpoint to promote `git_lesson_proposals` into `lessons`
 
 ## Open Blockers / Risks
-- Graph extraction is best-effort for TS/JS; path aliases (`@/`) are not resolved
-- `get_lesson_impact` reads Lesson from Neo4j only (lessons created while `KG_ENABLED=false` may show empty until re-added or linked)
+- Git ingestion in Docker requires repo visibility inside container (current approach: `/:/workspace:ro` mount)
+- Commit ingestion is metadata-focused; full patch semantic classification is still best-effort

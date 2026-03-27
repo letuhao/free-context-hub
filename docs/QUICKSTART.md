@@ -16,6 +16,7 @@ This guide gets your local ContextHub MVP running (Postgres + embeddings) and co
   - `get_context`
   - `delete_workspace`
   - Phase 4 (optional Neo4j graph, `KG_ENABLED=true`): `search_symbols`, `get_symbol_neighbors`, `trace_dependency_path`, `get_lesson_impact`
+  - Phase 5 (optional Git intelligence, `GIT_INGEST_ENABLED=true`): `ingest_git_history`, `list_commits`, `get_commit`, `suggest_lessons_from_commits`, `link_commit_to_lesson`, `analyze_commit_impact`
 - Project-scoped persistent memory + semantic code search (pgvector)
 
 ## Prerequisites
@@ -41,6 +42,7 @@ Edit `.env` and ensure:
 - `EMBEDDINGS_BASE_URL` points to your embeddings server (default: `http://127.0.0.1:1234`)
 - `EMBEDDINGS_MODEL` matches the DB embedding dimension (current MVP default is `mixedbread-ai/text-embedding-mxbai-embed-large-v1` with `EMBEDDINGS_DIM=1024`)
 - Phase 4 graph (optional): set `KG_ENABLED=true` and point `NEO4J_URI` / `NEO4J_USERNAME` / `NEO4J_PASSWORD` at your Neo4j Bolt endpoint (Compose defaults: `bolt://neo4j:7687` inside the stack, `bolt://127.0.0.1:7687` from the host). When `KG_ENABLED=false`, the server skips graph ingest/query and Phase 1–3 tools behave as before.
+- Phase 5 git intelligence (optional): set `GIT_INGEST_ENABLED=true` (and optional `GIT_MAX_COMMITS_PER_RUN`) to enable commit ingestion + automation tools.
 
 ## Step 2: Start Postgres + MCP server (Docker)
 
@@ -49,6 +51,19 @@ docker compose up -d
 ```
 
 Postgres listens on `localhost:5432`. Neo4j Browser/Bolt: `http://localhost:7474` / `bolt://localhost:7687`. MCP listens on `http://localhost:3000/mcp`.
+
+### Phase 5 Git ingestion in Docker
+
+- The `mcp` container mounts workspace as read-only at `/workspace`.
+- Use `root=/workspace` when calling `ingest_git_history` against dockerized MCP.
+- Smoke example for Docker runtime:
+
+```bash
+# Windows PowerShell
+$env:SMOKE_ROOT='/app'
+$env:SMOKE_GIT_ROOT='/workspace'
+npm run smoke-test
+```
 
 ### Phase 4 Neo4j troubleshooting
 

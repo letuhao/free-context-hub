@@ -56,6 +56,7 @@ async function main() {
   const projectIdA = process.env.SMOKE_PROJECT_ID_A ?? 'demo-project-A';
   const projectIdB = process.env.SMOKE_PROJECT_ID_B ?? 'demo-project-B';
   const root = process.env.SMOKE_ROOT ?? process.cwd();
+  const gitRoot = process.env.SMOKE_GIT_ROOT ?? root;
   const serverUrl = process.env.MCP_SERVER_URL ?? 'http://localhost:3000/mcp';
 
   const client = new Client(
@@ -96,6 +97,12 @@ async function main() {
       'get_symbol_neighbors',
       'trace_dependency_path',
       'get_lesson_impact',
+      'ingest_git_history',
+      'list_commits',
+      'get_commit',
+      'suggest_lessons_from_commits',
+      'link_commit_to_lesson',
+      'analyze_commit_impact',
     ];
     for (const n of requiredTools) {
       if (!names.has(n)) {
@@ -485,6 +492,158 @@ async function main() {
     }
   } else {
     console.log('[smoke] KG_ENABLED!=true; skipping Neo4j graph assertions');
+  }
+
+  console.log('[smoke] git intelligence tools (best-effort)...');
+  const gitEnabled = String(process.env.GIT_INGEST_ENABLED ?? '').toLowerCase() === 'true';
+  if (gitEnabled) {
+    const ingest = await client.request(
+      {
+        method: 'tools/call',
+        params: {
+          name: 'ingest_git_history',
+          arguments: {
+            ...tokenArgs,
+            project_id: projectIdA,
+            root: gitRoot,
+            max_commits: 20,
+            output_format: 'json_only',
+          },
+        },
+      },
+      CallToolResultSchema,
+    );
+    const ingestJson = extractFirstTextJson(ingest);
+    console.log('[smoke] ingest_git_history status:', ingestJson.status, 'commits:', ingestJson.commits_upserted);
+    if (String(ingestJson.status) === 'error') {
+      throw new Error(`ingest_git_history returned error: ${String(ingestJson.error ?? '(no error detail)')}`);
+    }
+
+    const listCommits = await client.request(
+      {
+        method: 'tools/call',
+        params: {
+          name: 'list_commits',
+          arguments: {
+            ...tokenArgs,
+            project_id: projectIdA,
+            limit: 5,
+            output_format: 'json_only',
+          },
+        },
+      },
+      CallToolResultSchema,
+    );
+    const listCommitsJson = extractFirstTextJson(listCommits);
+    const firstCommit = listCommitsJson.items?.[0]?.sha as string | undefined;
+    console.log('[smoke] list_commits count:', listCommitsJson.items?.length ?? 0);
+    if (!firstCommit) {
+      throw new Error('list_commits returned empty unexpectedly after ingest_git_history');
+    }
+
+    if (firstCommit) {
+      const getCommitResult = await client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'get_commit',
+            arguments: {
+              ...tokenArgs,
+              project_id: projectIdA,
+              sha: firstCommit,
+              output_format: 'json_only',
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+      const getCommitJson = extractFirstTextJson(getCommitResult);
+      console.log('[smoke] get_commit files:', getCommitJson.files?.length ?? 0);
+
+      const suggest = await client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'suggest_lessons_from_commits',
+            arguments: {
+              ...tokenArgs,
+              project_id: projectIdA,
+              commit_shas: [firstCommit],
+              limit: 1,
+              output_format: 'json_only',
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+      const suggestJson = extractFirstTextJson(suggest);
+      console.log('[smoke] suggest_lessons_from_commits proposals:', suggestJson.proposals?.length ?? 0);
+
+      const newLesson = await client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'add_lesson',
+            arguments: {
+              ...tokenArgs,
+              lesson_payload: {
+                project_id: projectIdA,
+                lesson_type: 'general_note',
+                title: 'Git link smoke lesson',
+                content: 'Temporary lesson for linking commit references in smoke.',
+                tags: ['smoke', 'phase5'],
+              },
+              output_format: 'json_only',
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+      const newLessonJson = extractFirstTextJson(newLesson);
+      const newLessonId = String(newLessonJson.lesson_id ?? '');
+
+      if (newLessonId) {
+        const link = await client.request(
+          {
+            method: 'tools/call',
+            params: {
+              name: 'link_commit_to_lesson',
+              arguments: {
+                ...tokenArgs,
+                project_id: projectIdA,
+                commit_sha: firstCommit,
+                lesson_id: newLessonId,
+                output_format: 'json_only',
+              },
+            },
+          },
+          CallToolResultSchema,
+        );
+        const linkJson = extractFirstTextJson(link);
+        console.log('[smoke] link_commit_to_lesson status:', linkJson.status, 'refs:', linkJson.linked_refs);
+      }
+
+      const impact = await client.request(
+        {
+          method: 'tools/call',
+          params: {
+            name: 'analyze_commit_impact',
+            arguments: {
+              ...tokenArgs,
+              project_id: projectIdA,
+              commit_sha: firstCommit,
+              limit: 20,
+              output_format: 'json_only',
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+      const impactJson = extractFirstTextJson(impact);
+      console.log('[smoke] analyze_commit_impact files/symbols/lessons:', impactJson.affected_files?.length ?? 0, impactJson.affected_symbols?.length ?? 0, impactJson.related_lessons?.length ?? 0);
+    }
+  } else {
+    console.log('[smoke] GIT_INGEST_ENABLED!=true; skipping phase 5 git intelligence assertions');
   }
 
   console.log('[smoke] search_lessons (A)...');

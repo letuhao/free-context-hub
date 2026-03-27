@@ -173,3 +173,70 @@ export async function compressText(input: { text: string; maxOutputChars?: numbe
     };
   }
 }
+
+export type CommitLessonSuggestion = {
+  lesson_type: 'decision' | 'preference' | 'guardrail' | 'workaround' | 'general_note';
+  title: string;
+  content: string;
+  tags: string[];
+  source_refs: string[];
+  rationale: string;
+};
+
+export async function suggestLessonFromCommit(input: {
+  sha: string;
+  message: string;
+  files: string[];
+}): Promise<CommitLessonSuggestion> {
+  const env = getEnv();
+  if (!env.DISTILLATION_ENABLED) {
+    throw new Error('DISTILLATION_ENABLED=false');
+  }
+
+  const system =
+    'You are an engineering memory assistant. Convert commit context into a reusable lesson draft. ' +
+    'Output ONLY valid JSON with keys: lesson_type,title,content,tags,source_refs,rationale. ' +
+    'lesson_type must be one of decision|preference|guardrail|workaround|general_note.';
+  const user =
+    `COMMIT_SHA: ${input.sha}\n` +
+    `COMMIT_MESSAGE:\n${input.message}\n\n` +
+    `CHANGED_FILES:\n${input.files.map(f => `- ${f}`).join('\n') || '(none)'}\n\n` +
+    'Return concise but specific JSON. source_refs must include git:<sha> and relevant file paths.';
+
+  const out = await chatCompletion({
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ],
+    max_tokens: 900,
+    temperature: 0.2,
+    timeoutMs: env.DISTILLATION_TIMEOUT_MS,
+  });
+
+  const parsed = extractJsonObject(out) as any;
+  const lesson_type = String(parsed?.lesson_type ?? '').trim();
+  const allowed = new Set(['decision', 'preference', 'guardrail', 'workaround', 'general_note']);
+  if (!allowed.has(lesson_type)) {
+    throw new Error('invalid lesson_type in commit suggestion');
+  }
+  const title = String(parsed?.title ?? '').trim();
+  const content = String(parsed?.content ?? '').trim();
+  const rationale = String(parsed?.rationale ?? '').trim();
+  if (!title || !content) {
+    throw new Error('missing title/content in commit suggestion');
+  }
+
+  const rawTags = Array.isArray(parsed?.tags) ? parsed.tags : [];
+  const tags = rawTags.map((t: any) => String(t).trim()).filter(Boolean);
+  const refs = Array.isArray(parsed?.source_refs) ? parsed.source_refs.map((x: any) => String(x).trim()).filter(Boolean) : [];
+  const source_refs = Array.from(new Set([`git:${input.sha}`, ...refs]));
+
+  return {
+    lesson_type: lesson_type as CommitLessonSuggestion['lesson_type'],
+    title,
+    content,
+    tags,
+    source_refs,
+    rationale: rationale || 'LLM synthesized from commit message and changed files.',
+  };
+}
