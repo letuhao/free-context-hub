@@ -6,6 +6,9 @@ import { buildRaptorSummaries } from './raptorBuilder.js';
 import { prepareRepo } from './repoSources.js';
 import { scanWorkspaceChanges } from './workspaceTracker.js';
 import { getEnv } from '../env.js';
+import { createModuleLogger } from '../utils/logger.js';
+
+const logger = createModuleLogger('jobExecutor');
 
 async function executeByType(
   jobType: JobType,
@@ -147,15 +150,18 @@ export async function runNextJob(queueName = 'default'): Promise<{
   if (!job) return { status: 'idle' };
   try {
     const started = Date.now();
-    console.log(`[worker] job start id=${job.job_id} type=${job.job_type} project=${job.project_id ?? 'null'} corr=${job.correlation_id ?? 'null'}`);
+    logger.info(
+      { job_id: job.job_id, job_type: job.job_type, project_id: job.project_id, correlation_id: job.correlation_id },
+      'job started',
+    );
     const result = await executeByType(job.job_type, job.project_id, job.payload, job.correlation_id);
     await completeJob(job.job_id);
-    console.log(`[worker] job done  id=${job.job_id} type=${job.job_type} ms=${Date.now() - started}`);
+    logger.info({ job_id: job.job_id, job_type: job.job_type, duration_ms: Date.now() - started }, 'job finished');
     return { status: 'ok', job_id: job.job_id, job_type: job.job_type, result };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await failJob(job.job_id, job.attempts, job.max_attempts, message);
-    console.error(`[worker] job error id=${job.job_id} type=${job.job_type} msg=${message}`);
+    logger.error({ job_id: job.job_id, job_type: job.job_type, error: message }, 'job failed');
     return { status: 'error', job_id: job.job_id, job_type: job.job_type, error: message };
   }
 }
@@ -171,15 +177,18 @@ export async function runJobById(jobId: string): Promise<{
   if (!job) return { status: 'idle' };
   try {
     const started = Date.now();
-    console.log(`[worker] job start id=${job.job_id} type=${job.job_type} project=${job.project_id ?? 'null'} corr=${job.correlation_id ?? 'null'}`);
+    logger.info(
+      { job_id: job.job_id, job_type: job.job_type, project_id: job.project_id, correlation_id: job.correlation_id },
+      'job started by id',
+    );
     const result = await executeByType(job.job_type, job.project_id, job.payload, job.correlation_id);
     await completeJob(job.job_id);
-    console.log(`[worker] job done  id=${job.job_id} type=${job.job_type} ms=${Date.now() - started}`);
+    logger.info({ job_id: job.job_id, job_type: job.job_type, duration_ms: Date.now() - started }, 'job finished by id');
     return { status: 'ok', job_id: job.job_id, job_type: job.job_type, result };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await failJob(job.job_id, job.attempts, job.max_attempts, message);
-    console.error(`[worker] job error id=${job.job_id} type=${job.job_type} msg=${message}`);
+    logger.error({ job_id: job.job_id, job_type: job.job_type, error: message }, 'job failed by id');
     return { status: 'error', job_id: job.job_id, job_type: job.job_type, error: message };
   }
 }

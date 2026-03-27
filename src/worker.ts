@@ -3,8 +3,10 @@ import { applyMigrations } from './db/applyMigrations.js';
 import { getEnv } from './env.js';
 import { runJobById, runNextJob } from './services/jobExecutor.js';
 import { getRabbitConsumerChannel } from './services/jobQueue.js';
+import { createModuleLogger } from './utils/logger.js';
 
 dotenv.config();
+const logger = createModuleLogger('worker');
 
 async function sleep(ms: number) {
   await new Promise(resolve => setTimeout(resolve, ms));
@@ -14,7 +16,7 @@ async function startRabbitConsumer(queueName: string) {
   const consumer = await getRabbitConsumerChannel(queueName);
   if (!consumer) return { status: 'disabled' as const };
   const { ch, queue } = consumer;
-  console.log(`[worker] rabbitmq consumer active queue=${queue}`);
+  logger.info({ queue }, 'rabbitmq consumer active');
   await ch.prefetch(1);
   await ch.consume(
     queue,
@@ -29,7 +31,7 @@ async function startRabbitConsumer(queueName: string) {
         jobId = String(msg.properties?.messageId ?? '');
       }
       const corr = String(msg.properties?.correlationId ?? '');
-      console.log(`[worker] rabbitmq recv job_id=${jobId || '(missing)'} corr=${corr || '(none)'}`);
+      logger.info({ job_id: jobId || null, correlation_id: corr || null }, 'rabbitmq message received');
       try {
         if (jobId) {
           await runJobById(jobId);
@@ -37,7 +39,7 @@ async function startRabbitConsumer(queueName: string) {
         ch.ack(msg);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        console.error(`[worker] rabbitmq handler error job_id=${jobId} msg=${message}`);
+        logger.error({ job_id: jobId || null, error: message }, 'rabbitmq handler error');
         // Requeue with backoff is handled via Postgres state; don't spin on poison messages.
         ch.nack(msg, false, false);
       }
@@ -51,7 +53,7 @@ async function main() {
   const env = getEnv();
   await applyMigrations();
   const queueName = env.JOB_QUEUE_NAME || 'default';
-  console.log(`[worker] started queue=${queueName} backend=${env.QUEUE_BACKEND} enabled=${env.QUEUE_ENABLED}`);
+  logger.info({ queue: queueName, backend: env.QUEUE_BACKEND, enabled: env.QUEUE_ENABLED }, 'worker started');
   if (env.QUEUE_ENABLED && env.QUEUE_BACKEND === 'rabbitmq') {
     await startRabbitConsumer(queueName);
   }
@@ -63,17 +65,17 @@ async function main() {
       continue;
     }
     if (res.status === 'error') {
-      console.error(`[worker] job failed id=${res.job_id} type=${res.job_type} error=${res.error}`);
+      logger.error({ job_id: res.job_id, job_type: res.job_type, error: res.error }, 'job failed');
       await sleep(200);
       continue;
     }
-    console.log(`[worker] job ok id=${res.job_id} type=${res.job_type}`);
+    logger.info({ job_id: res.job_id, job_type: res.job_type }, 'job completed');
     await sleep(50);
   }
 }
 
 main().catch(err => {
-  console.error('[worker] fatal', err instanceof Error ? err.message : err);
+  logger.fatal({ error: err instanceof Error ? err.message : String(err) }, 'worker fatal');
   process.exit(1);
 });
 

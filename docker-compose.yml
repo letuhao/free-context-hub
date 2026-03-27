@@ -88,7 +88,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - contexthub_mcpdata:/data
-      - ./:/workspace:ro
+      - ./:/workspace
 
   worker:
     build:
@@ -132,7 +132,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - contexthub_mcpdata:/data
-      - ./:/workspace:ro
+      - ./:/workspace
 
   # MCP server with corporate CA installed into container trust store.
   # Start with: docker compose --profile corp-ca up -d --build db mcp-ca

@@ -144,3 +144,9 @@ vite.config.ts.timestamp-*
 package-lock.json
 
 certs/
+
+docs/.raptor/
+
+docs/qc/artifacts/
+
+docs/qc/

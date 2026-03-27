@@ -1794,7 +1794,17 @@ function createMcpToolsServer() {
       inputSchema: z.object({
         workspace_token: z.string().optional(),
         project_id: z.string().min(1).optional(),
-        job_type: z.enum(['repo.sync', 'workspace.scan', 'workspace.delta_index', 'index.run', 'git.ingest', 'quality.eval', 'knowledge.refresh']),
+        job_type: z.enum([
+          'repo.sync',
+          'workspace.scan',
+          'workspace.delta_index',
+          'index.run',
+          'git.ingest',
+          'quality.eval',
+          'knowledge.refresh',
+          'faq.build',
+          'raptor.build',
+        ]),
         payload: z.record(z.string(), z.unknown()).optional(),
         correlation_id: z.string().optional(),
         queue_name: z.string().min(1).optional(),

@@ -5,6 +5,7 @@ import fg from 'fast-glob';
 
 import { compressText } from './distiller.js';
 import { qaSummarize } from './qaAgent.js';
+import { createModuleLogger } from '../utils/logger.js';
 
 function toPosix(p: string) {
   return p.replace(/\\/g, '/');
@@ -14,17 +15,22 @@ function safeSlug(rel: string) {
   return rel.replace(/[^A-Za-z0-9._/-]+/g, '-').replace(/-+/g, '-');
 }
 
+const logger = createModuleLogger('raptorBuilder');
+
 export async function buildRaptorSummaries(input: {
   projectId: string;
   root: string;
   pathGlob?: string;
   maxLevels?: number;
 }): Promise<{ status: 'ok'; written_files: string[]; files_scanned: number }> {
+  const startedAt = Date.now();
   const maxLevels = Math.max(1, Math.min(Number(input.maxLevels ?? 2), 3));
   const glob = String(input.pathGlob ?? 'docs/**/*.md');
+  logger.info({ project_id: input.projectId, root: input.root, path_glob: glob, max_levels: maxLevels }, 'raptor build started');
 
   const absRoot = path.resolve(input.root);
   const matches = await fg(glob, { cwd: absRoot, dot: false, onlyFiles: true, unique: true });
+  logger.info({ files_matched: matches.length }, 'raptor files matched');
 
   const outDir = path.join(absRoot, 'docs', '.raptor');
   await fs.mkdir(outDir, { recursive: true });
@@ -33,7 +39,11 @@ export async function buildRaptorSummaries(input: {
   const fileSummaries: Array<{ rel: string; summary: string }> = [];
 
   // Level 1: per-file summaries.
-  for (const rel of matches) {
+  for (let i = 0; i < matches.length; i++) {
+    const rel = matches[i];
+    if (i === 0 || i === matches.length - 1 || (i + 1) % 10 === 0) {
+      logger.info({ level: 1, progress: `${i + 1}/${matches.length}`, file: rel }, 'raptor level1 progress');
+    }
     const abs = path.join(absRoot, rel);
     const raw = await fs.readFile(abs, 'utf8').catch(() => '');
     if (!raw.trim()) continue;
@@ -58,7 +68,10 @@ export async function buildRaptorSummaries(input: {
       arr.push(s);
       byDir.set(dir, arr);
     }
+    let dirIndex = 0;
     for (const [dir, items] of byDir.entries()) {
+      dirIndex += 1;
+      logger.info({ level: 2, progress: `${dirIndex}/${byDir.size}`, directory: dir, items: items.length }, 'raptor level2 progress');
       const ctx =
         `DIRECTORY: ${dir}\n\n` +
         items.map(it => `FILE: ${it.rel}\nSUMMARY:\n${it.summary}\n`).join('\n');
@@ -73,6 +86,10 @@ export async function buildRaptorSummaries(input: {
     }
   }
 
+  logger.info(
+    { files_scanned: matches.length, written_files: written.length, duration_ms: Date.now() - startedAt },
+    'raptor build completed',
+  );
   return { status: 'ok', written_files: written, files_scanned: matches.length };
 }
 
