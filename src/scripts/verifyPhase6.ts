@@ -2,12 +2,13 @@
  * One-shot Phase 6 verification (run inside Docker: `docker compose exec mcp npx tsx src/scripts/verifyPhase6.ts`).
  * 1) index.run on /workspace
  * 2) quality.eval (golden set)
- * 3) optional knowledge.loop.shallow when PHASE6_KNOWLEDGE_LOOP_ENABLED=true
+ * 3) optional knowledge.loop.deep (lightweight: one round, no FAQ/RAPTOR/builder) when KNOWLEDGE_LOOP_ENABLED=true
  */
 import * as dotenv from 'dotenv';
 import { getDbPool } from '../db/client.js';
 import { getEnv } from '../env.js';
 import { enqueueJob } from '../services/jobQueue.js';
+import { qcVerifyProjectId, qcVerifyRepoRoot } from '../utils/qcVerifyEnv.js';
 
 dotenv.config();
 
@@ -48,15 +49,15 @@ async function ensureProjectRow(projectId: string) {
 
 async function main() {
   const env = getEnv();
-  const projectId = process.env.VERIFY_PHASE6_PROJECT_ID?.trim() || 'phase6-verify';
-  const root = process.env.VERIFY_PHASE6_ROOT?.trim() || '/workspace';
-  const queriesPath = env.PHASE6_EVAL_QUERIES_PATH || 'qc/queries.json';
+  const projectId = qcVerifyProjectId('phase6-verify');
+  const root = qcVerifyRepoRoot();
+  const queriesPath = env.QUALITY_EVAL_QUERIES_PATH || 'qc/queries.json';
 
   await ensureProjectRow(projectId);
 
   console.log('[verify] Phase 6 smoke');
   console.log('[verify] project_id=', projectId, 'root=', root, 'queries=', queriesPath);
-  console.log('[verify] PHASE6_KNOWLEDGE_LOOP_ENABLED=', env.PHASE6_KNOWLEDGE_LOOP_ENABLED);
+  console.log('[verify] KNOWLEDGE_LOOP_ENABLED=', env.KNOWLEDGE_LOOP_ENABLED);
 
   const idx = await enqueueJob({
     project_id: projectId,
@@ -85,17 +86,25 @@ async function main() {
   );
   console.log('[verify] latest quality.eval row:', last.rows[0]);
 
-  if (env.PHASE6_KNOWLEDGE_LOOP_ENABLED) {
-    const sh = await enqueueJob({
+  if (env.KNOWLEDGE_LOOP_ENABLED) {
+    const dp = await enqueueJob({
       project_id: projectId,
-      job_type: 'knowledge.loop.shallow',
-      payload: { root, run_faq: false, run_raptor: false },
-      correlation_id: `verify-phase6-shallow-${Date.now()}`,
+      job_type: 'knowledge.loop.deep',
+      payload: {
+        root,
+        max_rounds: 1,
+        parent_run_id: 'verify-phase6',
+        run_shallow: false,
+        run_faq: false,
+        run_raptor: false,
+        builder_memory: false,
+      },
+      correlation_id: `verify-phase6-deep-${Date.now()}`,
     });
-    console.log('[verify] enqueued knowledge.loop.shallow (faq/raptor off for speed) job_id=', sh.job_id);
-    await waitJob(sh.job_id, 'knowledge.loop.shallow', 30 * 60_000);
+    console.log('[verify] enqueued knowledge.loop.deep (minimal smoke: index+eval only in loop) job_id=', dp.job_id);
+    await waitJob(dp.job_id, 'knowledge.loop.deep', 45 * 60_000);
   } else {
-    console.log('[verify] skip knowledge.loop.shallow (PHASE6_KNOWLEDGE_LOOP_ENABLED=false)');
+    console.log('[verify] skip knowledge.loop.deep (KNOWLEDGE_LOOP_ENABLED=false)');
   }
 
   const docs = await pool.query(

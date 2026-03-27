@@ -28,7 +28,7 @@ Optional environment variables:
 
 ## Phase 6 rollback / baseline
 
-- **Baseline row:** `quality.eval` with `set_baseline: true` overwrites the `benchmark_artifact` at `doc_key` `quality_eval/baseline` (configurable via `PHASE6_BASELINE_DOC_KEY`). To “rollback” a baseline, upsert that row from a previous JSON snapshot (copy `content` from an older `quality_eval/<timestamp>` row) or delete the row and re-run.
+- **Baseline row:** `quality.eval` with `set_baseline: true` overwrites the `benchmark_artifact` at `doc_key` `quality_eval/baseline` (configurable via `QUALITY_EVAL_BASELINE_DOC_KEY`). To “rollback” a baseline, upsert that row from a previous JSON snapshot (copy `content` from an older `quality_eval/<timestamp>` row) or delete the row and re-run.
 - **Shallow/deep artifacts:** `phase6/shallow/*` and `phase6/deep/summary/*` are audit rows; safe to delete from `generated_documents` if you no longer need them (canonical FAQ/RAPTOR content remains in other `doc_type` rows or filesystem exports).
 - **Draft promotion:** Phase 6 loop artifacts may carry `metadata.status: draft`; `promote_generated_document` sets `active` without deleting history.
 

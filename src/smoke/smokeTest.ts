@@ -813,8 +813,9 @@ async function main() {
       throw new Error(`scan_workspace failed: ${String(scan.error ?? '')}`);
     }
 
-    const smokePhase6 = String(process.env.SMOKE_PHASE6 ?? '').toLowerCase() === 'true';
-    if (smokePhase6) {
+    const smokeKnowledgeLoop =
+      String(process.env.SMOKE_KNOWLEDGE_LOOP ?? process.env.SMOKE_PHASE6 ?? '').toLowerCase() === 'true';
+    if (smokeKnowledgeLoop) {
       const corr6 = randomUUID();
       await client.request(
         {
@@ -854,13 +855,13 @@ async function main() {
         }
       }
       if (!evalOutcome?.doc_key) {
-        throw new Error('SMOKE_PHASE6: expected quality.eval to produce result.doc_key');
+        throw new Error('SMOKE_KNOWLEDGE_LOOP: expected quality.eval to produce result.doc_key');
       }
-      console.log('[smoke] phase6 quality.eval doc_key:', evalOutcome.doc_key);
+      console.log('[smoke] knowledge-loop quality.eval doc_key:', evalOutcome.doc_key);
       const listTools3 = await client.request({ method: 'tools/list', params: {} }, ListToolsResultSchema);
       const names3 = new Set(listTools3.tools.map((t: any) => String(t.name)));
       if (!names3.has('promote_generated_document')) {
-        throw new Error('SMOKE_PHASE6: missing promote_generated_document tool');
+        throw new Error('SMOKE_KNOWLEDGE_LOOP: missing promote_generated_document tool');
       }
     }
   } else {

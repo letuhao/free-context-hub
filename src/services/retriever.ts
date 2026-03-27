@@ -233,7 +233,7 @@ async function llmRerank(params: {
           { role: 'user', content: user },
         ],
         temperature: 0.0,
-        max_tokens: 250,
+        max_tokens: env.RERANK_LLM_MAX_TOKENS,
       }),
     });
     if (!res.ok) {
@@ -317,7 +317,7 @@ export async function searchCode({
   }
 
   const vector = `[${vec.join(',')}]`;
-  const maxChars = 400;
+  const maxChars = env.RETRIEVAL_SNIPPET_MAX_CHARS;
 
   const params: any[] = [projectId, vector];
   let where = `c.project_id = $1`;

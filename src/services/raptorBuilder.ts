@@ -6,6 +6,8 @@ import fg from 'fast-glob';
 import { compressText } from './distiller.js';
 import { recordGeneratedExport, upsertGeneratedDocument } from './generatedDocs.js';
 import { qaSummarize } from './qaAgent.js';
+import { getEnv } from '../env.js';
+import { scaledSummaryCharBudget } from '../utils/llmCompletionBudget.js';
 import { createModuleLogger } from '../utils/logger.js';
 
 function toPosix(p: string) {
@@ -27,6 +29,8 @@ export async function buildRaptorSummaries(input: {
   correlationId?: string;
 }): Promise<{ status: 'ok'; written_files: string[]; files_scanned: number }> {
   const startedAt = Date.now();
+  const env = getEnv();
+  const ceiling = { sourceCharCeiling: env.LLM_SUMMARY_SOURCE_CHAR_CEILING };
   const maxLevels = Math.max(1, Math.min(Number(input.maxLevels ?? 2), 3));
   const glob = String(input.pathGlob ?? 'docs/**/*.md');
   logger.info({ project_id: input.projectId, root: input.root, path_glob: glob, max_levels: maxLevels }, 'raptor build started');
@@ -50,8 +54,9 @@ export async function buildRaptorSummaries(input: {
     const abs = path.join(absRoot, rel);
     const raw = await fs.readFile(abs, 'utf8').catch(() => '');
     if (!raw.trim()) continue;
-    const qaSummary = await qaSummarize({ text: raw, maxChars: 1800 });
-    const compressed = qaSummary ? { compressed: qaSummary } : await compressText({ text: raw, maxOutputChars: 1800 });
+    const maxOut = scaledSummaryCharBudget(raw.length, env.RAPTOR_L1_SUMMARY_MIN_CHARS, env.RAPTOR_L1_SUMMARY_MAX_CHARS, ceiling);
+    const qaSummary = await qaSummarize({ text: raw, maxChars: maxOut });
+    const compressed = qaSummary ? { compressed: qaSummary } : await compressText({ text: raw, maxOutputChars: maxOut });
     const summary = compressed.compressed.trim();
     const outRel = toPosix(path.join('docs', '.raptor', 'level1', safeSlug(rel)));
     const outAbs = path.join(absRoot, outRel);
@@ -90,8 +95,9 @@ export async function buildRaptorSummaries(input: {
       const ctx =
         `DIRECTORY: ${dir}\n\n` +
         items.map(it => `FILE: ${it.rel}\nSUMMARY:\n${it.summary}\n`).join('\n');
-      const qaSummary = await qaSummarize({ text: ctx, maxChars: 2000 });
-      const compressed = qaSummary ? { compressed: qaSummary } : await compressText({ text: ctx, maxOutputChars: 2000 });
+      const maxOutL2 = scaledSummaryCharBudget(ctx.length, env.RAPTOR_L2_SUMMARY_MIN_CHARS, env.RAPTOR_L2_SUMMARY_MAX_CHARS, ceiling);
+      const qaSummary = await qaSummarize({ text: ctx, maxChars: maxOutL2 });
+      const compressed = qaSummary ? { compressed: qaSummary } : await compressText({ text: ctx, maxOutputChars: maxOutL2 });
       const outRel = toPosix(path.join('docs', '.raptor', 'level2', safeSlug(`${dir}.md`)));
       const outAbs = path.join(absRoot, outRel);
       await fs.mkdir(path.dirname(outAbs), { recursive: true });

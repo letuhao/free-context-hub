@@ -44,6 +44,8 @@
 
 Detailed setup guide: [`docs/QUICKSTART.md`](docs/QUICKSTART.md).
 
+Phase 6 verification (Docker Compose, worker + MCP): [`docs/phase6-verification.md`](docs/phase6-verification.md) — after `docker compose up -d` with `mcp` and `worker`, run `npm run verify:phase6:qc:compose` from the repo root.
+
 Storage policy guide: [`docs/storage/storage-contract.md`](docs/storage/storage-contract.md).
 
 ---

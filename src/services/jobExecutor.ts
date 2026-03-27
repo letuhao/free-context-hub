@@ -7,7 +7,11 @@ import { buildFaq } from './faqBuilder.js';
 import { buildRaptorSummaries } from './raptorBuilder.js';
 import { upsertGeneratedDocument } from './generatedDocs.js';
 import { buildProjectMemoryArtifact } from './builderMemory.js';
-import { buildLargeRepoProjectMemory, shouldUseLargeRepoBuilderMemory } from './builderMemoryLarge.js';
+import {
+  buildLargeRepoProjectMemory,
+  estimateRepoLinesByHeuristic,
+  shouldUseLargeRepoBuilderMemory,
+} from './builderMemoryLarge.js';
 import { runQualityEvalAndPersist } from './qcEval.js';
 import { prepareRepo } from './repoSources.js';
 import { scanWorkspaceChanges } from './workspaceTracker.js';
@@ -113,14 +117,14 @@ async function executeByType(
           correlation_id: chainCorrelation ?? null,
           source_job_id: sourceJobId ?? null,
           payload: {
-            queries_path: String(payload.queries_path ?? env.PHASE6_EVAL_QUERIES_PATH),
+            queries_path: String(payload.queries_path ?? env.QUALITY_EVAL_QUERIES_PATH),
             set_baseline: payload.set_baseline === true,
             hybrid_mode: payload.hybrid_mode,
           },
         },
         'phase6 quality.eval start',
       );
-      const queriesPath = String(payload.queries_path ?? env.PHASE6_EVAL_QUERIES_PATH);
+      const queriesPath = String(payload.queries_path ?? env.QUALITY_EVAL_QUERIES_PATH);
       const hybridMode: 'off' | 'lexical' =
         payload.hybrid_mode === 'lexical' ? 'lexical' : env.RETRIEVAL_HYBRID_ENABLED ? 'lexical' : 'off';
       const setBaseline = payload.set_baseline === true;
@@ -173,9 +177,9 @@ async function executeByType(
         },
         'phase6 shallow start',
       );
-      if (!env.PHASE6_KNOWLEDGE_LOOP_ENABLED) {
+      if (!env.KNOWLEDGE_LOOP_ENABLED) {
         logger.info({ correlation_id: chainCorrelation }, 'phase6 shallow skipped');
-        return { status: 'ok', skipped: true, reason: 'PHASE6_KNOWLEDGE_LOOP_ENABLED=false' };
+        return { status: 'ok', skipped: true, reason: 'KNOWLEDGE_LOOP_ENABLED=false' };
       }
       const root = String(payload.root ?? '');
       if (!root) throw new Error('payload.root is required');
@@ -245,14 +249,14 @@ async function executeByType(
         },
         'phase6 deep start',
       );
-      if (!env.PHASE6_KNOWLEDGE_LOOP_ENABLED) {
+      if (!env.KNOWLEDGE_LOOP_ENABLED) {
         logger.info({ correlation_id: chainCorrelation }, 'phase6 deep skipped');
-        return { status: 'ok', skipped: true, reason: 'PHASE6_KNOWLEDGE_LOOP_ENABLED=false' };
+        return { status: 'ok', skipped: true, reason: 'KNOWLEDGE_LOOP_ENABLED=false' };
       }
       const root = String(payload.root ?? '');
       if (!root) throw new Error('payload.root is required');
       const maxRounds = Math.min(Math.max(Number(payload.max_rounds ?? 3), 1), 5);
-      const queriesPath = String(payload.queries_path ?? env.PHASE6_EVAL_QUERIES_PATH);
+      const queriesPath = String(payload.queries_path ?? env.QUALITY_EVAL_QUERIES_PATH);
       const hybridMode: 'off' | 'lexical' =
         payload.hybrid_mode === 'lexical' ? 'lexical' : env.RETRIEVAL_HYBRID_ENABLED ? 'lexical' : 'off';
       const parentRunId = payload.parent_run_id ? String(payload.parent_run_id) : 'run';
@@ -275,11 +279,28 @@ async function executeByType(
             });
           }
         }
-        if (round === 1 && payload.builder_memory !== false && env.PHASE6_BUILDER_MEMORY_ENABLED) {
+        if (round === 1 && payload.builder_memory !== false && env.BUILDER_MEMORY_ENABLED) {
+          let estLoc = -1;
+          try {
+            estLoc = await estimateRepoLinesByHeuristic(root);
+          } catch {
+            /* ignore */
+          }
           const useLarge = await shouldUseLargeRepoBuilderMemory({
             root,
             largeRepoPayload: payload.large_repo === true,
           });
+          logger.info(
+            {
+              event: 'phase6_builder_memory_path',
+              project_id: projectId,
+              use_large_repo_pipeline: useLarge,
+              estimated_loc_heuristic: estLoc,
+              large_repo_threshold: env.BUILDER_MEMORY_LARGE_REPO_LOC_THRESHOLD,
+              large_repo_payload: payload.large_repo === true,
+            },
+            'phase6 builder_memory: single-pass vs hierarchical (LOC heuristic is rough)',
+          );
           const bm = useLarge
             ? await buildLargeRepoProjectMemory({
                 projectId,

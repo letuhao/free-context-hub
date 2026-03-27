@@ -10,6 +10,7 @@ import { sha256Hex } from '../utils/hash.js';
 import { upsertFileGraphFromDisk } from '../kg/upsert.js';
 import { bumpProjectCacheVersion } from './cacheVersions.js';
 import { createModuleLogger } from '../utils/logger.js';
+import { getEnv } from '../env.js';
 import { indexGeneratedDocuments } from './generatedIndexer.js';
 
 const logger = createModuleLogger('indexer');
@@ -65,15 +66,16 @@ export async function indexProject({ projectId, root, linesPerChunk, embeddingBa
     [projectId, projectId],
   );
 
-  const batchSize = embeddingBatchSize ?? 8;
-  const chunkLines = linesPerChunk ?? 120;
-  const MAX_FILE_BYTES = 2_000_000;
+  const env = getEnv();
+  const batchSize = embeddingBatchSize ?? env.INDEX_EMBEDDING_BATCH_SIZE;
+  const chunkLines = linesPerChunk ?? env.CHUNK_LINES;
+  const maxFileBytes = env.INDEX_MAX_FILE_BYTES;
 
   for (const fileRel of files) {
     const filePath = path.join(resolvedRoot, fileRel);
     try {
       const stat = await fs.stat(filePath);
-      if (stat.size <= 0 || stat.size > MAX_FILE_BYTES) continue;
+      if (stat.size <= 0 || stat.size > maxFileBytes) continue;
 
       const buf = await fs.readFile(filePath);
       if (isProbablyBinary(buf)) continue;

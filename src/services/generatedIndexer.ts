@@ -1,5 +1,6 @@
 import { embedTexts } from './embedder.js';
 import { getDbPool } from '../db/client.js';
+import { getEnv } from '../env.js';
 import { chunkTextByLines } from '../utils/chunker.js';
 import { listGeneratedDocuments } from './generatedDocs.js';
 
@@ -18,9 +19,10 @@ export async function indexGeneratedDocuments(params: {
   embeddingBatchSize?: number;
 }): Promise<{ status: 'ok' | 'error'; docs_indexed: number; chunks_indexed: number; errors: Array<{ doc_key: string; message: string }> }> {
   const pool = getDbPool();
-  const docs = await listGeneratedDocuments({ projectId: params.projectId, limit: 5000 });
-  const chunkLines = params.linesPerChunk ?? 120;
-  const batchSize = params.embeddingBatchSize ?? 8;
+  const env = getEnv();
+  const docs = await listGeneratedDocuments({ projectId: params.projectId, limit: env.GENERATED_INDEX_MAX_DOCS });
+  const chunkLines = params.linesPerChunk ?? env.CHUNK_LINES;
+  const batchSize = params.embeddingBatchSize ?? env.INDEX_EMBEDDING_BATCH_SIZE;
   const errors: Array<{ doc_key: string; message: string }> = [];
   let docsIndexed = 0;
   let chunksIndexed = 0;

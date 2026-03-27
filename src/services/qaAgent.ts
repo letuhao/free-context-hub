@@ -1,4 +1,9 @@
 import { getEnv } from '../env.js';
+import {
+  completionTokensForOutputChars,
+  excerptForSummarization,
+  scaledSummaryCharBudget,
+} from '../utils/llmCompletionBudget.js';
 
 function qaBaseUrl(): string {
   const env = getEnv();
@@ -22,7 +27,24 @@ export async function qaSummarize(params: { text: string; maxChars?: number }): 
   const model = qaModel();
   if (!model) return null;
   const env = getEnv();
-  const maxChars = Math.max(200, Math.min(params.maxChars ?? 1800, 8000));
+  const ceiling = { sourceCharCeiling: env.LLM_SUMMARY_SOURCE_CHAR_CEILING };
+  const sourceLen = params.text.length;
+  const maxChars = Math.max(
+    env.QA_SUMMARY_OUTPUT_MIN_CHARS,
+    Math.min(
+      params.maxChars ??
+        scaledSummaryCharBudget(sourceLen, env.QA_SUMMARY_SCALED_MIN_CHARS, env.QA_SUMMARY_SCALED_MAX_CHARS, ceiling),
+      env.QA_SUMMARY_HARD_MAX_CHARS,
+    ),
+  );
+  const excerpt = excerptForSummarization(params.text, env.QA_SUMMARIZE_MAX_INPUT_CHARS);
+  const userContent = excerpt.truncated
+    ? `The source was truncated to fit context (head + tail; ${excerpt.omittedChars.toLocaleString()} characters omitted from the middle). Summarize what is visible in <= ${maxChars} characters. Preserve symbols, paths, and APIs.\n\n${excerpt.text}`
+    : `Summarize this content in <= ${maxChars} characters:\n\n${excerpt.text}`;
+
+  const maxTokens = completionTokensForOutputChars(maxChars, {
+    maxTokens: env.LLM_COMPLETION_MAX_TOKENS_CAP,
+  });
   const base = qaBaseUrl().endsWith('/') ? qaBaseUrl() : `${qaBaseUrl()}/`;
   const url = new URL('v1/chat/completions', base).toString();
   const ac = new AbortController();
@@ -40,10 +62,10 @@ export async function qaSummarize(params: { text: string; maxChars?: number }): 
             content:
               'You summarize technical content for retrieval. Keep concrete symbols, filenames, APIs, and constraints. No markdown fences.',
           },
-          { role: 'user', content: `Summarize this content in <= ${maxChars} chars:\n\n${params.text}` },
+          { role: 'user', content: userContent },
         ],
         temperature: 0.1,
-        max_tokens: Math.min(1200, Math.ceil(maxChars / 3)),
+        max_tokens: maxTokens,
       }),
     });
     if (!res.ok) return null;
@@ -67,13 +89,25 @@ export async function qaAnswerFromEvidence(params: {
   const model = qaModel();
   if (!model) return null;
   const env = getEnv();
-  const maxChars = Math.max(300, Math.min(params.maxChars ?? 2200, 9000));
+  const ctx = params.evidence.map((e, i) => `[#${i + 1}] ${e.path}\n${e.snippet}`).join('\n\n');
+  const ctxLen = ctx.length;
+  const ceiling = { sourceCharCeiling: env.LLM_SUMMARY_SOURCE_CHAR_CEILING };
+  const maxChars = Math.max(
+    env.QA_EVIDENCE_OUTPUT_MIN_CHARS,
+    Math.min(
+      params.maxChars ??
+        scaledSummaryCharBudget(ctxLen, env.QA_EVIDENCE_SCALED_MIN_CHARS, env.QA_EVIDENCE_SCALED_MAX_CHARS, ceiling),
+      env.QA_EVIDENCE_ANSWER_HARD_MAX_CHARS,
+    ),
+  );
+  const maxTokens = completionTokensForOutputChars(maxChars, {
+    maxTokens: env.LLM_COMPLETION_MAX_TOKENS_CAP,
+  });
   const base = qaBaseUrl().endsWith('/') ? qaBaseUrl() : `${qaBaseUrl()}/`;
   const url = new URL('v1/chat/completions', base).toString();
   const ac = new AbortController();
   const t = setTimeout(() => ac.abort(), env.QA_AGENT_TIMEOUT_MS);
   try {
-    const ctx = params.evidence.map((e, i) => `[#${i + 1}] ${e.path}\n${e.snippet}`).join('\n\n');
     const res = await fetch(url, {
       method: 'POST',
       headers: qaHeaders(),
@@ -89,7 +123,7 @@ export async function qaAnswerFromEvidence(params: {
           { role: 'user', content: `Question: ${params.question}\n\nEvidence:\n${ctx}\n\nReturn concise answer.` },
         ],
         temperature: 0.1,
-        max_tokens: Math.min(1200, Math.ceil(maxChars / 3)),
+        max_tokens: maxTokens,
       }),
     });
     if (!res.ok) return null;
@@ -104,4 +138,3 @@ export async function qaAnswerFromEvidence(params: {
     clearTimeout(t);
   }
 }
-

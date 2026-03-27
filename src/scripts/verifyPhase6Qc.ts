@@ -2,8 +2,11 @@
  * Full Phase 6 QC verification for project `phase6-qc-free-context-hub` (configurable).
  * Single correlation_id across jobs; asserts DB state before declaring success.
  *
+ * Enqueues **only** `knowledge.loop.deep` for the knowledge loop (not `knowledge.loop.shallow`), so FAQ/RAPTOR/builder
+ * memory run inside deep round 1 — avoids two heavy jobs competing for the same LLM.
+ *
  * Run (from repo root, same DB as worker):
- *   VERIFY_PHASE6_ROOT=/workspace npm run verify:phase6:qc
+ *   QC_VERIFY_REPO_ROOT=/workspace npm run verify:phase6:qc
  *
  * On Windows host talking to Postgres on localhost, ensure RABBITMQ_URL uses 127.0.0.1 if enqueue uses RabbitMQ from host.
  */
@@ -11,6 +14,13 @@ import * as dotenv from 'dotenv';
 import { getDbPool } from '../db/client.js';
 import { getEnv } from '../env.js';
 import { enqueueJob } from '../services/jobQueue.js';
+import {
+  qcVerifyCorrelationId,
+  qcVerifyDeepMaxRounds,
+  qcVerifyProjectId,
+  qcVerifyRepoRoot,
+  qcVerifySkipBuilderMemory,
+} from '../utils/qcVerifyEnv.js';
 
 dotenv.config();
 
@@ -66,14 +76,6 @@ async function assertNoFailedJobs(correlationId: string) {
 
 async function assertArtifacts(projectId: string) {
   const pool = getDbPool();
-  const shallow = await pool.query(
-    `SELECT 1 FROM generated_documents
-     WHERE project_id=$1 AND doc_type='benchmark_artifact' AND metadata->>'kind' = 'shallow_loop' LIMIT 1`,
-    [projectId],
-  );
-  if (!shallow.rowCount) {
-    throw new Error('[verify-qc] missing shallow_loop benchmark_artifact');
-  }
   const deep = await pool.query(
     `SELECT 1 FROM generated_documents
      WHERE project_id=$1 AND doc_type='benchmark_artifact' AND metadata->>'kind' = 'deep_loop_summary' LIMIT 1`,
@@ -91,29 +93,49 @@ async function assertArtifacts(projectId: string) {
     throw new Error('[verify-qc] missing quality_eval/* benchmark_artifact');
   }
   const env = getEnv();
-  if (env.PHASE6_BUILDER_MEMORY_ENABLED) {
+  if (env.BUILDER_MEMORY_ENABLED) {
     const bm = await pool.query(
       `SELECT 1 FROM generated_documents
-       WHERE project_id=$1 AND metadata->>'kind' = 'builder_memory' LIMIT 1`,
+       WHERE project_id=$1 AND doc_type='benchmark_artifact' AND (
+         metadata->>'kind' = 'builder_memory'
+         OR metadata->>'kind' = 'builder_memory_global'
+         OR doc_key LIKE 'phase6/builder_memory/global/%'
+       ) LIMIT 1`,
       [projectId],
     );
     if (!bm.rowCount) {
-      console.warn('[verify-qc] WARN: no builder_memory artifact (LLM may be unset or step skipped)');
+      console.warn(
+        '[verify-qc] WARN: no single-pass or global builder memory artifact (LLM may be unset, large_repo path only leaf, or step skipped)',
+      );
+      console.warn(
+        '[verify-qc] hint: Builder memory runs in the **worker** container, not this script. It needs a **chat** model (BUILDER_AGENT_MODEL or DISTILLATION_MODEL) and POST /v1/chat/completions — embeddings-only LM Studio will yield no_llm_output. Check worker logs: phase6 builder_memory / builder_memory_large / builder memory chat failed.',
+      );
+      const diag = await pool.query(
+        `SELECT doc_key, metadata->>'kind' AS kind, updated_at
+         FROM generated_documents
+         WHERE project_id=$1 AND doc_key LIKE 'phase6/builder_memory%'
+         ORDER BY updated_at DESC
+         LIMIT 12`,
+        [projectId],
+      );
+      if (diag.rowCount) {
+        console.warn('[verify-qc] recent phase6/builder_memory* rows (partial large-repo runs may show manifest/leaf only):');
+        console.table(diag.rows);
+      } else {
+        console.warn('[verify-qc] no phase6/builder_memory* rows at all — likely no chat model or builder_memory step returned early.');
+      }
     }
   }
 }
 
 async function main() {
   const env = getEnv();
-  const projectId = process.env.VERIFY_PHASE6_QC_PROJECT_ID?.trim() || DEFAULT_PROJECT;
-  const root = process.env.VERIFY_PHASE6_ROOT?.trim() || '/workspace';
+  const projectId = qcVerifyProjectId(DEFAULT_PROJECT);
+  const root = qcVerifyRepoRoot();
   const correlationId =
-    process.env.VERIFY_PHASE6_CORRELATION_ID?.trim() || `phase6-qc-${new Date().toISOString().replace(/[:.]/g, '-')}`;
-  const maxDeepRounds = Math.min(
-    5,
-    Math.max(1, Number(process.env.VERIFY_PHASE6_DEEP_MAX_ROUNDS ?? 3)),
-  );
-  const skipBuilderMemory = String(process.env.VERIFY_PHASE6_SKIP_BUILDER_MEMORY ?? '').toLowerCase() === 'true';
+    qcVerifyCorrelationId() ?? `phase6-qc-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+  const maxDeepRounds = Math.min(5, qcVerifyDeepMaxRounds(3));
+  const skipBuilderMemory = qcVerifySkipBuilderMemory();
 
   await ensureProjectRow(projectId);
 
@@ -121,11 +143,11 @@ async function main() {
   console.log('[verify-qc] project_id=', projectId);
   console.log('[verify-qc] root=', root);
   console.log('[verify-qc] correlation_id=', correlationId);
-  console.log('[verify-qc] PHASE6_KNOWLEDGE_LOOP_ENABLED=', env.PHASE6_KNOWLEDGE_LOOP_ENABLED);
-  console.log('[verify-qc] PHASE6_BUILDER_MEMORY_ENABLED=', env.PHASE6_BUILDER_MEMORY_ENABLED);
+  console.log('[verify-qc] KNOWLEDGE_LOOP_ENABLED=', env.KNOWLEDGE_LOOP_ENABLED);
+  console.log('[verify-qc] BUILDER_MEMORY_ENABLED=', env.BUILDER_MEMORY_ENABLED);
 
-  if (!env.PHASE6_KNOWLEDGE_LOOP_ENABLED) {
-    throw new Error('PHASE6_KNOWLEDGE_LOOP_ENABLED must be true for shallow/deep verification');
+  if (!env.KNOWLEDGE_LOOP_ENABLED) {
+    throw new Error('KNOWLEDGE_LOOP_ENABLED must be true for knowledge.loop.deep verification');
   }
 
   const idx = await enqueueJob({
@@ -136,14 +158,6 @@ async function main() {
   });
   await waitJob(idx.job_id, 'index.run', 30 * 60_000);
 
-  const shallow = await enqueueJob({
-    project_id: projectId,
-    job_type: 'knowledge.loop.shallow',
-    payload: { root, run_faq: true, run_raptor: true },
-    correlation_id: correlationId,
-  });
-  await waitJob(shallow.job_id, 'knowledge.loop.shallow', 60 * 60_000);
-
   const deep = await enqueueJob({
     project_id: projectId,
     job_type: 'knowledge.loop.deep',
@@ -151,7 +165,9 @@ async function main() {
       root,
       max_rounds: maxDeepRounds,
       parent_run_id: 'verify-qc',
-      run_shallow: false,
+      run_shallow: true,
+      run_faq: true,
+      run_raptor: true,
       builder_memory: skipBuilderMemory ? false : true,
     },
     correlation_id: correlationId,
@@ -161,7 +177,7 @@ async function main() {
   const baseline = await enqueueJob({
     project_id: projectId,
     job_type: 'quality.eval',
-    payload: { queries_path: env.PHASE6_EVAL_QUERIES_PATH, set_baseline: true },
+    payload: { queries_path: env.QUALITY_EVAL_QUERIES_PATH, set_baseline: true },
     correlation_id: correlationId,
   });
   await waitJob(baseline.job_id, 'quality.eval (set_baseline)', 30 * 60_000);

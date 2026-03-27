@@ -52,6 +52,7 @@ function defaultIgnores(root: string): string[] {
 const CHARS_PER_LINE_EST = 45;
 
 export async function estimateRepoLinesByHeuristic(root: string): Promise<number> {
+  const maxFile = getEnv().MANIFEST_MAX_FILE_BYTES;
   const resolved = path.resolve(root);
   const ignore = [...(await loadIgnorePatternsFromRoot(resolved)), ...defaultIgnores(resolved)];
   const rels = await fg(CODE_GLOB, { cwd: resolved, onlyFiles: true, ignore, dot: true });
@@ -60,7 +61,7 @@ export async function estimateRepoLinesByHeuristic(root: string): Promise<number
     try {
       const fp = path.join(resolved, rel);
       const st = await fs.stat(fp);
-      if (st.size <= 0 || st.size > 2_000_000) continue;
+      if (st.size <= 0 || st.size > maxFile) continue;
       total += Math.max(1, Math.floor(st.size / CHARS_PER_LINE_EST));
     } catch {
       /* skip */
@@ -78,19 +79,21 @@ async function countLinesInFile(fp: string, maxBytes: number): Promise<number> {
 }
 
 export async function scanRepoManifest(root: string): Promise<RepoManifest> {
+  const env = getEnv();
+  const maxFile = env.MANIFEST_MAX_FILE_BYTES;
+  const maxRead = env.MANIFEST_LINE_READ_MAX_BYTES;
   const resolved = path.resolve(root);
   const ignore = [...(await loadIgnorePatternsFromRoot(resolved)), ...defaultIgnores(resolved)];
   const rels = await fg(CODE_GLOB, { cwd: resolved, onlyFiles: true, ignore, dot: true });
   const files: ManifestEntry[] = [];
   let totalBytes = 0;
   let totalLines = 0;
-  const maxRead = 512_000;
 
   for (const rel of rels) {
     try {
       const fp = path.join(resolved, rel);
       const st = await fs.stat(fp);
-      if (st.size <= 0 || st.size > 2_000_000) continue;
+      if (st.size <= 0 || st.size > maxFile) continue;
       totalBytes += st.size;
       let lines: number;
       if (st.size <= maxRead) {
@@ -266,9 +269,15 @@ async function mergeTextsBatched(
   maxOutTokens: number,
   system: string,
   introUser: (batch: string) => string,
+  mergeLabel: string,
 ): Promise<string | null> {
   let layer = [...chunks].filter(c => c.trim());
-  if (layer.length === 0) return null;
+  if (layer.length === 0) {
+    if (chunks.length > 0) {
+      logger.warn({ merge_label: mergeLabel }, 'builder_memory_large merge: no non-empty chunks');
+    }
+    return null;
+  }
   if (layer.length === 1) return layer[0]!.trim();
 
   while (layer.length > 1) {
@@ -284,7 +293,18 @@ async function mergeTextsBatched(
         user: introUser(text),
         maxTokens: maxOutTokens,
       });
-      if (!merged) return null;
+      if (!merged) {
+        logger.warn(
+          {
+            merge_label: mergeLabel,
+            batch_start_index: i,
+            batch_parts: batch.length,
+            layer_size: layer.length,
+          },
+          'builder_memory_large merge step produced no output (see builder memory chat warnings)',
+        );
+        return null;
+      }
       next.push(merged);
     }
     layer = next;
@@ -323,8 +343,8 @@ export async function buildLargeRepoProjectMemory(
   input: BuildLargeRepoMemoryInput,
 ): Promise<BuildLargeRepoMemoryResult> {
   const env = getEnv();
-  if (!env.PHASE6_BUILDER_MEMORY_ENABLED) {
-    return { status: 'skipped', reason: 'PHASE6_BUILDER_MEMORY_ENABLED=false', run_id: '' };
+  if (!env.BUILDER_MEMORY_ENABLED) {
+    return { status: 'skipped', reason: 'BUILDER_MEMORY_ENABLED=false', run_id: '' };
   }
 
   const runId =
@@ -448,6 +468,15 @@ export async function buildLargeRepoProjectMemory(
   }
 
   if (leafBodies.length === 0) {
+    logger.warn(
+      {
+        run_id: runId,
+        shard_count: shards.length,
+        reason: 'no_leaf_content',
+        hint: 'All shards empty, skipped, or chat returned no text — check builder memory chat logs and BUILDER_AGENT_MODEL.',
+      },
+      'builder_memory_large skipped: no leaf summaries',
+    );
     return {
       status: 'skipped',
       reason: 'no_leaf_content',
@@ -480,6 +509,7 @@ export async function buildLargeRepoProjectMemory(
       modSystem,
       batch =>
         `Module area: ${mkey}\n\nMerge the following leaf summaries:\n\n${batch}\n\nWrite the merged module memory.`,
+      `module:${mkey}`,
     );
     if (!merged) continue;
     const mk = `phase6/builder_memory/module/${runId}/m${mi}`;
@@ -517,7 +547,22 @@ export async function buildLargeRepoProjectMemory(
     globalSystem,
     batch =>
       `Module summaries to roll up into global project memory:\n\n${batch}\n\nWrite the global memory document.`,
+    'global',
   );
+
+  if (!globalMerged) {
+    if (moduleTexts.length > 0) {
+      logger.warn(
+        { run_id: runId, module_count: moduleTexts.length },
+        'builder_memory_large global merge failed — no builder_memory_global artifact (see chat warnings)',
+      );
+    } else {
+      logger.warn(
+        { run_id: runId, leaf_count: leafBodies.length },
+        'builder_memory_large no module summaries to roll up — global skipped (module merges may have failed)',
+      );
+    }
+  }
 
   let globalKey: string | undefined;
   if (globalMerged) {
@@ -572,7 +617,7 @@ export async function shouldUseLargeRepoBuilderMemory(input: {
 }): Promise<boolean> {
   const env = getEnv();
   if (input.largeRepoPayload === true) return true;
-  if (env.PHASE6_LARGE_REPO_LOC_THRESHOLD <= 0) return false;
+  if (env.BUILDER_MEMORY_LARGE_REPO_LOC_THRESHOLD <= 0) return false;
   const est = await estimateRepoLinesByHeuristic(input.root);
-  return est >= env.PHASE6_LARGE_REPO_LOC_THRESHOLD;
+  return est >= env.BUILDER_MEMORY_LARGE_REPO_LOC_THRESHOLD;
 }

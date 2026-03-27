@@ -1,3 +1,5 @@
+# QC / knowledge loop: start `mcp` + `worker` + `db` (+ `rabbitmq`/`redis` as needed), set QUEUE_ENABLED=true
+# and KNOWLEDGE_LOOP_* / QUALITY_EVAL_* / BUILDER_MEMORY_* in `.env`, then run verify — see docs/phase6-verification.md.
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -38,6 +40,7 @@ services:
     volumes:
       - contexthub_redis_data:/data
 
+  # MCP HTTP :3000; repo mounted at /workspace (verify scripts: QC_VERIFY_REPO_ROOT=/workspace).
   mcp:
     build:
       context: .
@@ -90,6 +93,7 @@ services:
       - contexthub_mcpdata:/data
       - ./:/workspace
 
+  # Builder memory (Phase 6 deep) runs here: needs DISTILLATION_MODEL|BUILDER_AGENT_MODEL + chat-capable /v1/chat/completions in .env.
   worker:
     build:
       context: .

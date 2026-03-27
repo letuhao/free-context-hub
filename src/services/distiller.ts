@@ -1,5 +1,6 @@
 import { getEnv } from '../env.js';
 import * as z from 'zod/v4';
+import { completionTokensForOutputChars, excerptForSummarization } from '../utils/llmCompletionBudget.js';
 
 function chatBaseUrl(): string {
   const env = getEnv();
@@ -138,7 +139,10 @@ export async function reflectOnTopic(input: { topic: string; bullets: string[] }
 
 export async function compressText(input: { text: string; maxOutputChars?: number }): Promise<{ compressed: string; warning?: string }> {
   const env = getEnv();
-  const maxOut = Math.min(Math.max(input.maxOutputChars ?? 4000, 200), 32_000);
+  const maxOut = Math.min(
+    Math.max(input.maxOutputChars ?? 4000, env.DISTILLATION_COMPRESS_MIN_OUTPUT_CHARS),
+    env.DISTILLATION_COMPRESS_MAX_OUTPUT_CHARS,
+  );
 
   if (!env.DISTILLATION_ENABLED) {
     const t = String(input.text ?? '');
@@ -150,7 +154,9 @@ export async function compressText(input: { text: string; maxOutputChars?: numbe
 
   const system =
     'Compress the user text while preserving decisions, constraints, and actionable steps. Remove redundancy.';
-  const user = `MAX_OUTPUT_CHARS: ${maxOut}\n\nTEXT:\n${input.text}`;
+  const excerpt = excerptForSummarization(String(input.text ?? ''), env.QA_SUMMARIZE_MAX_INPUT_CHARS);
+  const user =
+    `MAX_OUTPUT_CHARS: ${maxOut}${excerpt.truncated ? ` (input truncated; ${excerpt.omittedChars} chars omitted from middle)` : ''}\n\nTEXT:\n${excerpt.text}`;
 
   try {
     const out = await chatCompletion({
@@ -158,7 +164,9 @@ export async function compressText(input: { text: string; maxOutputChars?: numbe
         { role: 'system', content: system },
         { role: 'user', content: user },
       ],
-      max_tokens: Math.min(1200, Math.ceil(maxOut / 3)),
+      max_tokens: completionTokensForOutputChars(maxOut, {
+        maxTokens: env.LLM_COMPLETION_MAX_TOKENS_CAP,
+      }),
       temperature: 0.1,
       timeoutMs: env.DISTILLATION_TIMEOUT_MS,
     });

@@ -165,18 +165,18 @@ export function evaluatePhase6Gates(params: {
     baseline_totals: baseline?.totals ?? null,
   };
 
-  if (env.PHASE6_MIN_RECALL_AT3 > 0 && candidate.totals.recall_at_3 < env.PHASE6_MIN_RECALL_AT3) {
+  if (env.QUALITY_EVAL_MIN_RECALL_AT3 > 0 && candidate.totals.recall_at_3 < env.QUALITY_EVAL_MIN_RECALL_AT3) {
     return {
       pass: false,
-      reason: `recall@3 ${candidate.totals.recall_at_3.toFixed(3)} < PHASE6_MIN_RECALL_AT3 (${env.PHASE6_MIN_RECALL_AT3})`,
+      reason: `recall@3 ${candidate.totals.recall_at_3.toFixed(3)} < QUALITY_EVAL_MIN_RECALL_AT3 (${env.QUALITY_EVAL_MIN_RECALL_AT3})`,
       details,
     };
   }
 
-  if (env.PHASE6_MAX_P95_MS > 0 && candidate.totals.p95_ms > env.PHASE6_MAX_P95_MS) {
+  if (env.QUALITY_EVAL_MAX_P95_MS > 0 && candidate.totals.p95_ms > env.QUALITY_EVAL_MAX_P95_MS) {
     return {
       pass: false,
-      reason: `p95_ms ${candidate.totals.p95_ms} > PHASE6_MAX_P95_MS (${env.PHASE6_MAX_P95_MS})`,
+      reason: `p95_ms ${candidate.totals.p95_ms} > QUALITY_EVAL_MAX_P95_MS (${env.QUALITY_EVAL_MAX_P95_MS})`,
       details,
     };
   }
@@ -184,16 +184,16 @@ export function evaluatePhase6Gates(params: {
   if (baseline) {
     const delta = candidate.totals.recall_at_3 - baseline.totals.recall_at_3;
     details.recall_delta = delta;
-    if (env.PHASE6_MIN_RECALL_DELTA > 0 && delta < env.PHASE6_MIN_RECALL_DELTA) {
+    if (env.QUALITY_EVAL_MIN_RECALL_DELTA > 0 && delta < env.QUALITY_EVAL_MIN_RECALL_DELTA) {
       return {
         pass: false,
-        reason: `recall@3 delta ${delta.toFixed(3)} < PHASE6_MIN_RECALL_DELTA (${env.PHASE6_MIN_RECALL_DELTA})`,
+        reason: `recall@3 delta ${delta.toFixed(3)} < QUALITY_EVAL_MIN_RECALL_DELTA (${env.QUALITY_EVAL_MIN_RECALL_DELTA})`,
         details,
       };
     }
   }
 
-  const regressGroups = env.PHASE6_NO_REGRESS_GROUPS.split(',')
+  const regressGroups = env.QUALITY_EVAL_NO_REGRESS_GROUPS.split(',')
     .map(s => s.trim())
     .filter(Boolean);
   if (baseline && regressGroups.length) {
@@ -210,7 +210,7 @@ export function evaluatePhase6Gates(params: {
       details.group_regressions = failures;
       return {
         pass: false,
-        reason: `group regression on PHASE6_NO_REGRESS_GROUPS: ${failures.join('; ')}`,
+        reason: `group regression on QUALITY_EVAL_NO_REGRESS_GROUPS: ${failures.join('; ')}`,
         details,
       };
     }
@@ -253,7 +253,7 @@ export async function runQualityEvalAndPersist(params: {
   baseline: ProductionEvalArtifact | null;
   doc_key: string;
 }> {
-  const baselineKey = params.baselineDocKey ?? params.env.PHASE6_BASELINE_DOC_KEY;
+  const baselineKey = params.baselineDocKey ?? params.env.QUALITY_EVAL_BASELINE_DOC_KEY;
   let baseline: ProductionEvalArtifact | null = null;
   const baselineRow = await getGeneratedDocument({
     projectId: params.projectId,
@@ -268,9 +268,9 @@ export async function runQualityEvalAndPersist(params: {
     projectId: params.projectId,
     queriesPath: params.queriesPath,
     hybridMode: params.hybridMode,
-    kgAssistByDefault: params.env.PHASE6_EVAL_KG_ASSIST,
+    kgAssistByDefault: params.env.QUALITY_EVAL_KG_ASSIST,
   });
-  const minRecall = Math.max(0, params.env.PHASE6_MIN_RECALL_AT3);
+  const minRecall = Math.max(0, params.env.QUALITY_EVAL_MIN_RECALL_AT3);
   artifact.fail_clusters = computeFailClusters(artifact, minRecall);
 
   const stamp = params.docKeySuffix ?? new Date().toISOString().replace(/[:.]/g, '-');

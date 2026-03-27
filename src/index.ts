@@ -36,6 +36,9 @@ const logger = createModuleLogger('mcp');
 
 dotenv.config();
 
+/** Parsed once at startup for tool schemas/help text (matches server defaults). */
+const startupEnv = getEnv();
+
 const OutputFormatSchema = z.enum(['auto_both', 'json_only', 'json_pretty', 'summary_only']);
 type OutputFormat = z.infer<typeof OutputFormatSchema>;
 
@@ -62,6 +65,12 @@ function logStartupEnvSummary() {
     EMBEDDINGS_MODEL: env.EMBEDDINGS_MODEL,
     EMBEDDINGS_DIM: env.EMBEDDINGS_DIM,
     CHUNK_LINES: env.CHUNK_LINES,
+    INDEX_MAX_FILE_BYTES: env.INDEX_MAX_FILE_BYTES,
+    INDEX_EMBEDDING_BATCH_SIZE: env.INDEX_EMBEDDING_BATCH_SIZE,
+    GENERATED_INDEX_MAX_DOCS: env.GENERATED_INDEX_MAX_DOCS,
+    RETRIEVAL_SNIPPET_MAX_CHARS: env.RETRIEVAL_SNIPPET_MAX_CHARS,
+    RERANK_LLM_MAX_TOKENS: env.RERANK_LLM_MAX_TOKENS,
+    LLM_SUMMARY_SOURCE_CHAR_CEILING: env.LLM_SUMMARY_SOURCE_CHAR_CEILING,
     // Never print secrets (token / API key)
     CONTEXT_HUB_WORKSPACE_TOKEN: env.CONTEXT_HUB_WORKSPACE_TOKEN ? '[set]' : '[not set]',
     EMBEDDINGS_API_KEY: env.EMBEDDINGS_API_KEY ? '[set]' : '[not set]',
@@ -87,6 +96,8 @@ function logStartupEnvSummary() {
     S3_ACCESS_KEY_ID: env.S3_ACCESS_KEY_ID ? '[set]' : '[not set]',
     S3_SECRET_ACCESS_KEY: env.S3_SECRET_ACCESS_KEY ? '[set]' : '[not set]',
     S3_FORCE_PATH_STYLE: env.S3_FORCE_PATH_STYLE,
+    KNOWLEDGE_LOOP_ENABLED: env.KNOWLEDGE_LOOP_ENABLED,
+    BUILDER_MEMORY_ENABLED: env.BUILDER_MEMORY_ENABLED,
   };
   logger.info({ env: safe }, 'startup env summary');
 }
@@ -254,8 +265,16 @@ function createMcpToolsServer() {
           key_parameters: [
             { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID from server env if omitted.' },
             { path: 'root', required: true, notes: 'Root directory to index.' },
-            { path: 'options.lines_per_chunk', required: false, notes: 'Default: 120.' },
-            { path: 'options.embedding_batch_size', required: false, notes: 'Default: 8.' },
+            {
+              path: 'options.lines_per_chunk',
+              required: false,
+              notes: `Default: ${startupEnv.CHUNK_LINES} (CHUNK_LINES).`,
+            },
+            {
+              path: 'options.embedding_batch_size',
+              required: false,
+              notes: `Default: ${startupEnv.INDEX_EMBEDDING_BATCH_SIZE} (INDEX_EMBEDDING_BATCH_SIZE).`,
+            },
           ],
         },
         {
@@ -508,7 +527,10 @@ function createMcpToolsServer() {
                 workspace_token: workspaceToken,
                 project_id: projectId,
                 root: 'D:/path/to/repo',
-                options: { lines_per_chunk: 120, embedding_batch_size: 8 },
+                options: {
+                  lines_per_chunk: startupEnv.CHUNK_LINES,
+                  embedding_batch_size: startupEnv.INDEX_EMBEDDING_BATCH_SIZE,
+                },
               },
             },
           },
@@ -642,8 +664,18 @@ function createMcpToolsServer() {
         output_format: OutputFormatSchema.default('auto_both').describe('Response format: auto_both | json_only | json_pretty | summary_only.'),
         options: z
           .object({
-            lines_per_chunk: z.number().int().positive().optional().describe('Chunk size in lines (default: 120).'),
-            embedding_batch_size: z.number().int().positive().optional().describe('Embedding batch size (default: 8).'),
+            lines_per_chunk: z
+              .number()
+              .int()
+              .positive()
+              .optional()
+              .describe(`Chunk size in lines (default: ${startupEnv.CHUNK_LINES} from CHUNK_LINES).`),
+            embedding_batch_size: z
+              .number()
+              .int()
+              .positive()
+              .optional()
+              .describe(`Embedding batch size (default: ${startupEnv.INDEX_EMBEDDING_BATCH_SIZE} from INDEX_EMBEDDING_BATCH_SIZE).`),
           })
           .optional(),
       }),

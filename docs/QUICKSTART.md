@@ -88,10 +88,10 @@ Notes:
 
 ### Phase 6 — knowledge loop + quality eval (optional)
 
-1. **Set env** (see `.env.example`): `PHASE6_KNOWLEDGE_LOOP_ENABLED=true` to allow worker jobs `knowledge.loop.shallow` and `knowledge.loop.deep` (otherwise they return `skipped: true`). Tune `PHASE6_*` gate variables when comparing `quality.eval` runs to a baseline.
+1. **Set env** (see `.env.example`): `KNOWLEDGE_LOOP_ENABLED=true` to allow worker jobs `knowledge.loop.shallow` and `knowledge.loop.deep` (otherwise they return `skipped: true`). Tune `QUALITY_EVAL_*` gate variables when comparing `quality.eval` runs to a baseline. (Deprecated: `PHASE6_*` aliases are still read.)
 2. **Enqueue jobs** via MCP `enqueue_job`:
-   - `knowledge.loop.shallow` — payload: `{ "root": "<repo root>", "run_faq": true, "run_raptor": true }` — runs FAQ + RAPTOR builders, then a single `index.run`, and writes a `benchmark_artifact` row (metadata `status: draft`).
-   - `knowledge.loop.deep` — payload: `{ "root": "<root>", "max_rounds": 3, "queries_path": "qc/queries.json" }` — optional first-round shallow build, then `index.run` + `quality.eval` each round until gates pass or max rounds.
+   - **`knowledge.loop.deep`** (recommended for a full pass) — payload: `{ "root": "<root>", "max_rounds": 3, "queries_path": "qc/queries.json" }` — round 1 can run FAQ + RAPTOR + builder memory (`run_shallow` defaults true), then `index.run` + `quality.eval` each round. Prefer **one** deep job instead of enqueueing shallow and deep together (avoids two heavy jobs hitting the LLM at once).
+   - `knowledge.loop.shallow` — optional standalone: `{ "root": "<repo root>", "run_faq": true, "run_raptor": true }` — FAQ + RAPTOR + `index.run` + shallow artifact; use when you do **not** run deep in the same window.
    - `quality.eval` — payload: `{ "queries_path": "qc/queries.json", "set_baseline": true }` (optional) — production retrieval metrics vs golden set; persists `benchmark_artifact` under `quality_eval/<timestamp>` and can pin baseline at `quality_eval/baseline`.
 3. **Worker**: run `run_next_job` (or a dedicated worker process) until jobs complete; use `list_jobs` with `correlation_id` to audit.
 4. **Human gate**: `list_generated_documents` with `doc_status: "draft"`, then `promote_generated_document` to set `metadata.status` to `active`.
@@ -100,7 +100,7 @@ Kiểm chứng đầy đủ (project `phase6-qc-free-context-hub`, correlation_i
 
 ### Phase 6 smoke (optional)
 
-Requires `SMOKE_QUEUE_TOOLS=true` + `SMOKE_PHASE6=true` (same `npm run smoke-test` session). After indexing, enqueues `quality.eval` and asserts a `doc_key` in the result; checks that `promote_generated_document` is registered.
+Requires `SMOKE_QUEUE_TOOLS=true` + `SMOKE_KNOWLEDGE_LOOP=true` (same `npm run smoke-test` session; deprecated alias `SMOKE_PHASE6`). After indexing, enqueues `quality.eval` and asserts a `doc_key` in the result; checks that `promote_generated_document` is registered.
 
 ### Phase 4 Neo4j troubleshooting
 
