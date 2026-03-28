@@ -2107,14 +2107,18 @@ function createMcpToolsServer() {
     {
       description:
         'Enqueue async job for worker pipeline (RabbitMQ/Postgres backend). ' +
-        'Required payload fields per job_type: ' +
-        'repo.sync: { git_url (required), ref?, cache_root?, since?, max_commits? } — clones/fetches repo then chains git.ingest + index.run. ' +
-        'index.run: { root (required) } — indexes files at root path. ' +
-        'git.ingest: { root (required), since?, max_commits? } — ingests git history from root. ' +
-        'workspace.scan: { root (required) } — scans workspace for changes. ' +
-        'workspace.delta_index: { root (required) } — indexes only changed files. ' +
-        'quality.eval: {} — runs QC golden set evaluation. ' +
-        'knowledge.refresh / faq.build / raptor.build / knowledge.loop.* / knowledge.memory.build: {} — no required payload fields.',
+        'IMPORTANT — required payload fields per job_type: ' +
+        'repo.sync: { git_url (REQUIRED), ref?, cache_root?, since?, max_commits? }. ' +
+        'index.run: { root (REQUIRED) }. ' +
+        'git.ingest: { root (REQUIRED), since?, max_commits? }. ' +
+        'workspace.scan: { root (REQUIRED) }. ' +
+        'workspace.delta_index: { root (REQUIRED) }. ' +
+        'faq.build: { root (REQUIRED), modules?, max_items? }. ' +
+        'raptor.build: { root (REQUIRED), path_glob?, max_levels? }. ' +
+        'knowledge.memory.build: { root (REQUIRED) }. ' +
+        'quality.eval: {} — no required payload. ' +
+        'knowledge.refresh: { commit_sha? }. ' +
+        'knowledge.loop.shallow / knowledge.loop.deep: {} — no required payload.',
       inputSchema: z.object({
         workspace_token: z.string().optional(),
         project_id: z.string().min(1).optional(),
@@ -2132,11 +2136,13 @@ function createMcpToolsServer() {
           'knowledge.loop.deep',
           'knowledge.memory.build',
         ]).describe(
-          'Job type. repo.sync requires payload.git_url. index.run/git.ingest/workspace.* require payload.root.',
+          'Job type. MOST jobs require payload.root (filesystem path). repo.sync requires payload.git_url instead.',
         ),
         payload: z.record(z.string(), z.unknown()).optional().describe(
-          'Job-specific payload. Key fields: git_url (for repo.sync), root (for index.run/git.ingest/workspace.*), ' +
-          'ref (git branch/tag), since (git date filter), max_commits (git limit).',
+          'REQUIRED for most jobs. repo.sync needs { git_url: "https://..." }. ' +
+          'ALL other jobs that touch files need { root: "/path/to/project" } — this includes: ' +
+          'index.run, git.ingest, workspace.scan, workspace.delta_index, faq.build, raptor.build, knowledge.memory.build. ' +
+          'Optional fields: ref, since, max_commits, modules, path_glob, max_items, max_levels.',
         ),
         correlation_id: z.string().optional(),
         queue_name: z.string().min(1).optional(),
