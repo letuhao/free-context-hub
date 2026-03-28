@@ -2244,7 +2244,9 @@ async function main() {
   const app = createMcpExpressApp();
   const transports: Record<string, StreamableHTTPServerTransport> = {};
 
-  const useJsonResponse = true;
+  // enableJsonResponse=false allows both JSON responses and SSE streaming.
+  // MCP Inspector and some clients require SSE support via GET.
+  const useJsonResponse = false;
 
   /** Create a new MCP transport + server instance and register it. */
   function createNewSession(): StreamableHTTPServerTransport {
@@ -2308,10 +2310,24 @@ async function main() {
     }
   });
 
-  // Per MCP Streamable HTTP spec, clients may attempt GET for SSE streams.
-  // In JSON response mode we don't support SSE here, so return 405.
-  app.get('/mcp', async (_req: any, res: any) => {
-    res.status(405).set('Allow', 'POST').send('Method Not Allowed');
+  // Per MCP Streamable HTTP spec, GET opens an SSE stream for server-initiated messages.
+  // Support it for clients like MCP Inspector that connect via GET first.
+  app.get('/mcp', async (req: any, res: any) => {
+    const sessionId = req.headers['mcp-session-id'];
+    if (sessionId && transports[String(sessionId)]) {
+      const transport = transports[String(sessionId)];
+      await transport.handleRequest(req as any, res as any);
+    } else {
+      // No valid session — tell client to POST initialize first.
+      res.status(400).json({
+        jsonrpc: '2.0',
+        error: {
+          code: -32000,
+          message: 'Session required: POST /mcp with method:"initialize" first to get a session ID.',
+        },
+        id: null,
+      });
+    }
   });
 
   const port = env.MCP_PORT;
