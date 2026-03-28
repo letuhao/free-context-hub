@@ -6,6 +6,7 @@ import { deleteProjectGraph } from '../kg/projectGraph.js';
 import { embedTexts } from './embedder.js';
 import { distillLesson } from './distiller.js';
 import { rebuildProjectSnapshot } from './snapshot.js';
+import { expandForFtsIndex, buildFtsQuery } from '../utils/ftsTokenizer.js';
 
 export type LessonType = 'decision' | 'preference' | 'guardrail' | 'workaround' | 'general_note';
 export type LessonStatus = 'draft' | 'active' | 'superseded' | 'archived';
@@ -160,11 +161,14 @@ export async function addLesson(payload: LessonPayload): Promise<AddLessonResult
     [payload.project_id, payload.project_id],
   );
 
+  // Build FTS content with camelCase expansion for identifier-aware search.
+  const ftsContent = expandForFtsIndex(payload.title + ' ' + payload.content);
+
   await pool.query(
     `INSERT INTO lessons(
       lesson_id, project_id, lesson_type, title, content, tags, source_refs,
-      embedding, captured_by, summary, quick_action, status, superseded_by, created_at, updated_at
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::vector,$9,$10,$11,$12,$13, now(), now());`,
+      embedding, captured_by, summary, quick_action, status, superseded_by, created_at, updated_at, fts
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::vector,$9,$10,$11,$12,$13, now(), now(), to_tsvector('english', $14));`,
     [
       lessonId,
       payload.project_id,
@@ -179,6 +183,7 @@ export async function addLesson(payload: LessonPayload): Promise<AddLessonResult
       quick_action,
       lessonStatus,
       null,
+      ftsContent,
     ],
   );
 
@@ -363,6 +368,10 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
   const tagsAny = (params.filters?.tags_any ?? []).filter(Boolean);
   const includeAll = Boolean(params.filters?.include_all_statuses);
 
+  // Extract tokens for FTS query.
+  const queryTokens = params.query.match(/[A-Za-z_][A-Za-z0-9_]{1,}/g) ?? [];
+  const ftsQuery = buildFtsQuery(queryTokens, 'or');
+
   const [vec] = await embedTexts([params.query]);
   const vector = `[${vec.join(',')}]`;
 
@@ -386,6 +395,22 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
   sqlParams.push(limit);
   const limitParam = `$${sqlParams.length}`;
 
+  // Build hybrid scoring: semantic + FTS keyword boost.
+  let ftsScoreExpr = '0';
+  let ftsJoin = '';
+  if (ftsQuery) {
+    sqlParams.push(ftsQuery);
+    const ftsParam = `$${sqlParams.length}`;
+    // Use a LEFT JOIN subquery so FTS matches boost score but don't exclude non-FTS results.
+    ftsJoin = `LEFT JOIN LATERAL (
+      SELECT ts_rank(l.fts, to_tsquery('english', ${ftsParam})) AS fts_rank
+      WHERE l.fts IS NOT NULL AND l.fts @@ to_tsquery('english', ${ftsParam})
+    ) fts_sub ON true`;
+    ftsScoreExpr = 'COALESCE(fts_sub.fts_rank, 0)';
+  }
+
+  const whereClause = whereParts.join(' AND ');
+
   const res = await pool.query(
     `SELECT
       l.lesson_id,
@@ -395,13 +420,22 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
       l.summary,
       l.tags,
       l.status,
-      GREATEST(0, 1 - (l.embedding <=> $2::vector)) AS score
+      GREATEST(0, 1 - (l.embedding <=> $2::vector)) AS sem_score,
+      ${ftsScoreExpr} AS fts_score,
+      LEAST(1.0, GREATEST(0, 1 - (l.embedding <=> $2::vector)) + 0.40 * ${ftsScoreExpr}) AS score
      FROM lessons l
-     WHERE ${whereParts.join(' AND ')}
-     ORDER BY l.embedding <=> $2::vector
+     ${ftsJoin}
+     WHERE ${whereClause}
+     ORDER BY score DESC, sem_score DESC
      LIMIT ${limitParam};`,
     sqlParams,
   );
+
+  const explanations: string[] = [];
+  if (ftsQuery) {
+    const ftsHits = (res.rows ?? []).filter((r: any) => Number(r.fts_score) > 0).length;
+    explanations.push(`hybrid: sem + 0.40*fts, fts_hits=${ftsHits}/${(res.rows ?? []).length}`);
+  }
 
   const matches: SearchLessonsResult['matches'] = (res.rows ?? []).map((r: any) => {
     const sum = r.summary != null ? String(r.summary).trim() : '';
@@ -417,7 +451,7 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
     };
   });
 
-  return { matches, explanations: [] };
+  return { matches, explanations };
 }
 
 export async function updateLessonStatus(params: {
