@@ -295,7 +295,7 @@ function createMcpToolsServer() {
           key_parameters: [
             { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
             { path: 'query', required: true, notes: 'Identifier, file path, or natural language query.' },
-            { path: 'kind', required: false, notes: "Filter by data kind: 'code', 'doc', 'config', 'test', 'infra', or array of kinds." },
+            { path: 'kind', required: false, notes: "Filter by data kind: 'source', 'type_def', 'test', 'migration', 'config', 'dependency', 'api_spec', 'doc', 'script', 'infra', 'style', 'generated'. Or array." },
             { path: 'max_files', required: false, notes: 'Max files to return (default 50).' },
             { path: 'semantic_threshold', required: false, notes: 'Min deterministic results before semantic is skipped (default 3). Set 0 to always include semantic.' },
           ],
@@ -821,11 +821,16 @@ function createMcpToolsServer() {
         query: z.string().min(1).describe('Search query. Can be an identifier (parseBooleanEnv), a path (src/env.ts), or natural language.'),
         kind: z
           .union([
-            z.enum(['code', 'doc', 'config', 'test', 'infra']),
-            z.array(z.enum(['code', 'doc', 'config', 'test', 'infra'])),
+            z.enum(['source', 'type_def', 'test', 'migration', 'config', 'dependency', 'api_spec', 'doc', 'script', 'infra', 'style', 'generated']),
+            z.array(z.enum(['source', 'type_def', 'test', 'migration', 'config', 'dependency', 'api_spec', 'doc', 'script', 'infra', 'style', 'generated'])),
           ])
           .optional()
-          .describe('Filter to specific data kinds. E.g., "code" for source only, ["code","config"] for both. Default: all kinds.'),
+          .describe(
+            'Filter by data kind: source (implementation code), type_def (interfaces/models/schemas), test, ' +
+            'migration (DB migrations/seeds), config (.env/yaml/json settings), dependency (package.json/go.mod), ' +
+            'api_spec (OpenAPI/GraphQL/protobuf), doc (markdown/README), script (utility scripts), ' +
+            'infra (CI/CD/Docker/Terraform), style (CSS/SCSS), generated (lock/codegen). Default: all.',
+          ),
         filters: z
           .object({
             path_glob: z.string().min(1).optional().describe("Optional path glob filter. Example: 'src/**/*.ts'."),
@@ -847,7 +852,7 @@ function createMcpToolsServer() {
           z.object({
             path: z.string(),
             tier: z.enum(['exact_match', 'symbol_match', 'fts_match', 'semantic']),
-            kind: z.enum(['code', 'doc', 'config', 'test', 'infra']),
+            kind: z.enum(['source', 'type_def', 'test', 'migration', 'config', 'dependency', 'api_spec', 'doc', 'script', 'infra', 'style', 'generated']),
             score: z.number(),
             symbols: z.array(z.string()),
             sample_lines: z.array(z.string()),

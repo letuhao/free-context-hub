@@ -36,11 +36,21 @@ export type FileCandidate = {
 
 /** Infer chunk kind from file path when DB metadata is unavailable. */
 function inferKindFromPath(path: string): ChunkKind {
-  if (/\.(test|spec)\.\w+$/.test(path) || /__tests__\//.test(path)) return 'test';
-  if (/\.(md|txt|rst|adoc)$/.test(path) || /^docs?\//.test(path)) return 'doc';
-  if (/\.(json|yaml|yml|toml|xml|env|ini|cfg|conf)$/.test(path) || /^\.\w/.test(path)) return 'config';
-  if (/\.(sh|bash|ps1|bat|cmd)$/.test(path) || /^(scripts?|ci|deploy|infra)\//.test(path) || /Dockerfile|Makefile|Jenkinsfile/.test(path)) return 'infra';
-  return 'code';
+  // Use the same classification logic as the indexer.
+  // This is a lightweight fallback for ripgrep results not in the DB.
+  const p = path.toLowerCase();
+  if (/\.lock$|\.min\.\w+$|\.map$|\bgenerated\//.test(p)) return 'generated';
+  if (/\.(test|spec)\.\w+$|__tests__\/|__mocks__\//.test(p)) return 'test';
+  if (/\bmigrations?\/|\bseed[s]?[./]/.test(p)) return 'migration';
+  if (/\.proto$|\.graphql$|\.gql$|openapi|swagger/i.test(p)) return 'api_spec';
+  if (/\.d\.ts$|\.types?\.\w+$|\btypes?\/|\bmodels?\/|\binterfaces?\//.test(p)) return 'type_def';
+  if (/package\.json$|go\.mod$|Cargo\.toml$|requirements.*\.txt$|Gemfile$|pyproject\.toml$/i.test(p)) return 'dependency';
+  if (/\.(md|mdx|txt|rst|adoc)$|^docs?\/|README|CHANGELOG/i.test(p)) return 'doc';
+  if (/\.(css|scss|sass|less)$|\bstyles?\//.test(p)) return 'style';
+  if (/\.(json|yaml|yml|toml|xml|env|ini|cfg|conf)$|\bconfig\.\w+$/.test(p)) return 'config';
+  if (/Dockerfile|docker-compose|\.tf$|\.github\/|\.gitlab/i.test(p)) return 'infra';
+  if (/\.(sh|bash|ps1|bat|cmd)$|\bscripts?\/|\bbin\//.test(p)) return 'script';
+  return 'source';
 }
 
 export type TieredSearchParams = {
@@ -607,13 +617,11 @@ export async function tieredSearch(params: TieredSearchParams): Promise<TieredSe
       fts_match: files.filter(f => f.tier === 'fts_match').length,
       semantic: files.filter(f => f.tier === 'semantic').length,
     },
-    by_kind: {
-      code: files.filter(f => f.kind === 'code').length,
-      doc: files.filter(f => f.kind === 'doc').length,
-      config: files.filter(f => f.kind === 'config').length,
-      test: files.filter(f => f.kind === 'test').length,
-      infra: files.filter(f => f.kind === 'infra').length,
-    },
+    by_kind: Object.fromEntries(
+      (['source', 'type_def', 'test', 'migration', 'config', 'dependency', 'api_spec', 'doc', 'script', 'infra', 'style', 'generated'] as const)
+        .map(k => [k, files.filter(f => f.kind === k).length])
+        .filter(([, count]) => (count as number) > 0)
+    ),
   }, 'tiered_search:done');
 
   if (params.debug) {
