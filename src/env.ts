@@ -137,8 +137,8 @@ const EnvSchema = z.object({
   RETRIEVAL_MMR_LAMBDA: z.coerce.number().min(0).max(1).optional().default(0.82),
   /** search_code: number of top candidates to apply MMR diversification on. */
   RETRIEVAL_MMR_WINDOW: z.coerce.number().int().positive().optional().default(80),
-  /** LLM rerank JSON completion budget. */
-  RERANK_LLM_MAX_TOKENS: z.coerce.number().int().positive().optional().default(250),
+  /** LLM rerank JSON completion budget (500+ recommended for thinking models like qwen3-reranker). */
+  RERANK_LLM_MAX_TOKENS: z.coerce.number().int().positive().optional().default(500),
 
   /** Max generated documents processed per `indexGeneratedDocuments` pass. */
   GENERATED_INDEX_MAX_DOCS: z.coerce.number().int().positive().optional().default(5000),
