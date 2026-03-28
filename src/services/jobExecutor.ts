@@ -13,12 +13,50 @@ import {
   shouldUseLargeRepoBuilderMemory,
 } from './builderMemoryLarge.js';
 import { runQualityEvalAndPersist } from './qcEval.js';
-import { prepareRepo } from './repoSources.js';
+import { getProjectSource, prepareRepo } from './repoSources.js';
 import { scanWorkspaceChanges } from './workspaceTracker.js';
 import { getEnv } from '../env.js';
 import { createModuleLogger } from '../utils/logger.js';
 
 const logger = createModuleLogger('jobExecutor');
+
+/**
+ * Auto-resolve payload.root from project_sources when not provided.
+ * This lets agents just pass project_id without knowing the Docker container path.
+ * Resolution order: payload.root → project_sources.repo_root → chunks.root → error.
+ */
+async function resolveRoot(projectId: string | null, payload: Record<string, unknown>): Promise<string> {
+  // If explicitly provided, use it.
+  const explicit = payload.root ? String(payload.root) : '';
+  if (explicit) return explicit;
+
+  if (!projectId) throw new Error('payload.root is required (or set project_id to auto-resolve from project_sources)');
+
+  // Try project_sources table (set by configure_project_source / prepare_repo).
+  try {
+    const source = await getProjectSource(projectId, 'remote_git');
+    if (source?.repo_root) {
+      logger.info({ projectId, resolvedRoot: source.repo_root, from: 'project_sources' }, 'auto-resolved root');
+      return String(source.repo_root);
+    }
+  } catch { /* table may not exist */ }
+
+  // Try chunks table (set by index_project).
+  try {
+    const { getDbPool } = await import('../db/client.js');
+    const pool = getDbPool();
+    const res = await pool.query(`SELECT DISTINCT root FROM chunks WHERE project_id = $1 LIMIT 1`, [projectId]);
+    if (res.rows?.[0]?.root) {
+      logger.info({ projectId, resolvedRoot: res.rows[0].root, from: 'chunks' }, 'auto-resolved root');
+      return String(res.rows[0].root);
+    }
+  } catch { /* ignore */ }
+
+  throw new Error(
+    `payload.root is required but was not provided, and no root could be auto-resolved for project "${projectId}". ` +
+    'Either pass payload.root explicitly, or run configure_project_source / prepare_repo / index_project first.',
+  );
+}
 
 async function executeByType(
   jobType: JobType,
@@ -60,8 +98,7 @@ async function executeByType(
     }
     case 'git.ingest': {
       if (!projectId) throw new Error('project_id is required for git.ingest');
-      const root = String(payload.root ?? '');
-      if (!root) throw new Error('payload.root is required');
+      const root = await resolveRoot(projectId, payload);
       return (await ingestGitHistory({
         projectId,
         root,
@@ -71,14 +108,12 @@ async function executeByType(
     }
     case 'index.run': {
       if (!projectId) throw new Error('project_id is required for index.run');
-      const root = String(payload.root ?? '');
-      if (!root) throw new Error('payload.root is required');
+      const root = await resolveRoot(projectId, payload);
       return (await indexProject({ projectId, root })) as unknown as Record<string, unknown>;
     }
     case 'workspace.scan': {
       if (!projectId) throw new Error('project_id is required for workspace.scan');
-      const root = String(payload.root ?? '');
-      if (!root) throw new Error('payload.root is required');
+      const root = await resolveRoot(projectId, payload);
       const scan = await scanWorkspaceChanges({ projectId, rootPath: root, runDeltaIndex: false });
       await enqueueJob({
         project_id: projectId,
@@ -96,8 +131,7 @@ async function executeByType(
     }
     case 'workspace.delta_index': {
       if (!projectId) throw new Error('project_id is required for workspace.delta_index');
-      const root = String(payload.root ?? '');
-      if (!root) throw new Error('payload.root is required');
+      const root = await resolveRoot(projectId, payload);
       return (await indexProject({ projectId, root })) as unknown as Record<string, unknown>;
     }
     case 'knowledge.refresh': {
@@ -181,8 +215,7 @@ async function executeByType(
         logger.info({ correlation_id: chainCorrelation }, 'phase6 shallow skipped');
         return { status: 'ok', skipped: true, reason: 'KNOWLEDGE_LOOP_ENABLED=false' };
       }
-      const root = String(payload.root ?? '');
-      if (!root) throw new Error('payload.root is required');
+      const root = await resolveRoot(projectId, payload);
       const runFaq = payload.run_faq !== false;
       const runRaptor = payload.run_raptor !== false;
       const parts: Record<string, unknown> = {};
@@ -253,8 +286,7 @@ async function executeByType(
         logger.info({ correlation_id: chainCorrelation }, 'phase6 deep skipped');
         return { status: 'ok', skipped: true, reason: 'KNOWLEDGE_LOOP_ENABLED=false' };
       }
-      const root = String(payload.root ?? '');
-      if (!root) throw new Error('payload.root is required');
+      const root = await resolveRoot(projectId, payload);
       const maxRounds = Math.min(Math.max(Number(payload.max_rounds ?? 3), 1), 5);
       const queriesPath = String(payload.queries_path ?? env.QUALITY_EVAL_QUERIES_PATH);
       const hybridMode: 'off' | 'lexical' =
@@ -409,8 +441,7 @@ async function executeByType(
     }
     case 'faq.build': {
       if (!projectId) throw new Error('project_id is required for faq.build');
-      const root = String(payload.root ?? '');
-      if (!root) throw new Error('payload.root is required');
+      const root = await resolveRoot(projectId, payload);
       const res = await buildFaq({
         projectId,
         root,
@@ -430,8 +461,7 @@ async function executeByType(
     }
     case 'raptor.build': {
       if (!projectId) throw new Error('project_id is required for raptor.build');
-      const root = String(payload.root ?? '');
-      if (!root) throw new Error('payload.root is required');
+      const root = await resolveRoot(projectId, payload);
       const res = await buildRaptorSummaries({
         projectId,
         root,
@@ -450,8 +480,7 @@ async function executeByType(
     }
     case 'knowledge.memory.build': {
       if (!projectId) throw new Error('project_id is required for knowledge.memory.build');
-      const root = String(payload.root ?? '');
-      if (!root) throw new Error('payload.root is required');
+      const root = await resolveRoot(projectId, payload);
       const res = await buildLargeRepoProjectMemory({
         projectId,
         root,
