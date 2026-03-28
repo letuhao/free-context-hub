@@ -291,7 +291,7 @@ function createMcpToolsServer() {
         },
         {
           name: 'search_code_tiered',
-          purpose: 'Multi-tier deterministic-first search for coder agents. ripgrep > symbol > FTS > semantic. Returns ALL candidate files with tier/kind labels.',
+          purpose: 'Multi-tier search with 3 auto-selected profiles: code-search (ripgrep > symbol > FTS > semantic), relationship (convention paths > KG > filtered ripgrep for tests), semantic-first (vector > FTS for docs). Returns ALL candidate files with tier/kind labels.',
           key_parameters: [
             { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
             { path: 'query', required: true, notes: 'Identifier, file path, or natural language query.' },
@@ -808,9 +808,11 @@ function createMcpToolsServer() {
     'search_code_tiered',
     {
       description:
-        'Multi-tier code search optimized for coder agents. Uses ripgrep (exact match) > symbol lookup > FTS > semantic (fallback). ' +
-        'Returns ALL candidate files grouped by tier and kind (code/doc/config/test/infra), so the agent can choose what to read. ' +
-        'Use the `kind` filter to search only code, only docs, only config, etc.',
+        'Multi-tier code search optimized for coder agents. Automatically selects search profile based on kind: ' +
+        'code/config/type files use deterministic-first search (ripgrep > symbol > FTS > semantic fallback); ' +
+        'test files use relationship-aware search (convention paths > KG imports > filtered ripgrep); ' +
+        'doc/script files use semantic-first search (vector similarity > FTS > ripgrep). ' +
+        'Returns ALL candidate files grouped by tier and kind, so the agent can choose what to read.',
       inputSchema: z.object({
         workspace_token: z.string().optional().describe('Workspace token (required only if MCP_AUTH_ENABLED=true).'),
         project_id: z
@@ -850,7 +852,7 @@ function createMcpToolsServer() {
         files: z.array(
           z.object({
             path: z.string(),
-            tier: z.enum(['exact_match', 'symbol_match', 'fts_match', 'semantic']),
+            tier: z.enum(['exact_match', 'symbol_match', 'fts_match', 'semantic', 'convention_match']),
             kind: z.enum(['source', 'type_def', 'test', 'migration', 'config', 'dependency', 'api_spec', 'doc', 'script', 'infra', 'style', 'generated']),
             score: z.number(),
             symbols: z.array(z.string()),
@@ -861,6 +863,7 @@ function createMcpToolsServer() {
         tiers_executed: z.array(z.string()),
         tiers_skipped: z.array(z.string()),
         query_classification: z.enum(['identifier', 'path', 'natural_language', 'mixed']),
+        search_profile: z.enum(['code-search', 'relationship', 'semantic-first']),
         explanations: z.array(z.string()),
         warnings: z.array(z.string()),
       }),
@@ -880,7 +883,7 @@ function createMcpToolsServer() {
       const tierCounts = result.tiers_executed
         .map(t => `${t}:${result.files.filter(f => f.tier === t).length}`)
         .join(' ');
-      let summary = `search_code_tiered: ${result.files.length} files (${tierCounts})`;
+      let summary = `search_code_tiered [${result.search_profile}]: ${result.files.length} files (${tierCounts})`;
       if (result.warnings.length) summary += ` [WARNINGS: ${result.warnings.join('; ')}]`;
       return formatToolResponse(result, summary, output_format);
     },
