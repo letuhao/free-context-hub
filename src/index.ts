@@ -2232,34 +2232,51 @@ async function main() {
 
   const useJsonResponse = true;
 
+  /** Create a new MCP transport + server instance and register it. */
+  function createNewSession(): StreamableHTTPServerTransport {
+    const server = createMcpToolsServer();
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => randomUUID(),
+      enableJsonResponse: useJsonResponse,
+      onsessioninitialized: sid => {
+        transports[sid] = transport;
+        logger.info({ sessionId: sid }, 'new MCP session created');
+      },
+    });
+    server.connect(transport);
+    return transport;
+  }
+
   app.post('/mcp', async (req: any, res: any) => {
     const sessionId = req.headers['mcp-session-id'];
 
     try {
       let transport: StreamableHTTPServerTransport;
-      if (sessionId && transports[String(sessionId)]) {
-        transport = transports[String(sessionId)];
-      } else if (!sessionId && isInitializeRequest(req.body)) {
-        // MCP SDK requires a Protocol/McpServer instance to be connected to a single transport.
-        // For each new initialization (new transport/session), create a fresh server instance.
-        const server = createMcpToolsServer();
-        transport = new StreamableHTTPServerTransport({
-          sessionIdGenerator: () => randomUUID(),
-          enableJsonResponse: useJsonResponse,
-          onsessioninitialized: sid => {
-            transports[sid] = transport;
-          },
-          // Note: in MVP we keep state in-memory.
-        });
 
-        await server.connect(transport);
-        await transport.handleRequest(req as any, res as any, req.body);
-        return;
+      if (sessionId && transports[String(sessionId)]) {
+        // Existing valid session — reuse transport.
+        transport = transports[String(sessionId)];
+      } else if (isInitializeRequest(req.body)) {
+        // Initialize request (with or without stale session ID) — create new session.
+        transport = createNewSession();
       } else {
+        // No valid session: stale ID, missing ID, or non-initialize request.
+        // Return a clear error telling the client to initialize first.
+        // Include the server URL and protocol info to help the client recover.
+        if (sessionId) {
+          logger.info({ staleSessionId: sessionId }, 'stale session rejected — client must re-initialize');
+        } else {
+          logger.info('no session — client must initialize first');
+        }
+
         res.status(400).json({
           jsonrpc: '2.0',
-          error: { code: -32000, message: 'Bad Request: No valid session ID provided' },
-          id: null,
+          error: {
+            code: -32000,
+            message: 'Session required: send an initialize request first (POST /mcp with method:"initialize"). ' +
+              'If you had a session, it expired after server restart — re-initialize to get a new session.',
+          },
+          id: (req.body as any)?.id ?? null,
         });
         return;
       }
