@@ -5,6 +5,6 @@
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_chunks_symbol_name_trgm
+CREATE INDEX IF NOT EXISTS idx_chunks_symbol_name_trgm
   ON chunks USING gin (symbol_name gin_trgm_ops)
   WHERE symbol_name IS NOT NULL;
