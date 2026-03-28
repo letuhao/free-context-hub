@@ -349,24 +349,40 @@ Phases 1–5 are primarily **passive learning**: index source, build vectors, op
 
 **Relationship to later phases**
 
-- **Phase 7–8:** Multi-agent communication and a GUI make it easier to review drafts and inspect graph impact before promotion.
-- **Phase 9–10:** Human-in-the-loop editing and multi-format ingestion widen the surface of facts the deep loop can safely absorb.
+- **Phase 7:** GUI makes it easier to review drafts and inspect knowledge before promotion.
+- **Phase 8–9:** Human-in-the-loop editing and multi-format ingestion widen the surface of facts the deep loop can safely absorb.
 
-### Phase 7-8: Communication & Visualization
-- **Multi-Agent Knowledge**: Collect knowledge from inter-agent and agent-to-builder communications.
-- **Interaction GUI**: Visual hub for humans to inspect and browse the knowledge graph.
+### Phase 7: Interactive GUI
+- **Knowledge Explorer**: Visual hub for humans to inspect and browse lessons, guardrails, project snapshots, and knowledge graph.
 
-### Phase 9-10: Human Interface & Multi-Format
-- **Human-in-the-loop**: Allow users to correct knowledge and add new insights interactively.
-- **Expanded Ingestion**: Support for PDF, DOCX, Excel, and Image files.
+### Phase 8: Human-in-the-loop
+- Allow users to correct knowledge, approve draft lessons, and add insights interactively.
 
-### Phase 11-12: Insights & Integration
-- **RAG to Insight**: Convert complex knowledge into human-readable text and diagrams on demand.
+### Phase 9: Multi-format Ingestion
+- Support for PDF, DOCX, Excel, and Image files.
+
+### Phase 10: IDE Native
 - **VS Code Extension**: Deep integration into the Visual Studio Code ecosystem.
 
-### Phase 13: Knowledge Portability
+### Phase 11: Knowledge Portability
 - **Exchange Hub**: Import/Export knowledge to/from other team-hosted ContextHubs or infrastructure.
 - Standardized knowledge interchange format.
+
+### Dropped: Multi-Agent Passive Collection
+
+Originally planned as "Phase 7: Multi-Agent Knowledge Sharing" — passively collecting knowledge from inter-agent communications.
+
+**Why it was dropped:**
+
+1. **Token cost contradicts core goal.** Parsing agent conversations requires an LLM, consuming tokens. The project's purpose is to *reduce* token usage, not add new token-consuming pipelines.
+
+2. **Low signal-to-noise ratio.** Most agent conversation is debugging, trial and error, and exploration. Extracting useful lessons from this noise requires sophisticated filtering that itself costs tokens and produces unreliable results.
+
+3. **Explicit capture is superior.** Agents already call `add_lesson` after reaching conclusions. The agent just finished the work — it knows exactly what's worth remembering. A passive collector watching from outside extracts worse quality at higher cost.
+
+4. **Knowledge sharing already works.** Multiple agents share the same `project_id` and `search_lessons` returns all agents' lessons. Agent B can find Agent A's decisions without needing Agent A's session transcript.
+
+The explicit `add_lesson` pattern (100 tokens to save) is strictly better than passive extraction (1000s of tokens to parse, uncertain quality). If knowledge capture rates are low, the fix is better agent instructions (CLAUDE.md), not a monitoring pipeline.
 
 ## Appendix: Relationship to Inspiration Projects
 ContextStream inspiration:

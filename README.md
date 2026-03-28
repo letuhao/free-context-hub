@@ -142,18 +142,22 @@ We tested 8 embedding models and 8 reranker models ([full benchmark](docs/benchm
 
 ## Roadmap
 
+**Completed:**
 - [x] **Phase 1-2**: Core MVP — Lessons, Search, Guardrails
 - [x] **Phase 3**: Knowledge Distillation & Reflection
 - [x] **Phase 4**: Knowledge Graph (Neo4j, symbol-level)
 - [x] **Phase 5**: Git Intelligence & Automation
 - [x] **Phase 6**: Retrieval Quality Tuning & Tiered Search
-- [ ] **Phase 7**: Multi-Agent Knowledge Sharing
-- [ ] **Phase 8**: Interactive GUI for Knowledge Exploration
-- [ ] **Phase 9**: Human-in-the-loop Correction
-- [ ] **Phase 10**: Multi-format Ingestion (PDF, DOCX, Images)
-- [ ] **Phase 11**: RAG to Insight (human-readable summaries)
-- [ ] **Phase 12**: IDE Native (VS Code extension)
-- [ ] **Phase 13**: Knowledge Portability (import/export)
+
+**Planned:**
+- [ ] **Phase 7**: Interactive GUI for Knowledge Exploration
+- [ ] **Phase 8**: Human-in-the-loop Correction
+- [ ] **Phase 9**: Multi-format Ingestion (PDF, DOCX, Images)
+- [ ] **Phase 10**: IDE Native (VS Code extension)
+- [ ] **Phase 11**: Knowledge Portability (import/export)
+
+**Dropped:**
+- ~~Multi-Agent Passive Collection~~ — Originally planned to passively monitor agent conversations and auto-extract lessons. Dropped because: (1) parsing conversations costs tokens, contradicting the "reduce token usage" goal; (2) most agent conversation is noise — debugging, trial and error; (3) agents already call `add_lesson` explicitly with high-quality, verified conclusions. Explicit capture is cheaper and more accurate than passive extraction.
 
 ---
 
