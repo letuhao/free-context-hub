@@ -13,13 +13,15 @@ export const lessonCrud: TestFn = async (ctx) => {
   const marker = `integration-test-crud-${Date.now()}`;
 
   try {
-    // 1. Add a lesson.
+    // 1. Add a lesson (args wrapped in lesson_payload).
     const added = await callTool(ctx.client, 'add_lesson', withAuth({
-      project_id: ctx.projectId,
-      lesson_type: 'decision',
-      title: `Test CRUD: ${marker}`,
-      content: `This is a test decision with marker ${marker} for integration testing.`,
-      tags: ['integration-test', 'crud-test'],
+      lesson_payload: {
+        project_id: ctx.projectId,
+        lesson_type: 'decision',
+        title: `Test CRUD: ${marker}`,
+        content: `This is a test decision with marker ${marker} for integration testing.`,
+        tags: ['integration-test', 'crud-test'],
+      },
     }, ctx.workspaceToken));
 
     const lessonId = added?.lesson_id;
@@ -85,21 +87,25 @@ export const lessonTypesAndTags: TestFn = async (ctx) => {
   try {
     // Add workaround.
     const w = await callTool(ctx.client, 'add_lesson', withAuth({
-      project_id: ctx.projectId,
-      lesson_type: 'workaround',
-      title: `Workaround: ${tag}`,
-      content: 'Redis cache must be flushed after deploy.',
-      tags: ['integration-test', tag, 'redis'],
+      lesson_payload: {
+        project_id: ctx.projectId,
+        lesson_type: 'workaround',
+        title: `Workaround: ${tag}`,
+        content: 'Redis cache must be flushed after deploy.',
+        tags: ['integration-test', tag, 'redis'],
+      },
     }, ctx.workspaceToken));
     ctx.createdLessonIds.push(w?.lesson_id);
 
     // Add preference.
     const p = await callTool(ctx.client, 'add_lesson', withAuth({
-      project_id: ctx.projectId,
-      lesson_type: 'preference',
-      title: `Preference: ${tag}`,
-      content: 'Use strict TypeScript everywhere.',
-      tags: ['integration-test', tag, 'typescript'],
+      lesson_payload: {
+        project_id: ctx.projectId,
+        lesson_type: 'preference',
+        title: `Preference: ${tag}`,
+        content: 'Use strict TypeScript everywhere.',
+        tags: ['integration-test', tag, 'typescript'],
+      },
     }, ctx.workspaceToken));
     ctx.createdLessonIds.push(p?.lesson_id);
 
@@ -138,11 +144,13 @@ export const lessonPersistence: TestFn = async (ctx) => {
 
   try {
     const added = await callTool(ctx.client, 'add_lesson', withAuth({
-      project_id: ctx.projectId,
-      lesson_type: 'general_note',
-      title: `Persistence: ${marker}`,
-      content: `Unique content for persistence verification: ${marker}`,
-      tags: ['integration-test', 'persistence-test'],
+      lesson_payload: {
+        project_id: ctx.projectId,
+        lesson_type: 'general_note',
+        title: `Persistence: ${marker}`,
+        content: `Unique content for persistence verification: ${marker}`,
+        tags: ['integration-test', 'persistence-test'],
+      },
     }, ctx.workspaceToken));
 
     const lessonId = added?.lesson_id;

@@ -13,28 +13,29 @@ export const guardrailEnforcement: TestFn = async (ctx) => {
   const tag = `it-guardrail-${Date.now()}`;
 
   try {
-    // Add a guardrail lesson.
+    // Add a guardrail lesson (nested in lesson_payload).
     const added = await callTool(ctx.client, 'add_lesson', withAuth({
-      project_id: ctx.projectId,
-      lesson_type: 'guardrail',
-      title: `Test guardrail: ${tag}`,
-      content: 'Always run tests before pushing to remote.',
-      tags: ['integration-test', tag],
-      guardrail: {
-        trigger: 'git push',
-        requirement: 'tests must pass before push',
-        severity: 'must',
+      lesson_payload: {
+        project_id: ctx.projectId,
+        lesson_type: 'guardrail',
+        title: `Test guardrail: ${tag}`,
+        content: 'Always run tests before pushing to remote.',
+        tags: ['integration-test', tag],
+        guardrail: {
+          trigger: 'git push',
+          requirement: 'tests must pass before push',
+          verification_method: 'user_confirmation',
+        },
       },
     }, ctx.workspaceToken));
 
     const lessonId = added?.lesson_id;
-    if (!lessonId) return fail(name, GROUP, Date.now() - start, 'add_lesson returned no lesson_id');
+    if (!lessonId) return fail(name, GROUP, Date.now() - start, `add_lesson returned no lesson_id: ${JSON.stringify(added)}`);
     ctx.createdLessonIds.push(lessonId);
 
     // Check guardrails for matching action — should block.
     const checkBlocked = await callTool(ctx.client, 'check_guardrails', withAuth({
-      project_id: ctx.projectId,
-      action_context: { action: 'git push' },
+      action_context: { action: 'git push', project_id: ctx.projectId },
     }, ctx.workspaceToken));
 
     if (checkBlocked?.pass !== false) {
@@ -44,8 +45,7 @@ export const guardrailEnforcement: TestFn = async (ctx) => {
 
     // Check guardrails for non-matching action — should pass.
     const checkPassed = await callTool(ctx.client, 'check_guardrails', withAuth({
-      project_id: ctx.projectId,
-      action_context: { action: 'read file' },
+      action_context: { action: 'read file', project_id: ctx.projectId },
     }, ctx.workspaceToken));
 
     if (checkPassed?.pass !== true) {
@@ -71,26 +71,27 @@ export const guardrailSuperseded: TestFn = async (ctx) => {
   try {
     // Add a guardrail.
     const added = await callTool(ctx.client, 'add_lesson', withAuth({
-      project_id: ctx.projectId,
-      lesson_type: 'guardrail',
-      title: `Supersedable guardrail: ${tag}`,
-      content: 'Must review before deploy.',
-      tags: ['integration-test', tag],
-      guardrail: {
-        trigger: 'deploy',
-        requirement: 'peer review required',
-        severity: 'must',
+      lesson_payload: {
+        project_id: ctx.projectId,
+        lesson_type: 'guardrail',
+        title: `Supersedable guardrail: ${tag}`,
+        content: 'Must review before deploy.',
+        tags: ['integration-test', tag],
+        guardrail: {
+          trigger: 'deploy',
+          requirement: 'peer review required',
+          verification_method: 'user_confirmation',
+        },
       },
     }, ctx.workspaceToken));
 
     const lessonId = added?.lesson_id;
-    if (!lessonId) return fail(name, GROUP, Date.now() - start, 'add_lesson returned no lesson_id');
+    if (!lessonId) return fail(name, GROUP, Date.now() - start, `add_lesson returned no lesson_id: ${JSON.stringify(added)}`);
     ctx.createdLessonIds.push(lessonId);
 
     // Should block.
     const checkBefore = await callTool(ctx.client, 'check_guardrails', withAuth({
-      project_id: ctx.projectId,
-      action_context: { action: 'deploy' },
+      action_context: { action: 'deploy', project_id: ctx.projectId },
     }, ctx.workspaceToken));
 
     if (checkBefore?.pass !== false) {
@@ -106,8 +107,7 @@ export const guardrailSuperseded: TestFn = async (ctx) => {
 
     // Should pass now.
     const checkAfter = await callTool(ctx.client, 'check_guardrails', withAuth({
-      project_id: ctx.projectId,
-      action_context: { action: 'deploy' },
+      action_context: { action: 'deploy', project_id: ctx.projectId },
     }, ctx.workspaceToken));
 
     if (checkAfter?.pass !== true) {
