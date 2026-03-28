@@ -254,6 +254,15 @@ function createMcpToolsServer() {
         'list_generated_documents',
         'get_generated_document',
         'promote_generated_document',
+        'configure_project_source',
+        'get_project_source',
+        'prepare_repo',
+        'enqueue_job',
+        'list_jobs',
+        'run_next_job',
+        'register_workspace_root',
+        'list_workspace_roots',
+        'scan_workspace',
       ];
 
       const tokenNote = env.MCP_AUTH_ENABLED
@@ -362,8 +371,10 @@ function createMcpToolsServer() {
             { path: 'lesson_payload.project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
             { path: 'lesson_payload.lesson_type', required: true, notes: 'decision|preference|guardrail|workaround|general_note.' },
             { path: 'lesson_payload.title', required: true, notes: 'Short label.' },
-            { path: 'lesson_payload.content', required: true, notes: 'Full content (embedded).' },
-            { path: 'lesson_payload.guardrail', required: false, notes: 'Optional guardrail rule payload.' },
+            { path: 'lesson_payload.content', required: true, notes: 'Full content (embedded for semantic search).' },
+            { path: 'lesson_payload.tags', required: false, notes: 'Array of tag strings for filtering (e.g., ["auth", "security"]).' },
+            { path: 'lesson_payload.source_refs', required: false, notes: 'Array of file paths or links (e.g., ["src/auth.ts"]).' },
+            { path: 'lesson_payload.guardrail', required: false, notes: 'Required when lesson_type="guardrail". Object with: trigger (string or /regex/), requirement (string), verification_method (string, e.g., "user_confirmation"). All 3 subfields required.' },
           ],
         },
         {
@@ -515,6 +526,72 @@ function createMcpToolsServer() {
             { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
             { path: 'commit_sha', required: true, notes: 'Git commit SHA.' },
             { path: 'limit', required: false, notes: 'Result cap for symbols/lessons.' },
+          ],
+        },
+        {
+          name: 'configure_project_source',
+          purpose: 'Configure remote git source for a project (URL, branch, credentials).',
+          key_parameters: [
+            { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
+            { path: 'git_url', required: true, notes: 'Remote git repository URL (https).' },
+            { path: 'branch', required: false, notes: 'Default branch (default: main).' },
+          ],
+        },
+        {
+          name: 'prepare_repo',
+          purpose: 'Clone or fetch a remote repo to local cache for indexing.',
+          key_parameters: [
+            { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
+            { path: 'git_url', required: true, notes: 'Remote git repository URL.' },
+          ],
+        },
+        {
+          name: 'enqueue_job',
+          purpose: 'Enqueue async worker job. MOST jobs require payload.root. repo.sync requires payload.git_url.',
+          key_parameters: [
+            { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
+            { path: 'job_type', required: true, notes: 'repo.sync | index.run | git.ingest | faq.build | raptor.build | quality.eval | knowledge.*.' },
+            { path: 'payload.root', required: false, notes: 'REQUIRED for most jobs (filesystem path to project). Not needed for repo.sync, quality.eval, knowledge.loop.*.' },
+            { path: 'payload.git_url', required: false, notes: 'REQUIRED for repo.sync only (remote git URL).' },
+          ],
+        },
+        {
+          name: 'list_jobs',
+          purpose: 'List async worker jobs. Use correlation_id to track jobs from one pipeline run.',
+          key_parameters: [
+            { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
+            { path: 'correlation_id', required: false, notes: 'Filter by pipeline run correlation ID.' },
+            { path: 'status', required: false, notes: 'Filter: queued|running|succeeded|failed|dead_letter.' },
+          ],
+        },
+        {
+          name: 'run_next_job',
+          purpose: 'Execute the next queued job (worker process). Call repeatedly to drain queue.',
+          key_parameters: [
+            { path: 'queue_name', required: false, notes: 'Queue to poll (default: "default").' },
+          ],
+        },
+        {
+          name: 'register_workspace_root',
+          purpose: 'Register filesystem root path for a project (enables ripgrep search).',
+          key_parameters: [
+            { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
+            { path: 'root_path', required: true, notes: 'Absolute filesystem path to project root.' },
+          ],
+        },
+        {
+          name: 'list_workspace_roots',
+          purpose: 'List registered workspace roots for a project.',
+          key_parameters: [
+            { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
+          ],
+        },
+        {
+          name: 'scan_workspace',
+          purpose: 'Scan workspace for changed files since last index (uses git status).',
+          key_parameters: [
+            { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
+            { path: 'root', required: true, notes: 'Workspace root path to scan.' },
           ],
         },
       ];
