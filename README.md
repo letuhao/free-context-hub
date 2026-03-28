@@ -109,24 +109,34 @@ ContextHub uses OpenAI-compatible APIs. Run locally with [LM Studio](https://lms
 
 ### Recommended Combo (benchmarked)
 
-We tested 8 embedding models on lesson search quality ([full benchmark](docs/benchmarks/2026-03-28-embedding-model-benchmark.md)). Best combo:
+We tested 8 embedding models and 8 reranker models ([full benchmark](docs/benchmarks/2026-03-28-embedding-model-benchmark.md)). Best combo:
 
 | Role | Model | Config |
 | :--- | :--- | :--- |
-| **Embeddings** | `qwen3-embedding-0.6b` | `EMBEDDINGS_DIM=1024` — best accuracy (18/18, avg 0.652) |
+| **Embeddings** | `qwen3-embedding-0.6b` | `EMBEDDINGS_DIM=1024` — best accuracy (18/18 pass, avg 0.652) |
+| **Reranker** | `qwen3-4b-instruct-ranker` | `RERANK_MODEL=qwen3-4b-instruct-ranker` — +9% accuracy at 180 lessons |
 | **Distillation** | `qwen2.5-coder-7b-instruct` | `DISTILLATION_ENABLED=true` — reflect, compress, summarize |
-| **Reranker** (optional) | `qwen3-reranker-4b` | `RERANK_MODEL=qwen.qwen3-reranker-4b` — LLM reranking |
 
-### Alternative Embedding Models
+### Alternative Models
 
-| Model | Dims | Pass Rate | Avg Score | Best For |
+**Embedding** (8 tested, lesson search accuracy):
+
+| Model | Dims | Pass Rate | Avg Score | Notes |
 | :--- | :--- | :--- | :--- | :--- |
-| **qwen3-embedding-0.6b** | 1024 | 18/18 | 0.652 | Best overall (recommended) |
-| bge-m3 | 1024 | 18/18 | 0.575 | Fast indexing, solid all-rounder |
-| mxbai-embed-large-v1 | 1024 | 17/18 | 0.648 | Close second, 1 failure |
-| jina-v5-text-small-retrieval | 1024 | 18/18 | 0.523 | Retrieval-optimized |
+| **qwen3-embedding-0.6b** | 1024 | 18/18 | 0.652 | Recommended |
+| bge-m3 | 1024 | 18/18 | 0.575 | Fast, solid all-rounder |
+| mxbai-embed-large-v1 | 1024 | 17/18 | 0.648 | Close but 1 failure |
 
-> **Note:** Code search uses ripgrep/FTS (deterministic), not embeddings. The embedding model only affects lesson and doc search quality. Code-specific models like `nomic-embed-code` performed worst (avg 0.381) for our use case.
+**Reranker** (8 tested, 180 lessons / 33 queries):
+
+| Model | Type | Pass Rate | Latency | Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| **qwen3-4b-instruct-ranker** | generative | 85% | 1.8s | Recommended — no thinking overhead |
+| qwen.qwen3-reranker-4b | generative | 85% | 1.9s | Thinking mode, same accuracy |
+| rank_zephyr_7b | generative | 82% | ~2s | RankGPT format |
+| (no rerank) | — | 76% | 99ms | Baseline |
+
+> **Note:** Code search uses ripgrep/FTS (deterministic), not embeddings. Cross-encoder rerankers (bge-reranker, gte-reranker) don't work via LM Studio — they need a dedicated `/v1/rerank` API.
 
 ---
 

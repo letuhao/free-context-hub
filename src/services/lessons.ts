@@ -403,13 +403,15 @@ async function rerankGenerative(query: string, candidates: RerankCandidate[]): P
 
   try {
     const system =
-      'You are a ranking model. Re-rank the lesson candidates by how directly they answer the query. ' +
-      'Output ONLY valid JSON: {"order":[...]} where order is an array of candidate indices (0-based), best match first. ' +
-      'No extra keys, no markdown.';
+      'You are RankLLM, an intelligent assistant that can rank passages based on their relevancy to the query. ' +
+      'Rank ALL passages. Output format: either JSON {"order":[0,2,1]} (0-based) or [1] > [3] > [2] (1-based). ' +
+      'Only respond with the ranking, no explanation.';
     const user =
-      `QUERY:\n${query}\n\nCANDIDATES:\n` +
-      candidates.map((c, i) => `#${i} TITLE: ${c.title}\nSNIPPET: ${c.snippet}`).join('\n\n') +
-      '\n\nReturn JSON.';
+      `I will provide you with ${candidates.length} passages, each indicated by number identifier [].\n` +
+      `Rank the passages based on their relevance to query: ${query}\n\n` +
+      candidates.map((c, i) => `[${i + 1}] ${c.title}. ${c.snippet}`).join('\n') +
+      `\n\nThe search query is: ${query}\n` +
+      `Rank the ${candidates.length} passages above. The most relevant passage should be listed first.`;
 
     const res = await fetch(url, {
       method: 'POST', headers: rerankHeaders(), signal: ac.signal,
@@ -423,18 +425,33 @@ async function rerankGenerative(query: string, candidates: RerankCandidate[]): P
     if (typeof content !== 'string' || !content.trim()) return candidates.map(c => c.index);
 
     const raw = content.trim();
+    const n = candidates.length;
+    let order: number[] = [];
+
+    // Try JSON format first: {"order":[1,0,2]}
     const first = raw.indexOf('{');
     const last = raw.lastIndexOf('}');
-    if (first < 0 || last <= first) return candidates.map(c => c.index);
+    if (first >= 0 && last > first) {
+      try {
+        const parsed = JSON.parse(raw.slice(first, last + 1));
+        const validated = RerankOrderSchema.safeParse(parsed);
+        if (validated.success) order = validated.data.order;
+      } catch { /* fall through to RankGPT format */ }
+    }
 
-    const parsed = JSON.parse(raw.slice(first, last + 1));
-    const validated = RerankOrderSchema.safeParse(parsed);
-    if (!validated.success) return candidates.map(c => c.index);
+    // Try RankGPT listwise format: [1] > [2] > [3] (1-based indices)
+    if (!order.length) {
+      const rankMatches = raw.match(/\[(\d+)\]/g);
+      if (rankMatches && rankMatches.length >= 2) {
+        order = rankMatches.map(m => parseInt(m.slice(1, -1), 10) - 1); // convert 1-based to 0-based
+      }
+    }
 
-    const n = candidates.length;
+    if (!order.length) return candidates.map(c => c.index);
+
     const seen = new Set<number>();
     const cleaned: number[] = [];
-    for (const idx of validated.data.order) {
+    for (const idx of order) {
       if (idx >= 0 && idx < n && !seen.has(idx)) { seen.add(idx); cleaned.push(idx); }
     }
     for (let i = 0; i < n; i++) if (!seen.has(i)) cleaned.push(i);
