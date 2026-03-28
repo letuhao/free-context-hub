@@ -6,6 +6,11 @@ import { deleteProjectGraph } from '../kg/projectGraph.js';
 import { embedTexts } from './embedder.js';
 import { distillLesson } from './distiller.js';
 import { rebuildProjectSnapshot } from './snapshot.js';
+import { expandForFtsIndex, buildFtsQuery } from '../utils/ftsTokenizer.js';
+import * as z from 'zod/v4';
+import { createModuleLogger } from '../utils/logger.js';
+
+const logger = createModuleLogger('lessons');
 
 export type LessonType = 'decision' | 'preference' | 'guardrail' | 'workaround' | 'general_note';
 export type LessonStatus = 'draft' | 'active' | 'superseded' | 'archived';
@@ -126,7 +131,8 @@ export async function addLesson(payload: LessonPayload): Promise<AddLessonResult
   const tags = payload.tags ?? [];
   const sourceRefs = payload.source_refs ?? [];
 
-  const [embedding] = await embedTexts([payload.content]);
+  const [embedding] = await embedTexts([payload.title + '. ' + payload.content]);
+  // Note: title prepended to content for better query-document alignment.
   const embeddingLiteral = `[${embedding.join(',')}]`;
 
   const conflict_suggestions = await findConflictSuggestions(payload.project_id, embeddingLiteral);
@@ -160,11 +166,14 @@ export async function addLesson(payload: LessonPayload): Promise<AddLessonResult
     [payload.project_id, payload.project_id],
   );
 
+  // Build FTS content with camelCase expansion for identifier-aware search.
+  const ftsContent = expandForFtsIndex(payload.title + ' ' + payload.content);
+
   await pool.query(
     `INSERT INTO lessons(
       lesson_id, project_id, lesson_type, title, content, tags, source_refs,
-      embedding, captured_by, summary, quick_action, status, superseded_by, created_at, updated_at
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::vector,$9,$10,$11,$12,$13, now(), now());`,
+      embedding, captured_by, summary, quick_action, status, superseded_by, created_at, updated_at, fts
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::vector,$9,$10,$11,$12,$13, now(), now(), to_tsvector('english', $14));`,
     [
       lessonId,
       payload.project_id,
@@ -179,6 +188,7 @@ export async function addLesson(payload: LessonPayload): Promise<AddLessonResult
       quick_action,
       lessonStatus,
       null,
+      ftsContent,
     ],
   );
 
@@ -356,12 +366,209 @@ function makeSnippet(s: string, maxChars: number) {
   return normalized.slice(0, maxChars - 1) + '…';
 }
 
+// ─── Lesson Reranker (generative + cross-encoder) ─────────────────────
+
+const RerankOrderSchema = z.object({
+  order: z.array(z.number().int().nonnegative()),
+});
+
+type RerankCandidate = { index: number; title: string; snippet: string };
+
+function rerankBaseUrl(): string {
+  const env = getEnv();
+  return (env.RERANK_BASE_URL?.trim() || env.DISTILLATION_BASE_URL?.trim() || env.EMBEDDINGS_BASE_URL).replace(/\/$/, '');
+}
+
+function rerankHeaders(): Record<string, string> {
+  const env = getEnv();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const key = env.RERANK_API_KEY ?? env.DISTILLATION_API_KEY ?? env.EMBEDDINGS_API_KEY;
+  if (key) headers.Authorization = `Bearer ${key}`;
+  return headers;
+}
+
+/**
+ * Generative reranker: sends all candidates to a chat model, gets JSON order back.
+ * Works with: qwen3-reranker-4b, zerank-2, any chat/instruct model.
+ */
+async function rerankGenerative(query: string, candidates: RerankCandidate[]): Promise<number[]> {
+  const env = getEnv();
+  const model = env.RERANK_MODEL ?? env.DISTILLATION_MODEL;
+  if (!model) return candidates.map(c => c.index);
+
+  const url = `${rerankBaseUrl()}/v1/chat/completions`;
+  const ac = new AbortController();
+  const timeoutMs = (env.RERANK_TIMEOUT_MS ?? 10000) + 5000;
+  const t = setTimeout(() => ac.abort(), timeoutMs);
+
+  try {
+    const system =
+      'You are RankLLM, an intelligent assistant that can rank passages based on their relevancy to the query. ' +
+      'Rank ALL passages. Output format: either JSON {"order":[0,2,1]} (0-based) or [1] > [3] > [2] (1-based). ' +
+      'Only respond with the ranking, no explanation.';
+    const user =
+      `I will provide you with ${candidates.length} passages, each indicated by number identifier [].\n` +
+      `Rank the passages based on their relevance to query: ${query}\n\n` +
+      candidates.map((c, i) => `[${i + 1}] ${c.title}. ${c.snippet}`).join('\n') +
+      `\n\nThe search query is: ${query}\n` +
+      `Rank the ${candidates.length} passages above. The most relevant passage should be listed first.`;
+
+    const res = await fetch(url, {
+      method: 'POST', headers: rerankHeaders(), signal: ac.signal,
+      body: JSON.stringify({ model, messages: [{ role: 'system', content: system }, { role: 'user', content: user }], temperature: 0.0, max_tokens: env.RERANK_LLM_MAX_TOKENS }),
+    });
+
+    if (!res.ok) { logger.warn({ status: res.status }, 'generative rerank: HTTP error'); return candidates.map(c => c.index); }
+
+    const json = (await res.json()) as any;
+    const content = json?.choices?.[0]?.message?.content;
+    if (typeof content !== 'string' || !content.trim()) return candidates.map(c => c.index);
+
+    const raw = content.trim();
+    const n = candidates.length;
+    let order: number[] = [];
+
+    // Try JSON format first: {"order":[1,0,2]}
+    const first = raw.indexOf('{');
+    const last = raw.lastIndexOf('}');
+    if (first >= 0 && last > first) {
+      try {
+        const parsed = JSON.parse(raw.slice(first, last + 1));
+        const validated = RerankOrderSchema.safeParse(parsed);
+        if (validated.success) order = validated.data.order;
+      } catch { /* fall through to RankGPT format */ }
+    }
+
+    // Try RankGPT listwise format: [1] > [2] > [3] (1-based indices)
+    if (!order.length) {
+      const rankMatches = raw.match(/\[(\d+)\]/g);
+      if (rankMatches && rankMatches.length >= 2) {
+        order = rankMatches.map(m => parseInt(m.slice(1, -1), 10) - 1); // convert 1-based to 0-based
+      }
+    }
+
+    if (!order.length) return candidates.map(c => c.index);
+
+    const seen = new Set<number>();
+    const cleaned: number[] = [];
+    for (const idx of order) {
+      if (idx >= 0 && idx < n && !seen.has(idx)) { seen.add(idx); cleaned.push(idx); }
+    }
+    for (let i = 0; i < n; i++) if (!seen.has(i)) cleaned.push(i);
+
+    logger.info({ query: query.slice(0, 60), candidates: n, top3: cleaned.slice(0, 3), mode: 'generative' }, 'lesson rerank: done');
+    return cleaned;
+  } catch (err) {
+    logger.warn({ error: err instanceof Error ? err.message : String(err) }, 'generative rerank: failed');
+    return candidates.map(c => c.index);
+  } finally { clearTimeout(t); }
+}
+
+/**
+ * Cross-encoder reranker: embeds query and candidates with the reranker model,
+ * then sorts by cosine similarity. Works with: bge-reranker, gte-reranker, jina-reranker.
+ *
+ * Uses the reranker model (not the main embedding model) for a second-pass scoring.
+ * The reranker model's embeddings are trained for relevance discrimination,
+ * giving different rankings than the initial retrieval embeddings.
+ */
+async function rerankCrossEncoder(query: string, candidates: RerankCandidate[]): Promise<number[]> {
+  const env = getEnv();
+  const model = env.RERANK_MODEL;
+  if (!model) return candidates.map(c => c.index);
+
+  const url = `${rerankBaseUrl()}/v1/embeddings`;
+  const ac = new AbortController();
+  const timeoutMs = (env.RERANK_TIMEOUT_MS ?? 10000) + 5000;
+  const t = setTimeout(() => ac.abort(), timeoutMs);
+
+  try {
+    // Embed query + all candidates in one batch call.
+    const texts = [query, ...candidates.map(c => `${c.title}. ${c.snippet}`)];
+
+    const res = await fetch(url, {
+      method: 'POST', headers: rerankHeaders(), signal: ac.signal,
+      body: JSON.stringify({ model, input: texts }),
+    });
+
+    if (!res.ok) { logger.warn({ status: res.status }, 'cross-encoder rerank: HTTP error'); return candidates.map(c => c.index); }
+
+    const json = (await res.json()) as any;
+    const embeddings: number[][] = (json?.data ?? [])
+      .sort((a: any, b: any) => a.index - b.index)
+      .map((d: any) => d.embedding);
+
+    if (embeddings.length < 2) return candidates.map(c => c.index);
+
+    const queryVec = embeddings[0];
+    const candidateVecs = embeddings.slice(1);
+
+    // Compute cosine similarity between query and each candidate.
+    const scored = candidateVecs.map((vec, i) => ({
+      index: i,
+      score: cosineSimilarity(queryVec, vec),
+    }));
+
+    // Sort by score descending.
+    scored.sort((a, b) => b.score - a.score);
+    const order = scored.map(s => s.index);
+
+    logger.info({
+      query: query.slice(0, 60),
+      candidates: candidates.length,
+      top3: order.slice(0, 3),
+      top3_scores: scored.slice(0, 3).map(s => s.score.toFixed(3)),
+      mode: 'cross-encoder',
+    }, 'lesson rerank: done');
+
+    return order;
+  } catch (err) {
+    logger.warn({ error: err instanceof Error ? err.message : String(err) }, 'cross-encoder rerank: failed');
+    return candidates.map(c => c.index);
+  } finally { clearTimeout(t); }
+}
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  const n = Math.min(a.length, b.length);
+  let dot = 0, normA = 0, normB = 0;
+  for (let i = 0; i < n; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  const denom = Math.sqrt(normA) * Math.sqrt(normB);
+  return denom > 0 ? dot / denom : 0;
+}
+
+/** Dispatch to the correct reranker based on RERANK_TYPE. */
+async function rerankLessons(params: {
+  query: string;
+  candidates: RerankCandidate[];
+}): Promise<number[]> {
+  const env = getEnv();
+  const model = env.RERANK_MODEL ?? env.DISTILLATION_MODEL;
+  if (!model) return params.candidates.map(c => c.index);
+
+  // For generative mode, DISTILLATION_ENABLED must be true (needs chat API).
+  // For cross-encoder mode, only needs embedding API — no distillation required.
+  if (env.RERANK_TYPE === 'cross-encoder') {
+    return rerankCrossEncoder(params.query, params.candidates);
+  }
+
+  if (!env.DISTILLATION_ENABLED) return params.candidates.map(c => c.index);
+  return rerankGenerative(params.query, params.candidates);
+}
+
 export async function searchLessons(params: SearchLessonsParams): Promise<SearchLessonsResult> {
   const pool = getDbPool();
   const limit = Math.min(Math.max(params.limit ?? 10, 1), 50);
   const lessonType = params.filters?.lesson_type;
   const tagsAny = (params.filters?.tags_any ?? []).filter(Boolean);
   const includeAll = Boolean(params.filters?.include_all_statuses);
+
+  // Extract tokens for FTS query.
+  const queryTokens = params.query.match(/[A-Za-z_][A-Za-z0-9_]{1,}/g) ?? [];
+  const ftsQuery = buildFtsQuery(queryTokens, 'or');
 
   const [vec] = await embedTexts([params.query]);
   const vector = `[${vec.join(',')}]`;
@@ -383,8 +590,51 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
     whereParts.push(`l.tags && $${sqlParams.length}::text[]`);
   }
 
-  sqlParams.push(limit);
+  // ── Dynamic retrieval pool sizing ──
+  // Count total lessons to scale the retrieval funnel.
+  // Separate query — doesn't need the vector param.
+  let totalLessons = 0;
+  try {
+    const countRes = await pool.query(
+      `SELECT count(*)::int AS n FROM lessons WHERE project_id = $1`,
+      [params.projectId],
+    );
+    totalLessons = Number(countRes.rows?.[0]?.n ?? 0);
+  } catch { /* best-effort */ }
+
+  // Rerank budget scales with lesson count (enterprise pattern: retrieve wide, rerank narrow).
+  //   <20 lessons: no rerank needed (semantic alone is fine)
+  //   <50 lessons: rerank top 10
+  //   <200 lessons: rerank top 20
+  //   <500 lessons: rerank top 30
+  //   500+: cap at 30 (beyond this, reranker latency dominates)
+  const rerankBudget =
+    totalLessons < 20 ? 0 :
+    totalLessons < 50 ? 10 :
+    totalLessons < 200 ? 20 :
+    totalLessons < 500 ? 30 :
+    30;
+
+  // Fetch 2x rerank budget to ensure correct answer is in the pool.
+  const fetchLimit = Math.max(limit, rerankBudget > 0 ? rerankBudget * 2 : limit * 3);
+  sqlParams.push(Math.min(fetchLimit, 60)); // hard cap at 60
   const limitParam = `$${sqlParams.length}`;
+
+  // Build hybrid scoring: semantic + FTS keyword boost.
+  let ftsScoreExpr = '0';
+  let ftsJoin = '';
+  if (ftsQuery) {
+    sqlParams.push(ftsQuery);
+    const ftsParam = `$${sqlParams.length}`;
+    // Use a LEFT JOIN subquery so FTS matches boost score but don't exclude non-FTS results.
+    ftsJoin = `LEFT JOIN LATERAL (
+      SELECT ts_rank(l.fts, to_tsquery('english', ${ftsParam})) AS fts_rank
+      WHERE l.fts IS NOT NULL AND l.fts @@ to_tsquery('english', ${ftsParam})
+    ) fts_sub ON true`;
+    ftsScoreExpr = 'COALESCE(fts_sub.fts_rank, 0)';
+  }
+
+  const whereClause = whereParts.join(' AND ');
 
   const res = await pool.query(
     `SELECT
@@ -395,15 +645,25 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
       l.summary,
       l.tags,
       l.status,
-      GREATEST(0, 1 - (l.embedding <=> $2::vector)) AS score
+      GREATEST(0, 1 - (l.embedding <=> $2::vector)) AS sem_score,
+      ${ftsScoreExpr} AS fts_score,
+      LEAST(1.0, GREATEST(0, 1 - (l.embedding <=> $2::vector)) + 0.40 * ${ftsScoreExpr}) AS score
      FROM lessons l
-     WHERE ${whereParts.join(' AND ')}
-     ORDER BY l.embedding <=> $2::vector
+     ${ftsJoin}
+     WHERE ${whereClause}
+     ORDER BY score DESC, sem_score DESC
      LIMIT ${limitParam};`,
     sqlParams,
   );
 
-  const matches: SearchLessonsResult['matches'] = (res.rows ?? []).map((r: any) => {
+  const explanations: string[] = [];
+  if (ftsQuery) {
+    const ftsHits = (res.rows ?? []).filter((r: any) => Number(r.fts_score) > 0).length;
+    explanations.push(`hybrid: sem + 0.40*fts, fts_hits=${ftsHits}/${(res.rows ?? []).length}`);
+  }
+
+  // Build initial matches from DB results.
+  let matches: SearchLessonsResult['matches'] = (res.rows ?? []).map((r: any) => {
     const sum = r.summary != null ? String(r.summary).trim() : '';
     const snippetSource = sum.length ? sum : String(r.content);
     return {
@@ -417,7 +677,35 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
     };
   });
 
-  return { matches, explanations: [] };
+  // LLM rerank: re-order top candidates for better ranking.
+  // Dynamic budget: skip for small sets, scale up for large lesson bases.
+  const env = getEnv();
+  if (rerankBudget > 0 && matches.length >= 2 && (env.RERANK_MODEL || env.DISTILLATION_MODEL) && env.DISTILLATION_ENABLED) {
+    try {
+      const rerankCount = Math.min(matches.length, rerankBudget);
+      const rerankCandidates = matches.slice(0, rerankCount).map((m, i) => ({
+        index: i,
+        title: m.title,
+        snippet: m.content_snippet,
+      }));
+
+      const rerankedOrder = await rerankLessons({ query: params.query, candidates: rerankCandidates });
+
+      // Apply reranked order to matches.
+      const rerankedTop = rerankedOrder.map(i => matches[i]).filter(Boolean);
+      const remaining = matches.slice(rerankCandidates.length);
+      matches = [...rerankedTop, ...remaining];
+
+      explanations.push(`reranked: top ${rerankCandidates.length}/${matches.length} candidates (budget=${rerankBudget}, total_lessons=${totalLessons})`);
+    } catch (err) {
+      explanations.push(`rerank skipped: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  // Trim to the originally requested limit after reranking.
+  matches = matches.slice(0, limit);
+
+  return { matches, explanations };
 }
 
 export async function updateLessonStatus(params: {

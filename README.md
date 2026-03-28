@@ -105,20 +105,38 @@ Detailed setup: [`docs/QUICKSTART.md`](docs/QUICKSTART.md)
 
 ## Self-Hosted Models
 
-ContextHub uses OpenAI-compatible APIs. We recommend running **two roles** (can be the same LM Studio instance):
+ContextHub uses OpenAI-compatible APIs. Run locally with [LM Studio](https://lmstudio.ai/) or any compatible server.
 
-### Embeddings (Required)
-- **Model**: `mixedbread-ai/text-embedding-mxbai-embed-large-v1`
-- **Dimensions**: `1024` (must match `EMBEDDINGS_DIM` in `.env`)
+### Recommended Combo (benchmarked)
 
-### Context Builder (Optional)
-Enable `DISTILLATION_ENABLED=true` for `reflect`, `compress_context`, and lesson summarization.
+We tested 8 embedding models and 8 reranker models ([full benchmark](docs/benchmarks/2026-03-28-embedding-model-benchmark.md)). Best combo:
 
-| Model Type | Recommended | Use Case |
+| Role | Model | Config |
 | :--- | :--- | :--- |
-| **Code-Focused** | `qwen2.5-coder-7b/14b` | Architecture summaries |
-| **Generalist** | `qwen2.5-7b`, `llama-3.1-8b` | Lesson distillation |
-| **Lightweight** | `phi-4`, `mistral-7b` | Low-latency summaries |
+| **Embeddings** | `qwen3-embedding-0.6b` | `EMBEDDINGS_DIM=1024` — best accuracy (18/18 pass, avg 0.652) |
+| **Reranker** | `qwen3-4b-instruct-ranker` | `RERANK_MODEL=qwen3-4b-instruct-ranker` — +9% accuracy at 180 lessons |
+| **Distillation** | `qwen2.5-coder-7b-instruct` | `DISTILLATION_ENABLED=true` — reflect, compress, summarize |
+
+### Alternative Models
+
+**Embedding** (8 tested, lesson search accuracy):
+
+| Model | Dims | Pass Rate | Avg Score | Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| **qwen3-embedding-0.6b** | 1024 | 18/18 | 0.652 | Recommended |
+| bge-m3 | 1024 | 18/18 | 0.575 | Fast, solid all-rounder |
+| mxbai-embed-large-v1 | 1024 | 17/18 | 0.648 | Close but 1 failure |
+
+**Reranker** (8 tested, 180 lessons / 33 queries):
+
+| Model | Type | Pass Rate | Latency | Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| **qwen3-4b-instruct-ranker** | generative | 85% | 1.8s | Recommended — no thinking overhead |
+| qwen.qwen3-reranker-4b | generative | 85% | 1.9s | Thinking mode, same accuracy |
+| rank_zephyr_7b | generative | 82% | ~2s | RankGPT format |
+| (no rerank) | — | 76% | 99ms | Baseline |
+
+> **Note:** Code search uses ripgrep/FTS (deterministic), not embeddings. Cross-encoder rerankers (bge-reranker, gte-reranker) don't work via LM Studio — they need a dedicated `/v1/rerank` API.
 
 ---
 
