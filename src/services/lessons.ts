@@ -7,6 +7,10 @@ import { embedTexts } from './embedder.js';
 import { distillLesson } from './distiller.js';
 import { rebuildProjectSnapshot } from './snapshot.js';
 import { expandForFtsIndex, buildFtsQuery } from '../utils/ftsTokenizer.js';
+import * as z from 'zod/v4';
+import { createModuleLogger } from '../utils/logger.js';
+
+const logger = createModuleLogger('lessons');
 
 export type LessonType = 'decision' | 'preference' | 'guardrail' | 'workaround' | 'general_note';
 export type LessonStatus = 'draft' | 'active' | 'superseded' | 'archived';
@@ -362,6 +366,97 @@ function makeSnippet(s: string, maxChars: number) {
   return normalized.slice(0, maxChars - 1) + '…';
 }
 
+// ─── LLM Reranker for Lessons ─────────────────────────────────────────
+
+const RerankOrderSchema = z.object({
+  order: z.array(z.number().int().nonnegative()),
+});
+
+async function rerankLessons(params: {
+  query: string;
+  candidates: Array<{ index: number; title: string; snippet: string }>;
+}): Promise<number[]> {
+  const env = getEnv();
+  const model = env.RERANK_MODEL ?? env.DISTILLATION_MODEL;
+  if (!model || !env.DISTILLATION_ENABLED) return params.candidates.map(c => c.index);
+
+  const baseUrl = (env.RERANK_BASE_URL?.trim() || env.DISTILLATION_BASE_URL?.trim() || env.EMBEDDINGS_BASE_URL).replace(/\/$/, '');
+  const url = `${baseUrl}/v1/chat/completions`;
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const key = env.RERANK_API_KEY ?? env.DISTILLATION_API_KEY ?? env.EMBEDDINGS_API_KEY;
+  if (key) headers.Authorization = `Bearer ${key}`;
+
+  const ac = new AbortController();
+  const timeoutMs = (env.RERANK_TIMEOUT_MS ?? 10000) + 5000; // extra budget for lessons
+  const t = setTimeout(() => ac.abort(), timeoutMs);
+
+  try {
+    const system =
+      'You are a ranking model. Re-rank the lesson candidates by how directly they answer the query. ' +
+      'Output ONLY valid JSON: {"order":[...]} where order is an array of candidate indices (0-based), best match first. ' +
+      'No extra keys, no markdown.';
+    const user =
+      `QUERY:\n${params.query}\n\nCANDIDATES:\n` +
+      params.candidates.map((c, i) => `#${i} TITLE: ${c.title}\nSNIPPET: ${c.snippet}`).join('\n\n') +
+      '\n\nReturn JSON.';
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      signal: ac.signal,
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user },
+        ],
+        temperature: 0.0,
+        max_tokens: env.RERANK_LLM_MAX_TOKENS,
+      }),
+    });
+
+    if (!res.ok) {
+      logger.warn({ status: res.status }, 'lesson rerank: HTTP error');
+      return params.candidates.map(c => c.index);
+    }
+
+    const json = (await res.json()) as any;
+    const content = json?.choices?.[0]?.message?.content;
+    if (typeof content !== 'string' || !content.trim()) {
+      return params.candidates.map(c => c.index);
+    }
+
+    const raw = content.trim();
+    const first = raw.indexOf('{');
+    const last = raw.lastIndexOf('}');
+    if (first < 0 || last <= first) return params.candidates.map(c => c.index);
+
+    const parsed = JSON.parse(raw.slice(first, last + 1));
+    const validated = RerankOrderSchema.safeParse(parsed);
+    if (!validated.success) return params.candidates.map(c => c.index);
+
+    const n = params.candidates.length;
+    const seen = new Set<number>();
+    const cleaned: number[] = [];
+    for (const idx of validated.data.order) {
+      if (idx >= 0 && idx < n && !seen.has(idx)) {
+        seen.add(idx);
+        cleaned.push(idx);
+      }
+    }
+    // Append missing indices.
+    for (let i = 0; i < n; i++) if (!seen.has(i)) cleaned.push(i);
+
+    logger.info({ query: params.query.slice(0, 60), candidates: n, reordered: cleaned.slice(0, 5) }, 'lesson rerank: done');
+    return cleaned;
+  } catch (err) {
+    logger.warn({ error: err instanceof Error ? err.message : String(err) }, 'lesson rerank: failed, keeping original order');
+    return params.candidates.map(c => c.index);
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 export async function searchLessons(params: SearchLessonsParams): Promise<SearchLessonsResult> {
   const pool = getDbPool();
   const limit = Math.min(Math.max(params.limit ?? 10, 1), 50);
@@ -393,7 +488,9 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
     whereParts.push(`l.tags && $${sqlParams.length}::text[]`);
   }
 
-  sqlParams.push(limit);
+  // Fetch more candidates than requested so reranker has a wider pool to reorder.
+  const fetchLimit = Math.min(limit * 3, 30);
+  sqlParams.push(fetchLimit);
   const limitParam = `$${sqlParams.length}`;
 
   // Build hybrid scoring: semantic + FTS keyword boost.
@@ -438,7 +535,8 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
     explanations.push(`hybrid: sem + 0.40*fts, fts_hits=${ftsHits}/${(res.rows ?? []).length}`);
   }
 
-  const matches: SearchLessonsResult['matches'] = (res.rows ?? []).map((r: any) => {
+  // Build initial matches from DB results.
+  let matches: SearchLessonsResult['matches'] = (res.rows ?? []).map((r: any) => {
     const sum = r.summary != null ? String(r.summary).trim() : '';
     const snippetSource = sum.length ? sum : String(r.content);
     return {
@@ -451,6 +549,33 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
       status: String(r.status ?? 'active') as LessonStatus,
     };
   });
+
+  // LLM rerank: re-order top candidates for better ranking.
+  // Only rerank if we have enough candidates and a rerank model is configured.
+  const env = getEnv();
+  if (matches.length >= 2 && (env.RERANK_MODEL || env.DISTILLATION_MODEL) && env.DISTILLATION_ENABLED) {
+    try {
+      const rerankCandidates = matches.slice(0, Math.min(matches.length, 8)).map((m, i) => ({
+        index: i,
+        title: m.title,
+        snippet: m.content_snippet,
+      }));
+
+      const rerankedOrder = await rerankLessons({ query: params.query, candidates: rerankCandidates });
+
+      // Apply reranked order to matches.
+      const rerankedTop = rerankedOrder.map(i => matches[i]).filter(Boolean);
+      const remaining = matches.slice(rerankCandidates.length);
+      matches = [...rerankedTop, ...remaining];
+
+      explanations.push(`reranked: top ${rerankCandidates.length} candidates reordered by LLM`);
+    } catch (err) {
+      explanations.push(`rerank skipped: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  // Trim to the originally requested limit after reranking.
+  matches = matches.slice(0, limit);
 
   return { matches, explanations };
 }
