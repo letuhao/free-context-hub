@@ -667,11 +667,13 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
   //   <200 lessons: rerank top 20
   //   <500 lessons: rerank top 30
   //   500+: cap at 30 (beyond this, reranker latency dominates)
+  // Rerank budget: skip for small lesson sets where semantic order is already good.
+  // At <50 lessons, reranking shuffles results without improving quality.
+  // At 50+ lessons, noise increases and reranking helps surface the right answer.
   const rerankBudget =
-    totalLessons < 20 ? 0 :
-    totalLessons < 50 ? 10 :
-    totalLessons < 200 ? 20 :
-    totalLessons < 500 ? 30 :
+    totalLessons < 50 ? 0 :
+    totalLessons < 200 ? 15 :
+    totalLessons < 500 ? 25 :
     30;
 
   // Fetch 2x rerank budget to ensure correct answer is in the pool.
