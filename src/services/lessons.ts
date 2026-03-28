@@ -127,7 +127,8 @@ export async function addLesson(payload: LessonPayload): Promise<AddLessonResult
   const tags = payload.tags ?? [];
   const sourceRefs = payload.source_refs ?? [];
 
-  const [embedding] = await embedTexts([payload.content]);
+  const [embedding] = await embedTexts([payload.title + '. ' + payload.content]);
+  // Note: title prepended to content for better query-document alignment.
   const embeddingLiteral = `[${embedding.join(',')}]`;
 
   const conflict_suggestions = await findConflictSuggestions(payload.project_id, embeddingLiteral);
