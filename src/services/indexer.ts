@@ -8,6 +8,7 @@ import { loadIgnorePatternsFromRoot } from '../utils/ignore.js';
 import { chunkTextByLines } from '../utils/chunker.js';
 import { smartChunkCode, type SmartChunk } from '../utils/smartChunker.js';
 import { detectLanguage } from '../utils/languageDetect.js';
+import { expandForFtsIndex } from '../utils/ftsTokenizer.js';
 import { sha256Hex } from '../utils/hash.js';
 import { upsertFileGraphFromDisk } from '../kg/upsert.js';
 import { bumpProjectCacheVersion } from './cacheVersions.js';
@@ -95,17 +96,19 @@ export async function indexProject({ projectId, root, linesPerChunk, embeddingBa
         // Incremental guard:
         // If a previous indexing run failed after updating `files.content_hash`
         // (e.g., embeddings auth 401) we might have deleted chunks but left no vectors.
-        // Only skip if chunks already exist for this file.
+        // Only skip if chunks already exist for this file AND have FTS populated.
+        // If fts is NULL, we need to re-index to populate the FTS column.
         const chunkExists = await pool.query(
           `SELECT 1
            FROM chunks
            WHERE project_id=$1 AND root=$2 AND file_path=$3
+             AND fts IS NOT NULL
            LIMIT 1;`,
           [projectId, resolvedRoot, fileRel],
         );
 
         if (chunkExists.rowCount && chunkExists.rowCount > 0) {
-          continue; // unchanged + vectors already present
+          continue; // unchanged + vectors already present + FTS populated
         }
       }
       const text = buf.toString('utf8');
@@ -177,8 +180,8 @@ export async function indexProject({ projectId, root, linesPerChunk, embeddingBa
               c.symbolName || null,
               c.symbolType || null,
               li.isTest,
-              // FTS content: file path + symbol name + code content for full-text search.
-              `${fileRel} ${c.symbolName ?? ''} ${c.content}`,
+              // FTS content: file path + symbol name + code content, with camelCase/snake_case expansion.
+              expandForFtsIndex(`${fileRel} ${c.symbolName ?? ''} ${c.content}`),
             ],
           );
         }

@@ -8,6 +8,10 @@ import { getProjectCacheVersion } from './cacheVersions.js';
 import { redisGetJson, redisKey, redisSetJson } from './redisCache.js';
 import { decomposeQuery } from '../utils/queryDecomposer.js';
 import { getLanguageSearchHints, getProjectDominantLanguage } from '../utils/languageHints.js';
+import { buildFtsQuery } from '../utils/ftsTokenizer.js';
+import { createModuleLogger } from '../utils/logger.js';
+
+const logger = createModuleLogger('retriever');
 
 export type SearchCodeParams = {
   projectId: string;
@@ -56,6 +60,21 @@ function splitCamelCase(id: string): string[] {
   // Return sub-words + the original compound
   return parts.length > 1 ? [...parts, id] : [id];
 }
+
+// Common English stop words that add noise to FTS/lexical matching.
+const STOP_WORDS = new Set([
+  'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'shall',
+  'should', 'may', 'might', 'must', 'can', 'could',
+  'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'as',
+  'into', 'through', 'during', 'before', 'after', 'above', 'below',
+  'and', 'but', 'or', 'nor', 'not', 'so', 'yet', 'both', 'either',
+  'neither', 'each', 'every', 'all', 'any', 'few', 'more', 'most',
+  'other', 'some', 'such', 'no', 'only', 'same', 'than', 'too', 'very',
+  'just', 'also', 'how', 'what', 'which', 'who', 'whom', 'this', 'that',
+  'these', 'those', 'where', 'when', 'why', 'here', 'there', 'then',
+  'about', 'it', 'its', 'if',
+]);
 
 /**
  * Workspace-agnostic keyword extraction.
@@ -121,12 +140,13 @@ function extractLexicalTokens(query: string): string[] {
     for (const route of routeMatch) tokens.push(route);
   }
 
-  // Normalize + de-dupe.
+  // Normalize + de-dupe + remove stop words.
   const normalized = tokens
     .map(s => s.trim())
     .filter(Boolean)
     .filter(s => /[A-Za-z]/.test(s))
-    .filter(s => s.length >= 2);
+    .filter(s => s.length >= 2)
+    .filter(s => !STOP_WORDS.has(s.toLowerCase()));
 
   return Array.from(new Set(normalized)).slice(0, 24);
 }
@@ -320,6 +340,25 @@ function hubFilePenalty(chunkCountForFile: number): number {
   return Math.min(0.18, Math.log2(chunkCountForFile) * 0.05);
 }
 
+/**
+ * Penalize scripts, QC tooling, and verification files that tend to
+ * REFERENCE core features (making them semantically similar to queries)
+ * but are not the actual implementation. This helps core source files
+ * rank above tooling/scaffolding for implementation queries.
+ */
+function scaffoldingPenalty(filePath: string): number {
+  const p = filePath.toLowerCase();
+  // Heavy penalty for QC/verification scripts — they discuss features but aren't the source
+  if (/\b(verify|prereq|audit|probe|seed)\b/.test(p) && /scripts\//.test(p)) return 0.12;
+  // Moderate penalty for general scripts/
+  if (/^src\/scripts\//.test(p)) return 0.06;
+  // Light penalty for QC test infra
+  if (/^(src\/)?qc\//.test(p) || /^qc\//.test(p)) return 0.08;
+  // Light penalty for smoke tests
+  if (/^src\/smoke\//.test(p)) return 0.04;
+  return 0;
+}
+
 function tokenizeForMmr(path: string, snippet: string): Set<string> {
   const src = `${path} ${snippet}`.toLowerCase();
   const toks = src.match(/[a-z0-9_]{4,}/g) ?? [];
@@ -500,10 +539,26 @@ export async function searchCode({
   debug,
   hybridMode,
 }: SearchCodeParams): Promise<SearchCodeResult> {
+  const searchStartMs = Date.now();
   const env = getEnv();
   const pool = getDbPool();
   const cacheVersion = await getProjectCacheVersion(projectId).catch(() => 1);
   const useLessonToCode = lessonToCode !== false;
+
+  logger.info({
+    project_id: projectId,
+    query,
+    pathGlob: pathGlob ?? null,
+    includeTests: Boolean(includeTests),
+    includeSmoke: Boolean(includeSmoke),
+    hybridMode: hybridMode ?? 'off',
+    rerankMode: rerankMode ?? 'off',
+    lexicalBoost: lexicalBoost !== false,
+    kgAssist: Boolean(kgAssist),
+    lessonToCode: useLessonToCode,
+    limit: limit ?? 10,
+    debug: Boolean(debug),
+  }, 'search_code:start');
   let lessonsSig = '0';
   if (useLessonToCode) {
     try {
@@ -542,6 +597,7 @@ export async function searchCode({
   // Query decomposition: split complex multi-intent queries into sub-queries.
   const subQueries = decomposeQuery(query);
   if (subQueries.length > 1) {
+    logger.info({ project_id: projectId, query, sub_queries: subQueries }, 'search_code:decomposed');
     const subResults = await Promise.all(
       subQueries.map(sq =>
         searchCode({
@@ -656,15 +712,9 @@ export async function searchCode({
       lexicalParams.push(like);
       whereLex += ` AND c.file_path LIKE $${lexicalParams.length}`;
     }
-    // Build FTS query from tokens. Try FTS first, fall back to ILIKE if fts column is null.
-    const ftsTerms = tokens
-      .map(t => t.trim())
-      .filter(Boolean)
-      .slice(0, 12)
-      .map(t => t.replace(/[^A-Za-z0-9_]/g, '')) // sanitize for tsquery
-      .filter(t => t.length >= 2);
-    if (ftsTerms.length) {
-      const tsquery = ftsTerms.join(' | '); // OR-match any token
+    // Build FTS query from tokens with camelCase/snake_case expansion.
+    const tsquery = buildFtsQuery(tokens.slice(0, 12));
+    if (tsquery.length > 0) {
       lexicalParams.push(tsquery);
       const ftsIdx = lexicalParams.length;
       // Use FTS when available (indexed chunks), fall back to ILIKE for legacy chunks.
@@ -699,6 +749,21 @@ export async function searchCode({
       lexicalRows = lexicalRes.rows ?? [];
     }
   }
+  logger.info({
+    project_id: projectId,
+    query,
+    hybrid_enabled: hybridEnabled,
+    hybrid_mode: hybridMode ?? 'off',
+    env_hybrid_enabled: env.RETRIEVAL_HYBRID_ENABLED,
+    lexical_limit: lexicalLimit,
+    tokens_count: tokens.length,
+    tokens_sample: tokens.slice(0, 8),
+    fts_query: hybridEnabled && tokens.length ? buildFtsQuery(tokens.slice(0, 12)) : null,
+    lexical_candidates: lexicalRows.length,
+    semantic_candidates: (res.rows ?? []).length,
+    hybrid_latency_ms: Date.now() - hybridStarted,
+  }, 'search_code:candidates');
+
   const kgFiles = new Set<string>();
   if (kgAssist) {
     try {
@@ -721,6 +786,10 @@ export async function searchCode({
     } catch {
       // best-effort
     }
+  }
+
+  if (kgFiles.size > 0) {
+    logger.info({ project_id: projectId, query, kg_files: Array.from(kgFiles) }, 'search_code:kg_files');
   }
 
   const explicitPriors = (preferPaths ?? []).filter(p => typeof p === 'string' && p.trim().length);
@@ -777,14 +846,15 @@ export async function searchCode({
     const kg = kgFiles.size && kgFiles.has(filePath) ? 0.25 : 0;
     const priorExplicit = pathPriorBoost(filePath, explicitPriors, { perHit: 0.1, cap: 0.2 });
     const priorLesson = pathPriorBoost(filePath, lessonPriors, { perHit: 0.18, cap: 0.54 });
-    const priorIntent = pathPriorBoost(filePath, intentPriors, { perHit: 0.08, cap: 0.16 });
-    const boosted = Math.min(1, sem + 0.25 * lex + kg + priorExplicit.boost + priorLesson.boost + priorIntent.boost);
+    const priorIntent = pathPriorBoost(filePath, intentPriors, { perHit: 0.12, cap: 0.24 });
+    const scaffold = scaffoldingPenalty(filePath);
+    const boosted = Math.min(1, sem + 0.40 * lex + kg + priorExplicit.boost + priorLesson.boost + priorIntent.boost) - scaffold;
     return {
       path: filePath,
       start_line: Number(r.start_line),
       end_line: Number(r.end_line),
       snippet,
-      score: boosted,
+      score: Math.max(0, boosted),
       match_type: 'semantic',
     };
   };
@@ -821,7 +891,7 @@ export async function searchCode({
   const fileLexTokens = tokens;
   const fileScores = Object.entries(perFile).map(([path, v]) => {
     const lex = fileLexTokens.length ? lexicalScore(fileLexTokens, path) : 0;
-    const fileScore = v.best + 0.15 * lex;
+    const fileScore = v.best + 0.25 * lex;
     return { path, fileScore };
   });
   fileScores.sort((a, b) => b.fileScore - a.fileScore);
@@ -888,7 +958,7 @@ export async function searchCode({
     explanations.push(`includeSmoke=${Boolean(includeSmoke)}`);
     if (explicitPriors.length) explanations.push(`preferPaths=${explicitPriors.join(',')}`);
     if (lessonPriors.length) explanations.push(`lessonToCodePriors=${lessonPriors.join(',')}`);
-    explanations.push('priorBoostWeights=explicit(0.1/0.2),lesson(0.18/0.54),intent(0.08/0.16)');
+    explanations.push('priorBoostWeights=explicit(0.1/0.2),lesson(0.18/0.54),intent(0.12/0.24)');
     explanations.push(`lessonToCode=${useLessonToCode} lessonsSig=${lessonsSig}`);
     if (intentPriors.length) explanations.push(`intentPriors=${intentPriors.join(',')}`);
     explanations.push(`lexicalBoost=${lexicalBoost !== false}`);
@@ -910,6 +980,27 @@ export async function searchCode({
   }
 
   const result = { matches: reranked.slice(0, topK), explanations };
+
+  const totalMs = Date.now() - searchStartMs;
+  logger.info({
+    project_id: projectId,
+    query,
+    total_ms: totalMs,
+    hybrid_enabled: hybridEnabled,
+    hybrid_mode: hybridMode ?? 'off',
+    rerank_mode: mode,
+    semantic_count: semanticMatches.length,
+    lexical_count: lexicalMatches.length,
+    lesson_expansion_count: lessonExpandedMatches.length,
+    merged_count: matches.length,
+    kg_files_count: kgFiles.size,
+    intent_priors: intentPriors,
+    lesson_priors_count: lessonPriors.length,
+    final_count: result.matches.length,
+    top_3_paths: result.matches.slice(0, 3).map(m => m.path),
+    top_3_scores: result.matches.slice(0, 3).map(m => m.score),
+  }, 'search_code:done');
+
   if (!debug) {
     await redisSetJson(retrievalCacheKey, result, env.REDIS_RETRIEVAL_TTL_SECONDS).catch(() => {});
   }

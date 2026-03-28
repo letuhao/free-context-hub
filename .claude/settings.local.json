@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(xxd)",
+      "Bash(node -e \"const fs=require\\(''fs''\\);let t=fs.readFileSync\\(''src/services/retriever.ts'',''utf8''\\);t=t.replace\\(/\\\\u2018/g,\"\"''\"\"\\).replace\\(/\\\\u2019/g,\"\"''\"\"\\).replace\\(/\\\\u201c/g,''\"\"''\\).replace\\(/\\\\u201d/g,''\"\"''\\).replace\\(/\\\\u2192/g,''->''\\).replace\\(/\\\\u2014/g,''--''\\);fs.writeFileSync\\(''src/services/retriever.ts'',t,''utf8''\\);console.log\\(''done''\\)\")",
+      "Bash(npm ls:*)",
+      "Bash(node -e \"const p=require\\(''''fs''''\\).readFileSync\\(0,''''utf8''''\\);const j=JSON.parse\\(p\\);console.log\\(Object.keys\\({...j.dependencies,...j.devDependencies}\\).filter\\(k=>k.includes\\(''''tree''''\\)||k.includes\\(''''morph''''\\)\\).join\\(''''\\\\n''''\\)\\)\")",
+      "Bash(npm search:*)",
+      "Bash(node -e \"const fs=require\\(''fs''\\);const files=[''src/utils/smartChunker.ts'',''src/utils/languageDetect.ts'',''src/utils/queryDecomposer.ts'',''src/utils/languageHints.ts''];for\\(const f of files\\){let t=fs.readFileSync\\(f,''utf8''\\);const orig=t;t=t.replace\\(/[\\\\u2018\\\\u2019]/g,String.fromCharCode\\(39\\)\\).replace\\(/[\\\\u201c\\\\u201d]/g,String.fromCharCode\\(34\\)\\).replace\\(/\\\\u2192/g,''->''\\).replace\\(/\\\\u2014/g,''--''\\);if\\(t!==orig\\){fs.writeFileSync\\(f,t,''utf8''\\);console.log\\(''fixed:'',f\\)}else{console.log\\(''ok:'',f\\)}}\")",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(gh pr:*)",
+      "Bash(where gh:*)",
+      "Bash(docker compose:*)",
+      "Bash(curl -s -X POST http://localhost:3000/mcp -H 'Content-Type: application/json' -d '{\"\"\"\"jsonrpc\"\"\"\":\"\"\"\"2.0\"\"\"\",\"\"\"\"id\"\"\"\":1,\"\"\"\"method\"\"\"\":\"\"\"\"tools/call\"\"\"\",\"\"\"\"params\"\"\"\":{\"\"\"\"name\"\"\"\":\"\"\"\"index_project\"\"\"\",\"\"\"\"arguments\"\"\"\":{\"\"\"\"project_id\"\"\"\":\"\"\"\"free-context-hub\"\"\"\",\"\"\"\"root\"\"\"\":\"\"\"\"/workspace\"\"\"\"}}}')",
+      "Bash(curl -s -X POST http://localhost:3000/mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{\"\"jsonrpc\"\":\"\"2.0\"\",\"\"id\"\":1,\"\"method\"\":\"\"initialize\"\",\"\"params\"\":{\"\"protocolVersion\"\":\"\"2025-03-26\"\",\"\"capabilities\"\":{},\"\"clientInfo\"\":{\"\"name\"\":\"\"cli\"\",\"\"version\"\":\"\"1.0\"\"}}}')",
+      "Bash(curl -v -X POST http://localhost:3000/mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{\"\"\"\"jsonrpc\"\"\"\":\"\"\"\"2.0\"\"\"\",\"\"\"\"id\"\"\"\":1,\"\"\"\"method\"\"\"\":\"\"\"\"initialize\"\"\"\",\"\"\"\"params\"\"\"\":{\"\"\"\"protocolVersion\"\"\"\":\"\"\"\"2025-03-26\"\"\"\",\"\"\"\"capabilities\"\"\"\":{},\"\"\"\"clientInfo\"\"\"\":{\"\"\"\"name\"\"\"\":\"\"\"\"cli\"\"\"\",\"\"\"\"version\"\"\"\":\"\"\"\"1.0\"\"\"\"}}}')",
+      "Bash(curl -s -X POST http://localhost:3000/mcp -H \"Content-Type: application/json\" -d '{\"\"\"\"jsonrpc\"\"\"\":\"\"\"\"2.0\"\"\"\",\"\"\"\"id\"\"\"\":1,\"\"\"\"method\"\"\"\":\"\"\"\"tools/call\"\"\"\",\"\"\"\"params\"\"\"\":{\"\"\"\"name\"\"\"\":\"\"\"\"search_code\"\"\"\",\"\"\"\"arguments\"\"\"\":{\"\"\"\"project_id\"\"\"\":\"\"\"\"free-context-hub\"\"\"\",\"\"\"\"query\"\"\"\":\"\"\"\"env boolean parser\"\"\"\",\"\"\"\"limit\"\"\"\":3}}}')",
+      "Bash(python -m json.tool)",
+      "Bash(curl -s -X POST http://localhost:3000/mcp -H \"Content-Type: application/json\" -H \"Accept: application/json, text/event-stream\" -d '{\"\"\"\"jsonrpc\"\"\"\":\"\"\"\"2.0\"\"\"\",\"\"\"\"id\"\"\"\":0,\"\"\"\"method\"\"\"\":\"\"\"\"initialize\"\"\"\",\"\"\"\"params\"\"\"\":{\"\"\"\"protocolVersion\"\"\"\":\"\"\"\"2024-11-05\"\"\"\",\"\"\"\"capabilities\"\"\"\":{},\"\"\"\"clientInfo\"\"\"\":{\"\"\"\"name\"\"\"\":\"\"\"\"test\"\"\"\",\"\"\"\"version\"\"\"\":\"\"\"\"1.0\"\"\"\"}}}')",
+      "Bash(curl -s -X POST http://localhost:3000/mcp -H \"Content-Type: application/json\" -H \"Accept: application/json, text/event-stream\" -d '{\"\"\"\"jsonrpc\"\"\"\":\"\"\"\"2.0\"\"\"\",\"\"\"\"id\"\"\"\":1,\"\"\"\"method\"\"\"\":\"\"\"\"tools/call\"\"\"\",\"\"\"\"params\"\"\"\":{\"\"\"\"name\"\"\"\":\"\"\"\"search_code\"\"\"\",\"\"\"\"arguments\"\"\"\":{\"\"\"\"project_id\"\"\"\":\"\"\"\"free-context-hub\"\"\"\",\"\"\"\"query\"\"\"\":\"\"\"\"env boolean parser\"\"\"\",\"\"\"\"limit\"\"\"\":3}}}')"
+    ]
+  }
+}
