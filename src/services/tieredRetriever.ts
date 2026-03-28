@@ -21,6 +21,7 @@ import type { ChunkKind } from '../utils/languageDetect.js';
 import { getProjectCacheVersion } from './cacheVersions.js';
 import { redisGetJson, redisKey, redisSetJson } from './redisCache.js';
 import { createHash } from 'node:crypto';
+import { normalize as pathNormalize } from 'node:path';
 
 const logger = createModuleLogger('tiered-retriever');
 
@@ -149,30 +150,26 @@ async function tier1Ripgrep(params: {
   const result = new Map<string, { tier: SearchTier; sample_lines: string[]; hit_count: number }>();
   if (!params.root || !params.tokens.length) return result;
 
-  try {
-    const rg = await ripgrepMultiPattern({
-      root: params.root,
-      patterns: params.tokens,
-      maxFiles: params.maxFiles,
-      timeoutMs: 5000,
+  const rg = await ripgrepMultiPattern({
+    root: params.root,
+    patterns: params.tokens,
+    maxFiles: params.maxFiles,
+    timeoutMs: 5000,
+  });
+
+  for (const f of rg.files) {
+    result.set(f.path, {
+      tier: 'exact_match',
+      sample_lines: f.sample_lines,
+      hit_count: f.hit_count,
     });
-
-    for (const f of rg.files) {
-      result.set(f.path, {
-        tier: 'exact_match',
-        sample_lines: f.sample_lines,
-        hit_count: f.hit_count,
-      });
-    }
-
-    logger.info({
-      tokens: params.tokens.slice(0, 5),
-      files_found: rg.files.length,
-      duration_ms: rg.duration_ms,
-    }, 'tier1:ripgrep');
-  } catch (err) {
-    logger.warn({ error: err instanceof Error ? err.message : String(err) }, 'tier1:ripgrep:error');
   }
+
+  logger.info({
+    tokens: params.tokens.slice(0, 5),
+    files_found: rg.files.length,
+    duration_ms: rg.duration_ms,
+  }, 'tier1:ripgrep');
 
   return result;
 }
@@ -188,53 +185,49 @@ async function tier2SymbolLookup(params: {
   const result = new Map<string, { tier: SearchTier; symbols: string[]; sample_lines: string[] }>();
   if (!params.tokens.length) return result;
 
-  try {
-    // Build ILIKE patterns for symbol_name matching.
-    const likePatterns = params.tokens
-      .filter(t => t.length >= 3)
-      .slice(0, 8)
-      .map(t => `%${t.replace(/[%_\\]/g, '\\$&')}%`);
+  // Build ILIKE patterns for symbol_name matching.
+  const likePatterns = params.tokens
+    .filter(t => t.length >= 3)
+    .slice(0, 8)
+    .map(t => `%${t.replace(/[%_\\]/g, '\\$&')}%`);
 
-    if (!likePatterns.length) return result;
+  if (!likePatterns.length) return result;
 
-    let kindWhere = '';
-    const queryParams: any[] = [params.projectId, likePatterns];
-    if (params.kindFilter?.length) {
-      queryParams.push(params.kindFilter);
-      kindWhere = ` AND c.chunk_kind = ANY($${queryParams.length}::text[])`;
-    }
-
-    const res = await params.pool.query(
-      `SELECT DISTINCT ON (c.file_path, c.symbol_name)
-         c.file_path, c.symbol_name, c.symbol_type, c.chunk_kind,
-         substring(c.content, 1, 200) AS sample
-       FROM chunks c
-       WHERE c.project_id = $1
-         AND c.symbol_name IS NOT NULL
-         AND c.symbol_name ILIKE ANY($2::text[])
-         ${kindWhere}
-       ORDER BY c.file_path, c.symbol_name
-       LIMIT 100;`,
-      queryParams,
-    );
-
-    for (const row of (res.rows ?? []) as any[]) {
-      const fp = String(row.file_path);
-      const entry = result.get(fp) ?? { tier: 'symbol_match' as const, symbols: [], sample_lines: [] };
-      if (row.symbol_name) entry.symbols.push(String(row.symbol_name));
-      if (row.sample && entry.sample_lines.length < 3) {
-        entry.sample_lines.push(String(row.sample).trim().slice(0, 120));
-      }
-      result.set(fp, entry);
-    }
-
-    logger.info({
-      tokens: params.tokens.slice(0, 5),
-      files_found: result.size,
-    }, 'tier2:symbol_lookup');
-  } catch (err) {
-    logger.warn({ error: err instanceof Error ? err.message : String(err) }, 'tier2:symbol_lookup:error');
+  let kindWhere = '';
+  const queryParams: any[] = [params.projectId, likePatterns];
+  if (params.kindFilter?.length) {
+    queryParams.push(params.kindFilter);
+    kindWhere = ` AND c.chunk_kind = ANY($${queryParams.length}::text[])`;
   }
+
+  const res = await params.pool.query(
+    `SELECT DISTINCT ON (c.file_path, c.symbol_name)
+       c.file_path, c.symbol_name, c.symbol_type, c.chunk_kind,
+       substring(c.content, 1, 200) AS sample
+     FROM chunks c
+     WHERE c.project_id = $1
+       AND c.symbol_name IS NOT NULL
+       AND c.symbol_name ILIKE ANY($2::text[])
+       ${kindWhere}
+     ORDER BY c.file_path, c.symbol_name
+     LIMIT 100;`,
+    queryParams,
+  );
+
+  for (const row of (res.rows ?? []) as any[]) {
+    const fp = String(row.file_path);
+    const entry = result.get(fp) ?? { tier: 'symbol_match' as const, symbols: [], sample_lines: [] };
+    if (row.symbol_name) entry.symbols.push(String(row.symbol_name));
+    if (row.sample && entry.sample_lines.length < 3) {
+      entry.sample_lines.push(String(row.sample).trim().slice(0, 120));
+    }
+    result.set(fp, entry);
+  }
+
+  logger.info({
+    tokens: params.tokens.slice(0, 5),
+    files_found: result.size,
+  }, 'tier2:symbol_lookup');
 
   return result;
 }
@@ -252,80 +245,76 @@ async function tier3FtsPath(params: {
 }): Promise<Map<string, { tier: SearchTier; fts_rank: number; sample_lines: string[] }>> {
   const result = new Map<string, { tier: SearchTier; fts_rank: number; sample_lines: string[] }>();
 
-  try {
-    const tsquery = buildFtsQuery(params.tokens.slice(0, 12), params.ftsMode ?? 'or');
-    if (!tsquery) return result;
+  const tsquery = buildFtsQuery(params.tokens.slice(0, 12), params.ftsMode ?? 'or');
+  if (!tsquery) return result;
 
-    let kindWhere = '';
-    const queryParams: any[] = [params.projectId, tsquery, params.limit];
+  let kindWhere = '';
+  const queryParams: any[] = [params.projectId, tsquery, params.limit];
+  if (params.kindFilter?.length) {
+    queryParams.push(params.kindFilter);
+    kindWhere = ` AND c.chunk_kind = ANY($${queryParams.length}::text[])`;
+  }
+
+  const res = await params.pool.query(
+    `SELECT c.file_path, c.chunk_kind, c.symbol_name,
+            ts_rank(c.fts, to_tsquery('english', $2)) AS rank,
+            substring(c.content, 1, 200) AS sample
+     FROM chunks c
+     WHERE c.project_id = $1
+       AND c.fts IS NOT NULL
+       AND c.fts @@ to_tsquery('english', $2)
+       ${kindWhere}
+     ORDER BY rank DESC
+     LIMIT $3;`,
+    queryParams,
+  );
+
+  for (const row of (res.rows ?? []) as any[]) {
+    const fp = String(row.file_path);
+    if (result.has(fp)) continue; // keep highest rank
+    result.set(fp, {
+      tier: 'fts_match',
+      fts_rank: Number(row.rank),
+      sample_lines: [String(row.sample ?? '').trim().slice(0, 120)],
+    });
+  }
+
+  // Also match file paths directly.
+  const pathTokens = params.tokens
+    .filter(t => t.length >= 3)
+    .slice(0, 6)
+    .map(t => `%${t.replace(/[%_\\]/g, '\\$&')}%`);
+
+  if (pathTokens.length) {
+    const pathParams: any[] = [params.projectId, pathTokens];
+    let pathKindWhere = '';
     if (params.kindFilter?.length) {
-      queryParams.push(params.kindFilter);
-      kindWhere = ` AND c.chunk_kind = ANY($${queryParams.length}::text[])`;
+      pathParams.push(params.kindFilter);
+      pathKindWhere = ` AND chunk_kind = ANY($${pathParams.length}::text[])`;
     }
 
-    const res = await params.pool.query(
-      `SELECT c.file_path, c.chunk_kind, c.symbol_name,
-              ts_rank(c.fts, to_tsquery('english', $2)) AS rank,
-              substring(c.content, 1, 200) AS sample
-       FROM chunks c
-       WHERE c.project_id = $1
-         AND c.fts IS NOT NULL
-         AND c.fts @@ to_tsquery('english', $2)
-         ${kindWhere}
-       ORDER BY rank DESC
-       LIMIT $3;`,
-      queryParams,
+    const pathRes = await params.pool.query(
+      `SELECT DISTINCT file_path, chunk_kind
+       FROM chunks
+       WHERE project_id = $1
+         AND file_path ILIKE ANY($2::text[])
+         ${pathKindWhere}
+       LIMIT 50;`,
+      pathParams,
     );
 
-    for (const row of (res.rows ?? []) as any[]) {
+    for (const row of (pathRes.rows ?? []) as any[]) {
       const fp = String(row.file_path);
-      if (result.has(fp)) continue; // keep highest rank
-      result.set(fp, {
-        tier: 'fts_match',
-        fts_rank: Number(row.rank),
-        sample_lines: [String(row.sample ?? '').trim().slice(0, 120)],
-      });
-    }
-
-    // Also match file paths directly.
-    const pathTokens = params.tokens
-      .filter(t => t.length >= 3)
-      .slice(0, 6)
-      .map(t => `%${t.replace(/[%_\\]/g, '\\$&')}%`);
-
-    if (pathTokens.length) {
-      const pathParams: any[] = [params.projectId, pathTokens];
-      let pathKindWhere = '';
-      if (params.kindFilter?.length) {
-        pathParams.push(params.kindFilter);
-        pathKindWhere = ` AND chunk_kind = ANY($${pathParams.length}::text[])`;
-      }
-
-      const pathRes = await params.pool.query(
-        `SELECT DISTINCT file_path, chunk_kind
-         FROM chunks
-         WHERE project_id = $1
-           AND file_path ILIKE ANY($2::text[])
-           ${pathKindWhere}
-         LIMIT 50;`,
-        pathParams,
-      );
-
-      for (const row of (pathRes.rows ?? []) as any[]) {
-        const fp = String(row.file_path);
-        if (!result.has(fp)) {
-          result.set(fp, { tier: 'fts_match', fts_rank: 0.01, sample_lines: [] });
-        }
+      if (!result.has(fp)) {
+        result.set(fp, { tier: 'fts_match', fts_rank: 0.01, sample_lines: [] });
       }
     }
-
-    logger.info({
-      tsquery,
-      files_found: result.size,
-    }, 'tier3:fts_path');
-  } catch (err) {
-    logger.warn({ error: err instanceof Error ? err.message : String(err) }, 'tier3:fts_path:error');
   }
+
+  logger.info({
+    tsquery,
+    files_found: result.size,
+  }, 'tier3:fts_path');
 
   return result;
 }
@@ -393,8 +382,6 @@ async function tier4Semantic(params: {
 }
 
 // ─── Resolve Workspace Root ─────────────────────────────────────────────
-
-import { resolve as pathResolve, normalize as pathNormalize } from 'node:path';
 
 /** In-memory cache for workspace root per project (rarely changes). */
 const rootCache = new Map<string, { root: string | null; ts: number }>();
@@ -474,7 +461,7 @@ async function resolveFileKind(
       [projectId, filePaths],
     );
     for (const row of (res.rows ?? []) as any[]) {
-      result.set(String(row.file_path), (row.chunk_kind ?? 'code') as ChunkKind);
+      result.set(String(row.file_path), (row.chunk_kind ?? 'source') as ChunkKind);
     }
   } catch { /* best-effort */ }
 
@@ -493,9 +480,10 @@ export async function tieredSearch(params: TieredSearchParams): Promise<TieredSe
   // ── Redis cache check ──────────────────────────────────────────────────
   const cacheVersion = await getProjectCacheVersion(params.projectId).catch(() => 1);
   const kindKey = params.kind
-    ? (Array.isArray(params.kind) ? params.kind.sort().join(',') : params.kind)
+    ? (Array.isArray(params.kind) ? [...params.kind].sort().join(',') : params.kind)
     : 'all';
-  const cacheHash = createHash('md5').update(`${params.query}|${kindKey}|${maxFiles}|${semanticThreshold}`).digest('hex').slice(0, 12);
+  const includeTestsKey = params.includeTests ? '1' : '0';
+  const cacheHash = createHash('md5').update(`${params.query}|${kindKey}|${maxFiles}|${semanticThreshold}|${includeTestsKey}`).digest('hex').slice(0, 12);
   const redisCacheKey = redisKey(['tiered', params.projectId, String(cacheVersion), cacheHash]);
 
   const cached = await redisGetJson<TieredSearchResult>(redisCacheKey).catch(() => null);
@@ -647,7 +635,7 @@ export async function tieredSearch(params: TieredSearchParams): Promise<TieredSe
 
     // Compute a composite score.
     let score = 0;
-    if (t1) score += 0.5 + (t1.hit_count / tokens.length) * 0.5; // 0.5-1.0 for ripgrep
+    if (t1) score += 0.5 + (tokens.length > 0 ? (t1.hit_count / tokens.length) : 1) * 0.5; // 0.5-1.0 for ripgrep
     if (t2) score += 0.4; // symbol match bonus
     if (t3) score += 0.1 + Math.min(0.3, t3.fts_rank); // FTS rank
     if (t4) score += t4.score * 0.3; // semantic (discounted)
