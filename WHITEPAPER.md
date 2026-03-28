@@ -384,6 +384,25 @@ Originally planned as "Phase 7: Multi-Agent Knowledge Sharing" — passively col
 
 The explicit `add_lesson` pattern (100 tokens to save) is strictly better than passive extraction (1000s of tokens to parse, uncertain quality). If knowledge capture rates are low, the fix is better agent instructions (CLAUDE.md), not a monitoring pipeline.
 
+### Dropped: Session History Sharing
+
+Considered as a feature to store and share full session transcripts between agents, enabling one agent to "see" what another agent did in a previous session.
+
+**Why it was dropped:**
+
+1. **Transcripts are massive.** A single agent session produces 50k-200k tokens of conversation. Storing and retrieving these consumes more context window than the knowledge they contain. This directly contradicts the project's goal of *reducing* token usage.
+
+2. **The value is in conclusions, not the journey.** An agent debugging a problem for 30 minutes produces 40k tokens of trial and error, but the useful output is one sentence: "Redis cache must be flushed after changing retrieval logic." That sentence is already captured by `add_lesson` in ~100 tokens.
+
+3. **Existing tools cover the use case.** When Agent B needs to know what Agent A decided:
+   - `search_lessons("what happened with auth refactor")` → returns the decision (~200 tokens)
+   - `SESSION_PATCH.md` → contains session status and next steps (~500 tokens)
+   - Both are orders of magnitude cheaper than reading a 100k-token transcript
+
+4. **Context window is the scarcest resource.** AI agents have limited context windows (100k-200k tokens). Filling that with another agent's raw session history leaves less room for the actual work. Every token of transcript loaded is a token not available for code, reasoning, or tool output.
+
+The design principle: **capture distilled knowledge (lessons), not raw conversations.** 100 well-written lessons are more useful than 100 session transcripts, at 1/1000th the token cost.
+
 ## Appendix: Relationship to Inspiration Projects
 ContextStream inspiration:
 - Persistent memory, semantic code search, and guardrails are the core concept.

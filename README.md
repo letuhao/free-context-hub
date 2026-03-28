@@ -157,7 +157,8 @@ We tested 8 embedding models and 8 reranker models ([full benchmark](docs/benchm
 - [ ] **Phase 11**: Knowledge Portability (import/export)
 
 **Dropped:**
-- ~~Multi-Agent Passive Collection~~ — Originally planned to passively monitor agent conversations and auto-extract lessons. Dropped because: (1) parsing conversations costs tokens, contradicting the "reduce token usage" goal; (2) most agent conversation is noise — debugging, trial and error; (3) agents already call `add_lesson` explicitly with high-quality, verified conclusions. Explicit capture is cheaper and more accurate than passive extraction.
+- ~~Multi-Agent Passive Collection~~ — Passively monitor agent conversations and auto-extract lessons. Dropped: parsing conversations costs tokens (contradicts "reduce token usage" goal), most conversation is noise, and agents already call `add_lesson` explicitly with verified conclusions.
+- ~~Session History Sharing~~ — Store and share full session transcripts between agents. Dropped: a single session transcript is 50k-200k tokens — sharing it defeats the purpose of reducing token usage. The value of a session is its conclusions, not the journey. `add_lesson` captures conclusions in ~100 tokens. `SESSION_PATCH.md` covers status. `search_lessons` lets any agent find any other agent's decisions. Full transcripts are noise that wastes context window.
 
 ---
 
