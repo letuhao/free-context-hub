@@ -150,15 +150,15 @@ We tested 8 embedding models and 8 reranker models ([full benchmark](docs/benchm
 - [x] **Phase 6**: Retrieval Quality Tuning & Tiered Search
 
 **Planned:**
-- [ ] **Phase 7**: Interactive GUI for Knowledge Exploration
+- [ ] **Phase 7**: Interactive GUI — web dashboard for browsing lessons, guardrails, and knowledge graph (also usable from VS Code's built-in browser)
 - [ ] **Phase 8**: Human-in-the-loop Correction
 - [ ] **Phase 9**: Multi-format Ingestion (PDF, DOCX, Images)
-- [ ] **Phase 10**: IDE Native (VS Code extension)
-- [ ] **Phase 11**: Knowledge Portability (import/export)
+- [ ] **Phase 10**: Knowledge Portability (import/export)
 
 **Dropped:**
-- ~~Multi-Agent Passive Collection~~ — Passively monitor agent conversations and auto-extract lessons. Dropped: parsing conversations costs tokens (contradicts "reduce token usage" goal), most conversation is noise, and agents already call `add_lesson` explicitly with verified conclusions.
-- ~~Session History Sharing~~ — Store and share full session transcripts between agents. Dropped: a single session transcript is 50k-200k tokens — sharing it defeats the purpose of reducing token usage. The value of a session is its conclusions, not the journey. `add_lesson` captures conclusions in ~100 tokens. `SESSION_PATCH.md` covers status. `search_lessons` lets any agent find any other agent's decisions. Full transcripts are noise that wastes context window.
+- ~~Multi-Agent Passive Collection~~ — Parsing agent conversations costs tokens (contradicts "reduce token usage" goal), most conversation is noise, `add_lesson` captures verified conclusions explicitly.
+- ~~Session History Sharing~~ — Transcripts are 50k-200k tokens. The value is conclusions, not the journey. `add_lesson` captures those in ~100 tokens.
+- ~~IDE Native (VS Code extension)~~ — Agents use MCP (done). Humans need a UI, but a web dashboard (Phase 7) works in any browser including VS Code's built-in browser — same reach, fraction of the effort. A dedicated extension adds VS Code API maintenance, version testing, and marketplace publishing overhead for no new capability. If deeper IDE integration is needed later (inline warnings, CodeLens), a lightweight extension can link to the web GUI.
 
 ---
 

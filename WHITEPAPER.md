@@ -353,18 +353,15 @@ Phases 1–5 are primarily **passive learning**: index source, build vectors, op
 - **Phase 8–9:** Human-in-the-loop editing and multi-format ingestion widen the surface of facts the deep loop can safely absorb.
 
 ### Phase 7: Interactive GUI
-- **Knowledge Explorer**: Visual hub for humans to inspect and browse lessons, guardrails, project snapshots, and knowledge graph.
+- **Knowledge Explorer**: Web dashboard for browsing lessons, guardrails, project snapshots, and knowledge graph. Also usable from VS Code's built-in browser — no dedicated extension needed.
 
 ### Phase 8: Human-in-the-loop
-- Allow users to correct knowledge, approve draft lessons, and add insights interactively.
+- Allow users to correct knowledge, approve draft lessons, and add insights interactively via the web GUI.
 
 ### Phase 9: Multi-format Ingestion
 - Support for PDF, DOCX, Excel, and Image files.
 
-### Phase 10: IDE Native
-- **VS Code Extension**: Deep integration into the Visual Studio Code ecosystem.
-
-### Phase 11: Knowledge Portability
+### Phase 10: Knowledge Portability
 - **Exchange Hub**: Import/Export knowledge to/from other team-hosted ContextHubs or infrastructure.
 - Standardized knowledge interchange format.
 
@@ -402,6 +399,20 @@ Considered as a feature to store and share full session transcripts between agen
 4. **Context window is the scarcest resource.** AI agents have limited context windows (100k-200k tokens). Filling that with another agent's raw session history leaves less room for the actual work. Every token of transcript loaded is a token not available for code, reasoning, or tool output.
 
 The design principle: **capture distilled knowledge (lessons), not raw conversations.** 100 well-written lessons are more useful than 100 session transcripts, at 1/1000th the token cost.
+
+### Dropped: IDE Native (VS Code Extension)
+
+Originally planned as a dedicated VS Code extension for browsing and managing knowledge from the editor.
+
+**Why it was dropped:**
+
+1. **Agents don't need it.** Agents interact via MCP tools — that's already done and working. The extension would only serve humans.
+
+2. **Web GUI covers the same use case.** The Phase 7 web dashboard works in any browser, including VS Code's built-in Simple Browser. Same functionality, accessible from any IDE, no extension maintenance.
+
+3. **High maintenance, low unique value.** A VS Code extension requires: learning the VS Code extension API, building webview panels, packaging for the marketplace, testing across VS Code versions, and updating when APIs change. All for a UI that duplicates the web dashboard.
+
+4. **Incremental path exists.** If deeper IDE integration is proven valuable later (inline guardrail warnings, CodeLens annotations), a lightweight extension can link to the web GUI rather than reimplementing the full knowledge browser.
 
 ## Appendix: Relationship to Inspiration Projects
 ContextStream inspiration:
