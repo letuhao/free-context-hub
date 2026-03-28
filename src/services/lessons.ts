@@ -124,6 +124,55 @@ async function findConflictSuggestions(
   return out;
 }
 
+/**
+ * Generate 3 alternative search phrasings for a lesson.
+ * Helps bridge vocabulary gaps (e.g., "programming languages" ↔ "service language policy").
+ */
+async function generateSearchAliases(title: string, content: string): Promise<string> {
+  const env = getEnv();
+  if (!env.DISTILLATION_ENABLED) return '';
+
+  const model = env.DISTILLATION_MODEL;
+  if (!model) return '';
+
+  const baseUrl = (env.DISTILLATION_BASE_URL?.trim() || env.EMBEDDINGS_BASE_URL).replace(/\/$/, '');
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const key = env.DISTILLATION_API_KEY ?? env.EMBEDDINGS_API_KEY;
+  if (key) headers.Authorization = `Bearer ${key}`;
+
+  try {
+    const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: 'Generate 3 alternative search queries that would help find this lesson. Include: 1) a question form, 2) keywords only, 3) a synonym/paraphrase. Output ONLY a JSON array of 3 strings.' },
+          { role: 'user', content: `Title: ${title}\nContent: ${content.slice(0, 500)}` },
+        ],
+        temperature: 0.3,
+        max_tokens: 200,
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+
+    if (!res.ok) return '';
+    const json = (await res.json()) as any;
+    const text = json?.choices?.[0]?.message?.content ?? '';
+    // Parse JSON array from response (may have markdown fences).
+    const match = text.match(/\[[\s\S]*\]/);
+    if (!match) return '';
+    const arr = JSON.parse(match[0]) as string[];
+    if (!Array.isArray(arr)) return '';
+    const aliases = arr.filter((s: unknown) => typeof s === 'string').slice(0, 3).join(' | ');
+    logger.info({ title: title.slice(0, 50), aliases: aliases.slice(0, 100) }, 'generated search aliases');
+    return aliases;
+  } catch (err) {
+    logger.warn({ error: err instanceof Error ? err.message : String(err) }, 'search alias generation failed');
+    return '';
+  }
+}
+
 export async function addLesson(payload: LessonPayload): Promise<AddLessonResult> {
   const pool = getDbPool();
   const lessonId = randomUUID();
@@ -131,8 +180,14 @@ export async function addLesson(payload: LessonPayload): Promise<AddLessonResult
   const tags = payload.tags ?? [];
   const sourceRefs = payload.source_refs ?? [];
 
-  const [embedding] = await embedTexts([payload.title + '. ' + payload.content]);
-  // Note: title prepended to content for better query-document alignment.
+  // Generate search aliases (alternative phrasings) for better vocabulary coverage.
+  const searchAliases = await generateSearchAliases(payload.title, payload.content);
+
+  // Embed title + aliases + content together for maximum searchability.
+  const embeddingText = searchAliases
+    ? `${payload.title}. ${searchAliases}. ${payload.content}`
+    : `${payload.title}. ${payload.content}`;
+  const [embedding] = await embedTexts([embeddingText]);
   const embeddingLiteral = `[${embedding.join(',')}]`;
 
   const conflict_suggestions = await findConflictSuggestions(payload.project_id, embeddingLiteral);
@@ -166,14 +221,17 @@ export async function addLesson(payload: LessonPayload): Promise<AddLessonResult
     [payload.project_id, payload.project_id],
   );
 
-  // Build FTS content with camelCase expansion for identifier-aware search.
-  const ftsContent = expandForFtsIndex(payload.title + ' ' + payload.content);
+  // Build FTS content: title + aliases + content with camelCase expansion.
+  const ftsSource = searchAliases
+    ? `${payload.title} ${searchAliases} ${payload.content}`
+    : `${payload.title} ${payload.content}`;
+  const ftsContent = expandForFtsIndex(ftsSource);
 
   await pool.query(
     `INSERT INTO lessons(
       lesson_id, project_id, lesson_type, title, content, tags, source_refs,
-      embedding, captured_by, summary, quick_action, status, superseded_by, created_at, updated_at, fts
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::vector,$9,$10,$11,$12,$13, now(), now(), to_tsvector('english', $14));`,
+      embedding, captured_by, summary, quick_action, status, superseded_by, created_at, updated_at, fts, search_aliases
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::vector,$9,$10,$11,$12,$13, now(), now(), to_tsvector('english', $14), $15);`,
     [
       lessonId,
       payload.project_id,
@@ -189,6 +247,7 @@ export async function addLesson(payload: LessonPayload): Promise<AddLessonResult
       lessonStatus,
       null,
       ftsContent,
+      searchAliases || null,
     ],
   );
 
