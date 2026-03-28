@@ -1,22 +1,80 @@
-# 🧠 free-context-hub
+# free-context-hub
 
-> **Self-hosted "persistent memory + semantic code search + guardrails" for MCP-enabled AI tools.**
+> **Self-hosted persistent memory + guardrails for AI coding agents. Free, local, for small teams.**
 
-`free-context-hub` is a local ContextHub that empowers your AI assistants (Cursor, Claude Code, etc.) with long-term memory, deep codebase understanding, and safety guardrails—all running on your hardware.
-
----
-
-## ✨ Key Features
-
-- 📂 **Semantic Indexing**: Index your repositories into `pgvector` for intent-based search.
-- 🔍 **Intent Search**: Find code by what it *does*, not just what it *says* (`search_code`).
-- 🧠 **Persistent Lessons**: Decisions, preferences, and workarounds stay across sessions.
-- 🛡️ **Smart Guardrails**: Apply lightweight safety checks before risky actions.
-- 🔬 **Phase 3 Distillation**: (Optional) Use local LLMs to summarize and reflect on your team's knowledge.
+free-context-hub is a local [ContextStream](https://contextstream.io/)-inspired MCP server that gives your AI assistants (Claude Code, Cursor, etc.) **persistent knowledge across sessions and agents** — decisions, preferences, workarounds, and guardrails that survive after a conversation ends.
 
 ---
 
-## 🚀 Quickstart (Run Locally)
+## Why This Exists
+
+Every new AI agent session starts from zero. The agent doesn't know:
+- Why your team chose JWT over sessions
+- That Redis cache must be flushed after deployment
+- That pushing without tests broke production last month
+- Your team's naming conventions and architectural preferences
+
+**free-context-hub solves this.** One agent captures a lesson, every future agent benefits — across sessions, across team members, persistently.
+
+---
+
+## Core Features (Priority Order)
+
+### 1. Persistent Lessons & Knowledge (Primary)
+The main value proposition. Store and retrieve team knowledge that persists across sessions and agents.
+
+- **`add_lesson`** — Capture decisions, preferences, workarounds, guardrails
+- **`search_lessons`** — Semantic search across all stored knowledge
+- **`list_lessons`** — Browse with filters (type, tags, status)
+- **`update_lesson_status`** — Lifecycle management (draft → active → superseded → archived)
+- **`reflect`** — LLM-synthesized answers from multiple lessons (optional, requires chat model)
+
+**Example workflow:**
+```
+Agent A (Monday):   add_lesson("We use JWT not sessions — legal requires stateless auth")
+Agent B (Thursday): search_lessons("authentication approach") → gets the decision instantly
+Agent C (Next month): Doesn't waste time debating sessions vs JWT
+```
+
+### 2. Guardrails (Primary)
+Prevent repeated mistakes by enforcing team rules before risky actions.
+
+- **`check_guardrails`** — Pre-action safety verification (git push, deploy, migrations)
+- Guardrails are derived from lessons with `lesson_type: "guardrail"`
+- Returns `pass/fail` + prompt for user confirmation when blocked
+
+### 3. Session Bootstrap (Primary)
+Quick onboarding for new agent sessions.
+
+- **`get_context`** — Bootstrap with project state + suggested next calls
+- **`get_project_summary`** — Full project briefing in one read
+- **`help`** — Tool discovery and sample workflows
+
+### 4. Code Search (Supplementary)
+Semantic code search assists agents in finding relevant code. This is a **supplementary feature**, not the core goal — agents already have built-in tools (Grep, Glob, Read) for code navigation.
+
+- **`search_code_tiered`** — Multi-tier search with 3 auto-selected profiles:
+  - *code-search*: ripgrep > symbol > FTS > semantic (for source/config/types)
+  - *relationship*: convention paths > KG imports > filtered ripgrep (for tests)
+  - *semantic-first*: vector similarity > FTS (for docs/scripts)
+- **`search_code`** — Legacy semantic-only search
+- **`index_project`** — Index repository into chunks + embeddings
+
+### 5. Git Intelligence (Supplementary)
+Auto-collect insights from commit history.
+
+- **`ingest_git_history`** / **`suggest_lessons_from_commits`** — Draft lessons from git history
+- **`analyze_commit_impact`** — Commit impact over symbol/lesson graph
+
+### 6. Knowledge Graph (Optional)
+Symbol-level code structure for advanced queries. Requires Neo4j.
+
+- **`search_symbols`** / **`get_symbol_neighbors`** / **`trace_dependency_path`**
+- **`get_lesson_impact`** — Which code does a lesson affect?
+
+---
+
+## Quickstart (Run Locally)
 
 1.  **Configure Environment**:
     ```bash
@@ -38,129 +96,55 @@
     ```bash
     npm run smoke-test
     ```
-6.  **Connect Cursor AI**:
-    Add the MCP server URL in Cursor settings: `http://localhost:3000/mcp`.
-    *(Defaults to no auth; set `MCP_AUTH_ENABLED=true` in `.env` if needed.)*
+6.  **Connect Your AI Tool**:
+    Add the MCP server URL in your tool's settings: `http://localhost:3000/mcp`.
 
-Detailed setup guide: [`docs/QUICKSTART.md`](docs/QUICKSTART.md).
-
-Phase 6 verification (Docker Compose, worker + MCP): [`docs/phase6-verification.md`](docs/phase6-verification.md) — after `docker compose up -d` with `mcp` and `worker`, run `npm run verify:phase6:qc:compose` from the repo root.
-
-Storage policy guide: [`docs/storage/storage-contract.md`](docs/storage/storage-contract.md).
+Detailed setup: [`docs/QUICKSTART.md`](docs/QUICKSTART.md)
 
 ---
 
-## 🤖 Self-Hosted Models
+## Self-Hosted Models
 
 ContextHub uses OpenAI-compatible APIs. We recommend running **two roles** (can be the same LM Studio instance):
 
-### 1. Embeddings (Indexing & Search)
-- **Model**: `mixedbread-ai/text-embedding-mxbai-embed-large-v1` (Default)
-- **Dimensions**: `1024` (Must match `EMBEDDINGS_DIM` in `.env`)
+### Embeddings (Required)
+- **Model**: `mixedbread-ai/text-embedding-mxbai-embed-large-v1`
+- **Dimensions**: `1024` (must match `EMBEDDINGS_DIM` in `.env`)
 
-### 2. Context Builder (Distillation & Reflection)
-Enable by setting `DISTILLATION_ENABLED=true`.
+### Context Builder (Optional)
+Enable `DISTILLATION_ENABLED=true` for `reflect`, `compress_context`, and lesson summarization.
 
-| Model Type | Recommended Models | Best Use Case |
+| Model Type | Recommended | Use Case |
 | :--- | :--- | :--- |
-| **Code-Focused** | `qwen2.5-coder-7b/14b` | Architecture summaries & `reflect` |
-| **Generalist** | `qwen2.5-7b`, `llama-3.1-8b` | Lesson distillation & compression |
+| **Code-Focused** | `qwen2.5-coder-7b/14b` | Architecture summaries |
+| **Generalist** | `qwen2.5-7b`, `llama-3.1-8b` | Lesson distillation |
 | **Lightweight** | `phi-4`, `mistral-7b` | Low-latency summaries |
 
-### 3. Rerank Model (Optional, online for `search_code`)
-Enable by calling `search_code` with `filters.rerank_mode="llm"` and configure:
-- `RERANK_MODEL` (required for dedicated rerank; otherwise uses `DISTILLATION_MODEL`)
-- `RERANK_BASE_URL`, `RERANK_API_KEY` (optional overrides)
+---
 
-Recommended rerank-oriented choices:
-- **Best quality / enough VRAM**: `Qwen/Qwen2.5-14B-Instruct`
-- **Balanced latency/quality**: `Qwen/Qwen2.5-7B-Instruct`
-- **Low-resource**: `Mistral-7B-Instruct`, `Phi-4`
+## Roadmap
 
-### 4. QA Agent Model (Optional, worker jobs `faq.build` / `raptor.build`)
-Configure:
-- `QA_AGENT_MODEL` (if omitted, fallback to `DISTILLATION_MODEL`)
-- `QA_AGENT_BASE_URL`, `QA_AGENT_API_KEY` (optional overrides)
-
-Recommended QA generation choices:
-- **Balanced**: `Qwen/Qwen2.5-7B-Instruct`
-- **Higher quality**: `Qwen/Qwen2.5-14B-Instruct`
-- **Low-resource**: `Phi-4` / `Mistral-7B-Instruct`
-
-> Can I use `qwen/qwen2.5-coder-14b` for rerank + QA to save PC resources?
->
-> Yes, you can run one shared model for both to simplify setup. It works and is often good enough for code-heavy corpora.
-> But for ranking/QA style outputs, **instruct/general models usually behave more stably** than coder-only models.
-> Practical recommendation: start with one shared model, measure `qc:rag` delta + latency, then decide if splitting models is worth it.
-
-### 5. Hybrid Retrieval (Optional, safe rollout)
-Hybrid retrieval expands `search_code` candidates with a lexical side-channel before ranking.
-
-Default is OFF. Enable by either:
-- per-call opt-in: `search_code.filters.hybrid_mode="lexical"`
-- environment toggle: `RETRIEVAL_HYBRID_ENABLED=true`
-
-Controls:
-- `RETRIEVAL_HYBRID_LEXICAL_LIMIT` (default `12`): cap lexical candidate expansion size.
-
-Recommended rollout:
-1. keep global env OFF,
-2. enable per-call only for target groups (`mcp-server`, `config`, `retrieval`),
-3. compare QC artifacts (`recall@3`, `MRR`, `p95`) across at least 2 runs before broader enablement.
+- [x] **Phase 1-2**: Core MVP — Lessons, Search, Guardrails
+- [x] **Phase 3**: Knowledge Distillation & Reflection
+- [x] **Phase 4**: Knowledge Graph (Neo4j, symbol-level)
+- [x] **Phase 5**: Git Intelligence & Automation
+- [x] **Phase 6**: Retrieval Quality Tuning & Tiered Search
+- [ ] **Phase 7**: Multi-Agent Knowledge Sharing
+- [ ] **Phase 8**: Interactive GUI for Knowledge Exploration
+- [ ] **Phase 9**: Human-in-the-loop Correction
+- [ ] **Phase 10**: Multi-format Ingestion (PDF, DOCX, Images)
+- [ ] **Phase 11**: RAG to Insight (human-readable summaries)
+- [ ] **Phase 12**: IDE Native (VS Code extension)
+- [ ] **Phase 13**: Knowledge Portability (import/export)
 
 ---
 
-## 🛠️ MCP Toolset
+## Troubleshooting
 
-Exposed tools for your AI agent:
-
-- 🆘 `help`: Tool discovery & sample workflows.
-- 🏗️ `index_project`: Full repository indexing.
-- 🔍 `search_code`: Semantic retrieval of code snippets.
-- 📚 `list_lessons` / `search_lessons`: Access persistent memory.
-- ✍️ `add_lesson`: Capture new decisions or guardrails.
-- 👮 `check_guardrails`: Pre-action safety verification.
-- 🏗️ `get_context`: Bootstrap session with project state.
-- 🔄 `update_lesson_status`: Manage lesson lifecycle (Phase 3).
-- 📋 `get_project_summary`: Get a full project briefing (Phase 3).
-- 🧠 `reflect`: LLM-synthesized answers from lessons (Phase 3).
-- 🗜️ `compress_context`: Chat-based text compression (Phase 3).
-- 🧨 `delete_workspace`: Wipe project data.
-- 🧾 `ingest_git_history` / `list_commits` / `get_commit`: Git intelligence ingestion + retrieval (Phase 5).
-- 📝 `suggest_lessons_from_commits` / `link_commit_to_lesson`: Draft lesson automation from commit context (Phase 5).
-- 🧭 `analyze_commit_impact`: Commit impact over Phase 4 symbol/lesson graph (Phase 5).
-- 🗂️ `list_generated_documents` / `get_generated_document`: Audit DB-first generated artifacts (FAQ/RAPTOR/QC/benchmark) directly from MCP.
-- 🔁 Worker automation + queue/source tools: `prepare_repo`, `enqueue_job`, `list_jobs` (with `correlation_id` filter), `run_next_job`, `scan_workspace`.
-- 🗃️ DB-first generated artifacts: FAQ/RAPTOR/QC outputs are canonical in Postgres (`generated_documents`) and optionally exported to filesystem.
-
----
-
-## 🗺️ Roadmap
-
-We are currently in **Phase 5**. Here is our path forward:
-
-- [x] **Phase 1-2**: MVP Core (Indexing, Search, Lessons, Guardrails).
-- [x] **Phase 3**: Knowledge Distillation & Reflection (LLM-powered).
-- [x] **Phase 4**: Advanced Code Indexing & **Knowledge Graph Building**.
-- [x] **Phase 5**: **Automation Knowledge Building**: Auto-collecting insights from Git commits.
-- [ ] **Phase 6**: **Active Knowledge & Deep Learning Loop**: Eval-driven retrieval improvement (QC-gated, bounded recursion); see [WHITEPAPER.md](WHITEPAPER.md).
-- [ ] **Phase 7**: **Multi-Agent Knowledge**: Collecting knowledge from inter-agent communications.
-- [ ] **Phase 8**: **Interactive GUI**: A visual interface for humans to explore the knowledge base.
-- [ ] **Phase 9**: **Human-in-the-loop**: Interactive correction and manual knowledge injection.
-- [ ] **Phase 10**: **Multi-format Support**: PDF, DOCX, XLSX, and Image ingestion.
-- [ ] **Phase 11**: **RAG to Insight**: Converting raw knowledge into human-readable text and diagrams.
-- [ ] **Phase 12**: **IDE Native**: Deep integration with Visual Studio Code.
-- [ ] **Phase 13**: **Knowledge Portability**: Import/Export knowledge to/from other infrastructure.
-
----
-
-## 🔧 Troubleshooting
-
-- **`Unauthorized: invalid workspace_token`**: Occurs if `MCP_AUTH_ENABLED=true` but the token is missing/wrong. Restart the server after `.env` changes.
+- **`Unauthorized: invalid workspace_token`**: Set `MCP_AUTH_ENABLED=false` in `.env` or provide the correct token.
 - **`dimension mismatch`**: Ensure `EMBEDDINGS_DIM=1024` matches your model's output.
 - **`401 Unauthorized` (LM Studio)**: Check `EMBEDDINGS_API_KEY` in your `.env`.
-- **`validate:phase5-worker` reports mixed jobs**: pass `correlation_id` into `enqueue_job` and query `list_jobs` with the same `correlation_id`.
 
 ---
 
-MIT License • [Whitepaper](WHITEPAPER.md) • [Agent Protocol](AGENT_PROTOCOL.md)
+MIT License | [Whitepaper](WHITEPAPER.md) | [Agent Protocol](AGENT_PROTOCOL.md)

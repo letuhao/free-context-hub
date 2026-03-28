@@ -152,3 +152,5 @@ docs/qc/artifacts/
 docs/faq/
 
 docs/qc/*-qc-report.md
+
+.claude/settings.local.json

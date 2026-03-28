@@ -199,7 +199,7 @@ const EnvSchema = z.object({
   RETRIEVAL_HYBRID_ENABLED: z
     .preprocess(v => parseBooleanEnv(v), z.boolean().optional())
     .default(false),
-  RETRIEVAL_HYBRID_LEXICAL_LIMIT: z.coerce.number().int().positive().optional().default(12),
+  RETRIEVAL_HYBRID_LEXICAL_LIMIT: z.coerce.number().int().positive().optional().default(20),
 
   // Phase 4: optional Neo4j graph store.
   KG_ENABLED: z

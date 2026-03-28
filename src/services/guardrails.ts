@@ -36,10 +36,13 @@ function matchTrigger(trigger: string, action: string) {
 export async function checkGuardrails(projectId: string, actionContext: ActionContext): Promise<GuardrailCheckResult> {
   const pool = getDbPool();
 
+  // Only check guardrails whose parent lesson is active (not superseded/archived).
   const rules = await pool.query(
-    `SELECT rule_id, trigger, requirement, verification_method
-     FROM guardrails
-     WHERE project_id=$1;`,
+    `SELECT g.rule_id, g.trigger, g.requirement, g.verification_method
+     FROM guardrails g
+     JOIN lessons l ON l.lesson_id = g.rule_id AND l.project_id = g.project_id
+     WHERE g.project_id = $1
+       AND COALESCE(l.status, 'active') IN ('active', 'draft');`,
     [projectId],
   );
 
