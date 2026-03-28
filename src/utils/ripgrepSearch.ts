@@ -7,6 +7,77 @@ import { createModuleLogger } from './logger.js';
 
 const logger = createModuleLogger('ripgrep');
 
+// ─── Circuit breaker: detect rg availability once ────────────────────────
+
+let rgAvailability: 'unknown' | 'available' | 'unavailable' = 'unknown';
+let rgCheckPromise: Promise<boolean> | null = null;
+
+/**
+ * Check if ripgrep binary is available. Caches result after first call.
+ * Returns true if rg can be executed.
+ */
+export async function isRipgrepAvailable(): Promise<boolean> {
+  if (rgAvailability === 'available') return true;
+  if (rgAvailability === 'unavailable') return false;
+
+  // Coalesce concurrent checks.
+  if (!rgCheckPromise) {
+    rgCheckPromise = new Promise<boolean>((resolve) => {
+      execFile('rg', ['--version'], { timeout: 3000 }, (error, stdout) => {
+        if (error || !stdout) {
+          rgAvailability = 'unavailable';
+          logger.warn('ripgrep (rg) binary not found — tier 1 search will be disabled');
+          resolve(false);
+        } else {
+          rgAvailability = 'available';
+          logger.info({ version: stdout.trim().split('\n')[0] }, 'ripgrep available');
+          resolve(true);
+        }
+      });
+    });
+  }
+  return rgCheckPromise;
+}
+
+// ─── Default ignore patterns per ecosystem ───────────────────────────────
+
+/** Language-agnostic ignore patterns that work across ecosystems. */
+export const DEFAULT_IGNORE_PATTERNS = [
+  // Version control
+  '.git/**',
+  '.svn/**',
+  '.hg/**',
+  // JavaScript/TypeScript
+  'node_modules/**',
+  'dist/**',
+  '.next/**',
+  '.nuxt/**',
+  // Python
+  '__pycache__/**',
+  '.venv/**',
+  'venv/**',
+  '.env/**',
+  '*.egg-info/**',
+  '.mypy_cache/**',
+  '.pytest_cache/**',
+  // Go
+  'vendor/**',
+  // Rust
+  'target/**',
+  // Java/Kotlin
+  '.gradle/**',
+  'build/**',
+  // General
+  '.cache/**',
+  'coverage/**',
+  '*.min.js',
+  '*.min.css',
+  '*.map',
+  '*.lock',
+];
+
+// ─── Types ───────────────────────────────────────────────────────────────
+
 export type RipgrepMatch = {
   file_path: string;       // relative to root
   line_number: number;
@@ -27,7 +98,7 @@ export type RipgrepResult = {
 export async function ripgrepLiteral(opts: {
   root: string;
   pattern: string;
-  /** Glob patterns to exclude (e.g., ['node_modules/**', '.git/**']). */
+  /** Glob patterns to exclude. Default: DEFAULT_IGNORE_PATTERNS. */
   ignore?: string[];
   /** Max files to return. Default 100. */
   maxFiles?: number;
@@ -36,6 +107,11 @@ export async function ripgrepLiteral(opts: {
   /** Max lines per file to capture. Default 3. */
   maxLinesPerFile?: number;
 }): Promise<RipgrepResult> {
+  // Circuit breaker: skip if rg is known unavailable.
+  if (!(await isRipgrepAvailable())) {
+    return { matches: [], files: [], duration_ms: 0, truncated: false };
+  }
+
   const start = Date.now();
   const maxFiles = opts.maxFiles ?? 100;
   const timeoutMs = opts.timeoutMs ?? 5000;
@@ -51,8 +127,8 @@ export async function ripgrepLiteral(opts: {
     '--max-filesize', '1M',
   ];
 
-  // Add ignore patterns.
-  for (const ig of (opts.ignore ?? ['node_modules/**', '.git/**', 'dist/**', '*.lock'])) {
+  // Add ignore patterns (configurable, with sensible multi-ecosystem defaults).
+  for (const ig of (opts.ignore ?? DEFAULT_IGNORE_PATTERNS)) {
     args.push('--glob', `!${ig}`);
   }
 
@@ -129,6 +205,11 @@ export async function ripgrepMultiPattern(opts: {
 }> {
   const start = Date.now();
   if (!opts.patterns.length) return { files: [], duration_ms: 0 };
+
+  // Circuit breaker: skip if rg is known unavailable.
+  if (!(await isRipgrepAvailable())) {
+    return { files: [], duration_ms: 0 };
+  }
 
   // Dedupe patterns and limit to 10 to control latency.
   const patterns = Array.from(new Set(opts.patterns)).slice(0, 10);

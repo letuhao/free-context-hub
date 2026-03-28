@@ -833,8 +833,7 @@ function createMcpToolsServer() {
           ),
         filters: z
           .object({
-            path_glob: z.string().min(1).optional().describe("Optional path glob filter. Example: 'src/**/*.ts'."),
-            include_tests: z.boolean().optional().describe('Include test files (default: false).'),
+            include_tests: z.boolean().optional().describe('Include test files (default: false). Auto-enabled when kind includes "test".'),
           })
           .optional(),
         max_files: z.number().int().positive().optional().describe('Max files to return (default: 50).'),
@@ -863,6 +862,7 @@ function createMcpToolsServer() {
         tiers_skipped: z.array(z.string()),
         query_classification: z.enum(['identifier', 'path', 'natural_language', 'mixed']),
         explanations: z.array(z.string()),
+        warnings: z.array(z.string()),
       }),
     },
     async ({ workspace_token, project_id, query, kind, filters, max_files, semantic_threshold, debug, output_format }) => {
@@ -872,7 +872,6 @@ function createMcpToolsServer() {
         projectId,
         query,
         kind: kind as any,
-        pathGlob: filters?.path_glob,
         includeTests: filters?.include_tests,
         maxFiles: max_files,
         semanticThreshold: semantic_threshold,
@@ -881,7 +880,8 @@ function createMcpToolsServer() {
       const tierCounts = result.tiers_executed
         .map(t => `${t}:${result.files.filter(f => f.tier === t).length}`)
         .join(' ');
-      const summary = `search_code_tiered: ${result.files.length} files (${tierCounts})`;
+      let summary = `search_code_tiered: ${result.files.length} files (${tierCounts})`;
+      if (result.warnings.length) summary += ` [WARNINGS: ${result.warnings.join('; ')}]`;
       return formatToolResponse(result, summary, output_format);
     },
   );

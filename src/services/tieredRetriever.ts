@@ -16,7 +16,11 @@ import { getEnv } from '../env.js';
 import { ripgrepMultiPattern } from '../utils/ripgrepSearch.js';
 import { buildFtsQuery } from '../utils/ftsTokenizer.js';
 import { createModuleLogger } from '../utils/logger.js';
+import { detectLanguage } from '../utils/languageDetect.js';
 import type { ChunkKind } from '../utils/languageDetect.js';
+import { getProjectCacheVersion } from './cacheVersions.js';
+import { redisGetJson, redisKey, redisSetJson } from './redisCache.js';
+import { createHash } from 'node:crypto';
 
 const logger = createModuleLogger('tiered-retriever');
 
@@ -34,33 +38,12 @@ export type FileCandidate = {
   sample_lines: string[];
 };
 
-/** Infer chunk kind from file path when DB metadata is unavailable. */
-function inferKindFromPath(path: string): ChunkKind {
-  // Use the same classification logic as the indexer.
-  // This is a lightweight fallback for ripgrep results not in the DB.
-  const p = path.toLowerCase();
-  if (/\.lock$|\.min\.\w+$|\.map$|\bgenerated\//.test(p)) return 'generated';
-  if (/\.(test|spec)\.\w+$|__tests__\/|__mocks__\//.test(p)) return 'test';
-  if (/\bmigrations?\/|\bseed[s]?[./]/.test(p)) return 'migration';
-  if (/\.proto$|\.graphql$|\.gql$|openapi|swagger/i.test(p)) return 'api_spec';
-  if (/\.d\.ts$|\.types?\.\w+$|\btypes?\/|\bmodels?\/|\binterfaces?\//.test(p)) return 'type_def';
-  if (/package\.json$|go\.mod$|Cargo\.toml$|requirements.*\.txt$|Gemfile$|pyproject\.toml$/i.test(p)) return 'dependency';
-  if (/\.(md|mdx|txt|rst|adoc)$|^docs?\/|README|CHANGELOG/i.test(p)) return 'doc';
-  if (/\.(css|scss|sass|less)$|\bstyles?\//.test(p)) return 'style';
-  if (/\.(json|yaml|yml|toml|xml|env|ini|cfg|conf)$|\bconfig\.\w+$/.test(p)) return 'config';
-  if (/Dockerfile|docker-compose|\.tf$|\.github\/|\.gitlab/i.test(p)) return 'infra';
-  if (/\.(sh|bash|ps1|bat|cmd)$|\bscripts?\/|\bbin\//.test(p)) return 'script';
-  return 'source';
-}
-
 export type TieredSearchParams = {
   projectId: string;
   query: string;
   /** Filter results to specific kinds. Default: all kinds. */
   kind?: ChunkKind | ChunkKind[];
-  /** Path glob filter (POSIX-like). */
-  pathGlob?: string;
-  /** Include test files. Default: false. */
+  /** Include test files. Default: false. Auto-set to true when kind includes 'test'. */
   includeTests?: boolean;
   /** Max files to return. Default: 50. */
   maxFiles?: number;
@@ -76,6 +59,8 @@ export type TieredSearchResult = {
   tiers_skipped: SearchTier[];
   query_classification: 'identifier' | 'path' | 'natural_language' | 'mixed';
   explanations: string[];
+  /** Non-empty when a tier failed or was degraded. Always included (not debug-only). */
+  warnings: string[];
 };
 
 // ─── Query Classification ────────────────────────────────────────────────
@@ -86,19 +71,42 @@ export type TieredSearchResult = {
  * - 'path': contains file paths or extensions → path matching
  * - 'natural_language': pure English question → semantic
  * - 'mixed': combination
+ *
+ * Priority: identifier > path > mixed > natural_language.
+ * Identifier patterns take precedence because words like "get", "list", "find"
+ * are common identifier prefixes (getUser, findById) — if the query contains
+ * a code identifier, treat it as code-first.
  */
 function classifyQuery(query: string): TieredSearchResult['query_classification'] {
   const hasIdentifier = /[a-z][A-Z]|[A-Z]{2,}[a-z]|_[a-z]|[a-z]_/.test(query);
-  const hasPath = /[/\\]/.test(query) || /\.\w{1,4}\b/.test(query);
-  const hasNaturalLanguage = /\b(how|where|what|which|why|when|does|is|are|can|find|show|list|get)\b/i.test(query);
+  const hasPath = /[/\\]/.test(query) || /\.\w{1,4}$/.test(query.trim());
+  // Only detect NL when the query has sentence-like structure, not just NL keywords
+  // embedded in identifiers. Require a space-separated NL keyword that isn't part
+  // of an identifier (e.g., "how does auth work" but not "getUser").
+  const hasNaturalLanguage = /(?:^|\s)(how|where|what|which|why|when|does|is|are|can|should|could)\s/i.test(query);
 
-  if (hasIdentifier && !hasNaturalLanguage) return 'identifier';
-  if (hasPath && !hasNaturalLanguage) return 'path';
-  if (hasNaturalLanguage && !hasIdentifier && !hasPath) return 'natural_language';
+  // Identifiers take absolute priority — even if NL words are present,
+  // a query like "find getUserById" should use ripgrep on "getUserById".
+  if (hasIdentifier) return hasNaturalLanguage ? 'mixed' : 'identifier';
+  if (hasPath) return hasNaturalLanguage ? 'mixed' : 'path';
+  if (hasNaturalLanguage) return 'natural_language';
   return 'mixed';
 }
 
 // ─── Token Extraction ────────────────────────────────────────────────────
+
+/** Common English words that should NOT be treated as code identifiers. */
+const EXTRACT_STOP_WORDS = new Set([
+  'how', 'where', 'what', 'which', 'when', 'why', 'who',
+  'does', 'find', 'show', 'list', 'with', 'from', 'this', 'that',
+  'have', 'been', 'they', 'them', 'into', 'each', 'some', 'more',
+  'most', 'also', 'just', 'only', 'about', 'after', 'before',
+  'should', 'could', 'would', 'being', 'other', 'will', 'the',
+  'and', 'for', 'are', 'but', 'not', 'all', 'can', 'had', 'her',
+  'was', 'one', 'our', 'out', 'use', 'way', 'many', 'then',
+  'like', 'long', 'make', 'thing', 'see', 'him', 'two', 'has',
+  'look', 'new', 'now', 'old', 'get', 'set',
+]);
 
 /** Extract identifier-like tokens suitable for ripgrep literal search. */
 function extractIdentifiers(query: string): string[] {
@@ -110,13 +118,15 @@ function extractIdentifiers(query: string): string[] {
     if (phrase.length >= 2) tokens.push(phrase);
   }
 
-  // camelCase/PascalCase/snake_case identifiers.
-  const identifiers = query.match(/[A-Za-z_][A-Za-z0-9_]{2,}/g) ?? [];
+  // camelCase/PascalCase/snake_case identifiers (min 2 chars).
+  const identifiers = query.match(/[A-Za-z_][A-Za-z0-9_]{1,}/g) ?? [];
   for (const id of identifiers) {
-    // Only keep things that look like code identifiers (not common English words).
+    // Strong identifier signals: case transitions or underscores → always keep.
     if (/[a-z][A-Z]|[A-Z]{2,}[a-z]|_/.test(id)) {
       tokens.push(id);
-    } else if (id.length >= 4 && !/^(where|what|which|when|does|find|show|list|with|from|this|that|have|been|they|them|into|each|some|more|most|also|just|only|about|after|before|should|could|would|being|other)$/i.test(id)) {
+    } else if (id.length >= 2 && !EXTRACT_STOP_WORDS.has(id.toLowerCase())) {
+      // Short tokens (2-3 chars like "env", "db", "pg", "api") are kept
+      // unless they're common English stop words.
       tokens.push(id);
     }
   }
@@ -237,11 +247,13 @@ async function tier3FtsPath(params: {
   kindFilter: ChunkKind[] | null;
   pool: ReturnType<typeof getDbPool>;
   limit: number;
+  /** Use AND mode for identifier queries to reduce over-broad matches. */
+  ftsMode?: 'or' | 'and';
 }): Promise<Map<string, { tier: SearchTier; fts_rank: number; sample_lines: string[] }>> {
   const result = new Map<string, { tier: SearchTier; fts_rank: number; sample_lines: string[] }>();
 
   try {
-    const tsquery = buildFtsQuery(params.tokens.slice(0, 12));
+    const tsquery = buildFtsQuery(params.tokens.slice(0, 12), params.ftsMode ?? 'or');
     if (!tsquery) return result;
 
     let kindWhere = '';
@@ -382,28 +394,65 @@ async function tier4Semantic(params: {
 
 // ─── Resolve Workspace Root ─────────────────────────────────────────────
 
+import { resolve as pathResolve, normalize as pathNormalize } from 'node:path';
+
+/** In-memory cache for workspace root per project (rarely changes). */
+const rootCache = new Map<string, { root: string | null; ts: number }>();
+const ROOT_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Validate that a workspace root is safe to use for ripgrep.
+ * Rejects paths containing traversal patterns.
+ */
+function isValidRoot(root: string): boolean {
+  const normalized = pathNormalize(root).replace(/\\/g, '/');
+  // Reject obvious traversal patterns.
+  if (normalized.includes('/../') || normalized.startsWith('../') || normalized === '..') {
+    logger.warn({ root }, 'workspace root rejected: path traversal detected');
+    return false;
+  }
+  // Reject root-level system directories on Unix.
+  if (/^\/(etc|proc|sys|dev|boot|root)\b/.test(normalized)) {
+    logger.warn({ root }, 'workspace root rejected: system directory');
+    return false;
+  }
+  return true;
+}
+
 async function resolveWorkspaceRoot(projectId: string, pool: ReturnType<typeof getDbPool>): Promise<string | null> {
+  // Check in-memory cache first.
+  const cached = rootCache.get(projectId);
+  if (cached && Date.now() - cached.ts < ROOT_CACHE_TTL_MS) return cached.root;
+
+  let root: string | null = null;
+
   try {
     // Try project_workspaces first (Phase 5).
     const ws = await pool.query(
       `SELECT root_path FROM project_workspaces WHERE project_id = $1 LIMIT 1;`,
       [projectId],
     );
-    if (ws.rows?.[0]?.root_path) return String(ws.rows[0].root_path);
+    if (ws.rows?.[0]?.root_path) root = String(ws.rows[0].root_path);
   } catch {
     // Table may not exist yet.
   }
 
-  try {
-    // Fall back to chunks.root (always available).
-    const ch = await pool.query(
-      `SELECT DISTINCT root FROM chunks WHERE project_id = $1 LIMIT 1;`,
-      [projectId],
-    );
-    if (ch.rows?.[0]?.root) return String(ch.rows[0].root);
-  } catch { /* ignore */ }
+  if (!root) {
+    try {
+      // Fall back to chunks.root (always available).
+      const ch = await pool.query(
+        `SELECT DISTINCT root FROM chunks WHERE project_id = $1 LIMIT 1;`,
+        [projectId],
+      );
+      if (ch.rows?.[0]?.root) root = String(ch.rows[0].root);
+    } catch { /* ignore */ }
+  }
 
-  return null;
+  // Validate before caching.
+  if (root && !isValidRoot(root)) root = null;
+
+  rootCache.set(projectId, { root, ts: Date.now() });
+  return root;
 }
 
 // ─── Kind Resolution ────────────────────────────────────────────────────
@@ -441,16 +490,28 @@ export async function tieredSearch(params: TieredSearchParams): Promise<TieredSe
   const maxFiles = params.maxFiles ?? 50;
   const semanticThreshold = params.semanticThreshold ?? 3;
 
+  // ── Redis cache check ──────────────────────────────────────────────────
+  const cacheVersion = await getProjectCacheVersion(params.projectId).catch(() => 1);
+  const kindKey = params.kind
+    ? (Array.isArray(params.kind) ? params.kind.sort().join(',') : params.kind)
+    : 'all';
+  const cacheHash = createHash('md5').update(`${params.query}|${kindKey}|${maxFiles}|${semanticThreshold}`).digest('hex').slice(0, 12);
+  const redisCacheKey = redisKey(['tiered', params.projectId, String(cacheVersion), cacheHash]);
+
+  const cached = await redisGetJson<TieredSearchResult>(redisCacheKey).catch(() => null);
+  if (cached && Array.isArray(cached.files)) {
+    logger.info({ cache: 'hit', key: redisCacheKey, files: cached.files.length }, 'tiered_search:cache_hit');
+    return cached;
+  }
+
   const classification = classifyQuery(params.query);
   const tokens = extractIdentifiers(params.query);
   const kindFilter = params.kind
     ? (Array.isArray(params.kind) ? params.kind : [params.kind])
     : null;
 
-  // Add 'test' to kind filter only if explicitly requested.
-  if (kindFilter && !params.includeTests && !kindFilter.includes('test')) {
-    // Don't add test exclusion — kindFilter already limits to requested kinds.
-  }
+  // Auto-enable test inclusion when kind filter explicitly requests tests.
+  const includeTests = params.includeTests || (kindFilter?.includes('test') ?? false);
 
   logger.info({
     project_id: params.projectId,
@@ -467,21 +528,49 @@ export async function tieredSearch(params: TieredSearchParams): Promise<TieredSe
   const tiersExecuted: SearchTier[] = [];
   const tiersSkipped: SearchTier[] = [];
   const explanations: string[] = [];
+  const warnings: string[] = [];
 
   // ── Execute Tier 1 + 2 + 3 in parallel ────────────────────────────────
   const [t1Result, t2Result, t3Result] = await Promise.all([
     // Tier 1: ripgrep (skip for pure natural language queries or if no root).
     (classification !== 'natural_language' && root && tokens.length > 0)
-      ? tier1Ripgrep({ root, tokens, kindFilter, maxFiles }).then(r => { tiersExecuted.push('exact_match'); return r; })
-      : Promise.resolve((() => { tiersSkipped.push('exact_match'); return new Map(); })()),
+      ? tier1Ripgrep({ root, tokens, kindFilter, maxFiles })
+          .then(r => { tiersExecuted.push('exact_match'); return r; })
+          .catch(err => {
+            warnings.push(`tier1_ripgrep failed: ${err instanceof Error ? err.message : String(err)}`);
+            tiersSkipped.push('exact_match');
+            return new Map() as Awaited<ReturnType<typeof tier1Ripgrep>>;
+          })
+      : Promise.resolve((() => {
+          tiersSkipped.push('exact_match');
+          if (!root && classification !== 'natural_language' && tokens.length > 0) {
+            warnings.push('tier1_ripgrep skipped: workspace root not found');
+          }
+          return new Map() as Awaited<ReturnType<typeof tier1Ripgrep>>;
+        })()),
 
     // Tier 2: symbol lookup (always run if tokens exist).
     tokens.length > 0
-      ? tier2SymbolLookup({ projectId: params.projectId, tokens, kindFilter, pool }).then(r => { tiersExecuted.push('symbol_match'); return r; })
-      : Promise.resolve((() => { tiersSkipped.push('symbol_match'); return new Map(); })()),
+      ? tier2SymbolLookup({ projectId: params.projectId, tokens, kindFilter, pool })
+          .then(r => { tiersExecuted.push('symbol_match'); return r; })
+          .catch(err => {
+            warnings.push(`tier2_symbol_lookup failed: ${err instanceof Error ? err.message : String(err)}`);
+            tiersSkipped.push('symbol_match');
+            return new Map() as Awaited<ReturnType<typeof tier2SymbolLookup>>;
+          })
+      : Promise.resolve((() => { tiersSkipped.push('symbol_match'); return new Map() as Awaited<ReturnType<typeof tier2SymbolLookup>>; })()),
 
-    // Tier 3: FTS (always run).
-    tier3FtsPath({ projectId: params.projectId, tokens, kindFilter, pool, limit: maxFiles }).then(r => { tiersExecuted.push('fts_match'); return r; }),
+    // Tier 3: FTS (always run). Use AND mode for identifier queries to reduce noise.
+    tier3FtsPath({
+      projectId: params.projectId, tokens, kindFilter, pool, limit: maxFiles,
+      ftsMode: (classification === 'identifier' || classification === 'path') ? 'and' : 'or',
+    })
+      .then(r => { tiersExecuted.push('fts_match'); return r; })
+      .catch(err => {
+        warnings.push(`tier3_fts failed: ${err instanceof Error ? err.message : String(err)}`);
+        tiersSkipped.push('fts_match');
+        return new Map() as Awaited<ReturnType<typeof tier3FtsPath>>;
+      }),
   ]);
 
   // Count unique files from deterministic tiers.
@@ -494,14 +583,19 @@ export async function tieredSearch(params: TieredSearchParams): Promise<TieredSe
   // ── Tier 4: Semantic (only if deterministic tiers found too few) ───────
   let t4Result = new Map<string, { tier: SearchTier; score: number; symbols: string[]; sample_lines: string[] }>();
   if (deterministicFiles.size < semanticThreshold || classification === 'natural_language') {
-    t4Result = await tier4Semantic({
-      projectId: params.projectId,
-      query: params.query,
-      kindFilter,
-      pool,
-      limit: maxFiles,
-    });
-    tiersExecuted.push('semantic');
+    try {
+      t4Result = await tier4Semantic({
+        projectId: params.projectId,
+        query: params.query,
+        kindFilter,
+        pool,
+        limit: maxFiles,
+      });
+      tiersExecuted.push('semantic');
+    } catch (err) {
+      warnings.push(`tier4_semantic failed: ${err instanceof Error ? err.message : String(err)}`);
+      tiersSkipped.push('semantic');
+    }
   } else {
     tiersSkipped.push('semantic');
     explanations.push(`semantic skipped: ${deterministicFiles.size} deterministic files >= threshold ${semanticThreshold}`);
@@ -571,14 +665,14 @@ export async function tieredSearch(params: TieredSearchParams): Promise<TieredSe
     if (t3?.sample_lines?.length && sampleLines.length < 3) sampleLines.push(...t3.sample_lines);
     if (t4?.sample_lines?.length && sampleLines.length < 3) sampleLines.push(...t4.sample_lines);
 
-    // Determine kind from DB or infer from path heuristics.
-    let kind: ChunkKind = kindMap.get(path) ?? inferKindFromPath(path);
+    // Determine kind from DB or infer from path using the canonical classifier.
+    let kind: ChunkKind = kindMap.get(path) ?? detectLanguage(path).kind;
 
     // Apply kind filter (for ripgrep results that didn't go through DB filter).
     if (kindFilter && !kindFilter.includes(kind)) continue;
 
-    // Exclude tests unless requested.
-    if (!params.includeTests && kind === 'test') continue;
+    // Exclude tests unless requested (or kind filter includes 'test').
+    if (!includeTests && kind === 'test') continue;
 
     candidates.push({
       path,
@@ -634,12 +728,20 @@ export async function tieredSearch(params: TieredSearchParams): Promise<TieredSe
     explanations.push(`total_ms=${totalMs}`);
   }
 
-  return {
+  const result: TieredSearchResult = {
     files,
     total_files: totalFiles,
     tiers_executed: tiersExecuted,
     tiers_skipped: tiersSkipped,
     query_classification: classification,
     explanations,
+    warnings,
   };
+
+  // ── Redis cache write (best-effort, only if no warnings indicating degradation) ──
+  if (!warnings.length) {
+    await redisSetJson(redisCacheKey, result, env.REDIS_RETRIEVAL_TTL_SECONDS).catch(() => {});
+  }
+
+  return result;
 }

@@ -83,7 +83,15 @@ const FTS_STOP_WORDS = new Set([
   'where', 'when', 'why', 'this', 'that', 'it', 'its', 'if',
 ]);
 
-export function buildFtsQuery(tokens: string[]): string {
+/**
+ * Build a tsquery string from tokens.
+ *
+ * @param tokens - Search tokens to include.
+ * @param mode - 'or' (default): any term matches. 'and': ALL terms must match.
+ *               Use 'and' for identifier queries to avoid over-broad matches
+ *               (e.g., "assertWorkspaceToken" should require all sub-words).
+ */
+export function buildFtsQuery(tokens: string[], mode: 'or' | 'and' = 'or'): string {
   const allTerms: string[] = [];
 
   for (const token of tokens) {
@@ -116,5 +124,6 @@ export function buildFtsQuery(tokens: string[]): string {
 
   const unique = Array.from(new Set(allTerms)).slice(0, 20);
   if (unique.length === 0) return '';
-  return unique.join(' | ');
+  const joiner = mode === 'and' ? ' & ' : ' | ';
+  return unique.join(joiner);
 }

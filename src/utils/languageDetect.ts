@@ -75,6 +75,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.r': 'r', '.R': 'r',
   '.sql': 'sql',
   '.sh': 'shell', '.bash': 'shell', '.zsh': 'shell',
+  '.bat': 'batch', '.cmd': 'batch',
   '.ps1': 'powershell',
   '.yml': 'yaml', '.yaml': 'yaml',
   '.json': 'json',
@@ -83,6 +84,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.html': 'html', '.htm': 'html',
   '.css': 'css', '.scss': 'scss', '.less': 'less',
   '.md': 'markdown', '.mdx': 'markdown',
+  '.ipynb': 'jupyter',
   '.txt': 'text',
   '.rst': 'rst',
   '.proto': 'protobuf',
@@ -120,7 +122,7 @@ const TYPE_DEF_PATTERNS = [
   /\bschemas?\//,                // schemas/ directory (non-DB)
   /\bentities?\//,               // entities/ directory
   /\bdto\//i,                    // dto/ directory
-  /\.proto$/,                    // protobuf definitions → also api_spec
+  // Note: .proto is in API_SPEC_PATTERNS (higher priority), not duplicated here.
 ];
 
 // Database migrations and schema files
@@ -134,7 +136,8 @@ const MIGRATION_PATTERNS = [
   /\bseed[s]?\//,               // seeds/ directory
   /\bflyway\//,                 // Flyway
   /\bliquibase\//,              // Liquibase
-  /\.sql$/,                     // standalone SQL files (context matters)
+  /\d{3,}_[^/]*\.sql$/,         // numbered migration files (e.g., 0001_init.sql, 20240101_add_users.sql)
+  /\bschema\.sql$/i,            // schema.sql
 ];
 
 // API specification files
@@ -324,7 +327,7 @@ function classifyKind(
 
   // ── Documentation ────────────────────────────────────────────────
   if (language === 'markdown' || language === 'text' || language === 'rst' ||
-      DOC_PATTERNS.some(p => p.test(path))) return 'doc';
+      language === 'jupyter' || DOC_PATTERNS.some(p => p.test(path))) return 'doc';
 
   // ── Styles ───────────────────────────────────────────────────────
   if (language === 'css' || language === 'scss' || language === 'less' ||
@@ -340,8 +343,8 @@ function classifyKind(
       INFRA_PATTERNS.some(p => p.test(pathLower))) return 'infra';
 
   // ── Scripts (utility scripts, not core application logic) ────────
-  // Shell/PowerShell files, and files in scripts/ directory
-  if (language === 'shell' || language === 'powershell' ||
+  // Shell/PowerShell/Batch files, and files in scripts/ directory
+  if (language === 'shell' || language === 'powershell' || language === 'batch' ||
       SCRIPT_PATTERNS.some(p => p.test(pathLower))) return 'script';
 
   // ── Source Code (default — actual implementation) ────────────────
