@@ -26,7 +26,7 @@ async function call(client: Client, name: string, args: Record<string, unknown>)
   catch { return txt; }
 }
 
-type L = { lesson_type: string; title: string; content: string; tags: string[] };
+type L = { lesson_type: string; title: string; content: string; tags: string[]; guardrail?: any };
 
 const LESSONS: L[] = [
   // === API Design (10) ===

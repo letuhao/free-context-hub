@@ -157,6 +157,9 @@ const EnvSchema = z.object({
   RERANK_BASE_URL: z.string().min(1).optional(),
   RERANK_API_KEY: z.string().optional(),
   RERANK_MODEL: z.string().min(1).optional(),
+  /** 'generative' = chat API with JSON output (qwen3-reranker, zerank).
+   *  'cross-encoder' = embedding API with cosine similarity re-scoring (bge-reranker, gte-reranker, jina-reranker). */
+  RERANK_TYPE: z.enum(['generative', 'cross-encoder']).optional().default('generative'),
   RERANK_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(1800),
   RERANK_CACHE_TTL_SECONDS: z.coerce.number().int().positive().optional().default(3600),
 

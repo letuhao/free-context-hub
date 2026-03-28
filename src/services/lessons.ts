@@ -366,28 +366,39 @@ function makeSnippet(s: string, maxChars: number) {
   return normalized.slice(0, maxChars - 1) + '…';
 }
 
-// ─── LLM Reranker for Lessons ─────────────────────────────────────────
+// ─── Lesson Reranker (generative + cross-encoder) ─────────────────────
 
 const RerankOrderSchema = z.object({
   order: z.array(z.number().int().nonnegative()),
 });
 
-async function rerankLessons(params: {
-  query: string;
-  candidates: Array<{ index: number; title: string; snippet: string }>;
-}): Promise<number[]> {
-  const env = getEnv();
-  const model = env.RERANK_MODEL ?? env.DISTILLATION_MODEL;
-  if (!model || !env.DISTILLATION_ENABLED) return params.candidates.map(c => c.index);
+type RerankCandidate = { index: number; title: string; snippet: string };
 
-  const baseUrl = (env.RERANK_BASE_URL?.trim() || env.DISTILLATION_BASE_URL?.trim() || env.EMBEDDINGS_BASE_URL).replace(/\/$/, '');
-  const url = `${baseUrl}/v1/chat/completions`;
+function rerankBaseUrl(): string {
+  const env = getEnv();
+  return (env.RERANK_BASE_URL?.trim() || env.DISTILLATION_BASE_URL?.trim() || env.EMBEDDINGS_BASE_URL).replace(/\/$/, '');
+}
+
+function rerankHeaders(): Record<string, string> {
+  const env = getEnv();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   const key = env.RERANK_API_KEY ?? env.DISTILLATION_API_KEY ?? env.EMBEDDINGS_API_KEY;
   if (key) headers.Authorization = `Bearer ${key}`;
+  return headers;
+}
 
+/**
+ * Generative reranker: sends all candidates to a chat model, gets JSON order back.
+ * Works with: qwen3-reranker-4b, zerank-2, any chat/instruct model.
+ */
+async function rerankGenerative(query: string, candidates: RerankCandidate[]): Promise<number[]> {
+  const env = getEnv();
+  const model = env.RERANK_MODEL ?? env.DISTILLATION_MODEL;
+  if (!model) return candidates.map(c => c.index);
+
+  const url = `${rerankBaseUrl()}/v1/chat/completions`;
   const ac = new AbortController();
-  const timeoutMs = (env.RERANK_TIMEOUT_MS ?? 10000) + 5000; // extra budget for lessons
+  const timeoutMs = (env.RERANK_TIMEOUT_MS ?? 10000) + 5000;
   const t = setTimeout(() => ac.abort(), timeoutMs);
 
   try {
@@ -396,65 +407,139 @@ async function rerankLessons(params: {
       'Output ONLY valid JSON: {"order":[...]} where order is an array of candidate indices (0-based), best match first. ' +
       'No extra keys, no markdown.';
     const user =
-      `QUERY:\n${params.query}\n\nCANDIDATES:\n` +
-      params.candidates.map((c, i) => `#${i} TITLE: ${c.title}\nSNIPPET: ${c.snippet}`).join('\n\n') +
+      `QUERY:\n${query}\n\nCANDIDATES:\n` +
+      candidates.map((c, i) => `#${i} TITLE: ${c.title}\nSNIPPET: ${c.snippet}`).join('\n\n') +
       '\n\nReturn JSON.';
 
     const res = await fetch(url, {
-      method: 'POST',
-      headers,
-      signal: ac.signal,
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: user },
-        ],
-        temperature: 0.0,
-        max_tokens: env.RERANK_LLM_MAX_TOKENS,
-      }),
+      method: 'POST', headers: rerankHeaders(), signal: ac.signal,
+      body: JSON.stringify({ model, messages: [{ role: 'system', content: system }, { role: 'user', content: user }], temperature: 0.0, max_tokens: env.RERANK_LLM_MAX_TOKENS }),
     });
 
-    if (!res.ok) {
-      logger.warn({ status: res.status }, 'lesson rerank: HTTP error');
-      return params.candidates.map(c => c.index);
-    }
+    if (!res.ok) { logger.warn({ status: res.status }, 'generative rerank: HTTP error'); return candidates.map(c => c.index); }
 
     const json = (await res.json()) as any;
     const content = json?.choices?.[0]?.message?.content;
-    if (typeof content !== 'string' || !content.trim()) {
-      return params.candidates.map(c => c.index);
-    }
+    if (typeof content !== 'string' || !content.trim()) return candidates.map(c => c.index);
 
     const raw = content.trim();
     const first = raw.indexOf('{');
     const last = raw.lastIndexOf('}');
-    if (first < 0 || last <= first) return params.candidates.map(c => c.index);
+    if (first < 0 || last <= first) return candidates.map(c => c.index);
 
     const parsed = JSON.parse(raw.slice(first, last + 1));
     const validated = RerankOrderSchema.safeParse(parsed);
-    if (!validated.success) return params.candidates.map(c => c.index);
+    if (!validated.success) return candidates.map(c => c.index);
 
-    const n = params.candidates.length;
+    const n = candidates.length;
     const seen = new Set<number>();
     const cleaned: number[] = [];
     for (const idx of validated.data.order) {
-      if (idx >= 0 && idx < n && !seen.has(idx)) {
-        seen.add(idx);
-        cleaned.push(idx);
-      }
+      if (idx >= 0 && idx < n && !seen.has(idx)) { seen.add(idx); cleaned.push(idx); }
     }
-    // Append missing indices.
     for (let i = 0; i < n; i++) if (!seen.has(i)) cleaned.push(i);
 
-    logger.info({ query: params.query.slice(0, 60), candidates: n, reordered: cleaned.slice(0, 5) }, 'lesson rerank: done');
+    logger.info({ query: query.slice(0, 60), candidates: n, top3: cleaned.slice(0, 3), mode: 'generative' }, 'lesson rerank: done');
     return cleaned;
   } catch (err) {
-    logger.warn({ error: err instanceof Error ? err.message : String(err) }, 'lesson rerank: failed, keeping original order');
-    return params.candidates.map(c => c.index);
-  } finally {
-    clearTimeout(t);
+    logger.warn({ error: err instanceof Error ? err.message : String(err) }, 'generative rerank: failed');
+    return candidates.map(c => c.index);
+  } finally { clearTimeout(t); }
+}
+
+/**
+ * Cross-encoder reranker: embeds query and candidates with the reranker model,
+ * then sorts by cosine similarity. Works with: bge-reranker, gte-reranker, jina-reranker.
+ *
+ * Uses the reranker model (not the main embedding model) for a second-pass scoring.
+ * The reranker model's embeddings are trained for relevance discrimination,
+ * giving different rankings than the initial retrieval embeddings.
+ */
+async function rerankCrossEncoder(query: string, candidates: RerankCandidate[]): Promise<number[]> {
+  const env = getEnv();
+  const model = env.RERANK_MODEL;
+  if (!model) return candidates.map(c => c.index);
+
+  const url = `${rerankBaseUrl()}/v1/embeddings`;
+  const ac = new AbortController();
+  const timeoutMs = (env.RERANK_TIMEOUT_MS ?? 10000) + 5000;
+  const t = setTimeout(() => ac.abort(), timeoutMs);
+
+  try {
+    // Embed query + all candidates in one batch call.
+    const texts = [query, ...candidates.map(c => `${c.title}. ${c.snippet}`)];
+
+    const res = await fetch(url, {
+      method: 'POST', headers: rerankHeaders(), signal: ac.signal,
+      body: JSON.stringify({ model, input: texts }),
+    });
+
+    if (!res.ok) { logger.warn({ status: res.status }, 'cross-encoder rerank: HTTP error'); return candidates.map(c => c.index); }
+
+    const json = (await res.json()) as any;
+    const embeddings: number[][] = (json?.data ?? [])
+      .sort((a: any, b: any) => a.index - b.index)
+      .map((d: any) => d.embedding);
+
+    if (embeddings.length < 2) return candidates.map(c => c.index);
+
+    const queryVec = embeddings[0];
+    const candidateVecs = embeddings.slice(1);
+
+    // Compute cosine similarity between query and each candidate.
+    const scored = candidateVecs.map((vec, i) => ({
+      index: i,
+      score: cosineSimilarity(queryVec, vec),
+    }));
+
+    // Sort by score descending.
+    scored.sort((a, b) => b.score - a.score);
+    const order = scored.map(s => s.index);
+
+    logger.info({
+      query: query.slice(0, 60),
+      candidates: candidates.length,
+      top3: order.slice(0, 3),
+      top3_scores: scored.slice(0, 3).map(s => s.score.toFixed(3)),
+      mode: 'cross-encoder',
+    }, 'lesson rerank: done');
+
+    return order;
+  } catch (err) {
+    logger.warn({ error: err instanceof Error ? err.message : String(err) }, 'cross-encoder rerank: failed');
+    return candidates.map(c => c.index);
+  } finally { clearTimeout(t); }
+}
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  const n = Math.min(a.length, b.length);
+  let dot = 0, normA = 0, normB = 0;
+  for (let i = 0; i < n; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
   }
+  const denom = Math.sqrt(normA) * Math.sqrt(normB);
+  return denom > 0 ? dot / denom : 0;
+}
+
+/** Dispatch to the correct reranker based on RERANK_TYPE. */
+async function rerankLessons(params: {
+  query: string;
+  candidates: RerankCandidate[];
+}): Promise<number[]> {
+  const env = getEnv();
+  const model = env.RERANK_MODEL ?? env.DISTILLATION_MODEL;
+  if (!model) return params.candidates.map(c => c.index);
+
+  // For generative mode, DISTILLATION_ENABLED must be true (needs chat API).
+  // For cross-encoder mode, only needs embedding API — no distillation required.
+  if (env.RERANK_TYPE === 'cross-encoder') {
+    return rerankCrossEncoder(params.query, params.candidates);
+  }
+
+  if (!env.DISTILLATION_ENABLED) return params.candidates.map(c => c.index);
+  return rerankGenerative(params.query, params.candidates);
 }
 
 export async function searchLessons(params: SearchLessonsParams): Promise<SearchLessonsResult> {
