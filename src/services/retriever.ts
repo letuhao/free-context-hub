@@ -6,6 +6,8 @@ import { getEnv } from '../env.js';
 import * as z from 'zod/v4';
 import { getProjectCacheVersion } from './cacheVersions.js';
 import { redisGetJson, redisKey, redisSetJson } from './redisCache.js';
+import { decomposeQuery } from '../utils/queryDecomposer.js';
+import { getLanguageSearchHints, getProjectDominantLanguage } from '../utils/languageHints.js';
 
 export type SearchCodeParams = {
   projectId: string;
@@ -42,61 +44,81 @@ function makeSnippet(content: string, maxChars: number) {
   return normalized.slice(0, maxChars - 1) + '…';
 }
 
-function extractLexicalTokens(query: string): string[] {
-  // Goal: surface entrypoints/config by extracting identifier-ish tokens, routes, and quoted phrases.
-  const q = query.trim();
+/**
+ * Split a camelCase or PascalCase identifier into its constituent words.
+ * e.g. "getUserById" -> ["get", "User", "By", "Id", "getUserById"]
+ */
+function splitCamelCase(id: string): string[] {
+  const parts = id.replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .split(/\s+/)
+    .filter(p => p.length >= 2);
+  // Return sub-words + the original compound
+  return parts.length > 1 ? [...parts, id] : [id];
+}
 
+/**
+ * Workspace-agnostic keyword extraction.
+ * Extracts identifiers, paths, quoted phrases, and structural tokens
+ * from any query -- no hardcoded project-specific probes.
+ */
+function extractLexicalTokens(query: string): string[] {
+  const q = query.trim();
   const tokens: string[] = [];
 
-  // Quoted phrases (keep as-is; useful for exact config keys like "workspace_token").
+  // 1. Quoted phrases (exact match intent).
   for (const m of q.matchAll(/"([^"]+)"|'([^']+)'|`([^`]+)`/g)) {
     const phrase = (m[1] ?? m[2] ?? m[3] ?? '').trim();
-    if (phrase.length >= 3) tokens.push(phrase);
+    if (phrase.length >= 2) tokens.push(phrase);
   }
 
-  // Identifier-ish / path-ish tokens.
+  // 2. Extract raw tokens by splitting on non-identifier characters.
   const raw = q
-    .replace(/[`"'“”‘’]/g, ' ')
-    .split(/[^A-Za-z0-9_./:-]+/g)
+    .replace(/[`"'""'']/g, ' ')
+    .split(/[^A-Za-z0-9_./:\\@#-]+/g)
     .map(s => s.trim())
     .filter(Boolean);
 
   for (const r of raw) {
-    const t = r.replace(/^\/+/, '').replace(/[:.,;!?]+$/g, '');
+    const t = r.replace(/^[/\\.:]+/, '').replace(/[.:,;!?]+$/g, '');
     if (!t) continue;
-    // Keep obvious identifiers and route-ish pieces.
-    if (/[A-Za-z]/.test(t) && (t.length >= 4 || /[_./-]/.test(t))) tokens.push(t);
-    // Add de-punctuated variants for things like "/mcp" -> "mcp".
-    if (t !== r && t.length >= 3) tokens.push(t);
+
+    // Keep obvious identifiers (camelCase, snake_case, PascalCase, UPPER_CASE, paths).
+    if (/[A-Za-z]/.test(t) && (t.length >= 3 || /[_./-]/.test(t))) {
+      tokens.push(t);
+      // Expand camelCase/PascalCase identifiers into sub-words for broader matching.
+      if (/[a-z][A-Z]|[A-Z]{2,}[a-z]/.test(t)) {
+        for (const part of splitCamelCase(t)) {
+          if (part.length >= 3) tokens.push(part);
+        }
+      }
+    }
+
+    // Path segments: "src/services/indexer.ts" -> ["src", "services", "indexer.ts"]
     if (t.includes('/')) {
       for (const part of t.split('/').filter(Boolean)) {
         if (/[A-Za-z]/.test(part) && part.length >= 3) tokens.push(part);
       }
     }
+
+    // snake_case parts: "build_project_memory" -> ["build", "project", "memory"]
+    if (t.includes('_')) {
+      for (const part of t.split('_').filter(Boolean)) {
+        if (/[A-Za-z]/.test(part) && part.length >= 3) tokens.push(part);
+      }
+    }
   }
 
-  // Intent-specific probes to help entrypoints like src/index.ts bubble up.
-  const lower = q.toLowerCase();
-  if (/(endpoint|route|router|mcp)/.test(lower)) {
-    tokens.push('registerTool', 'createMcp', 'express', '/mcp', 'index.ts');
+  // 3. Detect file extension patterns in the query for language-aware filtering.
+  const extMatch = q.match(/\.(ts|js|py|go|rs|java|kt|rb|cpp|c|h|cs|swift|scala|php|vue|tsx|jsx)\b/gi);
+  if (extMatch) {
+    for (const ext of extMatch) tokens.push(ext);
   }
-  if (/(workspace_token|auth|unauthorized|token)/.test(lower)) {
-    tokens.push('assertWorkspaceToken', 'workspace_token', 'MCP_AUTH_ENABLED');
-  }
-  if (/(embeddings|vector|pgvector)/.test(lower)) {
-    tokens.push('embed', 'embedTexts', 'EMBEDDINGS', 'pgvector');
-  }
-  if (/(output_format|auto_both|summary_only|json_only)/.test(lower)) {
-    tokens.push('output_format', 'auto_both', 'summary_only', 'json_only', 'formatToolResponse');
-  }
-  if (/(health|health endpoint)/.test(lower)) {
-    tokens.push('health', 'app.get', '/health');
-  }
-  if (/(dotenv|envschema|parsebooleanenv|default_project_id)/.test(lower)) {
-    tokens.push('dotenv', 'EnvSchema', 'parseBooleanEnv', 'DEFAULT_PROJECT_ID', 'resolveProjectIdOrThrow');
-  }
-  if (/(search_code|retriev|lexical|kg|boost)/.test(lower)) {
-    tokens.push('searchCode', 'lexicalBoost', 'kgAssist', 'pathPriorBoost', 'extractLexicalTokens');
+
+  // 4. Detect route/URL patterns.
+  const routeMatch = q.match(/\/[a-z0-9_-]{2,}(?:\/[a-z0-9_-]{2,})*/gi);
+  if (routeMatch) {
+    for (const route of routeMatch) tokens.push(route);
   }
 
   // Normalize + de-dupe.
@@ -104,9 +126,9 @@ function extractLexicalTokens(query: string): string[] {
     .map(s => s.trim())
     .filter(Boolean)
     .filter(s => /[A-Za-z]/.test(s))
-    .filter(s => s.length >= 3);
+    .filter(s => s.length >= 2);
 
-  return Array.from(new Set(normalized)).slice(0, 18);
+  return Array.from(new Set(normalized)).slice(0, 24);
 }
 
 function globToRegExp(glob: string): RegExp {
@@ -143,18 +165,33 @@ function pathPriorBoost(
   return { boost, hits };
 }
 
+/**
+ * Infer structural path priors from query intent -- workspace-agnostic.
+ * Returns glob patterns (not hardcoded file paths) based on what the query is asking about.
+ */
 function inferIntentPriors(query: string): string[] {
   const q = query.toLowerCase();
   const priors: string[] = [];
 
-  if (/(mcp|endpoint|route|registertool|output_format|auto_both|health)/.test(q)) {
-    priors.push('src/index.ts', 'src/utils/outputFormat.ts', 'src/smoke/smokeTest.ts', 'src/smoke/phase5WorkerValidation.ts');
+  // Entry-point / routing intent -> look for common entrypoint patterns
+  if (/(endpoint|route|router|handler|controller|middleware|server|app\b)/.test(q)) {
+    priors.push('src/**/index.*', 'src/**/app.*', 'src/**/server.*', 'src/**/route*');
   }
-  if (/(env|dotenv|default_project_id|workspace_token|parsebooleanenv|config|queue_|s3_|embeddings_)/.test(q)) {
-    priors.push('src/env.ts', 'src/index.ts');
+  // Config / env intent -> look for config patterns
+  if (/(config|env|setting|dotenv|\.env|environment)/.test(q)) {
+    priors.push('src/**/env.*', 'src/**/config.*', '**/settings.*');
   }
-  if (/(search_code|retriev|lexical|kg|boost|path_glob|__tests__|smoke)/.test(q)) {
-    priors.push('src/services/retriever.ts');
+  // Database / migration intent
+  if (/(migration|schema|database|table|column|sql)/.test(q)) {
+    priors.push('migrations/**', 'src/**/db/**', 'src/**/database/**');
+  }
+  // Test intent
+  if (/(test|spec|fixture|mock|jest|vitest|mocha)/.test(q)) {
+    priors.push('**/*.test.*', '**/*.spec.*', '**/__tests__/**');
+  }
+  // Service / business logic intent
+  if (/(service|business|logic|domain|use.?case)/.test(q)) {
+    priors.push('src/**/services/**', 'src/**/domain/**', 'src/**/usecases/**');
   }
 
   return Array.from(new Set(priors));
@@ -502,6 +539,35 @@ export async function searchCode({
     `poolK=${poolK}`,
   ]);
 
+  // Query decomposition: split complex multi-intent queries into sub-queries.
+  const subQueries = decomposeQuery(query);
+  if (subQueries.length > 1) {
+    const subResults = await Promise.all(
+      subQueries.map(sq =>
+        searchCode({
+          projectId, query: sq, pathGlob, includeTests, includeSmoke, preferPaths,
+          qcNoCap, rerankMode, lexicalBoost, kgAssist, lessonToCode,
+          limit: topK, debug, hybridMode,
+        }),
+      ),
+    );
+    // Merge: dedupe by (path, start_line, end_line), keep best score.
+    const seen = new Map<string, SearchCodeResult['matches'][number]>();
+    for (const sr of subResults) {
+      for (const m of sr.matches) {
+        const key = `${m.path}:${m.start_line}:${m.end_line}`;
+        const existing = seen.get(key);
+        if (!existing || m.score > existing.score) seen.set(key, m);
+      }
+    }
+    const merged = Array.from(seen.values()).sort((a, b) => b.score - a.score).slice(0, topK);
+    const explanations = debug
+      ? [`decomposed_into=${subQueries.length} sub_queries=[${subQueries.join(' | ')}]`,
+         ...subResults.flatMap(r => r.explanations)]
+      : [];
+    return { matches: merged, explanations };
+  }
+
   if (!debug) {
     const cached = await redisGetJson<SearchCodeResult>(retrievalCacheKey);
     if (cached && Array.isArray(cached.matches) && Array.isArray(cached.explanations)) {
@@ -523,7 +589,8 @@ export async function searchCode({
   const pg = (pathGlob ?? '').trim();
   const wantsTests = Boolean(includeTests) || /(^|\/)\*\*\/\*\.test\.ts$/.test(pg) || /\.test\.ts/.test(pg) || /__tests__/.test(pg);
   if (!wantsTests) {
-    where += ` AND c.file_path NOT LIKE '%.test.ts' AND c.file_path NOT LIKE '%/__tests__/%'`;
+    // Use is_test column when available, fall back to path patterns for unindexed chunks.
+    where += ` AND c.is_test = false AND c.file_path NOT LIKE '%.test.ts' AND c.file_path NOT LIKE '%/__tests__/%'`;
   }
 
   const wantsSmoke = Boolean(includeSmoke) || /(^|\/)src\/smoke\//.test(pg) || /\bsmoke\b/i.test(query);
@@ -555,7 +622,22 @@ export async function searchCode({
   `;
   const res = await pool.query(sql, params);
 
-  const tokens = lexicalBoost === false ? [] : extractLexicalTokens(query);
+  const baseTokens = lexicalBoost === false ? [] : extractLexicalTokens(query);
+  // Enrich tokens with language-aware hints when project language is known.
+  let tokens = baseTokens;
+  if (baseTokens.length > 0) {
+    try {
+      const lang = await getProjectDominantLanguage(pool, projectId);
+      if (lang) {
+        const hints = getLanguageSearchHints(query, lang);
+        if (hints.length) {
+          tokens = Array.from(new Set([...baseTokens, ...hints])).slice(0, 30);
+        }
+      }
+    } catch {
+      // best-effort: language hints are optional
+    }
+  }
   const hybridEnabled = (hybridMode ?? 'off') === 'lexical' || env.RETRIEVAL_HYBRID_ENABLED;
   const lexicalLimit = Math.max(1, env.RETRIEVAL_HYBRID_LEXICAL_LIMIT);
   let lexicalRows: any[] = [];
@@ -564,7 +646,7 @@ export async function searchCode({
     const lexicalParams: any[] = [projectId, vector];
     let whereLex = `c.project_id = $1`;
     if (!wantsTests) {
-      whereLex += ` AND c.file_path NOT LIKE '%.test.ts' AND c.file_path NOT LIKE '%/__tests__/%'`;
+      whereLex += ` AND c.is_test = false AND c.file_path NOT LIKE '%.test.ts' AND c.file_path NOT LIKE '%/__tests__/%'`;
     }
     if (!wantsSmoke) {
       whereLex += ` AND c.file_path NOT LIKE 'src/smoke/%'`;
@@ -574,19 +656,31 @@ export async function searchCode({
       lexicalParams.push(like);
       whereLex += ` AND c.file_path LIKE $${lexicalParams.length}`;
     }
-    const tokenLike = tokens
+    // Build FTS query from tokens. Try FTS first, fall back to ILIKE if fts column is null.
+    const ftsTerms = tokens
       .map(t => t.trim())
       .filter(Boolean)
       .slice(0, 12)
-      .map(t => `%${escapeLikePattern(t)}%`);
-    if (tokenLike.length) {
+      .map(t => t.replace(/[^A-Za-z0-9_]/g, '')) // sanitize for tsquery
+      .filter(t => t.length >= 2);
+    if (ftsTerms.length) {
+      const tsquery = ftsTerms.join(' | '); // OR-match any token
+      lexicalParams.push(tsquery);
+      const ftsIdx = lexicalParams.length;
+      // Use FTS when available (indexed chunks), fall back to ILIKE for legacy chunks.
+      // Also include ILIKE on file_path since FTS only covers content.
+      const tokenLike = tokens
+        .slice(0, 6)
+        .map(t => `%${escapeLikePattern(t)}%`);
       lexicalParams.push(tokenLike);
-      const arrIdx = lexicalParams.length;
-      whereLex += ` AND EXISTS (
-        SELECT 1
-        FROM unnest($${arrIdx}::text[]) AS tok
-        WHERE c.file_path ILIKE tok ESCAPE '\\'
-           OR c.content ILIKE tok ESCAPE '\\'
+      const likeIdx = lexicalParams.length;
+      whereLex += ` AND (
+        (c.fts IS NOT NULL AND c.fts @@ to_tsquery('english', $${ftsIdx}))
+        OR EXISTS (
+          SELECT 1
+          FROM unnest($${likeIdx}::text[]) AS tok
+          WHERE c.file_path ILIKE tok ESCAPE '\\'
+        )
       )`;
       lexicalParams.push(lexicalLimit);
       const lexicalSql = `
@@ -608,20 +702,20 @@ export async function searchCode({
   const kgFiles = new Set<string>();
   if (kgAssist) {
     try {
-      // Heuristic: KG symbol search works best with identifier-like tokens, not full natural language queries.
-      // Try the full query first, then fall back to token probes.
+      // KG symbol search works best with identifier-like tokens, not full natural language.
+      // Extract symbol-ish tokens from the already-computed lexical tokens (workspace-agnostic).
       const base = query.trim();
       const symbolish = tokens.filter(t => /[_]/.test(t) || /[A-Z]/.test(t) || /\(\)$/.test(t)).slice(0, 8);
-      const normalizedRoute = base.toLowerCase().includes('/mcp') ? ['mcp', '/mcp'] : [];
-      const intentProbes =
-        /(endpoint|route|router|mcp)/i.test(base) ? ['registerTool', 'createMcp', 'createMcpExpressApp', 'app.post'] : [];
-      const probes = Array.from(new Set([base, ...symbolish, ...normalizedRoute, ...intentProbes].filter(Boolean))).slice(0, 10);
+      // Detect route-like patterns in query and add them as probes.
+      const routeProbes: string[] = [];
+      const routeMatch = base.match(/\/[a-z0-9_-]{2,}(?:\/[a-z0-9_-]{2,})*/gi);
+      if (routeMatch) routeProbes.push(...routeMatch.flatMap(r => [r, r.replace(/^\//, '')]));
+      const probes = Array.from(new Set([base, ...symbolish, ...routeProbes].filter(Boolean))).slice(0, 10);
       for (const p of probes) {
         const sym = await searchSymbols({ projectId, query: p, limit: 10 });
         for (const m of sym.matches ?? []) {
           if (m.file_path) kgFiles.add(String(m.file_path));
         }
-        // Stop early if we already have a decent candidate set.
         if (kgFiles.size >= 12) break;
       }
     } catch {
