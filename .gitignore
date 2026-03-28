@@ -154,3 +154,5 @@ docs/faq/
 docs/qc/*-qc-report.md
 
 .claude/settings.local.json
+
+docs/qc/*-integration-report.md
