@@ -8,92 +8,90 @@ phase: Phase 6
 # Session Patch — 2026-03-28
 
 ## Where We Are
-Phase: **Phase 6 retrieval quality tuning complete** — pivoted from natural-language RAG tuning to **deterministic coder-agent search** with tiered retrieval and 12-kind data classification.
+Phase: **Phase 6 complete.** Tiered search pipeline, 3 search profiles, hybrid lesson search with LLM reranking, 8-model embedding benchmark, 17/17 test plan executed, 91% lesson search accuracy at 40 lessons scale.
 
 ## Completed This Session
 
-### Earlier work (pre-continuation)
-- Seeded MCP facts for worst clusters via `add_lesson` and verified lesson retrieval response quality.
-- Implemented **lesson-to-code expansion** in `src/services/retriever.ts`.
-- Added retrieval tuning controls (general-purpose, no workspace hardcoding).
-- Added diversification/ranking safety (hub-file penalty, MMR reorder, topK cap).
-- QC runner updates for controlled measurement.
-- Removed all 7 hardcoded intent probe blocks (workspace-specific bias).
-- Made retriever fully workspace-agnostic with universal token extraction.
+### Tiered Search Pipeline
+- **12-kind chunk classification**: source, type_def, test, migration, config, dependency, api_spec, doc, script, infra, style, generated
+- **4-tier deterministic-first search**: ripgrep → symbol ILIKE → FTS → semantic fallback
+- **3 search profiles** auto-selected by kind parameter:
+  - `code-search` (default): deterministic-first for source/config/types
+  - `relationship` (kind=test): convention paths → KG imports → filtered ripgrep
+  - `semantic-first` (kind=doc/script): semantic at full weight + FTS parallel
 
-### Continuation session — RAG tuning
-- **FTS backfill fix**: Diagnosed `lexical_candidates: 0` caused by NULL fts columns on pre-existing chunks. Fixed incremental guard to check `fts IS NOT NULL`.
-- **Retrieval logging** in `src/services/retriever.ts`: structured pino logs at search_code:start/candidates/kg_files/done for diagnosing query failures.
-- **Stop-word filtering** in FTS tokenizer and lexical token extraction.
-- **Scaffolding penalty**: De-prioritizes scripts/verify/qc files by 0.06-0.12 points.
-- **Migrations 0014-0015**: FTS backfill + forced re-index for camelCase expansion.
+### Review & Bug Fixes (20 issues fixed)
+- Query classification: identifier priority over NL words
+- Short token extraction (2+ chars: env, db, api)
+- FTS AND mode for identifier queries
+- `.sql` file misclassification fix
+- Ripgrep circuit breaker + multi-ecosystem ignore patterns
+- Path traversal validation on workspace root
+- Workspace root caching (5min TTL)
+- Redis caching for tiered search results
+- pg_trgm index on symbol_name for ILIKE performance
+- **Guardrails bug fix**: superseded/archived lessons were still blocking actions
+- `kind:"test"` + `includeTests:false` conflict resolved
 
-### Continuation session — Architecture pivot to coder-agent search
-After honest assessment that natural-language semantic search (recall@3=0.731) can't compete with built-in agent tools (Grep/Glob), pivoted strategy:
+### Lesson Search Quality
+- **Hybrid search**: semantic embedding + 0.40 * FTS keyword boost
+- **Title+content embedding**: prepend title for better query-document alignment
+- **LLM reranking**: top 8 candidates re-ordered by qwen3-reranker-4b
+- FTS tsvector column + GIN index on lessons table (migration 0019)
 
-- **Tiered retrieval pipeline** (`src/services/tieredRetriever.ts`, 620+ lines):
-  - Tier 1: **Ripgrep** — exact literal search on disk via `rg --fixed-strings` (fastest, most accurate)
-  - Tier 2: **Symbol lookup** — direct DB query on `symbol_name ILIKE` for identifier matching
-  - Tier 3: **FTS + path search** — PostgreSQL full-text search with camelCase expansion
-  - Tier 4: **Semantic** — embedding similarity (fallback only, when tiers 1-3 find < 3 files)
-  - Tiers 1-3 run in parallel; tier 4 conditional. Returns ALL matching files, smartly ordered.
+### Embedding Model Benchmark (8 models)
+- Tested: mxbai-large, nomic-v2, bge-m3, qwen3-4b, nomic-embed-code, qwen3-0.6b, embeddinggemma-300m, jina-v5-retrieval
+- **Winner: qwen3-embedding-0.6b** (1024d, 18/18 pass, avg 0.652)
+- Key finding: code-specific models hurt lesson search (lessons are text, not code)
+- Documented in `docs/benchmarks/2026-03-28-embedding-model-benchmark.md`
 
-- **Ripgrep integration** (`src/utils/ripgrepSearch.ts`):
-  - `ripgrepLiteral()`: single pattern search with timeout, max files, ignore patterns
-  - `ripgrepMultiPattern()`: parallel multi-pattern search, merged by hit count
+### Integration Test Runner
+- 13 automated tests via live MCP tool calls (`npm run test:integration`)
+- Covers: lesson CRUD, guardrails enforcement, session bootstrap, all 3 search profiles
+- All 13 tests pass on final configuration
 
-- **12-kind data classification** (`src/utils/languageDetect.ts` rewritten):
-  - `ChunkKind` type: source, type_def, test, migration, config, dependency, api_spec, doc, script, infra, style, generated
-  - `classifyKind()` with 80+ regex patterns, priority order: generated > test > migration > api_spec > type_def > dependency > doc > style > config > infra > script > source
-  - `ALL_CHUNK_KINDS` exported for schema validation
+### Scale Testing
+- 40 lessons (30 real session decisions + 10 seed), 33 queries
+- **91% accuracy** (30/33), avg score 0.722, discrimination gap 0.277
+- Scores improve with more lessons (0.652 → 0.722 avg from 10 to 40 lessons)
 
-- **Migration 0016** (`chunk_kind` column): Added column + 5-kind initial backfill + indexes
-- **Migration 0017** (`refined_chunk_kinds`): Re-classifies all chunks into 12 kinds with priority-ordered SQL UPDATEs
+### Documentation Updates
+- README: reframed priorities (lessons > guardrails > code search), model recommendations
+- WHITEPAPER: updated abstract and goals for persistent memory focus
+- Benchmark report, test plan, QC reports
 
-- **New MCP tool** `search_code_tiered` registered in `src/index.ts`:
-  - `kind` parameter: filter by single kind or array of kinds
-  - `max_files` (default 50), `semantic_threshold` (default 3) parameters
-  - Old `search_code` preserved for backward compatibility
+### Project Priority Reframe
+- **Core**: persistent cross-session knowledge, guardrails, session bootstrap
+- **Supplementary**: code search (agents have Grep/Glob), git intelligence
+- Code search is assistive, not the main value proposition
 
-- **Updated agent instructions** (`CLAUDE.md`):
-  - `search_code_tiered` is now primary recommended search tool
-  - Full 12-kind data table with descriptions and usage guidance
-  - Updated session start protocol and lean context loading rules
+## Measured Outcomes
 
-## Measured Outcome (QC)
+| Metric | Baseline | Final | Change |
+|--------|----------|-------|--------|
+| Integration tests | 0 | 13/13 pass | New |
+| Lesson search (10 lessons) | — | 18/18 (100%) | New |
+| Lesson search (40 lessons) | — | 30/33 (91%) | New |
+| Lesson avg score | — | 0.722 | New |
+| Golden set recall@3 | 0.731 | 0.761 | +4.1% |
+| Golden set MRR | 0.673 | 0.714 | +6.1% |
+| Tiered search baseline | — | recall@3=0.687 | New |
 
-| Run | recall@3 | MRR | Notes |
-|-----|----------|-----|-------|
-| Pre lesson-to-code | 0.507 | 0.477 | Initial baseline |
-| Best with hardcoded probes | 0.776 | 0.716 | Inflated by workspace-specific bias |
-| Honest baseline (probes removed) | 0.716 | 0.637 | True workspace-agnostic baseline |
-| + weight tuning | 0.716 | 0.660 | MRR +3.6% |
-| + FTS fix + stop words + scaffolding penalty | **0.731** | **0.673** | recall +2.1%, MRR +2.0% |
+## Final Model Combo
 
-> **Note:** QC golden set measures natural-language recall, which is no longer the primary focus.
-> The tiered pipeline targets **coder-agent search** where ripgrep/symbol lookup achieve near-100% accuracy for identifier queries.
-
-## Chunk Kind Distribution (current DB)
-
-| Kind | Count | Description |
-|------|-------|-------------|
-| source | 780 | Implementation code |
-| doc | 446 | Documentation, markdown, READMEs |
-| script | 70 | Utility/build scripts |
-| migration | 28 | DB migrations, seeds |
-| config | 24 | App configuration |
-| test | 4 | Test files |
-| infra | 2 | CI/CD, Docker |
-| dependency | 2 | Package manifests |
+| Role | Model |
+|------|-------|
+| Embeddings | qwen3-embedding-0.6b (1024d) |
+| Distillation | qwen2.5-coder-7b-instruct |
+| Reranker | qwen.qwen3-reranker-4b |
 
 ## Next
-- **QC tiered search**: Build golden set for identifier/code queries to measure tiered pipeline accuracy.
-- **Ripgrep in Docker**: Ensure `rg` binary is available in production container (add to Dockerfile).
-- **Kind-filtered benchmarks**: Measure search latency and accuracy per kind filter.
-- **Symbol index enrichment**: Extract more symbol metadata during indexing for tier 2 improvement.
-- **Consider code-specific embeddings** (e.g., `codeBERT`) for tier 4 semantic fallback.
+- Collect real usage data to identify remaining lesson search failures
+- Consider fine-tuning embedding adapter on domain data if accuracy plateaus
+- Phase 7: Multi-agent knowledge sharing
+- Phase 8: Interactive GUI for knowledge exploration
 
 ## Open Blockers / Risks
-- `rg` (ripgrep) binary must be installed in Docker container for tier 1 to work in production.
-- Lock files (e.g., `package-lock.json`, `yarn.lock`) are classified as `dependency` by migration 0017 but `generated` by the TS classifier — migration takes precedence in DB until re-index.
-- Scaffolding penalty is heuristic and may need per-project tuning for other workspaces.
+- 3/33 lesson queries fail at 40 lessons — vague queries competing against many topics
+- Ripgrep binary must be installed in Docker container for tier 1 search
+- Multiple dimension migration files (0020-0028) from model testing — squash before release
