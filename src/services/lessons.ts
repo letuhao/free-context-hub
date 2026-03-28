@@ -488,10 +488,34 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
     whereParts.push(`l.tags && $${sqlParams.length}::text[]`);
   }
 
-  // Fetch more candidates than requested so reranker has a wider pool to reorder.
-  // At 100+ lessons, the correct answer may not be in the top 9. Fetch 5x or at least 20.
-  const fetchLimit = Math.min(Math.max(limit * 5, 20), 50);
-  sqlParams.push(fetchLimit);
+  // ── Dynamic retrieval pool sizing ──
+  // Count total lessons to scale the retrieval funnel.
+  // Separate query — doesn't need the vector param.
+  let totalLessons = 0;
+  try {
+    const countRes = await pool.query(
+      `SELECT count(*)::int AS n FROM lessons WHERE project_id = $1`,
+      [params.projectId],
+    );
+    totalLessons = Number(countRes.rows?.[0]?.n ?? 0);
+  } catch { /* best-effort */ }
+
+  // Rerank budget scales with lesson count (enterprise pattern: retrieve wide, rerank narrow).
+  //   <20 lessons: no rerank needed (semantic alone is fine)
+  //   <50 lessons: rerank top 10
+  //   <200 lessons: rerank top 20
+  //   <500 lessons: rerank top 30
+  //   500+: cap at 30 (beyond this, reranker latency dominates)
+  const rerankBudget =
+    totalLessons < 20 ? 0 :
+    totalLessons < 50 ? 10 :
+    totalLessons < 200 ? 20 :
+    totalLessons < 500 ? 30 :
+    30;
+
+  // Fetch 2x rerank budget to ensure correct answer is in the pool.
+  const fetchLimit = Math.max(limit, rerankBudget > 0 ? rerankBudget * 2 : limit * 3);
+  sqlParams.push(Math.min(fetchLimit, 60)); // hard cap at 60
   const limitParam = `$${sqlParams.length}`;
 
   // Build hybrid scoring: semantic + FTS keyword boost.
@@ -552,11 +576,12 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
   });
 
   // LLM rerank: re-order top candidates for better ranking.
-  // Only rerank if we have enough candidates and a rerank model is configured.
+  // Dynamic budget: skip for small sets, scale up for large lesson bases.
   const env = getEnv();
-  if (matches.length >= 2 && (env.RERANK_MODEL || env.DISTILLATION_MODEL) && env.DISTILLATION_ENABLED) {
+  if (rerankBudget > 0 && matches.length >= 2 && (env.RERANK_MODEL || env.DISTILLATION_MODEL) && env.DISTILLATION_ENABLED) {
     try {
-      const rerankCandidates = matches.slice(0, Math.min(matches.length, 15)).map((m, i) => ({
+      const rerankCount = Math.min(matches.length, rerankBudget);
+      const rerankCandidates = matches.slice(0, rerankCount).map((m, i) => ({
         index: i,
         title: m.title,
         snippet: m.content_snippet,
@@ -569,7 +594,7 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
       const remaining = matches.slice(rerankCandidates.length);
       matches = [...rerankedTop, ...remaining];
 
-      explanations.push(`reranked: top ${rerankCandidates.length} candidates reordered by LLM`);
+      explanations.push(`reranked: top ${rerankCandidates.length}/${matches.length} candidates (budget=${rerankBudget}, total_lessons=${totalLessons})`);
     } catch (err) {
       explanations.push(`rerank skipped: ${err instanceof Error ? err.message : String(err)}`);
     }
