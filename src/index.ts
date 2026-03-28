@@ -12,6 +12,7 @@ import { createModuleLogger } from './utils/logger.js';
 import { applyMigrations } from './db/applyMigrations.js';
 import { indexProject } from './services/indexer.js';
 import { searchCode } from './services/retriever.js';
+import { tieredSearch } from './services/tieredRetriever.js';
 import { addLesson, deleteWorkspace, listLessons, searchLessons, updateLessonStatus } from './services/lessons.js';
 import { checkGuardrails } from './services/guardrails.js';
 import { getProjectSnapshotBody } from './services/snapshot.js';
@@ -228,6 +229,7 @@ function createMcpToolsServer() {
       const optionalFor = [
         'index_project',
         'search_code',
+        'search_code_tiered',
         'add_lesson',
         'delete_workspace',
         'list_lessons',
@@ -279,12 +281,23 @@ function createMcpToolsServer() {
         },
         {
           name: 'search_code',
-          purpose: 'Semantic search over indexed code chunks (pgvector).',
+          purpose: 'Semantic search over indexed code chunks (pgvector). Legacy tool — use search_code_tiered for better accuracy.',
           key_parameters: [
             { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
             { path: 'query', required: true, notes: 'Natural language query.' },
             { path: 'filters.path_glob', required: false, notes: "Optional filter, e.g. 'src/**/*.ts'." },
             { path: 'limit', required: false, notes: 'Top-k results (default 10).' },
+          ],
+        },
+        {
+          name: 'search_code_tiered',
+          purpose: 'Multi-tier deterministic-first search for coder agents. ripgrep > symbol > FTS > semantic. Returns ALL candidate files with tier/kind labels.',
+          key_parameters: [
+            { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
+            { path: 'query', required: true, notes: 'Identifier, file path, or natural language query.' },
+            { path: 'kind', required: false, notes: "Filter by data kind: 'code', 'doc', 'config', 'test', 'infra', or array of kinds." },
+            { path: 'max_files', required: false, notes: 'Max files to return (default 50).' },
+            { path: 'semantic_threshold', required: false, notes: 'Min deterministic results before semantic is skipped (default 3). Set 0 to always include semantic.' },
           ],
         },
         {
@@ -786,6 +799,84 @@ function createMcpToolsServer() {
         debug,
       });
       const summary = `search_code: matches=${result.matches.length}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  // ── Tiered Search (deterministic-first, for coder agents) ──────────────
+  server.registerTool(
+    'search_code_tiered',
+    {
+      description:
+        'Multi-tier code search optimized for coder agents. Uses ripgrep (exact match) > symbol lookup > FTS > semantic (fallback). ' +
+        'Returns ALL candidate files grouped by tier and kind (code/doc/config/test/infra), so the agent can choose what to read. ' +
+        'Use the `kind` filter to search only code, only docs, only config, etc.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional().describe('Workspace token (required only if MCP_AUTH_ENABLED=true).'),
+        project_id: z
+          .string()
+          .min(1)
+          .optional()
+          .describe('Project identifier. Optional if DEFAULT_PROJECT_ID is set.'),
+        query: z.string().min(1).describe('Search query. Can be an identifier (parseBooleanEnv), a path (src/env.ts), or natural language.'),
+        kind: z
+          .union([
+            z.enum(['code', 'doc', 'config', 'test', 'infra']),
+            z.array(z.enum(['code', 'doc', 'config', 'test', 'infra'])),
+          ])
+          .optional()
+          .describe('Filter to specific data kinds. E.g., "code" for source only, ["code","config"] for both. Default: all kinds.'),
+        filters: z
+          .object({
+            path_glob: z.string().min(1).optional().describe("Optional path glob filter. Example: 'src/**/*.ts'."),
+            include_tests: z.boolean().optional().describe('Include test files (default: false).'),
+          })
+          .optional(),
+        max_files: z.number().int().positive().optional().describe('Max files to return (default: 50).'),
+        semantic_threshold: z
+          .number()
+          .int()
+
+          .optional()
+          .describe('Min deterministic results before semantic search is skipped (default: 3). Set to 0 to always include semantic.'),
+        debug: z.boolean().optional().describe('When true, include debug explanations.'),
+        output_format: OutputFormatSchema.default('auto_both').describe('Response format.'),
+      }),
+      outputSchema: z.object({
+        files: z.array(
+          z.object({
+            path: z.string(),
+            tier: z.enum(['exact_match', 'symbol_match', 'fts_match', 'semantic']),
+            kind: z.enum(['code', 'doc', 'config', 'test', 'infra']),
+            score: z.number(),
+            symbols: z.array(z.string()),
+            sample_lines: z.array(z.string()),
+          }),
+        ),
+        total_files: z.number().int(),
+        tiers_executed: z.array(z.string()),
+        tiers_skipped: z.array(z.string()),
+        query_classification: z.enum(['identifier', 'path', 'natural_language', 'mixed']),
+        explanations: z.array(z.string()),
+      }),
+    },
+    async ({ workspace_token, project_id, query, kind, filters, max_files, semantic_threshold, debug, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      const result = await tieredSearch({
+        projectId,
+        query,
+        kind: kind as any,
+        pathGlob: filters?.path_glob,
+        includeTests: filters?.include_tests,
+        maxFiles: max_files,
+        semanticThreshold: semantic_threshold,
+        debug,
+      });
+      const tierCounts = result.tiers_executed
+        .map(t => `${t}:${result.files.filter(f => f.tier === t).length}`)
+        .join(' ');
+      const summary = `search_code_tiered: ${result.files.length} files (${tierCounts})`;
       return formatToolResponse(result, summary, output_format);
     },
   );

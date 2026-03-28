@@ -166,8 +166,8 @@ export async function indexProject({ projectId, root, linesPerChunk, embeddingBa
           await client.query(
             `INSERT INTO chunks(
               project_id, root, file_path, start_line, end_line, content, embedding,
-              language, symbol_name, symbol_type, is_test, fts
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7::vector,$8,$9,$10,$11,to_tsvector('english', $12));`,
+              language, symbol_name, symbol_type, is_test, fts, chunk_kind
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7::vector,$8,$9,$10,$11,to_tsvector('english', $12),$13);`,
             [
               projectId,
               resolvedRoot,
@@ -182,6 +182,7 @@ export async function indexProject({ projectId, root, linesPerChunk, embeddingBa
               li.isTest,
               // FTS content: file path + symbol name + code content, with camelCase/snake_case expansion.
               expandForFtsIndex(`${fileRel} ${c.symbolName ?? ''} ${c.content}`),
+              li.kind,
             ],
           );
         }
