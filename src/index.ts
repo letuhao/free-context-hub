@@ -2105,7 +2105,16 @@ function createMcpToolsServer() {
   server.registerTool(
     'enqueue_job',
     {
-      description: 'Enqueue async job for worker pipeline (RabbitMQ/Postgres backend).',
+      description:
+        'Enqueue async job for worker pipeline (RabbitMQ/Postgres backend). ' +
+        'Required payload fields per job_type: ' +
+        'repo.sync: { git_url (required), ref?, cache_root?, since?, max_commits? } — clones/fetches repo then chains git.ingest + index.run. ' +
+        'index.run: { root (required) } — indexes files at root path. ' +
+        'git.ingest: { root (required), since?, max_commits? } — ingests git history from root. ' +
+        'workspace.scan: { root (required) } — scans workspace for changes. ' +
+        'workspace.delta_index: { root (required) } — indexes only changed files. ' +
+        'quality.eval: {} — runs QC golden set evaluation. ' +
+        'knowledge.refresh / faq.build / raptor.build / knowledge.loop.* / knowledge.memory.build: {} — no required payload fields.',
       inputSchema: z.object({
         workspace_token: z.string().optional(),
         project_id: z.string().min(1).optional(),
@@ -2122,8 +2131,13 @@ function createMcpToolsServer() {
           'knowledge.loop.shallow',
           'knowledge.loop.deep',
           'knowledge.memory.build',
-        ]),
-        payload: z.record(z.string(), z.unknown()).optional(),
+        ]).describe(
+          'Job type. repo.sync requires payload.git_url. index.run/git.ingest/workspace.* require payload.root.',
+        ),
+        payload: z.record(z.string(), z.unknown()).optional().describe(
+          'Job-specific payload. Key fields: git_url (for repo.sync), root (for index.run/git.ingest/workspace.*), ' +
+          'ref (git branch/tag), since (git date filter), max_commits (git limit).',
+        ),
         correlation_id: z.string().optional(),
         queue_name: z.string().min(1).optional(),
         max_attempts: z.number().int().positive().optional(),
