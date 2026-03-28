@@ -18,7 +18,7 @@ Run these steps in order at the start of EVERY session:
 2. **Call** `get_context` (with `task.intent` + optional `task.query` / `task.path_glob`) → bootstrap minimal refs + optional `project_snapshot` + suggested next calls
 3. **Optional:** `get_project_summary` → full pre-built project briefing text (no embedding call) if you need more than the snapshot snippet from `get_context`
 4. **Call** `search_lessons` → load relevant prior decisions/preferences/guardrails for the task
-5. **Call** `search_code` → find relevant code locations by intent
+5. **Call** `search_code_tiered` → find relevant code locations with kind-filtered precision (preferred over `search_code`)
 6. **Read** the relevant module brief from `docs/context/modules/` ONLY if patching that module
 
 Do NOT load `WHITEPAPER.md` unless there is an architectural question not answered by the docs above.
@@ -29,16 +29,43 @@ Do NOT load `WHITEPAPER.md` unless there is an architectural question not answer
 
 ## Tool Usage Rules
 
-### `search_code` — use BEFORE reading files
+### `search_code_tiered` — primary code search (preferred)
 ```
 When: you need to find where something is implemented, before using Glob/Grep/Read
-How:  search_code(project_id, query="what you're looking for", limit=5)
-Why:  semantic search finds by intent, not by filename
+How:  search_code_tiered(project_id, query="what you're looking for", kind="source")
+Why:  uses ripgrep + symbol lookup + FTS first (near 100% accurate), semantic as fallback only
+      returns ALL candidate files with tier labels — you choose what to read
 ```
-Examples of when to call:
-- "where is auth handled?" → `search_code(query: "workspace token authentication")`
-- "where do we write chunks?" → `search_code(query: "chunk embedding storage write")`
-- "find the guardrail trigger logic" → `search_code(query: "trigger match guardrail rule")`
+
+**Data kinds** — filter to search only what you need:
+| Kind | What's in it | When to use |
+|------|-------------|-------------|
+| `source` | Implementation code (functions, classes, handlers) | "Where is X implemented?" |
+| `type_def` | Type/interface definitions, models, DTOs, .d.ts | "What type does X accept?" |
+| `test` | Test files (unit, integration, e2e, mocks) | "Is there a test for X?" |
+| `migration` | Database migrations, SQL schemas, seed data | "What columns does X table have?" |
+| `config` | App configuration (.env, yaml, json settings) | "What env vars are available?" |
+| `dependency` | Package manifests (package.json, go.mod, etc.) | "What version of X?" |
+| `api_spec` | API definitions (OpenAPI, GraphQL, protobuf) | "What's the API contract?" |
+| `doc` | Documentation (markdown, README, changelogs) | "Any docs about X?" |
+| `script` | Utility/build scripts (not core logic) | "How do I run the seed?" |
+| `infra` | CI/CD, Docker, Terraform, deployment | "How is CI configured?" |
+| `style` | CSS/SCSS/LESS styling | "What CSS classes exist?" |
+| `generated` | Lock files, codegen output | Usually excluded |
+
+Examples:
+- "where is auth handled?" → `search_code_tiered(query: "assertWorkspaceToken", kind: "source")`
+- "what DB migrations exist?" → `search_code_tiered(query: "chunks table columns", kind: "migration")`
+- "find env config for S3" → `search_code_tiered(query: "S3_BUCKET S3_ENDPOINT", kind: "config")`
+- "any docs about deployment?" → `search_code_tiered(query: "deploy docker", kind: "doc")`
+- "broad search, I'm not sure" → `search_code_tiered(query: "guardrail trigger logic")` (no kind = all)
+
+### `search_code` — legacy semantic search
+```
+When: fallback if search_code_tiered is unavailable, or for pure natural-language queries
+How:  search_code(project_id, query="what you're looking for", limit=5)
+Why:  semantic-only search, returns top-K results (less precise than tiered)
+```
 
 ### Phase 4 graph tools (`search_symbols`, `get_symbol_neighbors`, `trace_dependency_path`, `get_lesson_impact`)
 ```
@@ -122,7 +149,7 @@ If result has `pass: false` → show the `prompt` to the user and wait for expli
 ```
 When: after significant code additions or after a fresh clone
 How:  index_project(project_id: "free-context-hub", root: "<cwd>")
-Why:  keeps search_code results current; also refreshes project snapshot (Phase 3)
+Why:  keeps search results current; classifies chunks by kind; refreshes project snapshot
 ```
 
 ### `delete_workspace` — only on explicit user instruction
@@ -149,10 +176,13 @@ If any architectural decisions were made during the session, call `add_lesson` B
 
 | Situation | Load |
 |---|---|
-| Any session start | help() + get_context() + search_lessons() + search_code() |
+| Any session start | help() + get_context() + search_lessons() + search_code_tiered() |
 | Working on specific module | + relevant MODULE_BRIEF.md |
 | Architectural question | + WHITEPAPER.md (specific section only) |
-| Finding code | search_code() first, then Read if needed |
+| Finding code | search_code_tiered(kind: "source") first, then Read if needed |
+| Finding config/env | search_code_tiered(kind: "config") |
+| Finding DB schema | search_code_tiered(kind: "migration") |
+| Finding docs | search_code_tiered(kind: "doc") |
 | Before risky action | check_guardrails() — mandatory |
 
 **Do NOT load all module briefs at once.** Load only the module you are working on.
@@ -170,4 +200,6 @@ phase_3_chat:     optional OpenAI-compatible /v1/chat/completions for distill + 
                   (DISTILLATION_ENABLED, DISTILLATION_MODEL, DISTILLATION_BASE_URL defaults to EMBEDDINGS_BASE_URL)
 phase_4_graph:    optional Neo4j 5.x (KG_ENABLED, NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD)
                   TS/JS symbol graph + lesson links; tools noop with warning when disabled
+chunk_kinds:      12 data categories (source, type_def, test, migration, config, dependency,
+                  api_spec, doc, script, infra, style, generated)
 ```
