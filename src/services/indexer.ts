@@ -6,6 +6,8 @@ import { getDbPool } from '../db/client.js';
 import { rebuildProjectSnapshot } from './snapshot.js';
 import { loadIgnorePatternsFromRoot } from '../utils/ignore.js';
 import { chunkTextByLines } from '../utils/chunker.js';
+import { smartChunkCode, type SmartChunk } from '../utils/smartChunker.js';
+import { detectLanguage } from '../utils/languageDetect.js';
 import { sha256Hex } from '../utils/hash.js';
 import { upsertFileGraphFromDisk } from '../kg/upsert.js';
 import { bumpProjectCacheVersion } from './cacheVersions.js';
@@ -107,13 +109,17 @@ export async function indexProject({ projectId, root, linesPerChunk, embeddingBa
         }
       }
       const text = buf.toString('utf8');
-      const chunks = chunkTextByLines(text, chunkLines);
+      const langInfo = detectLanguage(fileRel);
+      // Use smart chunking for known languages, fall back to line-based.
+      const chunks: SmartChunk[] = langInfo.language && langInfo.language !== 'json' && langInfo.language !== 'yaml' && langInfo.language !== 'markdown'
+        ? smartChunkCode(text, langInfo.language, chunkLines)
+        : chunkTextByLines(text, chunkLines).map(c => ({ ...c }));
       if (chunks.length === 0) continue;
 
       // IMPORTANT: embed FIRST, then update DB.
       // This prevents "sticky" state where we updated `files.content_hash`
       // and deleted old chunks, but embeddings failed (auth/dimension mismatch).
-      const embeddedChunks: Array<{ chunk: (typeof chunks)[number]; embedding: number[] }> = [];
+      const embeddedChunks: Array<{ chunk: SmartChunk; embedding: number[]; langInfo: typeof langInfo }> = [];
 
       // Embed chunks in small batches.
       for (let i = 0; i < chunks.length; i += batchSize) {
@@ -124,7 +130,7 @@ export async function indexProject({ projectId, root, linesPerChunk, embeddingBa
           const c = slice[j];
           const embedding = vectors[j];
           if (!embedding || embedding.length === 0) continue;
-          embeddedChunks.push({ chunk: c, embedding });
+          embeddedChunks.push({ chunk: c, embedding, langInfo });
         }
       }
 
@@ -152,12 +158,13 @@ export async function indexProject({ projectId, root, linesPerChunk, embeddingBa
           [projectId, resolvedRoot, fileRel],
         );
 
-        // Insert new chunk vectors.
-        for (const { chunk: c, embedding } of embeddedChunks) {
+        // Insert new chunk vectors with metadata and FTS.
+        for (const { chunk: c, embedding, langInfo: li } of embeddedChunks) {
           await client.query(
             `INSERT INTO chunks(
-              project_id, root, file_path, start_line, end_line, content, embedding
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7::vector);`,
+              project_id, root, file_path, start_line, end_line, content, embedding,
+              language, symbol_name, symbol_type, is_test, fts
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7::vector,$8,$9,$10,$11,to_tsvector('english', $12));`,
             [
               projectId,
               resolvedRoot,
@@ -166,6 +173,12 @@ export async function indexProject({ projectId, root, linesPerChunk, embeddingBa
               c.endLine,
               c.content,
               vectorLiteral(embedding),
+              li.language || null,
+              c.symbolName || null,
+              c.symbolType || null,
+              li.isTest,
+              // FTS content: file path + symbol name + code content for full-text search.
+              `${fileRel} ${c.symbolName ?? ''} ${c.content}`,
             ],
           );
         }
