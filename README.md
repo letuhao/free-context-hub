@@ -105,20 +105,28 @@ Detailed setup: [`docs/QUICKSTART.md`](docs/QUICKSTART.md)
 
 ## Self-Hosted Models
 
-ContextHub uses OpenAI-compatible APIs. We recommend running **two roles** (can be the same LM Studio instance):
+ContextHub uses OpenAI-compatible APIs. Run locally with [LM Studio](https://lmstudio.ai/) or any compatible server.
 
-### Embeddings (Required)
-- **Model**: `mixedbread-ai/text-embedding-mxbai-embed-large-v1`
-- **Dimensions**: `1024` (must match `EMBEDDINGS_DIM` in `.env`)
+### Recommended Combo (benchmarked)
 
-### Context Builder (Optional)
-Enable `DISTILLATION_ENABLED=true` for `reflect`, `compress_context`, and lesson summarization.
+We tested 8 embedding models on lesson search quality ([full benchmark](docs/benchmarks/2026-03-28-embedding-model-benchmark.md)). Best combo:
 
-| Model Type | Recommended | Use Case |
+| Role | Model | Config |
 | :--- | :--- | :--- |
-| **Code-Focused** | `qwen2.5-coder-7b/14b` | Architecture summaries |
-| **Generalist** | `qwen2.5-7b`, `llama-3.1-8b` | Lesson distillation |
-| **Lightweight** | `phi-4`, `mistral-7b` | Low-latency summaries |
+| **Embeddings** | `qwen3-embedding-0.6b` | `EMBEDDINGS_DIM=1024` — best accuracy (18/18, avg 0.652) |
+| **Distillation** | `qwen2.5-coder-7b-instruct` | `DISTILLATION_ENABLED=true` — reflect, compress, summarize |
+| **Reranker** (optional) | `qwen3-reranker-4b` | `RERANK_MODEL=qwen.qwen3-reranker-4b` — LLM reranking |
+
+### Alternative Embedding Models
+
+| Model | Dims | Pass Rate | Avg Score | Best For |
+| :--- | :--- | :--- | :--- | :--- |
+| **qwen3-embedding-0.6b** | 1024 | 18/18 | 0.652 | Best overall (recommended) |
+| bge-m3 | 1024 | 18/18 | 0.575 | Fast indexing, solid all-rounder |
+| mxbai-embed-large-v1 | 1024 | 17/18 | 0.648 | Close second, 1 failure |
+| jina-v5-text-small-retrieval | 1024 | 18/18 | 0.523 | Retrieval-optimized |
+
+> **Note:** Code search uses ripgrep/FTS (deterministic), not embeddings. The embedding model only affects lesson and doc search quality. Code-specific models like `nomic-embed-code` performed worst (avg 0.381) for our use case.
 
 ---
 
