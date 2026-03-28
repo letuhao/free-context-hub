@@ -31,6 +31,7 @@ import { configureProjectSource, getProjectSource, prepareRepo } from './service
 import { enqueueJob, listJobs } from './services/jobQueue.js';
 import { runNextJob } from './services/jobExecutor.js';
 import { listWorkspaceRoots, registerWorkspaceRoot, scanWorkspaceChanges } from './services/workspaceTracker.js';
+import { resolveProjectRoot } from './utils/resolveProjectRoot.js';
 import { getGeneratedDocument, listGeneratedDocuments, promoteGeneratedDocument } from './services/generatedDocs.js';
 
 const logger = createModuleLogger('mcp');
@@ -272,10 +273,10 @@ function createMcpToolsServer() {
       const tools = [
         {
           name: 'index_project',
-          purpose: 'Index files under a root into chunks + embeddings (idempotent).',
+          purpose: 'Index files under a root into chunks + embeddings (idempotent). root auto-resolved from project config.',
           key_parameters: [
             { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID from server env if omitted.' },
-            { path: 'root', required: true, notes: 'Root directory to index.' },
+            { path: 'root', required: false, notes: 'Auto-resolved from project_sources/workspace. Pass to override.' },
             {
               path: 'options.lines_per_chunk',
               required: false,
@@ -750,7 +751,7 @@ function createMcpToolsServer() {
           .min(1)
           .optional()
           .describe('Project identifier for scoping stored vectors. Optional if DEFAULT_PROJECT_ID is set on the server.'),
-        root: z.string().min(1).describe('Root directory path to index (absolute or relative to server process cwd).'),
+        root: z.string().min(1).optional().describe('Project root path. Optional — auto-resolved from project_sources/workspace when omitted. Just pass project_id.'),
         output_format: OutputFormatSchema.default('auto_both').describe('Response format: auto_both | json_only | json_pretty | summary_only.'),
         options: z
           .object({
@@ -786,9 +787,10 @@ function createMcpToolsServer() {
     async ({ workspace_token, project_id, root, output_format, options }) => {
       assertWorkspaceToken(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
+      const resolvedRoot = await resolveProjectRoot(projectId, root);
       const result = await indexProject({
         projectId,
-        root,
+        root: resolvedRoot,
         linesPerChunk: options?.lines_per_chunk,
         embeddingBatchSize: options?.embedding_batch_size,
       });
@@ -1735,7 +1737,7 @@ function createMcpToolsServer() {
       inputSchema: z.object({
         workspace_token: z.string().optional(),
         project_id: z.string().min(1).optional(),
-        root: z.string().min(1),
+        root: z.string().min(1).optional().describe('Repository root path. Optional — auto-resolved from project_sources when omitted.'),
         since: z.string().min(1).optional(),
         max_commits: z.number().int().positive().optional(),
         output_format: OutputFormatSchema.default('auto_both'),
@@ -1753,9 +1755,10 @@ function createMcpToolsServer() {
     async ({ workspace_token, project_id, root, since, max_commits, output_format }) => {
       assertWorkspaceToken(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
+      const resolvedRoot = await resolveProjectRoot(pid, root);
       const result = await ingestGitHistory({
         projectId: pid,
-        root,
+        root: resolvedRoot,
         since,
         maxCommits: max_commits,
       });
@@ -1964,14 +1967,13 @@ function createMcpToolsServer() {
   server.registerTool(
     'configure_project_source',
     {
-      description: 'Configure project source mode: remote_git or local_workspace.',
+      description: 'Configure project source: set git_url so other tools can auto-resolve paths. Call this once per project.',
       inputSchema: z.object({
         workspace_token: z.string().optional(),
         project_id: z.string().min(1).optional(),
-        source_type: z.enum(['remote_git', 'local_workspace']),
-        git_url: z.string().min(1).optional(),
-        default_ref: z.string().min(1).optional(),
-        repo_root: z.string().min(1).optional(),
+        source_type: z.enum(['remote_git', 'local_workspace']).describe('Use remote_git for team shared repos.'),
+        git_url: z.string().min(1).optional().describe('Remote git URL (required for remote_git).'),
+        default_ref: z.string().min(1).optional().describe('Default branch (e.g., main).'),
         enabled: z.boolean().optional(),
         output_format: OutputFormatSchema.default('auto_both'),
       }),
@@ -1981,7 +1983,7 @@ function createMcpToolsServer() {
         source_type: z.enum(['remote_git', 'local_workspace']),
       }),
     },
-    async ({ workspace_token, project_id, source_type, git_url, default_ref, repo_root, enabled, output_format }) => {
+    async ({ workspace_token, project_id, source_type, git_url, default_ref, enabled, output_format }) => {
       assertWorkspaceToken(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       const result = await configureProjectSource({
@@ -1989,7 +1991,7 @@ function createMcpToolsServer() {
         sourceType: source_type,
         gitUrl: git_url,
         defaultRef: default_ref,
-        repoRoot: repo_root,
+        repoRoot: undefined, // auto-set by prepare_repo
         enabled,
       });
       const summary = `configure_project_source: project_id=${result.project_id}, source_type=${result.source_type}`;
@@ -2000,15 +2002,13 @@ function createMcpToolsServer() {
   server.registerTool(
     'prepare_repo',
     {
-      description: 'Clone/fetch/checkout remote repository into server cache and persist source metadata.',
+      description: 'Clone/fetch/checkout remote repository into server cache and persist source metadata. After this, other tools can auto-resolve root from project_id.',
       inputSchema: z.object({
         workspace_token: z.string().optional(),
         project_id: z.string().min(1).optional(),
-        git_url: z.string().min(1),
-        ref: z.string().min(1).optional(),
-        depth: z.number().int().positive().optional(),
-        cache_root: z.string().min(1).optional(),
-        source_storage_mode: z.enum(['local', 's3', 'hybrid']).optional(),
+        git_url: z.string().min(1).describe('Remote git repository URL (https).'),
+        ref: z.string().min(1).optional().describe('Branch or tag to checkout (default: main).'),
+        depth: z.number().int().positive().optional().describe('Shallow clone depth (optional).'),
         output_format: OutputFormatSchema.default('auto_both'),
       }),
       outputSchema: z.object({
@@ -2029,7 +2029,7 @@ function createMcpToolsServer() {
         error: z.string().optional(),
       }),
     },
-    async ({ workspace_token, project_id, git_url, ref, depth, cache_root, source_storage_mode, output_format }) => {
+    async ({ workspace_token, project_id, git_url, ref, depth, output_format }) => {
       assertWorkspaceToken(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       const env = getEnv();
@@ -2038,8 +2038,8 @@ function createMcpToolsServer() {
         gitUrl: git_url,
         ref,
         depth,
-        cacheRoot: cache_root ?? env.REPO_CACHE_ROOT,
-        sourceStorageMode: source_storage_mode ?? env.SOURCE_STORAGE_MODE,
+        cacheRoot: env.REPO_CACHE_ROOT,
+        sourceStorageMode: env.SOURCE_STORAGE_MODE as any,
       });
       const summary = `prepare_repo: status=${result.status}, repo_root=${result.repo_root}`;
       return formatToolResponse(result, summary, output_format);
@@ -2082,11 +2082,11 @@ function createMcpToolsServer() {
   server.registerTool(
     'register_workspace_root',
     {
-      description: 'Register one local workspace root for a project (multi-workspace mode).',
+      description: 'Register workspace root for a project (enables ripgrep code search). Optional if project already configured via prepare_repo.',
       inputSchema: z.object({
         workspace_token: z.string().optional(),
         project_id: z.string().min(1).optional(),
-        root_path: z.string().min(1),
+        root_path: z.string().min(1).optional().describe('Workspace root. Optional — auto-resolved from project config when omitted.'),
         active: z.boolean().optional(),
         output_format: OutputFormatSchema.default('auto_both'),
       }),
@@ -2100,7 +2100,8 @@ function createMcpToolsServer() {
     async ({ workspace_token, project_id, root_path, active, output_format }) => {
       assertWorkspaceToken(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const result = await registerWorkspaceRoot({ projectId: pid, rootPath: root_path, active });
+      const resolvedRoot = await resolveProjectRoot(pid, root_path);
+      const result = await registerWorkspaceRoot({ projectId: pid, rootPath: resolvedRoot, active });
       const summary = `register_workspace_root: workspace_id=${result.workspace_id}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2138,11 +2139,11 @@ function createMcpToolsServer() {
   server.registerTool(
     'scan_workspace',
     {
-      description: 'Scan local workspace git status (modified/untracked/staged) and optionally run delta indexing.',
+      description: 'Scan workspace for changed files (git status) and optionally run delta indexing.',
       inputSchema: z.object({
         workspace_token: z.string().optional(),
         project_id: z.string().min(1).optional(),
-        root_path: z.string().min(1),
+        root_path: z.string().min(1).optional().describe('Workspace root. Optional — auto-resolved from project config when omitted.'),
         run_delta_index: z.boolean().optional().default(false),
         output_format: OutputFormatSchema.default('auto_both'),
       }),
@@ -2169,9 +2170,10 @@ function createMcpToolsServer() {
     async ({ workspace_token, project_id, root_path, run_delta_index, output_format }) => {
       assertWorkspaceToken(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
+      const resolvedRoot = await resolveProjectRoot(pid, root_path);
       const result = await scanWorkspaceChanges({
         projectId: pid,
-        rootPath: root_path,
+        rootPath: resolvedRoot,
         runDeltaIndex: run_delta_index,
       });
       const summary = `scan_workspace: status=${result.status}, modified=${result.modified_files.length}, untracked=${result.untracked_files.length}, staged=${result.staged_files.length}`;

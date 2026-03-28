@@ -13,49 +13,17 @@ import {
   shouldUseLargeRepoBuilderMemory,
 } from './builderMemoryLarge.js';
 import { runQualityEvalAndPersist } from './qcEval.js';
-import { getProjectSource, prepareRepo } from './repoSources.js';
+import { prepareRepo } from './repoSources.js';
 import { scanWorkspaceChanges } from './workspaceTracker.js';
 import { getEnv } from '../env.js';
 import { createModuleLogger } from '../utils/logger.js';
+import { resolveProjectRoot } from '../utils/resolveProjectRoot.js';
 
 const logger = createModuleLogger('jobExecutor');
 
-/**
- * Auto-resolve payload.root from project_sources when not provided.
- * This lets agents just pass project_id without knowing the Docker container path.
- * Resolution order: payload.root → project_sources.repo_root → chunks.root → error.
- */
+/** Resolve root from payload or auto-resolve from project config. */
 async function resolveRoot(projectId: string | null, payload: Record<string, unknown>): Promise<string> {
-  // If explicitly provided, use it.
-  const explicit = payload.root ? String(payload.root) : '';
-  if (explicit) return explicit;
-
-  if (!projectId) throw new Error('payload.root is required (or set project_id to auto-resolve from project_sources)');
-
-  // Try project_sources table (set by configure_project_source / prepare_repo).
-  try {
-    const source = await getProjectSource(projectId, 'remote_git');
-    if (source?.repo_root) {
-      logger.info({ projectId, resolvedRoot: source.repo_root, from: 'project_sources' }, 'auto-resolved root');
-      return String(source.repo_root);
-    }
-  } catch { /* table may not exist */ }
-
-  // Try chunks table (set by index_project).
-  try {
-    const { getDbPool } = await import('../db/client.js');
-    const pool = getDbPool();
-    const res = await pool.query(`SELECT DISTINCT root FROM chunks WHERE project_id = $1 LIMIT 1`, [projectId]);
-    if (res.rows?.[0]?.root) {
-      logger.info({ projectId, resolvedRoot: res.rows[0].root, from: 'chunks' }, 'auto-resolved root');
-      return String(res.rows[0].root);
-    }
-  } catch { /* ignore */ }
-
-  throw new Error(
-    `payload.root is required but was not provided, and no root could be auto-resolved for project "${projectId}". ` +
-    'Either pass payload.root explicitly, or run configure_project_source / prepare_repo / index_project first.',
-  );
+  return resolveProjectRoot(projectId, payload.root ? String(payload.root) : undefined);
 }
 
 async function executeByType(
