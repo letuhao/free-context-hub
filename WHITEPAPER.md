@@ -1,21 +1,26 @@
 # ContextHub (Self-Hosted) White Paper
 
 ## Status
-Draft v0.1 (MVP-first)
+Draft v0.2
 
 ## Abstract
-ContextHub is a self-hosted, team-friendly system that gives MCP-enabled AI tools persistent memory and semantic code understanding, with intentionally minimal core features. It is designed for small teams that want the essential productivity benefits of ContextStream-like workflows, without requiring a hosted SaaS dependency.
+ContextHub is a self-hosted, team-friendly system that gives MCP-enabled AI coding agents **persistent memory and guardrails across sessions**. It is designed for small teams that want the essential productivity benefits of [ContextStream](https://contextstream.io/)-like workflows, without requiring a hosted SaaS dependency.
 
-At a high level, ContextHub provides:
-- Persistent "lessons" and preferences captured across sessions
-- Vector-first semantic code search (with optional hybrid later) for fast retrieval of relevant context
-- Lightweight, always-on guardrails derived from lessons
-- Local indexing and secure retrieval (with explicit ignore rules)
-- A future **Phase 6** path for **eval-driven active knowledge improvement** (optional, gated by quality metrics; see Roadmap)
+**The core problem:** every new AI agent session starts from zero. Decisions, preferences, workarounds, and constraints are forgotten. Teams repeat the same mistakes. Engineers re-explain the same architectural choices. ContextHub solves this by making agent knowledge persistent and shared.
 
-ContextHub is inspired by ContextStream's "persistent memory + semantic code search + guardrails" concept. For reference, see ContextStream's product description: https://contextstream.io/ .
+**Primary features (the reason this project exists):**
+- **Persistent lessons** — decisions, preferences, workarounds captured once, available to every future agent session
+- **Guardrails** — team rules enforced before risky actions (push, deploy, migrations)
+- **Session bootstrap** — new agents onboard instantly with project context and prior knowledge
 
-This project is built from scratch to keep the MVP small, self-hostable, and tailored to the required core flows (project-scoped persistent lessons + vector-first semantic retrieval + minimal guardrails).
+**Supplementary features (assistive, not the core goal):**
+- Semantic code search (tiered retrieval with kind-filtered precision)
+- Git intelligence (auto-draft lessons from commit history)
+- Knowledge graph (optional symbol-level code structure via Neo4j)
+
+Code search is supplementary because modern AI agents already have capable built-in tools for code navigation (Grep, Glob, file reading). What they lack — and what no built-in tool provides — is **persistent cross-session memory**. That is ContextHub's unique value.
+
+ContextHub is inspired by ContextStream's "persistent memory + semantic code search + guardrails" concept. Reference: https://contextstream.io/
 
 ## Problem Statement
 AI coding assistants often suffer from:
@@ -28,21 +33,29 @@ Large products solve this via hosted persistent memory and indexing, but small t
 - Minimal complexity (avoid enterprise-grade overhead)
 - Clearly scoped core features that work well out-of-the-box
 
-## Goals
-1. Provide persistent memory for small teams
-   - Store decisions, preferences, and "lessons learned" persistently across chat sessions
-   - Share memory across multiple users within the same `project_id`
-2. Provide semantic code search
-   - Retrieve relevant code context by intent using embeddings (semantic)
-   - Optionally add cheap lexical/symbol signals for hybrid retrieval later
-3. Provide lightweight guardrails from lessons
-   - Enforce critical workflow rules using simple, auditable checks before tool actions
-4. Be self-hostable and operate locally
-   - One-node deployment for the team; minimal external dependencies
-5. Keep MVP scope intentionally small
-   - Focus on core retrieval and guardrail workflows; defer advanced graph analysis and deep analytics
-6. (Roadmap) Support **controlled knowledge improvement loops** (Phase 6)
-   - Improve retrieval usefulness using benchmarks and explicit promotion rules, without abandoning auditability
+## Goals (Priority Order)
+
+### Primary Goals (Core Value)
+1. **Persistent cross-session memory** — the #1 reason this project exists
+   - Store decisions, preferences, workarounds, and "lessons learned" that persist after sessions end
+   - Share knowledge across multiple agents and team members within the same `project_id`
+   - Enable instant onboarding: new agent sessions bootstrap from accumulated team knowledge
+2. **Guardrails that prevent repeated mistakes**
+   - Enforce critical workflow rules (tests before push, migration review, etc.) using simple, auditable checks
+   - Derived from lessons — the team's own captured experience drives enforcement
+3. **Self-hostable with minimal complexity**
+   - One-node deployment (Docker Compose); no cloud dependency
+   - Data stays on team's hardware; full control and data residency
+
+### Supplementary Goals (Assistive Features)
+4. **Code search** — assists agents in finding relevant code
+   - Tiered retrieval (ripgrep > symbol > FTS > semantic) with kind-filtered precision
+   - Useful but not essential — agents have built-in Grep/Glob that work well for most searches
+5. **Git intelligence** — auto-draft lessons from commit history
+   - Reduces manual lesson capture effort
+6. **Knowledge graph** — optional symbol-level structure (Neo4j)
+   - Enables cross-reference queries (callers, importers, impact analysis)
+   - Optional: all core features work without it
 
 ## Non-Goals (MVP Scope Limits)
 - Full dependency impact analysis across the entire repo (deferred to later versions)
@@ -68,28 +81,34 @@ Large products solve this via hosted persistent memory and indexing, but small t
 
 ## System Overview (High-Level Architecture)
 ContextHub is composed of:
-- Indexing Service
-  - Discovers files in allowed roots
-  - Chunks and embeds both code content and lesson content
-  - Stores metadata and vectors (vector-first)
-- Lessons/Preferences Store (project-scoped)
-  - Stores lessons, preferences, and retrieval history keyed by `project_id`
-  - Stores lesson embeddings metadata for semantic retrieval
-- Retrieval Service
-  - Executes semantic search (vector similarity) and returns structured context
-  - Optionally enriches with lexical/symbol signals when available
-  - Reranks results and returns structured context to the MCP layer
-- Guardrails Engine
+- **Lessons/Knowledge Store** (core — the primary service)
+  - Stores lessons, preferences, guardrails, and workarounds keyed by `project_id`
+  - Semantic search over lesson embeddings for retrieval
+  - Lifecycle management (draft → active → superseded → archived)
+- **Guardrails Engine** (core)
   - Translates lessons into rule checks
-  - Enforces preconditions before tool execution
-- MCP Server(s)
-  - Exposes tools/resources to MCP clients (Cursor/Claude Code/etc.)
+  - Enforces preconditions before risky tool execution
+- **Session Bootstrap** (core)
+  - Project summaries, context bootstrapping, and knowledge onboarding for new sessions
+- **MCP Server** (core)
+  - Exposes tools/resources to MCP clients (Claude Code, Cursor, etc.)
+- **Code Indexing & Retrieval** (supplementary)
+  - Discovers files, chunks, embeds, and stores in pgvector
+  - Tiered search (ripgrep > symbol > FTS > semantic) with kind-filtered precision
+- **Git Intelligence** (supplementary)
+  - Ingests commit history, suggests lessons from changes
+- **Knowledge Graph** (optional)
+  - Neo4j symbol-level structure for cross-reference queries
 
-Typical flow:
-1. Indexing (background or on-demand)
-2. MCP client calls `search_code(query)` and/or `get_preferences()`
-3. MCP client calls `get_guardrails(context)` or runs guarded actions via MCP tool
-4. Lessons can be captured via an MCP tool (from user corrections or structured events)
+Typical flow (core):
+1. Agent starts session → `get_context()` + `search_lessons()` to bootstrap
+2. Agent works → `check_guardrails()` before risky actions
+3. Agent learns something → `add_lesson()` to persist for future sessions
+4. Next agent session → benefits from all previously captured knowledge
+
+Supplementary flow:
+5. `index_project()` for code search (on-demand or background)
+6. `search_code_tiered()` to find relevant code when agent needs it
 
 ## Core Components (MVP Design)
 ### 1. MCP Interface Layer
