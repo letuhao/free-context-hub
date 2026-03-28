@@ -2242,61 +2242,17 @@ async function main() {
   });
 
   const app = createMcpExpressApp();
-  const transports: Record<string, StreamableHTTPServerTransport> = {};
-
-  // enableJsonResponse=false allows both JSON responses and SSE streaming.
-  // MCP Inspector and some clients require SSE support via GET.
-  const useJsonResponse = false;
-
-  /** Create a new MCP transport + server instance and register it. */
-  function createNewSession(): StreamableHTTPServerTransport {
-    const server = createMcpToolsServer();
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: () => randomUUID(),
-      enableJsonResponse: useJsonResponse,
-      onsessioninitialized: sid => {
-        transports[sid] = transport;
-        logger.info({ sessionId: sid }, 'new MCP session created');
-      },
-    });
-    server.connect(transport);
-    return transport;
-  }
+  // ── Stateless MCP server: no session tracking ──
+  // Each request gets a fresh transport. No session IDs, no stale session errors.
+  // Simpler for self-hosted local deployment — any client can connect without handshake issues.
 
   app.post('/mcp', async (req: any, res: any) => {
-    const sessionId = req.headers['mcp-session-id'];
-
     try {
-      let transport: StreamableHTTPServerTransport;
-
-      if (sessionId && transports[String(sessionId)]) {
-        // Existing valid session — reuse transport.
-        transport = transports[String(sessionId)];
-      } else if (isInitializeRequest(req.body)) {
-        // Initialize request (with or without stale session ID) — create new session.
-        transport = createNewSession();
-      } else {
-        // No valid session: stale ID, missing ID, or non-initialize request.
-        // Return a clear error telling the client to initialize first.
-        // Include the server URL and protocol info to help the client recover.
-        if (sessionId) {
-          logger.info({ staleSessionId: sessionId }, 'stale session rejected — client must re-initialize');
-        } else {
-          logger.info('no session — client must initialize first');
-        }
-
-        res.status(400).json({
-          jsonrpc: '2.0',
-          error: {
-            code: -32000,
-            message: 'Session required: send an initialize request first (POST /mcp with method:"initialize"). ' +
-              'If you had a session, it expired after server restart — re-initialize to get a new session.',
-          },
-          id: (req.body as any)?.id ?? null,
-        });
-        return;
-      }
-
+      const server = createMcpToolsServer();
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined, // stateless — no session IDs
+      });
+      await server.connect(transport);
       await transport.handleRequest(req as any, res as any, req.body);
     } catch (error) {
       logger.error({ error }, 'mcp request error');
@@ -2310,43 +2266,32 @@ async function main() {
     }
   });
 
-  // Per MCP Streamable HTTP spec, GET opens an SSE stream for server-initiated messages.
-  // Support it for clients like MCP Inspector that connect via GET first.
   app.get('/mcp', async (req: any, res: any) => {
-    const sessionId = req.headers['mcp-session-id'];
-    if (sessionId && transports[String(sessionId)]) {
-      const transport = transports[String(sessionId)];
-      await transport.handleRequest(req as any, res as any);
-    } else {
-      // No valid session — tell client to POST initialize first.
-      res.status(400).json({
-        jsonrpc: '2.0',
-        error: {
-          code: -32000,
-          message: 'Session required: POST /mcp with method:"initialize" first to get a session ID.',
-        },
-        id: null,
+    try {
+      const server = createMcpToolsServer();
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
       });
+      await server.connect(transport);
+      await transport.handleRequest(req as any, res as any);
+    } catch (error) {
+      logger.error({ error }, 'mcp GET error');
+      if (!res.headersSent) {
+        res.status(500).json({
+          jsonrpc: '2.0',
+          error: { code: -32603, message: 'Internal server error' },
+          id: null,
+        });
+      }
     }
   });
 
   const port = env.MCP_PORT;
   app.listen(port, () => {
-    logger.info({ port, path: '/mcp' }, 'ContextHub MCP server listening');
+    logger.info({ port, path: '/mcp' }, 'ContextHub MCP server listening (stateless, no sessions)');
   });
 
-  process.on('SIGINT', async () => {
-    const sids = Object.keys(transports);
-    for (const sid of sids) {
-      try {
-        await transports[sid].close();
-      } catch {
-        // ignore
-      }
-      delete transports[sid];
-    }
-    process.exit(0);
-  });
+  process.on('SIGINT', () => process.exit(0));
 }
 
 main().catch(err => {
