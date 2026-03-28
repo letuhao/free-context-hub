@@ -489,7 +489,8 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
   }
 
   // Fetch more candidates than requested so reranker has a wider pool to reorder.
-  const fetchLimit = Math.min(limit * 3, 30);
+  // At 100+ lessons, the correct answer may not be in the top 9. Fetch 5x or at least 20.
+  const fetchLimit = Math.min(Math.max(limit * 5, 20), 50);
   sqlParams.push(fetchLimit);
   const limitParam = `$${sqlParams.length}`;
 
@@ -555,7 +556,7 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
   const env = getEnv();
   if (matches.length >= 2 && (env.RERANK_MODEL || env.DISTILLATION_MODEL) && env.DISTILLATION_ENABLED) {
     try {
-      const rerankCandidates = matches.slice(0, Math.min(matches.length, 8)).map((m, i) => ({
+      const rerankCandidates = matches.slice(0, Math.min(matches.length, 15)).map((m, i) => ({
         index: i,
         title: m.title,
         snippet: m.content_snippet,
