@@ -123,6 +123,9 @@ export const api = {
   getGeneratedDoc: (id: string, params: Record<string, string | number | undefined> = {}) =>
     request<any>("GET", `/api/generated-docs/${encodeURIComponent(id)}?${qs(params)}`),
 
+  promoteGeneratedDoc: (id: string, body: Record<string, unknown>) =>
+    request<any>("POST", `/api/generated-docs/${encodeURIComponent(id)}/promote`, body),
+
   // ── System ──
   health: () =>
     request<{ status: string; timestamp: string }>("GET", "/api/system/health"),
