@@ -15,6 +15,7 @@ import {
   type Column,
 } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
+import { relTime } from "@/lib/rel-time";
 import { LessonDetail } from "./lesson-detail";
 import { AddLessonDialog } from "./add-lesson-dialog";
 import { FilterPanel } from "./filter-panel";
@@ -162,20 +163,7 @@ export default function LessonsPage() {
     }
   };
 
-  // ── Relative time ──
-  const relativeTime = (dateStr: string) => {
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return "just now";
-    if (mins < 60) return `${mins}m ago`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    if (days < 30) return `${days}d ago`;
-    return `${Math.floor(days / 30)}mo ago`;
-  };
-
-  // ── Table columns (FIX #4: headers call handleSort on click) ──
+  // ── Table columns ──
   const columns: Column<Lesson>[] = [
     {
       key: "title",
@@ -225,7 +213,7 @@ export default function LessonsPage() {
       key: "created_at",
       header: `Created${sortArrow("created_at")}`,
       className: "cursor-pointer",
-      render: (row) => <span className="text-zinc-600 text-xs">{relativeTime(row.created_at)}</span>,
+      render: (row) => <span className="text-zinc-600 text-xs">{relTime(row.created_at)}</span>,
     },
   ];
 

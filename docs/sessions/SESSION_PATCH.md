@@ -1,58 +1,100 @@
 ---
 id: CH-T7-ARCHITECTURE
-date: 2026-03-29
+date: 2026-03-30
 module: Phase7-Architecture-Refactor
 phase: Phase 7
 ---
 
-# Session Patch — 2026-03-29
+# Session Patch — 2026-03-30
 
 ## Where We Are
-Phase: **Phase 7 architecture planned, ready to implement.** Multi-client refactor: extract core → add REST API → add AI streaming → MCP client package → Next.js GUI.
+Phase: **Phase 7 M1–M6 implemented + Dashboard and Lessons pages built.** Architecture refactor complete. GUI has 15 shared components, full Lessons page, full Dashboard page. Remaining: Guardrails, Jobs, Projects, Generated Docs, Code Search, Graph Explorer, Settings, Model Providers, Chat pages.
 
 ## Completed This Session
 
-### Model Benchmarks (8 embedding + 8 reranker)
-- **Embedding winner**: qwen3-embedding-0.6b (18/18, avg 0.652, 1024d)
-- **Reranker winner**: qwen3-4b-instruct-ranker (85% at 180 lessons, 1.8s)
-- Full benchmark documented in `docs/benchmarks/2026-03-28-embedding-model-benchmark.md`
+### Phase M1–M2: Extract core/ and mcp/ from monolith
+- `src/index.ts` reduced from 2379 → 86 lines
+- `src/core/` — protocol-agnostic: auth, errors (ContextHubError), startup, barrel re-exports
+- `src/mcp/` — 36 MCP tools + error boundary (ContextHubError → McpError)
+- Centralized `dotenv.config()` in `env.ts` (fixes import-order timing)
+- `getEnv()` memoization (parse once, cache for all calls)
 
-### Lesson Search Quality Improvements
-- **Search aliases**: auto-generated alternative phrasings via LLM at add_lesson time
-- **Dynamic rerank threshold**: raised to 50 lessons (skip rerank for small projects)
-- **Loreweave project**: 22 lessons, 92% accuracy (up from 58% with fixes)
-- **free-context-hub**: 180 lessons, 85% accuracy
+### Phase M3: REST API
+- `src/api/` — Express app on port 3001 with 17 endpoints
+- Bearer token auth middleware, ContextHubError → HTTP status mapping
+- Routes: lessons (offset pagination, sort, text search), guardrails, search, projects, git, jobs, generated-docs, system
 
-### MCP Server Improvements
-- **Stateless mode**: removed session tracking, any client can connect without handshake
-- **Auto-resolve root**: all tools auto-resolve filesystem paths from project_sources
-- **Hidden internal params**: cache_root, source_storage_mode, repo_root removed from tool schemas
-- **Fixed 9 missing tools** in help() output
-- **Fixed enqueue_job docs**: all job types now document required payload fields
-- **Fixed root resolution bug**: prefer remote_git over local_workspace, validate paths
+### Phase M4: Docker
+- `EXPOSE 3000 3001` in Dockerfile (both stages)
+- `API_PORT` env var in docker-compose.yml (mcp + mcp-ca services)
 
-### Documentation & Roadmap
-- **CLAUDE.md optimized**: 205 → 47 lines, saves ~2400 tokens/session
-- **Dropped features**: Multi-Agent Passive Collection, Session History Sharing, IDE Native (VS Code extension)
-- **Roadmap**: Phase 7 GUI, Phase 8 Human-in-loop, Phase 9 Multi-format, Phase 10 Knowledge Portability
+### Phase M5: MCP Client Package
+- `packages/mcp-client/` — standalone npm package (stdio → REST proxy)
+- 8 tools, RestApiError → McpError mapping, health check on startup
+- CLI: `npx @contexthub/mcp-client`
 
-### Architecture Plan (Phase 7)
-Designed multi-client architecture:
-- `src/core/` — shared business logic (extracted from services/db/kg/utils)
-- `src/mcp/` — thin MCP layer (tool registration only)
-- `src/api/` — REST API on port 3001 with AI chat streaming
-- `packages/mcp-client/` — separate npm package (stdio → REST proxy)
-- `gui/` — Next.js dashboard with AI Elements chat UI
+### Phase M6: Next.js GUI
+- `gui/` — Next.js 16 App Router, dark zinc theme, Geist fonts
+- **15 shared components**: DataTable (sortable, selectable, bulk ops, onHeaderClick), SlideOver, CommandPalette, Badge, Toast, Pagination, FilterPanel, FilterChips, EmptyState, LoadingSkeleton, ConfirmDialog, ErrorBanner, StatCard, PageHeader, SearchBar, Button
+- **ProjectContext** provider + sidebar with health polling + collapsible
 
-Plan saved to `plans/jolly-stirring-floyd.md`
+### Lessons Page (full implementation)
+- Dual search: text (ILIKE substring) + semantic (vector search)
+- Page-number pagination with jump-to-page (offset-based, backend + frontend)
+- Sortable columns (created_at, title, type, status) with sort arrows
+- Click-to-filter tags, filter panel dropdown (type + status)
+- Active-only default with "Show all" toggle
+- Bulk operations: checkbox select, archive, export JSON
+- Density toggle: comfortable / compact
+- Slide-over detail panel with status actions + "Open full page" link
+- Add lesson dialog: Write/Preview tabs, tag input, guardrail-specific fields
+- Backend: `listLessons` extended with offset, sort, order, q params + ILIKE wildcard escaping
 
-## Next: Phase M1 — Extract src/core/
-1. Create `src/core/` with barrel re-exports from current locations
-2. Extract `auth.ts` (assertWorkspaceToken, resolveProjectIdOrThrow)
-3. Update imports in index.ts
-4. Verify: tsc clean, integration tests pass
+### Dashboard Page (full implementation)
+- 5 stat cards (clickable → navigate): Lessons, Commits, Generated Docs, Active Jobs
+- Feature status grid: 9 subsystems with green/gray dots + model names
+- Quick actions: Add Lesson, Ask AI, Re-index, Check Guardrail, Ingest Git
+- Project summary section (collapsible, with Refresh)
+- Generated documents grid: FAQ, RAPTOR, QC cards with type badges
+- Two-column: Recent Lessons + Active Jobs (with animated running dots)
+- Recent Commits with sha links
+- Onboarding flow (3-step wizard) when project is empty
+- Auto-refresh 60s (pauses when tab hidden, resumes on visibility)
+- 6 parallel API calls via Promise.allSettled (graceful degradation)
+
+### Design Documentation
+- `docs/gui-design.md` — complete page & component design spec
+- `docs/gui-wireframes.html` — interactive component wireframes (all 15 components)
+- `docs/gui-lessons-wireframe.html` — interactive lessons page wireframe v2
+- `docs/gui-dashboard-wireframe.html` — interactive dashboard wireframe v2
+- Revised page map: 13 pages across Knowledge, Project, System groups
+- Model Providers page design (provider CRUD + feature→model assignment)
+
+### Review Fixes Applied
+- **Backend**: SQL cursor path rewrite (removed dead code, fixed param indices), ILIKE escaping, removed base_url/uri leak from system/info
+- **Frontend**: toast useRef pattern (prevents infinite re-render), relTime shared utility, FilterChips value-aware removal, DataTable onHeaderClick, AddLessonDialog backdrop fix, auto-refresh visibility optimization, initialLoad vs loading separation
+
+## Next Steps
+
+### Pages to implement (priority order)
+1. **Guardrails** — filtered lessons table + test panel (reuses lessons components)
+2. **Jobs** — DataTable + status tabs + polling
+3. **Projects** — card layout + action buttons + git history
+4. **Generated Docs** (`/knowledge/docs`) — FAQ/RAPTOR/QC viewer
+5. **Code Search** (`/knowledge/search`) — tiered search UI
+6. **Settings / Model Providers** (`/settings/models`) — provider CRUD + feature assignment
+7. **Settings / System** (`/settings`) — feature flags, env summary
+8. **Graph Explorer** (`/knowledge/graph`) — symbol search, dependency tracing (KG only)
+9. **Chat** — AI streaming (requires AI SDK deps + POST /api/chat endpoint)
+
+### Backend work needed for remaining pages
+- `GET /api/kg/stats` — symbol/relationship counts
+- `POST /api/kg/search-symbols`, `POST /api/kg/neighbors`, etc.
+- Model provider CRUD: `model_providers` + `model_assignments` tables + 9 endpoints
+- `POST /api/chat` — AI SDK streamText integration with LM Studio
 
 ## Open Blockers / Risks
 - Migration files 0020-0028 from model testing should be squashed before release
 - guardrail-superseded integration test fails when existing deploy guardrails in DB (data issue, not code)
-- Multiple Vercel plugin injections in context — not relevant for self-hosted project
+- Chat page blocked on AI SDK dependency installation + chat endpoint
+- Model Providers page blocked on new DB tables (migration needed)
