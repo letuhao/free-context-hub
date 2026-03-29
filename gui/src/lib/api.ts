@@ -85,10 +85,17 @@ export const api = {
   listJobs: (params: Record<string, string | number | undefined> = {}) =>
     request<any>("GET", `/api/jobs?${qs(params)}`),
 
+  // ── Generated Docs ──
+  listGeneratedDocs: (params: Record<string, string | number | undefined> = {}) =>
+    request<any>("GET", `/api/generated-docs?${qs(params)}`),
+
+  getGeneratedDoc: (id: string, params: Record<string, string | number | undefined> = {}) =>
+    request<any>("GET", `/api/generated-docs/${encodeURIComponent(id)}?${qs(params)}`),
+
   // ── System ──
   health: () =>
     request<{ status: string; timestamp: string }>("GET", "/api/system/health"),
 
   info: () =>
-    request<Record<string, unknown>>("GET", "/api/system/info"),
+    request<any>("GET", "/api/system/info"),
 };

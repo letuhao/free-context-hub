@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ContextHub — Dashboard Wireframe v2</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #09090b; color: #e4e4e7; line-height: 1.5; }
+
+  .shell { display: flex; height: 100vh; }
+
+  /* ── Sidebar ── */
+  .sidebar { width: 220px; background: #0a0a0b; border-right: 1px solid #27272a; display: flex; flex-direction: column; flex-shrink: 0; }
+  .sidebar-logo { padding: 16px 16px 12px; border-bottom: 1px solid #1c1c1f; }
+  .sidebar-logo h4 { font-size: 14px; color: #fafafa; font-weight: 600; }
+  .sidebar-logo p { font-size: 11px; color: #52525b; }
+  .sidebar-select { margin: 10px 10px 4px; padding: 6px 10px; background: #18181b; border: 1px solid #27272a; border-radius: 6px; color: #a1a1aa; font-size: 12px; width: calc(100% - 20px); }
+  .sidebar-nav { padding: 6px 8px; flex: 1; overflow-y: auto; }
+  .sidebar-item { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 6px; font-size: 13px; color: #71717a; text-decoration: none; margin-bottom: 1px; cursor: pointer; }
+  .sidebar-item.active { background: #27272a; color: #fafafa; }
+  .sidebar-item:hover:not(.active) { background: #1c1c1f; color: #a1a1aa; }
+  .sidebar-group { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: #3f3f46; padding: 14px 12px 4px; }
+  .sidebar-sub { padding-left: 28px; font-size: 12px; }
+  .sidebar-bottom { border-top: 1px solid #1c1c1f; padding: 10px 12px; display: flex; align-items: center; gap: 6px; font-size: 11px; color: #52525b; }
+  .health-dot { width: 7px; height: 7px; border-radius: 50%; background: #10b981; }
+  .main { flex: 1; overflow-y: auto; }
+  .page { padding: 24px 32px; max-width: 1040px; }
+
+  /* ── Header ── */
+  .page-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #27272a; padding-bottom: 16px; margin-bottom: 24px; }
+  .page-title { font-size: 18px; font-weight: 600; color: #fafafa; }
+  .page-subtitle { font-size: 13px; color: #71717a; margin-top: 2px; }
+  .btn { padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 4px; }
+  .btn-outline { background: transparent; border: 1px solid #3f3f46; color: #a1a1aa; }
+  .btn-outline:hover { border-color: #52525b; color: #d4d4d8; }
+  .btn-primary { background: #fafafa; color: #09090b; }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+  .btn-ghost { background: transparent; color: #71717a; border: none; font-size: 12px; cursor: pointer; }
+
+  /* ── Stats ── */
+  .stats-row { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+  .stat-card { flex: 1; min-width: 110px; padding: 16px; border: 1px solid #27272a; border-radius: 10px; background: #18181b; cursor: pointer; transition: border-color 0.15s; }
+  .stat-card:hover { border-color: #3f3f46; }
+  .stat-number { font-size: 26px; font-weight: 700; color: #fafafa; line-height: 1; }
+  .stat-label { font-size: 11px; color: #52525b; margin-top: 5px; }
+  .stat-sub { font-size: 10px; color: #3f3f46; margin-top: 2px; }
+  .stat-number.warn { color: #fbbf24; }
+
+  /* ── Feature Status ── */
+  .feature-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-bottom: 20px; padding: 14px 16px; border: 1px solid #27272a; border-radius: 10px; background: #18181b; }
+  .feature-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #a1a1aa; }
+  .feat-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .feat-on { background: #10b981; }
+  .feat-off { background: #3f3f46; }
+  .feature-item .label { color: #71717a; }
+  .feature-item .val { color: #a1a1aa; font-family: monospace; font-size: 11px; }
+
+  /* ── Quick Actions ── */
+  .quick-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+  .quick-action { display: flex; align-items: center; gap: 5px; padding: 7px 12px; border: 1px solid #27272a; border-radius: 8px; background: #18181b; font-size: 12px; color: #a1a1aa; cursor: pointer; transition: border-color 0.15s; }
+  .quick-action:hover { border-color: #3f3f46; color: #d4d4d8; }
+  .quick-action .ic { font-size: 13px; }
+
+  /* ── Section Card ── */
+  .section-card { border: 1px solid #27272a; border-radius: 10px; background: #18181b; margin-bottom: 16px; overflow: hidden; }
+  .section-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid #27272a; }
+  .section-title { font-size: 13px; font-weight: 600; color: #d4d4d8; }
+  .section-body { padding: 14px 16px; }
+  .section-body.hidden { display: none; }
+
+  /* ── Grids ── */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+
+  /* ── Summary ── */
+  .summary-text { font-size: 13px; color: #a1a1aa; line-height: 1.7; }
+  .summary-text strong { color: #d4d4d8; }
+  .summary-text code { background: #27272a; padding: 1px 5px; border-radius: 3px; font-size: 12px; color: #a1a1aa; }
+  .summary-text ul { padding-left: 18px; margin: 6px 0; }
+  .summary-text li { margin-bottom: 3px; }
+  .summary-text h3 { font-size: 13px; color: #d4d4d8; margin: 12px 0 4px; font-weight: 600; }
+
+  /* ── List rows ── */
+  .list-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #1c1c1f; }
+  .list-row:last-child { border-bottom: none; }
+  .list-row:hover { background: #141416; margin: 0 -16px; padding: 8px 16px; border-radius: 6px; cursor: pointer; }
+  .list-title { font-size: 12px; color: #d4d4d8; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .list-time { font-size: 10px; color: #3f3f46; flex-shrink: 0; }
+  .view-all { display: block; text-align: center; padding: 8px; font-size: 11px; color: #3b82f6; text-decoration: none; border-top: 1px solid #27272a; }
+  .view-all:hover { background: #141416; }
+
+  /* ── Badges ── */
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: 500; }
+  .badge-decision { background: rgba(59,130,246,0.1); color: #60a5fa; }
+  .badge-guardrail { background: rgba(239,68,68,0.1); color: #f87171; }
+  .badge-workaround { background: rgba(245,158,11,0.1); color: #fbbf24; }
+  .badge-preference { background: rgba(168,85,247,0.1); color: #c084fc; }
+  .badge-faq { background: rgba(16,185,129,0.1); color: #34d399; }
+  .badge-raptor { background: rgba(59,130,246,0.1); color: #60a5fa; }
+  .badge-qc { background: rgba(245,158,11,0.1); color: #fbbf24; }
+  .badge-sm { font-size: 9px; padding: 1px 6px; }
+
+  /* ── Job dots ── */
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .dot-running { background: #3b82f6; animation: pulse 1.5s infinite; }
+  .dot-queued { border: 1.5px solid #52525b; background: transparent; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  /* ── Doc cards ── */
+  .doc-card { padding: 12px; border: 1px solid #27272a; border-radius: 8px; background: #111113; cursor: pointer; transition: border-color 0.15s; }
+  .doc-card:hover { border-color: #3f3f46; }
+  .doc-card-title { font-size: 13px; color: #d4d4d8; font-weight: 500; margin-bottom: 4px; }
+  .doc-card-meta { font-size: 11px; color: #52525b; }
+  .doc-card-preview { font-size: 11px; color: #3f3f46; margin-top: 6px; line-height: 1.5; max-height: 40px; overflow: hidden; }
+
+  /* ── KG stats ── */
+  .kg-stats { display: flex; gap: 24px; align-items: center; }
+  .kg-stat { text-align: center; }
+  .kg-stat .num { font-size: 22px; font-weight: 700; color: #fafafa; }
+  .kg-stat .lbl { font-size: 11px; color: #52525b; }
+  .kg-visual { flex: 1; height: 80px; border: 1px dashed #27272a; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #27272a; font-size: 11px; }
+
+  /* ── Refresh ── */
+  .refresh-bar { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #3f3f46; }
+  .refresh-dot { width: 4px; height: 4px; border-radius: 50%; background: #3f3f46; animation: blink 3s infinite; }
+  @keyframes blink { 0%,90%,100% { opacity: 0.3; } 95% { opacity: 1; } }
+
+  /* ── View tabs ── */
+  .view-tabs { display: flex; gap: 0; margin-bottom: 20px; }
+  .view-tab { padding: 6px 16px; font-size: 13px; color: #52525b; cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent; }
+  .view-tab.active { color: #fafafa; border-bottom-color: #fafafa; }
+  .view-tab:hover:not(.active) { color: #a1a1aa; }
+
+  /* ── Onboarding ── */
+  .onboarding { border: 1px dashed #27272a; border-radius: 12px; padding: 48px 32px; text-align: center; }
+  .onboarding h2 { font-size: 22px; color: #fafafa; font-weight: 600; margin-bottom: 6px; }
+  .onboarding .sub { font-size: 14px; color: #52525b; margin-bottom: 32px; }
+  .onboarding-steps { display: flex; gap: 20px; justify-content: center; text-align: left; max-width: 720px; margin: 0 auto; }
+  .onboarding-step { flex: 1; padding: 20px; border: 1px solid #27272a; border-radius: 10px; background: #18181b; }
+  .step-number { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: #27272a; color: #a1a1aa; font-size: 12px; font-weight: 600; margin-bottom: 10px; }
+  .step-title { font-size: 14px; color: #d4d4d8; font-weight: 600; margin-bottom: 4px; }
+  .step-desc { font-size: 12px; color: #52525b; margin-bottom: 14px; line-height: 1.5; }
+
+  /* ── Commit rows ── */
+  .sha { font-family: monospace; font-size: 11px; color: #3b82f6; width: 56px; flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <!-- ═══ SIDEBAR (Updated with full nav) ═══ -->
+  <div class="sidebar">
+    <div class="sidebar-logo"><h4>ContextHub</h4><p>Knowledge Dashboard</p></div>
+    <input class="sidebar-select" value="free-context-hub" />
+    <div class="sidebar-nav">
+      <a class="sidebar-item active">📊 Dashboard</a>
+      <a class="sidebar-item">💬 Chat</a>
+
+      <div class="sidebar-group">Knowledge</div>
+      <a class="sidebar-item">📚 Lessons</a>
+      <a class="sidebar-item">🛡 Guardrails</a>
+      <a class="sidebar-item">📄 Generated Docs</a>
+      <a class="sidebar-item">🔍 Code Search</a>
+      <a class="sidebar-item">🕸 Graph Explorer</a>
+
+      <div class="sidebar-group">Project</div>
+      <a class="sidebar-item">📁 Overview</a>
+      <a class="sidebar-item">📦 Git History</a>
+      <a class="sidebar-item">🔗 Sources</a>
+
+      <div class="sidebar-group">System</div>
+      <a class="sidebar-item">⚡ Jobs</a>
+      <a class="sidebar-item">⚙ Settings</a>
+    </div>
+    <div class="sidebar-bottom"><span class="health-dot"></span> API connected</div>
+  </div>
+
+  <div class="main">
+    <!-- ═══ NORMAL DASHBOARD ═══ -->
+    <div class="page" id="normalView">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Dashboard</div>
+          <div class="page-subtitle">free-context-hub &mdash; project overview</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="refresh-bar"><span class="refresh-dot"></span> Auto-refresh 60s</div>
+          <button class="btn btn-outline btn-sm">↻ Refresh</button>
+        </div>
+      </div>
+
+      <div class="view-tabs">
+        <button class="view-tab active" onclick="showView('normal')">Dashboard</button>
+        <button class="view-tab" onclick="showView('empty')">Onboarding View</button>
+      </div>
+
+      <!-- ═══ STATS ROW (6 cards now) ═══ -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-number">142</div>
+          <div class="stat-label">Lessons</div>
+          <div class="stat-sub">98 active · 44 archived</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">8</div>
+          <div class="stat-label">Guardrails</div>
+          <div class="stat-sub">All enforced</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">847</div>
+          <div class="stat-label">Indexed Files</div>
+          <div class="stat-sub">3,201 chunks</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">23</div>
+          <div class="stat-label">Commits</div>
+          <div class="stat-sub">Last ingested 1h ago</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">5</div>
+          <div class="stat-label">Generated Docs</div>
+          <div class="stat-sub">2 FAQ · 2 RAPTOR · 1 QC</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number warn">3</div>
+          <div class="stat-label">Jobs Queued</div>
+          <div class="stat-sub">2 running · 1 waiting</div>
+        </div>
+      </div>
+
+      <!-- ═══ FEATURE STATUS (NEW) ═══ -->
+      <div class="feature-grid">
+        <div class="feature-item"><span class="feat-dot feat-on"></span> Embeddings <span class="val">qwen3-0.6b</span></div>
+        <div class="feature-item"><span class="feat-dot feat-on"></span> Distillation <span class="val">qwen2.5-7b</span></div>
+        <div class="feature-item"><span class="feat-dot feat-on"></span> Knowledge Graph <span class="val">Neo4j</span></div>
+        <div class="feature-item"><span class="feat-dot feat-on"></span> Queue <span class="val">RabbitMQ</span></div>
+        <div class="feature-item"><span class="feat-dot feat-on"></span> Git Ingest</div>
+        <div class="feature-item"><span class="feat-dot feat-on"></span> Builder Memory</div>
+        <div class="feature-item"><span class="feat-dot feat-on"></span> Knowledge Loop</div>
+        <div class="feature-item"><span class="feat-dot feat-off"></span> <span class="label">Redis Cache</span></div>
+      </div>
+
+      <!-- ═══ QUICK ACTIONS ═══ -->
+      <div class="quick-actions">
+        <div class="quick-action"><span class="ic">📝</span> Add Lesson</div>
+        <div class="quick-action"><span class="ic">💬</span> Ask AI</div>
+        <div class="quick-action"><span class="ic">🔄</span> Re-index</div>
+        <div class="quick-action"><span class="ic">🛡</span> Check Guardrail</div>
+        <div class="quick-action"><span class="ic">📦</span> Ingest Git</div>
+        <div class="quick-action"><span class="ic">📄</span> Build FAQ</div>
+        <div class="quick-action"><span class="ic">🌳</span> Build RAPTOR</div>
+      </div>
+
+      <!-- ═══ PROJECT SUMMARY ═══ -->
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-title">Project Summary</div>
+          <div style="display:flex;gap:6px">
+            <button class="btn-ghost" onclick="toggle('summaryBody')">▾ Collapse</button>
+            <button class="btn btn-outline btn-sm">💭 Refresh</button>
+          </div>
+        </div>
+        <div class="section-body" id="summaryBody">
+          <div class="summary-text">
+            <h3>Architecture</h3>
+            <p><strong>free-context-hub</strong> — self-hosted MCP server for persistent memory + guardrails. Multi-layer: <code>src/core/</code> (business logic), <code>src/mcp/</code> (36 tools), <code>src/api/</code> (REST on :3001), <code>gui/</code> (Next.js dashboard).</p>
+            <h3>Key Decisions</h3>
+            <ul>
+              <li><strong>pgvector</strong> for embeddings (1024d, qwen3-embedding-0.6b)</li>
+              <li><strong>ContextHubError</strong> for protocol-agnostic errors</li>
+              <li>Offset + cursor pagination for lessons API</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ GENERATED DOCS (NEW) ═══ -->
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-title">Generated Documents</div>
+          <a href="#" class="btn-ghost" style="color:#3b82f6;text-decoration:none">View all →</a>
+        </div>
+        <div class="section-body">
+          <div class="three-col">
+            <div class="doc-card">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                <span class="badge badge-faq">FAQ</span>
+                <span style="font-size:10px;color:#3f3f46">v3 · 2h ago</span>
+              </div>
+              <div class="doc-card-title">Project FAQ</div>
+              <div class="doc-card-preview">Q: What database does this project use? A: PostgreSQL with pgvector extension for embeddings...</div>
+            </div>
+            <div class="doc-card">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                <span class="badge badge-raptor">RAPTOR</span>
+                <span style="font-size:10px;color:#3f3f46">v2 · 1d ago</span>
+              </div>
+              <div class="doc-card-title">Hierarchical Summary</div>
+              <div class="doc-card-preview">Layer 0: 847 source chunks → Layer 1: 42 cluster summaries → Layer 2: 8 domain summaries...</div>
+            </div>
+            <div class="doc-card">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                <span class="badge badge-qc">QC Report</span>
+                <span style="font-size:10px;color:#3f3f46">v1 · 3d ago</span>
+              </div>
+              <div class="doc-card-title">Quality Eval Report</div>
+              <div class="doc-card-preview">Recall@3: 85% (target 80%) · P95 latency: 1.8s · 0 regressions detected...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ TWO-COL: KG + Active Jobs ═══ -->
+      <div class="two-col">
+        <!-- Knowledge Graph (NEW) -->
+        <div class="section-card">
+          <div class="section-header">
+            <div class="section-title">Knowledge Graph</div>
+            <span class="badge badge-sm" style="background:rgba(16,185,129,0.1);color:#34d399">KG enabled</span>
+          </div>
+          <div class="section-body">
+            <div class="kg-stats">
+              <div class="kg-stat">
+                <div class="num">1,247</div>
+                <div class="lbl">Symbols</div>
+              </div>
+              <div class="kg-stat">
+                <div class="num">3,891</div>
+                <div class="lbl">Relations</div>
+              </div>
+              <div class="kg-stat">
+                <div class="num">14</div>
+                <div class="lbl">Linked Lessons</div>
+              </div>
+              <div class="kg-visual">[graph mini-viz placeholder]</div>
+            </div>
+            <a href="#" class="view-all" style="margin:8px -16px -14px;border-radius:0 0 10px 10px">Explore Graph →</a>
+          </div>
+        </div>
+
+        <!-- Active Jobs -->
+        <div class="section-card">
+          <div class="section-header">
+            <div class="section-title">Active Jobs</div>
+            <div style="display:flex;gap:4px">
+              <span style="font-size:10px;color:#3b82f6;background:rgba(59,130,246,0.1);padding:2px 7px;border-radius:9999px">2 running</span>
+              <span style="font-size:10px;color:#71717a;background:rgba(113,113,122,0.1);padding:2px 7px;border-radius:9999px">1 queued</span>
+            </div>
+          </div>
+          <div class="section-body" style="padding:6px 16px">
+            <div class="list-row">
+              <span class="dot dot-running"></span>
+              <span class="list-title">index_project</span>
+              <span style="font-size:10px;color:#52525b">chunk 847/1200</span>
+              <span class="list-time">2m</span>
+            </div>
+            <div class="list-row">
+              <span class="dot dot-running"></span>
+              <span class="list-title">build_faq</span>
+              <span style="font-size:10px;color:#52525b">generating...</span>
+              <span class="list-time">5m</span>
+            </div>
+            <div class="list-row">
+              <span class="dot dot-queued"></span>
+              <span class="list-title">raptor.build</span>
+              <span style="font-size:10px;color:#52525b">waiting</span>
+              <span class="list-time">1m</span>
+            </div>
+          </div>
+          <a href="#" class="view-all">View all jobs →</a>
+        </div>
+      </div>
+
+      <!-- ═══ TWO-COL: Recent Lessons + Recent Commits ═══ -->
+      <div class="two-col">
+        <!-- Recent Lessons -->
+        <div class="section-card">
+          <div class="section-header">
+            <div class="section-title">Recent Lessons</div>
+            <span class="list-time">Last 24h</span>
+          </div>
+          <div class="section-body" style="padding:6px 16px">
+            <div class="list-row">
+              <span class="badge badge-decision" style="flex-shrink:0">decision</span>
+              <span class="list-title">Use pgvector for all embedding storage</span>
+              <span class="list-time">2h</span>
+            </div>
+            <div class="list-row">
+              <span class="badge badge-guardrail" style="flex-shrink:0">guardrail</span>
+              <span class="list-title">Never force-push to main branch</span>
+              <span class="list-time">5h</span>
+            </div>
+            <div class="list-row">
+              <span class="badge badge-workaround" style="flex-shrink:0">workaround</span>
+              <span class="list-title">Redis cache TTL must be &lt; 30 min</span>
+              <span class="list-time">8h</span>
+            </div>
+            <div class="list-row">
+              <span class="badge badge-preference" style="flex-shrink:0">preference</span>
+              <span class="list-title">Use Geist font family for all UI</span>
+              <span class="list-time">12h</span>
+            </div>
+          </div>
+          <a href="#" class="view-all">View all lessons →</a>
+        </div>
+
+        <!-- Recent Commits -->
+        <div class="section-card">
+          <div class="section-header">
+            <div class="section-title">Recent Commits</div>
+            <button class="btn btn-outline btn-sm">📦 Ingest New</button>
+          </div>
+          <div class="section-body" style="padding:6px 16px">
+            <div class="list-row">
+              <span class="sha">b0befc1</span>
+              <span class="list-title">Phase 7 multi-client architecture (M1–M6)</span>
+              <span class="list-time">1h</span>
+            </div>
+            <div class="list-row">
+              <span class="sha">f71e8d7</span>
+              <span class="list-title">Add Phase 7 architecture plan</span>
+              <span class="list-time">6h</span>
+            </div>
+            <div class="list-row">
+              <span class="sha">8be57a9</span>
+              <span class="list-title">Raise rerank threshold 20→50</span>
+              <span class="list-time">1d</span>
+            </div>
+            <div class="list-row">
+              <span class="sha">5cee336</span>
+              <span class="list-title">Search alias generation for lessons</span>
+              <span class="list-time">1d</span>
+            </div>
+          </div>
+          <a href="#" class="view-all">View git history →</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ ONBOARDING VIEW ═══ -->
+    <div class="page" id="emptyView" style="display:none">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Dashboard</div>
+          <div class="page-subtitle">free-context-hub &mdash; project overview</div>
+        </div>
+      </div>
+
+      <div class="view-tabs">
+        <button class="view-tab" onclick="showView('normal')">Dashboard</button>
+        <button class="view-tab active" onclick="showView('empty')">Onboarding View</button>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-number" style="color:#3f3f46">0</div><div class="stat-label">Lessons</div></div>
+        <div class="stat-card"><div class="stat-number" style="color:#3f3f46">0</div><div class="stat-label">Guardrails</div></div>
+        <div class="stat-card"><div class="stat-number" style="color:#3f3f46">0</div><div class="stat-label">Indexed Files</div></div>
+        <div class="stat-card"><div class="stat-number" style="color:#3f3f46">0</div><div class="stat-label">Commits</div></div>
+        <div class="stat-card"><div class="stat-number" style="color:#3f3f46">0</div><div class="stat-label">Generated Docs</div></div>
+        <div class="stat-card"><div class="stat-number" style="color:#3f3f46">0</div><div class="stat-label">Jobs</div></div>
+      </div>
+
+      <!-- Feature status — all off -->
+      <div class="feature-grid">
+        <div class="feature-item"><span class="feat-dot feat-on"></span> Embeddings <span class="val">qwen3-0.6b</span></div>
+        <div class="feature-item"><span class="feat-dot feat-off"></span> <span class="label">Distillation</span></div>
+        <div class="feature-item"><span class="feat-dot feat-off"></span> <span class="label">Knowledge Graph</span></div>
+        <div class="feature-item"><span class="feat-dot feat-off"></span> <span class="label">Queue</span></div>
+        <div class="feature-item"><span class="feat-dot feat-off"></span> <span class="label">Git Ingest</span></div>
+        <div class="feature-item"><span class="feat-dot feat-off"></span> <span class="label">Builder Memory</span></div>
+        <div class="feature-item"><span class="feat-dot feat-off"></span> <span class="label">Knowledge Loop</span></div>
+        <div class="feature-item"><span class="feat-dot feat-off"></span> <span class="label">Redis Cache</span></div>
+      </div>
+
+      <div class="onboarding">
+        <h2>Welcome to ContextHub</h2>
+        <p class="sub">Get your project's knowledge base up and running in 3 steps</p>
+        <div class="onboarding-steps">
+          <div class="onboarding-step">
+            <div class="step-number">1</div>
+            <div class="step-title">Index your project</div>
+            <div class="step-desc">Point to your repo and we'll index the source code for semantic search.</div>
+            <button class="btn btn-primary btn-sm">Index Project →</button>
+          </div>
+          <div class="onboarding-step">
+            <div class="step-number">2</div>
+            <div class="step-title">Add your first lesson</div>
+            <div class="step-desc">Record a decision, workaround, or guardrail that the team should know about.</div>
+            <button class="btn btn-primary btn-sm">Add Lesson →</button>
+          </div>
+          <div class="onboarding-step">
+            <div class="step-number">3</div>
+            <div class="step-title">Try the AI chat</div>
+            <div class="step-desc">Ask questions about your project — the AI searches your knowledge and answers.</div>
+            <button class="btn btn-outline btn-sm">Open Chat →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function showView(v) {
+    document.getElementById('normalView').style.display = v === 'normal' ? 'block' : 'none';
+    document.getElementById('emptyView').style.display = v === 'empty' ? 'block' : 'none';
+  }
+  function toggle(id) {
+    const el = document.getElementById(id);
+    el.classList.toggle('hidden');
+  }
+</script>
+
+</body>
+</html>

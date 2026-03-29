@@ -588,6 +588,268 @@ Monitor async job queue. Shows what's running, what's queued, what failed.
 
 ---
 
+## Revised Page Map (Post-Audit)
+
+The initial 6-page design only covered the tip of the iceberg. The system has 36 MCP tools
+across 8 subsystems. Here is the complete page map:
+
+### Sidebar Navigation
+
+```
+Dashboard           ← overview + onboarding
+──────────────────
+Chat                ← AI Q&A (Phase M6, deferred)
+──────────────────
+Lessons             ← CRUD, search, filters, bulk ops        ✅ done
+Guardrails          ← filtered lesson list + test panel
+──────────────────
+Knowledge
+  ├ Generated Docs   ← FAQ, RAPTOR summaries, QC reports
+  ├ Code Search      ← tiered search UI (exact→glob→FTS→semantic)
+  └ Graph Explorer   ← symbol search, neighbors, dependency trace (KG_ENABLED)
+──────────────────
+Projects
+  ├ Overview         ← stats, summary, re-index, reflect
+  ├ Git History      ← commits, ingest, suggest lessons
+  └ Sources          ← configure_project_source, prepare_repo
+──────────────────
+Jobs                ← queue monitor, enqueue
+──────────────────
+Settings
+  ├ Model Providers  ← add/manage providers + assign models to features
+  └ System           ← feature flags status, system info, env summary
+```
+
+### New Pages Needed
+
+| Page | Route | Services Used | Priority |
+|------|-------|---------------|----------|
+| **Generated Docs** | `/knowledge/docs` | listGeneratedDocuments, getGeneratedDocument, promoteGeneratedDocument | P0 — FAQ/RAPTOR are core outputs |
+| **Code Search** | `/knowledge/search` | searchCode, tieredSearch | P1 — power users search code from GUI |
+| **Graph Explorer** | `/knowledge/graph` | searchSymbols, getSymbolNeighbors, traceDependencyPath, getLessonImpact | P2 — only when KG enabled |
+| **Git History** | `/projects/git` | listCommits, getCommit, ingestGitHistory, suggestLessonsFromCommits, analyzeCommitImpact | P1 — currently flat list on projects page |
+| **Sources** | `/projects/sources` | configureProjectSource, getProjectSource, prepareRepo | P2 — admin, less frequent |
+| **Model Providers** | `/settings/models` | (new) model provider CRUD + feature→model assignment | P0 — core enterprise feature |
+| **Settings** | `/settings` | system/info, env flags | P1 — operators need feature flag visibility |
+
+---
+
+## Page 7: Model Providers (`/settings/models`)
+
+### Purpose
+Let users bring their own model providers instead of relying on env vars. Two tabs:
+1. **Providers** — add/edit OpenAI-compatible endpoints (LM Studio, Ollama, vLLM, OpenRouter, etc.)
+2. **Feature Assignment** — map each ContextHub feature to a specific provider + model
+
+### Why this matters
+Currently, model configuration is env-var-only (`EMBEDDINGS_BASE_URL`, `DISTILLATION_MODEL`, etc.).
+This is fine for ops/devops but painful for end users. The GUI should let users:
+- Add multiple providers (e.g., LM Studio for local, OpenRouter for fallback)
+- Pick which model handles which feature
+- Test a provider before committing to it
+- See at a glance what's powering each capability
+
+### Layout — Tab 1: Providers
+```
+┌──────────────────────────────────────────────────────────┐
+│ Model Providers                        [+ Add Provider]  │
+│ Manage your AI model providers                           │
+│                                                          │
+│ [Providers]  [Feature Assignment]                        │
+│                                                          │
+│ ┌─ Provider Cards ──────────────────────────────────┐   │
+│ │                                                    │   │
+│ │  ┌─ LM Studio (local) ──── ● connected ────────┐  │   │
+│ │  │ Base URL: http://localhost:1234               │  │   │
+│ │  │ Models: qwen3-embedding-0.6b, qwen2.5-coder  │  │   │
+│ │  │ Used by: embeddings, distillation, rerank     │  │   │
+│ │  │                    [Test ▶]  [Edit]  [Delete] │  │   │
+│ │  └──────────────────────────────────────────────┘  │   │
+│ │                                                    │   │
+│ │  ┌─ OpenRouter (cloud) ── ● connected ─────────┐  │   │
+│ │  │ Base URL: https://openrouter.ai/api/v1       │  │   │
+│ │  │ Models: anthropic/claude-3.5-sonnet           │  │   │
+│ │  │ Used by: builder_memory                       │  │   │
+│ │  │                    [Test ▶]  [Edit]  [Delete] │  │   │
+│ │  └──────────────────────────────────────────────┘  │   │
+│ │                                                    │   │
+│ │  ┌─ Ollama (local) ────── ○ not tested ────────┐  │   │
+│ │  │ Base URL: http://localhost:11434/v1           │  │   │
+│ │  │ Models: (auto-detect on test)                 │  │   │
+│ │  │ Used by: —                                    │  │   │
+│ │  │                    [Test ▶]  [Edit]  [Delete] │  │   │
+│ │  └──────────────────────────────────────────────┘  │   │
+│ └────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────┘
+```
+
+### Add/Edit Provider Dialog
+```
+┌─ Add Provider ───────────────────── [✕] │
+│                                          │
+│ Name:      [LM Studio_______________]    │
+│ Base URL:  [http://localhost:1234____]    │
+│ API Key:   [sk-... (optional)_______]    │
+│                                          │
+│ Models: (one per line)                   │
+│ ┌──────────────────────────────────┐    │
+│ │ qwen3-embedding-0.6b            │    │
+│ │ qwen2.5-coder-7b-instruct       │    │
+│ │ qwen3-4b-instruct-ranker        │    │
+│ └──────────────────────────────────┘    │
+│ [Auto-detect models ▶]                   │
+│                                          │
+│ ▸ Advanced                               │
+│   Timeout (ms):     [12000_____]         │
+│   Max tokens:       [4096______]         │
+│   Custom headers:   [___________]        │
+│                                          │
+│              [Cancel]  [Save Provider]   │
+└──────────────────────────────────────────┘
+```
+
+- **Auto-detect models**: calls `GET {base_url}/v1/models` and populates the list.
+- **Test**: sends a minimal completion request to verify connectivity.
+- **API Key**: stored encrypted. Shown as `sk-...xxxx` (masked).
+
+### Layout — Tab 2: Feature Assignment
+```
+┌──────────────────────────────────────────────────────────┐
+│ Model Providers                                          │
+│                                                          │
+│ [Providers]  [Feature Assignment]                        │
+│                                                          │
+│ Assign a provider and model to each ContextHub feature.  │
+│ Unassigned features fall back to env var defaults.       │
+│                                                          │
+│ ┌─ Feature Table ───────────────────────────────────┐   │
+│ │                                                    │   │
+│ │ Feature            Provider          Model      St │   │
+│ │────────────────────────────────────────────────── │   │
+│ │ Embeddings         [LM Studio ▾]    [qwen3-emb ▾] ● │ │
+│ │ Distillation       [LM Studio ▾]    [qwen2.5-c ▾] ● │ │
+│ │ Reranking          [LM Studio ▾]    [qwen3-4b  ▾] ● │ │
+│ │ Builder Memory     [OpenRouter ▾]   [claude-3.5▾] ● │ │
+│ │ QA Agent           [LM Studio ▾]    [qwen2.5-c ▾] ● │ │
+│ │ QC / Eval          [— default — ▾]  [— env —   ▾] ○ │ │
+│ │ Judge Agent        [— default — ▾]  [— env —   ▾] ○ │ │
+│ │ Search Aliases     [LM Studio ▾]    [qwen2.5-c ▾] ● │ │
+│ │ Commit Analysis    [LM Studio ▾]    [qwen2.5-c ▾] ● │ │
+│ │ FAQ Generation     [LM Studio ▾]    [qwen2.5-c ▾] ● │ │
+│ │ RAPTOR Summaries   [LM Studio ▾]    [qwen2.5-c ▾] ● │ │
+│ │ Chat (GUI)         [LM Studio ▾]    [qwen2.5-c ▾] ● │ │
+│ │                                                    │   │
+│ └────────────────────────────────────────────────────┘   │
+│                                                          │
+│ ● = custom assignment   ○ = using env default            │
+│                                                          │
+│ [Reset All to Defaults]                    [Save All]    │
+└──────────────────────────────────────────────────────────┘
+```
+
+### Feature → Model Mapping (complete list)
+
+| Feature | Env Var Fallback | Model Type | Notes |
+|---------|-----------------|------------|-------|
+| **Embeddings** | `EMBEDDINGS_BASE_URL` + `EMBEDDINGS_MODEL` | embedding | Required. Produces vectors. |
+| **Distillation** | `DISTILLATION_BASE_URL` + `DISTILLATION_MODEL` | chat/completion | Lesson summarization, reflection, compression |
+| **Reranking** | `RERANK_BASE_URL` + `RERANK_MODEL` | chat/completion or cross-encoder | Re-scores search results |
+| **Builder Memory** | `BUILDER_AGENT_MODEL` | chat/completion | Builds project memory artifacts |
+| **QA Agent** | `QA_AGENT_MODEL` | chat/completion | Answers questions from evidence |
+| **QC / Eval** | `QC_AGENT_MODEL` | chat/completion | Quality evaluation scoring |
+| **Judge Agent** | `JUDGE_AGENT_MODEL` | chat/completion | Evaluates lesson quality |
+| **Search Aliases** | (uses distillation) | chat/completion | Generates vocabulary bridges for lessons |
+| **Commit Analysis** | (uses distillation) | chat/completion | Analyzes git commits for lesson suggestions |
+| **FAQ Generation** | (uses distillation) | chat/completion | Builds project FAQ documents |
+| **RAPTOR Summaries** | (uses distillation) | chat/completion | Hierarchical chunk summarization |
+| **Chat (GUI)** | (uses distillation) | chat/completion | AI chat in the web dashboard |
+
+### Interactions
+- **Dropdowns are scoped**: Embeddings feature only shows embedding-capable models.
+  Chat features only show chat-capable models.
+- **"— default —"**: falls back to env var configuration. Shows the actual env var value in tooltip.
+- **Status dot**: green = GUI-assigned, gray = using env default.
+- **Test button on provider**: sends a test request, shows latency + model list response.
+- **Save All**: persists assignments to DB. Backend reads GUI assignments first, falls back to env vars.
+- **Reset All to Defaults**: clears all GUI assignments, reverts to env-var-only config.
+
+### Backend Requirements
+
+New DB table: `model_providers`
+```sql
+CREATE TABLE model_providers (
+  provider_id   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id    TEXT NOT NULL,
+  name          TEXT NOT NULL,
+  base_url      TEXT NOT NULL,
+  api_key_enc   TEXT,              -- encrypted
+  models        TEXT[] NOT NULL DEFAULT '{}',
+  timeout_ms    INT DEFAULT 12000,
+  max_tokens    INT DEFAULT 4096,
+  custom_headers JSONB DEFAULT '{}',
+  status        TEXT DEFAULT 'untested',  -- untested | connected | error
+  created_at    TIMESTAMPTZ DEFAULT now(),
+  updated_at    TIMESTAMPTZ DEFAULT now()
+);
+```
+
+New DB table: `model_assignments`
+```sql
+CREATE TABLE model_assignments (
+  project_id    TEXT NOT NULL,
+  feature       TEXT NOT NULL,     -- 'embeddings', 'distillation', 'rerank', etc.
+  provider_id   UUID REFERENCES model_providers(provider_id) ON DELETE SET NULL,
+  model_name    TEXT NOT NULL,
+  created_at    TIMESTAMPTZ DEFAULT now(),
+  PRIMARY KEY (project_id, feature)
+);
+```
+
+### New API Endpoints Needed (Model Providers)
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/model-providers` | List providers for project |
+| `POST /api/model-providers` | Add provider |
+| `PUT /api/model-providers/:id` | Update provider |
+| `DELETE /api/model-providers/:id` | Delete provider |
+| `POST /api/model-providers/:id/test` | Test provider connectivity |
+| `POST /api/model-providers/:id/detect-models` | Auto-detect available models |
+| `GET /api/model-assignments` | List feature→model assignments |
+| `PUT /api/model-assignments` | Bulk update assignments |
+| `DELETE /api/model-assignments` | Reset all to defaults |
+
+---
+
+### New API Endpoints Needed (All)
+
+| Endpoint | Purpose |
+|----------|---------|
+| **Generated Docs** | |
+| `GET /api/generated-docs` | List generated documents (FAQ, RAPTOR, QC) |
+| `GET /api/generated-docs/:id` | Get document content |
+| `POST /api/generated-docs/:id/promote` | Promote a document |
+| **Knowledge Graph** | |
+| `GET /api/kg/stats` | Symbol count, relationship count |
+| `POST /api/kg/search-symbols` | Search symbols in graph |
+| `POST /api/kg/neighbors` | Get symbol neighbors |
+| `POST /api/kg/trace-path` | Trace dependency path |
+| `POST /api/kg/lesson-impact` | Get lesson impact on codebase |
+| **Model Providers** | |
+| `GET /api/model-providers` | List providers for project |
+| `POST /api/model-providers` | Add provider |
+| `PUT /api/model-providers/:id` | Update provider |
+| `DELETE /api/model-providers/:id` | Delete provider |
+| `POST /api/model-providers/:id/test` | Test provider connectivity |
+| `POST /api/model-providers/:id/detect-models` | Auto-detect models via `/v1/models` |
+| `GET /api/model-assignments` | List feature→model assignments |
+| `PUT /api/model-assignments` | Bulk update feature assignments |
+| `DELETE /api/model-assignments` | Reset all assignments to env defaults |
+| **System** | |
+| `GET /api/system/info` (extend) | Feature flags, subsystem on/off status |
+
+---
+
 ## v2 Backlog (Deferred)
 
 These features are out of scope for v1 but are acknowledged and planned:
