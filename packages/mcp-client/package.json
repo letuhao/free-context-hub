@@ -1,0 +1,30 @@
+{
+  "name": "@contexthub/mcp-client",
+  "version": "0.1.0",
+  "description": "MCP stdio client that proxies tool calls to the ContextHub REST API",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "contexthub-mcp": "bin/contexthub-mcp.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist",
+    "bin"
+  ]
+}

@@ -302,10 +302,22 @@ export async function addLesson(payload: LessonPayload): Promise<AddLessonResult
   };
 }
 
+export type LessonSortField = 'created_at' | 'title' | 'lesson_type' | 'status';
+export type SortOrder = 'asc' | 'desc';
+
 export type ListLessonsParams = {
   projectId: string;
   limit?: number;
+  /** Cursor-based pagination (legacy, still supported). */
   after?: string;
+  /** Offset-based pagination (for page-number navigation). */
+  offset?: number;
+  /** Sort field (default: created_at). */
+  sort?: LessonSortField;
+  /** Sort order (default: desc). */
+  order?: SortOrder;
+  /** Text search — filters by title/content substring (case-insensitive). */
+  q?: string;
   filters?: {
     lesson_type?: LessonType;
     tags_any?: string[];
@@ -317,7 +329,18 @@ export type ListLessonsResult = {
   items: LessonItem[];
   next_cursor?: string;
   total_count: number;
+  /** Current page number (1-based, only when offset pagination used). */
+  page?: number;
+  /** Total pages (only when offset pagination used). */
+  total_pages?: number;
 };
+
+const VALID_SORT_FIELDS: Set<string> = new Set(['created_at', 'title', 'lesson_type', 'status']);
+
+/** Escape ILIKE wildcards in user input so `%` and `_` are matched literally. */
+function escapeIlike(s: string): string {
+  return s.replace(/[%_\\]/g, '\\$&');
+}
 
 export async function listLessons(params: ListLessonsParams): Promise<ListLessonsResult> {
   const pool = getDbPool();
@@ -325,7 +348,10 @@ export async function listLessons(params: ListLessonsParams): Promise<ListLesson
   const lessonType = params.filters?.lesson_type;
   const tagsAny = (params.filters?.tags_any ?? []).filter(Boolean);
   const status = params.filters?.status;
+  const sortField = VALID_SORT_FIELDS.has(params.sort ?? '') ? params.sort! : 'created_at';
+  const sortOrder = params.order === 'asc' ? 'ASC' : 'DESC';
 
+  // ── Build WHERE clause (shared by count + data queries) ──
   const whereParts: string[] = ['project_id = $1'];
   const whereParams: any[] = [params.projectId];
 
@@ -344,55 +370,67 @@ export async function listLessons(params: ListLessonsParams): Promise<ListLesson
     whereParts.push(`status = $${whereParams.length}`);
   }
 
+  if (params.q && params.q.trim().length > 0) {
+    whereParams.push(`%${escapeIlike(params.q.trim())}%`);
+    whereParts.push(`(title ILIKE $${whereParams.length} OR content ILIKE $${whereParams.length})`);
+  }
+
+  const whereSql = whereParts.join(' AND ');
+
+  // ── Count ──
   const countRes = await pool.query(
-    `SELECT COUNT(*)::int AS total_count FROM lessons WHERE ${whereParts.join(' AND ')};`,
+    `SELECT COUNT(*)::int AS total_count FROM lessons WHERE ${whereSql};`,
     [...whereParams],
   );
   const totalCount = Number(countRes.rows?.[0]?.total_count ?? 0);
 
-  let cursorClause = '';
-  if (params.after && params.after.trim().length > 0) {
-    const { createdAtIso, lessonId } = decodeCursor(params.after.trim());
-    whereParams.push(createdAtIso);
-    const createdAtParam = `$${whereParams.length}::timestamptz`;
-    whereParams.push(lessonId);
-    const lessonIdParam = `$${whereParams.length}::uuid`;
-    cursorClause = ` AND (created_at, lesson_id) < (${createdAtParam}, ${lessonIdParam})`;
+  // ── Pagination: snapshot param count before adding pagination-specific params ──
+  const dataParams = [...whereParams];
+  const useOffset = params.offset !== undefined && params.offset >= 0;
+
+  let dataWhereSql = whereSql;
+  let paginationSql: string;
+
+  if (useOffset) {
+    dataParams.push(limit);
+    dataParams.push(params.offset);
+    paginationSql = `LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}`;
+  } else {
+    // Cursor-based (legacy)
+    if (params.after && params.after.trim().length > 0) {
+      const { createdAtIso, lessonId } = decodeCursor(params.after.trim());
+      dataParams.push(createdAtIso);
+      dataParams.push(lessonId);
+      dataWhereSql += ` AND (created_at, lesson_id) < ($${dataParams.length - 1}::timestamptz, $${dataParams.length}::uuid)`;
+    }
+    dataParams.push(limit);
+    paginationSql = `LIMIT $${dataParams.length}`;
   }
 
-  const whereSql = whereParts.join(' AND ') + cursorClause;
-
-  whereParams.push(limit);
-  const limitParam = `$${whereParams.length}`;
+  const orderSql = `ORDER BY ${sortField} ${sortOrder}, lesson_id ${sortOrder}`;
 
   const res = await pool.query(
-    `SELECT
-      lesson_id,
-      project_id,
-      lesson_type,
-      title,
-      content,
-      tags,
-      source_refs,
-      created_at,
-      updated_at,
-      captured_by,
-      summary,
-      quick_action,
-      status,
-      superseded_by
+    `SELECT lesson_id, project_id, lesson_type, title, content, tags, source_refs,
+            created_at, updated_at, captured_by, summary, quick_action, status, superseded_by
      FROM lessons
-     WHERE ${whereSql}
-     ORDER BY created_at DESC, lesson_id DESC
-     LIMIT ${limitParam};`,
-    whereParams,
+     WHERE ${dataWhereSql}
+     ${orderSql}
+     ${paginationSql};`,
+    dataParams,
   );
 
   const items = (res.rows ?? []).map(mapLessonRow);
   const last = items.length ? items[items.length - 1] : null;
   const next_cursor = last ? encodeCursor(new Date(last.created_at).toISOString(), last.lesson_id) : undefined;
 
-  return { items, next_cursor, total_count: totalCount };
+  const result: ListLessonsResult = { items, next_cursor, total_count: totalCount };
+
+  if (useOffset) {
+    result.total_pages = Math.max(1, Math.ceil(totalCount / limit));
+    result.page = Math.floor((params.offset ?? 0) / limit) + 1;
+  }
+
+  return result;
 }
 
 export type SearchLessonsParams = {

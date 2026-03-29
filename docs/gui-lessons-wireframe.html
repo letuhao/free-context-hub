@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ContextHub — Lessons Page Wireframe v2</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #09090b; color: #e4e4e7; line-height: 1.5; }
+
+  /* ── Shell ── */
+  .shell { display: flex; height: 100vh; }
+  .sidebar { width: 220px; background: #0a0a0b; border-right: 1px solid #27272a; display: flex; flex-direction: column; flex-shrink: 0; }
+  .sidebar-logo { padding: 16px 16px 12px; border-bottom: 1px solid #1c1c1f; }
+  .sidebar-logo h4 { font-size: 14px; color: #fafafa; font-weight: 600; }
+  .sidebar-logo p { font-size: 11px; color: #52525b; }
+  .sidebar-select { margin: 10px 10px 4px; padding: 6px 10px; background: #18181b; border: 1px solid #27272a; border-radius: 6px; color: #a1a1aa; font-size: 12px; width: calc(100% - 20px); }
+  .sidebar-nav { padding: 6px 8px; flex: 1; }
+  .sidebar-item { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 6px; font-size: 13px; color: #71717a; text-decoration: none; margin-bottom: 1px; cursor: pointer; }
+  .sidebar-item.active { background: #27272a; color: #fafafa; }
+  .sidebar-item:hover:not(.active) { background: #1c1c1f; color: #a1a1aa; }
+  .sidebar-bottom { border-top: 1px solid #1c1c1f; padding: 10px 12px; display: flex; align-items: center; gap: 6px; font-size: 11px; color: #52525b; }
+  .health-dot { width: 7px; height: 7px; border-radius: 50%; background: #10b981; }
+  .main { flex: 1; overflow-y: auto; }
+
+  /* ── Page ── */
+  .page { padding: 24px 32px; max-width: 1100px; }
+  .page-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #27272a; padding-bottom: 16px; margin-bottom: 20px; }
+  .page-title { font-size: 18px; font-weight: 600; color: #fafafa; }
+  .page-subtitle { font-size: 13px; color: #71717a; margin-top: 2px; }
+
+  /* ── Buttons ── */
+  .btn { padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 4px; }
+  .btn-primary { background: #fafafa; color: #09090b; }
+  .btn-primary:hover { background: #e4e4e7; }
+  .btn-outline { background: transparent; border: 1px solid #3f3f46; color: #a1a1aa; }
+  .btn-outline:hover { border-color: #52525b; color: #d4d4d8; }
+  .btn-ghost { background: transparent; color: #a1a1aa; border: none; }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+  .btn[disabled] { opacity: 0.35; pointer-events: none; }
+
+  /* ── Search ── */
+  .search-row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .search-bar { flex: 1; display: flex; align-items: center; gap: 8px; padding: 8px 14px; border: 1px solid #27272a; border-radius: 8px; background: #18181b; }
+  .search-bar input { flex: 1; background: transparent; border: none; color: #d4d4d8; font-size: 13px; outline: none; }
+  .search-bar input::placeholder { color: #52525b; }
+  .search-icon { color: #52525b; font-size: 14px; }
+  .search-hint { font-size: 10px; color: #3f3f46; background: #27272a; padding: 1px 5px; border-radius: 3px; font-family: monospace; }
+
+  /* ── Search mode toggle ── */
+  .search-mode { display: flex; border: 1px solid #27272a; border-radius: 8px; overflow: hidden; flex-shrink: 0; }
+  .search-mode button { padding: 8px 12px; font-size: 12px; background: #18181b; color: #52525b; border: none; cursor: pointer; white-space: nowrap; }
+  .search-mode button.active { background: #27272a; color: #e4e4e7; }
+  .search-mode button:hover:not(.active) { color: #a1a1aa; }
+  .search-mode button:first-child { border-right: 1px solid #27272a; }
+
+  /* ── Filter chips ── */
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 9999px; font-size: 12px; background: #27272a; color: #a1a1aa; }
+  .chip .x { cursor: pointer; color: #52525b; font-weight: 700; }
+  .chip .x:hover { color: #a1a1aa; }
+  .chip-clear { font-size: 12px; color: #52525b; cursor: pointer; border: none; background: none; }
+  .chip-clear:hover { color: #a1a1aa; }
+
+  /* ── Filter dropdown ── */
+  .filter-panel { position: absolute; top: 100%; right: 0; width: 280px; background: #18181b; border: 1px solid #3f3f46; border-radius: 10px; padding: 16px; z-index: 20; box-shadow: 0 8px 30px rgba(0,0,0,0.5); margin-top: 4px; }
+  .filter-group { margin-bottom: 14px; }
+  .filter-group:last-child { margin-bottom: 0; }
+  .filter-label { font-size: 11px; color: #71717a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .filter-options { display: flex; flex-wrap: wrap; gap: 4px; }
+  .filter-opt { padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; border: 1px solid #27272a; color: #71717a; background: transparent; }
+  .filter-opt:hover { border-color: #3f3f46; color: #a1a1aa; }
+  .filter-opt.active { background: #27272a; color: #fafafa; border-color: #3f3f46; }
+  .filter-footer { display: flex; justify-content: space-between; margin-top: 14px; padding-top: 10px; border-top: 1px solid #27272a; }
+
+  /* ── Toolbar row (density + view controls) ── */
+  .toolbar-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .hidden-count { font-size: 12px; color: #52525b; }
+  .hidden-count a { color: #3b82f6; text-decoration: none; cursor: pointer; }
+  .hidden-count a:hover { text-decoration: underline; }
+  .density-toggle { display: flex; border: 1px solid #27272a; border-radius: 6px; overflow: hidden; }
+  .density-toggle button { padding: 3px 10px; font-size: 11px; background: transparent; color: #52525b; border: none; cursor: pointer; }
+  .density-toggle button.active { background: #27272a; color: #d4d4d8; }
+  .density-toggle button:first-child { border-right: 1px solid #27272a; }
+
+  /* ── Table ── */
+  .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .data-table th { text-align: left; padding: 8px 12px; color: #52525b; font-weight: 500; border-bottom: 1px solid #27272a; font-size: 12px; cursor: pointer; user-select: none; white-space: nowrap; }
+  .data-table th:hover { color: #a1a1aa; }
+  .data-table th .sort-arrow { font-size: 10px; margin-left: 3px; }
+  .data-table td { padding: 10px 12px; border-bottom: 1px solid #1c1c1f; color: #d4d4d8; }
+  .data-table.compact td { padding: 6px 12px; font-size: 12px; }
+  .data-table.compact th { padding: 6px 12px; }
+  .data-table tr:hover td { background: #141416; }
+  .data-table tr.focused td { background: #141416; border-left: 2px solid #3b82f6; }
+  .data-table tr.focused td:first-child { padding-left: 10px; }
+  .data-table tr { cursor: pointer; }
+  .data-table .cb { width: 32px; }
+  .data-table input[type=checkbox] { accent-color: #3b82f6; cursor: pointer; }
+  .data-table .title-cell { max-width: 320px; }
+  .data-table .title-text { color: #e4e4e7; }
+  .data-table .time { color: #52525b; font-size: 12px; }
+
+  /* ── Badges ── */
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 9999px; font-size: 11px; font-weight: 500; }
+  .badge-decision { background: rgba(59,130,246,0.1); color: #60a5fa; }
+  .badge-guardrail { background: rgba(239,68,68,0.1); color: #f87171; }
+  .badge-workaround { background: rgba(245,158,11,0.1); color: #fbbf24; }
+  .badge-preference { background: rgba(168,85,247,0.1); color: #c084fc; }
+  .badge-general { background: rgba(113,113,122,0.3); color: #a1a1aa; }
+  .badge-active { background: rgba(16,185,129,0.1); color: #34d399; }
+  .badge-draft { background: rgba(113,113,122,0.2); color: #a1a1aa; }
+  .badge-superseded { background: rgba(245,158,11,0.1); color: #fbbf24; }
+  .tag { display: inline-block; padding: 1px 7px; border-radius: 4px; font-size: 11px; background: #27272a; color: #71717a; margin-right: 3px; cursor: pointer; transition: color 0.1s; }
+  .tag:hover { color: #d4d4d8; background: #3f3f46; }
+  .tag-more { font-size: 11px; color: #52525b; cursor: pointer; }
+  .tag-more:hover { color: #a1a1aa; }
+
+  /* ── Pagination v2 ── */
+  .pagination { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; font-size: 12px; color: #52525b; }
+  .pagination .info { display: flex; align-items: center; gap: 12px; }
+  .pagination .pages { display: flex; align-items: center; gap: 2px; }
+  .page-btn { min-width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; font-size: 12px; cursor: pointer; border: 1px solid transparent; background: transparent; color: #71717a; }
+  .page-btn:hover:not(.active):not([disabled]) { background: #1c1c1f; color: #d4d4d8; }
+  .page-btn.active { background: #27272a; color: #fafafa; border-color: #3f3f46; }
+  .page-btn[disabled] { opacity: 0.3; cursor: default; }
+  .page-ellipsis { color: #3f3f46; padding: 0 4px; font-size: 12px; }
+  .goto { display: flex; align-items: center; gap: 4px; margin-left: 12px; }
+  .goto input { width: 40px; padding: 3px 6px; background: #18181b; border: 1px solid #27272a; border-radius: 4px; color: #a1a1aa; font-size: 11px; text-align: center; outline: none; }
+  .goto input:focus { border-color: #3f3f46; }
+
+  /* ── Bulk bar ── */
+  .bulk-bar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; background: rgba(30,41,59,0.5); border: 1px solid rgba(51,65,85,0.4); border-radius: 8px; margin-bottom: 12px; font-size: 13px; animation: slideDown 0.15s ease-out; }
+  .bulk-count { color: #93c5fd; font-weight: 600; }
+  @keyframes slideDown { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* ── Results indicator ── */
+  .results-indicator { font-size: 12px; color: #52525b; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .results-indicator .dot { width: 5px; height: 5px; border-radius: 50%; }
+  .results-indicator .dot-semantic { background: #8b5cf6; }
+  .results-indicator .dot-text { background: #3b82f6; }
+
+  /* ── Row menu ── */
+  .row-menu { position: relative; }
+  .row-menu-btn { background: none; border: none; color: #3f3f46; cursor: pointer; font-size: 16px; padding: 2px 6px; border-radius: 4px; }
+  .row-menu-btn:hover { background: #27272a; color: #a1a1aa; }
+  .row-menu-dropdown { position: absolute; right: 0; top: 100%; background: #1c1c1f; border: 1px solid #3f3f46; border-radius: 8px; padding: 4px; min-width: 160px; z-index: 10; box-shadow: 0 8px 24px rgba(0,0,0,0.4); display: none; }
+  .row-menu:hover .row-menu-dropdown { display: block; }
+  .row-menu-item { display: block; width: 100%; text-align: left; padding: 6px 10px; border-radius: 4px; font-size: 12px; color: #a1a1aa; border: none; background: none; cursor: pointer; }
+  .row-menu-item:hover { background: #27272a; color: #fafafa; }
+  .row-menu-item.danger { color: #f87171; }
+  .row-menu-item.danger:hover { background: rgba(239,68,68,0.1); }
+
+  /* ── Slide-over ── */
+  .slideover-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 40; display: none; }
+  .slideover-backdrop.open { display: flex; justify-content: flex-end; }
+  .slideover { width: 420px; background: #18181b; border-left: 1px solid #27272a; height: 100%; display: flex; flex-direction: column; animation: slideIn 0.2s ease-out; }
+  @keyframes slideIn { from { transform: translateX(30px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  .so-header { display: flex; justify-content: space-between; align-items: flex-start; padding: 20px 20px 16px; border-bottom: 1px solid #27272a; }
+  .so-title { font-size: 15px; font-weight: 600; color: #fafafa; line-height: 1.4; }
+  .so-close { color: #52525b; cursor: pointer; font-size: 20px; border: none; background: none; line-height: 1; padding: 4px; }
+  .so-close:hover { color: #a1a1aa; }
+  .so-body { flex: 1; overflow-y: auto; padding: 20px; }
+  .so-section { margin-bottom: 18px; }
+  .so-section-label { font-size: 11px; color: #52525b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .so-content { font-size: 13px; color: #a1a1aa; line-height: 1.65; }
+  .so-meta { display: flex; gap: 16px; font-size: 12px; color: #3f3f46; margin-bottom: 16px; }
+  .so-meta span { font-family: 'Segoe UI Mono', 'Cascadia Code', monospace; }
+  .so-footer { padding: 12px 20px; border-top: 1px solid #27272a; display: flex; gap: 8px; align-items: center; }
+  .so-link { font-size: 12px; color: #3b82f6; text-decoration: none; margin-left: auto; }
+  .so-link:hover { text-decoration: underline; }
+  .so-source { font-size: 12px; color: #52525b; font-family: monospace; line-height: 1.8; }
+
+  /* ── Add dialog ── */
+  .dialog-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 50; display: none; align-items: center; justify-content: center; }
+  .dialog-backdrop.open { display: flex; }
+  .dialog { width: 520px; max-height: 80vh; overflow-y: auto; background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 24px; animation: fadeIn 0.15s ease-out; }
+  @keyframes fadeIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
+  .dialog-title { font-size: 16px; font-weight: 600; color: #fafafa; margin-bottom: 20px; }
+  .form-group { margin-bottom: 14px; }
+  .form-label { display: block; font-size: 12px; color: #71717a; margin-bottom: 4px; }
+  .form-input { width: 100%; padding: 8px 12px; background: #09090b; border: 1px solid #3f3f46; border-radius: 6px; color: #e4e4e7; font-size: 13px; outline: none; }
+  .form-input:focus { border-color: #52525b; }
+  .form-select { width: 100%; padding: 8px 12px; background: #09090b; border: 1px solid #3f3f46; border-radius: 6px; color: #e4e4e7; font-size: 13px; outline: none; appearance: auto; }
+  .form-tags { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 6px 8px; background: #09090b; border: 1px solid #3f3f46; border-radius: 6px; min-height: 36px; }
+  .form-tag { display: inline-flex; align-items: center; gap: 2px; padding: 2px 8px; background: #27272a; border-radius: 4px; font-size: 12px; color: #a1a1aa; }
+  .form-tag .rm { cursor: pointer; color: #52525b; font-weight: 700; }
+  .form-tag-input { border: none; background: transparent; color: #e4e4e7; font-size: 12px; outline: none; min-width: 60px; flex: 1; }
+  .advanced-toggle { font-size: 13px; color: #52525b; cursor: pointer; border: none; background: none; padding: 4px 0; display: flex; align-items: center; gap: 4px; margin-bottom: 12px; }
+  .advanced-toggle:hover { color: #a1a1aa; }
+  .advanced-section { border-top: 1px solid #27272a; padding-top: 14px; margin-top: 4px; }
+  .guardrail-fields { background: #111113; border: 1px solid #27272a; border-radius: 8px; padding: 14px; margin-top: 8px; }
+  .guardrail-fields .form-group:last-child { margin-bottom: 0; }
+  .dialog-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; padding-top: 16px; border-top: 1px solid #27272a; }
+
+  /* ── Content editor with preview ── */
+  .content-tabs { display: flex; gap: 0; margin-bottom: 6px; }
+  .content-tab { padding: 4px 12px; font-size: 12px; background: transparent; color: #52525b; border: none; cursor: pointer; border-bottom: 2px solid transparent; }
+  .content-tab.active { color: #d4d4d8; border-bottom-color: #d4d4d8; }
+  .content-tab:hover:not(.active) { color: #a1a1aa; }
+  .form-textarea { width: 100%; padding: 8px 12px; background: #09090b; border: 1px solid #3f3f46; border-radius: 6px; color: #e4e4e7; font-size: 13px; outline: none; min-height: 120px; resize: vertical; font-family: inherit; }
+  .preview-box { padding: 10px 14px; background: #09090b; border: 1px solid #3f3f46; border-radius: 6px; min-height: 120px; font-size: 13px; color: #a1a1aa; line-height: 1.6; }
+  .preview-box strong { color: #d4d4d8; }
+  .preview-box code { background: #27272a; padding: 1px 5px; border-radius: 3px; font-size: 12px; color: #a1a1aa; }
+
+  .relative { position: relative; }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <!-- ═══ SIDEBAR ═══ -->
+  <div class="sidebar">
+    <div class="sidebar-logo"><h4>ContextHub</h4><p>Knowledge Dashboard</p></div>
+    <input class="sidebar-select" value="free-context-hub" />
+    <div class="sidebar-nav">
+      <a class="sidebar-item">📊 Dashboard</a>
+      <a class="sidebar-item">💬 Chat</a>
+      <a class="sidebar-item active">📚 Lessons</a>
+      <a class="sidebar-item">🛡 Guardrails</a>
+      <a class="sidebar-item">📁 Projects</a>
+      <a class="sidebar-item">⚡ Jobs</a>
+    </div>
+    <div class="sidebar-bottom"><span class="health-dot"></span> API connected</div>
+  </div>
+
+  <!-- ═══ MAIN ═══ -->
+  <div class="main">
+    <div class="page">
+
+      <!-- Page Header -->
+      <div class="page-header">
+        <div>
+          <div class="page-title">Lessons</div>
+          <div class="page-subtitle">Browse, search, and manage project knowledge</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-outline">Export</button>
+          <button class="btn btn-primary" onclick="document.getElementById('addDialog').classList.add('open')">+ Add Lesson</button>
+        </div>
+      </div>
+
+      <!-- ══ FIX #2: Search with dual mode toggle ══ -->
+      <div class="search-row">
+        <div class="search-bar" style="flex:1">
+          <span class="search-icon">🔍</span>
+          <input id="searchInput" placeholder="Search lessons..." oninput="toggleSearchMode()">
+          <span class="search-hint">/</span>
+          <div class="relative">
+            <button class="btn btn-ghost btn-sm" onclick="toggleFilterPanel()" style="font-size:12px">Filters ▾</button>
+            <!-- Filter dropdown panel -->
+            <div id="filterPanel" class="filter-panel" style="display:none">
+              <div class="filter-group">
+                <div class="filter-label">Type</div>
+                <div class="filter-options">
+                  <button class="filter-opt active">All</button>
+                  <button class="filter-opt" onclick="setFilter(this)">decision</button>
+                  <button class="filter-opt" onclick="setFilter(this)">guardrail</button>
+                  <button class="filter-opt" onclick="setFilter(this)">workaround</button>
+                  <button class="filter-opt" onclick="setFilter(this)">preference</button>
+                  <button class="filter-opt" onclick="setFilter(this)">general_note</button>
+                </div>
+              </div>
+              <div class="filter-group">
+                <div class="filter-label">Status</div>
+                <div class="filter-options">
+                  <button class="filter-opt active">All</button>
+                  <button class="filter-opt" onclick="setFilter(this)">active</button>
+                  <button class="filter-opt" onclick="setFilter(this)">draft</button>
+                  <button class="filter-opt" onclick="setFilter(this)">superseded</button>
+                  <button class="filter-opt" onclick="setFilter(this)">archived</button>
+                </div>
+              </div>
+              <div class="filter-group">
+                <div class="filter-label">Tags</div>
+                <input class="form-input" placeholder="e.g. database, git" style="font-size:12px;padding:6px 10px">
+              </div>
+              <div class="filter-footer">
+                <button class="btn btn-ghost btn-sm">Clear All</button>
+                <button class="btn btn-outline btn-sm" onclick="toggleFilterPanel()">Apply</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="search-mode">
+          <button class="active" id="modeText" onclick="setSearchMode('text')">Text</button>
+          <button id="modeSemantic" onclick="setSearchMode('semantic')">Semantic</button>
+        </div>
+      </div>
+
+      <!-- Filter chips -->
+      <div class="chips" id="filterChips">
+        <span class="chip">Status: active <span class="x" onclick="this.parentElement.remove()">&times;</span></span>
+      </div>
+
+      <!-- ══ FIX #3: Hidden count for non-active lessons ══ -->
+      <div class="toolbar-row">
+        <div class="hidden-count" id="hiddenCount">
+          Showing 98 active lessons <span style="color:#3f3f46">&middot;</span> 44 archived/superseded hidden &middot; <a onclick="showAll()">Show all</a>
+        </div>
+        <!-- ══ FIX #6: Density toggle ══ -->
+        <div class="density-toggle">
+          <button class="active" onclick="setDensity('comfortable',this)">Comfortable</button>
+          <button onclick="setDensity('compact',this)">Compact</button>
+        </div>
+      </div>
+
+      <!-- Search results indicator -->
+      <div class="results-indicator" id="searchIndicator" style="display:none">
+        <span class="dot" id="searchDot"></span>
+        <span id="searchModeLabel"></span> results for "<span id="searchQuery"></span>"
+      </div>
+
+      <!-- Bulk action bar -->
+      <div class="bulk-bar" id="bulkBar" style="display:none">
+        <span class="bulk-count" id="bulkCount">3 selected</span>
+        <button class="btn btn-outline btn-sm">Archive</button>
+        <button class="btn btn-outline btn-sm">Change Status ▾</button>
+        <button class="btn btn-outline btn-sm">Export JSON</button>
+        <button class="chip-clear" style="margin-left:auto" onclick="uncheckAll()">Deselect all</button>
+      </div>
+
+      <!-- ══ Table with FIX #5 (sortable headers), #7 (focus indicator), #4 (clickable tags) ══ -->
+      <div style="border:1px solid #27272a;border-radius:8px;overflow:hidden">
+        <table class="data-table" id="dataTable">
+          <thead>
+            <tr>
+              <th class="cb"><input type="checkbox" onchange="toggleAllCheckboxes(this)"></th>
+              <th onclick="toggleSort(this,'title')">Title <span class="sort-arrow"></span></th>
+              <th onclick="toggleSort(this,'type')">Type <span class="sort-arrow"></span></th>
+              <th onclick="toggleSort(this,'status')">Status <span class="sort-arrow"></span></th>
+              <th>Tags</th>
+              <th onclick="toggleSort(this,'created')" style="color:#a1a1aa">Created <span class="sort-arrow">▾</span></th>
+              <th style="width:40px;cursor:default"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- ══ FIX #7: first row has focus indicator ══ -->
+            <tr class="focused" onclick="openDetail()">
+              <td class="cb" onclick="event.stopPropagation()"><input type="checkbox" onchange="updateBulkBar()" checked></td>
+              <td class="title-cell"><span class="title-text">Use pgvector for all embedding storage</span></td>
+              <td><span class="badge badge-decision">decision</span></td>
+              <td><span class="badge badge-active">active</span></td>
+              <!-- ══ FIX #4: clickable tags with +N overflow ══ -->
+              <td><span class="tag" onclick="event.stopPropagation();filterByTag('database')">database</span><span class="tag" onclick="event.stopPropagation();filterByTag('postgres')">postgres</span><span class="tag-more" onclick="event.stopPropagation()" title="embeddings, pgvector">+2</span></td>
+              <td class="time">2h ago</td>
+              <td onclick="event.stopPropagation()"><div class="row-menu"><button class="row-menu-btn">⋯</button><div class="row-menu-dropdown"><button class="row-menu-item">Edit Status</button><button class="row-menu-item">Copy ID</button><button class="row-menu-item">Copy as JSON</button><button class="row-menu-item danger">Archive</button></div></div></td>
+            </tr>
+            <tr onclick="openDetail()">
+              <td class="cb" onclick="event.stopPropagation()"><input type="checkbox" onchange="updateBulkBar()" checked></td>
+              <td class="title-cell"><span class="title-text">Never force-push to main branch</span></td>
+              <td><span class="badge badge-guardrail">guardrail</span></td>
+              <td><span class="badge badge-active">active</span></td>
+              <td><span class="tag" onclick="event.stopPropagation();filterByTag('git')">git</span><span class="tag" onclick="event.stopPropagation();filterByTag('safety')">safety</span></td>
+              <td class="time">1d ago</td>
+              <td onclick="event.stopPropagation()"><div class="row-menu"><button class="row-menu-btn">⋯</button></div></td>
+            </tr>
+            <tr onclick="openDetail()">
+              <td class="cb" onclick="event.stopPropagation()"><input type="checkbox" onchange="updateBulkBar()" checked></td>
+              <td class="title-cell"><span class="title-text">Redis cache TTL must be &lt; 30 min for embeddings</span></td>
+              <td><span class="badge badge-workaround">workaround</span></td>
+              <td><span class="badge badge-active">active</span></td>
+              <td><span class="tag" onclick="event.stopPropagation();filterByTag('cache')">cache</span><span class="tag" onclick="event.stopPropagation();filterByTag('redis')">redis</span></td>
+              <td class="time">3d ago</td>
+              <td onclick="event.stopPropagation()"><div class="row-menu"><button class="row-menu-btn">⋯</button></div></td>
+            </tr>
+            <tr onclick="openDetail()">
+              <td class="cb" onclick="event.stopPropagation()"><input type="checkbox" onchange="updateBulkBar()"></td>
+              <td class="title-cell"><span class="title-text">Use Geist font family for all UI</span></td>
+              <td><span class="badge badge-preference">preference</span></td>
+              <td><span class="badge badge-active">active</span></td>
+              <td><span class="tag" onclick="event.stopPropagation();filterByTag('ui')">ui</span><span class="tag" onclick="event.stopPropagation();filterByTag('design')">design</span></td>
+              <td class="time">1w ago</td>
+              <td onclick="event.stopPropagation()"><div class="row-menu"><button class="row-menu-btn">⋯</button></div></td>
+            </tr>
+            <tr onclick="openDetail()">
+              <td class="cb" onclick="event.stopPropagation()"><input type="checkbox" onchange="updateBulkBar()"></td>
+              <td class="title-cell"><span class="title-text">Require backup before any DROP TABLE migration</span></td>
+              <td><span class="badge badge-guardrail">guardrail</span></td>
+              <td><span class="badge badge-active">active</span></td>
+              <td><span class="tag" onclick="event.stopPropagation();filterByTag('database')">database</span><span class="tag" onclick="event.stopPropagation();filterByTag('safety')">safety</span></td>
+              <td class="time">2w ago</td>
+              <td onclick="event.stopPropagation()"><div class="row-menu"><button class="row-menu-btn">⋯</button></div></td>
+            </tr>
+            <tr onclick="openDetail()">
+              <td class="cb" onclick="event.stopPropagation()"><input type="checkbox" onchange="updateBulkBar()"></td>
+              <td class="title-cell"><span class="title-text">Run integration tests before deploy to production</span></td>
+              <td><span class="badge badge-guardrail">guardrail</span></td>
+              <td><span class="badge badge-active">active</span></td>
+              <td><span class="tag" onclick="event.stopPropagation();filterByTag('ci')">ci</span><span class="tag" onclick="event.stopPropagation();filterByTag('deploy')">deploy</span></td>
+              <td class="time">3w ago</td>
+              <td onclick="event.stopPropagation()"><div class="row-menu"><button class="row-menu-btn">⋯</button></div></td>
+            </tr>
+            <tr onclick="openDetail()">
+              <td class="cb" onclick="event.stopPropagation()"><input type="checkbox" onchange="updateBulkBar()"></td>
+              <td class="title-cell"><span class="title-text">Prefer composition over inheritance in services</span></td>
+              <td><span class="badge badge-preference">preference</span></td>
+              <td><span class="badge badge-active">active</span></td>
+              <td><span class="tag" onclick="event.stopPropagation();filterByTag('architecture')">architecture</span></td>
+              <td class="time">1mo ago</td>
+              <td onclick="event.stopPropagation()"><div class="row-menu"><button class="row-menu-btn">⋯</button></div></td>
+            </tr>
+            <tr onclick="openDetail()">
+              <td class="cb" onclick="event.stopPropagation()"><input type="checkbox" onchange="updateBulkBar()"></td>
+              <td class="title-cell"><span class="title-text">Always use parameterized queries, never string concat</span></td>
+              <td><span class="badge badge-guardrail">guardrail</span></td>
+              <td><span class="badge badge-active">active</span></td>
+              <td><span class="tag" onclick="event.stopPropagation();filterByTag('database')">database</span><span class="tag" onclick="event.stopPropagation();filterByTag('security')">security</span></td>
+              <td class="time">1mo ago</td>
+              <td onclick="event.stopPropagation()"><div class="row-menu"><button class="row-menu-btn">⋯</button></div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ══ FIX #1: Page-number pagination with jump ══ -->
+      <div class="pagination">
+        <div class="info">
+          <span>Showing 41–60 of 842 lessons</span>
+        </div>
+        <div style="display:flex;align-items:center">
+          <div class="pages">
+            <button class="page-btn" title="Previous">←</button>
+            <button class="page-btn">1</button>
+            <span class="page-ellipsis">…</span>
+            <button class="page-btn">2</button>
+            <button class="page-btn active">3</button>
+            <button class="page-btn">4</button>
+            <button class="page-btn">5</button>
+            <span class="page-ellipsis">…</span>
+            <button class="page-btn">43</button>
+            <button class="page-btn" title="Next">→</button>
+          </div>
+          <div class="goto">
+            <span style="font-size:11px;color:#52525b">Go to</span>
+            <input value="" placeholder="#" onkeydown="if(event.key==='Enter')alert('Jump to page '+this.value)">
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SLIDE-OVER ═══ -->
+<div class="slideover-backdrop" id="detailPanel" onclick="if(event.target===this)closeDetail()">
+  <div class="slideover">
+    <div class="so-header">
+      <div>
+        <div class="so-title">Use pgvector for all embedding storage</div>
+        <div style="margin-top:8px">
+          <span class="badge badge-decision">decision</span>
+          <span class="badge badge-active" style="margin-left:4px">active</span>
+        </div>
+      </div>
+      <button class="so-close" onclick="closeDetail()">&times;</button>
+    </div>
+    <div class="so-body">
+      <div class="so-meta">
+        <span>ID: a1b2c3d4</span>
+        <span>2026-03-15</span>
+        <span>by claude-code</span>
+      </div>
+      <div class="so-section">
+        <div class="so-section-label">Content</div>
+        <div class="so-content">
+          We chose <strong style="color:#d4d4d8">pgvector</strong> over Pinecone because it is fully self-hosted — zero egress cost, and the embeddings live directly alongside our PostgreSQL data.<br><br>
+          Configuration:<br>
+          &bull; Vector dimensions: <code style="color:#a1a1aa;background:#27272a;padding:1px 5px;border-radius:3px;font-size:12px">1024</code> (qwen3-embedding-0.6b)<br>
+          &bull; Index type: <code style="color:#a1a1aa;background:#27272a;padding:1px 5px;border-radius:3px;font-size:12px">ivfflat</code> with <code style="color:#a1a1aa;background:#27272a;padding:1px 5px;border-radius:3px;font-size:12px">lists = 100</code><br>
+          &bull; Distance function: cosine similarity
+        </div>
+      </div>
+      <div class="so-section">
+        <div class="so-section-label">Tags</div>
+        <div>
+          <span class="chip" style="cursor:pointer" onclick="closeDetail();filterByTag('database')">database</span>
+          <span class="chip" style="cursor:pointer" onclick="closeDetail();filterByTag('postgres')">postgres</span>
+          <span class="chip" style="cursor:pointer" onclick="closeDetail();filterByTag('embeddings')">embeddings</span>
+          <span class="chip" style="cursor:pointer" onclick="closeDetail();filterByTag('pgvector')">pgvector</span>
+        </div>
+      </div>
+      <div class="so-section">
+        <div class="so-section-label">Source Refs</div>
+        <div class="so-source">src/db/client.ts:42<br>src/services/embedder.ts:7<br>docs/adr/003-embedding-store.md</div>
+      </div>
+    </div>
+    <div class="so-footer">
+      <button class="btn btn-outline btn-sm">Mark Superseded</button>
+      <button class="btn btn-outline btn-sm">Archive</button>
+      <button class="btn btn-ghost btn-sm">Copy JSON</button>
+      <a href="#" class="so-link">Open full page →</a>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ADD LESSON DIALOG with FIX #8 (markdown preview) ═══ -->
+<div class="dialog-backdrop" id="addDialog" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="dialog">
+    <div class="dialog-title">Add Lesson</div>
+    <div class="form-group">
+      <label class="form-label">Title</label>
+      <input class="form-input" placeholder="Short, descriptive title">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Type</label>
+      <select class="form-select" id="lessonTypeSelect" onchange="toggleGuardrailFields()">
+        <option value="decision">decision</option>
+        <option value="workaround">workaround</option>
+        <option value="preference">preference</option>
+        <option value="guardrail">guardrail</option>
+        <option value="general_note">general_note</option>
+      </select>
+    </div>
+
+    <!-- ══ FIX #8: Content with Write/Preview tabs ══ -->
+    <div class="form-group">
+      <label class="form-label">Content</label>
+      <div class="content-tabs">
+        <button class="content-tab active" onclick="showWriteTab(this)">Write</button>
+        <button class="content-tab" onclick="showPreviewTab(this)">Preview</button>
+      </div>
+      <textarea class="form-textarea" id="contentWrite" placeholder="Supports **markdown** formatting..." oninput="updatePreview()">We chose **pgvector** over Pinecone because:
+
+- Self-hosted, zero egress cost
+- Embeddings live next to PostgreSQL data
+- Vector dim: `1024` (qwen3-embedding-0.6b)</textarea>
+      <div class="preview-box" id="contentPreview" style="display:none">
+        We chose <strong>pgvector</strong> over Pinecone because:<br><br>
+        &bull; Self-hosted, zero egress cost<br>
+        &bull; Embeddings live next to PostgreSQL data<br>
+        &bull; Vector dim: <code>1024</code> (qwen3-embedding-0.6b)
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Tags</label>
+      <div class="form-tags">
+        <span class="form-tag">database <span class="rm">&times;</span></span>
+        <span class="form-tag">postgres <span class="rm">&times;</span></span>
+        <input class="form-tag-input" placeholder="add tag...">
+      </div>
+    </div>
+
+    <button class="advanced-toggle" onclick="toggleAdvanced()">
+      <span id="advArrow">▸</span> Advanced
+    </button>
+    <div class="advanced-section" id="advancedSection" style="display:none">
+      <div class="form-group">
+        <label class="form-label">Source Refs</label>
+        <input class="form-input" placeholder="e.g. src/db/client.ts:42">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Captured By</label>
+        <input class="form-input" placeholder="e.g. claude-code">
+      </div>
+      <div id="guardrailFields" style="display:none">
+        <div style="font-size:12px;color:#71717a;margin:12px 0 8px">Guardrail Rule</div>
+        <div class="guardrail-fields">
+          <div class="form-group"><label class="form-label">Trigger</label><input class="form-input" placeholder="e.g. force push to main"></div>
+          <div class="form-group"><label class="form-label">Requirement</label><input class="form-input" placeholder="e.g. Use PR workflow instead"></div>
+          <div class="form-group"><label class="form-label">Verification Method</label><select class="form-select"><option>user_confirmation</option><option>recorded_test_event</option><option>cli_exit_code</option></select></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dialog-footer">
+      <button class="btn btn-outline" onclick="document.getElementById('addDialog').classList.remove('open')">Cancel</button>
+      <button class="btn btn-primary">Add Lesson</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Slide-over
+  function openDetail() { document.getElementById('detailPanel').classList.add('open'); }
+  function closeDetail() { document.getElementById('detailPanel').classList.remove('open'); }
+
+  // Filter panel
+  function toggleFilterPanel() {
+    const p = document.getElementById('filterPanel');
+    p.style.display = p.style.display === 'none' ? 'block' : 'none';
+  }
+  function setFilter(btn) {
+    btn.closest('.filter-options').querySelectorAll('.filter-opt').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+
+  // FIX #4: Click tag to filter
+  function filterByTag(tag) {
+    const chips = document.getElementById('filterChips');
+    // Check if already filtered by this tag
+    if (chips.innerHTML.includes(tag)) return;
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.innerHTML = `Tag: ${tag} <span class="x" onclick="this.parentElement.remove()">&times;</span>`;
+    chips.insertBefore(chip, chips.lastElementChild);
+  }
+
+  // Bulk bar
+  function updateBulkBar() {
+    const checked = document.querySelectorAll('.data-table tbody input[type=checkbox]:checked').length;
+    const bar = document.getElementById('bulkBar');
+    if (checked > 0) { bar.style.display = 'flex'; document.getElementById('bulkCount').textContent = checked + ' selected'; }
+    else { bar.style.display = 'none'; }
+  }
+  function toggleAllCheckboxes(master) {
+    document.querySelectorAll('.data-table tbody input[type=checkbox]').forEach(cb => cb.checked = master.checked);
+    updateBulkBar();
+  }
+  function uncheckAll() {
+    document.querySelectorAll('.data-table input[type=checkbox]').forEach(cb => cb.checked = false);
+    updateBulkBar();
+  }
+
+  // FIX #2: Search mode toggle
+  function setSearchMode(mode) {
+    document.getElementById('modeText').classList.toggle('active', mode === 'text');
+    document.getElementById('modeSemantic').classList.toggle('active', mode === 'semantic');
+    toggleSearchMode(); // refresh indicator
+  }
+  function toggleSearchMode() {
+    const val = document.getElementById('searchInput').value;
+    const ind = document.getElementById('searchIndicator');
+    const isSemantic = document.getElementById('modeSemantic').classList.contains('active');
+    if (val.length > 0) {
+      ind.style.display = 'flex';
+      document.getElementById('searchQuery').textContent = val;
+      document.getElementById('searchDot').className = 'dot ' + (isSemantic ? 'dot-semantic' : 'dot-text');
+      document.getElementById('searchModeLabel').textContent = isSemantic ? 'Semantic search' : 'Text search';
+    } else {
+      ind.style.display = 'none';
+    }
+  }
+
+  // FIX #5: Sort toggle
+  function toggleSort(th, col) {
+    const arrow = th.querySelector('.sort-arrow');
+    // Reset all other arrows
+    document.querySelectorAll('.data-table th .sort-arrow').forEach(a => { if (a !== arrow) a.textContent = ''; });
+    document.querySelectorAll('.data-table th').forEach(h => { if (h !== th) h.style.color = ''; });
+    if (arrow.textContent === '▾') { arrow.textContent = '▴'; th.style.color = '#a1a1aa'; }
+    else if (arrow.textContent === '▴') { arrow.textContent = ''; th.style.color = ''; }
+    else { arrow.textContent = '▾'; th.style.color = '#a1a1aa'; }
+  }
+
+  // FIX #6: Density toggle
+  function setDensity(mode, btn) {
+    const table = document.getElementById('dataTable');
+    table.classList.toggle('compact', mode === 'compact');
+    btn.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+
+  // FIX #3: Show all (remove status filter)
+  function showAll() {
+    document.getElementById('hiddenCount').innerHTML = 'Showing all 142 lessons <span style="color:#3f3f46">&middot;</span> <a onclick="showActiveOnly()">Show active only</a>';
+  }
+  function showActiveOnly() {
+    document.getElementById('hiddenCount').innerHTML = 'Showing 98 active lessons <span style="color:#3f3f46">&middot;</span> 44 archived/superseded hidden &middot; <a onclick="showAll()">Show all</a>';
+  }
+
+  // Advanced toggle in add dialog
+  function toggleAdvanced() {
+    const s = document.getElementById('advancedSection');
+    const a = document.getElementById('advArrow');
+    if (s.style.display === 'none') { s.style.display = 'block'; a.textContent = '▾'; }
+    else { s.style.display = 'none'; a.textContent = '▸'; }
+  }
+  function toggleGuardrailFields() {
+    document.getElementById('guardrailFields').style.display = document.getElementById('lessonTypeSelect').value === 'guardrail' ? 'block' : 'none';
+  }
+
+  // FIX #8: Write/Preview toggle
+  function showWriteTab(btn) {
+    btn.parentElement.querySelectorAll('.content-tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('contentWrite').style.display = 'block';
+    document.getElementById('contentPreview').style.display = 'none';
+  }
+  function showPreviewTab(btn) {
+    btn.parentElement.querySelectorAll('.content-tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('contentWrite').style.display = 'none';
+    document.getElementById('contentPreview').style.display = 'block';
+  }
+
+  // FIX #7: Keyboard navigation
+  let focusedRow = 0;
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeDetail(); document.getElementById('addDialog').classList.remove('open'); document.getElementById('filterPanel').style.display='none'; return; }
+    if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.tagName === 'SELECT') return;
+    const rows = document.querySelectorAll('.data-table tbody tr');
+    if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); rows[focusedRow]?.classList.remove('focused'); focusedRow = Math.min(focusedRow+1, rows.length-1); rows[focusedRow]?.classList.add('focused'); rows[focusedRow]?.scrollIntoView({block:'nearest'}); }
+    if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); rows[focusedRow]?.classList.remove('focused'); focusedRow = Math.max(focusedRow-1, 0); rows[focusedRow]?.classList.add('focused'); rows[focusedRow]?.scrollIntoView({block:'nearest'}); }
+    if (e.key === 'Enter') { rows[focusedRow]?.click(); }
+    if (e.key === 'x') { const cb = rows[focusedRow]?.querySelector('input[type=checkbox]'); if(cb){ cb.checked=!cb.checked; updateBulkBar(); } }
+  });
+
+  // Init
+  updateBulkBar();
+</script>
+
+</body>
+</html>

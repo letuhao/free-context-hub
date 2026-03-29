@@ -1,4 +1,9 @@
+import * as dotenv from 'dotenv';
 import * as z from 'zod/v4';
+
+// Load .env before anything parses process.env.
+// dotenv.config() is idempotent — safe to call from multiple entrypoints.
+dotenv.config();
 
 function parseBooleanEnv(v: unknown): boolean | undefined {
   if (v === undefined || v === null) return undefined;
@@ -62,6 +67,7 @@ const EnvSchema = z.object({
   DEFAULT_PROJECT_ID: z.string().min(1).optional(),
 
   MCP_PORT: z.coerce.number().int().positive().optional().default(3000),
+  API_PORT: z.coerce.number().int().positive().optional().default(3001),
 
   // Vector dimension must match the embedding model configured above.
   EMBEDDINGS_DIM: z.coerce.number().int().positive().optional().default(1024),
@@ -382,12 +388,16 @@ const EnvSchema = z.object({
 
 export type Env = z.infer<typeof EnvSchema>;
 
+let _cachedEnv: Env | null = null;
+
 export function getEnv(raw: NodeJS.ProcessEnv = process.env): Env {
+  if (_cachedEnv && raw === process.env) return _cachedEnv;
   const parsed = EnvSchema.safeParse(migrateLegacyEnvKeys(raw));
   if (!parsed.success) {
     const issues = parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('\n');
     throw new Error(`Invalid environment variables:\n${issues}`);
   }
+  if (raw === process.env) _cachedEnv = parsed.data;
   return parsed.data;
 }
 
