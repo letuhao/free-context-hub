@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { enqueueJob, listJobs } from '../../core/index.js';
+import { enqueueJob, listJobs, runNextJob } from '../../core/index.js';
 
 const router = Router();
 
@@ -19,6 +19,14 @@ router.get('/', async (req, res, next) => {
       status: req.query.status as any,
       limit: req.query.limit ? Number(req.query.limit) : undefined,
     });
+    res.json(result);
+  } catch (e) { next(e); }
+});
+
+/** POST /api/jobs/run-next — run one queued job immediately */
+router.post('/run-next', async (req, res, next) => {
+  try {
+    const result = await runNextJob(req.body.queue_name);
     res.json(result);
   } catch (e) { next(e); }
 });
