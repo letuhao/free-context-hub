@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ContextHub GUI — Component Wireframes</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #09090b; color: #e4e4e7; padding: 32px; line-height: 1.5; }
+  h1 { font-size: 20px; margin-bottom: 32px; color: #fafafa; border-bottom: 1px solid #27272a; padding-bottom: 12px; }
+  h2 { font-size: 16px; color: #a1a1aa; margin: 40px 0 16px; text-transform: uppercase; letter-spacing: 1px; font-weight: 500; }
+  h3 { font-size: 13px; color: #71717a; margin: 8px 0 4px; }
+  .section { margin-bottom: 48px; }
+  .component-row { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; }
+  .component-box { border: 1px solid #27272a; border-radius: 8px; padding: 16px; background: #18181b; }
+  .label { font-size: 11px; color: #52525b; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* ── Badges ── */
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 9999px; font-size: 12px; font-weight: 500; margin: 2px 4px 2px 0; }
+  .badge-decision { background: rgba(59,130,246,0.1); color: #60a5fa; }
+  .badge-guardrail { background: rgba(239,68,68,0.1); color: #f87171; }
+  .badge-workaround { background: rgba(245,158,11,0.1); color: #fbbf24; }
+  .badge-preference { background: rgba(168,85,247,0.1); color: #c084fc; }
+  .badge-general { background: rgba(113,113,122,0.3); color: #a1a1aa; }
+  .badge-active { background: rgba(16,185,129,0.1); color: #34d399; }
+  .badge-draft { background: rgba(113,113,122,0.2); color: #a1a1aa; }
+  .badge-superseded { background: rgba(245,158,11,0.1); color: #fbbf24; }
+  .badge-archived { background: rgba(113,113,122,0.15); color: #71717a; }
+
+  /* ── Status dots ── */
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  .dot-running { background: #3b82f6; animation: pulse 1.5s infinite; }
+  .dot-queued { border: 1.5px solid #71717a; background: transparent; }
+  .dot-succeeded { background: #10b981; }
+  .dot-failed { background: #ef4444; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  /* ── StatCard ── */
+  .stat-card { min-width: 140px; padding: 16px 20px; border: 1px solid #27272a; border-radius: 8px; background: #18181b; cursor: pointer; transition: border-color 0.15s; }
+  .stat-card:hover { border-color: #3f3f46; }
+  .stat-number { font-size: 28px; font-weight: 700; color: #fafafa; }
+  .stat-label { font-size: 12px; color: #71717a; margin-top: 2px; }
+
+  /* ── PageHeader ── */
+  .page-header { display: flex; justify-content: space-between; align-items: flex-start; padding: 24px 0; border-bottom: 1px solid #27272a; margin-bottom: 16px; }
+  .page-title { font-size: 18px; font-weight: 600; color: #fafafa; }
+  .page-subtitle { font-size: 13px; color: #71717a; margin-top: 2px; }
+  .btn { padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; }
+  .btn-primary { background: #fafafa; color: #09090b; }
+  .btn-outline { background: transparent; border: 1px solid #3f3f46; color: #a1a1aa; }
+  .btn-danger { background: rgba(239,68,68,0.1); color: #f87171; border: 1px solid rgba(239,68,68,0.2); }
+  .btn-ghost { background: transparent; color: #a1a1aa; }
+
+  /* ── DataTable ── */
+  .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .data-table th { text-align: left; padding: 8px 12px; color: #71717a; font-weight: 500; border-bottom: 1px solid #27272a; font-size: 12px; }
+  .data-table td { padding: 10px 12px; border-bottom: 1px solid #1c1c1f; color: #d4d4d8; }
+  .data-table tr:hover td { background: #1c1c1f; }
+  .data-table .cb { width: 32px; }
+  .data-table input[type=checkbox] { accent-color: #3b82f6; }
+  .pagination { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; font-size: 12px; color: #71717a; }
+
+  /* ── Bulk Action Bar ── */
+  .bulk-bar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; background: #1e293b; border: 1px solid #334155; border-radius: 8px; margin-bottom: 12px; font-size: 13px; }
+  .bulk-bar .count { color: #93c5fd; font-weight: 600; }
+
+  /* ── FilterChips ── */
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 9999px; font-size: 12px; background: #27272a; color: #a1a1aa; margin-right: 6px; }
+  .chip .x { cursor: pointer; color: #71717a; font-weight: 700; margin-left: 2px; }
+
+  /* ── Search Bar ── */
+  .search-bar { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border: 1px solid #27272a; border-radius: 8px; background: #18181b; margin-bottom: 12px; }
+  .search-bar input { flex: 1; background: transparent; border: none; color: #d4d4d8; font-size: 13px; outline: none; }
+  .search-bar .icon { color: #52525b; font-size: 14px; }
+
+  /* ── SlideOver ── */
+  .slideover-demo { display: flex; gap: 0; }
+  .slideover-bg { flex: 1; background: #09090b; opacity: 0.6; min-height: 300px; border: 1px dashed #27272a; border-radius: 8px 0 0 8px; display: flex; align-items: center; justify-content: center; color: #3f3f46; font-size: 13px; }
+  .slideover { width: 380px; border: 1px solid #27272a; border-radius: 0 8px 8px 0; background: #18181b; padding: 20px; }
+  .slideover-header { display: flex; justify-content: space-between; margin-bottom: 16px; }
+  .slideover-title { font-size: 15px; font-weight: 600; color: #fafafa; }
+  .slideover-close { color: #71717a; cursor: pointer; font-size: 18px; }
+  .slideover-section { margin-bottom: 14px; }
+  .slideover-section-title { font-size: 11px; color: #52525b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .slideover-content { font-size: 13px; color: #a1a1aa; line-height: 1.6; }
+
+  /* ── EmptyState ── */
+  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 64px 24px; color: #52525b; border: 1px dashed #27272a; border-radius: 8px; }
+  .empty-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.4; }
+  .empty-title { font-size: 15px; color: #a1a1aa; margin-bottom: 4px; }
+  .empty-desc { font-size: 13px; margin-bottom: 16px; }
+
+  /* ── LoadingSkeleton ── */
+  .skeleton { background: linear-gradient(90deg, #27272a 25%, #3f3f46 50%, #27272a 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 4px; }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  .skeleton-line { height: 14px; margin-bottom: 10px; }
+  .skeleton-line.w60 { width: 60%; }
+  .skeleton-line.w80 { width: 80%; }
+  .skeleton-line.w40 { width: 40%; }
+  .skeleton-card { height: 80px; width: 140px; border-radius: 8px; }
+
+  /* ── Toast ── */
+  .toast { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 8px; font-size: 13px; margin: 4px 0; }
+  .toast-success { background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.2); color: #34d399; }
+  .toast-error { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); color: #f87171; }
+  .toast-info { background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.2); color: #60a5fa; }
+
+  /* ── Sidebar ── */
+  .sidebar-demo { width: 220px; background: #0a0a0b; border: 1px solid #27272a; border-radius: 8px; padding: 0; overflow: hidden; }
+  .sidebar-logo { padding: 16px 16px 12px; border-bottom: 1px solid #1c1c1f; }
+  .sidebar-logo h4 { font-size: 14px; color: #fafafa; font-weight: 600; }
+  .sidebar-logo p { font-size: 11px; color: #52525b; }
+  .sidebar-select { margin: 10px 10px 4px; padding: 6px 10px; background: #18181b; border: 1px solid #27272a; border-radius: 6px; color: #a1a1aa; font-size: 12px; width: calc(100% - 20px); }
+  .sidebar-nav { padding: 6px 8px; }
+  .sidebar-item { display: block; padding: 7px 12px; border-radius: 6px; font-size: 13px; color: #71717a; text-decoration: none; margin-bottom: 1px; }
+  .sidebar-item.active { background: #27272a; color: #fafafa; }
+  .sidebar-item:hover:not(.active) { background: #1c1c1f; color: #a1a1aa; }
+  .sidebar-bottom { border-top: 1px solid #1c1c1f; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #52525b; }
+  .health-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  .health-ok { background: #10b981; }
+  .health-err { background: #ef4444; }
+
+  /* ── CommandPalette ── */
+  .cmd-palette { width: 480px; border: 1px solid #3f3f46; border-radius: 12px; background: #18181b; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+  .cmd-input { padding: 14px 16px; border-bottom: 1px solid #27272a; display: flex; align-items: center; gap: 8px; }
+  .cmd-input input { flex: 1; background: transparent; border: none; color: #fafafa; font-size: 14px; outline: none; }
+  .cmd-results { padding: 6px; }
+  .cmd-group { padding: 4px 10px; font-size: 11px; color: #52525b; text-transform: uppercase; margin-top: 4px; }
+  .cmd-item { padding: 8px 12px; border-radius: 6px; font-size: 13px; color: #a1a1aa; cursor: pointer; display: flex; justify-content: space-between; }
+  .cmd-item:hover, .cmd-item.selected { background: #27272a; color: #fafafa; }
+  .cmd-item .shortcut { font-size: 11px; color: #52525b; font-family: monospace; }
+
+  /* ── ConfirmDialog ── */
+  .dialog-overlay { display: inline-block; padding: 24px; background: rgba(0,0,0,0.5); border-radius: 12px; }
+  .dialog { width: 400px; background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 24px; }
+  .dialog-title { font-size: 16px; font-weight: 600; color: #fafafa; margin-bottom: 8px; }
+  .dialog-desc { font-size: 13px; color: #a1a1aa; margin-bottom: 16px; line-height: 1.5; }
+  .dialog-input { width: 100%; padding: 8px 12px; background: #09090b; border: 1px solid #3f3f46; border-radius: 6px; color: #fafafa; font-size: 13px; margin-bottom: 16px; }
+  .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+  /* ── ErrorBanner ── */
+  .error-banner { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.15); border-radius: 8px; font-size: 13px; color: #fca5a5; }
+</style>
+</head>
+<body>
+
+<h1>ContextHub GUI — Shared Component Wireframes</h1>
+
+<!-- ═══════ SIDEBAR ═══════ -->
+<div class="section">
+<h2>Sidebar</h2>
+<div class="component-row">
+  <div class="sidebar-demo">
+    <div class="sidebar-logo">
+      <h4>ContextHub</h4>
+      <p>Knowledge Dashboard</p>
+    </div>
+    <select class="sidebar-select"><option>free-context-hub</option><option>loreweave</option></select>
+    <div class="sidebar-nav">
+      <a class="sidebar-item active" href="#">Dashboard</a>
+      <a class="sidebar-item" href="#">Chat</a>
+      <a class="sidebar-item" href="#">Lessons</a>
+      <a class="sidebar-item" href="#">Guardrails</a>
+      <a class="sidebar-item" href="#">Projects</a>
+      <a class="sidebar-item" href="#">Jobs</a>
+    </div>
+    <div class="sidebar-bottom">
+      <span><span class="health-dot health-ok"></span> API connected</span>
+      <span style="cursor:pointer">⚙</span>
+    </div>
+  </div>
+
+  <!-- Collapsed -->
+  <div class="sidebar-demo" style="width:56px;">
+    <div class="sidebar-logo" style="padding:12px 0;text-align:center">
+      <h4 style="font-size:16px">C</h4>
+    </div>
+    <div class="sidebar-nav" style="padding:6px 4px">
+      <a class="sidebar-item active" href="#" style="text-align:center;padding:8px 0">📊</a>
+      <a class="sidebar-item" href="#" style="text-align:center;padding:8px 0">💬</a>
+      <a class="sidebar-item" href="#" style="text-align:center;padding:8px 0">📚</a>
+      <a class="sidebar-item" href="#" style="text-align:center;padding:8px 0">🛡</a>
+      <a class="sidebar-item" href="#" style="text-align:center;padding:8px 0">📁</a>
+      <a class="sidebar-item" href="#" style="text-align:center;padding:8px 0">⚡</a>
+    </div>
+    <div class="sidebar-bottom" style="justify-content:center">
+      <span class="health-dot health-ok"></span>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════ PAGE HEADER ═══════ -->
+<div class="section">
+<h2>PageHeader</h2>
+<div class="component-box" style="max-width:700px">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Lessons</div>
+      <div class="page-subtitle">Browse, search, and manage project knowledge</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-outline">Export</button>
+      <button class="btn btn-primary">+ Add Lesson</button>
+    </div>
+  </div>
+</div>
+<h3>With breadcrumb</h3>
+<div class="component-box" style="max-width:700px">
+  <div style="font-size:12px;color:#52525b;margin-bottom:4px">Lessons / <span style="color:#a1a1aa">Use pgvector for embeddings</span></div>
+  <div class="page-header" style="padding-top:8px">
+    <div>
+      <div class="page-title">Use pgvector for all embeddings</div>
+      <div class="page-subtitle">decision · active · created 2026-03-15</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-outline">Copy</button>
+      <button class="btn btn-danger">Archive</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════ BADGES ═══════ -->
+<div class="section">
+<h2>Badge</h2>
+<h3>Lesson types</h3>
+<div class="component-row">
+  <span class="badge badge-decision">decision</span>
+  <span class="badge badge-guardrail">guardrail</span>
+  <span class="badge badge-workaround">workaround</span>
+  <span class="badge badge-preference">preference</span>
+  <span class="badge badge-general">general_note</span>
+</div>
+<h3>Lesson status</h3>
+<div class="component-row">
+  <span class="badge badge-active">active</span>
+  <span class="badge badge-draft">draft</span>
+  <span class="badge badge-superseded">superseded</span>
+  <span class="badge badge-archived">archived</span>
+</div>
+<h3>Job status</h3>
+<div class="component-row">
+  <span><span class="dot dot-running"></span>running</span>
+  <span style="margin-left:16px"><span class="dot dot-queued"></span>queued</span>
+  <span style="margin-left:16px"><span class="dot dot-succeeded"></span>succeeded</span>
+  <span style="margin-left:16px"><span class="dot dot-failed"></span>failed</span>
+</div>
+</div>
+
+<!-- ═══════ STAT CARDS ═══════ -->
+<div class="section">
+<h2>StatCard</h2>
+<div class="component-row">
+  <div class="stat-card">
+    <div class="stat-number">142</div>
+    <div class="stat-label">Lessons</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-number">8</div>
+    <div class="stat-label">Guardrails</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-number">23</div>
+    <div class="stat-label">Commits</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-number" style="color:#fbbf24">3</div>
+    <div class="stat-label">Jobs queued</div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════ SEARCH + FILTER CHIPS ═══════ -->
+<div class="section">
+<h2>Search Bar + Filter Chips</h2>
+<div class="component-box" style="max-width:700px">
+  <div class="search-bar">
+    <span class="icon">🔍</span>
+    <input placeholder="Search lessons..." value="database conventions">
+    <button class="btn btn-ghost" style="font-size:12px">Filters ▾</button>
+  </div>
+  <div>
+    <span class="chip">Type: decision <span class="x">×</span></span>
+    <span class="chip">Status: active <span class="x">×</span></span>
+    <span class="chip" style="background:transparent;color:#52525b;cursor:pointer">Clear all</span>
+  </div>
+</div>
+</div>
+
+<!-- ═══════ DATA TABLE ═══════ -->
+<div class="section">
+<h2>DataTable</h2>
+
+<h3>With bulk selection</h3>
+<div class="component-box" style="max-width:800px;padding:0 0 12px">
+  <div style="padding:12px 16px">
+    <div class="bulk-bar">
+      <span class="count">3 selected</span>
+      <button class="btn btn-outline" style="padding:4px 10px;font-size:12px">Archive</button>
+      <button class="btn btn-outline" style="padding:4px 10px;font-size:12px">Change Status ▾</button>
+      <button class="btn btn-outline" style="padding:4px 10px;font-size:12px">Export JSON</button>
+      <span style="margin-left:auto;color:#52525b;font-size:12px;cursor:pointer">Deselect all</span>
+    </div>
+  </div>
+  <table class="data-table">
+    <thead>
+      <tr><th class="cb"><input type="checkbox" checked></th><th>Title</th><th>Type</th><th>Status</th><th>Tags</th><th>Created</th><th></th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="cb"><input type="checkbox" checked></td><td>Use pgvector for all embeddings</td><td><span class="badge badge-decision">decision</span></td><td><span class="badge badge-active">active</span></td><td><span class="chip" style="margin:0">db</span> <span class="chip" style="margin:0">pg</span></td><td style="color:#71717a">2h ago</td><td style="color:#52525b;cursor:pointer">⋯</td></tr>
+      <tr><td class="cb"><input type="checkbox" checked></td><td>Never force-push to main</td><td><span class="badge badge-guardrail">guardrail</span></td><td><span class="badge badge-active">active</span></td><td><span class="chip" style="margin:0">git</span></td><td style="color:#71717a">1d ago</td><td style="color:#52525b;cursor:pointer">⋯</td></tr>
+      <tr><td class="cb"><input type="checkbox" checked></td><td>Redis cache TTL workaround</td><td><span class="badge badge-workaround">workaround</span></td><td><span class="badge badge-active">active</span></td><td><span class="chip" style="margin:0">cache</span> <span class="chip" style="margin:0">redis</span></td><td style="color:#71717a">3d ago</td><td style="color:#52525b;cursor:pointer">⋯</td></tr>
+      <tr><td class="cb"><input type="checkbox"></td><td>Use Geist font family</td><td><span class="badge badge-preference">preference</span></td><td><span class="badge badge-active">active</span></td><td><span class="chip" style="margin:0">ui</span></td><td style="color:#71717a">1w ago</td><td style="color:#52525b;cursor:pointer">⋯</td></tr>
+      <tr><td class="cb"><input type="checkbox"></td><td>Migration squash before release</td><td><span class="badge badge-general">general_note</span></td><td><span class="badge badge-draft">draft</span></td><td><span class="chip" style="margin:0">db</span></td><td style="color:#71717a">2w ago</td><td style="color:#52525b;cursor:pointer">⋯</td></tr>
+    </tbody>
+  </table>
+  <div class="pagination" style="padding:12px 16px">
+    <span>Showing 1–20 of 142</span>
+    <div style="display:flex;gap:4px">
+      <button class="btn btn-outline" style="padding:4px 10px;font-size:12px" disabled>← Prev</button>
+      <button class="btn btn-outline" style="padding:4px 10px;font-size:12px">Next →</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════ SLIDEOVER ═══════ -->
+<div class="section">
+<h2>SlideOver (Lesson Detail)</h2>
+<div class="slideover-demo" style="max-width:800px">
+  <div class="slideover-bg">(page content behind — dimmed)</div>
+  <div class="slideover">
+    <div class="slideover-header">
+      <div class="slideover-title">Use pgvector for all embeddings</div>
+      <span class="slideover-close">×</span>
+    </div>
+    <div style="margin-bottom:12px">
+      <span class="badge badge-decision">decision</span>
+      <span class="badge badge-active">active</span>
+    </div>
+    <div style="display:flex;gap:16px;font-size:12px;color:#52525b;margin-bottom:16px">
+      <span>ID: abc-123</span>
+      <span>2026-03-15</span>
+      <span>by claude-code</span>
+    </div>
+    <div class="slideover-section">
+      <div class="slideover-section-title">Content</div>
+      <div class="slideover-content">We chose pgvector over Pinecone because it's self-hosted, zero egress cost, and the data lives next to our PostgreSQL tables. Vector dimensions set to 1024 (qwen3-embedding-0.6b).</div>
+    </div>
+    <div class="slideover-section">
+      <div class="slideover-section-title">Tags</div>
+      <div><span class="chip">database</span><span class="chip">postgres</span><span class="chip">embeddings</span></div>
+    </div>
+    <div class="slideover-section">
+      <div class="slideover-section-title">Source Refs</div>
+      <div style="font-size:12px;color:#71717a;font-family:monospace">src/db/client.ts:42<br>docs/adr/003-embedding-store.md</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px;padding-top:12px;border-top:1px solid #27272a">
+      <button class="btn btn-outline" style="font-size:12px">Mark Superseded</button>
+      <button class="btn btn-outline" style="font-size:12px">Archive</button>
+      <button class="btn btn-ghost" style="font-size:12px">Copy JSON</button>
+      <a href="#" style="font-size:12px;color:#3b82f6;margin-left:auto;text-decoration:none;align-self:center">Open full page →</a>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════ COMMAND PALETTE ═══════ -->
+<div class="section">
+<h2>CommandPalette (Ctrl+K)</h2>
+<div class="cmd-palette">
+  <div class="cmd-input">
+    <span style="color:#52525b">🔍</span>
+    <input placeholder="Search pages, lessons, actions..." value="guardr">
+  </div>
+  <div class="cmd-results">
+    <div class="cmd-group">Pages</div>
+    <div class="cmd-item selected"><span>Guardrails</span><span class="shortcut">→ /guardrails</span></div>
+    <div class="cmd-group">Lessons</div>
+    <div class="cmd-item"><span>Never force-push to main</span><span class="shortcut">guardrail</span></div>
+    <div class="cmd-item"><span>Require backup before DROP TABLE</span><span class="shortcut">guardrail</span></div>
+    <div class="cmd-group">Actions</div>
+    <div class="cmd-item"><span>Add Guardrail</span><span class="shortcut">Ctrl+N</span></div>
+    <div class="cmd-item"><span>Check Guardrail</span></div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════ EMPTY STATE ═══════ -->
+<div class="section">
+<h2>EmptyState</h2>
+<div class="component-row">
+  <div class="empty-state" style="width:400px">
+    <div class="empty-icon">📚</div>
+    <div class="empty-title">No lessons yet</div>
+    <div class="empty-desc">Add your first lesson to start building project knowledge</div>
+    <button class="btn btn-primary">+ Add Lesson</button>
+  </div>
+  <div class="empty-state" style="width:300px">
+    <div class="empty-icon">⚡</div>
+    <div class="empty-title">No jobs</div>
+    <div class="empty-desc">All queued work has been completed</div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════ LOADING SKELETON ═══════ -->
+<div class="section">
+<h2>LoadingSkeleton</h2>
+<h3>Table skeleton</h3>
+<div class="component-box" style="max-width:700px">
+  <div style="display:flex;gap:16px;margin-bottom:16px">
+    <div class="skeleton skeleton-card"></div>
+    <div class="skeleton skeleton-card"></div>
+    <div class="skeleton skeleton-card"></div>
+    <div class="skeleton skeleton-card"></div>
+  </div>
+  <div class="skeleton skeleton-line w80"></div>
+  <div class="skeleton skeleton-line w60"></div>
+  <div class="skeleton skeleton-line w80"></div>
+  <div class="skeleton skeleton-line w40"></div>
+  <div class="skeleton skeleton-line w80"></div>
+</div>
+</div>
+
+<!-- ═══════ TOASTS ═══════ -->
+<div class="section">
+<h2>Toast Notifications</h2>
+<div style="display:flex;flex-direction:column;gap:4px;max-width:400px">
+  <div class="toast toast-success">✓ Lesson added successfully</div>
+  <div class="toast toast-error">✕ Indexing failed — connection timeout. <u style="cursor:pointer;margin-left:4px">Retry</u></div>
+  <div class="toast toast-info"><span class="dot dot-running" style="margin-right:2px"></span> Indexing project... <u style="cursor:pointer;margin-left:4px">View Job</u></div>
+</div>
+</div>
+
+<!-- ═══════ CONFIRM DIALOG ═══════ -->
+<div class="section">
+<h2>ConfirmDialog (Destructive)</h2>
+<div class="dialog-overlay">
+  <div class="dialog">
+    <div class="dialog-title">Delete workspace</div>
+    <div class="dialog-desc">This will permanently delete all data for <strong>free-context-hub</strong> — lessons, chunks, guardrails, jobs, and git history. This cannot be undone.</div>
+    <div style="font-size:12px;color:#71717a;margin-bottom:8px">Type <strong style="color:#f87171">free-context-hub</strong> to confirm:</div>
+    <input class="dialog-input" placeholder="free-context-hub" value="free-context-">
+    <div class="dialog-actions">
+      <button class="btn btn-outline">Cancel</button>
+      <button class="btn btn-danger" style="opacity:0.5">Delete Workspace</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════ ERROR BANNER ═══════ -->
+<div class="section">
+<h2>ErrorBanner</h2>
+<div style="max-width:700px;display:flex;flex-direction:column;gap:8px">
+  <div class="error-banner">
+    <span>Cannot connect to ContextHub API at localhost:3001</span>
+    <span style="cursor:pointer;color:#71717a">✕</span>
+  </div>
+  <div class="error-banner" style="background:rgba(245,158,11,0.08);border-color:rgba(245,158,11,0.15);color:#fcd34d">
+    <span>Authentication failed — check your API token in settings</span>
+    <span style="cursor:pointer;color:#71717a">✕</span>
+  </div>
+</div>
+</div>
+
+<!-- ═══════ BUTTONS ═══════ -->
+<div class="section">
+<h2>Buttons</h2>
+<div class="component-row" style="align-items:center">
+  <button class="btn btn-primary">Primary</button>
+  <button class="btn btn-outline">Outline</button>
+  <button class="btn btn-danger">Danger</button>
+  <button class="btn btn-ghost">Ghost</button>
+  <button class="btn btn-primary" disabled style="opacity:0.4">Disabled</button>
+</div>
+</div>
+
+</body>
+</html>

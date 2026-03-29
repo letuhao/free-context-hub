@@ -63,6 +63,7 @@ services:
       # If you run LM Studio on the host, containers must use host.docker.internal.
       EMBEDDINGS_BASE_URL: ${EMBEDDINGS_BASE_URL:-http://host.docker.internal:1234}
       MCP_PORT: ${MCP_PORT:-3000}
+      API_PORT: ${API_PORT:-3001}
       # Future phase: store index artifacts / caches here.
       INDEX_STORAGE_ROOT: /data/index
       # Future phase (optional): S3-compatible object storage for snapshots/artifacts.
@@ -87,6 +88,7 @@ services:
       REDIS_RERANK_TTL_SECONDS: ${REDIS_RERANK_TTL_SECONDS:-7200}
     ports:
       - "3000:3000"
+      - "3001:3001"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -160,6 +162,7 @@ services:
       DATABASE_URL: postgresql://contexthub:contexthub@db:5432/contexthub
       EMBEDDINGS_BASE_URL: ${EMBEDDINGS_BASE_URL:-http://host.docker.internal:1234}
       MCP_PORT: ${MCP_PORT:-3000}
+      API_PORT: ${API_PORT:-3001}
       INDEX_STORAGE_ROOT: /data/index
       S3_ENDPOINT: ${S3_ENDPOINT:-}
       S3_REGION: ${S3_REGION:-}
@@ -182,6 +185,7 @@ services:
       REDIS_RERANK_TTL_SECONDS: ${REDIS_RERANK_TTL_SECONDS:-7200}
     ports:
       - "3000:3000"
+      - "3001:3001"
     volumes:
       - contexthub_mcpdata:/data
       - ./:/workspace:ro

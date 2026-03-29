@@ -349,24 +349,70 @@ Phases 1–5 are primarily **passive learning**: index source, build vectors, op
 
 **Relationship to later phases**
 
-- **Phase 7–8:** Multi-agent communication and a GUI make it easier to review drafts and inspect graph impact before promotion.
-- **Phase 9–10:** Human-in-the-loop editing and multi-format ingestion widen the surface of facts the deep loop can safely absorb.
+- **Phase 7:** GUI makes it easier to review drafts and inspect knowledge before promotion.
+- **Phase 8–9:** Human-in-the-loop editing and multi-format ingestion widen the surface of facts the deep loop can safely absorb.
 
-### Phase 7-8: Communication & Visualization
-- **Multi-Agent Knowledge**: Collect knowledge from inter-agent and agent-to-builder communications.
-- **Interaction GUI**: Visual hub for humans to inspect and browse the knowledge graph.
+### Phase 7: Interactive GUI
+- **Knowledge Explorer**: Web dashboard for browsing lessons, guardrails, project snapshots, and knowledge graph. Also usable from VS Code's built-in browser — no dedicated extension needed.
 
-### Phase 9-10: Human Interface & Multi-Format
-- **Human-in-the-loop**: Allow users to correct knowledge and add new insights interactively.
-- **Expanded Ingestion**: Support for PDF, DOCX, Excel, and Image files.
+### Phase 8: Human-in-the-loop
+- Allow users to correct knowledge, approve draft lessons, and add insights interactively via the web GUI.
 
-### Phase 11-12: Insights & Integration
-- **RAG to Insight**: Convert complex knowledge into human-readable text and diagrams on demand.
-- **VS Code Extension**: Deep integration into the Visual Studio Code ecosystem.
+### Phase 9: Multi-format Ingestion
+- Support for PDF, DOCX, Excel, and Image files.
 
-### Phase 13: Knowledge Portability
+### Phase 10: Knowledge Portability
 - **Exchange Hub**: Import/Export knowledge to/from other team-hosted ContextHubs or infrastructure.
 - Standardized knowledge interchange format.
+
+### Dropped: Multi-Agent Passive Collection
+
+Originally planned as "Phase 7: Multi-Agent Knowledge Sharing" — passively collecting knowledge from inter-agent communications.
+
+**Why it was dropped:**
+
+1. **Token cost contradicts core goal.** Parsing agent conversations requires an LLM, consuming tokens. The project's purpose is to *reduce* token usage, not add new token-consuming pipelines.
+
+2. **Low signal-to-noise ratio.** Most agent conversation is debugging, trial and error, and exploration. Extracting useful lessons from this noise requires sophisticated filtering that itself costs tokens and produces unreliable results.
+
+3. **Explicit capture is superior.** Agents already call `add_lesson` after reaching conclusions. The agent just finished the work — it knows exactly what's worth remembering. A passive collector watching from outside extracts worse quality at higher cost.
+
+4. **Knowledge sharing already works.** Multiple agents share the same `project_id` and `search_lessons` returns all agents' lessons. Agent B can find Agent A's decisions without needing Agent A's session transcript.
+
+The explicit `add_lesson` pattern (100 tokens to save) is strictly better than passive extraction (1000s of tokens to parse, uncertain quality). If knowledge capture rates are low, the fix is better agent instructions (CLAUDE.md), not a monitoring pipeline.
+
+### Dropped: Session History Sharing
+
+Considered as a feature to store and share full session transcripts between agents, enabling one agent to "see" what another agent did in a previous session.
+
+**Why it was dropped:**
+
+1. **Transcripts are massive.** A single agent session produces 50k-200k tokens of conversation. Storing and retrieving these consumes more context window than the knowledge they contain. This directly contradicts the project's goal of *reducing* token usage.
+
+2. **The value is in conclusions, not the journey.** An agent debugging a problem for 30 minutes produces 40k tokens of trial and error, but the useful output is one sentence: "Redis cache must be flushed after changing retrieval logic." That sentence is already captured by `add_lesson` in ~100 tokens.
+
+3. **Existing tools cover the use case.** When Agent B needs to know what Agent A decided:
+   - `search_lessons("what happened with auth refactor")` → returns the decision (~200 tokens)
+   - `SESSION_PATCH.md` → contains session status and next steps (~500 tokens)
+   - Both are orders of magnitude cheaper than reading a 100k-token transcript
+
+4. **Context window is the scarcest resource.** AI agents have limited context windows (100k-200k tokens). Filling that with another agent's raw session history leaves less room for the actual work. Every token of transcript loaded is a token not available for code, reasoning, or tool output.
+
+The design principle: **capture distilled knowledge (lessons), not raw conversations.** 100 well-written lessons are more useful than 100 session transcripts, at 1/1000th the token cost.
+
+### Dropped: IDE Native (VS Code Extension)
+
+Originally planned as a dedicated VS Code extension for browsing and managing knowledge from the editor.
+
+**Why it was dropped:**
+
+1. **Agents don't need it.** Agents interact via MCP tools — that's already done and working. The extension would only serve humans.
+
+2. **Web GUI covers the same use case.** The Phase 7 web dashboard works in any browser, including VS Code's built-in Simple Browser. Same functionality, accessible from any IDE, no extension maintenance.
+
+3. **High maintenance, low unique value.** A VS Code extension requires: learning the VS Code extension API, building webview panels, packaging for the marketplace, testing across VS Code versions, and updating when APIs change. All for a UI that duplicates the web dashboard.
+
+4. **Incremental path exists.** If deeper IDE integration is proven valuable later (inline guardrail warnings, CodeLens annotations), a lightweight extension can link to the web GUI rather than reimplementing the full knowledge browser.
 
 ## Appendix: Relationship to Inspiration Projects
 ContextStream inspiration:

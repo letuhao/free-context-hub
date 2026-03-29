@@ -1,11 +1,8 @@
-import * as dotenv from 'dotenv';
 import { applyMigrations } from './db/applyMigrations.js';
 import { getEnv } from './env.js';
 import { runJobById, runNextJob } from './services/jobExecutor.js';
 import { getRabbitConsumerChannel } from './services/jobQueue.js';
 import { createModuleLogger } from './utils/logger.js';
-
-dotenv.config();
 const logger = createModuleLogger('worker');
 
 async function sleep(ms: number) {

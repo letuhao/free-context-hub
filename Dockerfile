@@ -14,7 +14,7 @@ RUN if [ "$NPM_STRICT_SSL" = "false" ]; then npm config set strict-ssl false; fi
 COPY . .
 RUN npm run build
 
-EXPOSE 3000
+EXPOSE 3000 3001
 CMD ["node", "dist/index.js"]
 
 FROM node:23-alpine AS ca-base
@@ -40,6 +40,6 @@ RUN npm config set cafile /usr/local/share/ca-certificates/personal_kas.crt \
 COPY . .
 RUN npm run build
 
-EXPOSE 3000
+EXPOSE 3000 3001
 CMD ["node", "dist/index.js"]
 

@@ -1,0 +1,43 @@
+import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
+import { ProjectProvider } from "@/contexts/project-context";
+import { ToastProvider } from "@/components/ui/toast";
+import { Sidebar } from "@/components/sidebar";
+import "./globals.css";
+
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+export const metadata: Metadata = {
+  title: "ContextHub",
+  description: "Self-hosted knowledge dashboard for AI agents",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable} h-full dark`}
+    >
+      <body className="h-full flex bg-zinc-950 text-zinc-100 font-[family-name:var(--font-geist-sans)]">
+        <ProjectProvider>
+          <ToastProvider>
+            <Sidebar />
+            <main className="flex-1 overflow-y-auto">{children}</main>
+          </ToastProvider>
+        </ProjectProvider>
+      </body>
+    </html>
+  );
+}

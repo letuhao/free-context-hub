@@ -124,6 +124,55 @@ async function findConflictSuggestions(
   return out;
 }
 
+/**
+ * Generate 3 alternative search phrasings for a lesson.
+ * Helps bridge vocabulary gaps (e.g., "programming languages" ↔ "service language policy").
+ */
+async function generateSearchAliases(title: string, content: string): Promise<string> {
+  const env = getEnv();
+  if (!env.DISTILLATION_ENABLED) return '';
+
+  const model = env.DISTILLATION_MODEL;
+  if (!model) return '';
+
+  const baseUrl = (env.DISTILLATION_BASE_URL?.trim() || env.EMBEDDINGS_BASE_URL).replace(/\/$/, '');
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const key = env.DISTILLATION_API_KEY ?? env.EMBEDDINGS_API_KEY;
+  if (key) headers.Authorization = `Bearer ${key}`;
+
+  try {
+    const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: 'Generate 3 alternative search queries that would help find this lesson. Include: 1) a question form, 2) keywords only, 3) a synonym/paraphrase. Output ONLY a JSON array of 3 strings.' },
+          { role: 'user', content: `Title: ${title}\nContent: ${content.slice(0, 500)}` },
+        ],
+        temperature: 0.3,
+        max_tokens: 200,
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+
+    if (!res.ok) return '';
+    const json = (await res.json()) as any;
+    const text = json?.choices?.[0]?.message?.content ?? '';
+    // Parse JSON array from response (may have markdown fences).
+    const match = text.match(/\[[\s\S]*\]/);
+    if (!match) return '';
+    const arr = JSON.parse(match[0]) as string[];
+    if (!Array.isArray(arr)) return '';
+    const aliases = arr.filter((s: unknown) => typeof s === 'string').slice(0, 3).join(' | ');
+    logger.info({ title: title.slice(0, 50), aliases: aliases.slice(0, 100) }, 'generated search aliases');
+    return aliases;
+  } catch (err) {
+    logger.warn({ error: err instanceof Error ? err.message : String(err) }, 'search alias generation failed');
+    return '';
+  }
+}
+
 export async function addLesson(payload: LessonPayload): Promise<AddLessonResult> {
   const pool = getDbPool();
   const lessonId = randomUUID();
@@ -131,8 +180,14 @@ export async function addLesson(payload: LessonPayload): Promise<AddLessonResult
   const tags = payload.tags ?? [];
   const sourceRefs = payload.source_refs ?? [];
 
-  const [embedding] = await embedTexts([payload.title + '. ' + payload.content]);
-  // Note: title prepended to content for better query-document alignment.
+  // Generate search aliases (alternative phrasings) for better vocabulary coverage.
+  const searchAliases = await generateSearchAliases(payload.title, payload.content);
+
+  // Embed title + aliases + content together for maximum searchability.
+  const embeddingText = searchAliases
+    ? `${payload.title}. ${searchAliases}. ${payload.content}`
+    : `${payload.title}. ${payload.content}`;
+  const [embedding] = await embedTexts([embeddingText]);
   const embeddingLiteral = `[${embedding.join(',')}]`;
 
   const conflict_suggestions = await findConflictSuggestions(payload.project_id, embeddingLiteral);
@@ -166,14 +221,17 @@ export async function addLesson(payload: LessonPayload): Promise<AddLessonResult
     [payload.project_id, payload.project_id],
   );
 
-  // Build FTS content with camelCase expansion for identifier-aware search.
-  const ftsContent = expandForFtsIndex(payload.title + ' ' + payload.content);
+  // Build FTS content: title + aliases + content with camelCase expansion.
+  const ftsSource = searchAliases
+    ? `${payload.title} ${searchAliases} ${payload.content}`
+    : `${payload.title} ${payload.content}`;
+  const ftsContent = expandForFtsIndex(ftsSource);
 
   await pool.query(
     `INSERT INTO lessons(
       lesson_id, project_id, lesson_type, title, content, tags, source_refs,
-      embedding, captured_by, summary, quick_action, status, superseded_by, created_at, updated_at, fts
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::vector,$9,$10,$11,$12,$13, now(), now(), to_tsvector('english', $14));`,
+      embedding, captured_by, summary, quick_action, status, superseded_by, created_at, updated_at, fts, search_aliases
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::vector,$9,$10,$11,$12,$13, now(), now(), to_tsvector('english', $14), $15);`,
     [
       lessonId,
       payload.project_id,
@@ -189,6 +247,7 @@ export async function addLesson(payload: LessonPayload): Promise<AddLessonResult
       lessonStatus,
       null,
       ftsContent,
+      searchAliases || null,
     ],
   );
 
@@ -243,10 +302,22 @@ export async function addLesson(payload: LessonPayload): Promise<AddLessonResult
   };
 }
 
+export type LessonSortField = 'created_at' | 'title' | 'lesson_type' | 'status';
+export type SortOrder = 'asc' | 'desc';
+
 export type ListLessonsParams = {
   projectId: string;
   limit?: number;
+  /** Cursor-based pagination (legacy, still supported). */
   after?: string;
+  /** Offset-based pagination (for page-number navigation). */
+  offset?: number;
+  /** Sort field (default: created_at). */
+  sort?: LessonSortField;
+  /** Sort order (default: desc). */
+  order?: SortOrder;
+  /** Text search — filters by title/content substring (case-insensitive). */
+  q?: string;
   filters?: {
     lesson_type?: LessonType;
     tags_any?: string[];
@@ -258,7 +329,18 @@ export type ListLessonsResult = {
   items: LessonItem[];
   next_cursor?: string;
   total_count: number;
+  /** Current page number (1-based, only when offset pagination used). */
+  page?: number;
+  /** Total pages (only when offset pagination used). */
+  total_pages?: number;
 };
+
+const VALID_SORT_FIELDS: Set<string> = new Set(['created_at', 'title', 'lesson_type', 'status']);
+
+/** Escape ILIKE wildcards in user input so `%` and `_` are matched literally. */
+function escapeIlike(s: string): string {
+  return s.replace(/[%_\\]/g, '\\$&');
+}
 
 export async function listLessons(params: ListLessonsParams): Promise<ListLessonsResult> {
   const pool = getDbPool();
@@ -266,7 +348,10 @@ export async function listLessons(params: ListLessonsParams): Promise<ListLesson
   const lessonType = params.filters?.lesson_type;
   const tagsAny = (params.filters?.tags_any ?? []).filter(Boolean);
   const status = params.filters?.status;
+  const sortField = VALID_SORT_FIELDS.has(params.sort ?? '') ? params.sort! : 'created_at';
+  const sortOrder = params.order === 'asc' ? 'ASC' : 'DESC';
 
+  // ── Build WHERE clause (shared by count + data queries) ──
   const whereParts: string[] = ['project_id = $1'];
   const whereParams: any[] = [params.projectId];
 
@@ -285,55 +370,67 @@ export async function listLessons(params: ListLessonsParams): Promise<ListLesson
     whereParts.push(`status = $${whereParams.length}`);
   }
 
+  if (params.q && params.q.trim().length > 0) {
+    whereParams.push(`%${escapeIlike(params.q.trim())}%`);
+    whereParts.push(`(title ILIKE $${whereParams.length} OR content ILIKE $${whereParams.length})`);
+  }
+
+  const whereSql = whereParts.join(' AND ');
+
+  // ── Count ──
   const countRes = await pool.query(
-    `SELECT COUNT(*)::int AS total_count FROM lessons WHERE ${whereParts.join(' AND ')};`,
+    `SELECT COUNT(*)::int AS total_count FROM lessons WHERE ${whereSql};`,
     [...whereParams],
   );
   const totalCount = Number(countRes.rows?.[0]?.total_count ?? 0);
 
-  let cursorClause = '';
-  if (params.after && params.after.trim().length > 0) {
-    const { createdAtIso, lessonId } = decodeCursor(params.after.trim());
-    whereParams.push(createdAtIso);
-    const createdAtParam = `$${whereParams.length}::timestamptz`;
-    whereParams.push(lessonId);
-    const lessonIdParam = `$${whereParams.length}::uuid`;
-    cursorClause = ` AND (created_at, lesson_id) < (${createdAtParam}, ${lessonIdParam})`;
+  // ── Pagination: snapshot param count before adding pagination-specific params ──
+  const dataParams = [...whereParams];
+  const useOffset = params.offset !== undefined && params.offset >= 0;
+
+  let dataWhereSql = whereSql;
+  let paginationSql: string;
+
+  if (useOffset) {
+    dataParams.push(limit);
+    dataParams.push(params.offset);
+    paginationSql = `LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}`;
+  } else {
+    // Cursor-based (legacy)
+    if (params.after && params.after.trim().length > 0) {
+      const { createdAtIso, lessonId } = decodeCursor(params.after.trim());
+      dataParams.push(createdAtIso);
+      dataParams.push(lessonId);
+      dataWhereSql += ` AND (created_at, lesson_id) < ($${dataParams.length - 1}::timestamptz, $${dataParams.length}::uuid)`;
+    }
+    dataParams.push(limit);
+    paginationSql = `LIMIT $${dataParams.length}`;
   }
 
-  const whereSql = whereParts.join(' AND ') + cursorClause;
-
-  whereParams.push(limit);
-  const limitParam = `$${whereParams.length}`;
+  const orderSql = `ORDER BY ${sortField} ${sortOrder}, lesson_id ${sortOrder}`;
 
   const res = await pool.query(
-    `SELECT
-      lesson_id,
-      project_id,
-      lesson_type,
-      title,
-      content,
-      tags,
-      source_refs,
-      created_at,
-      updated_at,
-      captured_by,
-      summary,
-      quick_action,
-      status,
-      superseded_by
+    `SELECT lesson_id, project_id, lesson_type, title, content, tags, source_refs,
+            created_at, updated_at, captured_by, summary, quick_action, status, superseded_by
      FROM lessons
-     WHERE ${whereSql}
-     ORDER BY created_at DESC, lesson_id DESC
-     LIMIT ${limitParam};`,
-    whereParams,
+     WHERE ${dataWhereSql}
+     ${orderSql}
+     ${paginationSql};`,
+    dataParams,
   );
 
   const items = (res.rows ?? []).map(mapLessonRow);
   const last = items.length ? items[items.length - 1] : null;
   const next_cursor = last ? encodeCursor(new Date(last.created_at).toISOString(), last.lesson_id) : undefined;
 
-  return { items, next_cursor, total_count: totalCount };
+  const result: ListLessonsResult = { items, next_cursor, total_count: totalCount };
+
+  if (useOffset) {
+    result.total_pages = Math.max(1, Math.ceil(totalCount / limit));
+    result.page = Math.floor((params.offset ?? 0) / limit) + 1;
+  }
+
+  return result;
 }
 
 export type SearchLessonsParams = {
@@ -608,11 +705,13 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
   //   <200 lessons: rerank top 20
   //   <500 lessons: rerank top 30
   //   500+: cap at 30 (beyond this, reranker latency dominates)
+  // Rerank budget: skip for small lesson sets where semantic order is already good.
+  // At <50 lessons, reranking shuffles results without improving quality.
+  // At 50+ lessons, noise increases and reranking helps surface the right answer.
   const rerankBudget =
-    totalLessons < 20 ? 0 :
-    totalLessons < 50 ? 10 :
-    totalLessons < 200 ? 20 :
-    totalLessons < 500 ? 30 :
+    totalLessons < 50 ? 0 :
+    totalLessons < 200 ? 15 :
+    totalLessons < 500 ? 25 :
     30;
 
   // Fetch 2x rerank budget to ensure correct answer is in the pool.

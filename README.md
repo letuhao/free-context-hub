@@ -142,18 +142,23 @@ We tested 8 embedding models and 8 reranker models ([full benchmark](docs/benchm
 
 ## Roadmap
 
+**Completed:**
 - [x] **Phase 1-2**: Core MVP — Lessons, Search, Guardrails
 - [x] **Phase 3**: Knowledge Distillation & Reflection
 - [x] **Phase 4**: Knowledge Graph (Neo4j, symbol-level)
 - [x] **Phase 5**: Git Intelligence & Automation
 - [x] **Phase 6**: Retrieval Quality Tuning & Tiered Search
-- [ ] **Phase 7**: Multi-Agent Knowledge Sharing
-- [ ] **Phase 8**: Interactive GUI for Knowledge Exploration
-- [ ] **Phase 9**: Human-in-the-loop Correction
-- [ ] **Phase 10**: Multi-format Ingestion (PDF, DOCX, Images)
-- [ ] **Phase 11**: RAG to Insight (human-readable summaries)
-- [ ] **Phase 12**: IDE Native (VS Code extension)
-- [ ] **Phase 13**: Knowledge Portability (import/export)
+
+**Planned:**
+- [ ] **Phase 7**: Interactive GUI — web dashboard for browsing lessons, guardrails, and knowledge graph (also usable from VS Code's built-in browser)
+- [ ] **Phase 8**: Human-in-the-loop Correction
+- [ ] **Phase 9**: Multi-format Ingestion (PDF, DOCX, Images)
+- [ ] **Phase 10**: Knowledge Portability (import/export)
+
+**Dropped:**
+- ~~Multi-Agent Passive Collection~~ — Parsing agent conversations costs tokens (contradicts "reduce token usage" goal), most conversation is noise, `add_lesson` captures verified conclusions explicitly.
+- ~~Session History Sharing~~ — Transcripts are 50k-200k tokens. The value is conclusions, not the journey. `add_lesson` captures those in ~100 tokens.
+- ~~IDE Native (VS Code extension)~~ — Agents use MCP (done). Humans need a UI, but a web dashboard (Phase 7) works in any browser including VS Code's built-in browser — same reach, fraction of the effort. A dedicated extension adds VS Code API maintenance, version testing, and marketplace publishing overhead for no new capability. If deeper IDE integration is needed later (inline warnings, CodeLens), a lightweight extension can link to the web GUI.
 
 ---
 
