@@ -6,14 +6,48 @@ import { useState, useEffect } from "react";
 import { useProject } from "@/contexts/project-context";
 import { cn } from "@/lib/cn";
 
-const navItems = [
+type NavItem = { href: string; label: string; icon: string };
+type NavGroup = { title: string; items: NavItem[] };
+
+const navGroups: (NavItem | NavGroup)[] = [
   { href: "/", label: "Dashboard", icon: "📊" },
   { href: "/chat", label: "Chat", icon: "💬" },
-  { href: "/lessons", label: "Lessons", icon: "📚" },
-  { href: "/guardrails", label: "Guardrails", icon: "🛡" },
-  { href: "/projects", label: "Projects", icon: "📁" },
-  { href: "/jobs", label: "Jobs", icon: "⚡" },
+  {
+    title: "Knowledge",
+    items: [
+      { href: "/lessons", label: "Lessons", icon: "📚" },
+      { href: "/guardrails", label: "Guardrails", icon: "🛡" },
+      { href: "/knowledge/docs", label: "Generated Docs", icon: "📄" },
+      { href: "/knowledge/search", label: "Code Search", icon: "🔍" },
+      { href: "/knowledge/graph", label: "Graph Explorer", icon: "🕸" },
+    ],
+  },
+  {
+    title: "Project",
+    items: [
+      { href: "/projects", label: "Overview", icon: "📁" },
+      { href: "/projects/git", label: "Git History", icon: "📦" },
+      { href: "/projects/sources", label: "Sources", icon: "🔗" },
+    ],
+  },
+  {
+    title: "System",
+    items: [
+      { href: "/jobs", label: "Jobs", icon: "⚡" },
+      { href: "/settings", label: "Settings", icon: "⚙" },
+      { href: "/settings/models", label: "Model Providers", icon: "🤖" },
+    ],
+  },
 ];
+
+function isGroup(item: NavItem | NavGroup): item is NavGroup {
+  return "title" in item;
+}
+
+function isActive(href: string, pathname: string): boolean {
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(href + "/");
+}
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -21,7 +55,6 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [healthy, setHealthy] = useState(true);
 
-  // Health polling
   useEffect(() => {
     const apiUrl = process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "http://localhost:3001";
     let active = true;
@@ -35,7 +68,6 @@ export function Sidebar() {
     return () => { active = false; clearInterval(interval); };
   }, []);
 
-  // Ctrl+B to toggle
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "b") {
@@ -47,6 +79,27 @@ export function Sidebar() {
     return () => document.removeEventListener("keydown", handler);
   }, []);
 
+  const renderItem = (item: NavItem) => {
+    const active = isActive(item.href, pathname);
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        title={collapsed ? item.label : undefined}
+        className={cn(
+          "flex items-center gap-2.5 rounded-md text-sm transition-colors",
+          collapsed ? "justify-center px-0 py-2" : "px-3 py-1.5",
+          active
+            ? "bg-zinc-800 text-zinc-100"
+            : "text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300",
+        )}
+      >
+        <span className="text-sm">{item.icon}</span>
+        {!collapsed && <span>{item.label}</span>}
+      </Link>
+    );
+  };
+
   return (
     <aside
       className={cn(
@@ -54,7 +107,6 @@ export function Sidebar() {
         collapsed ? "w-14" : "w-56",
       )}
     >
-      {/* Logo */}
       <div className="px-4 py-4 border-b border-zinc-800">
         {collapsed ? (
           <div className="text-center text-base font-bold text-zinc-100">C</div>
@@ -66,7 +118,6 @@ export function Sidebar() {
         )}
       </div>
 
-      {/* Project selector */}
       {!collapsed && (
         <div className="px-3 py-2">
           <input
@@ -79,60 +130,42 @@ export function Sidebar() {
         </div>
       )}
 
-      {/* Nav */}
-      <nav className="flex-1 px-2 py-2 space-y-0.5">
-        {navItems.map(({ href, label, icon }) => {
-          const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
-          return (
-            <Link
-              key={href}
-              href={href}
-              title={collapsed ? label : undefined}
-              className={cn(
-                "flex items-center gap-2.5 rounded-md text-sm transition-colors",
-                collapsed ? "justify-center px-0 py-2" : "px-3 py-2",
-                active
-                  ? "bg-zinc-800 text-zinc-100"
-                  : "text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300",
-              )}
-            >
-              <span className="text-base">{icon}</span>
-              {!collapsed && <span>{label}</span>}
-            </Link>
-          );
+      <nav className="flex-1 px-2 py-1 space-y-0.5 overflow-y-auto">
+        {navGroups.map((entry, i) => {
+          if (isGroup(entry)) {
+            return (
+              <div key={entry.title} className="mt-3 first:mt-0">
+                {!collapsed && (
+                  <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
+                    {entry.title}
+                  </div>
+                )}
+                <div className="space-y-0.5">
+                  {entry.items.map(renderItem)}
+                </div>
+              </div>
+            );
+          }
+          return renderItem(entry);
         })}
       </nav>
 
-      {/* Bottom */}
       <div className="border-t border-zinc-800 px-3 py-2.5 flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          <span
-            className={cn("w-2 h-2 rounded-full", healthy ? "bg-emerald-500" : "bg-red-500")}
-          />
+          <span className={cn("w-2 h-2 rounded-full", healthy ? "bg-emerald-500" : "bg-red-500")} />
           {!collapsed && (
             <span className="text-[11px] text-zinc-600">
               {healthy ? "API connected" : "API offline"}
             </span>
           )}
         </div>
-        {!collapsed && (
-          <button
-            onClick={() => setCollapsed(true)}
-            className="text-zinc-600 hover:text-zinc-400 text-xs"
-            title="Collapse sidebar (Ctrl+B)"
-          >
-            ◀
-          </button>
-        )}
-        {collapsed && (
-          <button
-            onClick={() => setCollapsed(false)}
-            className="text-zinc-600 hover:text-zinc-400 text-xs"
-            title="Expand sidebar (Ctrl+B)"
-          >
-            ▶
-          </button>
-        )}
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="text-zinc-600 hover:text-zinc-400 text-xs"
+          title={collapsed ? "Expand (Ctrl+B)" : "Collapse (Ctrl+B)"}
+        >
+          {collapsed ? "▶" : "◀"}
+        </button>
       </div>
     </aside>
   );
