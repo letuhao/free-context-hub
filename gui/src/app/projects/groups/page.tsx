@@ -249,7 +249,7 @@ export default function GroupsPage() {
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-zinc-200">{g.name}</span>
-                      <Badge>{g.group_id}</Badge>
+                      <Badge value={g.group_id} />
                     </div>
                     {g.description && (
                       <p className="text-xs text-zinc-500 mt-0.5">{g.description}</p>

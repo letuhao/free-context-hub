@@ -165,3 +165,7 @@ docker-compose.*.local.yml
 .claude/config.json
 
 .vscode/settings.json
+
+.claude/worktrees/stupefied-thompson
+
+.claude/settings.json

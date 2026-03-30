@@ -140,6 +140,21 @@ services:
       - contexthub_mcpdata:/data
       - ./:/workspace
 
+  # Next.js GUI — talks to the REST API on mcp:3001 inside the Docker network.
+  gui:
+    build:
+      context: ./gui
+      dockerfile: Dockerfile
+      args:
+        NPM_STRICT_SSL: ${NPM_STRICT_SSL:-false}
+        NEXT_PUBLIC_CONTEXTHUB_API_URL: ${NEXT_PUBLIC_CONTEXTHUB_API_URL:-http://localhost:3001}
+        NEXT_PUBLIC_CONTEXTHUB_TOKEN: ${NEXT_PUBLIC_CONTEXTHUB_TOKEN:-}
+        NEXT_PUBLIC_CONTEXTHUB_DEFAULT_PROJECT: ${NEXT_PUBLIC_CONTEXTHUB_DEFAULT_PROJECT:-free-context-hub}
+    depends_on:
+      - mcp
+    ports:
+      - "${GUI_PORT:-3002}:3000"
+
   # MCP server with corporate CA installed into container trust store.
   # Start with: docker compose --profile corp-ca up -d --build db mcp-ca
   mcp-ca:

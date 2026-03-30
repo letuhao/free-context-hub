@@ -9,7 +9,7 @@ ARG NPM_STRICT_SSL=true
 # Some networks MITM HTTPS with a custom CA and break npm inside containers.
 # Set build-arg NPM_STRICT_SSL=false to bypass (dev-only).
 RUN if [ "$NPM_STRICT_SSL" = "false" ]; then npm config set strict-ssl false; fi \
-  && npm ci --no-audit --no-fund
+  && npm install --no-audit --no-fund
 
 COPY . .
 RUN npm run build
@@ -35,7 +35,7 @@ ARG NPM_STRICT_SSL=true
 ENV NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/personal_kas.crt
 RUN npm config set cafile /usr/local/share/ca-certificates/personal_kas.crt \
   && if [ "$NPM_STRICT_SSL" = "false" ]; then npm config set strict-ssl false; fi \
-  && npm ci --no-audit --no-fund
+  && npm install --no-audit --no-fund
 
 COPY . .
 RUN npm run build
