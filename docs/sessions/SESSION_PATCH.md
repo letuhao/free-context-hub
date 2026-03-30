@@ -1,40 +1,32 @@
 ---
-id: CH-T7-GUI-COMPLETE
+id: CH-MULTI-REPO-STRATEGY
 date: 2026-03-30
-module: Phase7-GUI-Implementation
-phase: Phase 7
+module: Multi-Repo-Strategy
+phase: Planning
 ---
 
 # Session Patch — 2026-03-30
 
 ## Where We Are
-Phase: **Phase 7 GUI — 13 of 14 pages implemented.** All backend routes wired. Only Chat page remains (needs AI SDK integration). Architecture refactor (M1-M6) complete.
+Phase: **Multi-repo strategy planning.** Confirmed free-context-hub already supports multi-project natively via `project_id` scoping. Chose **Option C (Hybrid multi-layer)** for the user's microservice + integration architecture.
 
-## Page Status
+## What Was Done This Session
+- Explored existing multi-repo capabilities (project_id isolation, workspace roots, project_sources)
+- Identified 3 options: per-repo projects, single shared project, hybrid multi-layer
+- Chose Option C — hybrid with layered project_ids (global → system → integration → microservice)
+- Documented full strategy in `docs/multi-repo-strategy.md`
 
-| Page | Route | Status |
-|------|-------|--------|
-| Dashboard | `/` | Done |
-| Chat | `/chat` | Stub (needs AI SDK) |
-| Lessons | `/lessons` | Done (full) |
-| Guardrails | `/guardrails` | Done |
-| Generated Docs | `/knowledge/docs` | Done |
-| Code Search | `/knowledge/search` | Done |
-| Graph Explorer | `/knowledge/graph` | Done (placeholder) |
-| Projects Overview | `/projects` | Done |
-| Git History | `/projects/git` | Done |
-| Sources | `/projects/sources` | Done |
-| Jobs | `/jobs` | Done |
-| Settings | `/settings` | Done |
-| Model Providers | `/settings/models` | Done (client-side) |
+## Key Decision
+**Microservices ≠ Integrations.** Systems (Order, Payment) are separate bounded contexts. Microservices are internal to a system. Integration knowledge (API contracts, retry policies) lives in dedicated integration projects, not forced into either system.
 
-## Next Steps
-1. Chat page — AI SDK deps + POST /api/chat endpoint
-2. Model Providers backend — DB migration + service + 9 REST endpoints
-3. KG routes — 4 endpoints to power Graph Explorer
-4. Integration testing with live backend
+## Next Steps (next session)
+1. Define actual system names and project IDs for user's repos
+2. Create reusable CLAUDE.md template with multi-layer `search_lessons`
+3. Register workspace roots for each repo
+4. Seed shared guardrails in `platform-shared` project
+5. Seed integration contracts as lessons
+6. Evaluate adding multi-project `search_lessons` query support (feature enhancement)
 
-## Open Blockers
-- Chat blocked on AI SDK
-- Model Providers DB tables need migration
-- Graph Explorer needs KG REST routes
+## Prior Session Context
+- Phase 7 GUI: 14/14 pages complete
+- Open: Model Providers backend, KG routes, integration testing

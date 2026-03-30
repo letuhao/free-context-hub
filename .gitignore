@@ -156,3 +156,7 @@ docs/qc/*-qc-report.md
 .claude/settings.local.json
 .claude/worktrees/nervous-euclid
 docs/qc/*-integration-report.md
+
+# Machine-specific compose overrides
+docker-compose.pc.yml
+docker-compose.*.local.yml
