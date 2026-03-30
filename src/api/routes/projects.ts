@@ -6,9 +6,18 @@ import {
   deleteWorkspace,
   resolveProjectIdOrThrow,
   resolveProjectRoot,
+  listAllProjects,
 } from '../../core/index.js';
 
 const router = Router();
+
+/** GET /api/projects — list all projects with group memberships and lesson counts */
+router.get('/', async (req, res, next) => {
+  try {
+    const projects = await listAllProjects();
+    res.json({ projects });
+  } catch (e) { next(e); }
+});
 
 /** GET /api/projects/:id/summary — project summary snapshot */
 router.get('/:id/summary', async (req, res, next) => {

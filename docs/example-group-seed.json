@@ -1,0 +1,48 @@
+{
+  "groups": [
+    {
+      "group_id": "backend-shared",
+      "name": "Backend Shared",
+      "description": "Shared guardrails and conventions for all backend services",
+      "members": ["order-api", "payment-gateway", "inventory-api"]
+    },
+    {
+      "group_id": "order-payment-integration",
+      "name": "Order-Payment Integration",
+      "description": "API contracts, retry policies, and error mapping between Order and Payment systems",
+      "members": ["order-api", "payment-gateway"]
+    }
+  ],
+  "guardrails": [
+    {
+      "group_id": "backend-shared",
+      "lessons": [
+        {
+          "title": "No force push to main",
+          "content": "Never use git push --force on main/master branch. Use --force-with-lease if absolutely necessary, and only after team approval.",
+          "tags": ["git", "safety"]
+        },
+        {
+          "title": "Require tests before deploy",
+          "content": "All deployments must pass CI tests. Never skip tests or deploy from a failing branch.",
+          "tags": ["deploy", "testing"]
+        },
+        {
+          "title": "No secrets in code",
+          "content": "Never commit API keys, tokens, passwords, or other secrets to the repository. Use environment variables or a secrets manager.",
+          "tags": ["security"]
+        }
+      ]
+    },
+    {
+      "group_id": "order-payment-integration",
+      "lessons": [
+        {
+          "title": "Payment API retry policy",
+          "content": "Payment API calls should retry with exponential backoff (1s, 2s, 4s) up to 3 times. Do not retry on 4xx errors (client errors). Only retry on 5xx and network timeouts.",
+          "tags": ["api", "retry", "payment"]
+        }
+      ]
+    }
+  ]
+}

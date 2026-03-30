@@ -47,7 +47,7 @@ export const api = {
   addLesson: (body: Record<string, unknown>) =>
     request<any>("POST", "/api/lessons", body),
 
-  searchLessons: (body: { project_id?: string; query: string; limit?: number }) =>
+  searchLessons: (body: { project_id?: string; project_ids?: string[]; group_id?: string; include_groups?: boolean; query: string; limit?: number }) =>
     request<any>("POST", "/api/lessons/search", body),
 
   updateLessonStatus: (id: string, body: Record<string, unknown>) =>
@@ -62,6 +62,9 @@ export const api = {
     request<any>("POST", "/api/search/code-tiered", body),
 
   // ── Projects ──
+  listProjects: () =>
+    request<{ projects: any[] }>("GET", "/api/projects"),
+
   getProjectSummary: (id: string) =>
     request<any>("GET", `/api/projects/${encodeURIComponent(id)}/summary`),
 
@@ -125,6 +128,28 @@ export const api = {
 
   promoteGeneratedDoc: (id: string, body: Record<string, unknown>) =>
     request<any>("POST", `/api/generated-docs/${encodeURIComponent(id)}/promote`, body),
+
+  // ── Project Groups ──
+  listGroups: () =>
+    request<{ groups: any[] }>("GET", "/api/groups"),
+
+  createGroup: (body: { group_id: string; name: string; description?: string }) =>
+    request<any>("POST", "/api/groups", body),
+
+  deleteGroup: (groupId: string) =>
+    request<{ deleted: boolean }>("DELETE", `/api/groups/${encodeURIComponent(groupId)}`),
+
+  listGroupMembers: (groupId: string) =>
+    request<{ group_id: string; members: string[] }>("GET", `/api/groups/${encodeURIComponent(groupId)}/members`),
+
+  addProjectToGroup: (groupId: string, projectId: string) =>
+    request<{ added: boolean }>("POST", `/api/groups/${encodeURIComponent(groupId)}/members`, { project_id: projectId }),
+
+  removeProjectFromGroup: (groupId: string, projectId: string) =>
+    request<{ removed: boolean }>("DELETE", `/api/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(projectId)}`),
+
+  listGroupsForProject: (projectId: string) =>
+    request<{ project_id: string; groups: any[] }>("GET", `/api/groups/by-project/${encodeURIComponent(projectId)}`),
 
   // ── System ──
   health: () =>

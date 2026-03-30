@@ -26,6 +26,7 @@ const navGroups: (NavItem | NavGroup)[] = [
     title: "Project",
     items: [
       { href: "/projects", label: "Overview", icon: "📁" },
+      { href: "/projects/groups", label: "Groups", icon: "👥" },
       { href: "/projects/git", label: "Git History", icon: "📦" },
       { href: "/projects/sources", label: "Sources", icon: "🔗" },
     ],
@@ -51,7 +52,7 @@ function isActive(href: string, pathname: string): boolean {
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { projectId, setProjectId } = useProject();
+  const { projectId, setProjectId, projects, includeGroups, setIncludeGroups } = useProject();
   const [collapsed, setCollapsed] = useState(false);
   const [healthy, setHealthy] = useState(true);
 
@@ -119,14 +120,39 @@ export function Sidebar() {
       </div>
 
       {!collapsed && (
-        <div className="px-3 py-2">
-          <input
-            type="text"
-            value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
-            className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded-md text-xs text-zinc-300 outline-none focus:border-zinc-700"
-            placeholder="Project ID"
-          />
+        <div className="px-3 py-2 space-y-1.5">
+          {projects.length > 0 ? (
+            <select
+              value={projectId}
+              onChange={(e) => setProjectId(e.target.value)}
+              className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded-md text-xs text-zinc-300 outline-none focus:border-zinc-700 appearance-none cursor-pointer"
+            >
+              {projects.map((p) => (
+                <option key={p.project_id} value={p.project_id}>
+                  {p.name ?? p.project_id}
+                  {p.groups.length > 0 ? ` (${p.groups.length} groups)` : ""}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="text"
+              value={projectId}
+              onChange={(e) => setProjectId(e.target.value)}
+              className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded-md text-xs text-zinc-300 outline-none focus:border-zinc-700"
+              placeholder="Project ID"
+            />
+          )}
+          {/* Group toggle */}
+          <label className="flex items-center gap-1.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={includeGroups}
+              onChange={(e) => setIncludeGroups(e.target.checked)}
+              className="w-3 h-3 rounded border-zinc-700 bg-zinc-800 accent-blue-500"
+            />
+            <span className="text-[10px] text-zinc-500">Include group knowledge</span>
+          </label>
         </div>
       )}
 

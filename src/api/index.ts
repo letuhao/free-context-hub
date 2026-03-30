@@ -13,6 +13,7 @@ import { generatedDocsRouter } from './routes/generated-docs.js';
 import { workspaceRouter } from './routes/workspace.js';
 import { chatRouter } from './routes/chat.js';
 import { systemRouter } from './routes/system.js';
+import { projectGroupsRouter } from './routes/projectGroups.js';
 
 /**
  * Creates the REST API Express app.
@@ -42,6 +43,7 @@ export function createApiApp() {
   app.use('/api/workspace', workspaceRouter);
   app.use('/api', workspaceRouter); // mounts /api/sources/* routes
   app.use('/api/chat', chatRouter);
+  app.use('/api/groups', projectGroupsRouter);
 
   // ── Error handler (must be last) ──
   app.use(errorHandler);

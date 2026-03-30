@@ -29,7 +29,7 @@ type SearchMode = "text" | "semantic";
 const PAGE_SIZE = 20;
 
 export default function LessonsPage() {
-  const { projectId } = useProject();
+  const { projectId, includeGroups } = useProject();
   const { toast } = useToast();
 
   // Data
@@ -80,6 +80,7 @@ export default function LessonsPage() {
       if (debouncedQuery && searchMode === "semantic") {
         const result = await api.searchLessons({
           project_id: projectId,
+          include_groups: includeGroups || undefined,
           query: debouncedQuery,
           limit: PAGE_SIZE,
         });
@@ -110,7 +111,7 @@ export default function LessonsPage() {
     } finally {
       setLoading(false);
     }
-  }, [projectId, page, debouncedQuery, searchMode, sortField, sortOrder, filterType, filterStatus, filterTags, showAllStatuses, toast]);
+  }, [projectId, page, debouncedQuery, searchMode, sortField, sortOrder, filterType, filterStatus, filterTags, showAllStatuses, includeGroups, toast]);
 
   useEffect(() => { fetchLessons(); }, [fetchLessons]);
 
@@ -165,6 +166,24 @@ export default function LessonsPage() {
 
   // ── Table columns ──
   const columns: Column<Lesson>[] = [
+    // Show source project column when searching across groups.
+    ...(includeGroups && searchMode === "semantic" && debouncedQuery
+      ? [{
+          key: "project_id" as const,
+          header: "Source",
+          render: (row: Lesson) => (
+            <span
+              className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                row.project_id === projectId
+                  ? "bg-zinc-800 text-zinc-400"
+                  : "bg-blue-900/30 text-blue-400 border border-blue-800/40"
+              }`}
+            >
+              {row.project_id}
+            </span>
+          ),
+        }]
+      : []),
     {
       key: "title",
       header: `Title${sortArrow("title")}`,

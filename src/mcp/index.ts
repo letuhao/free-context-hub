@@ -23,6 +23,7 @@ import {
   deleteWorkspace,
   listLessons,
   searchLessons,
+  searchLessonsMulti,
   updateLessonStatus,
   checkGuardrails,
   getProjectSnapshotBody,
@@ -47,6 +48,15 @@ import {
   getGeneratedDocument,
   listGeneratedDocuments,
   promoteGeneratedDocument,
+  // project groups
+  createGroup,
+  deleteGroup,
+  listGroups,
+  listGroupMembers,
+  addProjectToGroup,
+  removeProjectFromGroup,
+  listGroupsForProject,
+  resolveProjectIds,
 } from '../core/index.js';
 import { formatToolResponse, OutputFormatSchema } from './formatters.js';
 
@@ -965,7 +975,7 @@ function createMcpToolsServer() {
   server.registerTool(
     'search_lessons',
     {
-      description: 'Semantic search over lesson embeddings for a project.',
+      description: 'Semantic search over lesson embeddings. Supports single project, multi-project, group-based, or include-all-groups search.',
       inputSchema: z.object({
         workspace_token: z.string().optional().describe('Workspace token (required only if MCP_AUTH_ENABLED=true).'),
         project_id: z
@@ -973,6 +983,20 @@ function createMcpToolsServer() {
           .min(1)
           .optional()
           .describe('Project identifier. Optional if DEFAULT_PROJECT_ID is set; otherwise required.'),
+        project_ids: z
+          .array(z.string().min(1))
+          .optional()
+          .describe('Search across multiple projects at once. When provided, searches all listed projects in a single query.'),
+        group_id: z
+          .string()
+          .min(1)
+          .optional()
+          .describe('Search lessons stored in a specific group project. Useful for shared/integration knowledge.'),
+        include_groups: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe('When true with project_id, also searches all groups this project belongs to.'),
         query: z.string().min(1).describe('Natural language query to embed and search against lesson embeddings.'),
         filters: z
           .object({
@@ -994,6 +1018,7 @@ function createMcpToolsServer() {
         matches: z.array(
           z.object({
             lesson_id: z.string(),
+            project_id: z.string().optional(),
             lesson_type: z.enum(['decision', 'preference', 'guardrail', 'workaround', 'general_note']),
             title: z.string(),
             content_snippet: z.string(),
@@ -1005,16 +1030,34 @@ function createMcpToolsServer() {
         explanations: z.array(z.string()),
       }),
     },
-    async ({ workspace_token, project_id, query, filters, limit, output_format }) => {
+    async ({ workspace_token, project_id, project_ids, group_id, include_groups, query, filters, limit, output_format }) => {
       assertWorkspaceToken(workspace_token);
-      const projectId = resolveProjectIdOrThrow(project_id);
-      const result = await searchLessons({
-        projectId,
-        query,
-        limit,
-        filters: filters as { lesson_type?: any; tags_any?: string[]; include_all_statuses?: boolean },
-      });
-      const summary = `search_lessons: matches=${result.matches.length}`;
+      const filtersTyped = filters as { lesson_type?: any; tags_any?: string[]; include_all_statuses?: boolean } | undefined;
+
+      // Priority: project_ids > group_id > project_id + include_groups > project_id alone
+      let resolvedIds: string[] | null = null;
+
+      if (project_ids && project_ids.length > 0) {
+        // Explicit multi-project search.
+        resolvedIds = project_ids;
+      } else if (group_id) {
+        // Search a specific group's project.
+        resolvedIds = [group_id];
+      } else {
+        const projectId = resolveProjectIdOrThrow(project_id);
+        if (include_groups) {
+          // Expand to include all groups this project belongs to.
+          resolvedIds = await resolveProjectIds(projectId, true);
+        } else {
+          // Single project search (backwards compat — identical to previous behavior).
+          const result = await searchLessons({ projectId, query, limit, filters: filtersTyped });
+          const summary = `search_lessons: matches=${result.matches.length}`;
+          return formatToolResponse(result, summary, output_format);
+        }
+      }
+
+      const result = await searchLessonsMulti({ projectIds: resolvedIds, query, limit, filters: filtersTyped });
+      const summary = `search_lessons: matches=${result.matches.length} (multi-project: ${resolvedIds.length})`;
       return formatToolResponse(result, summary, output_format);
     },
   );
@@ -1211,7 +1254,7 @@ function createMcpToolsServer() {
   server.registerTool(
     'check_guardrails',
     {
-      description: 'Evaluate guardrails before risky actions.',
+      description: 'Evaluate guardrails before risky actions. Supports include_groups to check group-level guardrails.',
       inputSchema: z.object({
         workspace_token: z.string().optional().describe('Workspace token (required only if MCP_AUTH_ENABLED=true).'),
         action_context: z
@@ -1222,6 +1265,11 @@ function createMcpToolsServer() {
             workspace: z.string().optional().describe('Alternative project identifier field for some clients.'),
           })
           .passthrough(),
+        include_groups: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe('When true, also checks guardrails from all groups this project belongs to.'),
         output_format: OutputFormatSchema.default('auto_both').describe('Response format: auto_both | json_only | json_pretty | summary_only.'),
       }),
       outputSchema: z.object({
@@ -1240,10 +1288,39 @@ function createMcpToolsServer() {
           .optional(),
       }),
     },
-    async ({ workspace_token, action_context, output_format }) => {
+    async ({ workspace_token, action_context, include_groups, output_format }) => {
       assertWorkspaceToken(workspace_token);
       const explicit = action_context.project_id ?? action_context.workspace;
       const projectId = explicit && String(explicit).trim() ? String(explicit) : resolveProjectIdOrThrow(undefined);
+
+      if (include_groups) {
+        // Check guardrails from project + all its groups. Merge results.
+        const allIds = await resolveProjectIds(projectId, true);
+        let totalChecked = 0;
+        const allMatched: Array<{ rule_id: string; verification_method: string; requirement: string }> = [];
+        let anyFailed = false;
+        let firstPrompt: string | undefined;
+
+        for (const pid of allIds) {
+          const r = await checkGuardrails(pid, action_context);
+          totalChecked += r.rules_checked;
+          if (!r.pass) {
+            anyFailed = true;
+            if (!firstPrompt && r.prompt) firstPrompt = r.prompt;
+            if (r.matched_rules) allMatched.push(...r.matched_rules);
+          }
+        }
+
+        const merged = {
+          pass: !anyFailed,
+          rules_checked: totalChecked,
+          needs_confirmation: anyFailed ? true : undefined,
+          prompt: firstPrompt,
+          matched_rules: allMatched.length > 0 ? allMatched : undefined,
+        };
+        const summary = `check_guardrails: pass=${merged.pass}, rules_checked=${merged.rules_checked} (${allIds.length} projects)`;
+        return formatToolResponse(merged, summary, output_format);
+      }
 
       const result = await checkGuardrails(projectId, action_context);
       const summary = `check_guardrails: pass=${result.pass}, rules_checked=${result.rules_checked}`;
@@ -2230,6 +2307,159 @@ function createMcpToolsServer() {
       const result = await runNextJob(queue_name);
       const summary = `run_next_job: status=${result.status}`;
       return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  // ── Project Groups ──
+
+  server.registerTool(
+    'list_groups',
+    {
+      description: 'List all project groups with member counts.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        groups: z.array(z.object({
+          group_id: z.string(),
+          name: z.string(),
+          description: z.string().nullable(),
+          member_count: z.number(),
+        })),
+      }),
+    },
+    async ({ workspace_token, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const groups = await listGroups();
+      const summary = `list_groups: count=${groups.length}`;
+      return formatToolResponse({ groups }, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'create_group',
+    {
+      description: 'Create a project group. Projects added as members can share knowledge via include_groups in search_lessons.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        group_id: z.string().min(1).describe('Unique identifier for the group (e.g. "order-payment-team").'),
+        name: z.string().min(1).describe('Human-readable group name.'),
+        description: z.string().optional().describe('Optional description of what knowledge this group shares.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        group_id: z.string(),
+        name: z.string(),
+        description: z.string().nullable(),
+      }),
+    },
+    async ({ workspace_token, group_id, name, description, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const result = await createGroup({ group_id, name, description });
+      const summary = `create_group: group_id=${result.group_id}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'delete_group',
+    {
+      description: 'Delete a project group. Members are removed automatically; shared lessons remain in the group project.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        group_id: z.string().min(1),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({ deleted: z.boolean() }),
+    },
+    async ({ workspace_token, group_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const result = await deleteGroup(group_id);
+      const summary = `delete_group: deleted=${result.deleted}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'add_project_to_group',
+    {
+      description: 'Add a project to a group so it shares knowledge with other group members.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        group_id: z.string().min(1),
+        project_id: z.string().min(1),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({ added: z.boolean() }),
+    },
+    async ({ workspace_token, group_id, project_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const result = await addProjectToGroup(group_id, project_id);
+      const summary = `add_project_to_group: group=${group_id} project=${project_id} added=${result.added}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'remove_project_from_group',
+    {
+      description: 'Remove a project from a group.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        group_id: z.string().min(1),
+        project_id: z.string().min(1),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({ removed: z.boolean() }),
+    },
+    async ({ workspace_token, group_id, project_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const result = await removeProjectFromGroup(group_id, project_id);
+      const summary = `remove_project_from_group: group=${group_id} project=${project_id} removed=${result.removed}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'list_group_members',
+    {
+      description: 'List all project IDs that belong to a group.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        group_id: z.string().min(1),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({ group_id: z.string(), members: z.array(z.string()) }),
+    },
+    async ({ workspace_token, group_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const members = await listGroupMembers(group_id);
+      const summary = `list_group_members: group=${group_id} count=${members.length}`;
+      return formatToolResponse({ group_id, members }, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'list_project_groups',
+    {
+      description: 'List all groups a project belongs to.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional().describe('Project ID. Optional if DEFAULT_PROJECT_ID is set.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        project_id: z.string(),
+        groups: z.array(z.object({ group_id: z.string(), name: z.string(), description: z.string().nullable() })),
+      }),
+    },
+    async ({ workspace_token, project_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      const groups = await listGroupsForProject(projectId);
+      const summary = `list_project_groups: project=${projectId} groups=${groups.length}`;
+      return formatToolResponse({ project_id: projectId, groups }, summary, output_format);
     },
   );
 
