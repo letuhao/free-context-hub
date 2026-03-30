@@ -30,7 +30,7 @@ export { searchCode } from '../services/retriever.js';
 export { tieredSearch } from '../services/tieredRetriever.js';
 
 // ── Services: lessons & guardrails ──
-export { addLesson, deleteWorkspace, listLessons, searchLessons, updateLessonStatus } from '../services/lessons.js';
+export { addLesson, deleteWorkspace, listLessons, searchLessons, searchLessonsMulti, updateLessonStatus } from '../services/lessons.js';
 export { checkGuardrails } from '../services/guardrails.js';
 
 // ── Services: distillation & snapshots ──
@@ -59,6 +59,21 @@ export { listWorkspaceRoots, registerWorkspaceRoot, scanWorkspaceChanges } from 
 
 // ── Services: generated docs ──
 export { getGeneratedDocument, listGeneratedDocuments, promoteGeneratedDocument } from '../services/generatedDocs.js';
+
+// ── Services: project groups ──
+export {
+  createGroup,
+  deleteGroup,
+  listGroups,
+  getGroup,
+  listGroupMembers,
+  addProjectToGroup,
+  removeProjectFromGroup,
+  listGroupsForProject,
+  resolveProjectIds,
+  listAllProjects,
+} from '../services/projectGroups.js';
+export type { ProjectGroup, ProjectGroupWithMembers, ProjectWithGroups } from '../services/projectGroups.js';
 
 // ── Utils ──
 export { resolveProjectRoot } from '../utils/resolveProjectRoot.js';

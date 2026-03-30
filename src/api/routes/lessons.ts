@@ -3,8 +3,10 @@ import {
   addLesson,
   listLessons,
   searchLessons,
+  searchLessonsMulti,
   updateLessonStatus,
   resolveProjectIdOrThrow,
+  resolveProjectIds,
 } from '../../core/index.js';
 
 const router = Router();
@@ -47,16 +49,30 @@ router.post('/', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-/** POST /api/lessons/search — semantic search lessons */
+/** POST /api/lessons/search — semantic search lessons (single or multi-project) */
 router.post('/search', async (req, res, next) => {
   try {
-    const projectId = resolveProjectIdOrThrow(req.body.project_id);
-    const result = await searchLessons({
-      projectId,
-      query: req.body.query,
-      filters: req.body.filters,
-      limit: req.body.limit,
-    });
+    const { project_id, project_ids, group_id, include_groups, query, filters, limit } = req.body;
+
+    // Priority: project_ids > group_id > project_id + include_groups > project_id alone
+    let resolvedIds: string[] | null = null;
+
+    if (Array.isArray(project_ids) && project_ids.length > 0) {
+      resolvedIds = project_ids;
+    } else if (group_id) {
+      resolvedIds = [String(group_id)];
+    } else {
+      const projectId = resolveProjectIdOrThrow(project_id);
+      if (include_groups) {
+        resolvedIds = await resolveProjectIds(projectId, true);
+      } else {
+        const result = await searchLessons({ projectId, query, filters, limit });
+        res.json(result);
+        return;
+      }
+    }
+
+    const result = await searchLessonsMulti({ projectIds: resolvedIds, query, filters, limit });
     res.json(result);
   } catch (e) { next(e); }
 });

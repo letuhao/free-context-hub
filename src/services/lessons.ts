@@ -447,6 +447,7 @@ export type SearchLessonsParams = {
 export type SearchLessonsResult = {
   matches: Array<{
     lesson_id: string;
+    project_id?: string;
     lesson_type: LessonType;
     title: string;
     content_snippet: string;
@@ -738,6 +739,7 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
   const res = await pool.query(
     `SELECT
       l.lesson_id,
+      l.project_id,
       l.lesson_type,
       l.title,
       l.content,
@@ -767,6 +769,7 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
     const snippetSource = sum.length ? sum : String(r.content);
     return {
       lesson_id: String(r.lesson_id),
+      project_id: String(r.project_id),
       lesson_type: String(r.lesson_type) as LessonType,
       title: String(r.title),
       content_snippet: makeSnippet(snippetSource, 280),
@@ -804,6 +807,165 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
   // Trim to the originally requested limit after reranking.
   matches = matches.slice(0, limit);
 
+  return { matches, explanations };
+}
+
+// ── Multi-project search ──
+
+export type SearchLessonsMultiParams = {
+  projectIds: string[];
+  query: string;
+  limit?: number;
+  filters?: {
+    lesson_type?: LessonType;
+    tags_any?: string[];
+    include_all_statuses?: boolean;
+  };
+};
+
+/**
+ * Search lessons across multiple projects in a single query.
+ * Uses `WHERE project_id = ANY($1::text[])` for efficient multi-project search.
+ * Single embedding computation, single SQL query, single rerank pass.
+ */
+export async function searchLessonsMulti(params: SearchLessonsMultiParams): Promise<SearchLessonsResult> {
+  const pool = getDbPool();
+  const projectIds = [...new Set(params.projectIds.filter(Boolean))];
+
+  // If only one project, delegate to single-project search (same perf path).
+  if (projectIds.length === 1) {
+    return searchLessons({ projectId: projectIds[0], query: params.query, limit: params.limit, filters: params.filters });
+  }
+  if (projectIds.length === 0) {
+    return { matches: [], explanations: ['no project_ids provided'] };
+  }
+
+  const limit = Math.min(Math.max(params.limit ?? 10, 1), 50);
+  const lessonType = params.filters?.lesson_type;
+  const tagsAny = (params.filters?.tags_any ?? []).filter(Boolean);
+  const includeAll = Boolean(params.filters?.include_all_statuses);
+
+  const queryTokens = params.query.match(/[A-Za-z_][A-Za-z0-9_]{1,}/g) ?? [];
+  const ftsQuery = buildFtsQuery(queryTokens, 'or');
+
+  const [vec] = await embedTexts([params.query]);
+  const vector = `[${vec.join(',')}]`;
+
+  // $1 = text[] of project IDs, $2 = vector
+  const sqlParams: any[] = [projectIds, vector];
+  const whereParts: string[] = ['l.project_id = ANY($1::text[])'];
+
+  if (!includeAll) {
+    whereParts.push(`l.status NOT IN ('superseded', 'archived')`);
+  }
+
+  if (lessonType) {
+    sqlParams.push(lessonType);
+    whereParts.push(`l.lesson_type = $${sqlParams.length}`);
+  }
+
+  if (tagsAny.length > 0) {
+    sqlParams.push(tagsAny);
+    whereParts.push(`l.tags && $${sqlParams.length}::text[]`);
+  }
+
+  // Dynamic retrieval pool sizing across all projects.
+  let totalLessons = 0;
+  try {
+    const countRes = await pool.query(
+      `SELECT count(*)::int AS n FROM lessons WHERE project_id = ANY($1::text[])`,
+      [projectIds],
+    );
+    totalLessons = Number(countRes.rows?.[0]?.n ?? 0);
+  } catch { /* best-effort */ }
+
+  const rerankBudget =
+    totalLessons < 50 ? 0 :
+    totalLessons < 200 ? 15 :
+    totalLessons < 500 ? 25 :
+    30;
+
+  const fetchLimit = Math.max(limit, rerankBudget > 0 ? rerankBudget * 2 : limit * 3);
+  sqlParams.push(Math.min(fetchLimit, 60));
+  const limitParam = `$${sqlParams.length}`;
+
+  let ftsScoreExpr = '0';
+  let ftsJoin = '';
+  if (ftsQuery) {
+    sqlParams.push(ftsQuery);
+    const ftsParam = `$${sqlParams.length}`;
+    ftsJoin = `LEFT JOIN LATERAL (
+      SELECT ts_rank(l.fts, to_tsquery('english', ${ftsParam})) AS fts_rank
+      WHERE l.fts IS NOT NULL AND l.fts @@ to_tsquery('english', ${ftsParam})
+    ) fts_sub ON true`;
+    ftsScoreExpr = 'COALESCE(fts_sub.fts_rank, 0)';
+  }
+
+  const whereClause = whereParts.join(' AND ');
+
+  const res = await pool.query(
+    `SELECT
+      l.lesson_id,
+      l.project_id,
+      l.lesson_type,
+      l.title,
+      l.content,
+      l.summary,
+      l.tags,
+      l.status,
+      GREATEST(0, 1 - (l.embedding <=> $2::vector)) AS sem_score,
+      ${ftsScoreExpr} AS fts_score,
+      LEAST(1.0, GREATEST(0, 1 - (l.embedding <=> $2::vector)) + 0.40 * ${ftsScoreExpr}) AS score
+     FROM lessons l
+     ${ftsJoin}
+     WHERE ${whereClause}
+     ORDER BY score DESC, sem_score DESC
+     LIMIT ${limitParam};`,
+    sqlParams,
+  );
+
+  const explanations: string[] = [`multi_project: ${projectIds.length} projects searched`];
+  if (ftsQuery) {
+    const ftsHits = (res.rows ?? []).filter((r: any) => Number(r.fts_score) > 0).length;
+    explanations.push(`hybrid: sem + 0.40*fts, fts_hits=${ftsHits}/${(res.rows ?? []).length}`);
+  }
+
+  let matches: SearchLessonsResult['matches'] = (res.rows ?? []).map((r: any) => {
+    const sum = r.summary != null ? String(r.summary).trim() : '';
+    const snippetSource = sum.length ? sum : String(r.content);
+    return {
+      lesson_id: String(r.lesson_id),
+      project_id: String(r.project_id),
+      lesson_type: String(r.lesson_type) as LessonType,
+      title: String(r.title),
+      content_snippet: makeSnippet(snippetSource, 280),
+      tags: (r.tags ?? []) as string[],
+      score: Number(r.score),
+      status: String(r.status ?? 'active') as LessonStatus,
+    };
+  });
+
+  // Rerank pass (same logic as single-project).
+  const env = getEnv();
+  if (rerankBudget > 0 && matches.length >= 2 && (env.RERANK_MODEL || env.DISTILLATION_MODEL) && env.DISTILLATION_ENABLED) {
+    try {
+      const rerankCount = Math.min(matches.length, rerankBudget);
+      const rerankCandidates = matches.slice(0, rerankCount).map((m, i) => ({
+        index: i,
+        title: m.title,
+        snippet: m.content_snippet,
+      }));
+      const rerankedOrder = await rerankLessons({ query: params.query, candidates: rerankCandidates });
+      const rerankedTop = rerankedOrder.map(i => matches[i]).filter(Boolean);
+      const remaining = matches.slice(rerankCandidates.length);
+      matches = [...rerankedTop, ...remaining];
+      explanations.push(`reranked: top ${rerankCandidates.length}/${matches.length} candidates (budget=${rerankBudget}, total_lessons=${totalLessons})`);
+    } catch (err) {
+      explanations.push(`rerank skipped: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  matches = matches.slice(0, limit);
   return { matches, explanations };
 }
 

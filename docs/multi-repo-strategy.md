@@ -6,72 +6,106 @@ The user operates multiple repositories across different systems (not just micro
 
 **Key distinction:** Microservices are internal parts of a system. Integration is how separate systems communicate across boundaries. They share contracts, not internals.
 
-## Current Capability
+## Implemented: Project Groups (Many-to-Many)
 
-free-context-hub already supports multi-repo natively:
-
-- `project_id` scopes all data (lessons, guardrails, embeddings, code chunks)
-- `project_workspaces` table supports multiple filesystem roots per project
-- `project_sources` table supports remote git repo URLs per project
-- All queries are isolated by `project_id` — no cross-contamination
-
-## Chosen Strategy: Option C — Hybrid (Multi-Layer)
+**Design choice: Groups, not trees.** Users decide which repos share knowledge with each other. A project can belong to multiple groups or none. No forced global hierarchy.
 
 ```
-┌─────────────────────────────────────────────────┐
-│            Shared Knowledge Layer                │
-│  (API contracts, integration patterns, auth)     │
-├────────────────────┬────────────────────────────┤
-│   Order System     │     Payment System          │
-│  ┌──────────────┐  │  ┌───────────────────────┐  │
-│  │ order-api    │  │  │ payment-gateway       │  │
-│  │ order-worker │──┼──│ payment-processor     │  │
-│  │ order-db     │  │  │ payment-ledger        │  │
-│  └──────────────┘  │  └───────────────────────┘  │
-│   (system lessons) │   (system lessons)          │
-└────────────────────┴────────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│  Group: "backend-shared"                            │
+│  Members: order-api, payment-gateway, inventory-api │
+│  → Shared guardrails: logging, auth, deploy rules   │
+├─────────────────────────────────────────────────────┤
+│  Group: "order-payment-integration"                 │
+│  Members: order-api, payment-gateway                │
+│  → API contracts, retry policies, error mapping     │
+├─────────────────────────────────────────────────────┤
+│  order-api (solo)                                   │
+│  → Only its own lessons when include_groups=false    │
+└─────────────────────────────────────────────────────┘
 ```
 
-### Project ID Mapping
+### Schema
 
-| Level | project_id example | What it stores |
-|---|---|---|
-| Global shared | `platform-shared` | Auth standards, logging conventions, deployment guardrails |
-| System | `order-system` | Domain decisions, internal event schemas |
-| System | `payment-system` | Domain decisions, compliance rules |
-| Integration | `order-payment-integration` | API contracts, retry policies, error mapping |
-| Microservice | `order-api`, `order-worker`... | Service-specific workarounds, config quirks |
+```sql
+-- project_groups: named groups of projects
+CREATE TABLE project_groups (
+  group_id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT
+);
+
+-- project_group_members: many-to-many relationship
+CREATE TABLE project_group_members (
+  group_id TEXT REFERENCES project_groups(group_id) ON DELETE CASCADE,
+  project_id TEXT REFERENCES projects(project_id) ON DELETE CASCADE,
+  PRIMARY KEY (group_id, project_id)
+);
+```
+
+### Search Modes
+
+| Mode | API Call | What it searches |
+|------|----------|-----------------|
+| Single project | `search_lessons(project_id: "order-api")` | Just this repo's lessons |
+| Include groups | `search_lessons(project_id: "order-api", include_groups: true)` | This repo + all groups it belongs to |
+| Specific group | `search_lessons(group_id: "order-payment-integration")` | Just the group's shared knowledge |
+| Explicit multi | `search_lessons(project_ids: ["order-api", "payment-gw"])` | Any combination of projects |
 
 ### CLAUDE.md Template (per repo)
 
-Each repo's `CLAUDE.md` should call `search_lessons` across relevant layers:
-
 ```markdown
-# CLAUDE.md — order-api (example)
-MCP: http://localhost:3000/mcp
+# CLAUDE.md — order-api
+MCP: http://localhost:3000/mcp | project_id: order-api
 
 ## Session Start
-1. search_lessons(query: "<task>", project_id: "order-api")
-2. search_lessons(query: "<task>", project_id: "order-system")
-3. search_lessons(query: "<task>", project_id: "platform-shared")
-4. check_guardrails(action_context: {action: "<what>"}, project_id: "order-api")
+1. search_lessons(query: "<task>", project_id: "order-api", include_groups: true)
+2. check_guardrails(action_context: {action: "<what>"}, project_id: "order-api", include_groups: true)
 ```
 
-When working on integration code, also search the integration project:
+One call, full knowledge. `include_groups: true` automatically resolves all groups this project belongs to.
+
+### Setup
+
+```bash
+# Seed groups from config
+npx tsx src/scripts/seedProjectGroups.ts docs/example-group-seed.json
 ```
-search_lessons(query: "<task>", project_id: "order-payment-integration")
-```
 
-## TODO — Next Session
+See `docs/CLAUDE-template-multi-repo.md` for full template.
+See `docs/example-group-seed.json` for config format.
 
-1. Define the actual system names and project IDs for the user's repos
-2. Create a CLAUDE.md template with multi-layer search_lessons
-3. Register workspace roots for each repo
-4. Seed shared guardrails in `platform-shared`
-5. Seed integration contracts as lessons in integration projects
-6. Consider whether `search_lessons` should support querying multiple project_ids in one call (feature enhancement)
+### GUI
 
-## Limitation
+- **Project Groups page** (`/projects/groups`): Create/delete groups, add/remove members
+- **Project selector** (sidebar): Dropdown with all projects, "Include group knowledge" toggle
+- **Lessons search**: Shows source project badge when searching across groups
 
-- Single auth token (`CONTEXT_HUB_WORKSPACE_TOKEN`) — no per-project auth in MVP
+## Implementation
+
+### Backend
+- Migration: `migrations/0030_project_groups.sql`
+- Service: `src/services/projectGroups.ts` — Group CRUD + `resolveProjectIds()`
+- Service: `src/services/lessons.ts` — `searchLessonsMulti()` for multi-project search
+- Routes: `src/api/routes/projectGroups.ts` — 7 REST endpoints
+- MCP: `search_lessons` supports `project_ids`, `group_id`, `include_groups`
+- MCP: `check_guardrails` supports `include_groups`
+- MCP: 7 new group management tools
+
+### Frontend
+- Context: `gui/src/contexts/project-context.tsx` — expanded with projects, groups, includeGroups
+- Sidebar: `gui/src/components/sidebar.tsx` — project dropdown + group toggle
+- Page: `gui/src/app/projects/groups/page.tsx` — group management
+- Lessons: `gui/src/app/lessons/page.tsx` — project attribution badges
+
+### Performance
+- Single SQL query with `WHERE project_id = ANY($1::text[])` — not N separate queries
+- Single embedding computation per search
+- Single rerank pass on merged results
+- Latency: under 1.5x single-project search
+
+## Limitations
+
+- Single auth token (`CONTEXT_HUB_WORKSPACE_TOKEN`) — no per-project auth
 - All projects share the same server instance
+- Max 50 members per group (enforced in service layer)
