@@ -160,3 +160,8 @@ docs/qc/*-integration-report.md
 # Machine-specific compose overrides
 docker-compose.pc.yml
 docker-compose.*.local.yml
+.claude/worktrees/infallible-perlman
+
+.claude/config.json
+
+.vscode/settings.json
