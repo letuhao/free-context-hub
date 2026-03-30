@@ -11,6 +11,7 @@ import { gitRouter } from './routes/git.js';
 import { jobsRouter } from './routes/jobs.js';
 import { generatedDocsRouter } from './routes/generated-docs.js';
 import { workspaceRouter } from './routes/workspace.js';
+import { chatRouter } from './routes/chat.js';
 import { systemRouter } from './routes/system.js';
 
 /**
@@ -40,6 +41,7 @@ export function createApiApp() {
   app.use('/api/generated-docs', generatedDocsRouter);
   app.use('/api/workspace', workspaceRouter);
   app.use('/api', workspaceRouter); // mounts /api/sources/* routes
+  app.use('/api/chat', chatRouter);
 
   // ── Error handler (must be last) ──
   app.use(errorHandler);
