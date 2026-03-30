@@ -85,12 +85,46 @@ export const api = {
   listJobs: (params: Record<string, string | number | undefined> = {}) =>
     request<any>("GET", `/api/jobs?${qs(params)}`),
 
+  getCommit: (sha: string, params: Record<string, string | number | undefined> = {}) =>
+    request<any>("GET", `/api/git/commits/${encodeURIComponent(sha)}?${qs(params)}`),
+
+  suggestLessons: (body: Record<string, unknown>) =>
+    request<any>("POST", "/api/git/suggest-lessons", body),
+
+  analyzeCommitImpact: (body: Record<string, unknown>) =>
+    request<any>("POST", "/api/git/analyze-impact", body),
+
+  reflectProject: (id: string, body: Record<string, unknown>) =>
+    request<any>("POST", `/api/projects/${encodeURIComponent(id)}/reflect`, body),
+
+  // ── Workspace / Sources ──
+  listWorkspaceRoots: (params: Record<string, string | number | undefined> = {}) =>
+    request<any>("GET", `/api/workspace/roots?${qs(params)}`),
+
+  registerWorkspaceRoot: (body: Record<string, unknown>) =>
+    request<any>("POST", "/api/workspace/register", body),
+
+  scanWorkspace: (body: Record<string, unknown>) =>
+    request<any>("POST", "/api/workspace/scan", body),
+
+  getProjectSource: (params: Record<string, string | number | undefined> = {}) =>
+    request<any>("GET", `/api/sources?${qs(params)}`),
+
+  configureSource: (body: Record<string, unknown>) =>
+    request<any>("POST", "/api/sources/configure", body),
+
+  prepareRepo: (body: Record<string, unknown>) =>
+    request<any>("POST", "/api/sources/prepare", body),
+
   // ── Generated Docs ──
   listGeneratedDocs: (params: Record<string, string | number | undefined> = {}) =>
     request<any>("GET", `/api/generated-docs?${qs(params)}`),
 
   getGeneratedDoc: (id: string, params: Record<string, string | number | undefined> = {}) =>
     request<any>("GET", `/api/generated-docs/${encodeURIComponent(id)}?${qs(params)}`),
+
+  promoteGeneratedDoc: (id: string, body: Record<string, unknown>) =>
+    request<any>("POST", `/api/generated-docs/${encodeURIComponent(id)}/promote`, body),
 
   // ── System ──
   health: () =>
