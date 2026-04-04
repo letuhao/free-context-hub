@@ -18,6 +18,7 @@ import { collaborationRouter, bookmarkRouter } from './routes/collaboration.js';
 import { activityRouter, notificationsRouter } from './routes/activity.js';
 import { analyticsRouter } from './routes/analytics.js';
 import { learningPathsRouter } from './routes/learningPaths.js';
+import { agentsRouter } from './routes/agents.js';
 import { systemRouter } from './routes/system.js';
 import { projectGroupsRouter } from './routes/projectGroups.js';
 
@@ -57,6 +58,7 @@ export function createApiApp() {
   app.use('/api/notifications', notificationsRouter);
   app.use('/api/analytics', analyticsRouter);
   app.use('/api/learning-paths', learningPathsRouter);
+  app.use('/api/agents', agentsRouter);
   app.use('/api/groups', projectGroupsRouter);
 
   // ── Error handler (must be last) ──

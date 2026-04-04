@@ -159,9 +159,9 @@
 
 | # | Task | Type | Est | Dep | Status |
 |---|------|------|-----|-----|--------|
-| 7.7.1 | `GET /api/search/global` — orchestrate across lessons, docs, code, guardrails, commits | BE | 1.5d | — | [ ] |
+| 7.7.1 | `GET /api/search/global` — orchestrate across lessons, docs, code, guardrails, commits | BE | 1.5d | — | [✓] |
 | 7.7.2 | Global search Cmd+K — cross-entity results, grouped, highlighted | FE | 2d | 7.7.1 | [ ] |
-| 7.7.3 | `agent_trust_levels` table + CRUD `/api/agents` | BE | 1d | — | [ ] |
+| 7.7.3 | `agent_trust_levels` table + CRUD `/api/agents` | BE | 1d | — | [✓] |
 | 7.7.4 | Agent trust levels panel in Review Inbox | FE | 1d | 7.7.3 | [ ] |
 | 7.7.5 | Guardrail test presets + test history | FE | 1d | — | [ ] |
 | 7.7.6 | Guardrail "What Would Block?" mode | FE | 1d | — | [ ] |
