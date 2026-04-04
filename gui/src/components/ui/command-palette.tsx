@@ -75,8 +75,8 @@ export function CommandPalette({ items }: CommandPaletteProps) {
 
   return (
     <div className="fixed inset-0 z-[60] flex items-start justify-center pt-[20vh]">
-      <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
-      <div className="relative w-[480px] bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl overflow-hidden">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-[fadeIn_0.1s_ease-out]" onClick={() => setOpen(false)} />
+      <div className="relative w-[480px] bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl overflow-hidden animate-[fadeInScale_0.15s_ease-out]">
         {/* Input */}
         <div className="flex items-center gap-2 px-4 py-3 border-b border-zinc-800">
           <span className="text-zinc-500 text-sm">&#x1F50D;</span>

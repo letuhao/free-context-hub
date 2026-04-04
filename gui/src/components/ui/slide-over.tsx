@@ -30,12 +30,12 @@ export function SlideOver({ open, onClose, title, subtitle, children, footer, wi
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-[fadeIn_0.15s_ease-out]" onClick={onClose} />
 
       {/* Panel */}
       <div
         className={cn(
-          "relative bg-zinc-900 border-l border-zinc-800 flex flex-col h-full",
+          "relative bg-zinc-900 border-l border-zinc-800 flex flex-col h-full animate-[slideInRight_0.2s_ease-out]",
           wide ? "w-[480px]" : "w-[380px]",
         )}
       >

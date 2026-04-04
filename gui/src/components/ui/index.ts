@@ -9,6 +9,7 @@ export { ErrorBanner } from "./error-banner";
 export { FilterChips } from "./filter-chips";
 export { StatCardSkeleton, TableSkeleton, LineSkeleton } from "./loading-skeleton";
 export { PageHeader } from "./page-header";
+export { Pagination } from "./pagination";
 export { SearchBar } from "./search-bar";
 export { SlideOver, SlideOverSection } from "./slide-over";
 export { StatCard } from "./stat-card";

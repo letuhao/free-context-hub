@@ -20,7 +20,7 @@ import { relTime } from "@/lib/rel-time";
 import { LessonDetail } from "./lesson-detail";
 import { AddLessonDialog } from "./add-lesson-dialog";
 import { FilterPanel } from "./filter-panel";
-import { Pagination } from "./pagination";
+import { Pagination } from "@/components/ui/pagination";
 import type { Lesson } from "./types";
 
 type SortField = "created_at" | "title" | "lesson_type" | "status";
