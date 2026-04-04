@@ -2,41 +2,50 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { useProject } from "@/contexts/project-context";
 import { cn } from "@/lib/cn";
+import {
+  LayoutDashboard, MessageSquare, BookOpen, Shield,
+  FileText, Search, Network, FolderOpen, Users,
+  GitBranch, Link2, Zap, Settings, Bot,
+  PanelLeftClose, PanelLeftOpen,
+} from "lucide-react";
 
-type NavItem = { href: string; label: string; icon: string };
+type NavItem = { href: string; label: string; icon: ReactNode };
 type NavGroup = { title: string; items: NavItem[] };
 
+const ICON_SIZE = 18;
+const ICON_STROKE = 1.5;
+
 const navGroups: (NavItem | NavGroup)[] = [
-  { href: "/", label: "Dashboard", icon: "📊" },
-  { href: "/chat", label: "Chat", icon: "💬" },
+  { href: "/", label: "Dashboard", icon: <LayoutDashboard size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
+  { href: "/chat", label: "Chat", icon: <MessageSquare size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
   {
     title: "Knowledge",
     items: [
-      { href: "/lessons", label: "Lessons", icon: "📚" },
-      { href: "/guardrails", label: "Guardrails", icon: "🛡" },
-      { href: "/knowledge/docs", label: "Generated Docs", icon: "📄" },
-      { href: "/knowledge/search", label: "Code Search", icon: "🔍" },
-      { href: "/knowledge/graph", label: "Graph Explorer", icon: "🕸" },
+      { href: "/lessons", label: "Lessons", icon: <BookOpen size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
+      { href: "/guardrails", label: "Guardrails", icon: <Shield size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
+      { href: "/knowledge/docs", label: "Generated Docs", icon: <FileText size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
+      { href: "/knowledge/search", label: "Code Search", icon: <Search size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
+      { href: "/knowledge/graph", label: "Graph Explorer", icon: <Network size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
     ],
   },
   {
     title: "Project",
     items: [
-      { href: "/projects", label: "Overview", icon: "📁" },
-      { href: "/projects/groups", label: "Groups", icon: "👥" },
-      { href: "/projects/git", label: "Git History", icon: "📦" },
-      { href: "/projects/sources", label: "Sources", icon: "🔗" },
+      { href: "/projects", label: "Overview", icon: <FolderOpen size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
+      { href: "/projects/groups", label: "Groups", icon: <Users size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
+      { href: "/projects/git", label: "Git History", icon: <GitBranch size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
+      { href: "/projects/sources", label: "Sources", icon: <Link2 size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
     ],
   },
   {
     title: "System",
     items: [
-      { href: "/jobs", label: "Jobs", icon: "⚡" },
-      { href: "/settings", label: "Settings", icon: "⚙" },
-      { href: "/settings/models", label: "Model Providers", icon: "🤖" },
+      { href: "/jobs", label: "Jobs", icon: <Zap size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
+      { href: "/settings", label: "Settings", icon: <Settings size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
+      { href: "/settings/models", label: "Model Providers", icon: <Bot size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
     ],
   },
 ];
@@ -95,7 +104,7 @@ export function Sidebar() {
             : "text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300",
         )}
       >
-        <span className="text-sm">{item.icon}</span>
+        <span className="shrink-0">{item.icon}</span>
         {!collapsed && <span>{item.label}</span>}
       </Link>
     );
@@ -187,10 +196,10 @@ export function Sidebar() {
         </div>
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="text-zinc-600 hover:text-zinc-400 text-xs"
+          className="text-zinc-600 hover:text-zinc-400"
           title={collapsed ? "Expand (Ctrl+B)" : "Collapse (Ctrl+B)"}
         >
-          {collapsed ? "▶" : "◀"}
+          {collapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
         </button>
       </div>
     </aside>
