@@ -5,7 +5,7 @@ import { Badge, Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useProject } from "@/contexts/project-context";
 import { api } from "@/lib/api";
-import { X, Pencil, Save, Undo2, Archive, ArrowRight, RefreshCw, Copy, History, ChevronDown, ChevronRight, Sparkles, FileText, Link2, Plus } from "lucide-react";
+import { X, Pencil, Save, Undo2, Archive, ArrowRight, RefreshCw, Copy, History, ChevronDown, ChevronRight, Sparkles, FileText, Link2, Plus, ThumbsUp, ThumbsDown, Bookmark, MessageSquare } from "lucide-react";
 import { relTime } from "@/lib/rel-time";
 import { AiEditor } from "./ai-editor";
 import type { Lesson } from "./types";
@@ -63,6 +63,18 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick, init
   const [aiEditorOpen, setAiEditorOpen] = useState(false);
   const [linkedDocs, setLinkedDocs] = useState<{ document_id: string; name: string; doc_type: string; file_size_bytes?: number }[]>([]);
 
+  // Feedback
+  const [feedback, setFeedback] = useState<{ up_count: number; down_count: number; user_vote: number; retrieval_count: number }>({ up_count: 0, down_count: 0, user_vote: 0, retrieval_count: 0 });
+
+  // Bookmark
+  const [bookmarked, setBookmarked] = useState(false);
+
+  // Comments
+  const [comments, setComments] = useState<any[]>([]);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [newComment, setNewComment] = useState("");
+  const [postingComment, setPostingComment] = useState(false);
+
   // Reset edit state when lesson changes
   useEffect(() => {
     if (lesson) {
@@ -99,6 +111,59 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick, init
     // For now, set empty — will populate when document-lesson API supports reverse query
     setLinkedDocs([]);
   }, [lesson, projectId]);
+
+  // Fetch feedback
+  useEffect(() => {
+    if (!lesson) return;
+    api.getFeedback(lesson.lesson_id, "gui-user")
+      .then((res) => setFeedback({ up_count: res.up_count ?? 0, down_count: res.down_count ?? 0, user_vote: res.user_vote ?? 0, retrieval_count: res.retrieval_count ?? 0 }))
+      .catch(() => {});
+  }, [lesson]);
+
+  // Fetch comments
+  const fetchComments = useCallback(() => {
+    if (!lesson) return;
+    api.listComments(lesson.lesson_id)
+      .then((res) => setComments(res.comments ?? []))
+      .catch(() => setComments([]));
+  }, [lesson]);
+
+  useEffect(() => { if (commentsOpen) fetchComments(); }, [commentsOpen, fetchComments]);
+
+  const handleVote = async (vote: 1 | -1) => {
+    if (!lesson) return;
+    try {
+      await api.voteFeedback(lesson.lesson_id, { user_id: "gui-user", vote });
+      const res = await api.getFeedback(lesson.lesson_id, "gui-user");
+      setFeedback({ up_count: res.up_count ?? 0, down_count: res.down_count ?? 0, user_vote: res.user_vote ?? 0, retrieval_count: res.retrieval_count ?? 0 });
+    } catch {}
+  };
+
+  const handleToggleBookmark = async () => {
+    if (!lesson) return;
+    try {
+      if (bookmarked) {
+        await api.removeBookmark({ user_id: "gui-user", lesson_id: lesson.lesson_id });
+      } else {
+        await api.addBookmark({ user_id: "gui-user", lesson_id: lesson.lesson_id });
+      }
+      setBookmarked(!bookmarked);
+    } catch {}
+  };
+
+  const handlePostComment = async () => {
+    if (!lesson || !newComment.trim()) return;
+    setPostingComment(true);
+    try {
+      await api.addComment(lesson.lesson_id, { author: "gui-user", content: newComment.trim() });
+      setNewComment("");
+      fetchComments();
+    } catch (err) {
+      toast("error", err instanceof Error ? err.message : "Failed to post comment");
+    } finally {
+      setPostingComment(false);
+    }
+  };
 
   // Track dirty state
   useEffect(() => {
@@ -250,6 +315,13 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick, init
               )}
               <div className="flex items-center gap-1 shrink-0 ml-3">
                 <button
+                  onClick={handleToggleBookmark}
+                  className={`p-1.5 rounded-md hover:bg-zinc-800 transition-colors ${bookmarked ? "text-amber-400" : "text-zinc-500 hover:text-zinc-300"}`}
+                  title={bookmarked ? "Remove bookmark" : "Bookmark"}
+                >
+                  <Bookmark size={16} fill={bookmarked ? "currentColor" : "none"} />
+                </button>
+                <button
                   onClick={() => editing ? handleCancel() : setEditing(true)}
                   className="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
                   title={editing ? "Cancel edit" : "Edit"}
@@ -292,6 +364,46 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick, init
                 </span>
               )}
             </div>
+
+            {/* Feedback bar */}
+            {!editing && (
+              <div className="flex items-center gap-3 px-3 py-2 bg-zinc-800/40 border border-zinc-800 rounded-lg">
+                <span className="text-xs text-zinc-500">Was this useful?</span>
+                <button
+                  onClick={() => handleVote(1)}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs transition-colors ${
+                    feedback.user_vote === 1
+                      ? "bg-emerald-500/15 border border-emerald-500/20 text-emerald-400"
+                      : "bg-zinc-800 border border-zinc-700 text-zinc-400 hover:bg-emerald-500/15 hover:border-emerald-500/20 hover:text-emerald-400"
+                  }`}
+                >
+                  <ThumbsUp size={14} />
+                  <span className="font-medium">{feedback.up_count}</span>
+                </button>
+                <button
+                  onClick={() => handleVote(-1)}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs transition-colors ${
+                    feedback.user_vote === -1
+                      ? "bg-red-500/15 border border-red-500/20 text-red-400"
+                      : "bg-zinc-800 border border-zinc-700 text-zinc-400 hover:bg-red-500/15 hover:border-red-500/20 hover:text-red-400"
+                  }`}
+                >
+                  <ThumbsDown size={14} />
+                  <span className="font-medium">{feedback.down_count}</span>
+                </button>
+                {(feedback.up_count + feedback.down_count) > 0 && (
+                  <div className="flex-1 max-w-[120px] h-1.5 bg-zinc-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-500 rounded-full"
+                      style={{ width: `${Math.round((feedback.up_count / (feedback.up_count + feedback.down_count)) * 100)}%` }}
+                    />
+                  </div>
+                )}
+                {feedback.retrieval_count > 0 && (
+                  <span className="text-[11px] text-zinc-600">Retrieved {feedback.retrieval_count} times</span>
+                )}
+              </div>
+            )}
 
             {/* Content */}
             <div>
@@ -404,6 +516,74 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick, init
                 }}
                 onClose={() => setAiEditorOpen(false)}
               />
+            )}
+
+            {/* Comments */}
+            {!editing && (
+              <div>
+                <button
+                  onClick={() => setCommentsOpen(!commentsOpen)}
+                  className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-zinc-500 hover:text-zinc-300 transition-colors mb-2"
+                >
+                  <MessageSquare size={12} />
+                  <span>Comments</span>
+                  {commentsOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                  {comments.length > 0 && (
+                    <span className="text-zinc-600 normal-case tracking-normal">({comments.length})</span>
+                  )}
+                </button>
+                {commentsOpen && (
+                  <div className="space-y-3">
+                    {comments.length === 0 && (
+                      <p className="text-xs text-zinc-600 py-2">No comments yet</p>
+                    )}
+                    {comments.map((c: any) => (
+                      <div key={c.comment_id} className="flex gap-3">
+                        <AuthorAvatar name={c.author ?? "?"} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs font-medium text-zinc-300">{c.author}</span>
+                            <span className="text-[11px] text-zinc-600">{relTime(c.created_at)}</span>
+                          </div>
+                          <p className="text-sm text-zinc-400 leading-relaxed">{c.content}</p>
+                          {/* Nested replies */}
+                          {c.replies?.map((r: any) => (
+                            <div key={r.comment_id} className="flex gap-3 mt-3 pl-2 border-l-2 border-zinc-800">
+                              <AuthorAvatar name={r.author ?? "?"} />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-xs font-medium text-zinc-300">{r.author}</span>
+                                  <span className="text-[11px] text-zinc-600">{relTime(r.created_at)}</span>
+                                </div>
+                                <p className="text-sm text-zinc-400 leading-relaxed">{r.content}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                    {/* Add comment */}
+                    <div className="pt-3 border-t border-zinc-800">
+                      <textarea
+                        rows={2}
+                        value={newComment}
+                        onChange={(e) => setNewComment(e.target.value)}
+                        placeholder="Add a comment..."
+                        className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-300 outline-none placeholder-zinc-600 resize-none focus:border-zinc-600 transition-colors"
+                      />
+                      <div className="flex items-center justify-end mt-2">
+                        <button
+                          onClick={handlePostComment}
+                          disabled={!newComment.trim() || postingComment}
+                          className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white font-medium transition-colors disabled:opacity-50"
+                        >
+                          {postingComment ? "Posting..." : "Post Comment"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Version History — flat row layout matching draft */}

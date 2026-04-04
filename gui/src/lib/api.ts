@@ -84,6 +84,42 @@ export const api = {
   deleteConversation: (id: string, params: { project_id: string }) =>
     request<{ status: string; deleted?: boolean }>("DELETE", `/api/chat/conversations/${encodeURIComponent(id)}?${qs(params)}`),
 
+  // ── Comments ──
+  listComments: (lessonId: string) =>
+    request<{ comments?: any[] }>("GET", `/api/lessons/${encodeURIComponent(lessonId)}/comments`),
+
+  addComment: (lessonId: string, body: { author: string; content: string; parent_id?: string }) =>
+    request<any>("POST", `/api/lessons/${encodeURIComponent(lessonId)}/comments`, body),
+
+  deleteComment: (lessonId: string, commentId: string) =>
+    request<any>("DELETE", `/api/lessons/${encodeURIComponent(lessonId)}/comments/${encodeURIComponent(commentId)}`),
+
+  // ── Feedback ──
+  getFeedback: (lessonId: string, userId?: string) =>
+    request<{ up_count?: number; down_count?: number; user_vote?: number; retrieval_count?: number }>(
+      "GET", `/api/lessons/${encodeURIComponent(lessonId)}/feedback${userId ? `?user_id=${encodeURIComponent(userId)}` : ""}`
+    ),
+
+  voteFeedback: (lessonId: string, body: { user_id: string; vote: 1 | -1 }) =>
+    request<any>("POST", `/api/lessons/${encodeURIComponent(lessonId)}/feedback`, body),
+
+  // ── Bookmarks ──
+  listBookmarks: (params: { user_id: string; project_id: string }) =>
+    request<{ bookmarks?: any[] }>("GET", `/api/bookmarks?${qs(params)}`),
+
+  addBookmark: (body: { user_id: string; lesson_id: string }) =>
+    request<any>("POST", "/api/bookmarks", body),
+
+  removeBookmark: (params: { user_id: string; lesson_id: string }) =>
+    request<any>("DELETE", `/api/bookmarks?${qs(params)}`),
+
+  // ── Import/Export ──
+  exportLessons: (params: { project_id: string; format?: string }) =>
+    request<any>("GET", `/api/lessons/export?${qs(params)}`),
+
+  importLessons: (body: { project_id: string; lessons: any[] }) =>
+    request<{ status: string; imported_count?: number; skipped_count?: number; errors?: any[] }>("POST", "/api/lessons/import", body),
+
   // ── Documents ──
   listDocuments: (params: Record<string, string | number | undefined> = {}) =>
     request<any>("GET", `/api/documents?${qs(params)}`),

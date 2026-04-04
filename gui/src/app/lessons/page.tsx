@@ -17,8 +17,10 @@ import {
 } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { relTime } from "@/lib/rel-time";
+import { Upload, Download, Bookmark } from "lucide-react";
 import { LessonDetail } from "./lesson-detail";
 import { AddLessonDialog } from "./add-lesson-dialog";
+import { ImportDialog } from "./import-dialog";
 import { FilterPanel } from "./filter-panel";
 import { Pagination } from "@/components/ui/pagination";
 import type { Lesson } from "./types";
@@ -67,6 +69,8 @@ export default function LessonsPage() {
   // Panels
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [showBookmarked, setShowBookmarked] = useState(false);
 
   // Debounce search
   useEffect(() => {
@@ -267,7 +271,21 @@ export default function LessonsPage() {
         subtitle="Browse, search, and manage project knowledge"
         actions={
           <>
-            <Button variant="outline" onClick={() => toast("info", "Export coming soon")}>Export</Button>
+            <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
+              <Upload size={12} className="mr-1" /> Import
+            </Button>
+            <Button variant="outline" onClick={async () => {
+              try {
+                const data = await api.exportLessons({ project_id: projectId, format: "json" });
+                const blob = new Blob([JSON.stringify(data.lessons ?? data, null, 2)], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a"); a.href = url; a.download = `${projectId}-lessons.json`; a.click();
+                URL.revokeObjectURL(url);
+                toast("success", "Lessons exported");
+              } catch (err) { toast("error", err instanceof Error ? err.message : "Export failed"); }
+            }}>
+              <Download size={12} className="mr-1" /> Export
+            </Button>
             <Button variant="primary" onClick={() => setAddDialogOpen(true)}>+ Add Lesson</Button>
           </>
         }
@@ -378,19 +396,32 @@ export default function LessonsPage() {
             );
           })}
         </div>
-        <div className="flex border border-zinc-800 rounded-md overflow-hidden">
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setCompact(false)}
-            className={`px-2.5 py-1 text-[11px] ${!compact ? "bg-zinc-800 text-zinc-300" : "text-zinc-600"}`}
+            onClick={() => setShowBookmarked(!showBookmarked)}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border transition-colors ${
+              showBookmarked
+                ? "border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
+                : "border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700"
+            }`}
           >
-            Comfortable
+            <Bookmark size={14} fill={showBookmarked ? "currentColor" : "none"} />
+            Bookmarked
           </button>
-          <button
-            onClick={() => setCompact(true)}
-            className={`px-2.5 py-1 text-[11px] border-l border-zinc-800 ${compact ? "bg-zinc-800 text-zinc-300" : "text-zinc-600"}`}
-          >
-            Compact
-          </button>
+          <div className="flex border border-zinc-800 rounded-md overflow-hidden">
+            <button
+              onClick={() => setCompact(false)}
+              className={`px-2.5 py-1 text-[11px] ${!compact ? "bg-zinc-800 text-zinc-300" : "text-zinc-600"}`}
+            >
+              Comfortable
+            </button>
+            <button
+              onClick={() => setCompact(true)}
+              className={`px-2.5 py-1 text-[11px] border-l border-zinc-800 ${compact ? "bg-zinc-800 text-zinc-300" : "text-zinc-600"}`}
+            >
+              Compact
+            </button>
+          </div>
         </div>
       </div>
 
@@ -453,6 +484,12 @@ export default function LessonsPage() {
         open={addDialogOpen}
         onClose={() => setAddDialogOpen(false)}
         onAdded={() => { fetchLessons(); setAddDialogOpen(false); }}
+      />
+
+      <ImportDialog
+        open={importDialogOpen}
+        onClose={() => setImportDialogOpen(false)}
+        onImported={() => { fetchLessons(); setImportDialogOpen(false); }}
       />
     </div>
   );

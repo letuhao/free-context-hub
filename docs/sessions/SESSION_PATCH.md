@@ -8,7 +8,7 @@ phase: BE Complete, FE In Progress
 # Session Patch — 2026-04-04
 
 ## Where We Are
-Phase: **Phase 7 — BE complete (22/22), FE Sprint 7.1 complete (8/8), FE Sprint 7.2 complete (5/5), FE Sprint 7.3 complete (5/5), FE Sprint 7.4 complete (4/4).**
+Phase: **Phase 7 — BE complete (22/22), FE Sprint 7.1-7.5 complete.**
 
 ## What Was Done This Session
 
@@ -94,11 +94,17 @@ New BE surface:
 - CLAUDE.md: Architecture diagram, project structure, 9-phase task workflow, development phases overview
 - docs/phase7-task-breakdown.md: 7 sprints, 73 tasks with status tracking
 
+### FE Sprint 7.5 — COMPLETE (6/6)
+- [✓] 7.5.5: Comments section in lesson detail — collapsible, threaded replies (border-l-2), avatar+name+time, add comment textarea + Post button
+- [✓] 7.5.6: Feedback thumbs up/down in lesson detail — emerald/red voting, progress bar, retrieval count
+- [✓] 7.5.7: Bookmark button in lesson detail header (amber filled/outline toggle) + Bookmarked filter toggle on lessons page
+- [✓] 7.5.9: Import dialog — 3 tabs (JSON/CSV/Markdown), paste+parse, preview table (Title/Type/Tags/Status), import with count
+- [✓] 7.5.10: Export button — JSON file download via blob URL
+- 10 new API methods: comments (list/add/delete), feedback (get/vote), bookmarks (list/add/remove), import, export
+
 ## Next Steps
-1. **FE Sprint 7.5** — Comments, feedback, bookmarks UI
-4. **FE Sprint 7.5** — Comments, feedback, bookmarks UI
-5. **FE Sprint 7.6** — Activity feed, analytics, onboarding pages
-6. **FE Sprint 7.7** — Global search Cmd+K, guardrail UX, responsive
+1. **FE Sprint 7.6** — Activity feed, analytics, onboarding pages
+2. **FE Sprint 7.7** — Global search Cmd+K, guardrail UX, responsive
 
 ## Key Decisions This Session
 - **Drafts before code** — design all enhancements as HTML first, review, then implement
