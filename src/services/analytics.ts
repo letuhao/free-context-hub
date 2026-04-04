@@ -94,7 +94,10 @@ export async function getRetrievalTimeseries(params: {
      ORDER BY date ASC`,
     [params.projectId, days],
   );
-  return { points: result.rows.map((r: any) => ({ date: String(r.date).slice(0, 10), count: r.count })) };
+  return { points: result.rows.map((r: any) => ({
+    date: r.date instanceof Date ? r.date.toISOString().slice(0, 10) : String(r.date).slice(0, 10),
+    count: r.count,
+  })) };
 }
 
 /** Most/least retrieved lessons (using feedback upvotes as proxy for "useful"). */

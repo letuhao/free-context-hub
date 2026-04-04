@@ -38,6 +38,7 @@ import { allCollaborationTests } from './tests/collaborationTests.js';
 import { allActivityAnalyticsTests } from './tests/activityAnalyticsTests.js';
 import { allSearchAgentTests } from './tests/searchAgentTests.js';
 import { allSprint77Tests } from './tests/sprint77Tests.js';
+import { allMcpSmokeTests } from './tests/mcpSmokeTests.js';
 
 dotenv.config();
 
@@ -204,7 +205,11 @@ async function main() {
   console.log('\n── Sprint 7.7 Endpoints ──');
   allResults.push(...await runTests(allSprint77Tests, ctx));
 
-  // Group 10: Tiered Search (P1-P2).
+  // Group 10: MCP Smoke Tests.
+  console.log('\n── MCP Smoke Tests ──');
+  allResults.push(...await runTests(allMcpSmokeTests, ctx));
+
+  // Group 11: Tiered Search (P1-P2).
   if (!SKIP_TIERED) {
     console.log('\n── Tiered Search ──');
     allResults.push(...await runTests(allTieredSearchTests, ctx));
