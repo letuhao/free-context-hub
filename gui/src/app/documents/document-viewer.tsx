@@ -41,9 +41,10 @@ interface DocumentViewerProps {
   doc: Doc;
   onClose: () => void;
   onChanged: () => void;
+  autoGenerate?: boolean;
 }
 
-export function DocumentViewer({ doc, onClose, onChanged }: DocumentViewerProps) {
+export function DocumentViewer({ doc, onClose, onChanged, autoGenerate }: DocumentViewerProps) {
   const { projectId } = useProject();
   const { toast } = useToast();
 
@@ -55,6 +56,9 @@ export function DocumentViewer({ doc, onClose, onChanged }: DocumentViewerProps)
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [linkSearchOpen, setLinkSearchOpen] = useState(false);
+  const [linkSearchQuery, setLinkSearchQuery] = useState("");
+  const [linkSearchResults, setLinkSearchResults] = useState<{ lesson_id: string; title: string; lesson_type: string }[]>([]);
 
   // Fetch document content
   useEffect(() => {
@@ -64,6 +68,13 @@ export function DocumentViewer({ doc, onClose, onChanged }: DocumentViewerProps)
       .catch(() => setContent("(Failed to load content)"))
       .finally(() => setLoadingContent(false));
   }, [doc.document_id, projectId]);
+
+  // Auto-generate if requested
+  useEffect(() => {
+    if (autoGenerate && !loadingContent && content && suggestions.length === 0 && !generating) {
+      handleGenerateLessons();
+    }
+  }, [autoGenerate, loadingContent, content]);
 
   // Fetch linked lessons
   const fetchLinked = useCallback(() => {
@@ -152,6 +163,31 @@ export function DocumentViewer({ doc, onClose, onChanged }: DocumentViewerProps)
 
   const handleDismiss = (idx: number) => {
     setSuggestions((prev) => prev.map((s, i) => i === idx ? { ...s, accepted: false } : s));
+  };
+
+  // Link lesson search
+  useEffect(() => {
+    if (!linkSearchOpen || !linkSearchQuery.trim()) { setLinkSearchResults([]); return; }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await api.listLessons({ project_id: projectId, q: linkSearchQuery, limit: 5, status: "active" });
+        setLinkSearchResults((res.items ?? []).map((l: any) => ({ lesson_id: l.lesson_id, title: l.title, lesson_type: l.lesson_type })));
+      } catch { setLinkSearchResults([]); }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [linkSearchQuery, linkSearchOpen, projectId]);
+
+  const handleLinkLesson = async (lessonId: string) => {
+    try {
+      await api.linkDocLesson(doc.document_id, lessonId, { project_id: projectId });
+      fetchLinked();
+      onChanged();
+      setLinkSearchOpen(false);
+      setLinkSearchQuery("");
+      toast("success", "Lesson linked");
+    } catch (err) {
+      toast("error", err instanceof Error ? err.message : "Link failed");
+    }
   };
 
   const handleUnlink = async (lessonId: string) => {
@@ -273,9 +309,38 @@ export function DocumentViewer({ doc, onClose, onChanged }: DocumentViewerProps)
                 ))
               )}
 
-              <button className="w-full px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-md text-zinc-400 hover:text-zinc-200 transition-colors text-center">
-                + Link Existing Lesson
-              </button>
+              {linkSearchOpen ? (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={linkSearchQuery}
+                    onChange={(e) => setLinkSearchQuery(e.target.value)}
+                    placeholder="Search lessons..."
+                    autoFocus
+                    className="w-full px-2.5 py-1.5 bg-zinc-950 border border-zinc-700 rounded-md text-xs text-zinc-300 outline-none focus:border-zinc-500 placeholder:text-zinc-600"
+                  />
+                  {linkSearchResults.map((l) => (
+                    <button
+                      key={l.lesson_id}
+                      onClick={() => handleLinkLesson(l.lesson_id)}
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 bg-zinc-950 border border-zinc-800 rounded-md hover:border-zinc-600 transition-colors text-left"
+                    >
+                      <Badge value={l.lesson_type} variant="type" />
+                      <span className="text-xs text-zinc-300 truncate">{l.title}</span>
+                    </button>
+                  ))}
+                  {linkSearchQuery && linkSearchResults.length === 0 && (
+                    <p className="text-[10px] text-zinc-600 text-center py-1">No lessons found</p>
+                  )}
+                  <button onClick={() => { setLinkSearchOpen(false); setLinkSearchQuery(""); }} className="text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors w-full text-center">
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => setLinkSearchOpen(true)} className="w-full px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-md text-zinc-400 hover:text-zinc-200 transition-colors text-center">
+                  + Link Existing Lesson
+                </button>
+              )}
 
               {/* Generate section */}
               <div className="border-t border-zinc-800 pt-4 space-y-3">

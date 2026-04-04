@@ -46,6 +46,7 @@ export default function DocumentsPage() {
   const [filter, setFilter] = useState<DocFilter>("all");
   const [uploadMode, setUploadMode] = useState<"upload" | "url" | null>(null);
   const [viewDoc, setViewDoc] = useState<Doc | null>(null);
+  const [autoGenerate, setAutoGenerate] = useState(false);
 
   const fetchDocs = useCallback(async () => {
     setLoading(true);
@@ -109,7 +110,7 @@ export default function DocumentsPage() {
       <div className="grid grid-cols-3 gap-4 mb-6">
         <StatCard label="Documents" value={totalCount} icon={<FileText size={16} />} />
         <StatCard label="Linked to Lessons" value={linkedCount} icon={<Link2 size={16} />} />
-        <StatCard label="Unlinked" value={totalCount - linkedCount} icon={<FileText size={16} />} highlight={totalCount - linkedCount > 0} />
+        <StatCard label="Pending Review" value={totalCount - linkedCount} icon={<Sparkles size={16} />} highlight={totalCount - linkedCount > 0} />
       </div>
 
       {/* Filter tabs */}
@@ -174,10 +175,10 @@ export default function DocumentsPage() {
                   <td className="px-4 py-3 text-xs text-zinc-500">{relTime(doc.created_at)}</td>
                   <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                     <div className="flex gap-1.5">
-                      <button onClick={() => setViewDoc(doc)} className="px-2 py-1 text-[11px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 hover:text-zinc-200 transition-colors">
+                      <button onClick={() => { setAutoGenerate(false); setViewDoc(doc); }} className="px-2 py-1 text-[11px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 hover:text-zinc-200 transition-colors">
                         View
                       </button>
-                      <button onClick={() => setViewDoc(doc)} className="px-2 py-1 text-[11px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 hover:text-zinc-200 transition-colors">
+                      <button onClick={() => { setAutoGenerate(true); setViewDoc(doc); }} className="px-2 py-1 text-[11px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 hover:text-zinc-200 transition-colors">
                         Generate Lessons
                       </button>
                       <button onClick={() => handleDelete(doc)} className="px-2 py-1 text-[11px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-red-400/70 hover:text-red-400 transition-colors">
@@ -206,8 +207,9 @@ export default function DocumentsPage() {
       {viewDoc && (
         <DocumentViewer
           doc={viewDoc}
-          onClose={() => setViewDoc(null)}
+          onClose={() => { setViewDoc(null); setAutoGenerate(false); }}
           onChanged={fetchDocs}
+          autoGenerate={autoGenerate}
         />
       )}
     </div>
