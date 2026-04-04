@@ -169,3 +169,5 @@ docker-compose.*.local.yml
 .claude/worktrees/stupefied-thompson
 
 .claude/settings.json
+
+.playwright-mcp/
