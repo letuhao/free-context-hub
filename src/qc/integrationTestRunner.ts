@@ -33,6 +33,7 @@ import { allGuardrailTests } from './tests/guardrailTests.js';
 import { allBootstrapTests } from './tests/bootstrapTests.js';
 import { allTieredSearchTests } from './tests/tieredSearchTests.js';
 import { allChatHistoryTests } from './tests/chatHistoryTests.js';
+import { allDocumentTests } from './tests/documentTests.js';
 
 dotenv.config();
 
@@ -179,7 +180,11 @@ async function main() {
   console.log('\n── Chat History ──');
   allResults.push(...await runTests(allChatHistoryTests, ctx));
 
-  // Group 5: Tiered Search (P1-P2).
+  // Group 5: Documents (REST-based).
+  console.log('\n── Documents ──');
+  allResults.push(...await runTests(allDocumentTests, ctx));
+
+  // Group 6: Tiered Search (P1-P2).
   if (!SKIP_TIERED) {
     console.log('\n── Tiered Search ──');
     allResults.push(...await runTests(allTieredSearchTests, ctx));

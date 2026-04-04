@@ -13,6 +13,7 @@ import { generatedDocsRouter } from './routes/generated-docs.js';
 import { workspaceRouter } from './routes/workspace.js';
 import { chatRouter } from './routes/chat.js';
 import { chatHistoryRouter } from './routes/chatHistory.js';
+import { documentsRouter } from './routes/documents.js';
 import { systemRouter } from './routes/system.js';
 import { projectGroupsRouter } from './routes/projectGroups.js';
 
@@ -45,6 +46,7 @@ export function createApiApp() {
   app.use('/api', workspaceRouter); // mounts /api/sources/* routes
   app.use('/api/chat', chatRouter);
   app.use('/api/chat/conversations', chatHistoryRouter);
+  app.use('/api/documents', documentsRouter);
   app.use('/api/groups', projectGroupsRouter);
 
   // ── Error handler (must be last) ──
