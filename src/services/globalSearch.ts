@@ -1,4 +1,7 @@
 import { getDbPool } from '../db/client.js';
+import { createModuleLogger } from '../utils/logger.js';
+
+const logger = createModuleLogger('global-search');
 
 export interface GlobalSearchResults {
   query: string;
@@ -72,7 +75,10 @@ export async function globalSearch(params: {
        ORDER BY committed_at DESC
        LIMIT $3`,
       [params.projectId, pattern, limit],
-    ).catch(() => ({ rows: [] })), // git_commits may not exist for all projects
+    ).catch((err) => {
+      logger.warn({ error: err instanceof Error ? err.message : String(err) }, 'git_commits query failed (table may not exist)');
+      return { rows: [] };
+    }),
   ]);
 
   const lessons = lessonsRes.rows;

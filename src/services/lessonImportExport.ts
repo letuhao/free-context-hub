@@ -81,36 +81,48 @@ export async function importLessons(params: {
     existingTitles = new Set(existing.rows.map((r: any) => r.t));
   }
 
+  const validTypes = ['decision', 'preference', 'guardrail', 'workaround', 'general_note'];
+
   for (const lesson of params.lessons) {
-    if (!lesson.title || !lesson.content || !lesson.lesson_type) {
-      result.errors.push(`Missing required fields for "${lesson.title ?? '(no title)'}"`);
-      result.details.push({ title: lesson.title ?? '(no title)', status: 'error', reason: 'missing fields' });
+    const title = lesson.title?.trim();
+    const content = lesson.content?.trim();
+    const lessonType = lesson.lesson_type?.trim();
+
+    if (!title || !content || !lessonType) {
+      result.errors.push(`Missing required fields for "${title ?? '(no title)'}"`);
+      result.details.push({ title: title ?? '(no title)', status: 'error', reason: 'missing fields' });
       continue;
     }
 
-    if (skipDuplicates && existingTitles.has(lesson.title.toLowerCase())) {
+    if (!validTypes.includes(lessonType)) {
+      result.errors.push(`Invalid lesson_type "${lessonType}" for "${title}"`);
+      result.details.push({ title, status: 'error', reason: `invalid type: ${lessonType}` });
+      continue;
+    }
+
+    if (skipDuplicates && existingTitles.has(title.toLowerCase())) {
       result.skipped++;
-      result.details.push({ title: lesson.title, status: 'skipped', reason: 'duplicate title' });
+      result.details.push({ title, status: 'skipped', reason: 'duplicate title' });
       continue;
     }
 
     try {
       await addLesson({
         project_id: params.projectId,
-        lesson_type: lesson.lesson_type as any,
-        title: lesson.title,
-        content: lesson.content,
+        lesson_type: lessonType as any,
+        title,
+        content,
         tags: lesson.tags,
         source_refs: lesson.source_refs,
         captured_by: lesson.captured_by ?? 'import',
       });
       result.imported++;
-      result.details.push({ title: lesson.title, status: 'imported' });
-      existingTitles.add(lesson.title.toLowerCase());
+      result.details.push({ title, status: 'imported' });
+      existingTitles.add(title.toLowerCase());
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      result.errors.push(`Failed to import "${lesson.title}": ${msg}`);
-      result.details.push({ title: lesson.title, status: 'error', reason: msg });
+      result.errors.push(`Failed to import "${title}": ${msg}`);
+      result.details.push({ title, status: 'error', reason: msg });
     }
   }
 

@@ -93,7 +93,13 @@ Instruction: ${params.instruction}`;
       return { status: 'error', error: 'AI response did not contain valid JSON' };
     }
 
-    const parsed = JSON.parse(match[0]);
+    let parsed: any;
+    try {
+      parsed = JSON.parse(match[0]);
+    } catch {
+      logger.warn({ text: match[0].slice(0, 200) }, 'malformed JSON in improve response');
+      return { status: 'error', error: 'AI response contained malformed JSON' };
+    }
     const suggestions: ImproveSuggestion[] = (parsed.suggestions ?? [parsed]).map((s: any) => ({
       original: s.original ?? targetText,
       improved: s.improved ?? '',

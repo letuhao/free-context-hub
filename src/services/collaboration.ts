@@ -24,6 +24,7 @@ export async function addComment(params: {
      VALUES ($1, $2, $3, $4) RETURNING *`,
     [params.lessonId, params.parentId ?? null, params.author, params.content],
   );
+  if (!result.rowCount) throw new Error('Failed to insert comment');
   return result.rows[0];
 }
 

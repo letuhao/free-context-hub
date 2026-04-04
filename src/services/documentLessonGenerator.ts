@@ -86,7 +86,13 @@ ${content}`;
       return { status: 'error', error: 'AI response did not contain valid JSON' };
     }
 
-    const parsed = JSON.parse(match[0]);
+    let parsed: any;
+    try {
+      parsed = JSON.parse(match[0]);
+    } catch {
+      logger.warn({ text: match[0].slice(0, 200) }, 'malformed JSON in generate-lessons response');
+      return { status: 'error', error: 'AI response contained malformed JSON' };
+    }
     const validTypes = ['decision', 'preference', 'guardrail', 'workaround', 'general_note'];
     const suggestions: SuggestedLesson[] = (parsed.suggestions ?? [])
       .slice(0, maxLessons)

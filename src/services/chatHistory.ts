@@ -46,7 +46,7 @@ export async function listConversations(params: {
     `SELECT COUNT(*) AS cnt FROM chat_conversations WHERE project_id = $1`,
     [params.projectId],
   );
-  const total_count = parseInt(countRes.rows[0].cnt, 10);
+  const total_count = parseInt(countRes.rows[0]?.cnt ?? '0', 10);
 
   const result = await pool.query(
     `SELECT conversation_id, project_id, title, created_at, updated_at

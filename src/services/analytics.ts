@@ -20,7 +20,7 @@ export async function getRetrievalStats(params: {
     `SELECT COUNT(*) AS cnt FROM lessons WHERE project_id = $1 AND status = 'active'`,
     [params.projectId],
   );
-  const active_lessons = parseInt(activeRes.rows[0].cnt, 10);
+  const active_lessons = parseInt(activeRes.rows[0]?.cnt ?? '0', 10);
 
   // Stale lessons (active but not updated in X days).
   const staleRes = await pool.query(
@@ -28,7 +28,7 @@ export async function getRetrievalStats(params: {
      WHERE project_id = $1 AND status = 'active' AND updated_at < now() - interval '1 day' * $2`,
     [params.projectId, staleDays],
   );
-  const stale_lessons = parseInt(staleRes.rows[0].cnt, 10);
+  const stale_lessons = parseInt(staleRes.rows[0]?.cnt ?? '0', 10);
 
   // Approval rate: active / (active + archived + superseded).
   const allRes = await pool.query(
@@ -46,7 +46,7 @@ export async function getRetrievalStats(params: {
      WHERE project_id = $1 AND created_at >= now() - interval '1 day' * $2`,
     [params.projectId, days],
   );
-  const total_retrievals = parseInt(retrievalRes.rows[0].cnt, 10);
+  const total_retrievals = parseInt(retrievalRes.rows[0]?.cnt ?? '0', 10);
 
   return { total_retrievals, active_lessons, approval_rate, stale_lessons, stale_threshold_days: staleDays };
 }

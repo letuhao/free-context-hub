@@ -60,7 +60,7 @@ export async function listDocuments(params: {
   const countRes = await pool.query(
     `SELECT COUNT(*) AS cnt FROM documents d ${where}`, args,
   );
-  const total_count = parseInt(countRes.rows[0].cnt, 10);
+  const total_count = parseInt(countRes.rows[0]?.cnt ?? '0', 10);
 
   let query = `
     SELECT d.*, COALESCE(lc.cnt, 0)::int AS linked_lesson_count

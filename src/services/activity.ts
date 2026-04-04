@@ -1,5 +1,9 @@
 import { getDbPool } from '../db/client.js';
 
+function safeStringify(obj: unknown): string | null {
+  try { return JSON.stringify(obj); } catch { return null; }
+}
+
 export type EventType =
   | 'lesson.created' | 'lesson.updated' | 'lesson.status_changed' | 'lesson.deleted'
   | 'guardrail.triggered' | 'guardrail.passed'
@@ -34,9 +38,9 @@ export async function logActivity(params: {
      VALUES ($1, $2, $3, $4, $5, $6) RETURNING activity_id`,
     [params.projectId, params.eventType, params.actor ?? null,
      params.title, params.detail ?? null,
-     params.metadata ? JSON.stringify(params.metadata) : null],
+     params.metadata ? safeStringify(params.metadata) : null],
   );
-  return result.rows[0].activity_id;
+  return result.rows[0]?.activity_id;
 }
 
 /** List activity for a project with optional filters. */
@@ -63,7 +67,7 @@ export async function listActivity(params: {
   }
 
   const countRes = await pool.query(`SELECT COUNT(*) AS cnt FROM activity_log ${where}`, args);
-  const total_count = parseInt(countRes.rows[0].cnt, 10);
+  const total_count = parseInt(countRes.rows[0]?.cnt ?? '0', 10);
 
   args.push(limit);
   const result = await pool.query(
@@ -129,7 +133,7 @@ export async function listNotifications(params: {
 
   return {
     items: result.rows,
-    unread_count: parseInt(unreadRes.rows[0].cnt, 10),
+    unread_count: parseInt(unreadRes.rows[0]?.cnt ?? '0', 10),
   };
 }
 
