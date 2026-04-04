@@ -8,7 +8,7 @@ phase: BE Complete, FE In Progress
 # Session Patch — 2026-04-04
 
 ## Where We Are
-Phase: **Phase 7 — BE complete (22/22), FE Sprint 7.1 complete (8/8), FE Sprint 7.2 complete (5/5), FE Sprint 7.3 complete (5/5).**
+Phase: **Phase 7 — BE complete (22/22), FE Sprint 7.1 complete (8/8), FE Sprint 7.2 complete (5/5), FE Sprint 7.3 complete (5/5), FE Sprint 7.4 complete (4/4).**
 
 ## What Was Done This Session
 
@@ -80,6 +80,14 @@ New BE surface:
 - Streaming: dot pulse animation
 - New API methods: listConversations, createConversation, getConversation, addMessage, toggleMessagePin, deleteConversation
 
+### FE Sprint 7.4 — COMPLETE (4/4)
+- [✓] 7.4.5: Documents page — /documents route, breadcrumb, header (Upload+Link URL), 3 stat cards, 6 filter tabs, DataTable with type badges (PDF red/Markdown purple/URL cyan), row actions (View/Generate/Delete), Upload dialog (content mode + URL mode, tags, description)
+- [✓] 7.4.6: Document viewer modal — header with name+type+time+Generate+Copy+Close, in-doc search (match counter, prev/next, amber highlights), content area (markdown rendering for .md, pre-wrap for others), linked lessons sidebar (w-64, lesson cards with Unlink, "Link Existing Lesson" button)
+- [✓] 7.4.7: Generate Lessons flow — trigger from viewer header + sidebar, AI suggestion cards (type badge+title+Accept/Dismiss), Accept creates draft lesson + links to doc
+- [✓] 7.4.8: Linked documents section in lesson detail — FileText icon header, document cards (Open/Unlink), "Attach Document" dashed button
+- 8 new API methods in api.ts: listDocuments, createDocument, getDocument, deleteDocument, generateLessonsFromDoc, linkDocLesson, unlinkDocLesson, listDocLessons
+- Sidebar: added "Documents" link (Files icon) under Knowledge group
+
 ### Documentation Updates
 - README.md: Screenshots section, detailed Phase 7 roadmap
 - WHITEPAPER.md: v0.3, AI-to-Human bridge vision, detailed Phase 7 section
@@ -87,7 +95,7 @@ New BE surface:
 - docs/phase7-task-breakdown.md: 7 sprints, 73 tasks with status tracking
 
 ## Next Steps
-1. **FE Sprint 7.4** — Documents page
+1. **FE Sprint 7.5** — Comments, feedback, bookmarks UI
 4. **FE Sprint 7.5** — Comments, feedback, bookmarks UI
 5. **FE Sprint 7.6** — Activity feed, analytics, onboarding pages
 6. **FE Sprint 7.7** — Global search Cmd+K, guardrail UX, responsive

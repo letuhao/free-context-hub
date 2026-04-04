@@ -84,6 +84,31 @@ export const api = {
   deleteConversation: (id: string, params: { project_id: string }) =>
     request<{ status: string; deleted?: boolean }>("DELETE", `/api/chat/conversations/${encodeURIComponent(id)}?${qs(params)}`),
 
+  // ── Documents ──
+  listDocuments: (params: Record<string, string | number | undefined> = {}) =>
+    request<any>("GET", `/api/documents?${qs(params)}`),
+
+  createDocument: (body: { project_id: string; name: string; doc_type: string; url?: string; content?: string; file_size_bytes?: number; description?: string; tags?: string[] }) =>
+    request<any>("POST", "/api/documents", body),
+
+  getDocument: (id: string, params: { project_id: string }) =>
+    request<any>("GET", `/api/documents/${encodeURIComponent(id)}?${qs(params)}`),
+
+  deleteDocument: (id: string, params: { project_id: string }) =>
+    request<any>("DELETE", `/api/documents/${encodeURIComponent(id)}?${qs(params)}`),
+
+  generateLessonsFromDoc: (id: string, body: { project_id: string; max_lessons?: number }) =>
+    request<{ status: string; suggestions?: any[] }>("POST", `/api/documents/${encodeURIComponent(id)}/generate-lessons`, body),
+
+  linkDocLesson: (docId: string, lessonId: string, body: { project_id: string }) =>
+    request<any>("POST", `/api/documents/${encodeURIComponent(docId)}/lessons/${encodeURIComponent(lessonId)}`, body),
+
+  unlinkDocLesson: (docId: string, lessonId: string, params: { project_id: string }) =>
+    request<any>("DELETE", `/api/documents/${encodeURIComponent(docId)}/lessons/${encodeURIComponent(lessonId)}?${qs(params)}`),
+
+  listDocLessons: (docId: string, params: { project_id: string }) =>
+    request<any>("GET", `/api/documents/${encodeURIComponent(docId)}/lessons?${qs(params)}`),
+
   // ── Guardrails ──
   checkGuardrails: (body: { project_id?: string; action_context: Record<string, unknown> }) =>
     request<any>("POST", "/api/guardrails/check", body),

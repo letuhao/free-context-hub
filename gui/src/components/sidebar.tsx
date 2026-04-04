@@ -7,7 +7,7 @@ import { useProject } from "@/contexts/project-context";
 import { cn } from "@/lib/cn";
 import {
   LayoutDashboard, MessageSquare, BookOpen, Shield,
-  FileText, Search, Network, FolderOpen, Users,
+  FileText, Search, Network, FolderOpen, Users, Files,
   GitBranch, Link2, Zap, Settings, Bot,
   PanelLeftClose, PanelLeftOpen, ClipboardCheck,
 } from "lucide-react";
@@ -27,6 +27,7 @@ const buildNavGroups = (reviewCount: number): (NavItem | NavGroup)[] => [
       { href: "/lessons", label: "Lessons", icon: <BookOpen size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/review", label: "Review Inbox", icon: <ClipboardCheck size={ICON_SIZE} strokeWidth={ICON_STROKE} />, badge: reviewCount },
       { href: "/guardrails", label: "Guardrails", icon: <Shield size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
+      { href: "/documents", label: "Documents", icon: <Files size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/knowledge/docs", label: "Generated Docs", icon: <FileText size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/knowledge/search", label: "Code Search", icon: <Search size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/knowledge/graph", label: "Graph Explorer", icon: <Network size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },

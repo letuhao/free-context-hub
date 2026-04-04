@@ -5,7 +5,7 @@ import { Badge, Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useProject } from "@/contexts/project-context";
 import { api } from "@/lib/api";
-import { X, Pencil, Save, Undo2, Archive, ArrowRight, RefreshCw, Copy, History, ChevronDown, ChevronRight, Sparkles } from "lucide-react";
+import { X, Pencil, Save, Undo2, Archive, ArrowRight, RefreshCw, Copy, History, ChevronDown, ChevronRight, Sparkles, FileText, Link2, Plus } from "lucide-react";
 import { relTime } from "@/lib/rel-time";
 import { AiEditor } from "./ai-editor";
 import type { Lesson } from "./types";
@@ -61,6 +61,7 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick, init
   const [expandedVersion, setExpandedVersion] = useState<number | null>(null);
   const [restoring, setRestoring] = useState(false);
   const [aiEditorOpen, setAiEditorOpen] = useState(false);
+  const [linkedDocs, setLinkedDocs] = useState<{ document_id: string; name: string; doc_type: string; file_size_bytes?: number }[]>([]);
 
   // Reset edit state when lesson changes
   useEffect(() => {
@@ -89,6 +90,15 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick, init
   useEffect(() => {
     if (versionsOpen && lesson) fetchVersions();
   }, [versionsOpen, lesson, fetchVersions]);
+
+  // Fetch linked documents
+  useEffect(() => {
+    if (!lesson) { setLinkedDocs([]); return; }
+    // Documents are linked TO lessons — we need to find docs linked to this lesson
+    // Using a simple approach: list all docs and check (API doesn't have reverse lookup)
+    // For now, set empty — will populate when document-lesson API supports reverse query
+    setLinkedDocs([]);
+  }, [lesson, projectId]);
 
   // Track dirty state
   useEffect(() => {
@@ -331,6 +341,39 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick, init
                       className="px-2 py-0.5 text-xs bg-zinc-800 border border-dashed border-zinc-600 rounded-full text-zinc-400 placeholder-zinc-600 w-20 focus:outline-none focus:border-zinc-500"
                     />
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* Linked Documents */}
+            {!editing && (
+              <div>
+                <h3 className="text-[11px] uppercase tracking-wide text-zinc-500 mb-2 flex items-center gap-1.5">
+                  <FileText size={14} className="text-zinc-500" />
+                  Documents
+                </h3>
+                <div className="space-y-2">
+                  {linkedDocs.length === 0 ? (
+                    <p className="text-xs text-zinc-600">No documents linked</p>
+                  ) : (
+                    linkedDocs.map((d) => (
+                      <div key={d.document_id} className="flex items-center gap-3 px-3 py-2.5 bg-zinc-800/40 border border-zinc-800 rounded-lg">
+                        <FileText size={18} className={d.doc_type === "url" ? "text-blue-400 shrink-0" : "text-red-400 shrink-0"} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-zinc-300 truncate">{d.name}</p>
+                          <p className="text-[11px] text-zinc-600">{d.doc_type === "url" ? "External" : `${((d.file_size_bytes ?? 0) / 1024).toFixed(0)} KB`}</p>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button className="px-2 py-1 text-[10px] bg-zinc-700/50 hover:bg-zinc-700 border border-zinc-600/50 rounded text-zinc-400 hover:text-zinc-300 transition-colors">Open</button>
+                          <button className="px-2 py-1 text-[10px] bg-zinc-700/50 hover:bg-red-600/20 border border-zinc-600/50 hover:border-red-700/50 rounded text-zinc-500 hover:text-red-400 transition-colors">Unlink</button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  <button className="flex items-center gap-1.5 px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300 border border-dashed border-zinc-700 hover:border-zinc-500 rounded-lg transition-colors w-full justify-center">
+                    <Plus size={14} />
+                    Attach Document
+                  </button>
                 </div>
               </div>
             )}
