@@ -976,7 +976,9 @@ export async function updateLesson(params: {
   content?: string;
   tags?: string[];
   source_refs?: string[];
-}): Promise<{ status: 'ok' | 'error'; error?: string; re_embedded?: boolean }> {
+  changedBy?: string;
+  changeSummary?: string;
+}): Promise<{ status: 'ok' | 'error'; error?: string; re_embedded?: boolean; version_number?: number }> {
   const pool = getDbPool();
 
   const existing = await pool.query(
@@ -995,6 +997,20 @@ export async function updateLesson(params: {
 
   const contentChanged = newTitle !== row.title || newContent !== row.content;
   let reEmbedded = false;
+
+  // Save version snapshot before overwriting (only for content/title changes)
+  if (contentChanged) {
+    const versionRes = await pool.query(
+      `SELECT COALESCE(MAX(version_number), 0) AS max_ver FROM lesson_versions WHERE lesson_id = $1`,
+      [params.lessonId],
+    );
+    const nextVersion = (versionRes.rows[0]?.max_ver ?? 0) + 1;
+    await pool.query(
+      `INSERT INTO lesson_versions (lesson_id, version_number, title, content, tags, changed_by, change_summary)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [params.lessonId, nextVersion, row.title, row.content, row.tags, params.changedBy ?? null, params.changeSummary ?? null],
+    );
+  }
 
   if (contentChanged) {
     const searchAliases = await generateSearchAliases(newTitle, newContent);
@@ -1044,7 +1060,14 @@ export async function updateLesson(params: {
   }
 
   await rebuildProjectSnapshot(params.projectId).catch(() => {});
-  return { status: 'ok', re_embedded: reEmbedded };
+
+  // Get current version count for response
+  const verCount = contentChanged
+    ? await pool.query(`SELECT MAX(version_number) AS ver FROM lesson_versions WHERE lesson_id = $1`, [params.lessonId])
+    : null;
+  const versionNumber = verCount?.rows[0]?.ver ?? undefined;
+
+  return { status: 'ok', re_embedded: reEmbedded, version_number: versionNumber };
 }
 
 export async function updateLessonStatus(params: {

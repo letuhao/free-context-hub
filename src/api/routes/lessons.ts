@@ -89,6 +89,8 @@ router.put('/:id', async (req, res, next) => {
       content: req.body.content,
       tags: req.body.tags,
       source_refs: req.body.source_refs,
+      changedBy: req.body.changed_by,
+      changeSummary: req.body.change_summary,
     });
     if (result.status === 'error') {
       res.status(404).json(result);
