@@ -33,12 +33,19 @@ export const activityNotificationsTest: TestFn = async (ctx) => {
     if (notifs.unread_count !== 0) return fail(name, GROUP, Date.now() - start, `Fresh user should have 0 unread, got ${notifs.unread_count}`);
     if (!Array.isArray(notifs.items)) return fail(name, GROUP, Date.now() - start, 'Missing items array');
 
-    // 5. Mark-read with nothing to mark — should return updated:0.
+    // 5. Mark-all-read with nothing to mark — should return updated:0.
     const mark = await (await fetch(`${API_BASE}/api/notifications/mark-read`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_id: freshUser }),
     })).json() as any;
     if (mark.updated !== 0) return fail(name, GROUP, Date.now() - start, `Expected 0 updated for fresh user, got ${mark.updated}`);
+
+    // 6. Mark single notification read (with fake notification_id — should return updated:0).
+    const markSingle = await (await fetch(`${API_BASE}/api/notifications/mark-read`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: freshUser, notification_id: '00000000-0000-0000-0000-000000000000' }),
+    })).json() as any;
+    if (markSingle.updated !== 0) return fail(name, GROUP, Date.now() - start, `Mark single: expected 0, got ${markSingle.updated}`);
 
     return pass(name, GROUP, Date.now() - start);
   } catch (err) {
@@ -108,6 +115,15 @@ export const learningPathsTest: TestFn = async (ctx) => {
     // Get path — completed.
     const path2 = await (await fetch(`${API_BASE}/api/learning-paths?project_id=${ctx.projectId}&user_id=test-learner`)).json() as any;
     if (path2.completed < 1) return fail(name, GROUP, Date.now() - start, 'Not marked completed');
+
+    // Uncomplete (DELETE /:pathId/complete).
+    const uncomplete = await fetch(`${API_BASE}/api/learning-paths/${added.path_id}/complete?user_id=test-learner`, { method: 'DELETE' });
+    const uc = await uncomplete.json() as any;
+    if (uc.status !== 'ok') return fail(name, GROUP, Date.now() - start, `Uncomplete failed: ${uc.error}`);
+
+    // Verify uncompleted.
+    const path3 = await (await fetch(`${API_BASE}/api/learning-paths?project_id=${ctx.projectId}&user_id=test-learner`)).json() as any;
+    if (path3.completed !== 0) return fail(name, GROUP, Date.now() - start, `After uncomplete: expected 0, got ${path3.completed}`);
 
     // Remove from path.
     const del = await (await fetch(`${API_BASE}/api/learning-paths/${added.path_id}`, { method: 'DELETE' })).json() as any;

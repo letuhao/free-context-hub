@@ -88,6 +88,20 @@ export const feedbackTest: TestFn = async (ctx) => {
     if (fb2.upvotes !== 1) return fail(name, GROUP, Date.now() - start, `After change: expected 1 upvote, got ${fb2.upvotes}`);
     if (fb2.user_vote !== -1) return fail(name, GROUP, Date.now() - start, `After change: expected user_vote=-1`);
 
+    // Remove feedback.
+    const delRes = await fetch(`${API_BASE}/api/lessons/${lesson.lesson_id}/feedback?user_id=user-a`, { method: 'DELETE' });
+    const del = await delRes.json() as any;
+    if (del.status !== 'ok') return fail(name, GROUP, Date.now() - start, `Remove feedback failed`);
+
+    // Verify removed.
+    const fb3 = await (await fetch(`${API_BASE}/api/lessons/${lesson.lesson_id}/feedback?user_id=user-a`)).json() as any;
+    if (fb3.user_vote !== null) return fail(name, GROUP, Date.now() - start, `After remove: user_vote should be null, got ${fb3.user_vote}`);
+    if (fb3.upvotes !== 1) return fail(name, GROUP, Date.now() - start, `After remove: expected 1 upvote (user-b), got ${fb3.upvotes}`);
+
+    // Remove non-existent → 404.
+    const gone = await fetch(`${API_BASE}/api/lessons/${lesson.lesson_id}/feedback?user_id=user-a`, { method: 'DELETE' });
+    if (gone.status !== 404) return fail(name, GROUP, Date.now() - start, `Expected 404 for removed feedback, got ${gone.status}`);
+
     return pass(name, GROUP, Date.now() - start);
   } catch (err) {
     return fail(name, GROUP, Date.now() - start, `Exception: ${err instanceof Error ? err.message : String(err)}`);
@@ -160,11 +174,30 @@ export const importExportTest: TestFn = async (ctx) => {
     if (imp.imported !== 2) return fail(name, GROUP, Date.now() - start, `Expected 2 imported, got ${imp.imported}`);
     if (imp.skipped !== 1) return fail(name, GROUP, Date.now() - start, `Expected 1 skipped, got ${imp.skipped}`);
 
-    // Export.
+    // Export (all).
     const exp = await (await fetch(`${API_BASE}/api/lessons/export?project_id=${ctx.projectId}`)).json() as any;
     if (exp.total_count < 2) return fail(name, GROUP, Date.now() - start, `Expected >=2 exported, got ${exp.total_count}`);
     const hasA = exp.items?.some((l: any) => l.title?.includes(`Import A: ${marker}`));
     if (!hasA) return fail(name, GROUP, Date.now() - start, 'Imported lesson not found in export');
+
+    // Export with status filter.
+    const expActive = await (await fetch(`${API_BASE}/api/lessons/export?project_id=${ctx.projectId}&status=active`)).json() as any;
+    const hasArchived = expActive.items?.some((l: any) => l.status === 'archived');
+    if (hasArchived) return fail(name, GROUP, Date.now() - start, 'Export status=active should not include archived');
+
+    // Import with invalid lesson_type.
+    const badImp = await (await fetch(`${API_BASE}/api/lessons/import`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project_id: ctx.projectId,
+        lessons: [
+          { lesson_type: 'invalid_type', title: 'Bad type', content: 'test' },
+          { lesson_type: 'decision', title: `Valid: ${marker}-extra`, content: 'test' },
+        ],
+      }),
+    })).json() as any;
+    if (badImp.imported !== 1) return fail(name, GROUP, Date.now() - start, `Expected 1 imported (valid only), got ${badImp.imported}`);
+    if (badImp.errors?.length !== 1) return fail(name, GROUP, Date.now() - start, `Expected 1 error for invalid type, got ${badImp.errors?.length}`);
 
     return pass(name, GROUP, Date.now() - start);
   } catch (err) {

@@ -30,6 +30,22 @@ export const globalSearchTest: TestFn = async (ctx) => {
     const found = res.lessons.some((l: any) => l.title?.includes('Global search test retry'));
     if (!found) return fail(name, GROUP, Date.now() - start, 'Lesson not found in global search');
 
+    // Create a guardrail + document with "retry" to test cross-entity search.
+    await fetch(`${API_BASE}/api/lessons`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_id: ctx.projectId, lesson_type: 'guardrail', title: 'Max retry attempts must be 3', content: 'Enforce retry limit', tags: ['integration-test', 'global-search'] }),
+    });
+    await fetch(`${API_BASE}/api/documents`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_id: ctx.projectId, name: 'Retry Strategy RFC.md', doc_type: 'markdown', content: 'Retry with exponential backoff', tags: ['integration-test'] }),
+    });
+
+    // Search again — should find across entities.
+    const cross = await (await fetch(`${API_BASE}/api/search/global?project_id=${ctx.projectId}&q=retry`)).json() as any;
+    if (!cross.guardrails?.length) return fail(name, GROUP, Date.now() - start, 'Guardrail not found in cross-entity search');
+    if (!cross.documents?.length) return fail(name, GROUP, Date.now() - start, 'Document not found in cross-entity search');
+    if (cross.total_count < 3) return fail(name, GROUP, Date.now() - start, `Expected >=3 total across entities, got ${cross.total_count}`);
+
     // Empty query returns empty.
     const empty = await (await fetch(`${API_BASE}/api/search/global?project_id=${ctx.projectId}&q=`)).json() as any;
     if (empty.total_count !== 0) return fail(name, GROUP, Date.now() - start, `Empty query should return 0, got ${empty.total_count}`);
