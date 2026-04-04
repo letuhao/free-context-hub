@@ -179,4 +179,37 @@ router.patch('/:id/status', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+/** GET /api/lessons/export — export lessons as JSON */
+router.get('/export', async (req, res, next) => {
+  try {
+    const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
+    const { exportLessons } = await import('../../services/lessonImportExport.js');
+    const result = await exportLessons({
+      projectId,
+      format: (req.query.format as 'json' | 'csv') ?? 'json',
+      status: req.query.status as string | undefined,
+    });
+    if (req.query.download === 'true') {
+      const filename = `lessons-${projectId}-${new Date().toISOString().slice(0, 10)}.json`;
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Type', 'application/json');
+    }
+    res.json(result);
+  } catch (e) { next(e); }
+});
+
+/** POST /api/lessons/import — import lessons from JSON array */
+router.post('/import', async (req, res, next) => {
+  try {
+    const projectId = resolveProjectIdOrThrow(req.body.project_id);
+    const { importLessons } = await import('../../services/lessonImportExport.js');
+    const result = await importLessons({
+      projectId,
+      lessons: req.body.lessons ?? [],
+      skipDuplicates: req.body.skip_duplicates,
+    });
+    res.json(result);
+  } catch (e) { next(e); }
+});
+
 export { router as lessonsRouter };

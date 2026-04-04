@@ -117,14 +117,14 @@
 
 | # | Task | Type | Est | Dep | Status |
 |---|------|------|-----|-----|--------|
-| 7.5.1 | `lesson_comments` table + migration | BE | 0.5d | — | [ ] |
-| 7.5.2 | CRUD `/api/lessons/:id/comments` — add, list, reply, delete | BE | 1d | 7.5.1 | [ ] |
-| 7.5.3 | `lesson_feedback` table + `POST/GET /api/lessons/:id/feedback` | BE | 1d | — | [ ] |
-| 7.5.4 | `bookmarks` table + CRUD `/api/bookmarks` | BE | 0.5d | — | [ ] |
+| 7.5.1 | `lesson_comments` table + migration | BE | 0.5d | — | [✓] |
+| 7.5.2 | CRUD `/api/lessons/:id/comments` — add, list, reply, delete | BE | 1d | 7.5.1 | [✓] |
+| 7.5.3 | `lesson_feedback` table + `POST/GET /api/lessons/:id/feedback` | BE | 1d | — | [✓] |
+| 7.5.4 | `bookmarks` table + CRUD `/api/bookmarks` | BE | 0.5d | — | [✓] |
 | 7.5.5 | Comments section in lesson detail (threaded replies) | FE | 1.5d | 7.5.2 | [ ] |
 | 7.5.6 | Feedback thumbs up/down + retrieval count display | FE | 1d | 7.5.3 | [ ] |
 | 7.5.7 | Bookmark button + bookmarks filter in lessons page | FE | 1d | 7.5.4 | [ ] |
-| 7.5.8 | `POST /api/lessons/import` + `GET /api/lessons/export` (JSON/CSV) | BE | 1d | — | [ ] |
+| 7.5.8 | `POST /api/lessons/import` + `GET /api/lessons/export` (JSON/CSV) | BE | 1d | — | [✓] |
 | 7.5.9 | Import dialog (JSON/CSV/Markdown tabs, preview, duplicate detection) | FE | 1.5d | 7.5.8 | [ ] |
 | 7.5.10 | Export button (JSON/CSV download) | FE | 0.5d | 7.5.8 | [ ] |
 
