@@ -74,10 +74,9 @@ export default function DashboardPage() {
   // FIX #2: Reduced from 9 to 6 parallel calls (consolidated lessons queries)
   const fetchAll = useCallback(async () => {
     try {
-      const [lessonsRes, jobsRes, commitsRes, infoRes, docsRes, summaryRes] = await Promise.allSettled([
-        // Single lessons call — get recent 5 + total_count for both all and guardrails
+      const [lessonsRes, guardrailsRes, jobsRes, commitsRes, infoRes, docsRes, summaryRes] = await Promise.allSettled([
         api.listLessons({ project_id: projectId, limit: 5, offset: 0, sort: "created_at", order: "desc" }),
-        // Combined jobs — get all active (running + queued)
+        api.listLessons({ project_id: projectId, lesson_type: "guardrail", limit: 1 }),
         api.listJobs({ project_id: projectId, limit: 10 }),
         api.listCommits({ project_id: projectId, limit: 5 }),
         api.info(),
@@ -88,6 +87,7 @@ export default function DashboardPage() {
       const val = <T,>(r: PromiseSettledResult<T>, fallback: T): T => r.status === "fulfilled" ? r.value : fallback;
 
       const lessonsData = val(lessonsRes, { items: [], total_count: 0 });
+      const guardrailsData = val(guardrailsRes, { total_count: 0 });
       const jobsData = val(jobsRes, { items: [] });
       const commitsData = val(commitsRes, { items: [] });
       const infoData = val(infoRes, null);
@@ -99,9 +99,7 @@ export default function DashboardPage() {
 
       setStats({
         lessons: lessonsData.total_count ?? 0,
-        // FIX #6: Count guardrails from the recent lessons response isn't accurate,
-        // but a separate call just for a count is wasteful. Use the info we have.
-        guardrails: 0, // Will be set below if we can derive it
+        guardrails: guardrailsData.total_count ?? 0,
         commits: commitsData.items?.length ?? 0,
         docs: docsData.items?.length ?? 0,
         jobsActive: activeJobItems.length,

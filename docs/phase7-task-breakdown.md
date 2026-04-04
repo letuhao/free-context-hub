@@ -176,6 +176,8 @@
 | 7.7.17 | Import: CSV + Markdown tab implementation | FE | 1d | 7.5.9 | [ ] |
 | 7.7.18 | Import: drag-drop file input for JSON/CSV | FE | 0.5d | 7.5.9 | [ ] |
 | 7.7.19 | Lessons table: Feedback column (needs BE to return counts in list) | FE+BE | 1d | 7.5.6 | [ ] |
+| 7.7.20 | Activity: notification settings persistence (needs BE settings API) | FE+BE | 1d | 7.6.4 | [ ] |
+| 7.7.21 | Analytics: SVG area chart for Retrieval Trends (needs time-series data) | FE+BE | 1.5d | 7.6.7 | [ ] |
 | 7.7.12 | AI editor: floating text selection toolbar ("Ask AI" on selected text) | FE | 2d | 7.3.2 | [ ] |
 | 7.7.13 | AI editor: AI-suggested tags (purple dashed, sparkle icon, accept) | FE+BE | 1d | 7.3.2 | [ ] |
 

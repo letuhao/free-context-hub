@@ -112,18 +112,51 @@ export default function AnalyticsPage() {
 
           {/* Charts: Lessons by Type (donut) */}
           <div className="grid grid-cols-2 gap-4 mb-6">
-            {/* Lessons by Type */}
+            {/* Lessons by Type (donut chart) */}
             <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
               <h2 className="text-sm font-medium text-zinc-300 mb-4">Lessons by Type</h2>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                {Object.entries(typeBreakdown).map(([type, count]) => (
-                  <div key={type} className="flex items-center gap-2 text-xs">
-                    <span className={`w-2.5 h-2.5 rounded-sm ${typeColors[type] ?? "bg-zinc-500"}`} />
-                    <span className="text-zinc-400">{type}</span>
-                    <span className="ml-auto text-zinc-300 font-medium">{count as number}</span>
-                  </div>
-                ))}
-              </div>
+              {(() => {
+                const entries = Object.entries(typeBreakdown);
+                const total = entries.reduce((s, [, c]) => s + (c as number), 0);
+                const conicColors: Record<string, string> = {
+                  decision: "rgb(59,130,246)", workaround: "rgb(245,158,11)", guardrail: "rgb(239,68,68)", preference: "rgb(168,85,247)", general_note: "rgb(113,113,122)",
+                };
+                let angle = 0;
+                const segments = entries.map(([type, count]) => {
+                  const deg = total > 0 ? ((count as number) / total) * 360 : 0;
+                  const start = angle;
+                  angle += deg;
+                  return { type, count: count as number, start, end: angle, color: conicColors[type] ?? "rgb(113,113,122)" };
+                });
+                const gradient = segments.map(s => `${s.color} ${s.start}deg ${s.end}deg`).join(", ");
+                return (
+                  <>
+                    <div className="flex items-center justify-center mb-4">
+                      <div className="relative w-36 h-36">
+                        <div className="w-full h-full rounded-full" style={{ background: total > 0 ? `conic-gradient(${gradient})` : "#27272a" }} />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-20 h-20 rounded-full bg-zinc-900/60 flex items-center justify-center">
+                            <div className="text-center">
+                              <p className="text-lg font-semibold text-zinc-100">{total}</p>
+                              <p className="text-[9px] text-zinc-500">total</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                      {segments.map((s) => (
+                        <div key={s.type} className="flex items-center gap-2 text-xs">
+                          <span className={`w-2.5 h-2.5 rounded-sm ${typeColors[s.type] ?? "bg-zinc-500"}`} />
+                          <span className="text-zinc-400">{s.type}</span>
+                          <span className="ml-auto text-zinc-300 font-medium">{s.count}</span>
+                          <span className="text-zinc-600 text-[10px]">{total > 0 ? Math.round((s.count / total) * 100) : 0}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
 
             {/* Most retrieved */}
@@ -135,7 +168,7 @@ export default function AnalyticsPage() {
                     <th className="text-left py-2 font-medium w-8">#</th>
                     <th className="text-left py-2 font-medium">Title</th>
                     <th className="text-left py-2 font-medium w-20">Type</th>
-                    <th className="text-right py-2 font-medium w-16">Count</th>
+                    <th className="text-left py-2 font-medium w-40">Retrievals</th>
                   </tr>
                 </thead>
                 <tbody className="text-zinc-300">
@@ -144,7 +177,14 @@ export default function AnalyticsPage() {
                       <td className="py-2.5 text-zinc-500">{i + 1}</td>
                       <td className="py-2.5 font-medium truncate max-w-[200px]">{l.title}</td>
                       <td className="py-2.5"><Badge value={l.lesson_type} variant="type" /></td>
-                      <td className="py-2.5 text-right text-zinc-400">{l.retrieval_count ?? 0}</td>
+                      <td className="py-2.5">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full ${typeColors[l.lesson_type] ?? "bg-zinc-500"}`} style={{ width: `${topLessons[0]?.retrieval_count ? Math.round(((l.retrieval_count ?? 0) / topLessons[0].retrieval_count) * 100) : 0}%` }} />
+                          </div>
+                          <span className="text-zinc-400 w-6 text-right">{l.retrieval_count ?? 0}</span>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                   {topLessons.length === 0 && (
@@ -177,12 +217,20 @@ export default function AnalyticsPage() {
                             await api.updateLessonStatus(l.lesson_id, { project_id: projectId, status: "archived" });
                             toast("success", "Lesson archived");
                             fetchData();
-                          } catch {}
+                          } catch (err) {
+                            toast("error", err instanceof Error ? err.message : "Archive failed");
+                          }
                         }}
                         className="px-2 py-1 text-[10px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 transition-colors"
                       >
                         Archive
                       </button>
+                      <a
+                        href="/lessons"
+                        className="px-2 py-1 text-[10px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 transition-colors"
+                      >
+                        Review
+                      </a>
                     </div>
                   </div>
                 ))}

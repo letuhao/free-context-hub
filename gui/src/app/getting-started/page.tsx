@@ -92,7 +92,9 @@ export default function GettingStartedPage() {
   const completedItems = sections.reduce((s, sec) => s + sec.items.filter((i) => i.completed).length, 0);
   const progressPct = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
 
-  const toggleComplete = (lessonId: string) => {
+  const toggleComplete = async (lessonId: string) => {
+    // Optimistic update
+    const wasCompleted = sections.flatMap(s => s.items).find(i => i.lesson_id === lessonId)?.completed ?? false;
     setSections((prev) =>
       prev.map((sec) => ({
         ...sec,
@@ -101,6 +103,21 @@ export default function GettingStartedPage() {
         ),
       }))
     );
+    // Persist to API
+    try {
+      await api.updateLearningProgress("default", { user_id: "gui-user", lesson_id: lessonId, completed: !wasCompleted });
+    } catch {
+      // Revert on failure
+      setSections((prev) =>
+        prev.map((sec) => ({
+          ...sec,
+          items: sec.items.map((item) =>
+            item.lesson_id === lessonId ? { ...item, completed: wasCompleted } : item
+          ),
+        }))
+      );
+      toast("error", "Failed to save progress");
+    }
   };
 
   // Find next uncompleted item
@@ -130,6 +147,12 @@ export default function GettingStartedPage() {
         <div className="w-full h-2.5 bg-zinc-800 rounded-full overflow-hidden">
           <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${progressPct}%` }} />
         </div>
+        {totalItems > completedItems && (
+          <p className="text-xs text-zinc-500 mt-2 flex items-center gap-1.5">
+            <Circle size={14} className="text-zinc-600" />
+            Estimated time: ~{(totalItems - completedItems) * 2} min remaining
+          </p>
+        )}
       </div>
 
       {loading ? (

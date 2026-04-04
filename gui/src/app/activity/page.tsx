@@ -75,7 +75,9 @@ export default function ActivityPage() {
       await api.markNotificationsRead({});
       toast("success", "All notifications marked as read");
       fetchActivity();
-    } catch {}
+    } catch (err) {
+      toast("error", err instanceof Error ? err.message : "Failed to mark notifications");
+    }
   };
 
   const FILTER_TABS: { label: string; value: ActivityFilter }[] = [
@@ -169,6 +171,20 @@ export default function ActivityPage() {
                       <div className="flex items-center gap-3 mt-1.5">
                         <span className="text-[11px] text-zinc-600">{relTime(item.created_at)}</span>
                         <span className="text-[11px] text-zinc-600">Project: <span className="text-zinc-500">{projectId}</span></span>
+                      </div>
+                      <div className="flex gap-3 mt-2">
+                        {item.entity_type === "lesson" && (
+                          <a href="/lessons" className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors">View Lesson →</a>
+                        )}
+                        {item.entity_type === "job" && (
+                          <a href="/jobs" className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors">View Job →</a>
+                        )}
+                        {item.entity_type === "guardrail" && (
+                          <a href="/guardrails" className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors">View Guardrail →</a>
+                        )}
+                        {item.entity_type === "document" && (
+                          <a href="/documents" className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors">View Document →</a>
+                        )}
                       </div>
                     </div>
                   </div>
