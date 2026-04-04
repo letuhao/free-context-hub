@@ -53,6 +53,18 @@ export const api = {
   updateLessonStatus: (id: string, body: Record<string, unknown>) =>
     request<any>("PATCH", `/api/lessons/${encodeURIComponent(id)}/status`, body),
 
+  updateLesson: (id: string, body: { project_id: string; title?: string; content?: string; tags?: string[]; source_refs?: string[]; changed_by?: string; change_summary?: string }) =>
+    request<{ status: string; re_embedded?: boolean; version_number?: number }>("PUT", `/api/lessons/${encodeURIComponent(id)}`, body),
+
+  listLessonVersions: (id: string, params: { project_id: string }) =>
+    request<{ status: string; versions?: any[]; total_count?: number }>("GET", `/api/lessons/${encodeURIComponent(id)}/versions?${qs(params)}`),
+
+  batchUpdateLessonStatus: (body: { project_id: string; lesson_ids: string[]; status: string }) =>
+    request<{ status: string; updated_count?: number; failed_ids?: string[] }>("POST", "/api/lessons/batch-status", body),
+
+  improveLessonContent: (id: string, body: { project_id: string; instruction: string; selected_text?: string }) =>
+    request<{ status: string; suggestions?: any[] }>("POST", `/api/lessons/${encodeURIComponent(id)}/improve`, body),
+
   // ── Guardrails ──
   checkGuardrails: (body: { project_id?: string; action_context: Record<string, unknown> }) =>
     request<any>("POST", "/api/guardrails/check", body),
