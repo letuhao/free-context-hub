@@ -28,6 +28,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { callTool, withAuth } from './testTypes.js';
 import type { TestContext, TestFn, TestResult } from './testTypes.js';
 import { allLessonTests } from './tests/lessonTests.js';
+import { allLessonUpdateTests } from './tests/lessonUpdateTests.js';
 import { allGuardrailTests } from './tests/guardrailTests.js';
 import { allBootstrapTests } from './tests/bootstrapTests.js';
 import { allTieredSearchTests } from './tests/tieredSearchTests.js';
@@ -160,6 +161,10 @@ async function main() {
   // Group 1: Lessons (P0).
   console.log('── Lessons ──');
   allResults.push(...await runTests(allLessonTests, ctx));
+
+  // Group 1b: Lesson Update & Versioning.
+  console.log('\n── Lesson Updates ──');
+  allResults.push(...await runTests(allLessonUpdateTests, ctx));
 
   // Group 2: Guardrails (P0).
   console.log('\n── Guardrails ──');

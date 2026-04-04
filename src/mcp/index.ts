@@ -24,6 +24,7 @@ import {
   listLessons,
   searchLessons,
   searchLessonsMulti,
+  updateLesson,
   updateLessonStatus,
   checkGuardrails,
   getProjectSnapshotBody,
@@ -173,6 +174,7 @@ function createMcpToolsServer() {
         'get_context',
         'check_guardrails',
         'help',
+        'update_lesson',
         'update_lesson_status',
         'get_project_summary',
         'reflect',
@@ -333,6 +335,19 @@ function createMcpToolsServer() {
             { path: 'task.intent', required: false, notes: 'High-level intent (used for suggestions).' },
             { path: 'task.query', required: false, notes: 'Optional query string for suggestions.' },
             { path: 'task.path_glob', required: false, notes: 'Optional path filter for suggested search_code.' },
+          ],
+        },
+        {
+          name: 'update_lesson',
+          purpose: 'Update lesson content, title, tags, or source_refs. Auto re-embeds and creates version history.',
+          key_parameters: [
+            { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
+            { path: 'lesson_id', required: true, notes: 'Lesson UUID.' },
+            { path: 'title', required: false, notes: 'New title.' },
+            { path: 'content', required: false, notes: 'New content.' },
+            { path: 'tags', required: false, notes: 'New tags array (replaces all).' },
+            { path: 'changed_by', required: false, notes: 'Who made the change (audit).' },
+            { path: 'change_summary', required: false, notes: 'Short description of the change.' },
           ],
         },
         {
@@ -1414,6 +1429,51 @@ function createMcpToolsServer() {
 
       const result = { project_id: pid, context_refs, project_snapshot, suggested_next_calls, notes };
       const summary = `get_context: project_id=${pid}, refs=${context_refs.length}, suggestions=${suggested_next_calls.length}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'update_lesson',
+    {
+      description: 'Update lesson content, title, tags, or source_refs. Re-embeds automatically when title or content changes. Creates a version snapshot before overwriting.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional().describe('Workspace token (required only if MCP_AUTH_ENABLED=true).'),
+        project_id: z
+          .string()
+          .min(1)
+          .optional()
+          .describe('Project identifier. Optional if DEFAULT_PROJECT_ID is set; otherwise required.'),
+        lesson_id: z.string().min(1).describe('Lesson UUID to update.'),
+        title: z.string().min(1).optional().describe('New title (optional).'),
+        content: z.string().min(1).optional().describe('New content (optional).'),
+        tags: z.array(z.string()).optional().describe('New tags array — replaces all existing tags (optional).'),
+        source_refs: z.array(z.string()).optional().describe('New source refs — replaces all existing refs (optional).'),
+        changed_by: z.string().optional().describe('Who made the change (for version history audit).'),
+        change_summary: z.string().optional().describe('Short description of what changed (for version history).'),
+        output_format: OutputFormatSchema.default('auto_both').describe('Response format: auto_both | json_only | json_pretty | summary_only.'),
+      }),
+      outputSchema: z.object({
+        status: z.enum(['ok', 'error']),
+        error: z.string().optional(),
+        re_embedded: z.boolean().optional(),
+        version_number: z.number().optional(),
+      }),
+    },
+    async ({ workspace_token, project_id, lesson_id, title, content, tags, source_refs, changed_by, change_summary, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const pid = resolveProjectIdOrThrow(project_id);
+      const result = await updateLesson({
+        projectId: pid,
+        lessonId: lesson_id,
+        title,
+        content,
+        tags,
+        source_refs,
+        changedBy: changed_by,
+        changeSummary: change_summary,
+      });
+      const summary = `update_lesson: status=${result.status}, re_embedded=${result.re_embedded}`;
       return formatToolResponse(result, summary, output_format);
     },
   );
