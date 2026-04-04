@@ -184,6 +184,37 @@ export const api = {
   searchCode: (body: Record<string, unknown>) =>
     request<any>("POST", "/api/search/code-tiered", body),
 
+  globalSearch: (params: { project_id: string; q: string; limit?: number }) =>
+    request<{ lessons?: any[]; documents?: any[]; guardrails?: any[]; commits?: any[]; total_count?: number }>(
+      "GET", `/api/search/global?${qs(params)}`
+    ),
+
+  suggestTags: (lessonId: string, body: { project_id: string }) =>
+    request<{ suggestions?: string[]; current_tags?: string[] }>("POST", `/api/lessons/${encodeURIComponent(lessonId)}/suggest-tags`, body),
+
+  getNotificationSettings: (params: { project_id: string; user_id?: string }) =>
+    request<{ settings?: Record<string, boolean> }>("GET", `/api/notifications/settings?${qs(params)}`),
+
+  updateNotificationSettings: (body: { project_id: string; user_id?: string; settings: Record<string, boolean> }) =>
+    request<any>("PUT", "/api/notifications/settings", body),
+
+  getRetrievalTimeseries: (params: { project_id: string; days?: number }) =>
+    request<{ points?: { date: string; count: number }[] }>("GET", `/api/analytics/timeseries?${qs(params)}`),
+
+  uploadDocument: async (body: FormData) => {
+    const API_URL = process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "http://localhost:3001";
+    const res = await fetch(`${API_URL}/api/documents/upload`, { method: "POST", body });
+    if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+    return res.json();
+  },
+
+  // ── Agents ──
+  listAgents: (params: { project_id: string }) =>
+    request<{ agents?: any[] }>("GET", `/api/agents?${qs(params)}`),
+
+  updateAgentTrust: (agentId: string, body: { project_id: string; trust_level?: string; auto_approve?: boolean }) =>
+    request<any>("PATCH", `/api/agents/${encodeURIComponent(agentId)}`, body),
+
   // ── Projects ──
   listProjects: () =>
     request<{ projects: any[] }>("GET", "/api/projects"),

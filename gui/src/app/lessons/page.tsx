@@ -267,6 +267,26 @@ export default function LessonsPage() {
       },
     },
     {
+      key: "feedback",
+      header: "Feedback",
+      render: (row: any) => {
+        const up = row.feedback_up ?? 0;
+        const down = row.feedback_down ?? 0;
+        const total = up + down;
+        if (total === 0) return <span className="text-[10px] text-zinc-600">—</span>;
+        const pct = Math.round((up / total) * 100);
+        return (
+          <div className="flex items-center gap-1.5">
+            <span className="text-emerald-400 text-[10px]">↑{up}</span>
+            <span className="text-red-400 text-[10px]">↓{down}</span>
+            <div className="w-10 h-1 bg-zinc-700 rounded-full overflow-hidden">
+              <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pct}%` }} />
+            </div>
+          </div>
+        );
+      },
+    },
+    {
       key: "created_at",
       header: `Created`,
       className: "cursor-pointer",

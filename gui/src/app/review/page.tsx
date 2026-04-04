@@ -13,7 +13,7 @@ import {
 } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { relTime } from "@/lib/rel-time";
-import { Check, X, Eye, CheckCheck, Pencil } from "lucide-react";
+import { Check, X, Eye, CheckCheck, Pencil, Shield, ChevronDown, ChevronRight } from "lucide-react";
 import { LessonDetail } from "../lessons/lesson-detail";
 import type { Lesson } from "../lessons/types";
 
@@ -113,6 +113,8 @@ export default function ReviewInboxPage() {
 
   // Reject dialog
   const [rejectTarget, setRejectTarget] = useState<Lesson | null>(null);
+  const [agents, setAgents] = useState<any[]>([]);
+  const [agentsOpen, setAgentsOpen] = useState(false);
 
   const fetchReviewItems = useCallback(async () => {
     setLoading(true);
@@ -140,6 +142,13 @@ export default function ReviewInboxPage() {
   }, [projectId, filter, toast]);
 
   useEffect(() => { fetchReviewItems(); }, [fetchReviewItems]);
+
+  // Fetch agents
+  useEffect(() => {
+    api.listAgents({ project_id: projectId })
+      .then((res) => setAgents(res.agents ?? []))
+      .catch(() => {});
+  }, [projectId]);
   useEffect(() => { setSelectedIds(new Set()); }, [filter]);
 
   const toggleSelect = (id: string) => {
@@ -460,6 +469,69 @@ export default function ReviewInboxPage() {
         }}
         onClose={() => setRejectTarget(null)}
       />
+
+      {/* Agent Trust Levels */}
+      <details className="border border-zinc-800 rounded-lg bg-zinc-900/50 mt-6" open={agentsOpen} onToggle={(e) => setAgentsOpen((e.target as HTMLDetailsElement).open)}>
+        <summary className="px-4 py-3 text-sm font-medium text-zinc-300 cursor-pointer flex items-center gap-2 hover:text-zinc-100">
+          <Shield size={18} />
+          Agent Trust Levels
+        </summary>
+        <div className="px-4 pb-4">
+          {agents.length === 0 ? (
+            <p className="text-xs text-zinc-600 py-2">No agents tracked yet</p>
+          ) : (
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-zinc-800 text-zinc-500">
+                  <th className="text-left py-2 font-medium">Agent</th>
+                  <th className="text-left py-2 font-medium">Trust Level</th>
+                  <th className="text-left py-2 font-medium">Auto-approve</th>
+                  <th className="text-right py-2 font-medium">Lessons</th>
+                </tr>
+              </thead>
+              <tbody className="text-zinc-300">
+                {agents.map((a: any) => (
+                  <tr key={a.agent_id} className="border-b border-zinc-800/50">
+                    <td className="py-2.5">{a.agent_id}</td>
+                    <td className="py-2.5">
+                      <select
+                        value={a.trust_level ?? "normal"}
+                        onChange={async (e) => {
+                          try {
+                            await api.updateAgentTrust(a.agent_id, { project_id: projectId, trust_level: e.target.value });
+                            const res = await api.listAgents({ project_id: projectId });
+                            setAgents(res.agents ?? []);
+                          } catch {}
+                        }}
+                        className="bg-zinc-800 border border-zinc-700 rounded px-2 py-0.5 text-xs text-zinc-300 outline-none"
+                      >
+                        <option value="untrusted">Untrusted</option>
+                        <option value="normal">Normal</option>
+                        <option value="trusted">Trusted</option>
+                      </select>
+                    </td>
+                    <td className="py-2.5">
+                      <button
+                        onClick={async () => {
+                          try {
+                            await api.updateAgentTrust(a.agent_id, { project_id: projectId, auto_approve: !a.auto_approve });
+                            const res = await api.listAgents({ project_id: projectId });
+                            setAgents(res.agents ?? []);
+                          } catch {}
+                        }}
+                        className={`w-8 h-[18px] rounded-full relative transition-colors ${a.auto_approve ? "bg-blue-600" : "bg-zinc-700"}`}
+                      >
+                        <div className={`absolute top-0.5 w-3.5 h-3.5 rounded-full shadow-sm transition-all ${a.auto_approve ? "right-0.5 bg-white" : "left-0.5 bg-zinc-400"}`} />
+                      </button>
+                    </td>
+                    <td className="py-2.5 text-right text-zinc-500">{a.lesson_count ?? 0}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </details>
 
       {/* Lesson Detail Modal */}
       <LessonDetail

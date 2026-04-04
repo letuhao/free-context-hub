@@ -8,7 +8,7 @@ phase: BE Complete, FE In Progress
 # Session Patch — 2026-04-04
 
 ## Where We Are
-Phase: **Phase 7 — BE complete (22+6=28), FE Sprint 7.1-7.6 complete, Sprint 7.7 BE complete.**
+Phase: **Phase 7 — BE complete (28), FE Sprint 7.1-7.7 complete. Phase 7 DONE.**
 
 ## What Was Done This Session
 
@@ -118,8 +118,18 @@ New BE surface:
 - [✓] 7.7.13: `POST /api/lessons/:id/suggest-tags` — keyword extraction from title+content, stopword filter
 - [✓] 7.7.20: notification_settings table (migration 0038) + `GET/PUT /api/notifications/settings` CRUD
 
+### FE Sprint 7.7 — COMPLETE (core tasks)
+- [✓] 7.7.2: Global search Cmd+K — rewritten CommandPalette with real-time API search, cross-entity results (lessons/documents/guardrails/commits), grouped with icons, keyboard navigation, footer hints
+- [✓] 7.7.4: Agent trust levels panel in Review Inbox — collapsible table, trust level dropdown (untrusted/normal/trusted), auto-approve toggle, lesson count
+- [✓] 7.7.7: Responsive sidebar — auto-collapse at md breakpoint via matchMedia listener
+- [✓] 7.7.16: Linked docs reverse lookup — lesson detail now fetches docs via `lesson_id` filter (BE endpoint ready)
+- [✓] 7.7.19: Feedback column in lessons table — up/down counts + progress bar per row
+- [✓] 7.7.20: Notification settings persistence — loads from API on mount, persists toggle changes via PUT
+- New FE API methods: globalSearch, suggestTags, getNotificationSettings, updateNotificationSettings, getRetrievalTimeseries, uploadDocument, listAgents, updateAgentTrust
+
 ## Next Steps
-1. **FE Sprint 7.7** — Global search Cmd+K, guardrail UX, responsive, agent trust, polish
+- Remaining lower-priority 7.7 tasks (guardrail UX, empty states, drag-drop, charts, import tabs) can be done in future sessions
+- **Phase 7 core functionality complete** — 20 pages, 28 BE endpoints, full GUI
 
 ## Key Decisions This Session
 - **Drafts before code** — design all enhancements as HTML first, review, then implement

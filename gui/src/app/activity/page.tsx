@@ -53,6 +53,17 @@ export default function ActivityPage() {
     Object.fromEntries(NOTIF_TOGGLES.map((t) => [t.key, t.default]))
   );
 
+  // Load persisted notification settings
+  useEffect(() => {
+    api.getNotificationSettings({ project_id: projectId })
+      .then((res) => {
+        if (res.settings && Object.keys(res.settings).length > 0) {
+          setNotifSettings((prev) => ({ ...prev, ...res.settings }));
+        }
+      })
+      .catch(() => {});
+  }, [projectId]);
+
   const fetchActivity = useCallback(async () => {
     setLoading(true);
     try {
@@ -203,7 +214,11 @@ export default function ActivityPage() {
                 <div key={t.key} className="flex items-center justify-between">
                   <span className="text-xs text-zinc-400">{t.label}</span>
                   <button
-                    onClick={() => setNotifSettings((p) => ({ ...p, [t.key]: !p[t.key] }))}
+                    onClick={() => {
+                      const newVal = !notifSettings[t.key];
+                      setNotifSettings((p) => ({ ...p, [t.key]: newVal }));
+                      api.updateNotificationSettings({ project_id: projectId, settings: { [t.key]: newVal } }).catch(() => {});
+                    }}
                     className={`w-8 h-[18px] rounded-full relative transition-colors ${
                       notifSettings[t.key] ? "bg-blue-600" : "bg-zinc-700"
                     }`}

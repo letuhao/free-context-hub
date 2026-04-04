@@ -104,13 +104,17 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick, init
     if (versionsOpen && lesson) fetchVersions();
   }, [versionsOpen, lesson, fetchVersions]);
 
-  // Fetch linked documents
+  // Fetch linked documents (reverse lookup via lesson_id filter)
   useEffect(() => {
     if (!lesson) { setLinkedDocs([]); return; }
-    // Documents are linked TO lessons — we need to find docs linked to this lesson
-    // Using a simple approach: list all docs and check (API doesn't have reverse lookup)
-    // For now, set empty — will populate when document-lesson API supports reverse query
-    setLinkedDocs([]);
+    api.listDocuments({ project_id: projectId, lesson_id: lesson.lesson_id, limit: 20 })
+      .then((res) => setLinkedDocs((res.items ?? []).map((d: any) => ({
+        document_id: d.document_id ?? d.doc_id,
+        name: d.name,
+        doc_type: d.doc_type,
+        file_size_bytes: d.file_size_bytes,
+      }))))
+      .catch(() => setLinkedDocs([]));
   }, [lesson, projectId]);
 
   // Fetch feedback

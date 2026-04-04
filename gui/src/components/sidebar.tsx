@@ -68,6 +68,15 @@ export function Sidebar() {
   const pathname = usePathname();
   const { projectId, setProjectId, projects, includeGroups, setIncludeGroups } = useProject();
   const [collapsed, setCollapsed] = useState(false);
+
+  // Auto-collapse on small screens
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 768px)");
+    const handle = (e: MediaQueryListEvent | MediaQueryList) => setCollapsed(e.matches);
+    handle(mq);
+    mq.addEventListener("change", handle);
+    return () => mq.removeEventListener("change", handle);
+  }, []);
   const [healthy, setHealthy] = useState(true);
   const [reviewCount, setReviewCount] = useState(0);
   const [notifCount, setNotifCount] = useState(0);

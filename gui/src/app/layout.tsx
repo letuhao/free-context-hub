@@ -4,6 +4,7 @@ import { ProjectProvider } from "@/contexts/project-context";
 import { ToastProvider } from "@/components/ui/toast";
 import { Sidebar } from "@/components/sidebar";
 import { KeyboardShortcutsTrigger } from "@/components/keyboard-shortcuts-trigger";
+import { CommandPalette } from "@/components/ui/command-palette";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -37,6 +38,7 @@ export default function RootLayout({
             <Sidebar />
             <main className="flex-1 overflow-y-auto">{children}</main>
             <KeyboardShortcutsTrigger />
+            <CommandPalette />
           </ToastProvider>
         </ProjectProvider>
       </body>
