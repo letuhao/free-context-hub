@@ -22,9 +22,17 @@ router.post('/upload', upload.single('file'), async (req, res, next) => {
     if (!file) { res.status(400).json({ status: 'error', error: 'No file uploaded' }); return; }
 
     const name = file.originalname;
-    const content = file.buffer.toString('utf-8');
     const ext = name.split('.').pop()?.toLowerCase();
-    const docType = ext === 'md' ? 'markdown' : ext === 'pdf' ? 'pdf' : 'text';
+
+    // PDF files: store as binary indicator, not raw UTF-8 (binary would be garbled)
+    const isPdf = ext === 'pdf' || file.mimetype === 'application/pdf';
+    const content = isPdf ? `[PDF file: ${name}, ${file.size} bytes]` : file.buffer.toString('utf-8');
+    const docType = ext === 'md' ? 'markdown' : isPdf ? 'pdf' : 'text';
+
+    let tags: string[] | undefined;
+    if (req.body.tags) {
+      try { tags = JSON.parse(req.body.tags); } catch { tags = undefined; }
+    }
 
     const result = await createDocument({
       projectId,
@@ -33,7 +41,7 @@ router.post('/upload', upload.single('file'), async (req, res, next) => {
       content,
       fileSizeBytes: file.size,
       description: req.body.description ?? undefined,
-      tags: req.body.tags ? JSON.parse(req.body.tags) : undefined,
+      tags,
     });
     res.status(201).json(result);
   } catch (e) { next(e); }

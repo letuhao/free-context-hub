@@ -126,6 +126,7 @@ router.post('/:id/suggest-tags', async (req, res, next) => {
     }
     const lesson = existing.rows[0];
     const currentTags: string[] = lesson.tags ?? [];
+    const currentTagsLower = new Set(currentTags.map((t: string) => t.toLowerCase()));
 
     // Simple keyword extraction — extract meaningful words from title+content not already in tags
     const text = `${lesson.title} ${lesson.content}`.toLowerCase();
@@ -139,7 +140,7 @@ router.post('/:id/suggest-tags', async (req, res, next) => {
     const words = text.match(/[a-z][a-z0-9_-]{2,}/g) ?? [];
     const freq: Record<string, number> = {};
     for (const w of words) {
-      if (!stopWords.has(w) && !currentTags.includes(w)) freq[w] = (freq[w] ?? 0) + 1;
+      if (!stopWords.has(w) && !currentTagsLower.has(w)) freq[w] = (freq[w] ?? 0) + 1;
     }
     const suggestions = Object.entries(freq)
       .sort((a, b) => b[1] - a[1])

@@ -356,32 +356,37 @@ export async function listLessons(params: ListLessonsParams): Promise<ListLesson
   const sortOrder = params.order === 'asc' ? 'ASC' : 'DESC';
 
   // ── Build WHERE clause (shared by count + data queries) ──
-  const whereParts: string[] = ['project_id = $1'];
+  // Build WHERE parts — unqualified for COUNT, qualified (l.) for JOIN query
   const whereParams: any[] = [params.projectId];
+  const whereParts: string[] = ['project_id = $1'];
+  const wherePartsL: string[] = ['l.project_id = $1'];
 
   if (lessonType) {
     whereParams.push(lessonType);
     whereParts.push(`lesson_type = $${whereParams.length}`);
+    wherePartsL.push(`l.lesson_type = $${whereParams.length}`);
   }
 
   if (tagsAny.length > 0) {
     whereParams.push(tagsAny);
     whereParts.push(`tags && $${whereParams.length}::text[]`);
+    wherePartsL.push(`l.tags && $${whereParams.length}::text[]`);
   }
 
   if (status) {
     whereParams.push(status);
     whereParts.push(`status = $${whereParams.length}`);
+    wherePartsL.push(`l.status = $${whereParams.length}`);
   }
 
   if (params.q && params.q.trim().length > 0) {
     whereParams.push(`%${escapeIlike(params.q.trim())}%`);
     whereParts.push(`(title ILIKE $${whereParams.length} OR content ILIKE $${whereParams.length})`);
+    wherePartsL.push(`(l.title ILIKE $${whereParams.length} OR l.content ILIKE $${whereParams.length})`);
   }
 
   const whereSql = whereParts.join(' AND ');
-  // Qualified version for JOIN queries (alias "l")
-  const whereSqlL = whereParts.map(p => p.replace(/^(project_id|lesson_type|tags|status|title|content)/g, 'l.$1')).join(' AND ');
+  const whereSqlL = wherePartsL.join(' AND ');
 
   // ── Count ──
   const countRes = await pool.query(

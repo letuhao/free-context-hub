@@ -88,17 +88,30 @@ notifRouter.put('/settings', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const userId = req.body.user_id ?? 'gui-user';
-    const settings: Record<string, boolean> = req.body.settings ?? {};
+    const rawSettings = req.body.settings ?? {};
+    // Validate: only boolean values, sanitize keys
+    const settings: [string, boolean][] = Object.entries(rawSettings)
+      .filter(([, v]) => typeof v === 'boolean')
+      .map(([k, v]) => [String(k).slice(0, 64), v as boolean]);
+
+    if (settings.length === 0) { res.json({ status: 'ok' }); return; }
+
     const { getDbPool } = await import('../../db/client.js');
     const pool = getDbPool();
-    for (const [key, enabled] of Object.entries(settings)) {
-      await pool.query(
-        `INSERT INTO notification_settings (user_id, project_id, setting_key, enabled, updated_at)
-         VALUES ($1, $2, $3, $4, now())
-         ON CONFLICT (user_id, project_id, setting_key) DO UPDATE SET enabled = $4, updated_at = now()`,
-        [userId, projectId, key, enabled],
-      );
+    // Batch upsert
+    const values: string[] = [];
+    const args: any[] = [userId, projectId];
+    for (let i = 0; i < settings.length; i++) {
+      const [key, enabled] = settings[i];
+      args.push(key, enabled);
+      values.push(`($1, $2, $${args.length - 1}, $${args.length}, now())`);
     }
+    await pool.query(
+      `INSERT INTO notification_settings (user_id, project_id, setting_key, enabled, updated_at)
+       VALUES ${values.join(', ')}
+       ON CONFLICT (user_id, project_id, setting_key) DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = now()`,
+      args,
+    );
     res.json({ status: 'ok' });
   } catch (e) { next(e); }
 });
