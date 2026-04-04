@@ -37,6 +37,7 @@ import { allDocumentTests } from './tests/documentTests.js';
 import { allCollaborationTests } from './tests/collaborationTests.js';
 import { allActivityAnalyticsTests } from './tests/activityAnalyticsTests.js';
 import { allSearchAgentTests } from './tests/searchAgentTests.js';
+import { allSprint77Tests } from './tests/sprint77Tests.js';
 
 dotenv.config();
 
@@ -199,7 +200,11 @@ async function main() {
   console.log('\n── Global Search & Agents ──');
   allResults.push(...await runTests(allSearchAgentTests, ctx));
 
-  // Group 9: Tiered Search (P1-P2).
+  // Group 9: Sprint 7.7 new endpoints.
+  console.log('\n── Sprint 7.7 Endpoints ──');
+  allResults.push(...await runTests(allSprint77Tests, ctx));
+
+  // Group 10: Tiered Search (P1-P2).
   if (!SKIP_TIERED) {
     console.log('\n── Tiered Search ──');
     allResults.push(...await runTests(allTieredSearchTests, ctx));
