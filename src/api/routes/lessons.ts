@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   addLesson,
+  batchUpdateLessonStatus,
   listLessons,
   listLessonVersions,
   searchLessons,
@@ -111,6 +112,23 @@ router.put('/:id', async (req, res, next) => {
     });
     if (result.status === 'error') {
       res.status(404).json(result);
+      return;
+    }
+    res.json(result);
+  } catch (e) { next(e); }
+});
+
+/** POST /api/lessons/batch-status — bulk approve/reject/archive up to 50 lessons */
+router.post('/batch-status', async (req, res, next) => {
+  try {
+    const projectId = resolveProjectIdOrThrow(req.body.project_id);
+    const result = await batchUpdateLessonStatus({
+      projectId,
+      lessonIds: req.body.lesson_ids ?? [],
+      status: req.body.status,
+    });
+    if (result.status === 'error') {
+      res.status(400).json(result);
       return;
     }
     res.json(result);

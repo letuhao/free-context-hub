@@ -1099,6 +1099,39 @@ export async function listLessonVersions(params: {
   };
 }
 
+export async function batchUpdateLessonStatus(params: {
+  projectId: string;
+  lessonIds: string[];
+  status: LessonStatus;
+}): Promise<{ status: 'ok' | 'error'; error?: string; updated_count?: number; failed_ids?: string[] }> {
+  if (!params.lessonIds.length) {
+    return { status: 'error', error: 'lesson_ids is empty' };
+  }
+  if (params.lessonIds.length > 50) {
+    return { status: 'error', error: 'max 50 lessons per batch' };
+  }
+
+  const pool = getDbPool();
+
+  const result = await pool.query(
+    `UPDATE lessons SET status = $3, updated_at = now()
+     WHERE project_id = $1 AND lesson_id = ANY($2::uuid[])
+     RETURNING lesson_id`,
+    [params.projectId, params.lessonIds, params.status],
+  );
+
+  const updatedIds = new Set((result.rows as { lesson_id: string }[]).map(r => r.lesson_id));
+  const failedIds = params.lessonIds.filter(id => !updatedIds.has(id));
+
+  await rebuildProjectSnapshot(params.projectId).catch(() => {});
+
+  return {
+    status: 'ok',
+    updated_count: updatedIds.size,
+    failed_ids: failedIds.length > 0 ? failedIds : undefined,
+  };
+}
+
 export async function updateLessonStatus(params: {
   projectId: string;
   lessonId: string;

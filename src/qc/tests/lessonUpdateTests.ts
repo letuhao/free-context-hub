@@ -218,4 +218,75 @@ export const lessonVersionHistory: TestFn = async (ctx) => {
   }
 };
 
-export const allLessonUpdateTests: TestFn[] = [lessonUpdate, lessonUpdateTagsOnly, lessonUpdateNotFound, lessonVersionHistory];
+/**
+ * Test: Batch status update — approve/reject multiple lessons at once
+ */
+export const lessonBatchStatus: TestFn = async (ctx) => {
+  const name = 'lesson-batch-status';
+  const start = Date.now();
+  const apiBase = process.env.API_BASE_URL?.trim() || 'http://localhost:3001';
+  const marker = `batch-${Date.now()}`;
+
+  try {
+    // 1. Create 3 draft lessons.
+    const ids: string[] = [];
+    for (let i = 1; i <= 3; i++) {
+      const res = await fetch(`${apiBase}/api/lessons`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: ctx.projectId, lesson_type: 'decision',
+          title: `Batch ${i}: ${marker}`, content: `Content ${i}`,
+          tags: ['integration-test', 'batch-test'],
+        }),
+      });
+      const data = await res.json() as any;
+      if (!data.lesson_id) return fail(name, GROUP, Date.now() - start, `create #${i} failed`);
+      ids.push(data.lesson_id);
+      ctx.createdLessonIds.push(data.lesson_id);
+    }
+
+    // 2. Batch approve all 3.
+    const approveRes = await fetch(`${apiBase}/api/lessons/batch-status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_id: ctx.projectId, lesson_ids: ids, status: 'active' }),
+    });
+    const approve = await approveRes.json() as any;
+    if (approve.updated_count !== 3) return fail(name, GROUP, Date.now() - start, `Expected 3 updated, got ${approve.updated_count}`);
+
+    // 3. Batch archive 2 of them.
+    const archiveRes = await fetch(`${apiBase}/api/lessons/batch-status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_id: ctx.projectId, lesson_ids: [ids[0], ids[1]], status: 'archived' }),
+    });
+    const archive = await archiveRes.json() as any;
+    if (archive.updated_count !== 2) return fail(name, GROUP, Date.now() - start, `Expected 2 archived, got ${archive.updated_count}`);
+
+    // 4. Batch with one invalid ID — partial success.
+    const fakeId = '00000000-0000-0000-0000-000000000000';
+    const partialRes = await fetch(`${apiBase}/api/lessons/batch-status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_id: ctx.projectId, lesson_ids: [ids[2], fakeId], status: 'superseded' }),
+    });
+    const partial = await partialRes.json() as any;
+    if (partial.updated_count !== 1) return fail(name, GROUP, Date.now() - start, `Expected 1 partial update, got ${partial.updated_count}`);
+    if (!partial.failed_ids?.includes(fakeId)) return fail(name, GROUP, Date.now() - start, `Expected failed_ids to contain fake ID`);
+
+    // 5. Empty array → 400.
+    const emptyRes = await fetch(`${apiBase}/api/lessons/batch-status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_id: ctx.projectId, lesson_ids: [], status: 'active' }),
+    });
+    if (emptyRes.status !== 400) return fail(name, GROUP, Date.now() - start, `Expected 400 for empty, got ${emptyRes.status}`);
+
+    return pass(name, GROUP, Date.now() - start);
+  } catch (err) {
+    return fail(name, GROUP, Date.now() - start, `Exception: ${err instanceof Error ? err.message : String(err)}`);
+  }
+};
+
+export const allLessonUpdateTests: TestFn[] = [lessonUpdate, lessonUpdateTagsOnly, lessonUpdateNotFound, lessonVersionHistory, lessonBatchStatus];
