@@ -15,4 +15,4 @@ export type Lesson = {
 };
 
 export const LESSON_TYPES = ["decision", "workaround", "preference", "guardrail", "general_note"] as const;
-export const LESSON_STATUSES = ["active", "draft", "superseded", "archived"] as const;
+export const LESSON_STATUSES = ["active", "draft", "pending_review", "superseded", "archived"] as const;

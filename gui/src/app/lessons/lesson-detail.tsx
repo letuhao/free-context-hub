@@ -5,17 +5,43 @@ import { Badge, Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useProject } from "@/contexts/project-context";
 import { api } from "@/lib/api";
-import { X, Pencil, Save, Undo2, Archive, ArrowRight, RefreshCw, Copy } from "lucide-react";
+import { X, Pencil, Save, Undo2, Archive, ArrowRight, RefreshCw, Copy, History, ChevronDown, ChevronRight } from "lucide-react";
+import { relTime } from "@/lib/rel-time";
 import type { Lesson } from "./types";
+
+type LessonVersion = {
+  version_number: number;
+  title: string;
+  content: string;
+  tags: string[];
+  changed_by: string | null;
+  changed_at: string;
+  change_summary: string | null;
+};
 
 interface LessonDetailProps {
   lesson: Lesson | null;
   onClose: () => void;
   onStatusChange: () => void;
   onTagClick: (tag: string) => void;
+  initialEditMode?: boolean;
 }
 
-export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick }: LessonDetailProps) {
+/** Avatar circle for author names */
+function AuthorAvatar({ name }: { name: string }) {
+  const colors: Record<string, string> = {
+    c: "bg-purple-600", l: "bg-blue-600", g: "bg-green-600", r: "bg-rose-600",
+  };
+  const initial = name.charAt(0).toUpperCase();
+  const bg = colors[name.charAt(0).toLowerCase()] ?? "bg-zinc-600";
+  return (
+    <span className={`w-4 h-4 rounded-full ${bg} flex items-center justify-center text-[7px] font-bold text-white shrink-0`}>
+      {initial}
+    </span>
+  );
+}
+
+export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick, initialEditMode }: LessonDetailProps) {
   const { toast } = useToast();
   const { projectId } = useProject();
 
@@ -27,16 +53,40 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick }: Le
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
 
+  // Version history
+  const [versions, setVersions] = useState<LessonVersion[]>([]);
+  const [versionsOpen, setVersionsOpen] = useState(false);
+  const [versionsLoading, setVersionsLoading] = useState(false);
+  const [expandedVersion, setExpandedVersion] = useState<number | null>(null);
+  const [restoring, setRestoring] = useState(false);
+
   // Reset edit state when lesson changes
   useEffect(() => {
     if (lesson) {
       setEditTitle(lesson.title);
       setEditContent(lesson.content);
       setEditTags([...lesson.tags]);
-      setEditing(false);
+      setEditing(!!initialEditMode);
       setDirty(false);
+      setVersions([]);
+      setVersionsOpen(false);
+      setExpandedVersion(null);
     }
-  }, [lesson]);
+  }, [lesson, initialEditMode]);
+
+  // Fetch versions when section is opened
+  const fetchVersions = useCallback(() => {
+    if (!lesson) return;
+    setVersionsLoading(true);
+    api.listLessonVersions(lesson.lesson_id, { project_id: projectId })
+      .then((res) => setVersions(res.versions ?? []))
+      .catch(() => setVersions([]))
+      .finally(() => setVersionsLoading(false));
+  }, [lesson, projectId]);
+
+  useEffect(() => {
+    if (versionsOpen && lesson) fetchVersions();
+  }, [versionsOpen, lesson, fetchVersions]);
 
   // Track dirty state
   useEffect(() => {
@@ -87,13 +137,14 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick }: Le
       toast("success", "Lesson updated");
       setEditing(false);
       setDirty(false);
+      if (versionsOpen) fetchVersions();
       onStatusChange();
     } catch (err) {
       toast("error", err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(false);
     }
-  }, [lesson, dirty, editTitle, editContent, editTags, projectId, toast, onStatusChange]);
+  }, [lesson, dirty, editTitle, editContent, editTags, projectId, toast, onStatusChange, versionsOpen, fetchVersions]);
 
   const handleCancel = () => {
     if (lesson) {
@@ -103,6 +154,28 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick }: Le
     }
     setEditing(false);
     setDirty(false);
+  };
+
+  const handleRestore = async (v: LessonVersion) => {
+    if (!lesson) return;
+    setRestoring(true);
+    try {
+      await api.updateLesson(lesson.lesson_id, {
+        project_id: projectId,
+        title: v.title,
+        content: v.content,
+        tags: v.tags,
+        changed_by: "gui-user",
+        change_summary: `Restored from v${v.version_number}`,
+      });
+      toast("success", `Restored to v${v.version_number}`);
+      if (versionsOpen) fetchVersions();
+      onStatusChange();
+    } catch (err) {
+      toast("error", err instanceof Error ? err.message : "Restore failed");
+    } finally {
+      setRestoring(false);
+    }
   };
 
   const changeStatus = async (status: string) => {
@@ -139,6 +212,7 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick }: Le
 
   const created = new Date(lesson.created_at);
   const dateStr = created.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+  const maxVersion = versions.length > 0 ? Math.max(...versions.map(v => v.version_number)) : 0;
 
   return (
     <>
@@ -199,7 +273,12 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick }: Le
             <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-600 font-mono">
               <span>ID: {lesson.lesson_id.slice(0, 8)}</span>
               <span>{dateStr}</span>
-              {lesson.captured_by && <span>by {lesson.captured_by}</span>}
+              {lesson.captured_by && (
+                <span className="inline-flex items-center gap-1">
+                  <AuthorAvatar name={lesson.captured_by} />
+                  {lesson.captured_by}
+                </span>
+              )}
             </div>
 
             {/* Content */}
@@ -266,6 +345,105 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick }: Le
               </div>
             )}
 
+            {/* Version History — flat row layout matching draft */}
+            {!editing && (
+              <div>
+                <button
+                  onClick={() => setVersionsOpen(!versionsOpen)}
+                  className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-zinc-500 hover:text-zinc-300 transition-colors mb-2"
+                >
+                  <History size={12} />
+                  <span>History</span>
+                  {versionsOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                  {versions.length > 0 && (
+                    <span className="text-[10px] text-zinc-600 normal-case tracking-normal ml-1">
+                      ({versions.length})
+                    </span>
+                  )}
+                </button>
+                {versionsOpen && (
+                  <div className="space-y-0">
+                    {versionsLoading ? (
+                      <div className="text-xs text-zinc-600 py-2">Loading versions...</div>
+                    ) : versions.length === 0 ? (
+                      <div className="text-xs text-zinc-600 py-2">No previous versions</div>
+                    ) : (
+                      versions.map((v) => {
+                        const isCurrent = v.version_number === maxVersion;
+                        const isExpanded = expandedVersion === v.version_number;
+                        return (
+                          <div key={v.version_number}>
+                            {/* Flat row */}
+                            <div className="flex items-center gap-3 px-3 py-2.5 border-b border-zinc-800/60">
+                              <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded shrink-0 ${
+                                isCurrent
+                                  ? "bg-blue-500/15 text-blue-400 border border-blue-500/20"
+                                  : "bg-zinc-700/50 text-zinc-400 border border-zinc-700"
+                              }`}>
+                                v{v.version_number}
+                              </span>
+                              <span className="text-xs text-zinc-400 flex-1 truncate">
+                                {v.change_summary ?? "No description"}
+                              </span>
+                              {v.changed_by && (
+                                <span className="inline-flex items-center gap-1 shrink-0">
+                                  <AuthorAvatar name={v.changed_by} />
+                                  <span className="text-[11px] text-zinc-500">{v.changed_by}</span>
+                                </span>
+                              )}
+                              <span className="text-[11px] text-zinc-600 shrink-0">{relTime(v.changed_at)}</span>
+                              {isCurrent ? (
+                                <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 shrink-0">
+                                  Current
+                                </span>
+                              ) : (
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    onClick={() => setExpandedVersion(isExpanded ? null : v.version_number)}
+                                    className="px-2 py-0.5 text-[10px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 hover:text-zinc-300 transition-colors"
+                                  >
+                                    {isExpanded ? "Hide" : "View"}
+                                  </button>
+                                  <button
+                                    onClick={() => handleRestore(v)}
+                                    disabled={restoring}
+                                    className="px-2 py-0.5 text-[10px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 hover:text-zinc-300 transition-colors disabled:opacity-50"
+                                  >
+                                    Restore
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                            {/* Expanded content (View) */}
+                            {isExpanded && (
+                              <div className="px-4 py-3 bg-zinc-800/30 border-b border-zinc-800/60 space-y-2">
+                                <div className="text-xs text-zinc-500 font-medium">Title</div>
+                                <div className="text-sm text-zinc-400">{v.title}</div>
+                                <div className="text-xs text-zinc-500 font-medium pt-1">Content</div>
+                                <div className="text-sm text-zinc-400 whitespace-pre-wrap max-h-40 overflow-y-auto font-mono text-xs leading-relaxed bg-zinc-800/50 rounded p-2">
+                                  {v.content}
+                                </div>
+                                {v.tags.length > 0 && (
+                                  <>
+                                    <div className="text-xs text-zinc-500 font-medium pt-1">Tags</div>
+                                    <div className="flex flex-wrap gap-1">
+                                      {v.tags.map((t) => (
+                                        <span key={t} className="px-2 py-0.5 rounded-full text-[11px] bg-zinc-800 text-zinc-500">{t}</span>
+                                      ))}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {lesson.superseded_by && (
               <div>
                 <h3 className="text-[11px] uppercase tracking-wide text-zinc-500 mb-2">Superseded By</h3>
@@ -302,7 +480,7 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick }: Le
                     <RefreshCw size={13} className="mr-1" /> Reactivate
                   </Button>
                 )}
-                {lesson.status === "draft" && (
+                {(lesson.status === "draft" || lesson.status === "pending_review") && (
                   <Button variant="primary" size="sm" onClick={() => changeStatus("active")}>
                     Approve
                   </Button>

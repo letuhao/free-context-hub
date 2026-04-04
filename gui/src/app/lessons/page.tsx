@@ -61,6 +61,9 @@ export default function LessonsPage() {
   // Density
   const [compact, setCompact] = useState(false);
 
+  // Tab counts
+  const [tabCounts, setTabCounts] = useState<Record<string, number>>({});
+
   // Panels
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -115,6 +118,25 @@ export default function LessonsPage() {
   }, [projectId, page, debouncedQuery, searchMode, sortField, sortOrder, filterType, filterStatus, filterTags, showAllStatuses, includeGroups, toast]);
 
   useEffect(() => { fetchLessons(); }, [fetchLessons]);
+
+  // Fetch tab counts (on mount + when lessons change)
+  useEffect(() => {
+    const statuses = ["active", "draft", "pending_review", "superseded", "archived"];
+    Promise.all(
+      statuses.map((s) =>
+        api.listLessons({ project_id: projectId, status: s, limit: 1 })
+          .then((r) => [s, r.total_count ?? 0] as const)
+          .catch(() => [s, 0] as const)
+      )
+    ).then((results) => {
+      const counts: Record<string, number> = {};
+      let total = 0;
+      for (const [s, c] of results) { counts[s] = c; total += c; }
+      counts.all = total;
+      counts.review = (counts.draft ?? 0) + (counts.pending_review ?? 0);
+      setTabCounts(counts);
+    });
+  }, [projectId, loading]); // re-fetch when loading changes (after data mutation)
 
   // ── Sort ──
   const handleSort = (field: SortField) => {
@@ -237,8 +259,6 @@ export default function LessonsPage() {
     },
   ];
 
-  const isFiltered = filterStatus === "active" && !showAllStatuses;
-
   return (
     <div className="p-6 max-w-[1100px]">
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Lessons" }]} />
@@ -309,24 +329,54 @@ export default function LessonsPage() {
         </div>
       )}
 
-      {/* Toolbar: hidden count + density */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-xs text-zinc-600">
-          {isFiltered ? (
-            <>
-              Showing {totalCount} active lessons &middot;{" "}
-              <button onClick={() => setShowAllStatuses(true)} className="text-blue-500 hover:underline">
-                Show all
+      {/* Status tabs + density */}
+      <div className="flex items-center justify-between mb-4 border-b border-zinc-800 pb-3">
+        <div className="flex items-center gap-1">
+          {([
+            { label: "All", countKey: "all", statuses: undefined, hasAmberDot: false },
+            { label: "Active", countKey: "active", statuses: "active", hasAmberDot: false },
+            { label: "Draft / Pending Review", countKey: "review", statuses: "draft,pending_review", hasAmberDot: true },
+            { label: "Superseded", countKey: "superseded", statuses: "superseded", hasAmberDot: false },
+          ] as const).map((tab) => {
+            // "All" tab is active when showAllStatuses is true
+            // Other tabs match against their statuses
+            const isActive = tab.statuses === undefined
+              ? showAllStatuses
+              : !showAllStatuses && (
+                  tab.statuses.includes(",")
+                    ? tab.statuses.split(",").includes(filterStatus ?? "")
+                    : filterStatus === tab.statuses
+                );
+            const count = tabCounts[tab.countKey];
+            return (
+              <button
+                key={tab.label}
+                onClick={() => {
+                  if (tab.statuses === undefined) {
+                    setShowAllStatuses(true);
+                    setFilterStatus(undefined);
+                  } else {
+                    setShowAllStatuses(false);
+                    // For combined tab, filter by "draft" (shows both in BE query via multiple fetches in review inbox)
+                    setFilterStatus(tab.statuses.includes(",") ? "draft" : tab.statuses);
+                  }
+                }}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors inline-flex items-center gap-1.5 ${
+                  isActive
+                    ? "bg-zinc-800 text-zinc-100 border border-zinc-700"
+                    : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50"
+                }`}
+              >
+                {tab.hasAmberDot && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                )}
+                {tab.label}
+                {count !== undefined && (
+                  <span className={isActive ? "text-zinc-400" : "text-zinc-600"}>({count})</span>
+                )}
               </button>
-            </>
-          ) : (
-            <>
-              Showing all {totalCount} lessons &middot;{" "}
-              <button onClick={() => { setFilterStatus("active"); setShowAllStatuses(false); }} className="text-blue-500 hover:underline">
-                Active only
-              </button>
-            </>
-          )}
+            );
+          })}
         </div>
         <div className="flex border border-zinc-800 rounded-md overflow-hidden">
           <button

@@ -8,7 +8,7 @@ phase: BE Complete, FE In Progress
 # Session Patch — 2026-04-04
 
 ## Where We Are
-Phase: **Phase 7 — BE complete (22/22), FE Sprint 7.1 complete (8/8), FE Sprint 7.2 in progress (2/5).**
+Phase: **Phase 7 — BE complete (22/22), FE Sprint 7.1 complete (8/8), FE Sprint 7.2 complete (5/5).**
 
 ## What Was Done This Session
 
@@ -51,12 +51,12 @@ New BE surface:
 7. Move Pagination to shared `ui/` component
 8. Add animations (SlideOver slideInRight, ConfirmDialog/CommandPalette fadeInScale, Toast slideUp)
 
-### FE Sprint 7.2 — IN PROGRESS (2/5)
+### FE Sprint 7.2 — COMPLETE (5/5)
 - [✓] 7.2.4: Lesson detail center modal with edit mode (title/content/tags editing)
 - [✓] 7.2.6: Dirty indicator + Ctrl+S save (included in 7.2.4)
-- [ ] 7.2.5: Version history section in lesson detail
-- [ ] 7.2.8: Review Inbox page (card-based review, batch approve/reject)
-- [ ] 7.2.9: Lessons page — add Draft/Pending Review status tab
+- [✓] 7.2.5: Version history — flat row layout (matching draft), version badges (blue=current, zinc=old), View/Restore buttons, AuthorAvatar component, change summary inline
+- [✓] 7.2.8: Review Inbox — full draft alignment: stats bar (agent breakdown), expandable cards (full content on click), Edit & Approve (opens modal in edit mode), Reject dialog (reason dropdown + note), sidebar badge count (amber, 60s poll), batch approve/reject, Approve All Visible header button, aria-expanded a11y
+- [✓] 7.2.9: Lessons page — merged Draft/Pending Review tab (amber dot indicator), per-tab counts (parallel API fetch), border-bottom divider, removed separate Archived tab
 
 ### Documentation Updates
 - README.md: Screenshots section, detailed Phase 7 roadmap
@@ -65,8 +65,7 @@ New BE surface:
 - docs/phase7-task-breakdown.md: 7 sprints, 73 tasks with status tracking
 
 ## Next Steps
-1. **Continue FE Sprint 7.2** — 7.2.5 (version history UI), 7.2.8 (review inbox page), 7.2.9 (status tabs)
-2. **FE Sprint 7.3** — AI-assisted editor, chat history sidebar, markdown rendering
+1. **FE Sprint 7.3** — AI-assisted editor, chat history sidebar, markdown rendering
 3. **FE Sprint 7.4** — Documents page
 4. **FE Sprint 7.5** — Comments, feedback, bookmarks UI
 5. **FE Sprint 7.6** — Activity feed, analytics, onboarding pages
@@ -78,3 +77,6 @@ New BE surface:
 - **9-phase task workflow** — Plan→Design→Review→Build→Test→Review→QC→Session→Commit
 - **package-lock.json stays gitignored** — Dockerfile uses `npm install`
 - **Review pipeline** — AI-created lessons default to `draft`, configurable trust per agent
+- **9-phase workflow applied to FE 7.2** — Plan→Design→Review→Build→Test→Review→QC→Session→Commit; caught 3 review issues (unused imports, missing aria-expanded)
+- **Version Restore** — re-uses existing `updateLesson` API (no new BE endpoint needed)
+- **Reject = archive** — rejection archives the lesson with toast showing reason; DB column for rejection reason deferred to Phase 8

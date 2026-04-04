@@ -9,22 +9,23 @@ import {
   LayoutDashboard, MessageSquare, BookOpen, Shield,
   FileText, Search, Network, FolderOpen, Users,
   GitBranch, Link2, Zap, Settings, Bot,
-  PanelLeftClose, PanelLeftOpen,
+  PanelLeftClose, PanelLeftOpen, ClipboardCheck,
 } from "lucide-react";
 
-type NavItem = { href: string; label: string; icon: ReactNode };
+type NavItem = { href: string; label: string; icon: ReactNode; badge?: number };
 type NavGroup = { title: string; items: NavItem[] };
 
 const ICON_SIZE = 18;
 const ICON_STROKE = 1.5;
 
-const navGroups: (NavItem | NavGroup)[] = [
+const buildNavGroups = (reviewCount: number): (NavItem | NavGroup)[] => [
   { href: "/", label: "Dashboard", icon: <LayoutDashboard size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
   { href: "/chat", label: "Chat", icon: <MessageSquare size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
   {
     title: "Knowledge",
     items: [
       { href: "/lessons", label: "Lessons", icon: <BookOpen size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
+      { href: "/review", label: "Review Inbox", icon: <ClipboardCheck size={ICON_SIZE} strokeWidth={ICON_STROKE} />, badge: reviewCount },
       { href: "/guardrails", label: "Guardrails", icon: <Shield size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/knowledge/docs", label: "Generated Docs", icon: <FileText size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/knowledge/search", label: "Code Search", icon: <Search size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
@@ -64,6 +65,7 @@ export function Sidebar() {
   const { projectId, setProjectId, projects, includeGroups, setIncludeGroups } = useProject();
   const [collapsed, setCollapsed] = useState(false);
   const [healthy, setHealthy] = useState(true);
+  const [reviewCount, setReviewCount] = useState(0);
 
   useEffect(() => {
     const apiUrl = process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "http://localhost:3001";
@@ -77,6 +79,24 @@ export function Sidebar() {
     const interval = setInterval(check, 30_000);
     return () => { active = false; clearInterval(interval); };
   }, []);
+
+  // Fetch review inbox count
+  useEffect(() => {
+    if (!projectId) return;
+    const apiUrl = process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "http://localhost:3001";
+    let active = true;
+    const fetchCount = () => {
+      Promise.all([
+        fetch(`${apiUrl}/api/lessons?project_id=${encodeURIComponent(projectId)}&status=draft&limit=1`).then(r => r.ok ? r.json() : { total_count: 0 }),
+        fetch(`${apiUrl}/api/lessons?project_id=${encodeURIComponent(projectId)}&status=pending_review&limit=1`).then(r => r.ok ? r.json() : { total_count: 0 }),
+      ]).then(([d, p]) => {
+        if (active) setReviewCount((d.total_count ?? 0) + (p.total_count ?? 0));
+      }).catch(() => {});
+    };
+    fetchCount();
+    const interval = setInterval(fetchCount, 60_000);
+    return () => { active = false; clearInterval(interval); };
+  }, [projectId]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -106,6 +126,11 @@ export function Sidebar() {
       >
         <span className="shrink-0">{item.icon}</span>
         {!collapsed && <span>{item.label}</span>}
+        {!collapsed && item.badge !== undefined && item.badge > 0 && (
+          <span className="ml-auto text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full">
+            {item.badge}
+          </span>
+        )}
       </Link>
     );
   };
@@ -166,7 +191,7 @@ export function Sidebar() {
       )}
 
       <nav className="flex-1 px-2 py-1 space-y-0.5 overflow-y-auto">
-        {navGroups.map((entry, i) => {
+        {buildNavGroups(reviewCount).map((entry, i) => {
           if (isGroup(entry)) {
             return (
               <div key={entry.title} className="mt-3 first:mt-0">
