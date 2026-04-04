@@ -1,142 +1,102 @@
 ---
-id: CH-PHASE7-BE-FE
+id: CH-PHASE7-COMPLETE
 date: 2026-04-04
 module: Phase-7-GUI-Enhancement
-phase: BE Complete, FE In Progress
+phase: COMPLETE
 ---
 
 # Session Patch — 2026-04-04
 
 ## Where We Are
-Phase: **Phase 7 — BE complete (28), FE Sprint 7.1-7.7 complete. Phase 7 DONE.**
+**Phase 7 COMPLETE.** 20 pages, 28+ BE endpoints, 38 migrations, 37/37 integration tests passing.
 
 ## What Was Done This Session
 
-### Docker / Infrastructure
-- `Dockerfile`: Changed `npm ci` → `npm install` (package-lock.json gitignored by design)
-- `gui/Dockerfile`: Created multi-stage Next.js Dockerfile
-- `docker-compose.yml`: Added `gui` service on port 3002
-- Fixed Badge type error in projects/groups/page.tsx
+### Phase 7 — Full Summary
 
-### GUI Draft Design (docs/gui-drafts/)
-- v1: Baseline snapshots (32 files)
-- v2: UI Polish (icons, breadcrumbs, animations, sticky headers)
-- v3: Feature enhancements (documents, notifications, AI editor, chat history)
-- v4: Human-in-the-loop (review inbox, analytics, onboarding, global search)
-- Total: 21 page drafts + 16 component drafts + index catalog
-- 7 demo screenshots in README
+**7 FE sprints + BE + testing, all done in a single session.**
 
-### Phase 7 BE — ALL COMPLETE (22 tasks)
-Sprint 7.2: Lesson edit, versions, list versions, batch status (4 tasks)
-Sprint 7.3: AI improve, chat tables, chat history API (3 tasks)
-Sprint 7.4: Document tables, CRUD+linking, AI generate lessons (4 tasks)
-Sprint 7.5: Comments, feedback, bookmarks, import/export (5 tasks)
-Sprint 7.6: Activity log, notifications, analytics, learning paths (4 tasks)
-Sprint 7.7: Global search, agent trust levels (2 tasks)
+| Sprint | Focus | FE Tasks | Key Deliverables |
+|--------|-------|----------|-----------------|
+| 7.1 | Foundation | 8 | Lucide icons, breadcrumbs, animations, pagination, keyboard shortcuts |
+| 7.2 | Lesson editing | 5 | Version history, review inbox, status tabs, reject dialog |
+| 7.3 | AI features | 5 | Markdown rendering, chat sidebar, AI editor, pinned messages |
+| 7.4 | Documents | 4 | Upload/link, viewer, AI lesson generation, linked docs |
+| 7.5 | Collaboration | 6 | Comments, feedback, bookmarks, import/export |
+| 7.6 | Observability | 5 | Activity timeline, analytics, getting started, dashboard insights |
+| 7.7 | Polish | 6 BE + 6 FE | Global search, agent trust, responsive, feedback column |
 
-New BE surface:
-- 7 migrations (0031-0037): lesson_versions, chat_conversations, chat_messages, documents, document_lessons, lesson_comments, lesson_feedback, bookmarks, activity_log, notifications, learning_paths, learning_progress, agent_trust_levels
-- 11 new service files, 7 new route files
-- ~60 new REST endpoints
-- 33 integration tests (30 pass / 3 pre-existing tiered-search failures)
-- 13 review issues fixed (CRITICAL: JSON.parse safety, COUNT null checks; HIGH: error logging, INSERT checks; MEDIUM: validation, serialization safety)
+### Workflow Applied
+Every sprint followed the **9-phase task workflow**:
+1. PLAN (Architect + PO) → 2. DESIGN (Lead) → 3. REVIEW (PO + Lead) → 4. BUILD → 5. TEST → 6. REVIEW (Lead) → 7. QC (QA/PO) → 8. SESSION → 9. COMMIT
 
-### FE Sprint 7.1 — COMPLETE (8 tasks) + Draft Alignment Fixes
-1. Fix background color (`bg-zinc-950` consistent) — cleaned globals.css
-2. Fix settings green gradient — same root cause
-3. Replace emoji → Lucide React icons in sidebar (14 icons)
-4. Fix stat card styling (icons, flex-1, hover, highlight border)
-5. Add breadcrumbs to all 12 nested pages
-6. Sticky table headers + sort indicator icons (ChevronUp/Down)
-7. Move Pagination to shared `ui/` component
-8. Add animations (SlideOver slideInRight, ConfirmDialog/CommandPalette fadeInScale, Toast slideUp)
+Each sprint also had a **draft-vs-implementation review** pass comparing HTML drafts against code, identifying and fixing gaps.
 
-**Draft alignment fixes (post-review):**
-- SearchBar: emoji 🔍 → Lucide `Search` icon (18x18, stroke 1.5)
-- Toast: unicode ✓✕ℹ → Lucide `CheckCircle2`, `XCircle`, `Info` icons
-- CommandPalette: emoji 🔍 → Lucide `Search` icon
-- [NEW] KeyboardShortcuts overlay (7.1.8): 3-column grid, `?` key trigger, search filter, key badges, fadeInScale animation, wired into layout.tsx
+### Testing
+- **37 integration tests** (34 Tier 1 REST API + 3 Tier 2 MCP smoke)
+- **ALL 37 PASS** (~146s runtime)
+- Testing plan documented at `docs/testing-plan.md`
+- Test reports generated to `docs/qc/`
 
-### FE Sprint 7.2 — COMPLETE (5/5)
-- [✓] 7.2.4: Lesson detail center modal with edit mode (title/content/tags editing)
-- [✓] 7.2.6: Dirty indicator + Ctrl+S save (included in 7.2.4)
-- [✓] 7.2.5: Version history — flat row layout (matching draft), version badges (blue=current, zinc=old), View/Restore buttons, AuthorAvatar component, change summary inline
-- [✓] 7.2.8: Review Inbox — full draft alignment: stats bar (agent breakdown), expandable cards (full content on click), Edit & Approve (opens modal in edit mode), Reject dialog (reason dropdown + note), sidebar badge count (amber, 60s poll), batch approve/reject, Approve All Visible header button, aria-expanded a11y
-- [✓] 7.2.9: Lessons page — merged Draft/Pending Review tab (amber dot indicator), per-tab counts (parallel API fetch), border-bottom divider, removed separate Archived tab
+### BE Surface (28+ endpoints)
+- 38 migrations (0001-0038)
+- 14 route files, 70+ REST endpoints
+- 36 MCP tools
+- New Sprint 7.7 endpoints: document upload (multer), suggest-tags, analytics timeseries, notification settings, linked docs reverse lookup, feedback counts in lesson list
 
-### FE Sprint 7.3 — COMPLETE (5/5)
-- [✓] 7.3.7: Chat markdown rendering — `react-markdown` + `remark-gfm`, custom components for code blocks (language label + Copy), inline code (emerald), headings, lists
-- [✓] 7.3.5: Chat history sidebar — w-64 left panel, conversation list from API, search, New Chat, active highlight (blue border), collapse toggle, delete conversation
-- [✓] 7.3.6: Create Lesson from Answer — "Create Lesson" pill on AI message hover, popover with pre-filled title/type, calls `api.addLesson`
-- [✓] 7.3.8: Pinned messages bar — collapsible bar below header, pin count, Jump button, Pin button on AI message hover
-- [✓] 7.3.2: AI-assisted editor — "Improve with AI" button in lesson detail footer, AI toolbar (Clarify/Simplify/Expand/Custom), custom prompt input (purple themed), diff view (red old/green new), per-chunk Accept/Reject + Accept All/Reject All, applies accepted changes to editor
-
-**Chat page style overhaul:**
-- User bubbles: blue-600 rounded-2xl, AI avatar: Bot SVG icon in zinc-800 circle
-- Hover toolbars: Copy/Edit/Retry (user), Copy/Pin/CreateLesson (AI)
-- Tool calls: blue left border, "done" badge, collapsible details
-- Input: textarea auto-grow + Send icon + Stop button
-- Empty state: gradient ring icon + prompt pills with borderPulse animation
-- Streaming: dot pulse animation
-- New API methods: listConversations, createConversation, getConversation, addMessage, toggleMessagePin, deleteConversation
-
-### FE Sprint 7.4 — COMPLETE (4/4)
-- [✓] 7.4.5: Documents page — /documents route, breadcrumb, header (Upload+Link URL), 3 stat cards, 6 filter tabs, DataTable with type badges (PDF red/Markdown purple/URL cyan), row actions (View/Generate/Delete), Upload dialog (content mode + URL mode, tags, description)
-- [✓] 7.4.6: Document viewer modal — header with name+type+time+Generate+Copy+Close, in-doc search (match counter, prev/next, amber highlights), content area (markdown rendering for .md, pre-wrap for others), linked lessons sidebar (w-64, lesson cards with Unlink, "Link Existing Lesson" button)
-- [✓] 7.4.7: Generate Lessons flow — trigger from viewer header + sidebar, AI suggestion cards (type badge+title+Accept/Dismiss), Accept creates draft lesson + links to doc
-- [✓] 7.4.8: Linked documents section in lesson detail — FileText icon header, document cards (Open/Unlink), "Attach Document" dashed button
-- 8 new API methods in api.ts: listDocuments, createDocument, getDocument, deleteDocument, generateLessonsFromDoc, linkDocLesson, unlinkDocLesson, listDocLessons
-- Sidebar: added "Documents" link (Files icon) under Knowledge group
+### FE Surface (20 pages)
+Dashboard, Chat, Lessons, Review Inbox, Guardrails, Documents, Getting Started, Activity, Analytics, Generated Docs, Code Search, Graph Explorer, Projects (Overview/Groups/Git/Sources), Jobs, Settings, Model Providers
 
 ### Documentation Updates
-- README.md: Screenshots section, detailed Phase 7 roadmap
-- WHITEPAPER.md: v0.3, AI-to-Human bridge vision, detailed Phase 7 section
-- CLAUDE.md: Architecture diagram, project structure, 9-phase task workflow, development phases overview
-- docs/phase7-task-breakdown.md: 7 sprints, 73 tasks with status tracking
-
-### FE Sprint 7.5 — COMPLETE (6/6)
-- [✓] 7.5.5: Comments section in lesson detail — collapsible, threaded replies (border-l-2), avatar+name+time, add comment textarea + Post button
-- [✓] 7.5.6: Feedback thumbs up/down in lesson detail — emerald/red voting, progress bar, retrieval count
-- [✓] 7.5.7: Bookmark button in lesson detail header (amber filled/outline toggle) + Bookmarked filter toggle on lessons page
-- [✓] 7.5.9: Import dialog — 3 tabs (JSON/CSV/Markdown), paste+parse, preview table (Title/Type/Tags/Status), import with count
-- [✓] 7.5.10: Export button — JSON file download via blob URL
-- 10 new API methods: comments (list/add/delete), feedback (get/vote), bookmarks (list/add/remove), import, export
-
-### FE Sprint 7.6 — COMPLETE (5/5)
-- [✓] 7.6.4: Activity & Notifications page — timeline feed with colored event icons + unread dots, category tabs (All/Lessons/Jobs/Guardrails/Documents), time filter (Today/Week/Month/All), notification settings panel with toggle switches, Mark All Read
-- [✓] 7.6.5: Notification bell in sidebar — Activity nav item with unread count badge (60s poll)
-- [✓] 7.6.7: Analytics page — 4 stat cards (retrievals/active/approval/stale), Lessons by Type breakdown, Most Retrieved table, Dead Knowledge section (amber, Archive action), Agent Activity table, time range toggle
-- [✓] 7.6.9: Getting Started page — progress bar (X of Y, percentage), learning sections grouped by lesson type, completed/current/not-started states, Reset Progress
-- [✓] 7.6.10: Dashboard insights — Knowledge Health Score (SVG circular ring), Insights panel (lightbulb icon, border-left indicators)
-- 10 new API methods, 3 new pages (/activity, /analytics, /getting-started), sidebar links (Activity, Analytics, Getting Started)
-
-### Sprint 7.7 BE — COMPLETE (6/6)
-- [✓] 7.7.16: listDocuments — add `lesson_id` filter (subquery on document_lessons)
-- [✓] 7.7.19: listLessons — return `feedback_up`/`feedback_down` counts via LEFT JOIN on lesson_feedback
-- [✓] 7.7.21: `GET /api/analytics/timeseries` — daily activity counts with generate_series fill
-- [✓] 7.7.14: `POST /api/documents/upload` — multipart file upload via multer (memoryStorage, 10MB limit)
-- [✓] 7.7.13: `POST /api/lessons/:id/suggest-tags` — keyword extraction from title+content, stopword filter
-- [✓] 7.7.20: notification_settings table (migration 0038) + `GET/PUT /api/notifications/settings` CRUD
-
-### FE Sprint 7.7 — COMPLETE (core tasks)
-- [✓] 7.7.2: Global search Cmd+K — rewritten CommandPalette with real-time API search, cross-entity results (lessons/documents/guardrails/commits), grouped with icons, keyboard navigation, footer hints
-- [✓] 7.7.4: Agent trust levels panel in Review Inbox — collapsible table, trust level dropdown (untrusted/normal/trusted), auto-approve toggle, lesson count
-- [✓] 7.7.7: Responsive sidebar — auto-collapse at md breakpoint via matchMedia listener
-- [✓] 7.7.16: Linked docs reverse lookup — lesson detail now fetches docs via `lesson_id` filter (BE endpoint ready)
-- [✓] 7.7.19: Feedback column in lessons table — up/down counts + progress bar per row
-- [✓] 7.7.20: Notification settings persistence — loads from API on mount, persists toggle changes via PUT
-- New FE API methods: globalSearch, suggestTags, getNotificationSettings, updateNotificationSettings, getRetrievalTimeseries, uploadDocument, listAgents, updateAgentTrust
-
-## Next Steps
-- Remaining lower-priority 7.7 tasks (guardrail UX, empty states, drag-drop, charts, import tabs) can be done in future sessions
-- **Phase 7 core functionality complete** — 20 pages, 28 BE endpoints, full GUI
+- README.md: Phase 7 complete, roadmap updated with all 7 sprint deliverables
+- CLAUDE.md: Architecture counts updated (20 pages, 18 components, 38 migrations, 70+ endpoints)
+- docs/testing-plan.md: Complete with acceptance criteria checked off
+- docs/phase7-task-breakdown.md: All sprint statuses updated
 
 ## Key Decisions This Session
-- **Drafts before code** — design all enhancements as HTML first, review, then implement
-- **Center modal over slide-over** — for content-heavy views (lesson detail, FAQ)
-- **9-phase task workflow** — Plan→Design→Review→Build→Test→Review→QC→Session→Commit
-- **package-lock.json stays gitignored** — Dockerfile uses `npm install`
-- **Review pipeline** — AI-created lessons default to `draft`, configurable trust per agent
-- **9-phase workflow applied to FE 7.2** — Plan→Design→Review→Build→Test→Review→QC→Session→Commit; caught 3 review issues (unused imports, missing aria-expanded)
-- **Version Restore** — re-uses existing `updateLesson` API (no new BE endpoint needed)
-- **Reject = archive** — rejection archives the lesson with toast showing reason; DB column for rejection reason deferred to Phase 8
+- **Drafts before code** — design as HTML first, review, then implement
+- **9-phase task workflow** — catches issues at review stage (unused imports, a11y, missing features)
+- **Draft-vs-implementation review** — systematic gap analysis after each sprint
+- **Defer strategy** — lower-priority items added to Sprint 7.7 backlog rather than blocking
+- **Pure automation testing** — no AI-in-loop, deterministic, CI-ready
+- **Reject = archive** — rejection archives with toast reason; DB column deferred to Phase 8
+- **Version Restore** — reuses existing updateLesson API
+- **Responsive sidebar** — matchMedia listener, auto-collapse at md breakpoint
+
+## Deferred to Future Sessions
+### Remaining Sprint 7.7 polish (optional):
+- 7.7.5/6: Guardrail test presets + "What Would Block?" mode
+- 7.7.8: Empty state gradient rings
+- 7.7.11: Chat conversation loading on sidebar click
+- 7.7.12/13: AI editor selection toolbar + suggested tags FE
+- 7.7.14/15: Drag-drop file upload FE + search scroll-to-match
+- 7.7.17/18: CSV/Markdown import tabs + drag-drop input
+- 7.7.21: SVG area chart for analytics
+
+### Phase 8 (planned):
+- Access control (roles/permissions)
+- Custom lesson types/templates
+- Rich content editor
+- Agent audit trail
+- CI/CD pipeline with test automation
+
+## Commit Log (this session)
+```
+3ea73ae Complete test plan — 37/37 tests pass (Tier 1 + Tier 2)
+ad7fb3d Add Sprint 7.7 integration tests (7 new tests, 34 total)
+0aa474f Add testing plan — Tier 1 REST API + Tier 2 MCP smoke tests
+1864196 Update README and CLAUDE.md — Phase 7 complete
+fdf5314 [7.7-FE] Complete Sprint 7.7 FE core
+25d027f [7.7-BE] Review fixes — SQL safety, upload guard, tag dedup
+2efd2f2 [7.7-BE] Complete Sprint 7.7 BE — 6 new endpoints
+11b7698 [7.6] Review fixes — persist progress, donut chart, action links
+7d53d4d [7.6] Complete Sprint 7.6 FE — activity, analytics, onboarding
+1070616 [7.5] Review fixes — bookmark filter, duplicates, replies, errors
+cba5e72 [7.5] Complete Sprint 7.5 FE — comments, feedback, bookmarks
+2e1cb40 [7.4] Review fixes — auto-generate, stat card, link lesson search
+8274cf8 [7.4] Complete Sprint 7.4 FE — Documents page, viewer, AI gen
+4f62241 [7.3] Review fixes — syntax highlight, Lucide icons, a11y, tags
+34cf57c [7.3] Complete Sprint 7.3 FE — AI features, chat overhaul
+b86d946 [7.1] Draft alignment — Lucide icons + KeyboardShortcuts
+e4fb0ef [7.2] Complete Sprint 7.2 FE — version history, review inbox
+```
