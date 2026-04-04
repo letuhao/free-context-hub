@@ -35,6 +35,7 @@ import { allTieredSearchTests } from './tests/tieredSearchTests.js';
 import { allChatHistoryTests } from './tests/chatHistoryTests.js';
 import { allDocumentTests } from './tests/documentTests.js';
 import { allCollaborationTests } from './tests/collaborationTests.js';
+import { allActivityAnalyticsTests } from './tests/activityAnalyticsTests.js';
 
 dotenv.config();
 
@@ -189,7 +190,11 @@ async function main() {
   console.log('\n── Collaboration ──');
   allResults.push(...await runTests(allCollaborationTests, ctx));
 
-  // Group 7: Tiered Search (P1-P2).
+  // Group 7: Activity, Analytics, Learning Paths (REST-based).
+  console.log('\n── Activity & Analytics ──');
+  allResults.push(...await runTests(allActivityAnalyticsTests, ctx));
+
+  // Group 8: Tiered Search (P1-P2).
   if (!SKIP_TIERED) {
     console.log('\n── Tiered Search ──');
     allResults.push(...await runTests(allTieredSearchTests, ctx));

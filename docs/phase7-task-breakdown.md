@@ -138,14 +138,14 @@
 
 | # | Task | Type | Est | Dep | Status |
 |---|------|------|-----|-----|--------|
-| 7.6.1 | `activity_log` table + auto-log on lesson/job/guardrail events | BE | 2d | — | [ ] |
-| 7.6.2 | `GET /api/activity` — list with filters (type, time range) | BE | 0.5d | 7.6.1 | [ ] |
-| 7.6.3 | `notifications` table + `GET/PATCH /api/notifications` (mark read) | BE | 1d | 7.6.1 | [ ] |
+| 7.6.1 | `activity_log` table + auto-log on lesson/job/guardrail events | BE | 2d | — | [✓] |
+| 7.6.2 | `GET /api/activity` — list with filters (type, time range) | BE | 0.5d | 7.6.1 | [✓] |
+| 7.6.3 | `notifications` table + `GET/PATCH /api/notifications` (mark read) | BE | 1d | 7.6.1 | [✓] |
 | 7.6.4 | Activity & Notifications page — timeline, preferences panel | FE | 2d | 7.6.2, 7.6.3 | [ ] |
 | 7.6.5 | Notification bell in sidebar with unread count | FE | 0.5d | 7.6.3 | [ ] |
-| 7.6.6 | `GET /api/analytics/*` — retrieval stats, stale detection, agent activity | BE | 2d | — | [ ] |
+| 7.6.6 | `GET /api/analytics/*` — retrieval stats, stale detection, agent activity | BE | 2d | — | [✓] |
 | 7.6.7 | Analytics page — charts, tables, dead knowledge | FE | 2d | 7.6.6 | [ ] |
-| 7.6.8 | `learning_paths` + `learning_progress` tables + CRUD API | BE | 1.5d | — | [ ] |
+| 7.6.8 | `learning_paths` + `learning_progress` tables + CRUD API | BE | 1.5d | — | [✓] |
 | 7.6.9 | Getting Started page — learning path, progress tracker | FE | 1.5d | 7.6.8 | [ ] |
 | 7.6.10 | Dashboard insights panel + knowledge health score | FE | 1d | 7.6.6 | [ ] |
 

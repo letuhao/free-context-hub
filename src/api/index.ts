@@ -15,6 +15,9 @@ import { chatRouter } from './routes/chat.js';
 import { chatHistoryRouter } from './routes/chatHistory.js';
 import { documentsRouter } from './routes/documents.js';
 import { collaborationRouter, bookmarkRouter } from './routes/collaboration.js';
+import { activityRouter, notificationsRouter } from './routes/activity.js';
+import { analyticsRouter } from './routes/analytics.js';
+import { learningPathsRouter } from './routes/learningPaths.js';
 import { systemRouter } from './routes/system.js';
 import { projectGroupsRouter } from './routes/projectGroups.js';
 
@@ -50,6 +53,10 @@ export function createApiApp() {
   app.use('/api/documents', documentsRouter);
   app.use('/api/lessons', collaborationRouter); // comments + feedback under /api/lessons/:id/*
   app.use('/api/bookmarks', bookmarkRouter);
+  app.use('/api/activity', activityRouter);
+  app.use('/api/notifications', notificationsRouter);
+  app.use('/api/analytics', analyticsRouter);
+  app.use('/api/learning-paths', learningPathsRouter);
   app.use('/api/groups', projectGroupsRouter);
 
   // ── Error handler (must be last) ──
