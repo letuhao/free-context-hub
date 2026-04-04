@@ -1,7 +1,7 @@
 "use client";
 
-import { cn } from "@/lib/cn";
 import { useRef, useEffect } from "react";
+import { Search } from "lucide-react";
 
 interface SearchBarProps {
   value: string;
@@ -27,7 +27,7 @@ export function SearchBar({ value, onChange, placeholder = "Search...", filterSl
 
   return (
     <div className="flex items-center gap-2 px-3 py-2 border border-zinc-800 rounded-lg bg-zinc-900">
-      <span className="text-zinc-500 text-sm">&#x1F50D;</span>
+      <Search size={18} strokeWidth={1.5} className="text-zinc-500 shrink-0" />
       <input
         ref={inputRef}
         type="text"

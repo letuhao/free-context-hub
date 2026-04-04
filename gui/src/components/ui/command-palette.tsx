@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { Search } from "lucide-react";
 
 export interface CommandItem {
   id: string;
@@ -79,7 +80,7 @@ export function CommandPalette({ items }: CommandPaletteProps) {
       <div className="relative w-[480px] bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl overflow-hidden animate-[fadeInScale_0.15s_ease-out]">
         {/* Input */}
         <div className="flex items-center gap-2 px-4 py-3 border-b border-zinc-800">
-          <span className="text-zinc-500 text-sm">&#x1F50D;</span>
+          <Search size={18} strokeWidth={1.5} className="text-zinc-500 shrink-0" />
           <input
             ref={inputRef}
             type="text"

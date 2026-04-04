@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { CheckCircle2, XCircle, Info } from "lucide-react";
 
 type ToastType = "success" | "error" | "info";
 
@@ -41,10 +42,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     info: "bg-blue-500/10 border-blue-500/20 text-blue-400",
   };
 
-  const icons: Record<ToastType, string> = {
-    success: "\u2713",
-    error: "\u2715",
-    info: "\u2139",
+  const icons: Record<ToastType, ReactNode> = {
+    success: <CheckCircle2 size={18} strokeWidth={1.5} />,
+    error: <XCircle size={18} strokeWidth={1.5} />,
+    info: <Info size={18} strokeWidth={1.5} />,
   };
 
   return (
@@ -57,7 +58,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             key={t.id}
             className={cn("flex items-center gap-2 px-4 py-2.5 rounded-lg border text-sm animate-[slideUp_0.2s_ease-out]", styles[t.type])}
           >
-            <span>{icons[t.type]}</span>
+            <span className="shrink-0">{icons[t.type]}</span>
             <span className="flex-1">{t.message}</span>
             {t.action && (
               <button onClick={t.action.onClick} className="underline text-xs ml-1">

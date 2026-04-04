@@ -41,7 +41,7 @@ New BE surface:
 - 33 integration tests (30 pass / 3 pre-existing tiered-search failures)
 - 13 review issues fixed (CRITICAL: JSON.parse safety, COUNT null checks; HIGH: error logging, INSERT checks; MEDIUM: validation, serialization safety)
 
-### FE Sprint 7.1 — COMPLETE (8 tasks)
+### FE Sprint 7.1 — COMPLETE (8 tasks) + Draft Alignment Fixes
 1. Fix background color (`bg-zinc-950` consistent) — cleaned globals.css
 2. Fix settings green gradient — same root cause
 3. Replace emoji → Lucide React icons in sidebar (14 icons)
@@ -50,6 +50,12 @@ New BE surface:
 6. Sticky table headers + sort indicator icons (ChevronUp/Down)
 7. Move Pagination to shared `ui/` component
 8. Add animations (SlideOver slideInRight, ConfirmDialog/CommandPalette fadeInScale, Toast slideUp)
+
+**Draft alignment fixes (post-review):**
+- SearchBar: emoji 🔍 → Lucide `Search` icon (18x18, stroke 1.5)
+- Toast: unicode ✓✕ℹ → Lucide `CheckCircle2`, `XCircle`, `Info` icons
+- CommandPalette: emoji 🔍 → Lucide `Search` icon
+- [NEW] KeyboardShortcuts overlay (7.1.8): 3-column grid, `?` key trigger, search filter, key badges, fadeInScale animation, wired into layout.tsx
 
 ### FE Sprint 7.2 — COMPLETE (5/5)
 - [✓] 7.2.4: Lesson detail center modal with edit mode (title/content/tags editing)

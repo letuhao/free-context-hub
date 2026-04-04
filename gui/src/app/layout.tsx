@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { ProjectProvider } from "@/contexts/project-context";
 import { ToastProvider } from "@/components/ui/toast";
 import { Sidebar } from "@/components/sidebar";
+import { KeyboardShortcutsTrigger } from "@/components/keyboard-shortcuts-trigger";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -35,6 +36,7 @@ export default function RootLayout({
           <ToastProvider>
             <Sidebar />
             <main className="flex-1 overflow-y-auto">{children}</main>
+            <KeyboardShortcutsTrigger />
           </ToastProvider>
         </ProjectProvider>
       </body>
