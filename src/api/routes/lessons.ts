@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   addLesson,
   listLessons,
+  listLessonVersions,
   searchLessons,
   searchLessonsMulti,
   updateLesson,
@@ -74,6 +75,22 @@ router.post('/search', async (req, res, next) => {
     }
 
     const result = await searchLessonsMulti({ projectIds: resolvedIds, query, filters, limit });
+    res.json(result);
+  } catch (e) { next(e); }
+});
+
+/** GET /api/lessons/:id/versions — list version history for a lesson */
+router.get('/:id/versions', async (req, res, next) => {
+  try {
+    const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
+    const result = await listLessonVersions({
+      projectId,
+      lessonId: req.params.id,
+    });
+    if (result.status === 'error') {
+      res.status(404).json(result);
+      return;
+    }
     res.json(result);
   } catch (e) { next(e); }
 });

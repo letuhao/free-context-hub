@@ -24,6 +24,7 @@ import {
   listLessons,
   searchLessons,
   searchLessonsMulti,
+  listLessonVersions,
   updateLesson,
   updateLessonStatus,
   checkGuardrails,
@@ -174,6 +175,7 @@ function createMcpToolsServer() {
         'get_context',
         'check_guardrails',
         'help',
+        'list_lesson_versions',
         'update_lesson',
         'update_lesson_status',
         'get_project_summary',
@@ -335,6 +337,14 @@ function createMcpToolsServer() {
             { path: 'task.intent', required: false, notes: 'High-level intent (used for suggestions).' },
             { path: 'task.query', required: false, notes: 'Optional query string for suggestions.' },
             { path: 'task.path_glob', required: false, notes: 'Optional path filter for suggested search_code.' },
+          ],
+        },
+        {
+          name: 'list_lesson_versions',
+          purpose: 'List version history for a lesson (previous snapshots before each edit).',
+          key_parameters: [
+            { path: 'project_id', required: false, notes: 'Optional; uses DEFAULT_PROJECT_ID if omitted.' },
+            { path: 'lesson_id', required: true, notes: 'Lesson UUID.' },
           ],
         },
         {
@@ -1429,6 +1439,40 @@ function createMcpToolsServer() {
 
       const result = { project_id: pid, context_refs, project_snapshot, suggested_next_calls, notes };
       const summary = `get_context: project_id=${pid}, refs=${context_refs.length}, suggestions=${suggested_next_calls.length}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'list_lesson_versions',
+    {
+      description: 'List version history for a lesson. Returns snapshots of previous states before each content/title edit, ordered newest first.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional().describe('Workspace token (required only if MCP_AUTH_ENABLED=true).'),
+        project_id: z.string().min(1).optional().describe('Project identifier.'),
+        lesson_id: z.string().min(1).describe('Lesson UUID.'),
+        output_format: OutputFormatSchema.default('auto_both').describe('Response format.'),
+      }),
+      outputSchema: z.object({
+        status: z.enum(['ok', 'error']),
+        error: z.string().optional(),
+        versions: z.array(z.object({
+          version_number: z.number(),
+          title: z.string(),
+          content: z.string(),
+          tags: z.array(z.string()),
+          changed_by: z.string().nullable(),
+          changed_at: z.string(),
+          change_summary: z.string().nullable(),
+        })).optional(),
+        total_count: z.number().optional(),
+      }),
+    },
+    async ({ workspace_token, project_id, lesson_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const pid = resolveProjectIdOrThrow(project_id);
+      const result = await listLessonVersions({ projectId: pid, lessonId: lesson_id });
+      const summary = `list_lesson_versions: ${result.total_count ?? 0} version(s)`;
       return formatToolResponse(result, summary, output_format);
     },
   );

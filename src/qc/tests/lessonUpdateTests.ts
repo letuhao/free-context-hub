@@ -141,4 +141,81 @@ export const lessonUpdateNotFound: TestFn = async (ctx) => {
   }
 };
 
-export const allLessonUpdateTests: TestFn[] = [lessonUpdate, lessonUpdateTagsOnly, lessonUpdateNotFound];
+/**
+ * Test: Version history — create, edit twice, verify version list.
+ * Uses REST API directly to avoid MCP auto_both format parse issues with nested LLM-generated text.
+ */
+export const lessonVersionHistory: TestFn = async (ctx) => {
+  const name = 'lesson-version-history';
+  const start = Date.now();
+  const marker = `version-hist-${Date.now()}`;
+  const apiBase = process.env.API_BASE_URL?.trim() || 'http://localhost:3001';
+
+  try {
+    // 1. Create lesson via REST.
+    const createRes = await fetch(`${apiBase}/api/lessons`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project_id: ctx.projectId, lesson_type: 'decision',
+        title: `V1: ${marker}`, content: `First version: ${marker}`,
+        tags: ['integration-test', 'version-history'],
+      }),
+    });
+    const created = await createRes.json() as any;
+    const lessonId = created?.lesson_id;
+    if (!lessonId) return fail(name, GROUP, Date.now() - start, 'create returned no lesson_id');
+    ctx.createdLessonIds.push(lessonId);
+
+    // 2. No versions yet.
+    const emptyRes = await fetch(`${apiBase}/api/lessons/${lessonId}/versions?project_id=${ctx.projectId}`);
+    const empty = await emptyRes.json() as any;
+    if (empty?.total_count !== 0) return fail(name, GROUP, Date.now() - start, `Expected 0 versions, got ${empty?.total_count}`);
+
+    // 3. Edit content → version 1.
+    const u1Res = await fetch(`${apiBase}/api/lessons/${lessonId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project_id: ctx.projectId, title: `V2: ${marker}`, content: `Second version: ${marker}`,
+        changed_by: 'test-user', change_summary: 'First edit',
+      }),
+    });
+    const u1 = await u1Res.json() as any;
+    if (u1?.version_number !== 1) return fail(name, GROUP, Date.now() - start, `Expected version 1, got ${u1?.version_number}`);
+
+    // 4. Edit again → version 2.
+    const u2Res = await fetch(`${apiBase}/api/lessons/${lessonId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project_id: ctx.projectId, content: `Third version: ${marker}`,
+        changed_by: 'test-agent', change_summary: 'Second edit',
+      }),
+    });
+    const u2 = await u2Res.json() as any;
+    if (u2?.version_number !== 2) return fail(name, GROUP, Date.now() - start, `Expected version 2, got ${u2?.version_number}`);
+
+    // 5. List versions — 2 entries, newest first.
+    const histRes = await fetch(`${apiBase}/api/lessons/${lessonId}/versions?project_id=${ctx.projectId}`);
+    const hist = await histRes.json() as any;
+    if (hist?.total_count !== 2) return fail(name, GROUP, Date.now() - start, `Expected 2 versions, got ${hist?.total_count}`);
+
+    const v = hist?.versions ?? [];
+    if (v[0]?.version_number !== 2) return fail(name, GROUP, Date.now() - start, `Newest should be v2, got v${v[0]?.version_number}`);
+    if (v[1]?.version_number !== 1) return fail(name, GROUP, Date.now() - start, `Second should be v1, got v${v[1]?.version_number}`);
+    if (!v[1]?.title?.includes('V1:')) return fail(name, GROUP, Date.now() - start, `v1 title wrong: ${v[1]?.title}`);
+    if (v[1]?.changed_by !== 'test-user') return fail(name, GROUP, Date.now() - start, `v1 changed_by=${v[1]?.changed_by}`);
+    if (!v[0]?.title?.includes('V2:')) return fail(name, GROUP, Date.now() - start, `v2 title wrong: ${v[0]?.title}`);
+
+    // 6. 404 for wrong project.
+    const badRes = await fetch(`${apiBase}/api/lessons/${lessonId}/versions?project_id=wrong-project`);
+    if (badRes.status !== 404) return fail(name, GROUP, Date.now() - start, `Expected 404 for wrong project, got ${badRes.status}`);
+
+    return pass(name, GROUP, Date.now() - start);
+  } catch (err) {
+    return fail(name, GROUP, Date.now() - start, `Exception: ${err instanceof Error ? err.message : String(err)}`);
+  }
+};
+
+export const allLessonUpdateTests: TestFn[] = [lessonUpdate, lessonUpdateTagsOnly, lessonUpdateNotFound, lessonVersionHistory];

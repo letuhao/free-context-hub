@@ -1070,6 +1070,35 @@ export async function updateLesson(params: {
   return { status: 'ok', re_embedded: reEmbedded, version_number: versionNumber };
 }
 
+export async function listLessonVersions(params: {
+  projectId: string;
+  lessonId: string;
+}): Promise<{ status: 'ok' | 'error'; error?: string; versions?: any[]; total_count?: number }> {
+  const pool = getDbPool();
+
+  const existing = await pool.query(
+    `SELECT lesson_id FROM lessons WHERE project_id=$1 AND lesson_id=$2`,
+    [params.projectId, params.lessonId],
+  );
+  if (!existing.rowCount) {
+    return { status: 'error', error: 'lesson not found for project' };
+  }
+
+  const result = await pool.query(
+    `SELECT version_number, title, content, tags, changed_by, changed_at, change_summary
+     FROM lesson_versions
+     WHERE lesson_id = $1
+     ORDER BY version_number DESC`,
+    [params.lessonId],
+  );
+
+  return {
+    status: 'ok',
+    versions: result.rows,
+    total_count: result.rowCount ?? 0,
+  };
+}
+
 export async function updateLessonStatus(params: {
   projectId: string;
   lessonId: string;
