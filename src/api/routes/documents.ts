@@ -57,6 +57,33 @@ router.get('/:id', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+/** POST /api/documents/:id/generate-lessons — AI-extract lesson suggestions from doc content */
+router.post('/:id/generate-lessons', async (req, res, next) => {
+  try {
+    const projectId = resolveProjectIdOrThrow(req.body.project_id);
+    const doc = await getDocument({ docId: req.params.id, projectId });
+    if (!doc) {
+      res.status(404).json({ status: 'error', error: 'document not found' });
+      return;
+    }
+    if (!doc.content?.trim()) {
+      res.status(400).json({ status: 'error', error: 'document has no text content to analyze' });
+      return;
+    }
+    const { generateLessonsFromDocument } = await import('../../services/documentLessonGenerator.js');
+    const result = await generateLessonsFromDocument({
+      docName: doc.name,
+      docContent: doc.content,
+      maxLessons: req.body.max_lessons,
+    });
+    if (result.status === 'error') {
+      res.status(502).json(result);
+      return;
+    }
+    res.json(result);
+  } catch (e) { next(e); }
+});
+
 /** DELETE /api/documents/:id — delete a document */
 router.delete('/:id', async (req, res, next) => {
   try {

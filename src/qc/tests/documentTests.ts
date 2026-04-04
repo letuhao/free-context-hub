@@ -119,4 +119,66 @@ export const documentTypeFilter: TestFn = async (ctx) => {
   }
 };
 
-export const allDocumentTests: TestFn[] = [documentCrudAndLinking, documentTypeFilter];
+/**
+ * Test: Generate lessons from document content via AI
+ */
+export const documentGenerateLessons: TestFn = async (ctx) => {
+  const name = 'document-generate-lessons';
+  const start = Date.now();
+
+  try {
+    // 1. Create doc with content.
+    const doc = await (await fetch(`${API_BASE}/api/documents`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project_id: ctx.projectId, name: 'Gen test.md', doc_type: 'markdown',
+        content: '# Conventions\n\nAlways use TypeScript strict mode.\nPrefer const over let.\nUse async/await instead of raw promises.',
+        tags: ['integration-test'],
+      }),
+    })).json() as any;
+    const docId = doc.doc_id;
+    if (!docId) return fail(name, GROUP, Date.now() - start, 'create failed');
+
+    // 2. Generate lessons.
+    const genRes = await fetch(`${API_BASE}/api/documents/${docId}/generate-lessons`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_id: ctx.projectId, max_lessons: 3 }),
+    });
+
+    if (genRes.status === 502) {
+      // LLM not available — skip gracefully.
+      await fetch(`${API_BASE}/api/documents/${docId}?project_id=${ctx.projectId}`, { method: 'DELETE' });
+      return pass(name, GROUP, Date.now() - start, 'Skipped: LLM not available (502)');
+    }
+    if (genRes.status !== 200) return fail(name, GROUP, Date.now() - start, `Generate returned ${genRes.status}`);
+
+    const gen = await genRes.json() as any;
+    if (gen.status !== 'ok') return fail(name, GROUP, Date.now() - start, `status=${gen.status}: ${gen.error}`);
+    if (!gen.suggestions?.length) return fail(name, GROUP, Date.now() - start, 'No suggestions returned');
+
+    const s = gen.suggestions[0];
+    if (!s.title || !s.content || !s.lesson_type) return fail(name, GROUP, Date.now() - start, 'Suggestion missing required fields');
+
+    // 3. 400 for doc without content.
+    const emptyDoc = await (await fetch(`${API_BASE}/api/documents`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_id: ctx.projectId, name: 'empty', doc_type: 'url', url: 'https://x.com' }),
+    })).json() as any;
+
+    const emptyRes = await fetch(`${API_BASE}/api/documents/${emptyDoc.doc_id}/generate-lessons`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_id: ctx.projectId }),
+    });
+    if (emptyRes.status !== 400) return fail(name, GROUP, Date.now() - start, `Expected 400 for empty doc, got ${emptyRes.status}`);
+
+    // Cleanup.
+    await fetch(`${API_BASE}/api/documents/${docId}?project_id=${ctx.projectId}`, { method: 'DELETE' });
+    await fetch(`${API_BASE}/api/documents/${emptyDoc.doc_id}?project_id=${ctx.projectId}`, { method: 'DELETE' });
+
+    return pass(name, GROUP, Date.now() - start);
+  } catch (err) {
+    return fail(name, GROUP, Date.now() - start, `Exception: ${err instanceof Error ? err.message : String(err)}`);
+  }
+};
+
+export const allDocumentTests: TestFn[] = [documentCrudAndLinking, documentTypeFilter, documentGenerateLessons];
