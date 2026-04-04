@@ -80,6 +80,36 @@ router.post('/search', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+/** POST /api/lessons/:id/improve — AI-suggested improvements for lesson content */
+router.post('/:id/improve', async (req, res, next) => {
+  try {
+    const projectId = resolveProjectIdOrThrow(req.body.project_id);
+    const { getDbPool } = await import('../../db/client.js');
+    const pool = getDbPool();
+    const existing = await pool.query(
+      `SELECT title, content FROM lessons WHERE project_id=$1 AND lesson_id=$2`,
+      [projectId, req.params.id],
+    );
+    if (!existing.rowCount) {
+      res.status(404).json({ status: 'error', error: 'lesson not found for project' });
+      return;
+    }
+    const lesson = existing.rows[0];
+    const { improveLessonContent } = await import('../../services/lessonImprover.js');
+    const result = await improveLessonContent({
+      title: lesson.title,
+      content: lesson.content,
+      instruction: req.body.instruction,
+      selectedText: req.body.selected_text,
+    });
+    if (result.status === 'error') {
+      res.status(502).json(result);
+      return;
+    }
+    res.json(result);
+  } catch (e) { next(e); }
+});
+
 /** GET /api/lessons/:id/versions — list version history for a lesson */
 router.get('/:id/versions', async (req, res, next) => {
   try {
