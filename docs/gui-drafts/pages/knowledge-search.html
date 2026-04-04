@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: Code Search</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen font-sans">
+  <div class="flex h-screen">
+    <aside class="w-56 shrink-0 border-r border-zinc-800 bg-zinc-950">
+      <div class="px-4 py-4 border-b border-zinc-800">
+        <h1 class="text-sm font-semibold text-zinc-100">ContextHub</h1>
+        <p class="text-[11px] text-zinc-600">Knowledge Dashboard</p>
+      </div>
+    </aside>
+    <main class="flex-1 overflow-y-auto p-6">
+      <p class="text-xs text-zinc-600 mb-4">Draft: pages/knowledge-search | Source: gui/src/app/knowledge/search/page.tsx</p>
+
+      <!-- Breadcrumb -->
+      <div class="flex items-center gap-1.5 text-xs text-zinc-500 mb-4">
+        <span>Knowledge</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        <span class="text-zinc-400">Code Search</span>
+      </div>
+
+      <!-- PageHeader -->
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h1 class="text-lg font-semibold text-zinc-100">Code Search</h1>
+          <p class="text-xs text-zinc-500 mt-0.5">Tiered search across the free-context-hub codebase</p>
+        </div>
+      </div>
+
+      <!-- SearchBar + kind dropdown -->
+      <div class="flex gap-2 mb-6">
+        <div class="flex-1 flex items-center gap-2 px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-lg">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500 shrink-0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" value="search_lessons" placeholder="Search code..." class="flex-1 bg-transparent text-sm text-zinc-300 outline-none placeholder-zinc-600" />
+        </div>
+        <select class="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-zinc-300 outline-none">
+          <option>All kinds</option>
+          <option>source</option>
+          <option>test</option>
+          <option>doc</option>
+          <option>config</option>
+        </select>
+        <button class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm text-white transition-colors">Search</button>
+      </div>
+
+      <!-- Results -->
+      <div class="space-y-3">
+        <!-- Result 1: exact match -->
+        <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500 shrink-0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <span class="text-sm text-blue-400 font-mono">src/tools/search-lessons.ts</span>
+            <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-zinc-700 text-zinc-400">source</span>
+            <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-500/20 text-emerald-400">exact</span>
+            <span class="text-[10px] text-zinc-600 ml-auto">score: 1.00</span>
+          </div>
+          <div class="bg-zinc-950 border border-zinc-800 rounded p-3 text-xs font-mono text-zinc-400 overflow-x-auto">
+            <div><span class="text-zinc-600 select-none">42</span>  <span class="text-purple-400">export</span> <span class="text-blue-400">async function</span> <span class="text-emerald-400">search_lessons</span>(params: <span class="text-amber-300">SearchParams</span>) {</div>
+            <div><span class="text-zinc-600 select-none">43</span>    <span class="text-purple-400">const</span> { query, project_id, limit = <span class="text-amber-400">20</span> } = params;</div>
+            <div><span class="text-zinc-600 select-none">44</span>    <span class="text-purple-400">const</span> results = <span class="text-blue-400">await</span> db.<span class="text-emerald-400">searchLessons</span>(project_id, query, limit);</div>
+          </div>
+        </div>
+
+        <!-- Result 2: glob match -->
+        <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500 shrink-0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <span class="text-sm text-blue-400 font-mono">src/mcp/handlers.ts</span>
+            <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-zinc-700 text-zinc-400">source</span>
+            <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-500/20 text-blue-400">glob</span>
+            <span class="text-[10px] text-zinc-600 ml-auto">score: 0.85</span>
+          </div>
+          <div class="bg-zinc-950 border border-zinc-800 rounded p-3 text-xs font-mono text-zinc-400 overflow-x-auto">
+            <div><span class="text-zinc-600 select-none">118</span>  <span class="text-purple-400">case</span> <span class="text-amber-400">"search_lessons"</span>:</div>
+            <div><span class="text-zinc-600 select-none">119</span>    <span class="text-purple-400">return</span> <span class="text-blue-400">await</span> <span class="text-emerald-400">handleSearchLessons</span>(args, projectId);</div>
+          </div>
+        </div>
+
+        <!-- Result 3: semantic match -->
+        <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500 shrink-0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <span class="text-sm text-blue-400 font-mono">tests/tools/search-lessons.test.ts</span>
+            <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-zinc-700 text-zinc-400">test</span>
+            <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-purple-500/20 text-purple-400">semantic</span>
+            <span class="text-[10px] text-zinc-600 ml-auto">score: 0.72</span>
+          </div>
+          <div class="bg-zinc-950 border border-zinc-800 rounded p-3 text-xs font-mono text-zinc-400 overflow-x-auto">
+            <div><span class="text-zinc-600 select-none">8</span>   <span class="text-emerald-400">describe</span>(<span class="text-amber-400">"search_lessons tool"</span>, () => {</div>
+            <div><span class="text-zinc-600 select-none">9</span>     <span class="text-emerald-400">it</span>(<span class="text-amber-400">"returns matching lessons sorted by relevance"</span>, <span class="text-blue-400">async</span> () => {</div>
+            <div><span class="text-zinc-600 select-none">10</span>      <span class="text-purple-400">const</span> result = <span class="text-blue-400">await</span> <span class="text-emerald-400">search_lessons</span>({ query: <span class="text-amber-400">"retry"</span>, project_id: <span class="text-amber-400">"test"</span> });</div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

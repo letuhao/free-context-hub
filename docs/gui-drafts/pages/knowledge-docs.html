@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: Generated Docs</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.97) translateY(8px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen font-sans">
+  <div class="flex h-screen">
+    <aside class="w-56 shrink-0 border-r border-zinc-800 bg-zinc-950">
+      <div class="px-4 py-4 border-b border-zinc-800">
+        <h1 class="text-sm font-semibold text-zinc-100">ContextHub</h1>
+        <p class="text-[11px] text-zinc-600">Knowledge Dashboard</p>
+      </div>
+    </aside>
+    <main class="flex-1 overflow-y-auto p-6 relative">
+      <p class="text-xs text-zinc-600 mb-4">Draft: pages/knowledge-docs | Source: gui/src/app/knowledge/docs/page.tsx</p>
+
+      <!-- Breadcrumb -->
+      <div class="flex items-center gap-1.5 text-xs text-zinc-500 mb-4">
+        <span>Knowledge</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        <span class="text-zinc-400">Generated Docs</span>
+      </div>
+
+      <!-- PageHeader -->
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h1 class="text-lg font-semibold text-zinc-100">Generated Docs</h1>
+          <p class="text-xs text-zinc-500 mt-0.5">AI-generated documentation for free-context-hub</p>
+        </div>
+      </div>
+
+      <!-- Type filter tabs -->
+      <div class="flex gap-1 mb-4 border-b border-zinc-800 pb-0">
+        <button class="px-3 py-2 text-xs font-medium text-blue-400 border-b-2 border-blue-400 -mb-px">All</button>
+        <button class="px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300">FAQ</button>
+        <button class="px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300">RAPTOR</button>
+        <button class="px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300">QC Report</button>
+        <button class="px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300">QC Artifact</button>
+        <button class="px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300">Benchmark</button>
+      </div>
+
+      <!-- DataTable -->
+      <div class="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+        <table class="w-full text-left">
+          <thead class="sticky top-0 z-10 bg-zinc-900">
+            <tr class="border-b border-zinc-800">
+              <th class="px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider w-28">Type</th>
+              <th class="px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Title</th>
+              <th class="px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider w-28">Updated</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-zinc-800">
+            <tr class="hover:bg-zinc-800/50 cursor-pointer transition-colors bg-zinc-800/30">
+              <td class="px-4 py-3"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-500/20 text-blue-400">FAQ</span></td>
+              <td class="px-4 py-3 text-sm text-zinc-300">Project FAQ</td>
+              <td class="px-4 py-3 text-xs text-zinc-500">2h ago</td>
+            </tr>
+            <tr class="hover:bg-zinc-800/50 cursor-pointer transition-colors">
+              <td class="px-4 py-3"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-purple-500/20 text-purple-400">RAPTOR</span></td>
+              <td class="px-4 py-3 text-sm text-zinc-300">Architecture Summary</td>
+              <td class="px-4 py-3 text-xs text-zinc-500">5h ago</td>
+            </tr>
+            <tr class="hover:bg-zinc-800/50 cursor-pointer transition-colors">
+              <td class="px-4 py-3"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-500/20 text-amber-400">QC Report</span></td>
+              <td class="px-4 py-3 text-sm text-zinc-300">Knowledge Quality Check</td>
+              <td class="px-4 py-3 text-xs text-zinc-500">1d ago</td>
+            </tr>
+            <tr class="hover:bg-zinc-800/50 cursor-pointer transition-colors">
+              <td class="px-4 py-3"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-500/20 text-blue-400">FAQ</span></td>
+              <td class="px-4 py-3 text-sm text-zinc-300">API Reference FAQ</td>
+              <td class="px-4 py-3 text-xs text-zinc-500">1d ago</td>
+            </tr>
+            <tr class="hover:bg-zinc-800/50 cursor-pointer transition-colors">
+              <td class="px-4 py-3"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-500/20 text-emerald-400">QC Artifact</span></td>
+              <td class="px-4 py-3 text-sm text-zinc-300">Coverage Report</td>
+              <td class="px-4 py-3 text-xs text-zinc-500">2d ago</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Center modal backdrop -->
+      <div class="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"></div>
+
+      <!-- Center modal (floating, max-w-3xl, max-h-[85vh]) -->
+      <div class="fixed inset-0 z-50 flex items-center justify-center p-6">
+        <div class="w-full max-w-3xl max-h-[85vh] bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl flex flex-col" style="animation: fadeIn 0.2s ease-out">
+          <!-- Header row 1: title + actions -->
+          <div class="px-6 pt-4 pb-2 flex items-center justify-between shrink-0">
+            <div class="flex items-center gap-3">
+              <h2 class="text-base font-semibold text-zinc-100">Project FAQ</h2>
+              <span class="px-2 py-0.5 text-[10px] font-medium rounded-full bg-emerald-500/10 text-emerald-400">FAQ</span>
+              <span class="text-xs text-zinc-600">Updated 2 hours ago</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button class="px-2.5 py-1 text-xs bg-transparent border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 rounded-md transition-colors">Promote</button>
+              <button class="px-2.5 py-1 text-xs bg-transparent border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 rounded-md transition-colors flex items-center gap-1">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                Copy
+              </button>
+              <button class="text-zinc-500 hover:text-zinc-300 ml-1">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Header row 2: in-document search (Ctrl+F style) -->
+          <div class="px-6 pb-3 border-b border-zinc-800 shrink-0">
+            <div class="flex items-center gap-2 px-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-zinc-500 shrink-0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" placeholder="Search in document..." value="connect" class="flex-1 bg-transparent text-xs text-zinc-200 outline-none placeholder:text-zinc-600" />
+              <div class="flex items-center gap-1.5 shrink-0">
+                <span class="text-[10px] text-zinc-500">2 of 3</span>
+                <!-- Up arrow -->
+                <button class="text-zinc-500 hover:text-zinc-300">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
+                </button>
+                <!-- Down arrow -->
+                <button class="text-zinc-500 hover:text-zinc-300">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <!-- Clear -->
+                <button class="text-zinc-600 hover:text-zinc-400 text-xs ml-0.5">&times;</button>
+              </div>
+              <kbd class="text-[9px] text-zinc-600 bg-zinc-800 px-1 py-0.5 rounded shrink-0">Ctrl+F</kbd>
+            </div>
+          </div>
+
+          <!-- Scrollable content area -->
+          <div class="flex-1 overflow-y-auto px-6 py-5 text-sm text-zinc-300 leading-relaxed space-y-5">
+            <div>
+              <h3 class="text-sm font-semibold text-zinc-100 mb-2">What is ContextHub?</h3>
+              <p class="text-zinc-400 leading-relaxed">ContextHub is a self-hosted persistent memory and guardrails system for AI agents. It stores lessons, decisions, workarounds, and preferences that agents can query via MCP tools. Unlike cloud-hosted solutions, all data stays on your infrastructure.</p>
+            </div>
+            <div class="border-t border-zinc-800/50 pt-5">
+              <h3 class="text-sm font-semibold text-zinc-100 mb-2">How do I <mark class="bg-amber-500/30 text-amber-200 rounded px-0.5">connect</mark> my AI agent?</h3>
+              <p class="text-zinc-400 leading-relaxed mb-2">Point your MCP-compatible agent to <code class="text-[13px] bg-zinc-800 px-1.5 py-0.5 rounded text-emerald-400 font-mono">http://localhost:3000/mcp</code> and pass <code class="text-[13px] bg-zinc-800 px-1.5 py-0.5 rounded text-emerald-400 font-mono">project_id</code> in your tool calls.</p>
+              <p class="text-zinc-400 leading-relaxed">The server exposes tools like <code class="text-[13px] bg-zinc-800 px-1.5 py-0.5 rounded text-emerald-400 font-mono">search_lessons</code>, <code class="text-[13px] bg-zinc-800 px-1.5 py-0.5 rounded text-emerald-400 font-mono">check_guardrails</code>, and <code class="text-[13px] bg-zinc-800 px-1.5 py-0.5 rounded text-emerald-400 font-mono">add_lesson</code>.</p>
+            </div>
+            <div class="border-t border-zinc-800/50 pt-5">
+              <h3 class="text-sm font-semibold text-zinc-100 mb-2">What storage backend does it use?</h3>
+              <p class="text-zinc-400 leading-relaxed">PostgreSQL with pgvector for embeddings storage and vector similarity search. The knowledge graph uses Neo4j. Data is persisted via Docker volumes.</p>
+            </div>
+            <div class="border-t border-zinc-800/50 pt-5">
+              <h3 class="text-sm font-semibold text-zinc-100 mb-2">Can I use it with multiple projects?</h3>
+              <p class="text-zinc-400 leading-relaxed">Yes. Each project has its own isolated namespace. You can also create project groups to share knowledge across related repositories. Projects in the same group can <mark class="bg-amber-500/20 text-amber-200/80 rounded px-0.5">connect</mark> and search each other's lessons when the "Include group knowledge" toggle is enabled.</p>
+            </div>
+            <div class="border-t border-zinc-800/50 pt-5">
+              <h3 class="text-sm font-semibold text-zinc-100 mb-2">How does the tiered code search work?</h3>
+              <p class="text-zinc-400 leading-relaxed">Code search uses three tiers in order: <strong class="text-zinc-300">exact match</strong> (fastest, filename/symbol lookup), <strong class="text-zinc-300">glob pattern</strong> (file path patterns), and <strong class="text-zinc-300">semantic search</strong> (embedding-based similarity). Results are merged and deduplicated, with the highest-confidence tier taking priority.</p>
+            </div>
+            <div class="border-t border-zinc-800/50 pt-5">
+              <h3 class="text-sm font-semibold text-zinc-100 mb-2">What models are supported?</h3>
+              <p class="text-zinc-400 leading-relaxed">Any OpenAI-compatible API endpoint works — LM Studio, Ollama, vLLM, OpenRouter, or the OpenAI API itself. Configure providers in the Model Providers settings page and assign models to specific features (embeddings, distillation, chat, etc.).</p>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="px-6 py-3 border-t border-zinc-800 flex items-center justify-between shrink-0">
+            <div class="flex items-center gap-3 text-xs text-zinc-600">
+              <span>Doc ID: <span class="font-mono">a3f8c2e1</span></span>
+              <span>Source job: <span class="font-mono">faq.build</span></span>
+            </div>
+            <span class="text-[10px] text-zinc-600">Press ESC to close</span>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

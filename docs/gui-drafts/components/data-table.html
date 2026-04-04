@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: DataTable</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 p-8 font-sans">
+  <h1 class="text-xl font-bold mb-1">DataTable</h1>
+  <p class="text-sm text-zinc-500 mb-8">Source: gui/src/components/ui/data-table.tsx</p>
+
+  <!-- Bulk Action Bar -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">Bulk Action Bar (shown when rows selected)</h2>
+  <div class="flex items-center gap-3 px-4 py-2 mb-3 bg-blue-950/30 border border-blue-900/30 rounded-lg text-sm">
+    <span class="text-blue-300 font-semibold">2 selected</span>
+    <button class="rounded-md font-medium transition-colors px-2.5 py-1 text-xs bg-transparent border border-zinc-700 text-zinc-300 hover:border-zinc-600 hover:text-zinc-100">Archive</button>
+    <button class="rounded-md font-medium transition-colors px-2.5 py-1 text-xs bg-transparent border border-zinc-700 text-zinc-300 hover:border-zinc-600 hover:text-zinc-100">Delete</button>
+    <button class="ml-auto text-xs text-zinc-500 hover:text-zinc-300">Deselect all</button>
+  </div>
+
+  <!-- Table -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">Table with Checkboxes, Sortable Headers, Row Actions</h2>
+  <div class="border border-zinc-800 rounded-lg overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="sticky top-0 z-10 bg-zinc-900">
+        <tr class="border-b border-zinc-800">
+          <th class="w-10 px-3 py-2"><input type="checkbox" class="accent-blue-500" /></th>
+          <th class="text-left px-3 py-2 text-xs font-medium text-zinc-500 cursor-pointer hover:text-zinc-400">
+            <span class="inline-flex items-center gap-1">
+              Title
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
+            </span>
+          </th>
+          <th class="text-left px-3 py-2 text-xs font-medium text-zinc-500 cursor-pointer hover:text-zinc-400">
+            <span class="inline-flex items-center gap-1">
+              Type
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="opacity-30"><polyline points="18 15 12 9 6 15"/><polyline points="6 9 12 15 18 9" transform="translate(0,6)"/></svg>
+            </span>
+          </th>
+          <th class="text-left px-3 py-2 text-xs font-medium text-zinc-500 cursor-pointer hover:text-zinc-400">
+            <span class="inline-flex items-center gap-1">
+              Status
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="opacity-30"><polyline points="18 15 12 9 6 15"/><polyline points="6 9 12 15 18 9" transform="translate(0,6)"/></svg>
+            </span>
+          </th>
+          <th class="text-left px-3 py-2 text-xs font-medium text-zinc-500 cursor-pointer hover:text-zinc-400">
+            <span class="inline-flex items-center gap-1">
+              Updated
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="opacity-30"><polyline points="18 15 12 9 6 15"/><polyline points="6 9 12 15 18 9" transform="translate(0,6)"/></svg>
+            </span>
+          </th>
+          <th class="w-10"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="border-b border-zinc-900 hover:bg-zinc-900/60 cursor-pointer">
+          <td class="px-3 py-2.5"><input type="checkbox" checked class="accent-blue-500" /></td>
+          <td class="px-3 py-2.5 text-zinc-300">Use Drizzle ORM for all queries</td>
+          <td class="px-3 py-2.5 text-zinc-300"><span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-500/10 text-blue-400">decision</span></td>
+          <td class="px-3 py-2.5 text-zinc-300"><span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400">active</span></td>
+          <td class="px-3 py-2.5 text-zinc-300">2 hours ago</td>
+          <td class="px-3 py-2.5 text-zinc-500"><button class="hover:text-zinc-300">...</button></td>
+        </tr>
+        <tr class="border-b border-zinc-900 hover:bg-zinc-900/60 cursor-pointer">
+          <td class="px-3 py-2.5"><input type="checkbox" checked class="accent-blue-500" /></td>
+          <td class="px-3 py-2.5 text-zinc-300">Never push directly to main</td>
+          <td class="px-3 py-2.5 text-zinc-300"><span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-red-400">guardrail</span></td>
+          <td class="px-3 py-2.5 text-zinc-300"><span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400">active</span></td>
+          <td class="px-3 py-2.5 text-zinc-300">5 hours ago</td>
+          <td class="px-3 py-2.5 text-zinc-500"><button class="hover:text-zinc-300">...</button></td>
+        </tr>
+        <tr class="border-b border-zinc-900 hover:bg-zinc-900/60 cursor-pointer">
+          <td class="px-3 py-2.5"><input type="checkbox" class="accent-blue-500" /></td>
+          <td class="px-3 py-2.5 text-zinc-300">Fix ESLint false positive on hooks</td>
+          <td class="px-3 py-2.5 text-zinc-300"><span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400">workaround</span></td>
+          <td class="px-3 py-2.5 text-zinc-300"><span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-zinc-500/20 text-zinc-400">draft</span></td>
+          <td class="px-3 py-2.5 text-zinc-300">1 day ago</td>
+          <td class="px-3 py-2.5 text-zinc-500"><button class="hover:text-zinc-300">...</button></td>
+        </tr>
+        <tr class="border-b border-zinc-900 hover:bg-zinc-900/60 cursor-pointer">
+          <td class="px-3 py-2.5"><input type="checkbox" class="accent-blue-500" /></td>
+          <td class="px-3 py-2.5 text-zinc-300">Use snake_case for DB columns</td>
+          <td class="px-3 py-2.5 text-zinc-300"><span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-500/10 text-purple-400">preference</span></td>
+          <td class="px-3 py-2.5 text-zinc-300"><span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400">superseded</span></td>
+          <td class="px-3 py-2.5 text-zinc-300">3 days ago</td>
+          <td class="px-3 py-2.5 text-zinc-500"><button class="hover:text-zinc-300">...</button></td>
+        </tr>
+        <tr class="hover:bg-zinc-900/60 cursor-pointer">
+          <td class="px-3 py-2.5"><input type="checkbox" class="accent-blue-500" /></td>
+          <td class="px-3 py-2.5 text-zinc-300">Pin Node.js to v20 LTS</td>
+          <td class="px-3 py-2.5 text-zinc-300"><span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-zinc-700 text-zinc-300">general_note</span></td>
+          <td class="px-3 py-2.5 text-zinc-300"><span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-zinc-500/[0.15] text-zinc-500">archived</span></td>
+          <td class="px-3 py-2.5 text-zinc-300">1 week ago</td>
+          <td class="px-3 py-2.5 text-zinc-500"><button class="hover:text-zinc-300">...</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination: Page 3 of 12, 235 total -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">Pagination (with page numbers, ellipsis, jump box)</h2>
+  <div class="flex items-center justify-between py-3 text-xs text-zinc-500">
+    <span>Showing 41–60 of 235</span>
+    <div class="flex items-center gap-1">
+      <!-- Prev arrow -->
+      <button class="min-w-[28px] h-7 inline-flex items-center justify-center rounded-md text-xs border border-transparent text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300 cursor-pointer transition-colors">&larr;</button>
+      <!-- Page 1 -->
+      <button class="min-w-[28px] h-7 inline-flex items-center justify-center rounded-md text-xs border border-transparent text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300 cursor-pointer transition-colors">1</button>
+      <!-- Page 2 -->
+      <button class="min-w-[28px] h-7 inline-flex items-center justify-center rounded-md text-xs border border-transparent text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300 cursor-pointer transition-colors">2</button>
+      <!-- Page 3 (active) -->
+      <button class="min-w-[28px] h-7 inline-flex items-center justify-center rounded-md text-xs border bg-zinc-800 text-zinc-100 border-zinc-700 cursor-pointer transition-colors">3</button>
+      <!-- Page 4 -->
+      <button class="min-w-[28px] h-7 inline-flex items-center justify-center rounded-md text-xs border border-transparent text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300 cursor-pointer transition-colors">4</button>
+      <!-- Ellipsis -->
+      <span class="px-1 text-zinc-700">&hellip;</span>
+      <!-- Page 12 (last) -->
+      <button class="min-w-[28px] h-7 inline-flex items-center justify-center rounded-md text-xs border border-transparent text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300 cursor-pointer transition-colors">12</button>
+      <!-- Next arrow -->
+      <button class="min-w-[28px] h-7 inline-flex items-center justify-center rounded-md text-xs border border-transparent text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300 cursor-pointer transition-colors">&rarr;</button>
+      <!-- Jump box -->
+      <div class="flex items-center gap-1 ml-3">
+        <span class="text-zinc-600">Go to</span>
+        <input type="text" placeholder="#" class="w-10 px-1.5 py-1 bg-zinc-900 border border-zinc-800 rounded text-[11px] text-zinc-400 text-center outline-none focus:border-zinc-700" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Pagination: Page 1 of 3 (few pages, no ellipsis) -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">Pagination (few pages, no ellipsis)</h2>
+  <div class="flex items-center justify-between py-3 text-xs text-zinc-500">
+    <span>Showing 1–20 of 42</span>
+    <div class="flex items-center gap-1">
+      <!-- Prev (disabled) -->
+      <button class="min-w-[28px] h-7 inline-flex items-center justify-center rounded-md text-xs border border-transparent text-zinc-600 opacity-30 cursor-default">&larr;</button>
+      <!-- Page 1 (active) -->
+      <button class="min-w-[28px] h-7 inline-flex items-center justify-center rounded-md text-xs border bg-zinc-800 text-zinc-100 border-zinc-700 cursor-pointer transition-colors">1</button>
+      <!-- Page 2 -->
+      <button class="min-w-[28px] h-7 inline-flex items-center justify-center rounded-md text-xs border border-transparent text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300 cursor-pointer transition-colors">2</button>
+      <!-- Page 3 -->
+      <button class="min-w-[28px] h-7 inline-flex items-center justify-center rounded-md text-xs border border-transparent text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300 cursor-pointer transition-colors">3</button>
+      <!-- Next -->
+      <button class="min-w-[28px] h-7 inline-flex items-center justify-center rounded-md text-xs border border-transparent text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300 cursor-pointer transition-colors">&rarr;</button>
+      <!-- Jump box -->
+      <div class="flex items-center gap-1 ml-3">
+        <span class="text-zinc-600">Go to</span>
+        <input type="text" placeholder="#" class="w-10 px-1.5 py-1 bg-zinc-900 border border-zinc-800 rounded text-[11px] text-zinc-400 text-center outline-none focus:border-zinc-700" />
+      </div>
+    </div>
+  </div>
+</body>
+</html>

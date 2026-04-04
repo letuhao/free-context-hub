@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: LoadingSkeleton</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 p-8 font-sans">
+  <h1 class="text-xl font-bold mb-1">LoadingSkeleton</h1>
+  <p class="text-sm text-zinc-500 mb-8">Source: gui/src/components/ui/loading-skeleton.tsx</p>
+
+  <!-- StatCardSkeleton -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">StatCardSkeleton (count=4)</h2>
+  <div class="flex gap-4">
+    <div class="min-w-[140px] h-20 rounded-lg bg-zinc-800 animate-pulse"></div>
+    <div class="min-w-[140px] h-20 rounded-lg bg-zinc-800 animate-pulse"></div>
+    <div class="min-w-[140px] h-20 rounded-lg bg-zinc-800 animate-pulse"></div>
+    <div class="min-w-[140px] h-20 rounded-lg bg-zinc-800 animate-pulse"></div>
+  </div>
+
+  <!-- TableSkeleton -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">TableSkeleton (rows=5)</h2>
+  <div class="space-y-3">
+    <div class="h-3.5 rounded bg-zinc-800 animate-pulse w-4/5"></div>
+    <div class="h-3.5 rounded bg-zinc-800 animate-pulse w-3/5"></div>
+    <div class="h-3.5 rounded bg-zinc-800 animate-pulse w-4/5"></div>
+    <div class="h-3.5 rounded bg-zinc-800 animate-pulse w-3/5"></div>
+    <div class="h-3.5 rounded bg-zinc-800 animate-pulse w-4/5"></div>
+  </div>
+
+  <!-- LineSkeleton -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">LineSkeleton (lines=3)</h2>
+  <div class="space-y-2.5">
+    <div class="h-3.5 rounded bg-zinc-800 animate-pulse w-4/5"></div>
+    <div class="h-3.5 rounded bg-zinc-800 animate-pulse w-3/5"></div>
+    <div class="h-3.5 rounded bg-zinc-800 animate-pulse w-full"></div>
+  </div>
+</body>
+</html>

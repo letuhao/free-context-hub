@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: Lessons</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen font-sans">
+  <div class="flex h-screen">
+    <!-- Sidebar placeholder -->
+    <aside class="w-56 shrink-0 border-r border-zinc-800 bg-zinc-950">
+      <div class="px-4 py-4 border-b border-zinc-800">
+        <h1 class="text-sm font-semibold text-zinc-100">ContextHub</h1>
+        <p class="text-[11px] text-zinc-600">Knowledge Dashboard</p>
+      </div>
+    </aside>
+    <!-- Main content -->
+    <main class="flex-1 overflow-y-auto p-6">
+      <p class="text-xs text-zinc-600 mb-4">Draft: pages/lessons | Source: gui/src/app/lessons/page.tsx</p>
+
+      <!-- Breadcrumb -->
+      <div class="flex items-center gap-1.5 text-xs text-zinc-500 mb-4">
+        <span>Knowledge</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        <span class="text-zinc-400">Lessons</span>
+      </div>
+
+      <!-- PageHeader -->
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h1 class="text-lg font-semibold text-zinc-100">Lessons</h1>
+          <p class="text-xs text-zinc-500 mt-0.5">Manage knowledge entries for free-context-hub</p>
+        </div>
+        <div class="flex gap-2">
+          <button class="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-md text-zinc-300 transition-colors flex items-center gap-1">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 11 12 6 7 11"/><line x1="12" y1="18" x2="12" y2="6"/></svg>
+            Import
+          </button>
+          <button class="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-md text-zinc-300 transition-colors flex items-center gap-1">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="7 13 12 18 17 13"/><line x1="12" y1="6" x2="12" y2="18"/></svg>
+            Export
+          </button>
+          <button class="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white transition-colors">+ Add Lesson</button>
+        </div>
+      </div>
+
+      <!-- Status Filter Tabs -->
+      <div class="flex items-center gap-1 mb-4 border-b border-zinc-800 pb-3">
+        <button class="px-3 py-1.5 text-xs font-medium rounded-md bg-zinc-800 text-zinc-100 border border-zinc-700">All (58)</button>
+        <button class="px-3 py-1.5 text-xs font-medium rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 transition-colors">Active (42)</button>
+        <button class="px-3 py-1.5 text-xs font-medium rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 transition-colors inline-flex items-center gap-1.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+          Draft / Pending Review (12)
+        </button>
+        <button class="px-3 py-1.5 text-xs font-medium rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 transition-colors">Superseded (3)</button>
+        <button class="px-3 py-1.5 text-xs font-medium rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 transition-colors">Archived (1)</button>
+      </div>
+
+      <!-- SearchBar with mode toggle -->
+      <div class="flex gap-2 mb-4">
+        <div class="flex-1 relative">
+          <div class="flex items-center gap-2 w-full px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-lg">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500 shrink-0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" placeholder="Search lessons..." class="flex-1 bg-transparent text-sm text-zinc-300 outline-none placeholder-zinc-600" />
+          </div>
+        </div>
+        <div class="flex bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+          <button class="px-3 py-2 text-xs bg-zinc-700 text-zinc-200">Text</button>
+          <button class="px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300">Semantic</button>
+        </div>
+      </div>
+
+      <!-- FilterChips -->
+      <div class="flex gap-2 mb-4 flex-wrap">
+        <span class="inline-flex items-center gap-1 px-2 py-1 bg-blue-500/20 text-blue-400 rounded-md text-xs">
+          Type: decision
+          <button class="ml-1 text-blue-400/60 hover:text-blue-400">&times;</button>
+        </span>
+        <span class="inline-flex items-center gap-1 px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-md text-xs">
+          Status: active
+          <button class="ml-1 text-emerald-400/60 hover:text-emerald-400">&times;</button>
+        </span>
+      </div>
+
+      <!-- Status toggle -->
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-3">
+          <span class="text-xs text-zinc-500">Showing 42 active lessons</span>
+          <button class="text-xs text-blue-400 hover:text-blue-300">&middot; Show all</button>
+        </div>
+        <div class="flex items-center gap-2">
+          <!-- Bookmarked filter toggle -->
+          <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" class="text-amber-400"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>
+            Bookmarked
+          </button>
+          <div class="flex bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+            <button class="px-3 py-1.5 text-xs bg-zinc-700 text-zinc-200">Comfortable</button>
+            <button class="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-300">Compact</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bulk Edit Bar (shown when items selected) -->
+      <div class="bg-blue-500/10 border border-blue-500/30 rounded-lg px-4 py-2.5 mb-4 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <input type="checkbox" checked class="w-3.5 h-3.5 rounded border-zinc-700 bg-zinc-800 accent-blue-500" />
+          <span class="text-xs text-zinc-300">3 lessons selected</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button class="px-2.5 py-1 text-[10px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-md text-zinc-300 transition-colors">Archive</button>
+          <button class="px-2.5 py-1 text-[10px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-md text-zinc-300 transition-colors">Export JSON</button>
+          <button class="px-2.5 py-1 text-[10px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-md text-zinc-300 transition-colors">Edit Tags</button>
+          <select class="px-2.5 py-1 text-[10px] bg-zinc-800 border border-zinc-700 rounded-md text-zinc-300 outline-none appearance-none cursor-pointer">
+            <option>Change Status</option>
+            <option>active</option>
+            <option>superseded</option>
+            <option>archived</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- DataTable -->
+      <div class="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+        <table class="w-full text-left">
+          <thead class="sticky top-0 z-10 bg-zinc-900">
+            <tr class="border-b border-zinc-800">
+              <th class="px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Title</th>
+              <th class="px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider w-24">Type</th>
+              <th class="px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider w-24">Status</th>
+              <th class="px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Tags</th>
+              <th class="px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider w-24">Feedback</th>
+              <th class="px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider w-28 cursor-pointer hover:text-zinc-400">
+                <span class="inline-flex items-center gap-1">
+                  Created
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                </span>
+              </th>
+              <th class="px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider w-28">By</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-zinc-800">
+            <!-- Row 1 -->
+            <tr class="hover:bg-zinc-800/50 cursor-pointer transition-colors">
+              <td class="px-4 py-3 text-sm text-zinc-300">Use retry with exponential backoff for external API calls</td>
+              <td class="px-4 py-3"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-500/20 text-blue-400">decision</span></td>
+              <td class="px-4 py-3"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-500/20 text-emerald-400">active</span></td>
+              <td class="px-4 py-3"><span class="text-[10px] text-zinc-500">api, reliability</span></td>
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-1.5">
+                  <span class="inline-flex items-center gap-0.5 text-emerald-400 text-[10px]">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z"/><path d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg>
+                    12
+                  </span>
+                  <span class="inline-flex items-center gap-0.5 text-red-400 text-[10px]">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 15v4a3 3 0 003 3l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3H10z"/><path d="M17 2h3a2 2 0 012 2v7a2 2 0 01-2 2h-3"/></svg>
+                    1
+                  </span>
+                  <div class="w-10 h-1 bg-zinc-700 rounded-full overflow-hidden">
+                    <div class="h-full bg-emerald-500 rounded-full" style="width: 92%"></div>
+                  </div>
+                </div>
+              </td>
+              <td class="px-4 py-3 text-xs text-zinc-500">2h ago</td>
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-1.5">
+                  <span class="w-4 h-4 rounded-full bg-purple-600 flex items-center justify-center text-[7px] font-bold text-white shrink-0">C</span>
+                  <span class="text-[11px] text-zinc-400">claude</span>
+                </div>
+              </td>
+            </tr>
+            <!-- Row 2 -->
+            <tr class="hover:bg-zinc-800/50 cursor-pointer transition-colors">
+              <td class="px-4 py-3 text-sm text-zinc-300">SQLite WAL mode required for concurrent reads</td>
+              <td class="px-4 py-3"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-500/20 text-amber-400">workaround</span></td>
+              <td class="px-4 py-3"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-500/20 text-emerald-400">active</span></td>
+              <td class="px-4 py-3"><span class="text-[10px] text-zinc-500">sqlite, performance</span></td>
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-1.5">
+                  <span class="inline-flex items-center gap-0.5 text-emerald-400 text-[10px]">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z"/><path d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg>
+                    8
+                  </span>
+                  <span class="inline-flex items-center gap-0.5 text-zinc-600 text-[10px]">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 15v4a3 3 0 003 3l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3H10z"/><path d="M17 2h3a2 2 0 012 2v7a2 2 0 01-2 2h-3"/></svg>
+                    0
+                  </span>
+                  <div class="w-10 h-1 bg-zinc-700 rounded-full overflow-hidden">
+                    <div class="h-full bg-emerald-500 rounded-full" style="width: 100%"></div>
+                  </div>
+                </div>
+              </td>
+              <td class="px-4 py-3 text-xs text-zinc-500">5h ago</td>
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-1.5">
+                  <span class="w-4 h-4 rounded-full bg-blue-600 flex items-center justify-center text-[7px] font-bold text-white shrink-0">L</span>
+                  <span class="text-[11px] text-zinc-400">letuhao</span>
+                </div>
+              </td>
+            </tr>
+            <!-- Row 3 -->
+            <tr class="hover:bg-zinc-800/50 cursor-pointer transition-colors">
+              <td class="px-4 py-3 text-sm text-zinc-300">Always validate project_id before MCP tool execution</td>
+              <td class="px-4 py-3"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-red-500/20 text-red-400">guardrail</span></td>
+              <td class="px-4 py-3"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-500/20 text-emerald-400">active</span></td>
+              <td class="px-4 py-3"><span class="text-[10px] text-zinc-500">security, mcp</span></td>
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-1.5">
+                  <span class="inline-flex items-center gap-0.5 text-emerald-400 text-[10px]">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z"/><path d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg>
+                    5
+                  </span>
+                  <span class="inline-flex items-center gap-0.5 text-red-400 text-[10px]">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 15v4a3 3 0 003 3l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3H10z"/><path d="M17 2h3a2 2 0 012 2v7a2 2 0 01-2 2h-3"/></svg>
+                    2
+                  </span>
+                  <div class="w-10 h-1 bg-zinc-700 rounded-full overflow-hidden">
+                    <div class="h-full bg-emerald-500 rounded-full" style="width: 71%"></div>
+                  </div>
+                </div>
+              </td>
+              <td class="px-4 py-3 text-xs text-zinc-500">1d ago</td>
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-1.5">
+                  <span class="w-4 h-4 rounded-full bg-purple-600 flex items-center justify-center text-[7px] font-bold text-white shrink-0">C</span>
+                  <span class="text-[11px] text-zinc-400">claude</span>
+                </div>
+              </td>
+            </tr>
+            <!-- Row 4 -->
+            <tr class="hover:bg-zinc-800/50 cursor-pointer transition-colors">
+              <td class="px-4 py-3 text-sm text-zinc-300">Prefer pnpm over npm for monorepo workspaces</td>
+              <td class="px-4 py-3"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-500/20 text-emerald-400">preference</span></td>
+              <td class="px-4 py-3"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-500/20 text-emerald-400">active</span></td>
+              <td class="px-4 py-3"><span class="text-[10px] text-zinc-500">tooling, monorepo</span></td>
+              <td class="px-4 py-3">
+                <span class="text-[10px] text-zinc-600">No feedback</span>
+              </td>
+              <td class="px-4 py-3 text-xs text-zinc-500">2d ago</td>
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-1.5">
+                  <span class="w-4 h-4 rounded-full bg-blue-600 flex items-center justify-center text-[7px] font-bold text-white shrink-0">L</span>
+                  <span class="text-[11px] text-zinc-400">letuhao</span>
+                </div>
+              </td>
+            </tr>
+            <!-- Row 5 -->
+            <tr class="hover:bg-zinc-800/50 cursor-pointer transition-colors">
+              <td class="px-4 py-3 text-sm text-zinc-300">Batch embedding calls to reduce LLM round-trips</td>
+              <td class="px-4 py-3"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-500/20 text-blue-400">decision</span></td>
+              <td class="px-4 py-3"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-zinc-500/20 text-zinc-400">superseded</span></td>
+              <td class="px-4 py-3"><span class="text-[10px] text-zinc-500">embedding, performance</span></td>
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-1.5">
+                  <span class="inline-flex items-center gap-0.5 text-emerald-400 text-[10px]">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z"/><path d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg>
+                    3
+                  </span>
+                  <span class="inline-flex items-center gap-0.5 text-red-400 text-[10px]">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 15v4a3 3 0 003 3l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3H10z"/><path d="M17 2h3a2 2 0 012 2v7a2 2 0 01-2 2h-3"/></svg>
+                    1
+                  </span>
+                  <div class="w-10 h-1 bg-zinc-700 rounded-full overflow-hidden">
+                    <div class="h-full bg-emerald-500 rounded-full" style="width: 75%"></div>
+                  </div>
+                </div>
+              </td>
+              <td class="px-4 py-3 text-xs text-zinc-500">3d ago</td>
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-1.5">
+                  <span class="w-4 h-4 rounded-full bg-green-600 flex items-center justify-center text-[7px] font-bold text-white shrink-0">G</span>
+                  <span class="text-[11px] text-zinc-400">gpt-4</span>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      <div class="flex items-center justify-between py-3 text-xs text-zinc-500">
+        <span>Showing 1–20 of 42 lessons</span>
+        <div class="flex items-center gap-1">
+          <!-- Prev (disabled on page 1) -->
+          <button class="min-w-[28px] h-7 inline-flex items-center justify-center rounded-md text-xs border border-transparent text-zinc-600 opacity-30 cursor-default">&larr;</button>
+          <!-- Page 1 (active) -->
+          <button class="min-w-[28px] h-7 inline-flex items-center justify-center rounded-md text-xs border bg-zinc-800 text-zinc-100 border-zinc-700 cursor-pointer transition-colors">1</button>
+          <!-- Page 2 -->
+          <button class="min-w-[28px] h-7 inline-flex items-center justify-center rounded-md text-xs border border-transparent text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300 cursor-pointer transition-colors">2</button>
+          <!-- Page 3 -->
+          <button class="min-w-[28px] h-7 inline-flex items-center justify-center rounded-md text-xs border border-transparent text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300 cursor-pointer transition-colors">3</button>
+          <!-- Next -->
+          <button class="min-w-[28px] h-7 inline-flex items-center justify-center rounded-md text-xs border border-transparent text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300 cursor-pointer transition-colors">&rarr;</button>
+          <!-- Jump box -->
+          <div class="flex items-center gap-1 ml-3">
+            <span class="text-zinc-600">Go to</span>
+            <input type="text" placeholder="#" class="w-10 px-1.5 py-1 bg-zinc-900 border border-zinc-800 rounded text-[11px] text-zinc-400 text-center outline-none focus:border-zinc-700" />
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ===== IMPORT DIALOG (Modal Overlay) ===== -->
+  <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+    <div class="bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl w-[600px] max-h-[80vh] overflow-y-auto">
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
+        <h2 class="text-sm font-semibold text-zinc-100">Import Lessons</h2>
+        <button class="text-zinc-500 hover:text-zinc-300 text-lg leading-none">&times;</button>
+      </div>
+
+      <!-- Tabs -->
+      <div class="flex border-b border-zinc-800">
+        <button class="px-4 py-2.5 text-xs font-medium text-blue-400 border-b-2 border-blue-400">JSON</button>
+        <button class="px-4 py-2.5 text-xs font-medium text-zinc-500 hover:text-zinc-300">CSV</button>
+        <button class="px-4 py-2.5 text-xs font-medium text-zinc-500 hover:text-zinc-300">From Markdown</button>
+      </div>
+
+      <!-- JSON Tab (active) -->
+      <div class="p-6">
+        <!-- Drag & drop zone -->
+        <div class="border-2 border-dashed border-zinc-700 rounded-lg p-6 text-center mb-4 hover:border-zinc-600 transition-colors">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500 mx-auto mb-2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <p class="text-xs text-zinc-400">Drop a .json file or paste JSON</p>
+        </div>
+
+        <!-- Textarea for pasting -->
+        <textarea rows="3" placeholder="Paste JSON here..." class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-md text-xs text-zinc-300 outline-none placeholder-zinc-600 resize-none mb-4 font-mono"></textarea>
+
+        <!-- Preview table -->
+        <div class="border border-zinc-800 rounded-lg overflow-hidden mb-3">
+          <table class="w-full text-left">
+            <thead>
+              <tr class="border-b border-zinc-800 bg-zinc-800/50">
+                <th class="px-3 py-2 text-[10px] font-medium text-zinc-500 uppercase">Title</th>
+                <th class="px-3 py-2 text-[10px] font-medium text-zinc-500 uppercase w-20">Type</th>
+                <th class="px-3 py-2 text-[10px] font-medium text-zinc-500 uppercase">Tags</th>
+                <th class="px-3 py-2 text-[10px] font-medium text-zinc-500 uppercase w-20">Status</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-zinc-800">
+              <tr>
+                <td class="px-3 py-2 text-xs text-zinc-300">Always use structured logging</td>
+                <td class="px-3 py-2"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-500/20 text-blue-400">decision</span></td>
+                <td class="px-3 py-2 text-[10px] text-zinc-500">logging, observability</td>
+                <td class="px-3 py-2"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-500/20 text-emerald-400">Ready</span></td>
+              </tr>
+              <tr>
+                <td class="px-3 py-2 text-xs text-zinc-300">Pin all Docker base images to digests</td>
+                <td class="px-3 py-2"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-500/20 text-emerald-400">preference</span></td>
+                <td class="px-3 py-2 text-[10px] text-zinc-500">docker, security</td>
+                <td class="px-3 py-2"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-500/20 text-emerald-400">Ready</span></td>
+              </tr>
+              <tr>
+                <td class="px-3 py-2 text-xs text-zinc-300">Use retry with exponential backoff for external API calls</td>
+                <td class="px-3 py-2"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-500/20 text-blue-400">decision</span></td>
+                <td class="px-3 py-2 text-[10px] text-zinc-500">api, reliability</td>
+                <td class="px-3 py-2"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-500/20 text-amber-400">Duplicate</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Summary -->
+        <p class="text-[10px] text-zinc-500 mb-4">3 lessons ready, 1 duplicate will be skipped</p>
+
+        <!-- Actions -->
+        <div class="flex items-center justify-end gap-2">
+          <button class="px-4 py-2 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-md text-zinc-300 transition-colors">Cancel</button>
+          <button class="px-4 py-2 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white transition-colors">Import 3 Lessons</button>
+        </div>
+      </div>
+
+      <!-- From Markdown tab hint (hidden, shown here as reference) -->
+      <div class="hidden p-6">
+        <div class="border-2 border-dashed border-zinc-700 rounded-lg p-6 text-center hover:border-zinc-600 transition-colors">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500 mx-auto mb-2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <p class="text-xs text-zinc-400">Paste or upload a .md file. AI will parse it into separate lessons.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

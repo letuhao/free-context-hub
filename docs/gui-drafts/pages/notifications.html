@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: Activity &amp; Notifications</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.97) translateY(8px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen font-sans">
+  <div class="flex h-screen">
+    <!-- Sidebar placeholder -->
+    <aside class="w-56 shrink-0 border-r border-zinc-800 bg-zinc-950">
+      <div class="px-4 py-4 border-b border-zinc-800">
+        <h1 class="text-sm font-semibold text-zinc-100">ContextHub</h1>
+        <p class="text-[11px] text-zinc-600">Knowledge Dashboard</p>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="flex-1 overflow-y-auto p-6">
+      <p class="text-xs text-zinc-600 mb-4">Draft: pages/notifications | Source: gui/src/app/activity/page.tsx</p>
+
+      <!-- Breadcrumb -->
+      <div class="flex items-center gap-1.5 text-xs text-zinc-500 mb-4">
+        <span>System</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        <span class="text-zinc-400">Activity</span>
+      </div>
+
+      <!-- PageHeader -->
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h1 class="text-lg font-semibold text-zinc-100">Activity &amp; Notifications</h1>
+          <p class="text-xs text-zinc-500 mt-0.5">Track changes made by agents and team members</p>
+        </div>
+        <div class="flex gap-2">
+          <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-md text-zinc-300 transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+            Settings
+          </button>
+          <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+            Mark All Read
+          </button>
+        </div>
+      </div>
+
+      <!-- Filter bar -->
+      <div class="flex items-center justify-between mb-6">
+        <!-- Category tabs -->
+        <div class="flex gap-1 border-b border-zinc-800 pb-0">
+          <button class="px-3 py-2 text-xs font-medium text-blue-400 border-b-2 border-blue-400 -mb-px">All</button>
+          <button class="px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300">Lessons</button>
+          <button class="px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300">Jobs</button>
+          <button class="px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300">Guardrails</button>
+          <button class="px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300">Documents</button>
+        </div>
+        <!-- Time filter -->
+        <div class="flex bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+          <button class="px-3 py-1.5 text-xs bg-zinc-700 text-zinc-200">Today</button>
+          <button class="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-300">This Week</button>
+          <button class="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-300">This Month</button>
+          <button class="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-300">All Time</button>
+        </div>
+      </div>
+
+      <!-- Main layout: Feed + Settings panel -->
+      <div class="flex gap-6">
+
+        <!-- Activity feed -->
+        <div class="flex-1 relative">
+          <!-- Vertical connecting line -->
+          <div class="absolute left-[15px] top-4 bottom-4 w-px bg-zinc-800"></div>
+
+          <div class="space-y-0">
+
+            <!-- Item 1: Lesson created (UNREAD) -->
+            <div class="flex gap-4 p-4 rounded-lg hover:bg-zinc-900/50 transition-colors relative">
+              <!-- Unread indicator -->
+              <div class="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+              <!-- Icon -->
+              <div class="w-8 h-8 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0 z-10">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-blue-400"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm text-zinc-200"><span class="text-zinc-400">Agent claude-3 created lesson:</span> Use connection pooling for PostgreSQL</p>
+                <div class="flex items-center gap-3 mt-1.5">
+                  <span class="text-[11px] text-zinc-600">2 hours ago</span>
+                  <span class="text-[11px] text-zinc-600">Project: <span class="text-zinc-500">free-context-hub</span></span>
+                </div>
+                <div class="mt-2">
+                  <a class="text-[11px] text-blue-400 hover:text-blue-300 transition-colors">View Lesson &rarr;</a>
+                </div>
+              </div>
+            </div>
+
+            <!-- Item 2: Guardrail triggered (UNREAD) -->
+            <div class="flex gap-4 p-4 rounded-lg hover:bg-zinc-900/50 transition-colors relative">
+              <div class="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+              <div class="w-8 h-8 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0 z-10">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-red-400"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm text-zinc-200"><span class="text-zinc-400">Guardrail triggered:</span> 'No force push to main' blocked by agent cursor-agent</p>
+                <div class="flex items-center gap-3 mt-1.5">
+                  <span class="text-[11px] text-zinc-600">3 hours ago</span>
+                  <span class="text-[11px] text-zinc-600">Project: <span class="text-zinc-500">free-context-hub</span></span>
+                  <span class="text-[11px] text-zinc-600">Action: <code class="text-[10px] bg-zinc-800 px-1 py-0.5 rounded text-red-400/80 font-mono">git push --force origin main</code></span>
+                </div>
+                <div class="mt-2">
+                  <a class="text-[11px] text-blue-400 hover:text-blue-300 transition-colors">View Guardrail &rarr;</a>
+                </div>
+              </div>
+            </div>
+
+            <!-- Item 3: Job succeeded -->
+            <div class="flex gap-4 p-4 rounded-lg hover:bg-zinc-900/50 transition-colors relative">
+              <div class="w-8 h-8 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0 z-10">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-emerald-400"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm text-zinc-200"><span class="text-zinc-400">Job succeeded:</span> faq.build completed in 45s</p>
+                <div class="flex items-center gap-3 mt-1.5">
+                  <span class="text-[11px] text-zinc-600">5 hours ago</span>
+                  <span class="text-[11px] text-zinc-600">Project: <span class="text-zinc-500">free-context-hub</span></span>
+                  <span class="text-[11px] text-zinc-600">Output: <span class="text-zinc-500">6 FAQ entries generated</span></span>
+                </div>
+                <div class="flex gap-3 mt-2">
+                  <a class="text-[11px] text-blue-400 hover:text-blue-300 transition-colors">View Job &rarr;</a>
+                  <a class="text-[11px] text-blue-400 hover:text-blue-300 transition-colors">View FAQ &rarr;</a>
+                </div>
+              </div>
+            </div>
+
+            <!-- Item 4: Lesson updated -->
+            <div class="flex gap-4 p-4 rounded-lg hover:bg-zinc-900/50 transition-colors relative">
+              <div class="w-8 h-8 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 z-10">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-amber-400"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm text-zinc-200"><span class="text-zinc-400">Lesson updated:</span> Retry strategy for LLM providers <span class="text-zinc-500">(v2 &rarr; v3)</span></p>
+                <div class="flex items-center gap-3 mt-1.5">
+                  <span class="text-[11px] text-zinc-600">8 hours ago</span>
+                  <span class="text-[11px] text-zinc-600">Project: <span class="text-zinc-500">free-context-hub</span></span>
+                  <span class="text-[11px] text-zinc-600">Changed by: <span class="text-zinc-500">human (letuhao1994)</span></span>
+                </div>
+                <div class="flex gap-3 mt-2">
+                  <a class="text-[11px] text-blue-400 hover:text-blue-300 transition-colors">View Lesson &rarr;</a>
+                  <a class="text-[11px] text-blue-400 hover:text-blue-300 transition-colors">View Diff &rarr;</a>
+                </div>
+              </div>
+            </div>
+
+            <!-- Item 5: Job failed -->
+            <div class="flex gap-4 p-4 rounded-lg hover:bg-zinc-900/50 transition-colors relative">
+              <div class="w-8 h-8 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0 z-10">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-red-400"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm text-zinc-200"><span class="text-zinc-400">Job failed:</span> knowledge.memory.build &mdash; ECONNRESET</p>
+                <div class="flex items-center gap-3 mt-1.5">
+                  <span class="text-[11px] text-zinc-600">12 hours ago</span>
+                  <span class="text-[11px] text-zinc-600">Project: <span class="text-zinc-500">free-context-hub</span></span>
+                  <span class="text-[11px] text-zinc-600">Attempt <span class="text-zinc-500">3/3</span></span>
+                </div>
+                <div class="flex gap-3 mt-2">
+                  <a class="text-[11px] text-blue-400 hover:text-blue-300 transition-colors">View Job &rarr;</a>
+                  <a class="text-[11px] text-amber-400 hover:text-amber-300 transition-colors">Retry &rarr;</a>
+                </div>
+              </div>
+            </div>
+
+            <!-- Item 6: Document uploaded -->
+            <div class="flex gap-4 p-4 rounded-lg hover:bg-zinc-900/50 transition-colors relative">
+              <div class="w-8 h-8 rounded-full bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shrink-0 z-10">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-purple-400"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm text-zinc-200"><span class="text-zinc-400">Document uploaded:</span> API Design Guidelines v2.pdf</p>
+                <div class="flex items-center gap-3 mt-1.5">
+                  <span class="text-[11px] text-zinc-600">1 day ago</span>
+                  <span class="text-[11px] text-zinc-600">Project: <span class="text-zinc-500">free-context-hub</span></span>
+                  <span class="text-[11px] text-zinc-600">2.4 MB</span>
+                </div>
+                <div class="mt-2">
+                  <a class="text-[11px] text-blue-400 hover:text-blue-300 transition-colors">View Document &rarr;</a>
+                </div>
+              </div>
+            </div>
+
+            <!-- Item 7: Lessons generated from document -->
+            <div class="flex gap-4 p-4 rounded-lg hover:bg-zinc-900/50 transition-colors relative">
+              <div class="w-8 h-8 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0 z-10">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-blue-400"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm text-zinc-200"><span class="text-zinc-400">Agent gpt-4 created 3 lessons from document:</span> Retry Strategy RFC.md</p>
+                <div class="flex items-center gap-3 mt-1.5">
+                  <span class="text-[11px] text-zinc-600">1 day ago</span>
+                  <span class="text-[11px] text-zinc-600">Project: <span class="text-zinc-500">free-context-hub</span></span>
+                </div>
+                <div class="mt-2">
+                  <a class="text-[11px] text-blue-400 hover:text-blue-300 transition-colors">View Lessons &rarr;</a>
+                </div>
+              </div>
+            </div>
+
+            <!-- Item 8: Project group created -->
+            <div class="flex gap-4 p-4 rounded-lg hover:bg-zinc-900/50 transition-colors relative">
+              <div class="w-8 h-8 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0 z-10">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-emerald-400"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm text-zinc-200"><span class="text-zinc-400">New project group created:</span> backend-services</p>
+                <div class="flex items-center gap-3 mt-1.5">
+                  <span class="text-[11px] text-zinc-600">2 days ago</span>
+                  <span class="text-[11px] text-zinc-600">3 member projects</span>
+                </div>
+                <div class="mt-2">
+                  <a class="text-[11px] text-blue-400 hover:text-blue-300 transition-colors">View Group &rarr;</a>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Notification preferences panel -->
+        <div class="w-72 shrink-0">
+          <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-5 sticky top-6">
+            <h3 class="text-sm font-semibold text-zinc-100 mb-4">Notification Settings</h3>
+
+            <div class="space-y-3">
+              <!-- Toggle: Job failures -->
+              <div class="flex items-center justify-between">
+                <span class="text-xs text-zinc-400">Job failures</span>
+                <div class="w-8 h-[18px] bg-blue-600 rounded-full relative cursor-pointer">
+                  <div class="absolute right-0.5 top-0.5 w-3.5 h-3.5 bg-white rounded-full shadow-sm"></div>
+                </div>
+              </div>
+              <!-- Toggle: Guardrail violations -->
+              <div class="flex items-center justify-between">
+                <span class="text-xs text-zinc-400">Guardrail violations</span>
+                <div class="w-8 h-[18px] bg-blue-600 rounded-full relative cursor-pointer">
+                  <div class="absolute right-0.5 top-0.5 w-3.5 h-3.5 bg-white rounded-full shadow-sm"></div>
+                </div>
+              </div>
+              <!-- Toggle: New lessons by agents -->
+              <div class="flex items-center justify-between">
+                <span class="text-xs text-zinc-400">New lessons by agents</span>
+                <div class="w-8 h-[18px] bg-blue-600 rounded-full relative cursor-pointer">
+                  <div class="absolute right-0.5 top-0.5 w-3.5 h-3.5 bg-white rounded-full shadow-sm"></div>
+                </div>
+              </div>
+              <!-- Toggle: Lesson updates (OFF) -->
+              <div class="flex items-center justify-between">
+                <span class="text-xs text-zinc-400">Lesson updates</span>
+                <div class="w-8 h-[18px] bg-zinc-700 rounded-full relative cursor-pointer">
+                  <div class="absolute left-0.5 top-0.5 w-3.5 h-3.5 bg-zinc-400 rounded-full shadow-sm"></div>
+                </div>
+              </div>
+              <!-- Toggle: Job completions (OFF) -->
+              <div class="flex items-center justify-between">
+                <span class="text-xs text-zinc-400">Job completions</span>
+                <div class="w-8 h-[18px] bg-zinc-700 rounded-full relative cursor-pointer">
+                  <div class="absolute left-0.5 top-0.5 w-3.5 h-3.5 bg-zinc-400 rounded-full shadow-sm"></div>
+                </div>
+              </div>
+              <!-- Toggle: Document uploads (OFF) -->
+              <div class="flex items-center justify-between">
+                <span class="text-xs text-zinc-400">Document uploads</span>
+                <div class="w-8 h-[18px] bg-zinc-700 rounded-full relative cursor-pointer">
+                  <div class="absolute left-0.5 top-0.5 w-3.5 h-3.5 bg-zinc-400 rounded-full shadow-sm"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Delivery section -->
+            <div class="border-t border-zinc-800 mt-4 pt-4">
+              <h4 class="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">Delivery</h4>
+              <div class="space-y-3">
+                <!-- In-app (always ON) -->
+                <div class="flex items-center justify-between">
+                  <span class="text-xs text-zinc-400">In-app</span>
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] text-zinc-600">(always)</span>
+                    <div class="w-8 h-[18px] bg-blue-600 rounded-full relative cursor-not-allowed opacity-60">
+                      <div class="absolute right-0.5 top-0.5 w-3.5 h-3.5 bg-white rounded-full shadow-sm"></div>
+                    </div>
+                  </div>
+                </div>
+                <!-- Email (OFF) -->
+                <div class="flex items-center justify-between">
+                  <span class="text-xs text-zinc-400">Email</span>
+                  <div class="w-8 h-[18px] bg-zinc-700 rounded-full relative cursor-pointer">
+                    <div class="absolute left-0.5 top-0.5 w-3.5 h-3.5 bg-zinc-400 rounded-full shadow-sm"></div>
+                  </div>
+                </div>
+                <!-- Email input (disabled) -->
+                <input type="email" placeholder="you@example.com" disabled class="w-full px-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-600 outline-none placeholder:text-zinc-700 cursor-not-allowed opacity-50" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</body>
+</html>

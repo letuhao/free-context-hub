@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: FilterChips</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 p-8 font-sans">
+  <h1 class="text-xl font-bold mb-1">FilterChips</h1>
+  <p class="text-sm text-zinc-500 mb-8">Source: gui/src/components/ui/filter-chips.tsx</p>
+
+  <!-- Active Filters -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">Active Filter Chips with Remove Buttons</h2>
+  <div class="flex items-center gap-1.5 flex-wrap mb-3">
+    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs bg-zinc-800 text-zinc-400">
+      Type: decision
+      <button class="text-zinc-600 hover:text-zinc-300 font-bold ml-0.5">&times;</button>
+    </span>
+    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs bg-zinc-800 text-zinc-400">
+      Status: active
+      <button class="text-zinc-600 hover:text-zinc-300 font-bold ml-0.5">&times;</button>
+    </span>
+    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs bg-zinc-800 text-zinc-400">
+      Tag: api
+      <button class="text-zinc-600 hover:text-zinc-300 font-bold ml-0.5">&times;</button>
+    </span>
+    <button class="text-xs text-zinc-600 hover:text-zinc-400 ml-1">Clear all</button>
+  </div>
+
+  <!-- Single Filter -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">Single Filter Chip</h2>
+  <div class="flex items-center gap-1.5 flex-wrap mb-3">
+    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs bg-zinc-800 text-zinc-400">
+      Type: guardrail
+      <button class="text-zinc-600 hover:text-zinc-300 font-bold ml-0.5">&times;</button>
+    </span>
+    <button class="text-xs text-zinc-600 hover:text-zinc-400 ml-1">Clear all</button>
+  </div>
+</body>
+</html>

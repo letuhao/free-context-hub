@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: ErrorBanner</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 p-8 font-sans">
+  <h1 class="text-xl font-bold mb-1">ErrorBanner</h1>
+  <p class="text-sm text-zinc-500 mb-8">Source: gui/src/components/ui/error-banner.tsx</p>
+
+  <!-- Error Variant -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">Error Variant (default)</h2>
+  <div class="flex items-center justify-between px-4 py-2.5 rounded-lg border text-sm mb-4 bg-red-500/[0.08] border-red-500/[0.15] text-red-300">
+    <span>Failed to fetch lessons: API returned 500. Please try again or check your connection.</span>
+    <button class="text-zinc-500 hover:text-zinc-300 ml-4">&times;</button>
+  </div>
+
+  <!-- Warning Variant -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">Warning Variant</h2>
+  <div class="flex items-center justify-between px-4 py-2.5 rounded-lg border text-sm mb-4 bg-amber-500/[0.08] border-amber-500/[0.15] text-amber-300">
+    <span>Your API key expires in 3 days. Update it in Settings to avoid service disruption.</span>
+    <button class="text-zinc-500 hover:text-zinc-300 ml-4">&times;</button>
+  </div>
+</body>
+</html>

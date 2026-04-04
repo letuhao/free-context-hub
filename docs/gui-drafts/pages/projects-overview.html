@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: Project Overview</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen font-sans">
+  <div class="flex h-screen">
+    <aside class="w-56 shrink-0 border-r border-zinc-800 bg-zinc-950">
+      <div class="px-4 py-4 border-b border-zinc-800">
+        <h1 class="text-sm font-semibold text-zinc-100">ContextHub</h1>
+        <p class="text-[11px] text-zinc-600">Knowledge Dashboard</p>
+      </div>
+    </aside>
+    <main class="flex-1 overflow-y-auto p-6">
+      <p class="text-xs text-zinc-600 mb-4">Draft: pages/projects-overview | Source: gui/src/app/projects/page.tsx</p>
+
+      <!-- Breadcrumb -->
+      <div class="flex items-center gap-1.5 text-xs text-zinc-500 mb-4">
+        <span>Project</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        <span class="text-zinc-400">Overview</span>
+      </div>
+
+      <!-- PageHeader -->
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h1 class="text-lg font-semibold text-zinc-100">Project Overview</h1>
+          <p class="text-xs text-zinc-500 mt-0.5">free-context-hub workspace management</p>
+        </div>
+        <div class="flex gap-2">
+          <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-md text-zinc-300 transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            Re-index
+          </button>
+          <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-md text-zinc-300 transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+            Reflect
+          </button>
+          <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0"><circle cx="12" cy="12" r="4"/><line x1="1.05" y1="12" x2="7" y2="12"/><line x1="17.01" y1="12" x2="22.96" y2="12"/></svg>
+            Ingest Git
+          </button>
+        </div>
+      </div>
+
+      <!-- StatCards -->
+      <div class="grid grid-cols-4 gap-4 mb-6">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+          <div class="flex items-center gap-2 mb-1">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+            <p class="text-xs text-zinc-500">Lessons</p>
+          </div>
+          <p class="text-2xl font-semibold text-zinc-100 mt-1">42</p>
+        </div>
+        <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+          <div class="flex items-center gap-2 mb-1">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <p class="text-xs text-zinc-500">Guardrails</p>
+          </div>
+          <p class="text-2xl font-semibold text-zinc-100 mt-1">3</p>
+        </div>
+        <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+          <div class="flex items-center gap-2 mb-1">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500"><circle cx="12" cy="12" r="4"/><line x1="1.05" y1="12" x2="7" y2="12"/><line x1="17.01" y1="12" x2="22.96" y2="12"/></svg>
+            <p class="text-xs text-zinc-500">Commits</p>
+          </div>
+          <p class="text-2xl font-semibold text-zinc-100 mt-1">15</p>
+        </div>
+        <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+          <div class="flex items-center gap-2 mb-1">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <p class="text-xs text-zinc-500">Generated Docs</p>
+          </div>
+          <p class="text-2xl font-semibold text-zinc-100 mt-1">8</p>
+        </div>
+      </div>
+
+      <!-- Project Summary (collapsible) -->
+      <details class="bg-zinc-900 border border-zinc-800 rounded-lg mb-6" open>
+        <summary class="px-4 py-3 text-sm font-medium text-zinc-300 cursor-pointer hover:text-zinc-100 select-none">
+          Project Summary
+        </summary>
+        <div class="px-4 pb-4 text-xs text-zinc-400 leading-relaxed border-t border-zinc-800 pt-3">
+          free-context-hub is a self-hosted persistent memory and guardrails system for AI agents. It provides MCP-compatible tools for managing lessons, guardrails, code search, and generated documentation. The backend is built with Node.js and uses SQLite for storage. The GUI is a Next.js dashboard that connects to the API server. Key features include tiered code search (exact, glob, semantic), project groups for multi-repo knowledge sharing, a background job queue with dead-letter support, and AI-generated documentation (FAQ, RAPTOR summaries, QC reports).
+        </div>
+      </details>
+
+      <!-- Danger Zone (collapsible) -->
+      <details class="bg-zinc-900 border border-red-900/50 rounded-lg">
+        <summary class="px-4 py-3 text-sm font-medium text-red-400 cursor-pointer hover:text-red-300 select-none">
+          Danger Zone
+        </summary>
+        <div class="px-4 pb-4 border-t border-zinc-800 pt-3">
+          <p class="text-xs text-zinc-500 mb-3">Permanently delete the workspace and all associated data for this project. This action cannot be undone.</p>
+          <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-red-600 hover:bg-red-500 rounded-md text-white transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            Delete Workspace
+          </button>
+        </div>
+      </details>
+    </main>
+  </div>
+</body>
+</html>

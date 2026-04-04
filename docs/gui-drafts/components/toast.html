@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: Toast</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes slideUp {
+      from { transform: translateY(16px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 p-8 font-sans">
+  <h1 class="text-xl font-bold mb-1">Toast</h1>
+  <p class="text-sm text-zinc-500 mb-8">Source: gui/src/components/ui/toast.tsx</p>
+
+  <!-- All 3 toast types stacked -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">All Toast Types (stacked, as they appear in bottom-right)</h2>
+  <div class="flex flex-col gap-2 max-w-sm">
+    <!-- Success -->
+    <div class="flex items-center gap-2 px-4 py-2.5 rounded-lg border text-sm bg-emerald-500/10 border-emerald-500/20 text-emerald-400" style="animation: slideUp 0.2s ease-out">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="shrink-0"><polyline points="20 6 9 17 4 12"/></svg>
+      <span class="flex-1">Lesson saved successfully.</span>
+      <button class="text-zinc-600 hover:text-zinc-400 ml-1">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <!-- Error (with action button) -->
+    <div class="flex items-center gap-2 px-4 py-2.5 rounded-lg border text-sm bg-red-500/10 border-red-500/20 text-red-400" style="animation: slideUp 0.2s ease-out">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="shrink-0"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+      <span class="flex-1">Failed to delete guardrail.</span>
+      <button class="underline text-xs ml-1">Retry</button>
+      <button class="text-zinc-600 hover:text-zinc-400 ml-1">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <!-- Info -->
+    <div class="flex items-center gap-2 px-4 py-2.5 rounded-lg border text-sm bg-blue-500/10 border-blue-500/20 text-blue-400" style="animation: slideUp 0.2s ease-out">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="shrink-0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      <span class="flex-1">Background sync completed. 12 new lessons imported.</span>
+      <button class="text-zinc-600 hover:text-zinc-400 ml-1">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+  </div>
+</body>
+</html>

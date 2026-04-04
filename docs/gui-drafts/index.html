@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ContextHub GUI Drafts — Index</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 p-8 font-sans max-w-4xl mx-auto">
+  <h1 class="text-2xl font-bold mb-1">ContextHub GUI Drafts</h1>
+  <p class="text-sm text-zinc-500 mb-4">Enhanced HTML references for GUI review. Open any file in a browser to preview.</p>
+
+  <!-- Enhancement Changelog -->
+  <details open class="mb-4 border border-zinc-800 rounded-lg bg-zinc-900">
+    <summary class="px-4 py-3 text-sm font-medium text-zinc-300 cursor-pointer hover:text-zinc-100">v4 — Human-in-the-Loop & Collaboration (2026-04-04)</summary>
+    <div class="px-4 py-3 border-t border-zinc-800 text-xs text-zinc-400 space-y-2">
+      <div><span class="text-emerald-400 font-medium">NEW — Review Inbox:</span> Draft→Review→Active approval pipeline, card-based review UI, batch approve/reject, AI confidence scores, agent trust levels with auto-approve toggle.</div>
+      <div><span class="text-emerald-400 font-medium">NEW — Analytics:</span> Retrieval trends chart, lessons-by-type donut, most/least retrieved tables, dead knowledge detection, agent activity with approval rates.</div>
+      <div><span class="text-emerald-400 font-medium">NEW — Getting Started:</span> Guided onboarding learning path, section-based progress (53%), current lesson highlight, admin path editor, completion state.</div>
+      <div><span class="text-emerald-400 font-medium">NEW — Keyboard Shortcuts:</span> ? key overlay with 3-column grid (Navigation, Editor, AI actions), searchable, chord shortcuts (G+D, A+A).</div>
+      <div><span class="text-blue-400 font-medium">Global Search (Cmd+K):</span> Cross-entity search — lessons, documents, code, guardrails, commits. Grouped results with type icons, highlighted matches, keyboard hints.</div>
+      <div><span class="text-blue-400 font-medium">Lesson Detail:</span> Comments &amp; discussions (threaded replies, auto-review bot), feedback signals (thumbs up/down + retrieval count), bookmark button.</div>
+      <div><span class="text-blue-400 font-medium">Lesson Detail Editor:</span> AI-assisted editing — select chunks → Ask AI (Clarify/Simplify/Expand/Custom) → diff view with per-chunk Accept/Reject → dirty indicator + Undo/Redo.</div>
+      <div><span class="text-amber-400 font-medium">Lessons Page:</span> Status tabs (Active/Draft-Pending/Superseded/Archived), feedback column, "created by" column with avatars, bookmarks filter.</div>
+      <div><span class="text-amber-400 font-medium">Sidebar:</span> Review Inbox (with badge), Analytics, Getting Started (53% progress), Bookmarks nav items. Keyboard shortcut hint.</div>
+    </div>
+  </details>
+
+  <details class="mb-4 border border-zinc-800 rounded-lg bg-zinc-900">
+    <summary class="px-4 py-3 text-sm font-medium text-zinc-300 cursor-pointer hover:text-zinc-100">v3 — Feature Enhancements (2026-04-04)</summary>
+    <div class="px-4 py-3 border-t border-zinc-800 text-xs text-zinc-400 space-y-2">
+      <div><span class="text-emerald-400 font-medium">NEW — Documents Page:</span> Upload/link reference docs (PDF, MD, URL), document viewer with in-doc search, linked lessons sidebar, "Generate Lessons from Doc" AI action.</div>
+      <div><span class="text-emerald-400 font-medium">NEW — Activity &amp; Notifications:</span> Vertical timeline feed (lessons, jobs, guardrails, docs), unread indicators, notification preferences panel.</div>
+      <div><span class="text-emerald-400 font-medium">Lesson Detail:</span> Edit mode (inline editing), version history (v1/v2/v3 with restore), "Improve with AI" button, linked documents section. Now uses center modal.</div>
+      <div><span class="text-blue-400 font-medium">Chat:</span> Conversation history sidebar, pinned messages bar, "Create Lesson from Answer" popover with pre-filled fields.</div>
+      <div><span class="text-blue-400 font-medium">Dashboard:</span> Knowledge health score (72% ring), insights panel (stale lessons, missing guardrails), suggested actions.</div>
+      <div><span class="text-blue-400 font-medium">Guardrails:</span> Test presets dropdown, test history log, "What Would Block?" mode with confidence bars.</div>
+      <div><span class="text-amber-400 font-medium">Sidebar:</span> Notification bell with unread badge, Documents nav item, Activity nav item.</div>
+      <div><span class="text-amber-400 font-medium">Lessons:</span> Import/Export buttons, import dialog (JSON/CSV/Markdown tabs, preview table), enhanced bulk edit (Edit Tags, Change Status).</div>
+      <div><span class="text-amber-400 font-medium">Knowledge Docs:</span> Center modal (was slide-over), in-document search with highlight + match navigation.</div>
+    </div>
+  </details>
+
+  <details class="mb-8 border border-zinc-800 rounded-lg bg-zinc-900">
+    <summary class="px-4 py-3 text-sm font-medium text-zinc-300 cursor-pointer hover:text-zinc-100">v2 — UI Polish (2026-04-04)</summary>
+    <div class="px-4 py-3 border-t border-zinc-800 text-xs text-zinc-400 space-y-2">
+      <div><span class="text-emerald-400 font-medium">P0 — Icons:</span> Replaced all emoji nav icons with Lucide SVG icons across sidebar, all pages, and components.</div>
+      <div><span class="text-emerald-400 font-medium">P0 — Chat:</span> Markdown rendering, code blocks with syntax highlighting, message hover toolbars, styled tool call cards.</div>
+      <div><span class="text-blue-400 font-medium">P1 — Dashboard:</span> Redesigned from 7 sections to 3 focused zones. Activity timeline + system status.</div>
+      <div><span class="text-blue-400 font-medium">P1 — Breadcrumbs:</span> All 12 nested pages. Animations on modals/toasts. Backdrop blur.</div>
+      <div><span class="text-amber-400 font-medium">P2 — Tables:</span> Sticky headers, sort indicator arrows, page number pagination with jump box.</div>
+    </div>
+  </details>
+
+  <!-- Components -->
+  <h2 class="text-lg font-semibold text-zinc-200 mb-3 border-b border-zinc-800 pb-2">Shared Components (16)</h2>
+  <div class="grid grid-cols-3 gap-3 mb-10">
+    <a href="components/badge.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">Badge</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Type, status, job status variants</div>
+    </a>
+    <a href="components/button.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">Button</div>
+      <div class="text-xs text-zinc-500 mt-0.5">4 variants, 2 sizes, disabled</div>
+    </a>
+    <a href="components/data-table.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">DataTable</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Selection, sort, bulk, pagination</div>
+    </a>
+    <a href="components/command-palette.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">CommandPalette</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Ctrl+K, grouped items, keyboard</div>
+    </a>
+    <a href="components/confirm-dialog.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">ConfirmDialog</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Simple + destructive with type-to-confirm</div>
+    </a>
+    <a href="components/empty-state.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">EmptyState</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Icon, title, description, action</div>
+    </a>
+    <a href="components/error-banner.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">ErrorBanner</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Error + warning with dismiss</div>
+    </a>
+    <a href="components/filter-chips.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">FilterChips</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Removable chips + clear all</div>
+    </a>
+    <a href="components/loading-skeleton.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">LoadingSkeleton</div>
+      <div class="text-xs text-zinc-500 mt-0.5">StatCard, Table, Line skeletons</div>
+    </a>
+    <a href="components/page-header.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">PageHeader</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Breadcrumb, title, subtitle, actions</div>
+    </a>
+    <a href="components/search-bar.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">SearchBar</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Search input with filter slot</div>
+    </a>
+    <a href="components/slide-over.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">SlideOver</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Normal + wide, sections, footer</div>
+    </a>
+    <a href="components/stat-card.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">StatCard</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Normal, highlighted, clickable</div>
+    </a>
+    <a href="components/toast.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">Toast</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Success, error, info with actions</div>
+    </a>
+    <a href="components/sidebar.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">Sidebar</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Nav groups, review badge, bookmarks, shortcuts hint</div>
+    </a>
+    <a href="components/keyboard-shortcuts.html" class="block p-3 border border-emerald-800/50 rounded-lg hover:border-emerald-600/50 transition-colors">
+      <div class="text-sm font-medium text-emerald-300">Keyboard Shortcuts <span class="text-[10px] text-emerald-500 font-normal ml-1">NEW</span></div>
+      <div class="text-xs text-zinc-500 mt-0.5">? overlay, 3-col grid, searchable</div>
+    </a>
+  </div>
+
+  <!-- Pages -->
+  <h2 class="text-lg font-semibold text-zinc-200 mb-3 border-b border-zinc-800 pb-2">Pages (21)</h2>
+  <div class="grid grid-cols-3 gap-3 mb-10">
+    <a href="pages/layout.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">Layout</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Root layout with sidebar + main</div>
+    </a>
+    <a href="pages/dashboard.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">Dashboard</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Stats, features, actions, feeds</div>
+    </a>
+    <a href="pages/chat.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">Chat</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Messages, tool calls, input bar</div>
+    </a>
+    <a href="pages/lessons.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">Lessons</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Search, filter, table, pagination</div>
+    </a>
+    <a href="pages/guardrails.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">Guardrails</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Test panel, rules table</div>
+    </a>
+    <a href="pages/jobs.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">Jobs</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Status tabs, queue, enqueue dialog</div>
+    </a>
+    <a href="pages/knowledge-docs.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">Generated Docs</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Type tabs, table, slide-over</div>
+    </a>
+    <a href="pages/knowledge-graph.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">Graph Explorer</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Search, placeholder viz, features</div>
+    </a>
+    <a href="pages/knowledge-search.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">Code Search</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Tiered results, kind filter</div>
+    </a>
+    <a href="pages/projects-overview.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">Project Overview</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Stats, summary, danger zone</div>
+    </a>
+    <a href="pages/projects-groups.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">Groups</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Create, expand, manage members</div>
+    </a>
+    <a href="pages/projects-git.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">Git History</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Commits, suggestions, detail expand</div>
+    </a>
+    <a href="pages/projects-sources.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">Sources</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Source config, workspace roots</div>
+    </a>
+    <a href="pages/settings.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">Settings</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Server info, feature flags</div>
+    </a>
+    <a href="pages/settings-models.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">Model Providers</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Providers, feature assignments</div>
+    </a>
+    <a href="pages/lesson-detail.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">Lesson Detail</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Center modal, edit mode, versions, AI improve</div>
+    </a>
+    <a href="pages/documents.html" class="block p-3 border border-emerald-800/50 rounded-lg hover:border-emerald-600/50 transition-colors">
+      <div class="text-sm font-medium text-emerald-300">Documents <span class="text-[10px] text-emerald-500 font-normal ml-1">NEW</span></div>
+      <div class="text-xs text-zinc-500 mt-0.5">Upload, link, viewer, generate lessons</div>
+    </a>
+    <a href="pages/notifications.html" class="block p-3 border border-emerald-800/50 rounded-lg hover:border-emerald-600/50 transition-colors">
+      <div class="text-sm font-medium text-emerald-300">Activity & Notifications <span class="text-[10px] text-emerald-500 font-normal ml-1">v3</span></div>
+      <div class="text-xs text-zinc-500 mt-0.5">Timeline feed, unread badges, preferences</div>
+    </a>
+    <a href="pages/review-inbox.html" class="block p-3 border border-emerald-800/50 rounded-lg hover:border-emerald-600/50 transition-colors">
+      <div class="text-sm font-medium text-emerald-300">Review Inbox <span class="text-[10px] text-emerald-500 font-normal ml-1">NEW</span></div>
+      <div class="text-xs text-zinc-500 mt-0.5">Approval workflow, trust levels, batch review</div>
+    </a>
+    <a href="pages/analytics.html" class="block p-3 border border-emerald-800/50 rounded-lg hover:border-emerald-600/50 transition-colors">
+      <div class="text-sm font-medium text-emerald-300">Analytics <span class="text-[10px] text-emerald-500 font-normal ml-1">NEW</span></div>
+      <div class="text-xs text-zinc-500 mt-0.5">Usage trends, dead knowledge, agent activity</div>
+    </a>
+    <a href="pages/onboarding.html" class="block p-3 border border-emerald-800/50 rounded-lg hover:border-emerald-600/50 transition-colors">
+      <div class="text-sm font-medium text-emerald-300">Getting Started <span class="text-[10px] text-emerald-500 font-normal ml-1">NEW</span></div>
+      <div class="text-xs text-zinc-500 mt-0.5">Learning path, progress tracker, admin editor</div>
+    </a>
+  </div>
+
+  <div class="text-xs text-zinc-600 border-t border-zinc-800 pt-4">
+    v4 — Updated 2026-04-04. 21 pages, 16 components. Human-in-the-loop features complete.
+  </div>
+</body>
+</html>

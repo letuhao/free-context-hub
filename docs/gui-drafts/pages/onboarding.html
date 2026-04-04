@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: Getting Started</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeIn 0.2s ease-out; }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen font-sans">
+  <div class="flex h-screen">
+
+    <!-- ===== SIDEBAR ===== -->
+    <aside class="shrink-0 border-r border-zinc-800 bg-zinc-950 flex flex-col w-56">
+      <div class="px-4 py-4 border-b border-zinc-800">
+        <h1 class="text-sm font-semibold tracking-tight text-zinc-100">ContextHub</h1>
+        <p class="text-[11px] text-zinc-600 mt-0.5">Knowledge Dashboard</p>
+      </div>
+      <div class="px-3 py-2 space-y-1.5">
+        <select class="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded-md text-xs text-zinc-300 outline-none appearance-none cursor-pointer">
+          <option>free-context-hub</option>
+          <option>my-saas-app (2 groups)</option>
+          <option>internal-tools</option>
+        </select>
+      </div>
+      <nav class="flex-1 px-2 py-1 space-y-0.5 overflow-y-auto">
+        <a class="flex items-center gap-2.5 rounded-md text-sm transition-colors px-3 py-1.5 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="4" rx="1"/><rect x="14" y="11" width="7" height="10" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+          <span>Dashboard</span>
+        </a>
+        <a class="flex items-center gap-2.5 rounded-md text-sm transition-colors px-3 py-1.5 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+          <span>Chat</span>
+        </a>
+        <div class="mt-3">
+          <div class="px-3 py-1 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Knowledge</div>
+          <div class="space-y-0.5">
+            <a class="flex items-center gap-2.5 rounded-md text-sm transition-colors px-3 py-1.5 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+              <span>Lessons</span>
+            </a>
+            <!-- Getting Started (active) -->
+            <a class="flex items-center gap-2.5 rounded-md text-sm transition-colors px-3 py-1.5 bg-zinc-800 text-zinc-100">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              <span>Getting Started</span>
+            </a>
+            <a class="flex items-center gap-2.5 rounded-md text-sm transition-colors px-3 py-1.5 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <span>Guardrails</span>
+            </a>
+          </div>
+        </div>
+        <div class="mt-3">
+          <div class="px-3 py-1 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">System</div>
+          <div class="space-y-0.5">
+            <a class="flex items-center gap-2.5 rounded-md text-sm transition-colors px-3 py-1.5 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              <span>Jobs</span>
+            </a>
+            <a class="flex items-center gap-2.5 rounded-md text-sm transition-colors px-3 py-1.5 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+              <span>Settings</span>
+            </a>
+          </div>
+        </div>
+      </nav>
+      <div class="border-t border-zinc-800 px-3 py-2.5 flex items-center justify-between">
+        <div class="flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+          <span class="text-[11px] text-zinc-600">API connected</span>
+        </div>
+        <button class="text-zinc-600 hover:text-zinc-400 text-xs" title="Collapse (Ctrl+B)">&#x25C0;</button>
+      </div>
+    </aside>
+
+    <!-- ===== MAIN CONTENT ===== -->
+    <main class="flex-1 overflow-y-auto p-6">
+      <p class="text-xs text-zinc-600 mb-4">Draft: pages/onboarding | Source: gui/src/app/getting-started/page.tsx</p>
+
+      <!-- Breadcrumb -->
+      <div class="flex items-center gap-1.5 text-xs text-zinc-500 mb-4">
+        <span>Knowledge</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        <span class="text-zinc-400">Getting Started</span>
+      </div>
+
+      <!-- PageHeader -->
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h1 class="text-lg font-semibold text-zinc-100">Getting Started</h1>
+          <p class="text-xs text-zinc-500 mt-0.5">Learn your project's key decisions, patterns, and guardrails</p>
+        </div>
+        <div class="flex gap-2">
+          <button class="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-md text-zinc-300 transition-colors flex items-center gap-1.5">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+            Reset Progress
+          </button>
+          <button class="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-md text-zinc-300 transition-colors flex items-center gap-1.5">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+            Share Link
+          </button>
+        </div>
+      </div>
+
+      <!-- ===== PROGRESS OVERVIEW ===== -->
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4 mb-6">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-sm font-medium text-zinc-300">8 of 15 completed</span>
+          <span class="text-sm font-semibold text-emerald-400">53%</span>
+        </div>
+        <div class="w-full h-2.5 bg-zinc-800 rounded-full overflow-hidden">
+          <div class="h-full bg-emerald-500 rounded-full transition-all" style="width: 53%"></div>
+        </div>
+        <p class="text-xs text-zinc-500 mt-2 flex items-center gap-1.5">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-600"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Estimated time: ~20 min remaining
+        </p>
+      </div>
+
+      <!-- ===== LEARNING PATH SECTIONS ===== -->
+      <div class="space-y-6">
+
+        <!-- Section 1: Architecture & Design -->
+        <div>
+          <div class="flex items-center gap-2 mb-3">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+            <h2 class="text-sm font-medium text-zinc-200">Architecture &amp; Design</h2>
+            <span class="text-[10px] text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded">3/4 completed</span>
+          </div>
+          <div class="space-y-1 ml-1">
+            <!-- Completed -->
+            <div class="flex items-center gap-3 px-3 py-2 rounded-md">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-emerald-500 shrink-0"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              <span class="text-xs text-zinc-500 line-through">Core technology stack</span>
+              <span class="px-1.5 py-0.5 text-[10px] bg-blue-500/10 text-blue-400/60 rounded ml-auto">decision</span>
+            </div>
+            <div class="flex items-center gap-3 px-3 py-2 rounded-md">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-emerald-500 shrink-0"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              <span class="text-xs text-zinc-500 line-through">Database choice and configuration</span>
+              <span class="px-1.5 py-0.5 text-[10px] bg-blue-500/10 text-blue-400/60 rounded ml-auto">decision</span>
+            </div>
+            <div class="flex items-center gap-3 px-3 py-2 rounded-md">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-emerald-500 shrink-0"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              <span class="text-xs text-zinc-500 line-through">API design patterns</span>
+              <span class="px-1.5 py-0.5 text-[10px] bg-blue-500/10 text-blue-400/60 rounded ml-auto">decision</span>
+            </div>
+            <!-- Current (expanded) -->
+            <div class="border-l-2 border-blue-500 bg-blue-500/5 rounded-r-lg px-4 py-3">
+              <div class="flex items-center gap-3">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-blue-400 shrink-0"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span class="text-xs text-zinc-100 font-medium">Service communication patterns</span>
+                <span class="px-1.5 py-0.5 text-[10px] bg-blue-500/20 text-blue-400 rounded ml-auto">decision</span>
+              </div>
+              <div class="mt-2 ml-7 text-xs text-zinc-400 leading-relaxed">
+                <p>Internal services communicate via REST over HTTP/2 for synchronous calls. For async workloads, use a lightweight message queue (BullMQ on Redis) rather than a full broker...</p>
+              </div>
+              <div class="mt-2 ml-7">
+                <button class="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors">
+                  Read Full Lesson
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: Code Conventions -->
+        <div>
+          <div class="flex items-center gap-2 mb-3">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            <h2 class="text-sm font-medium text-zinc-200">Code Conventions</h2>
+            <span class="text-[10px] text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded">3/5 completed</span>
+          </div>
+          <div class="space-y-1 ml-1">
+            <div class="flex items-center gap-3 px-3 py-2 rounded-md">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-emerald-500 shrink-0"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              <span class="text-xs text-zinc-500 line-through">Naming conventions</span>
+              <span class="px-1.5 py-0.5 text-[10px] bg-purple-500/10 text-purple-400/60 rounded ml-auto">preference</span>
+            </div>
+            <div class="flex items-center gap-3 px-3 py-2 rounded-md">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-emerald-500 shrink-0"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              <span class="text-xs text-zinc-500 line-through">Error handling patterns</span>
+              <span class="px-1.5 py-0.5 text-[10px] bg-amber-500/10 text-amber-400/60 rounded ml-auto">workaround</span>
+            </div>
+            <div class="flex items-center gap-3 px-3 py-2 rounded-md">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-emerald-500 shrink-0"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              <span class="text-xs text-zinc-500 line-through">Logging standards</span>
+              <span class="px-1.5 py-0.5 text-[10px] bg-purple-500/10 text-purple-400/60 rounded ml-auto">preference</span>
+            </div>
+            <!-- Not started -->
+            <div class="flex items-center gap-3 px-3 py-2 rounded-md">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-600 shrink-0"><circle cx="12" cy="12" r="10"/></svg>
+              <span class="text-xs text-zinc-400">Testing strategy</span>
+              <span class="px-1.5 py-0.5 text-[10px] bg-blue-500/10 text-blue-400/50 rounded ml-auto">decision</span>
+            </div>
+            <div class="flex items-center gap-3 px-3 py-2 rounded-md">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-600 shrink-0"><circle cx="12" cy="12" r="10"/></svg>
+              <span class="text-xs text-zinc-400">Code review checklist</span>
+              <span class="px-1.5 py-0.5 text-[10px] bg-purple-500/10 text-purple-400/50 rounded ml-auto">preference</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 3: Guardrails & Safety -->
+        <div>
+          <div class="flex items-center gap-2 mb-3">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <h2 class="text-sm font-medium text-zinc-200">Guardrails &amp; Safety</h2>
+            <span class="text-[10px] text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded">2/4 completed</span>
+          </div>
+          <div class="space-y-1 ml-1">
+            <div class="flex items-center gap-3 px-3 py-2 rounded-md">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-emerald-500 shrink-0"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              <span class="text-xs text-zinc-500 line-through">No force push to main</span>
+              <span class="px-1.5 py-0.5 text-[10px] bg-red-500/10 text-red-400/60 rounded ml-auto">guardrail</span>
+            </div>
+            <div class="flex items-center gap-3 px-3 py-2 rounded-md">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-emerald-500 shrink-0"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              <span class="text-xs text-zinc-500 line-through">Schema migration review required</span>
+              <span class="px-1.5 py-0.5 text-[10px] bg-red-500/10 text-red-400/60 rounded ml-auto">guardrail</span>
+            </div>
+            <div class="flex items-center gap-3 px-3 py-2 rounded-md">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-600 shrink-0"><circle cx="12" cy="12" r="10"/></svg>
+              <span class="text-xs text-zinc-400">Production deploy checklist</span>
+              <span class="px-1.5 py-0.5 text-[10px] bg-red-500/10 text-red-400/50 rounded ml-auto">guardrail</span>
+            </div>
+            <div class="flex items-center gap-3 px-3 py-2 rounded-md">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-600 shrink-0"><circle cx="12" cy="12" r="10"/></svg>
+              <span class="text-xs text-zinc-400">Data deletion safeguards</span>
+              <span class="px-1.5 py-0.5 text-[10px] bg-red-500/10 text-red-400/50 rounded ml-auto">guardrail</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 4: Getting Help -->
+        <div>
+          <div class="flex items-center gap-2 mb-3">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <h2 class="text-sm font-medium text-zinc-200">Getting Help</h2>
+            <span class="text-[10px] text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded">0/2 completed</span>
+          </div>
+          <div class="space-y-1 ml-1">
+            <div class="flex items-center gap-3 px-3 py-2 rounded-md">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-600 shrink-0"><circle cx="12" cy="12" r="10"/></svg>
+              <span class="text-xs text-zinc-400">How to use the AI chat</span>
+              <span class="px-1.5 py-0.5 text-[10px] bg-zinc-700/50 text-zinc-500 rounded ml-auto">general_note</span>
+            </div>
+            <div class="flex items-center gap-3 px-3 py-2 rounded-md">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-600 shrink-0"><circle cx="12" cy="12" r="10"/></svg>
+              <span class="text-xs text-zinc-400">How to add/edit lessons</span>
+              <span class="px-1.5 py-0.5 text-[10px] bg-zinc-700/50 text-zinc-500 rounded ml-auto">general_note</span>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- end learning path sections -->
+
+      <!-- ===== COMPLETION STATE (shown at >80%) ===== -->
+      <div class="mt-6 bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-4">
+        <h3 class="text-sm font-medium text-emerald-400 mb-1">Almost there!</h3>
+        <p class="text-xs text-zinc-400 mb-3">You've covered the essentials. Here are some optional deep-dives:</p>
+        <div class="space-y-1.5">
+          <a class="flex items-center gap-2 text-xs text-blue-400 hover:text-blue-300 transition-colors cursor-pointer">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+            Advanced caching strategies
+          </a>
+          <a class="flex items-center gap-2 text-xs text-blue-400 hover:text-blue-300 transition-colors cursor-pointer">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+            Observability and monitoring setup
+          </a>
+          <a class="flex items-center gap-2 text-xs text-blue-400 hover:text-blue-300 transition-colors cursor-pointer">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+            Performance benchmarking guide
+          </a>
+        </div>
+      </div>
+
+      <!-- ===== ADMIN PANEL (collapsible) ===== -->
+      <details class="border border-zinc-800 rounded-lg bg-zinc-900/50 mt-6">
+        <summary class="px-4 py-3 text-sm font-medium text-zinc-300 cursor-pointer flex items-center gap-2 hover:text-zinc-100">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          Manage Learning Path (admin)
+        </summary>
+        <div class="px-4 pb-4">
+          <div class="space-y-1.5">
+            <!-- Drag-reorder items -->
+            <div class="flex items-center gap-2 px-3 py-2 bg-zinc-800/50 rounded-md group">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-600 cursor-grab shrink-0"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              <span class="text-xs text-zinc-300 flex-1">Core technology stack</span>
+              <select class="px-2 py-0.5 bg-zinc-900 border border-zinc-700 rounded text-[10px] text-zinc-400 outline-none">
+                <option selected>Architecture &amp; Design</option>
+                <option>Code Conventions</option>
+                <option>Guardrails &amp; Safety</option>
+                <option>Getting Help</option>
+              </select>
+              <button class="text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all" title="Remove">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <div class="flex items-center gap-2 px-3 py-2 bg-zinc-800/50 rounded-md group">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-600 cursor-grab shrink-0"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              <span class="text-xs text-zinc-300 flex-1">Database choice and configuration</span>
+              <select class="px-2 py-0.5 bg-zinc-900 border border-zinc-700 rounded text-[10px] text-zinc-400 outline-none">
+                <option selected>Architecture &amp; Design</option>
+                <option>Code Conventions</option>
+                <option>Guardrails &amp; Safety</option>
+                <option>Getting Help</option>
+              </select>
+              <button class="text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all" title="Remove">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <div class="flex items-center gap-2 px-3 py-2 bg-zinc-800/50 rounded-md group">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-600 cursor-grab shrink-0"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              <span class="text-xs text-zinc-300 flex-1">API design patterns</span>
+              <select class="px-2 py-0.5 bg-zinc-900 border border-zinc-700 rounded text-[10px] text-zinc-400 outline-none">
+                <option selected>Architecture &amp; Design</option>
+                <option>Code Conventions</option>
+                <option>Guardrails &amp; Safety</option>
+                <option>Getting Help</option>
+              </select>
+              <button class="text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all" title="Remove">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+          </div>
+          <button class="mt-3 px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-md text-zinc-300 transition-colors flex items-center gap-1.5">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Lesson to Path
+          </button>
+        </div>
+      </details>
+
+    </main>
+  </div>
+</body>
+</html>

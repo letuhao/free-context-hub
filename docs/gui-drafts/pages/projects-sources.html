@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: Sources</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen font-sans">
+  <div class="flex h-screen">
+    <aside class="w-56 shrink-0 border-r border-zinc-800 bg-zinc-950">
+      <div class="px-4 py-4 border-b border-zinc-800">
+        <h1 class="text-sm font-semibold text-zinc-100">ContextHub</h1>
+        <p class="text-[11px] text-zinc-600">Knowledge Dashboard</p>
+      </div>
+    </aside>
+    <main class="flex-1 overflow-y-auto p-6">
+      <p class="text-xs text-zinc-600 mb-4">Draft: pages/projects-sources | Source: gui/src/app/projects/sources/page.tsx</p>
+
+      <!-- Breadcrumb -->
+      <div class="flex items-center gap-1.5 text-xs text-zinc-500 mb-4">
+        <span>Project</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        <span class="text-zinc-400">Sources</span>
+      </div>
+
+      <!-- PageHeader -->
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h1 class="text-lg font-semibold text-zinc-100">Sources</h1>
+          <p class="text-xs text-zinc-500 mt-0.5">Code source configuration for free-context-hub</p>
+        </div>
+        <div class="flex gap-2">
+          <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-md text-zinc-300 transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Scan
+          </button>
+          <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0"><circle cx="12" cy="12" r="4"/><line x1="1.05" y1="12" x2="7" y2="12"/><line x1="17.01" y1="12" x2="22.96" y2="12"/></svg>
+            Prepare Remote Repo
+          </button>
+        </div>
+      </div>
+
+      <!-- Current Source card -->
+      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4 mb-6">
+        <div class="flex items-center gap-2 mb-3">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-400"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          <h2 class="text-sm font-medium text-zinc-300">Current Source</h2>
+        </div>
+        <div class="grid grid-cols-2 gap-3 text-xs">
+          <div>
+            <span class="text-zinc-500">Type:</span>
+            <span class="ml-2 px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-500/20 text-blue-400">local_workspace</span>
+          </div>
+          <div>
+            <span class="text-zinc-500">Default Ref:</span>
+            <span class="ml-2 text-zinc-300 font-mono">main</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Configure Source form -->
+      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4 mb-6">
+        <div class="flex items-center gap-2 mb-3">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-400"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <h2 class="text-sm font-medium text-zinc-300">Configure Source</h2>
+        </div>
+        <div class="space-y-3">
+          <div>
+            <label class="text-xs text-zinc-500 block mb-1">Source Type</label>
+            <select class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-md text-sm text-zinc-300 outline-none">
+              <option>local_workspace</option>
+              <option>git_remote</option>
+              <option>github</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs text-zinc-500 block mb-1">Default Ref</label>
+            <input type="text" value="main" class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-md text-sm text-zinc-300 outline-none focus:border-zinc-600" />
+          </div>
+          <button class="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white transition-colors">Save</button>
+        </div>
+      </div>
+
+      <!-- Workspace Roots -->
+      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+        <div class="flex items-center gap-2 mb-3">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-400"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          <h2 class="text-sm font-medium text-zinc-300">Workspace Roots</h2>
+        </div>
+        <div class="space-y-2 mb-4">
+          <div class="flex items-center justify-between bg-zinc-800/50 border border-zinc-700 rounded-md px-3 py-2">
+            <span class="text-xs text-zinc-300 font-mono">/home/dev/projects/free-context-hub</span>
+            <button class="text-xs text-red-400 hover:text-red-300">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div class="flex items-center justify-between bg-zinc-800/50 border border-zinc-700 rounded-md px-3 py-2">
+            <span class="text-xs text-zinc-300 font-mono">/home/dev/projects/free-context-hub/gui</span>
+            <button class="text-xs text-red-400 hover:text-red-300">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        </div>
+        <div>
+          <h3 class="text-xs text-zinc-500 mb-2">Register Root</h3>
+          <div class="flex gap-2">
+            <input type="text" placeholder="/path/to/workspace" class="flex-1 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-md text-sm text-zinc-300 outline-none focus:border-zinc-600 placeholder-zinc-600" />
+            <button class="px-3 py-1.5 text-xs bg-zinc-700 hover:bg-zinc-600 border border-zinc-600 rounded-md text-zinc-300 transition-colors">Register</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

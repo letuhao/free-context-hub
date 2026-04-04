@@ -1,22 +1,26 @@
 # ContextHub (Self-Hosted) White Paper
 
 ## Status
-Draft v0.2
+Draft v0.3
 
 ## Abstract
 ContextHub is a self-hosted, team-friendly system that gives MCP-enabled AI coding agents **persistent memory and guardrails across sessions**. It is designed for small teams that want the essential productivity benefits of [ContextStream](https://contextstream.io/)-like workflows, without requiring a hosted SaaS dependency.
 
 **The core problem:** every new AI agent session starts from zero. Decisions, preferences, workarounds, and constraints are forgotten. Teams repeat the same mistakes. Engineers re-explain the same architectural choices. ContextHub solves this by making agent knowledge persistent and shared.
 
+**The expanded vision:** ContextHub has evolved from an AI-only tool to an **AI-to-AI and AI-to-Human bridge**. While agents capture knowledge automatically via MCP, humans need to review, approve, refine, and teach agents through that knowledge. The system serves both audiences — agents produce knowledge, humans curate it, and everyone benefits.
+
 **Primary features (the reason this project exists):**
 - **Persistent lessons** — decisions, preferences, workarounds captured once, available to every future agent session
 - **Guardrails** — team rules enforced before risky actions (push, deploy, migrations)
 - **Session bootstrap** — new agents onboard instantly with project context and prior knowledge
+- **Human-in-the-loop GUI** — web dashboard for reviewing, approving, editing, and enriching AI-generated knowledge
 
 **Supplementary features (assistive, not the core goal):**
 - Semantic code search (tiered retrieval with kind-filtered precision)
 - Git intelligence (auto-draft lessons from commit history)
 - Knowledge graph (optional symbol-level code structure via Neo4j)
+- Document management (attach reference docs, generate lessons from documents)
 
 Code search is supplementary because modern AI agents already have capable built-in tools for code navigation (Grep, Glob, file reading). What they lack — and what no built-in tool provides — is **persistent cross-session memory**. That is ContextHub's unique value.
 
@@ -352,18 +356,56 @@ Phases 1–5 are primarily **passive learning**: index source, build vectors, op
 - **Phase 7:** GUI makes it easier to review drafts and inspect knowledge before promotion.
 - **Phase 8–9:** Human-in-the-loop editing and multi-format ingestion widen the surface of facts the deep loop can safely absorb.
 
-### Phase 7: Interactive GUI
-- **Knowledge Explorer**: Web dashboard for browsing lessons, guardrails, project snapshots, and knowledge graph. Also usable from VS Code's built-in browser — no dedicated extension needed.
+### Phase 7: Interactive GUI & Human-in-the-Loop (In Progress)
 
-### Phase 8: Human-in-the-loop
-- Allow users to correct knowledge, approve draft lessons, and add insights interactively via the web GUI.
+Phase 7 represents a major shift: ContextHub evolves from an **agent-only backend** to an **AI-Human collaboration platform**. The web GUI (Next.js 16 + React 19 + Tailwind CSS) serves as the bridge where humans review, approve, and refine AI-generated knowledge.
 
-### Phase 9: Multi-format Ingestion
-- Support for PDF, DOCX, Excel, and Image files.
+**Status:** Core 14 pages and 15 shared components are functional. GUI enhancement phase is in **draft design** stage — 21 page drafts + 16 component drafts completed as standalone HTML references (`docs/gui-drafts/`). Implementation pending.
 
-### Phase 10: Knowledge Portability
-- **Exchange Hub**: Import/Export knowledge to/from other team-hosted ContextHubs or infrastructure.
-- Standardized knowledge interchange format.
+**Core pages (functional):**
+- Dashboard, Chat (AI SDK streaming), Lessons (CRUD + search), Guardrails (test panel), Jobs (queue monitor), Knowledge (Generated Docs, Graph Explorer, Code Search), Projects (Overview, Groups, Git History, Sources), Settings (System info, Model Providers)
+
+**Planned enhancements (drafted, not yet implemented):**
+
+*AI-to-Human bridge features:*
+- **Review Inbox** — Draft→Review→Active approval pipeline for AI-generated lessons, with agent trust levels and batch review
+- **AI-Assisted Editor** — Select text chunks → Ask AI (Clarify/Simplify/Expand/Custom prompt) → diff view with per-chunk Accept/Reject → dirty indicator
+- **"Create Lesson from Answer"** — One-click conversion of chat responses to lessons with pre-filled fields
+- **Feedback signals** — Thumbs up/down on lessons with retrieval count tracking, enabling quality metrics
+
+*Knowledge management features:*
+- **Document Management** — Upload/link reference docs (PDF, MD, URL), in-document search, generate lessons from documents
+- **Knowledge Analytics** — Retrieval trends, dead knowledge detection, agent activity tracking, approval rates
+- **Global Search (Cmd+K)** — Cross-entity search across lessons, documents, code, guardrails, commits
+- **Comments & Discussions** — Threaded comments on lessons with @mentions and auto-review bot
+- **Bookmarks / Favorites** — Personal quick-access collections
+
+*Onboarding & adoption:*
+- **Guided Onboarding** — Curated learning path for new team members with section-based progress tracker
+- **Keyboard Shortcuts** — Power-user overlay (? key) with navigation, editor, and AI action shortcuts
+
+*UI polish:*
+- Lucide React icon library (replacing emoji), breadcrumbs, sticky table headers, modal/toast animations, markdown rendering in chat with syntax highlighting, enhanced pagination (page numbers + jump box)
+- Import/Export (JSON, CSV, Markdown parsing)
+
+**Relationship to later phases:** Phase 7 absorbs significant portions of what was originally planned for Phase 8 (human-in-the-loop) and Phase 9-10 (document ingestion, import/export). The GUI enhancement drafts serve as the design specification for implementation.
+
+### Phase 8: Advanced Human-in-the-Loop (Planned)
+Features not absorbed by Phase 7:
+- Access control (owner/editor/viewer roles per project)
+- Custom lesson types and templates (beyond the 5 built-in types)
+- Rich content (embedded images, diagrams, tables in lessons)
+- Comparison/diff view for lesson versions side-by-side
+- Agent profiles and detailed audit trails
+
+### Phase 9: Multi-format Ingestion (Planned)
+- Support for PDF, DOCX, Excel, and Image files
+- Document management foundation laid in Phase 7; this phase adds parsing/extraction pipelines
+
+### Phase 10: Knowledge Portability (Planned)
+- **Exchange Hub**: Import/Export knowledge to/from other team-hosted ContextHubs or infrastructure
+- Standardized knowledge interchange format
+- Basic import/export (JSON/CSV) included in Phase 7; this phase adds cross-instance sync
 
 ### Dropped: Multi-Agent Passive Collection
 

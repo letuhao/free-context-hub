@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: SlideOver</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes slideIn {
+      from { transform: translateX(100%); }
+      to { transform: translateX(0); }
+    }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 p-8 font-sans">
+  <h1 class="text-xl font-bold mb-1">SlideOver</h1>
+  <p class="text-sm text-zinc-500 mb-8">Source: gui/src/components/ui/slide-over.tsx</p>
+
+  <!-- Side by side: normal and wide -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">Normal (380px) and Wide (480px) variants side by side</h2>
+  <div class="flex gap-6">
+
+    <!-- Normal width panel -->
+    <div class="relative" style="width: 380px; height: 520px;">
+      <div class="bg-zinc-900 border border-zinc-800 rounded-lg flex flex-col h-full w-full" style="animation: slideIn 0.2s ease-out">
+        <!-- Header -->
+        <div class="flex items-start justify-between px-5 py-4 border-b border-zinc-800 shrink-0">
+          <div class="min-w-0">
+            <h2 class="text-base font-semibold text-zinc-100 truncate">Lesson Detail</h2>
+            <div class="mt-0.5 text-xs text-zinc-500">Normal width (380px)</div>
+          </div>
+          <button class="text-zinc-500 hover:text-zinc-300 ml-4">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <!-- Body -->
+        <div class="flex-1 overflow-y-auto px-5 py-4">
+          <!-- SlideOverSection: Metadata -->
+          <div class="mb-5">
+            <h3 class="text-[11px] uppercase tracking-wide text-zinc-500 mb-2">Metadata</h3>
+            <div class="text-sm text-zinc-400 leading-relaxed">
+              <div class="flex justify-between mb-1">
+                <span class="text-zinc-500">Type</span>
+                <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-500/10 text-blue-400">decision</span>
+              </div>
+              <div class="flex justify-between mb-1">
+                <span class="text-zinc-500">Status</span>
+                <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400">active</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-zinc-500">Created</span>
+                <span>2024-12-15</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- SlideOverSection: Content -->
+          <div class="mb-5">
+            <h3 class="text-[11px] uppercase tracking-wide text-zinc-500 mb-2">Content</h3>
+            <div class="text-sm text-zinc-400 leading-relaxed">
+              Use Drizzle ORM for all database queries. Raw SQL is only acceptable for complex aggregations that cannot be expressed through the ORM.
+            </div>
+          </div>
+
+          <!-- SlideOverSection: Tags -->
+          <div class="mb-5">
+            <h3 class="text-[11px] uppercase tracking-wide text-zinc-500 mb-2">Tags</h3>
+            <div class="text-sm text-zinc-400 leading-relaxed flex gap-1.5 flex-wrap">
+              <span class="inline-block px-2.5 py-0.5 rounded-full text-xs bg-zinc-800 text-zinc-400">database</span>
+              <span class="inline-block px-2.5 py-0.5 rounded-full text-xs bg-zinc-800 text-zinc-400">orm</span>
+              <span class="inline-block px-2.5 py-0.5 rounded-full text-xs bg-zinc-800 text-zinc-400">drizzle</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="px-5 py-3 border-t border-zinc-800 shrink-0">
+          <div class="flex justify-end gap-2">
+            <button class="rounded-md font-medium transition-colors px-3.5 py-1.5 text-sm bg-transparent border border-zinc-700 text-zinc-300 hover:border-zinc-600 hover:text-zinc-100">Close</button>
+            <button class="rounded-md font-medium transition-colors px-3.5 py-1.5 text-sm bg-zinc-100 text-zinc-900 hover:bg-zinc-200">Edit</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Wide panel -->
+    <div class="relative" style="width: 480px; height: 520px;">
+      <div class="bg-zinc-900 border border-zinc-800 rounded-lg flex flex-col h-full w-full" style="animation: slideIn 0.2s ease-out">
+        <!-- Header -->
+        <div class="flex items-start justify-between px-5 py-4 border-b border-zinc-800 shrink-0">
+          <div class="min-w-0">
+            <h2 class="text-base font-semibold text-zinc-100 truncate">Edit Guardrail</h2>
+            <div class="mt-0.5 text-xs text-zinc-500">Wide variant (480px)</div>
+          </div>
+          <button class="text-zinc-500 hover:text-zinc-300 ml-4">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <!-- Body -->
+        <div class="flex-1 overflow-y-auto px-5 py-4">
+          <!-- SlideOverSection: Form -->
+          <div class="mb-5">
+            <h3 class="text-[11px] uppercase tracking-wide text-zinc-500 mb-2">Details</h3>
+            <div class="text-sm text-zinc-400 leading-relaxed space-y-3">
+              <div>
+                <label class="text-xs text-zinc-500 block mb-1">Title</label>
+                <input type="text" value="No direct push to main" class="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-md text-sm text-zinc-100 outline-none" readonly />
+              </div>
+              <div>
+                <label class="text-xs text-zinc-500 block mb-1">Description</label>
+                <textarea class="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-md text-sm text-zinc-100 outline-none resize-none" rows="3" readonly>All changes must go through pull requests with at least one approval before merging to main.</textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- SlideOverSection: Conditions -->
+          <div class="mb-5">
+            <h3 class="text-[11px] uppercase tracking-wide text-zinc-500 mb-2">Conditions</h3>
+            <div class="text-sm text-zinc-400 leading-relaxed">
+              Triggered when action contains "git push" and target branch is "main" or "master".
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="px-5 py-3 border-t border-zinc-800 shrink-0">
+          <div class="flex justify-end gap-2">
+            <button class="rounded-md font-medium transition-colors px-3.5 py-1.5 text-sm bg-transparent border border-zinc-700 text-zinc-300 hover:border-zinc-600 hover:text-zinc-100">Cancel</button>
+            <button class="rounded-md font-medium transition-colors px-3.5 py-1.5 text-sm bg-zinc-100 text-zinc-900 hover:bg-zinc-200">Save Changes</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Backdrop + animation note -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">Animation &amp; Backdrop Notes</h2>
+  <div class="text-xs text-zinc-500 space-y-1">
+    <p>Panel uses <code class="text-zinc-400 bg-zinc-800 px-1 py-0.5 rounded">animation: slideIn 0.2s ease-out</code> for entrance.</p>
+    <p>Backdrop overlay uses <code class="text-zinc-400 bg-zinc-800 px-1 py-0.5 rounded">backdrop-blur-sm</code> for a frosted glass effect.</p>
+  </div>
+</body>
+</html>

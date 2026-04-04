@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: Button</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 p-8 font-sans">
+  <h1 class="text-xl font-bold mb-1">Button</h1>
+  <p class="text-sm text-zinc-500 mb-8">Source: gui/src/components/ui/button.tsx</p>
+
+  <!-- Size: md (default) -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">Size: md (default)</h2>
+  <div class="flex flex-wrap items-center gap-3">
+    <button class="rounded-md font-medium transition-colors px-3.5 py-1.5 text-sm bg-zinc-100 text-zinc-900 hover:bg-zinc-200">Primary</button>
+    <button class="rounded-md font-medium transition-colors px-3.5 py-1.5 text-sm bg-transparent border border-zinc-700 text-zinc-300 hover:border-zinc-600 hover:text-zinc-100">Outline</button>
+    <button class="rounded-md font-medium transition-colors px-3.5 py-1.5 text-sm bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20">Danger</button>
+    <button class="rounded-md font-medium transition-colors px-3.5 py-1.5 text-sm bg-transparent text-zinc-400 hover:text-zinc-200">Ghost</button>
+  </div>
+
+  <!-- Size: sm -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">Size: sm</h2>
+  <div class="flex flex-wrap items-center gap-3">
+    <button class="rounded-md font-medium transition-colors px-2.5 py-1 text-xs bg-zinc-100 text-zinc-900 hover:bg-zinc-200">Primary</button>
+    <button class="rounded-md font-medium transition-colors px-2.5 py-1 text-xs bg-transparent border border-zinc-700 text-zinc-300 hover:border-zinc-600 hover:text-zinc-100">Outline</button>
+    <button class="rounded-md font-medium transition-colors px-2.5 py-1 text-xs bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20">Danger</button>
+    <button class="rounded-md font-medium transition-colors px-2.5 py-1 text-xs bg-transparent text-zinc-400 hover:text-zinc-200">Ghost</button>
+  </div>
+
+  <!-- Disabled States -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">Disabled States (size: md)</h2>
+  <div class="flex flex-wrap items-center gap-3">
+    <button disabled class="rounded-md font-medium transition-colors px-3.5 py-1.5 text-sm bg-zinc-100 text-zinc-900 opacity-40 pointer-events-none">Primary</button>
+    <button disabled class="rounded-md font-medium transition-colors px-3.5 py-1.5 text-sm bg-transparent border border-zinc-700 text-zinc-300 opacity-40 pointer-events-none">Outline</button>
+    <button disabled class="rounded-md font-medium transition-colors px-3.5 py-1.5 text-sm bg-red-500/10 text-red-400 border border-red-500/20 opacity-40 pointer-events-none">Danger</button>
+    <button disabled class="rounded-md font-medium transition-colors px-3.5 py-1.5 text-sm bg-transparent text-zinc-400 opacity-40 pointer-events-none">Ghost</button>
+  </div>
+</body>
+</html>

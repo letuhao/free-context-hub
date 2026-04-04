@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: CommandPalette</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 p-8 font-sans">
+  <h1 class="text-xl font-bold mb-1">CommandPalette</h1>
+  <p class="text-sm text-zinc-500 mb-8">Source: gui/src/components/ui/command-palette.tsx</p>
+
+  <!-- Open State with search results -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">Global Search (Cmd+K) — Active query: "retry"</h2>
+  <div class="relative flex items-start justify-center pt-8">
+    <!-- Backdrop simulation -->
+    <div class="absolute inset-0 bg-black/50 rounded-xl"></div>
+    <!-- Palette -->
+    <div class="relative w-[560px] bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl overflow-hidden">
+      <!-- Input -->
+      <div class="flex items-center gap-2 px-4 py-3 border-b border-zinc-800">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500 shrink-0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input
+          type="text"
+          value="retry"
+          placeholder="Search everything..."
+          class="flex-1 bg-transparent border-none text-sm text-zinc-100 outline-none placeholder:text-zinc-600"
+          readonly
+        />
+        <kbd class="text-[10px] text-zinc-600 bg-zinc-800 px-1.5 py-0.5 rounded">ESC</kbd>
+      </div>
+
+      <!-- Results -->
+      <div class="max-h-[420px] overflow-y-auto py-1">
+
+        <!-- Lessons group -->
+        <div>
+          <div class="px-3 py-1.5 text-[11px] uppercase text-zinc-600 tracking-wide flex items-center gap-1.5">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-600"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+            Lessons (3 matches)
+          </div>
+          <!-- Result 1 (highlighted) -->
+          <div class="flex items-center gap-3 px-3 py-2 mx-1 rounded-md text-sm cursor-pointer bg-zinc-800 text-zinc-100">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-blue-400 shrink-0"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+            <div class="flex-1 min-w-0">
+              <span class="text-sm text-zinc-100 truncate block">Use <mark class="bg-amber-500/30 text-amber-200 rounded px-0.5">retry</mark> with exponential backoff</span>
+              <span class="text-[11px] text-zinc-500">decision · active · 89 retrievals</span>
+            </div>
+          </div>
+          <!-- Result 2 -->
+          <div class="flex items-center gap-3 px-3 py-2 mx-1 rounded-md text-sm cursor-pointer text-zinc-400 hover:bg-zinc-800/50">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-blue-400/60 shrink-0"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+            <div class="flex-1 min-w-0">
+              <span class="text-sm text-zinc-400 truncate block">HTTP <mark class="bg-amber-500/30 text-amber-200 rounded px-0.5">retry</mark> best practices</span>
+              <span class="text-[11px] text-zinc-600">decision · superseded</span>
+            </div>
+          </div>
+          <!-- Result 3 -->
+          <div class="flex items-center gap-3 px-3 py-2 mx-1 rounded-md text-sm cursor-pointer text-zinc-400 hover:bg-zinc-800/50">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-blue-400/60 shrink-0"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+            <div class="flex-1 min-w-0">
+              <span class="text-sm text-zinc-400 truncate block"><mark class="bg-amber-500/30 text-amber-200 rounded px-0.5">Retry</mark> queue for failed webhooks</span>
+              <span class="text-[11px] text-zinc-600">workaround · active</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Documents group -->
+        <div class="mt-1">
+          <div class="px-3 py-1.5 text-[11px] uppercase text-zinc-600 tracking-wide flex items-center gap-1.5">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-600"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+            Documents (1 match)
+          </div>
+          <div class="flex items-center gap-3 px-3 py-2 mx-1 rounded-md text-sm cursor-pointer text-zinc-400 hover:bg-zinc-800/50">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500 shrink-0"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+            <div class="flex-1 min-w-0">
+              <span class="text-sm text-zinc-400 truncate block"><mark class="bg-amber-500/30 text-amber-200 rounded px-0.5">Retry</mark> Strategy RFC.md</span>
+              <span class="text-[11px] text-zinc-600">Markdown · 12 KB · 3 linked lessons</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Code group -->
+        <div class="mt-1">
+          <div class="px-3 py-1.5 text-[11px] uppercase text-zinc-600 tracking-wide flex items-center gap-1.5">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-600"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            Code (2 matches)
+          </div>
+          <div class="flex items-center gap-3 px-3 py-2 mx-1 rounded-md text-sm cursor-pointer text-zinc-400 hover:bg-zinc-800/50">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-emerald-400/60 shrink-0"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            <div class="flex-1 min-w-0">
+              <span class="text-sm text-zinc-400 truncate block">src/lib/<mark class="bg-amber-500/30 text-amber-200 rounded px-0.5">retry</mark>.ts</span>
+              <span class="text-[11px] text-zinc-600 font-mono">export async function <mark class="bg-amber-500/30 text-amber-200 rounded px-0.5">retry</mark>&lt;T&gt;(...) — line 12</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-3 px-3 py-2 mx-1 rounded-md text-sm cursor-pointer text-zinc-400 hover:bg-zinc-800/50">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-emerald-400/60 shrink-0"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            <div class="flex-1 min-w-0">
+              <span class="text-sm text-zinc-400 truncate block">src/services/jobExecutor.ts</span>
+              <span class="text-[11px] text-zinc-600 font-mono">await <mark class="bg-amber-500/30 text-amber-200 rounded px-0.5">retry</mark>(() =&gt; processJob... — line 89</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Guardrails group -->
+        <div class="mt-1">
+          <div class="px-3 py-1.5 text-[11px] uppercase text-zinc-600 tracking-wide flex items-center gap-1.5">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-600"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Guardrails (1 match)
+          </div>
+          <div class="flex items-center gap-3 px-3 py-2 mx-1 rounded-md text-sm cursor-pointer text-zinc-400 hover:bg-zinc-800/50">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-red-400/60 shrink-0"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <div class="flex-1 min-w-0">
+              <span class="text-sm text-zinc-400 truncate block">Max 3 <mark class="bg-amber-500/30 text-amber-200 rounded px-0.5">retry</mark> attempts for external calls</span>
+              <span class="text-[11px] text-zinc-600">active</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Commits group -->
+        <div class="mt-1">
+          <div class="px-3 py-1.5 text-[11px] uppercase text-zinc-600 tracking-wide flex items-center gap-1.5">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-600"><circle cx="12" cy="12" r="4"/><line x1="1.05" y1="12" x2="7" y2="12"/><line x1="17.01" y1="12" x2="22.96" y2="12"/></svg>
+            Commits (1 match)
+          </div>
+          <div class="flex items-center gap-3 px-3 py-2 mx-1 rounded-md text-sm cursor-pointer text-zinc-400 hover:bg-zinc-800/50">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500 shrink-0"><circle cx="12" cy="12" r="4"/><line x1="1.05" y1="12" x2="7" y2="12"/><line x1="17.01" y1="12" x2="22.96" y2="12"/></svg>
+            <div class="flex-1 min-w-0">
+              <span class="text-sm text-zinc-400 truncate block">
+                <span class="font-mono text-zinc-500">5180333</span>
+                — Add <mark class="bg-amber-500/30 text-amber-200 rounded px-0.5">retry</mark> with exponential backoff
+              </span>
+              <span class="text-[11px] text-zinc-600">letuhao1994 · 2d ago</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Divider -->
+        <div class="border-t border-zinc-800 my-1"></div>
+
+        <!-- Actions group (always shown) -->
+        <div>
+          <div class="px-3 py-1.5 text-[11px] uppercase text-zinc-600 tracking-wide">Actions</div>
+          <div class="flex items-center gap-3 px-3 py-2 mx-1 rounded-md text-sm cursor-pointer text-zinc-400 hover:bg-zinc-800/50">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500 shrink-0"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>Create new lesson</span>
+          </div>
+          <div class="flex items-center gap-3 px-3 py-2 mx-1 rounded-md text-sm cursor-pointer text-zinc-400 hover:bg-zinc-800/50">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500 shrink-0"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <span>Import lessons</span>
+          </div>
+          <div class="flex items-center gap-3 px-3 py-2 mx-1 rounded-md text-sm cursor-pointer text-zinc-400 hover:bg-zinc-800/50">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500 shrink-0"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            <span>Enqueue job</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="px-4 py-2 border-t border-zinc-800 flex items-center gap-4 text-[11px] text-zinc-600">
+        <span class="inline-flex items-center gap-1">
+          <kbd class="text-[10px] bg-zinc-800 px-1 py-0.5 rounded">&uarr;&darr;</kbd>
+          Navigate
+        </span>
+        <span class="inline-flex items-center gap-1">
+          <kbd class="text-[10px] bg-zinc-800 px-1 py-0.5 rounded">Enter</kbd>
+          Select
+        </span>
+        <span class="inline-flex items-center gap-1">
+          <kbd class="text-[10px] bg-zinc-800 px-1 py-0.5 rounded">Tab</kbd>
+          Filter by type
+        </span>
+        <span class="inline-flex items-center gap-1">
+          <kbd class="text-[10px] bg-zinc-800 px-1 py-0.5 rounded">ESC</kbd>
+          Close
+        </span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

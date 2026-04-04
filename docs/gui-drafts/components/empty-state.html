@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: EmptyState</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 p-8 font-sans">
+  <h1 class="text-xl font-bold mb-1">EmptyState</h1>
+  <p class="text-sm text-zinc-500 mb-8">Source: gui/src/components/ui/empty-state.tsx</p>
+
+  <!-- Icon + Title only -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">Variant 1: Icon + Title Only</h2>
+  <div class="flex flex-col items-center justify-center py-16 px-6 text-center border border-dashed border-zinc-800 rounded-lg">
+    <div class="bg-gradient-to-br from-zinc-800 to-zinc-900 rounded-full w-16 h-16 flex items-center justify-center mb-3">
+      <span class="text-3xl opacity-40">&#x1F4ED;</span>
+    </div>
+    <div class="text-sm text-zinc-400 mb-1">No lessons found</div>
+  </div>
+
+  <!-- With Description -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">Variant 2: With Description</h2>
+  <div class="flex flex-col items-center justify-center py-16 px-6 text-center border border-dashed border-zinc-800 rounded-lg">
+    <div class="bg-gradient-to-br from-zinc-800 to-zinc-900 rounded-full w-16 h-16 flex items-center justify-center mb-3">
+      <span class="text-3xl opacity-40">&#x1F50D;</span>
+    </div>
+    <div class="text-sm text-zinc-400 mb-1">No results match your search</div>
+    <div class="text-xs text-zinc-600 mb-4">Try adjusting your filters or search query to find what you're looking for.</div>
+  </div>
+
+  <!-- With Action Button -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">Variant 3: With Description + Action Button</h2>
+  <div class="flex flex-col items-center justify-center py-16 px-6 text-center border border-dashed border-zinc-800 rounded-lg">
+    <div class="bg-gradient-to-br from-zinc-800 to-zinc-900 rounded-full w-16 h-16 flex items-center justify-center mb-3">
+      <span class="text-3xl opacity-40">&#x1F6E1;</span>
+    </div>
+    <div class="text-sm text-zinc-400 mb-1">No guardrails configured</div>
+    <div class="text-xs text-zinc-600 mb-4">Guardrails help enforce team rules before risky actions are taken.</div>
+    <button class="rounded-md font-medium transition-colors px-3.5 py-1.5 text-sm bg-zinc-100 text-zinc-900 hover:bg-zinc-200">Create Guardrail</button>
+  </div>
+</body>
+</html>

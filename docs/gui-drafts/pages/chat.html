@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: Chat</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Scrollbar styling */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #52525b; }
+
+    /* Suggested prompt hover border animation */
+    @keyframes borderPulse {
+      0%, 100% { border-color: #3f3f46; }
+      50% { border-color: #71717a; }
+    }
+    .prompt-pill:hover {
+      animation: borderPulse 1.5s ease-in-out infinite;
+    }
+
+    /* Animated dots for tool status */
+    @keyframes dotPulse {
+      0%, 80%, 100% { opacity: 0.3; }
+      40% { opacity: 1; }
+    }
+    .dot-1 { animation: dotPulse 1.4s infinite 0s; }
+    .dot-2 { animation: dotPulse 1.4s infinite 0.2s; }
+    .dot-3 { animation: dotPulse 1.4s infinite 0.4s; }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen font-sans">
+  <div class="flex h-screen">
+
+    <!-- Nav Sidebar -->
+    <aside class="w-56 shrink-0 border-r border-zinc-800 bg-zinc-950 flex flex-col">
+      <div class="px-4 py-4 border-b border-zinc-800">
+        <h1 class="text-sm font-semibold text-zinc-100">ContextHub</h1>
+        <p class="text-[11px] text-zinc-600">Knowledge Dashboard</p>
+      </div>
+      <nav class="flex-1 px-2 py-3 space-y-0.5">
+        <!-- Chat (active) -->
+        <a href="#" class="flex items-center gap-2.5 px-3 py-2 rounded-md bg-zinc-800/60 text-zinc-100 text-sm">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-zinc-300 shrink-0"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+          Chat
+        </a>
+        <!-- Lessons -->
+        <a href="#" class="flex items-center gap-2.5 px-3 py-2 rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/30 text-sm transition-colors">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+          Lessons
+        </a>
+        <!-- Guardrails -->
+        <a href="#" class="flex items-center gap-2.5 px-3 py-2 rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/30 text-sm transition-colors">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Guardrails
+        </a>
+        <!-- Projects -->
+        <a href="#" class="flex items-center gap-2.5 px-3 py-2 rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/30 text-sm transition-colors">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+          Projects
+        </a>
+        <!-- Settings -->
+        <a href="#" class="flex items-center gap-2.5 px-3 py-2 rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/30 text-sm transition-colors">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          Settings
+        </a>
+      </nav>
+      <div class="px-3 py-3 border-t border-zinc-800">
+        <div class="flex items-center gap-2 px-2">
+          <div class="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-[10px] font-medium text-white">U</div>
+          <span class="text-xs text-zinc-500 truncate">free-context-hub</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main content area (contains chat history sidebar + chat) -->
+    <div class="flex-1 flex h-full">
+
+      <!-- Chat History Sidebar -->
+      <div class="w-64 shrink-0 border-r border-zinc-800 bg-zinc-950 flex flex-col">
+        <!-- Header -->
+        <div class="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
+          <span class="text-xs font-semibold text-zinc-300">Conversations</span>
+          <button class="p-1 rounded-md hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors" title="New Chat">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+        </div>
+        <!-- Search -->
+        <div class="px-3 py-2 border-b border-zinc-800/60">
+          <div class="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-md px-2.5 py-1.5">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-600 shrink-0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" placeholder="Search conversations..." class="bg-transparent text-xs text-zinc-400 placeholder-zinc-600 outline-none w-full" />
+          </div>
+        </div>
+        <!-- Conversation list -->
+        <div class="flex-1 overflow-y-auto py-1">
+          <!-- Active conversation -->
+          <a href="#" class="flex flex-col gap-0.5 px-4 py-2.5 bg-zinc-800 border-l-2 border-l-blue-500">
+            <span class="text-xs text-zinc-200 truncate font-medium">Architectural decisions</span>
+            <span class="text-[10px] text-zinc-600">2h ago</span>
+          </a>
+          <!-- Other conversations -->
+          <a href="#" class="flex flex-col gap-0.5 px-4 py-2.5 hover:bg-zinc-800/40 transition-colors">
+            <span class="text-xs text-zinc-400 truncate">Deploy checklist review</span>
+            <span class="text-[10px] text-zinc-600">1d ago</span>
+          </a>
+          <a href="#" class="flex flex-col gap-0.5 px-4 py-2.5 hover:bg-zinc-800/40 transition-colors">
+            <span class="text-xs text-zinc-400 truncate">Retry strategy analysis</span>
+            <span class="text-[10px] text-zinc-600">3d ago</span>
+          </a>
+          <a href="#" class="flex flex-col gap-0.5 px-4 py-2.5 hover:bg-zinc-800/40 transition-colors">
+            <span class="text-xs text-zinc-400 truncate">Guardrail testing help</span>
+            <span class="text-[10px] text-zinc-600">1w ago</span>
+          </a>
+          <a href="#" class="flex flex-col gap-0.5 px-4 py-2.5 hover:bg-zinc-800/40 transition-colors">
+            <span class="text-xs text-zinc-400 truncate">Import legacy lessons</span>
+            <span class="text-[10px] text-zinc-600">2w ago</span>
+          </a>
+        </div>
+        <!-- Collapse button -->
+        <div class="px-3 py-2 border-t border-zinc-800">
+          <button class="flex items-center gap-1.5 text-[11px] text-zinc-600 hover:text-zinc-400 transition-colors w-full justify-center">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="15 18 9 12 15 6"/></svg>
+            Collapse
+          </button>
+        </div>
+      </div>
+
+      <!-- Chat panel -->
+      <main class="flex-1 flex flex-col h-full min-w-0">
+        <p class="text-xs text-zinc-600 px-6 pt-4 mb-0">Draft: pages/chat | Source: gui/src/app/chat/page.tsx</p>
+
+        <!-- Header -->
+        <div class="px-6 py-4 border-b border-zinc-800 shrink-0">
+          <h1 class="text-lg font-semibold text-zinc-100">Chat</h1>
+          <p class="text-xs text-zinc-500">Ask questions about free-context-hub -- AI searches your knowledge base</p>
+        </div>
+
+        <!-- Pinned Messages Bar (expanded state) -->
+        <div class="px-6 py-2 border-b border-zinc-800 bg-zinc-900/40 shrink-0">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-xs text-zinc-400 font-medium flex items-center gap-1.5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V16a2 2 0 002 2h10a2 2 0 002-2v-.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V5a2 2 0 00-2-2h-2a2 2 0 00-2 2v5.76z"/></svg>
+              2 pinned messages
+            </span>
+            <button class="p-0.5 rounded hover:bg-zinc-800 text-zinc-600 hover:text-zinc-400 transition-colors">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
+            </button>
+          </div>
+          <div class="space-y-1.5">
+            <div class="flex items-center gap-2 px-2.5 py-1.5 bg-zinc-800/50 border border-zinc-800 rounded-md">
+              <span class="text-[11px] text-zinc-400 flex-1 truncate">Key Architectural Decisions -- Here are the 5 foundational architectural decisions...</span>
+              <button class="text-[10px] text-blue-400 hover:text-blue-300 shrink-0 transition-colors">Jump</button>
+            </div>
+            <div class="flex items-center gap-2 px-2.5 py-1.5 bg-zinc-800/50 border border-zinc-800 rounded-md">
+              <span class="text-[11px] text-zinc-400 flex-1 truncate">The retry logic is in src/lib/retry.ts. Here is the core function...</span>
+              <button class="text-[10px] text-blue-400 hover:text-blue-300 shrink-0 transition-colors">Jump</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Messages area -->
+        <div class="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+
+          <!-- Empty state (faded for context) -->
+          <div class="mb-8 opacity-30 pointer-events-none">
+            <div class="flex flex-col items-center pt-12 pb-6">
+              <!-- Large icon with gradient ring -->
+              <div class="relative mb-5">
+                <div class="w-16 h-16 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center" style="box-shadow: 0 0 0 4px rgba(59,130,246,0.08), 0 0 0 8px rgba(59,130,246,0.04);">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                </div>
+              </div>
+              <p class="text-sm text-zinc-400 mb-1 font-medium">Ask anything about your project</p>
+              <p class="text-xs text-zinc-600 mb-5">AI searches your knowledge base, lessons, and code</p>
+              <div class="flex flex-wrap gap-2 justify-center max-w-lg">
+                <button class="prompt-pill px-3.5 py-2 text-xs bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800/60 transition-colors">What are our key architectural decisions?</button>
+                <button class="prompt-pill px-3.5 py-2 text-xs bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800/60 transition-colors">Show recent workarounds</button>
+                <button class="prompt-pill px-3.5 py-2 text-xs bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800/60 transition-colors">Can I deploy to production?</button>
+                <button class="prompt-pill px-3.5 py-2 text-xs bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800/60 transition-colors">Summarize project conventions</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Message 1: User -->
+          <div class="flex justify-end group">
+            <div class="flex items-start gap-2">
+              <!-- Hover toolbar (user) -->
+              <div class="flex items-center gap-0.5 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button class="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-600 hover:text-zinc-400 transition-colors" title="Copy">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                </button>
+                <button class="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-600 hover:text-zinc-400 transition-colors" title="Edit">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                </button>
+                <button class="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-600 hover:text-zinc-400 transition-colors" title="Retry">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+                </button>
+              </div>
+              <div class="max-w-[70%] bg-blue-600 rounded-2xl rounded-tr-sm px-4 py-2.5">
+                <p class="text-sm text-white">What are our key architectural decisions?</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Message 2: AI intro -->
+          <div class="flex gap-3 group">
+            <div class="w-7 h-7 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0 mt-0.5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-zinc-400"><path d="M12 2a4 4 0 014 4v2h2a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2v-8a2 2 0 012-2h2V6a4 4 0 014-4z"/><circle cx="9" cy="14" r="1"/><circle cx="15" cy="14" r="1"/></svg>
+            </div>
+            <div class="max-w-[75%]">
+              <div class="bg-zinc-900 border border-zinc-800 rounded-2xl rounded-tl-sm px-4 py-2.5">
+                <p class="text-sm text-zinc-300">Let me search your knowledge base for architectural decisions.</p>
+              </div>
+              <!-- Hover toolbar (AI) with enhanced actions -->
+              <div class="flex items-center gap-0.5 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button class="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-600 hover:text-zinc-400 transition-colors" title="Copy">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                </button>
+                <button class="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-600 hover:text-zinc-400 transition-colors" title="Pin">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>
+                </button>
+                <button class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] bg-blue-600/20 text-blue-400 border border-blue-700/50 hover:bg-blue-600/30 transition-colors ml-1">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l1.912 5.813a2 2 0 001.275 1.275L21 12l-5.813 1.912a2 2 0 00-1.275 1.275L12 21l-1.912-5.813a2 2 0 00-1.275-1.275L3 12l5.813-1.912a2 2 0 001.275-1.275L12 3z"/></svg>
+                  Create Lesson
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tool call: search_lessons (done) -->
+          <div class="flex gap-3">
+            <div class="w-7 h-7 shrink-0"></div>
+            <div class="max-w-[75%]">
+              <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg overflow-hidden border-l-2 border-l-blue-500">
+                <div class="px-3 py-2.5 flex items-center gap-2.5">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-blue-400 shrink-0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <span class="text-xs font-mono text-zinc-300">search_lessons</span>
+                  <span class="ml-auto px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">done</span>
+                </div>
+                <details>
+                  <summary class="px-3 py-1.5 text-[11px] text-zinc-600 cursor-pointer hover:text-zinc-400 border-t border-zinc-800/60 select-none">Show result</summary>
+                  <div class="px-3 py-2 border-t border-zinc-800/60 text-xs font-mono text-zinc-600">
+                    <pre class="text-[11px] whitespace-pre-wrap">{ "query": "architectural decisions", "project_id": "free-context-hub" }
+Found 5 lessons matching query</pre>
+                  </div>
+                </details>
+              </div>
+            </div>
+          </div>
+
+          <!-- Message 3: AI full markdown response (with "Create Lesson" popover visible) -->
+          <div class="flex gap-3 group">
+            <div class="w-7 h-7 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0 mt-0.5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-zinc-400"><path d="M12 2a4 4 0 014 4v2h2a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2v-8a2 2 0 012-2h2V6a4 4 0 014-4z"/><circle cx="9" cy="14" r="1"/><circle cx="15" cy="14" r="1"/></svg>
+            </div>
+            <div class="max-w-[75%]">
+              <div class="bg-zinc-900 border border-zinc-800 rounded-2xl rounded-tl-sm px-5 py-4 space-y-3">
+                <!-- Rendered markdown -->
+                <h2 class="text-base font-semibold text-zinc-100 pb-1 border-b border-zinc-800">Key Architectural Decisions</h2>
+
+                <p class="text-sm text-zinc-300 leading-relaxed">Here are the 5 foundational architectural decisions for the project:</p>
+
+                <ol class="text-sm text-zinc-400 space-y-2.5 list-decimal list-inside">
+                  <li><strong class="text-zinc-200">SQLite with WAL mode</strong> -- chosen for single-file deployment and concurrent read support. Configuration lives in <code class="bg-zinc-800 px-1 py-0.5 rounded text-[13px] font-mono text-emerald-400">src/services/lessons.ts</code>.</li>
+                  <li><strong class="text-zinc-200">MCP as the primary interface</strong> -- allows any AI agent to connect without custom integration. The server exposes tools via the standard MCP protocol.</li>
+                  <li><strong class="text-zinc-200">Tiered code search</strong> -- exact match first, then glob, then semantic to balance speed and recall.</li>
+                  <li><strong class="text-zinc-200">Job queue with dead-letter</strong> -- failed jobs are preserved for debugging rather than silently dropped.</li>
+                  <li><strong class="text-zinc-200">Batch embedding calls</strong> -- reduces LLM round-trips for large ingestion operations.</li>
+                </ol>
+
+                <p class="text-sm text-zinc-300 leading-relaxed">The retry configuration is defined in the service layer. Here is the current config:</p>
+
+                <!-- Code block with syntax highlighting -->
+                <div class="bg-zinc-900/80 border border-zinc-800 rounded-lg overflow-hidden">
+                  <div class="flex items-center justify-between px-3 py-1.5 border-b border-zinc-800 bg-zinc-900">
+                    <span class="text-[11px] text-zinc-500 font-mono">typescript</span>
+                    <button class="flex items-center gap-1 text-[11px] text-zinc-600 hover:text-zinc-400 transition-colors">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                      Copy
+                    </button>
+                  </div>
+                  <div class="px-4 py-3 text-[13px] font-mono leading-relaxed overflow-x-auto">
+                    <div><span class="text-purple-400">export</span> <span class="text-purple-400">const</span> <span class="text-zinc-200">retryConfig</span> = {</div>
+                    <div>  maxAttempts: <span class="text-amber-400">3</span>,</div>
+                    <div>  backoff: <span class="text-emerald-400">'exponential'</span>,</div>
+                    <div>  initialDelay: <span class="text-amber-400">500</span>,  <span class="text-zinc-500">// ms</span></div>
+                    <div>  maxDelay: <span class="text-amber-400">5000</span>,</div>
+                    <div>  retryableErrors: [</div>
+                    <div>    <span class="text-emerald-400">'ECONNRESET'</span>,</div>
+                    <div>    <span class="text-emerald-400">'ETIMEDOUT'</span>,</div>
+                    <div>    <span class="text-emerald-400">'RATE_LIMITED'</span>,</div>
+                    <div>  ],</div>
+                    <div>};</div>
+                  </div>
+                </div>
+              </div>
+              <!-- Hover toolbar (AI) with Create Lesson popover VISIBLE -->
+              <div class="flex items-center gap-0.5 mt-1 relative">
+                <button class="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-600 hover:text-zinc-400 transition-colors" title="Copy">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                </button>
+                <button class="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-600 hover:text-zinc-400 transition-colors" title="Pin">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>
+                </button>
+                <!-- Create Lesson button (active state) -->
+                <button class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] bg-blue-600/30 text-blue-400 border border-blue-600/60 ml-1">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l1.912 5.813a2 2 0 001.275 1.275L21 12l-5.813 1.912a2 2 0 00-1.275 1.275L12 21l-1.912-5.813a2 2 0 00-1.275-1.275L3 12l5.813-1.912a2 2 0 001.275-1.275L12 3z"/></svg>
+                  Create Lesson
+                </button>
+
+                <!-- Create Lesson Popover -->
+                <div class="absolute top-8 left-8 z-50 w-72 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl p-4 space-y-3">
+                  <h4 class="text-xs font-semibold text-zinc-200">Create Lesson from This Response</h4>
+                  <!-- Title -->
+                  <div>
+                    <label class="text-[10px] text-zinc-500 uppercase tracking-wider mb-1 block">Title</label>
+                    <input type="text" value="Key architectural decisions for free-context-hub" class="w-full bg-zinc-800 border border-zinc-700 rounded-md px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-zinc-500 transition-colors" />
+                  </div>
+                  <!-- Type -->
+                  <div>
+                    <label class="text-[10px] text-zinc-500 uppercase tracking-wider mb-1 block">Type</label>
+                    <select class="w-full bg-zinc-800 border border-zinc-700 rounded-md px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-zinc-500 transition-colors appearance-none">
+                      <option selected>decision</option>
+                      <option>workaround</option>
+                      <option>preference</option>
+                      <option>guardrail</option>
+                    </select>
+                  </div>
+                  <!-- Tags -->
+                  <div>
+                    <label class="text-[10px] text-zinc-500 uppercase tracking-wider mb-1 block">Tags</label>
+                    <div class="flex flex-wrap gap-1">
+                      <span class="px-2 py-0.5 text-[10px] bg-zinc-800 border border-zinc-700 rounded-full text-zinc-400">api</span>
+                      <span class="px-2 py-0.5 text-[10px] bg-zinc-800 border border-zinc-700 rounded-full text-zinc-400">architecture</span>
+                    </div>
+                  </div>
+                  <!-- Actions -->
+                  <div class="flex items-center gap-2 pt-1">
+                    <button class="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white font-medium transition-colors">Create</button>
+                    <button class="px-3 py-1.5 text-xs bg-transparent hover:bg-zinc-800 border border-zinc-700 rounded-md text-zinc-400 hover:text-zinc-300 transition-colors">Cancel</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Message 4: User -->
+          <div class="flex justify-end group">
+            <div class="flex items-start gap-2">
+              <div class="flex items-center gap-0.5 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button class="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-600 hover:text-zinc-400 transition-colors" title="Copy">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                </button>
+                <button class="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-600 hover:text-zinc-400 transition-colors" title="Edit">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                </button>
+                <button class="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-600 hover:text-zinc-400 transition-colors" title="Retry">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+                </button>
+              </div>
+              <div class="max-w-[70%] bg-blue-600 rounded-2xl rounded-tr-sm px-4 py-2.5">
+                <p class="text-sm text-white">Show me the retry implementation</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tool call: search_code (done) -->
+          <div class="flex gap-3">
+            <div class="w-7 h-7 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0 mt-0.5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-zinc-400"><path d="M12 2a4 4 0 014 4v2h2a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2v-8a2 2 0 012-2h2V6a4 4 0 014-4z"/><circle cx="9" cy="14" r="1"/><circle cx="15" cy="14" r="1"/></svg>
+            </div>
+            <div class="max-w-[75%]">
+              <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg overflow-hidden border-l-2 border-l-blue-500">
+                <div class="px-3 py-2.5 flex items-center gap-2.5">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-blue-400 shrink-0"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                  <span class="text-xs font-mono text-zinc-300">search_code</span>
+                  <span class="ml-auto px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">done</span>
+                </div>
+                <details>
+                  <summary class="px-3 py-1.5 text-[11px] text-zinc-600 cursor-pointer hover:text-zinc-400 border-t border-zinc-800/60 select-none">Show result</summary>
+                  <div class="px-3 py-2 border-t border-zinc-800/60 text-xs font-mono text-zinc-600">
+                    <pre class="text-[11px] whitespace-pre-wrap">{ "query": "retry implementation", "kind": "code" }
+Found 2 files: src/lib/retry.ts, src/providers/lm-studio.ts</pre>
+                  </div>
+                </details>
+              </div>
+            </div>
+          </div>
+
+          <!-- Message 5: AI response with code -->
+          <div class="flex gap-3 group">
+            <div class="w-7 h-7 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0 mt-0.5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-zinc-400"><path d="M12 2a4 4 0 014 4v2h2a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2v-8a2 2 0 012-2h2V6a4 4 0 014-4z"/><circle cx="9" cy="14" r="1"/><circle cx="15" cy="14" r="1"/></svg>
+            </div>
+            <div class="max-w-[75%]">
+              <div class="bg-zinc-900 border border-zinc-800 rounded-2xl rounded-tl-sm px-5 py-4 space-y-3">
+                <p class="text-sm text-zinc-300 leading-relaxed">The retry logic is in <code class="bg-zinc-800 px-1 py-0.5 rounded text-[13px] font-mono text-emerald-400">src/lib/retry.ts</code>. Here is the core function:</p>
+
+                <!-- Code block -->
+                <div class="bg-zinc-900/80 border border-zinc-800 rounded-lg overflow-hidden">
+                  <div class="flex items-center justify-between px-3 py-1.5 border-b border-zinc-800 bg-zinc-900">
+                    <span class="text-[11px] text-zinc-500 font-mono">typescript</span>
+                    <button class="flex items-center gap-1 text-[11px] text-zinc-600 hover:text-zinc-400 transition-colors">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                      Copy
+                    </button>
+                  </div>
+                  <div class="px-4 py-3 text-[13px] font-mono leading-relaxed overflow-x-auto">
+                    <div><span class="text-purple-400">export</span> <span class="text-purple-400">async</span> <span class="text-purple-400">function</span> <span class="text-blue-400">retry</span>&lt;<span class="text-amber-400">T</span>&gt;(</div>
+                    <div>  <span class="text-zinc-200">fn</span>: () =&gt; <span class="text-amber-400">Promise</span>&lt;<span class="text-amber-400">T</span>&gt;,</div>
+                    <div>  <span class="text-zinc-200">opts</span>: <span class="text-amber-400">RetryOptions</span> = retryConfig</div>
+                    <div>): <span class="text-amber-400">Promise</span>&lt;<span class="text-amber-400">T</span>&gt; {</div>
+                    <div>  <span class="text-purple-400">let</span> <span class="text-zinc-200">lastError</span>: <span class="text-amber-400">Error</span>;</div>
+                    <div>  <span class="text-purple-400">for</span> (<span class="text-purple-400">let</span> i = <span class="text-amber-400">0</span>; i &lt; opts.maxAttempts; i++) {</div>
+                    <div>    <span class="text-purple-400">try</span> {</div>
+                    <div>      <span class="text-purple-400">return</span> <span class="text-purple-400">await</span> <span class="text-blue-400">fn</span>();</div>
+                    <div>    } <span class="text-purple-400">catch</span> (err) {</div>
+                    <div>      lastError = err <span class="text-purple-400">as</span> <span class="text-amber-400">Error</span>;</div>
+                    <div>      <span class="text-purple-400">if</span> (!isRetryable(err, opts)) <span class="text-purple-400">throw</span> err;</div>
+                    <div>      <span class="text-purple-400">const</span> delay = getBackoff(i, opts);</div>
+                    <div>      logger.<span class="text-blue-400">warn</span>(<span class="text-emerald-400">`Retry $&#123;i+1&#125;/$&#123;opts.maxAttempts&#125;`</span>);</div>
+                    <div>      <span class="text-purple-400">await</span> <span class="text-blue-400">sleep</span>(delay);</div>
+                    <div>    }</div>
+                    <div>  }</div>
+                    <div>  <span class="text-purple-400">throw</span> lastError!;</div>
+                    <div>}</div>
+                  </div>
+                </div>
+
+                <p class="text-sm text-zinc-300 leading-relaxed">Key behaviors:</p>
+                <ul class="text-sm text-zinc-400 space-y-1 list-disc list-inside">
+                  <li>Uses <strong class="text-zinc-200">exponential backoff</strong> with jitter</li>
+                  <li>Only retries errors in the <code class="bg-zinc-800 px-1 py-0.5 rounded text-[13px] font-mono text-emerald-400">retryableErrors</code> list</li>
+                  <li>Logs each retry at <strong class="text-zinc-200">warn</strong> level for observability</li>
+                </ul>
+              </div>
+              <!-- Hover toolbar (AI) -->
+              <div class="flex items-center gap-0.5 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button class="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-600 hover:text-zinc-400 transition-colors" title="Copy">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                </button>
+                <button class="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-600 hover:text-zinc-400 transition-colors" title="Pin">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>
+                </button>
+                <button class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] bg-blue-600/20 text-blue-400 border border-blue-700/50 hover:bg-blue-600/30 transition-colors ml-1">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l1.912 5.813a2 2 0 001.275 1.275L21 12l-5.813 1.912a2 2 0 00-1.275 1.275L12 21l-1.912-5.813a2 2 0 00-1.275-1.275L3 12l5.813-1.912a2 2 0 001.275-1.275L12 3z"/></svg>
+                  Create Lesson
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Input bar -->
+        <div class="border-t border-zinc-800 px-6 py-3 shrink-0">
+          <div class="flex items-end gap-2 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 focus-within:border-zinc-600 transition-colors">
+            <!-- Attachment button -->
+            <button class="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-600 hover:text-zinc-400 transition-colors shrink-0 mb-0.5" title="Attach file">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+            </button>
+            <!-- Textarea -->
+            <textarea
+              rows="1"
+              placeholder="Ask about your project..."
+              class="flex-1 bg-transparent text-sm text-zinc-300 outline-none placeholder-zinc-600 resize-none leading-relaxed py-1"
+              style="min-height: 24px; max-height: 120px;"
+            ></textarea>
+            <!-- Model selector pill with chevron -->
+            <div class="flex items-center gap-2 shrink-0 mb-0.5">
+              <button class="px-2.5 py-1 text-[11px] bg-zinc-800 border border-zinc-700 rounded-full text-zinc-400 hover:border-zinc-600 hover:text-zinc-300 transition-colors flex items-center gap-1">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 014 4v2h2a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2v-8a2 2 0 012-2h2V6a4 4 0 014-4z"/></svg>
+                GPT-4o
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <!-- Send button -->
+              <button class="p-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white transition-colors">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

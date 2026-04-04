@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: StatCard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 p-8 font-sans">
+  <h1 class="text-xl font-bold mb-1">StatCard</h1>
+  <p class="text-sm text-zinc-500 mb-8">Source: gui/src/components/ui/stat-card.tsx</p>
+
+  <!-- All 4 variants -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">Variants: Normal, Highlighted (amber), Clickable Hover, Different Values</h2>
+  <div class="flex gap-4">
+    <!-- Normal -->
+    <div class="min-w-[140px] p-4 border border-zinc-800 rounded-lg bg-zinc-900 transition-colors">
+      <div class="text-2xl font-bold text-zinc-100">42</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Total Lessons</div>
+    </div>
+
+    <!-- Highlighted (amber) -->
+    <div class="min-w-[140px] p-4 border border-zinc-800 rounded-lg bg-zinc-900 transition-colors">
+      <div class="text-2xl font-bold text-amber-400">7</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Active Guardrails</div>
+    </div>
+
+    <!-- Clickable (hover state shown via border) -->
+    <div class="min-w-[140px] p-4 border border-zinc-700 rounded-lg bg-zinc-900 transition-colors cursor-pointer">
+      <div class="text-2xl font-bold text-zinc-100">3</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Pending Jobs</div>
+    </div>
+
+    <!-- Different value type -->
+    <div class="min-w-[140px] p-4 border border-zinc-800 rounded-lg bg-zinc-900 transition-colors">
+      <div class="text-2xl font-bold text-zinc-100">98%</div>
+      <div class="text-xs text-zinc-500 mt-0.5">Uptime</div>
+    </div>
+  </div>
+</body>
+</html>

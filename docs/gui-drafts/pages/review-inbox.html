@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: Review Inbox</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeIn 0.2s ease-out; }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen font-sans">
+  <div class="flex h-screen">
+
+    <!-- ===== SIDEBAR ===== -->
+    <aside class="shrink-0 border-r border-zinc-800 bg-zinc-950 flex flex-col w-56">
+      <div class="px-4 py-4 border-b border-zinc-800">
+        <h1 class="text-sm font-semibold tracking-tight text-zinc-100">ContextHub</h1>
+        <p class="text-[11px] text-zinc-600 mt-0.5">Knowledge Dashboard</p>
+      </div>
+      <div class="px-3 py-2 space-y-1.5">
+        <select class="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded-md text-xs text-zinc-300 outline-none appearance-none cursor-pointer">
+          <option>free-context-hub</option>
+          <option>my-saas-app (2 groups)</option>
+          <option>internal-tools</option>
+        </select>
+      </div>
+      <nav class="flex-1 px-2 py-1 space-y-0.5 overflow-y-auto">
+        <a class="flex items-center gap-2.5 rounded-md text-sm transition-colors px-3 py-1.5 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="4" rx="1"/><rect x="14" y="11" width="7" height="10" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+          <span>Dashboard</span>
+        </a>
+        <a class="flex items-center gap-2.5 rounded-md text-sm transition-colors px-3 py-1.5 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+          <span>Chat</span>
+        </a>
+        <div class="mt-3">
+          <div class="px-3 py-1 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Knowledge</div>
+          <div class="space-y-0.5">
+            <a class="flex items-center gap-2.5 rounded-md text-sm transition-colors px-3 py-1.5 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+              <span>Lessons</span>
+            </a>
+            <!-- Review Inbox (active) -->
+            <a class="flex items-center gap-2.5 rounded-md text-sm transition-colors px-3 py-1.5 bg-zinc-800 text-zinc-100">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z"/></svg>
+              <span>Review Inbox</span>
+              <span class="ml-auto text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full">12</span>
+            </a>
+            <a class="flex items-center gap-2.5 rounded-md text-sm transition-colors px-3 py-1.5 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <span>Guardrails</span>
+            </a>
+          </div>
+        </div>
+        <div class="mt-3">
+          <div class="px-3 py-1 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">System</div>
+          <div class="space-y-0.5">
+            <a class="flex items-center gap-2.5 rounded-md text-sm transition-colors px-3 py-1.5 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              <span>Jobs</span>
+            </a>
+            <a class="flex items-center gap-2.5 rounded-md text-sm transition-colors px-3 py-1.5 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+              <span>Settings</span>
+            </a>
+          </div>
+        </div>
+      </nav>
+      <div class="border-t border-zinc-800 px-3 py-2.5 flex items-center justify-between">
+        <div class="flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+          <span class="text-[11px] text-zinc-600">API connected</span>
+        </div>
+        <button class="text-zinc-600 hover:text-zinc-400 text-xs" title="Collapse (Ctrl+B)">&#x25C0;</button>
+      </div>
+    </aside>
+
+    <!-- ===== MAIN CONTENT ===== -->
+    <main class="flex-1 overflow-y-auto p-6">
+      <p class="text-xs text-zinc-600 mb-4">Draft: pages/review-inbox | Source: gui/src/app/review/page.tsx</p>
+
+      <!-- Breadcrumb -->
+      <div class="flex items-center gap-1.5 text-xs text-zinc-500 mb-4">
+        <span>Knowledge</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        <span class="text-zinc-400">Review Inbox</span>
+      </div>
+
+      <!-- PageHeader -->
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h1 class="text-lg font-semibold text-zinc-100">Review Inbox</h1>
+          <p class="text-xs text-zinc-500 mt-0.5">Review and approve AI-generated lessons</p>
+        </div>
+        <div class="flex gap-2">
+          <button class="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-md text-zinc-300 transition-colors flex items-center gap-1.5">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+            Auto-approve trusted agents
+          </button>
+          <button class="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white transition-colors flex items-center gap-1.5">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Approve All Visible
+          </button>
+        </div>
+      </div>
+
+      <!-- Stats bar -->
+      <div class="flex items-center gap-4 text-xs text-zinc-500 mb-5">
+        <span class="flex items-center gap-1.5">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span class="text-zinc-300 font-medium">12</span> pending review
+        </span>
+        <span class="text-zinc-700">&middot;</span>
+        <span class="flex items-center gap-1.5">
+          <span class="w-4 h-4 rounded-full bg-purple-500/20 text-purple-400 text-[10px] font-bold flex items-center justify-center">C</span>
+          <span class="text-zinc-300 font-medium">5</span> from claude-agent
+        </span>
+        <span class="text-zinc-700">&middot;</span>
+        <span class="flex items-center gap-1.5">
+          <span class="w-4 h-4 rounded-full bg-sky-500/20 text-sky-400 text-[10px] font-bold flex items-center justify-center">Cu</span>
+          <span class="text-zinc-300 font-medium">7</span> from cursor-agent
+        </span>
+      </div>
+
+      <!-- Filter tabs -->
+      <div class="flex items-center gap-1 border-b border-zinc-800 mb-5">
+        <button class="px-3 py-2 text-xs font-medium text-blue-400 border-b-2 border-blue-400 -mb-px">All Pending (12)</button>
+        <button class="px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300">By claude-agent (5)</button>
+        <button class="px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300">By cursor-agent (7)</button>
+        <button class="px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300">Recently Rejected (3)</button>
+      </div>
+
+      <!-- Batch action bar -->
+      <div class="flex items-center gap-3 mb-4 px-3 py-2 bg-zinc-900/60 border border-zinc-800 rounded-lg">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" class="w-3.5 h-3.5 rounded border-zinc-600 bg-zinc-800 accent-blue-500" />
+          <span class="text-xs text-zinc-400">Select all</span>
+        </label>
+        <span class="text-xs text-zinc-500">&middot;</span>
+        <span class="text-xs text-zinc-300 font-medium">5 selected</span>
+        <div class="ml-auto flex gap-2">
+          <button class="px-2.5 py-1 text-xs bg-emerald-600 hover:bg-emerald-500 rounded-md text-white transition-colors flex items-center gap-1">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            Approve Selected
+          </button>
+          <button class="px-2.5 py-1 text-xs bg-zinc-800 hover:bg-red-900/40 border border-zinc-700 hover:border-red-800 rounded-md text-zinc-300 hover:text-red-400 transition-colors flex items-center gap-1">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            Reject Selected
+          </button>
+        </div>
+      </div>
+
+      <!-- ===== REVIEW CARDS ===== -->
+      <div class="space-y-3">
+
+        <!-- Card 1: Expanded / Active -->
+        <div class="border border-blue-500/30 bg-zinc-900/80 rounded-lg overflow-hidden">
+          <div class="px-4 py-3 flex items-start gap-3">
+            <input type="checkbox" checked class="mt-1 w-3.5 h-3.5 rounded border-zinc-600 bg-zinc-800 accent-blue-500" />
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-1">
+                <h3 class="text-sm font-medium text-zinc-100">Use connection pooling for PostgreSQL</h3>
+                <span class="px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/20 text-amber-400 rounded">draft</span>
+              </div>
+              <div class="flex items-center gap-2 text-xs text-zinc-500">
+                <span class="w-5 h-5 rounded-full bg-purple-500/20 text-purple-400 text-[10px] font-bold flex items-center justify-center">C</span>
+                <span>by <span class="text-zinc-400">claude-agent</span></span>
+                <span class="text-zinc-700">&middot;</span>
+                <span>2 hours ago</span>
+                <span class="text-zinc-700">&middot;</span>
+                <span>Project: <span class="text-zinc-400">free-context-hub</span></span>
+              </div>
+
+              <!-- Expanded content -->
+              <div class="mt-3 text-xs text-zinc-400 leading-relaxed space-y-2">
+                <p>When connecting to PostgreSQL from a Node.js application, always use a connection pool instead of creating individual connections. This prevents connection exhaustion under load and significantly improves response times.</p>
+                <p>For production deployments, configure the pool with a maximum of 20 connections per instance. When using PgBouncer or similar external poolers, set the application-level pool max to 5 and let the external pooler handle distribution.</p>
+                <div class="bg-zinc-950 border border-zinc-800 rounded-md p-3 font-mono text-[11px] text-zinc-300">
+                  <span class="text-purple-400">import</span> { Pool } <span class="text-purple-400">from</span> <span class="text-emerald-400">'pg'</span>;<br><br>
+                  <span class="text-purple-400">const</span> pool = <span class="text-purple-400">new</span> <span class="text-blue-400">Pool</span>({<br>
+                  &nbsp;&nbsp;max: <span class="text-amber-400">20</span>,<br>
+                  &nbsp;&nbsp;idleTimeoutMillis: <span class="text-amber-400">30000</span>,<br>
+                  &nbsp;&nbsp;connectionTimeoutMillis: <span class="text-amber-400">2000</span>,<br>
+                  });
+                </div>
+              </div>
+
+              <!-- Tags -->
+              <div class="flex items-center gap-1.5 mt-3">
+                <span class="px-1.5 py-0.5 text-[10px] bg-zinc-800 text-zinc-400 rounded">postgresql</span>
+                <span class="px-1.5 py-0.5 text-[10px] bg-zinc-800 text-zinc-400 rounded">performance</span>
+                <span class="px-1.5 py-0.5 text-[10px] bg-zinc-800 text-zinc-400 rounded">database</span>
+              </div>
+
+              <!-- AI Confidence -->
+              <div class="flex items-center gap-2 mt-3">
+                <span class="text-[10px] text-zinc-500">AI Confidence:</span>
+                <span class="text-[10px] text-emerald-400 font-medium">High (0.92)</span>
+                <div class="flex-1 max-w-[120px] h-1 bg-zinc-800 rounded-full overflow-hidden">
+                  <div class="h-full bg-emerald-500 rounded-full" style="width: 92%"></div>
+                </div>
+              </div>
+
+              <!-- Actions -->
+              <div class="flex items-center gap-2 mt-4 pt-3 border-t border-zinc-800">
+                <button class="px-3 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 rounded-md text-white transition-colors flex items-center gap-1.5">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  Approve
+                </button>
+                <button class="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-md text-zinc-300 transition-colors flex items-center gap-1.5">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  Edit &amp; Approve
+                </button>
+                <button class="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-red-900/40 border border-zinc-700 hover:border-red-800 rounded-md text-zinc-300 hover:text-red-400 transition-colors flex items-center gap-1.5">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  Reject
+                </button>
+                <button class="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-md text-zinc-300 transition-colors flex items-center gap-1.5">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                  Comment
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 2: Collapsed -->
+        <div class="border border-zinc-800 bg-zinc-900/50 rounded-lg hover:border-zinc-700 transition-colors">
+          <div class="px-4 py-3 flex items-center gap-3">
+            <input type="checkbox" checked class="w-3.5 h-3.5 rounded border-zinc-600 bg-zinc-800 accent-blue-500" />
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <h3 class="text-sm font-medium text-zinc-100 truncate">Pin Docker base images to SHA digests</h3>
+                <span class="px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/20 text-amber-400 rounded shrink-0">draft</span>
+              </div>
+              <div class="flex items-center gap-2 text-xs text-zinc-500 mt-0.5">
+                <span class="w-4 h-4 rounded-full bg-sky-500/20 text-sky-400 text-[9px] font-bold flex items-center justify-center">Cu</span>
+                <span>by cursor-agent</span>
+                <span class="text-zinc-700">&middot;</span>
+                <span>3h ago</span>
+              </div>
+              <p class="text-xs text-zinc-500 mt-1 truncate">Always pin base images in Dockerfile to prevent supply-chain attacks and ensure reproducible builds...</p>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+              <button class="p-1.5 text-zinc-500 hover:text-emerald-400 hover:bg-emerald-500/10 rounded transition-colors" title="Approve">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
+              <button class="p-1.5 text-zinc-500 hover:text-blue-400 hover:bg-blue-500/10 rounded transition-colors" title="Edit & Approve">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+              <button class="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors" title="Reject">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 3: Collapsed -->
+        <div class="border border-zinc-800 bg-zinc-900/50 rounded-lg hover:border-zinc-700 transition-colors">
+          <div class="px-4 py-3 flex items-center gap-3">
+            <input type="checkbox" checked class="w-3.5 h-3.5 rounded border-zinc-600 bg-zinc-800 accent-blue-500" />
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <h3 class="text-sm font-medium text-zinc-100 truncate">Avoid SELECT * in production queries</h3>
+                <span class="px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/20 text-amber-400 rounded shrink-0">draft</span>
+              </div>
+              <div class="flex items-center gap-2 text-xs text-zinc-500 mt-0.5">
+                <span class="w-4 h-4 rounded-full bg-purple-500/20 text-purple-400 text-[9px] font-bold flex items-center justify-center">C</span>
+                <span>by claude-agent</span>
+                <span class="text-zinc-700">&middot;</span>
+                <span>5h ago</span>
+              </div>
+              <p class="text-xs text-zinc-500 mt-1 truncate">Use explicit column lists to prevent schema-change breakage and reduce network overhead in production...</p>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+              <button class="p-1.5 text-zinc-500 hover:text-emerald-400 hover:bg-emerald-500/10 rounded transition-colors" title="Approve">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
+              <button class="p-1.5 text-zinc-500 hover:text-blue-400 hover:bg-blue-500/10 rounded transition-colors" title="Edit & Approve">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+              <button class="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors" title="Reject">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 4: Collapsed with comment indicator -->
+        <div class="border border-zinc-800 bg-zinc-900/50 rounded-lg hover:border-zinc-700 transition-colors">
+          <div class="px-4 py-3 flex items-center gap-3">
+            <input type="checkbox" class="w-3.5 h-3.5 rounded border-zinc-600 bg-zinc-800 accent-blue-500" />
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <h3 class="text-sm font-medium text-zinc-100 truncate">Use feature flags for gradual rollouts</h3>
+                <span class="px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/20 text-amber-400 rounded shrink-0">draft</span>
+                <span class="flex items-center gap-0.5 text-[10px] text-zinc-500 shrink-0">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                  <span class="text-blue-400 font-medium">2</span>
+                </span>
+              </div>
+              <div class="flex items-center gap-2 text-xs text-zinc-500 mt-0.5">
+                <span class="w-4 h-4 rounded-full bg-sky-500/20 text-sky-400 text-[9px] font-bold flex items-center justify-center">Cu</span>
+                <span>by cursor-agent</span>
+                <span class="text-zinc-700">&middot;</span>
+                <span>8h ago</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+              <button class="p-1.5 text-zinc-500 hover:text-emerald-400 hover:bg-emerald-500/10 rounded transition-colors" title="Approve">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
+              <button class="p-1.5 text-zinc-500 hover:text-blue-400 hover:bg-blue-500/10 rounded transition-colors" title="Edit & Approve">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+              <button class="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors" title="Reject">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- end review cards -->
+
+      <!-- ===== REJECT DIALOG (overlay) ===== -->
+      <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" style="display: none;" id="reject-dialog">
+        <div class="bg-zinc-900 border border-zinc-700 rounded-lg max-w-sm w-full p-5 fade-in shadow-2xl">
+          <h3 class="text-sm font-semibold text-zinc-100 mb-4 flex items-center gap-2">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-red-400"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            Reject Lesson
+          </h3>
+          <div class="space-y-3">
+            <div>
+              <label class="text-xs text-zinc-500 mb-1 block">Reason</label>
+              <select class="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-md text-xs text-zinc-300 outline-none">
+                <option>Inaccurate</option>
+                <option>Duplicate</option>
+                <option>Too vague</option>
+                <option>Not relevant</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs text-zinc-500 mb-1 block">Optional note</label>
+              <textarea rows="3" class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-md text-xs text-zinc-300 outline-none resize-none placeholder-zinc-600" placeholder="Add context for the agent..."></textarea>
+            </div>
+          </div>
+          <div class="flex justify-end gap-2 mt-4">
+            <button class="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-md text-zinc-300 transition-colors">Cancel</button>
+            <button class="px-3 py-1.5 text-xs bg-red-600 hover:bg-red-500 rounded-md text-white transition-colors">Reject</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Show the reject dialog inline for draft preview -->
+      <div class="mt-6 mb-6">
+        <p class="text-[10px] text-zinc-600 mb-2 uppercase tracking-wider">Preview: Reject Dialog</p>
+        <div class="bg-zinc-900 border border-zinc-700 rounded-lg max-w-sm w-full p-5 shadow-2xl">
+          <h3 class="text-sm font-semibold text-zinc-100 mb-4 flex items-center gap-2">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-red-400"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            Reject Lesson
+          </h3>
+          <div class="space-y-3">
+            <div>
+              <label class="text-xs text-zinc-500 mb-1 block">Reason</label>
+              <select class="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-md text-xs text-zinc-300 outline-none">
+                <option>Inaccurate</option>
+                <option>Duplicate</option>
+                <option>Too vague</option>
+                <option>Not relevant</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs text-zinc-500 mb-1 block">Optional note</label>
+              <textarea rows="3" class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-md text-xs text-zinc-300 outline-none resize-none placeholder-zinc-600" placeholder="Add context for the agent..."></textarea>
+            </div>
+          </div>
+          <div class="flex justify-end gap-2 mt-4">
+            <button class="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-md text-zinc-300 transition-colors">Cancel</button>
+            <button class="px-3 py-1.5 text-xs bg-red-600 hover:bg-red-500 rounded-md text-white transition-colors">Reject</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== AGENT TRUST LEVELS (collapsible) ===== -->
+      <details class="border border-zinc-800 rounded-lg bg-zinc-900/50 mt-6">
+        <summary class="px-4 py-3 text-sm font-medium text-zinc-300 cursor-pointer flex items-center gap-2 hover:text-zinc-100">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Agent Trust Levels
+        </summary>
+        <div class="px-4 pb-4">
+          <table class="w-full text-xs">
+            <thead>
+              <tr class="border-b border-zinc-800 text-zinc-500">
+                <th class="text-left py-2 font-medium">Agent Name</th>
+                <th class="text-left py-2 font-medium">Trust Level</th>
+                <th class="text-left py-2 font-medium">Auto-approve</th>
+                <th class="text-right py-2 font-medium">Lessons Created</th>
+                <th class="text-right py-2 font-medium">Approval Rate</th>
+              </tr>
+            </thead>
+            <tbody class="text-zinc-300">
+              <tr class="border-b border-zinc-800/50">
+                <td class="py-2.5 flex items-center gap-2">
+                  <span class="w-5 h-5 rounded-full bg-purple-500/20 text-purple-400 text-[10px] font-bold flex items-center justify-center">C</span>
+                  claude-agent
+                </td>
+                <td class="py-2.5">
+                  <select class="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-[11px] text-zinc-300 outline-none">
+                    <option>new</option>
+                    <option>standard</option>
+                    <option selected>trusted</option>
+                  </select>
+                </td>
+                <td class="py-2.5">
+                  <button class="w-8 h-4 bg-emerald-600 rounded-full relative">
+                    <span class="absolute right-0.5 top-0.5 w-3 h-3 bg-white rounded-full"></span>
+                  </button>
+                </td>
+                <td class="py-2.5 text-right">45</td>
+                <td class="py-2.5 text-right text-emerald-400">92%</td>
+              </tr>
+              <tr class="border-b border-zinc-800/50">
+                <td class="py-2.5 flex items-center gap-2">
+                  <span class="w-5 h-5 rounded-full bg-sky-500/20 text-sky-400 text-[10px] font-bold flex items-center justify-center">Cu</span>
+                  cursor-agent
+                </td>
+                <td class="py-2.5">
+                  <select class="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-[11px] text-zinc-300 outline-none">
+                    <option>new</option>
+                    <option selected>standard</option>
+                    <option>trusted</option>
+                  </select>
+                </td>
+                <td class="py-2.5">
+                  <button class="w-8 h-4 bg-zinc-700 rounded-full relative">
+                    <span class="absolute left-0.5 top-0.5 w-3 h-3 bg-zinc-400 rounded-full"></span>
+                  </button>
+                </td>
+                <td class="py-2.5 text-right">18</td>
+                <td class="py-2.5 text-right text-amber-400">78%</td>
+              </tr>
+              <tr>
+                <td class="py-2.5 flex items-center gap-2">
+                  <span class="w-5 h-5 rounded-full bg-zinc-700 text-zinc-400 text-[10px] font-bold flex items-center justify-center">G</span>
+                  gpt-4-agent
+                </td>
+                <td class="py-2.5">
+                  <select class="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-[11px] text-zinc-300 outline-none">
+                    <option selected>new</option>
+                    <option>standard</option>
+                    <option>trusted</option>
+                  </select>
+                </td>
+                <td class="py-2.5">
+                  <button class="w-8 h-4 bg-zinc-700 rounded-full relative">
+                    <span class="absolute left-0.5 top-0.5 w-3 h-3 bg-zinc-400 rounded-full"></span>
+                  </button>
+                </td>
+                <td class="py-2.5 text-right">3</td>
+                <td class="py-2.5 text-right text-zinc-500">&mdash;</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
+
+    </main>
+  </div>
+</body>
+</html>

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: Badge</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 p-8 font-sans">
+  <h1 class="text-xl font-bold mb-1">Badge</h1>
+  <p class="text-sm text-zinc-500 mb-8">Source: gui/src/components/ui/badge.tsx</p>
+
+  <!-- Type Variants -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">Type Variants (variant="type")</h2>
+  <div class="flex flex-wrap items-center gap-3">
+    <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-500/10 text-blue-400">decision</span>
+    <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-red-400">guardrail</span>
+    <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400">workaround</span>
+    <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-500/10 text-purple-400">preference</span>
+    <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-zinc-700 text-zinc-300">general_note</span>
+  </div>
+
+  <!-- Status Variants -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">Status Variants (variant="status")</h2>
+  <div class="flex flex-wrap items-center gap-3">
+    <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400">active</span>
+    <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-zinc-500/20 text-zinc-400">draft</span>
+    <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400">superseded</span>
+    <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-zinc-500/[0.15] text-zinc-500">archived</span>
+  </div>
+
+  <!-- JobStatusBadge Variants -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">JobStatusBadge Variants</h2>
+  <div class="flex flex-wrap items-center gap-5">
+    <span class="inline-flex items-center gap-1.5 text-xs font-medium text-blue-400">
+      <span class="w-2 h-2 rounded-full shrink-0 bg-blue-500 animate-pulse"></span>
+      running
+    </span>
+    <span class="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-400">
+      <span class="w-2 h-2 rounded-full shrink-0 border border-zinc-500 bg-transparent"></span>
+      queued
+    </span>
+    <span class="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400">
+      <span class="w-2 h-2 rounded-full shrink-0 bg-emerald-500"></span>
+      succeeded
+    </span>
+    <span class="inline-flex items-center gap-1.5 text-xs font-medium text-red-400">
+      <span class="w-2 h-2 rounded-full shrink-0 bg-red-500"></span>
+      failed
+    </span>
+    <span class="inline-flex items-center gap-1.5 text-xs font-medium text-red-400">
+      <span class="w-2 h-2 rounded-full shrink-0 bg-red-500"></span>
+      dead_letter
+    </span>
+  </div>
+</body>
+</html>

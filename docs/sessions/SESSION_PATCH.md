@@ -1,62 +1,86 @@
 ---
-id: CH-MULTI-REPO-GROUPS
-date: 2026-03-30
-module: Multi-Repo-Groups
-phase: Implementation Complete
+id: CH-GUI-ENHANCEMENT-DRAFTS
+date: 2026-04-04
+module: GUI-Enhancement-Phase
+phase: Draft Design Complete
 ---
 
-# Session Patch — 2026-03-30
+# Session Patch — 2026-04-04
 
 ## Where We Are
-Phase: **Multi-repo project groups — fully implemented.** Chose groups (many-to-many) over tree hierarchy based on user feedback. All 6 batches complete.
+Phase: **Phase 7 GUI Enhancement — draft design complete, implementation pending.**
+
+The GUI has 14 functional pages + 15 shared components (from prior session). This session focused on designing enhancements through standalone HTML drafts before implementing in React.
 
 ## What Was Done This Session
 
-### Batch 1: Schema + Group CRUD
-- Migration `0030_project_groups.sql`: `project_groups` + `project_group_members` tables
-- Service `src/services/projectGroups.ts`: 8 functions (CRUD + resolveProjectIds + listAllProjects)
-- Routes `src/api/routes/projectGroups.ts`: 7 REST endpoints
-- MCP: 7 new group management tools (create_group, delete_group, list_groups, etc.)
-- GUI API client updated with all group methods
+### Docker / Infrastructure Fixes
+- `Dockerfile`: Changed `npm ci` → `npm install` (package-lock.json is gitignored by design)
+- `gui/Dockerfile`: Created multi-stage Next.js Dockerfile (deps → build → runner)
+- `gui/next.config.ts`: Enabled `output: "standalone"` for Docker
+- `docker-compose.yml`: Added `gui` service on port 3002
+- Fixed Badge type error in `gui/src/app/projects/groups/page.tsx` (`<Badge>{x}</Badge>` → `<Badge value={x} />`)
 
-### Batch 2: Multi-Project Search
-- `searchLessonsMulti()` in `src/services/lessons.ts` — single SQL with `ANY()`, single rerank
-- `project_id` attribution on every search result match
-- MCP `search_lessons` extended: `project_ids`, `group_id`, `include_groups` params
-- REST `POST /api/lessons/search` extended with same params
-- Backwards compatible: existing single `project_id` calls unchanged
+### GUI Draft Design (docs/gui-drafts/)
+Created comprehensive HTML draft references for all current and planned GUI features.
 
-### Batch 3: List Projects + Multi-Project Guardrails
-- `GET /api/projects` — lists all projects with group memberships and lesson counts
-- `check_guardrails` MCP + REST extended with `include_groups` — checks group-level guardrails
-- `listAllProjects()` service function
+**v1 — Baseline (32 files):** Snapshot of all 15 components + 14 pages as standalone HTML
 
-### Batch 4: GUI — Project Groups Page
-- New page: `gui/src/app/projects/groups/page.tsx`
-- Create/delete groups, expand to see members, add/remove members
-- Empty state with CTA, confirm dialog for delete
-- Sidebar updated with "Groups" nav item
+**v2 — UI Polish:**
+- Replaced all emoji icons with Lucide SVG icons (18x18 stroke-based)
+- Chat: markdown rendering, code blocks with syntax highlighting, message hover toolbars, tool call cards
+- Dashboard: redesigned from 7 flat sections to 3 focused zones (overview strip, activity feed, quick start)
+- Breadcrumbs on all 12 nested pages
+- Sticky table headers, sort indicator arrows, enhanced pagination (page numbers + jump box)
+- Modal/toast animations (slide-in, fade-in, backdrop blur)
+- Empty state gradient rings
 
-### Batch 5: GUI — Project Selector + Search Attribution
-- Project context expanded: `projects`, `includeGroups`, `setIncludeGroups`, `refreshProjects`
-- Sidebar: project dropdown (falls back to text input if no projects), "Include group knowledge" toggle
-- Lessons page: "Source" column with project_id badge when searching across groups (blue for group, gray for own)
+**v3 — Feature Enhancements:**
+- NEW: Documents page (upload/link, viewer with in-doc search, generate lessons from docs)
+- NEW: Activity & Notifications page (timeline feed, notification preferences)
+- Lesson detail: center modal (was slide-over), edit mode, version history, AI improve, linked documents
+- Chat: history sidebar, pinned messages, "Create Lesson from Answer" popover
+- Dashboard: knowledge health score (72% ring), insights panel, suggested actions
+- Guardrails: test presets, test history, "What Would Block?" mode
+- Sidebar: notification bell, Documents nav, Activity nav
+- Lessons: import/export, import dialog (JSON/CSV/Markdown), enhanced bulk edit
+- Knowledge docs: center modal with in-document search and highlight
 
-### Batch 6: Templates + Seeding
-- Seed script: `src/scripts/seedProjectGroups.ts` — accepts config JSON
-- Example config: `docs/example-group-seed.json`
-- CLAUDE.md template: `docs/CLAUDE-template-multi-repo.md`
-- Updated `docs/multi-repo-strategy.md` with full implementation details
+**v4 — Human-in-the-Loop & Collaboration:**
+- NEW: Review Inbox (draft→review→active pipeline, card-based review, agent trust levels)
+- NEW: Analytics (retrieval trends chart, dead knowledge, agent activity)
+- NEW: Getting Started (guided onboarding learning path, progress tracker)
+- NEW: Keyboard Shortcuts overlay (? key, 3-column grid, chord shortcuts)
+- Lesson detail: AI-assisted editor (select chunks → Ask AI → diff view → per-chunk accept/reject → dirty indicator), comments/discussions (threaded + auto-review bot), feedback signals (thumbs up/down + retrieval count), bookmarks
+- Lessons page: status tabs (Active/Draft-Pending/Superseded/Archived), feedback column, "created by" avatars, bookmarks filter
+- Command palette: global search across lessons/docs/code/guardrails/commits
+- Sidebar: Review Inbox badge, Analytics, Getting Started (53%), Bookmarks, shortcuts hint
 
-## Key Decision
-**Groups, not trees.** User defines which repos share knowledge. Many-to-many, not parent-child. A project can belong to 0..N groups. Groups are optional — everything works without them.
+### Documentation Updates
+- `README.md`: Updated roadmap — Phase 7 detailed with functional vs enhancement checklist, design drafts reference
+- `WHITEPAPER.md`: v0.2 → v0.3 — expanded vision (AI-to-Human bridge), detailed Phase 7 section with all planned enhancements, updated Phase 8-10 scope
+
+## Final Inventory: docs/gui-drafts/
+- **21 page drafts** (layout, dashboard, chat, lessons, guardrails, jobs, knowledge-docs, knowledge-graph, knowledge-search, projects-overview, projects-groups, projects-git, projects-sources, settings, settings-models, lesson-detail, documents, notifications, review-inbox, analytics, onboarding)
+- **16 component drafts** (badge, button, data-table, command-palette, confirm-dialog, empty-state, error-banner, filter-chips, loading-skeleton, page-header, search-bar, slide-over, stat-card, toast, sidebar, keyboard-shortcuts)
+- **index.html** — clickable catalog with v2/v3/v4 changelog
+
+## Key Decisions
+- **Drafts before code** — design all enhancements as HTML first, review with stakeholder, then implement in React
+- **Center modal over slide-over** — for content-heavy views (lesson detail, FAQ/docs) because right-dock is too narrow
+- **AI-assisted editing** — Cursor-style inline AI with per-chunk accept/reject, not all-or-nothing
+- **Review pipeline** — AI-created lessons default to `draft`, human approval required (configurable trust levels per agent)
+- **package-lock.json stays gitignored** — Dockerfile uses `npm install` instead of `npm ci`
 
 ## Next Steps
-1. Run integration tests with real multi-project data
-2. Consider adding group-level lessons page in GUI (filter by group_id)
-3. Consider cross-group search (search across multiple groups at once)
-4. Evaluate performance with 100+ projects / 10+ groups
+1. **Review drafts** — open `docs/gui-drafts/index.html` in browser, review all 37 files
+2. **Prioritize implementation** — pick which enhancements to implement first (suggest: Lucide icons + review inbox + lesson editing)
+3. **Install lucide-react** in gui/ package
+4. **Implement enhancement batch 1** — icon system, breadcrumbs, sticky headers (low effort, high visual impact)
+5. **Implement enhancement batch 2** — review inbox, lesson editing with AI assist (high effort, core value)
+6. **Implement enhancement batch 3** — documents page, analytics, onboarding (medium effort, differentiation)
 
 ## Prior Session Context
-- Phase 7 GUI: 14/14 pages complete
+- Phase 7 GUI: 14/14 core pages complete
+- Multi-repo project groups: fully implemented
 - Open: Model Providers backend, KG routes, integration testing

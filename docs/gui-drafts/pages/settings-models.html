@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: Model Providers</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen font-sans">
+  <div class="flex h-screen">
+    <aside class="w-56 shrink-0 border-r border-zinc-800 bg-zinc-950">
+      <div class="px-4 py-4 border-b border-zinc-800">
+        <h1 class="text-sm font-semibold text-zinc-100">ContextHub</h1>
+        <p class="text-[11px] text-zinc-600">Knowledge Dashboard</p>
+      </div>
+    </aside>
+    <main class="flex-1 overflow-y-auto p-6">
+      <p class="text-xs text-zinc-600 mb-4">Draft: pages/settings-models | Source: gui/src/app/settings/models/page.tsx</p>
+
+      <!-- Breadcrumb -->
+      <div class="flex items-center gap-1.5 text-xs text-zinc-500 mb-4">
+        <span>System</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        <span class="text-zinc-400">Model Providers</span>
+      </div>
+
+      <!-- PageHeader -->
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h1 class="text-lg font-semibold text-zinc-100">Model Providers</h1>
+          <p class="text-xs text-zinc-500 mt-0.5">Configure LLM providers and feature assignments</p>
+        </div>
+        <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white transition-colors">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Provider
+        </button>
+      </div>
+
+      <!-- Tabs -->
+      <div class="flex gap-1 mb-6 border-b border-zinc-800 pb-0">
+        <button class="px-3 py-2 text-xs font-medium text-blue-400 border-b-2 border-blue-400 -mb-px">Providers</button>
+        <button class="px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300">Feature Assignment</button>
+      </div>
+
+      <!-- Providers tab -->
+      <div class="space-y-4 mb-8">
+        <!-- Provider 1: LM Studio -->
+        <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-3">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-400"><path d="M12 2a4 4 0 0 1 4 4c0 1.95-1.4 3.58-3.25 3.93L12 22l-.75-12.07A4.001 4.001 0 0 1 12 2z"/><path d="M8 6a4 4 0 0 0-4 4c0 1.95 1.4 3.58 3.25 3.93"/><path d="M16 6a4 4 0 0 1 4 4c0 1.95-1.4 3.58-3.25 3.93"/></svg>
+              <h3 class="text-sm font-medium text-zinc-200">LM Studio</h3>
+              <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-500/20 text-emerald-400">connected</span>
+            </div>
+            <div class="flex gap-2">
+              <button class="px-2 py-1 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-300">Test</button>
+              <button class="px-2 py-1 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-300">Edit</button>
+              <button class="px-2 py-1 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded">Delete</button>
+            </div>
+          </div>
+          <p class="text-xs text-zinc-500 mb-2">http://localhost:1234/v1</p>
+          <div class="flex flex-wrap gap-1.5">
+            <span class="px-2 py-0.5 text-[10px] bg-zinc-800 border border-zinc-700 rounded-full text-zinc-400">qwen2.5-coder-7b</span>
+            <span class="px-2 py-0.5 text-[10px] bg-zinc-800 border border-zinc-700 rounded-full text-zinc-400">nomic-embed-text</span>
+            <span class="px-2 py-0.5 text-[10px] bg-zinc-800 border border-zinc-700 rounded-full text-zinc-400">llama-3.1-8b</span>
+          </div>
+        </div>
+
+        <!-- Provider 2: Ollama -->
+        <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-3">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-400"><path d="M12 2a4 4 0 0 1 4 4c0 1.95-1.4 3.58-3.25 3.93L12 22l-.75-12.07A4.001 4.001 0 0 1 12 2z"/><path d="M8 6a4 4 0 0 0-4 4c0 1.95 1.4 3.58 3.25 3.93"/><path d="M16 6a4 4 0 0 1 4 4c0 1.95-1.4 3.58-3.25 3.93"/></svg>
+              <h3 class="text-sm font-medium text-zinc-200">Ollama</h3>
+              <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-zinc-500/20 text-zinc-500">untested</span>
+            </div>
+            <div class="flex gap-2">
+              <button class="px-2 py-1 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-300">Test</button>
+              <button class="px-2 py-1 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-300">Edit</button>
+              <button class="px-2 py-1 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded">Delete</button>
+            </div>
+          </div>
+          <p class="text-xs text-zinc-500 mb-2">http://localhost:11434/v1</p>
+          <div class="flex flex-wrap gap-1.5">
+            <span class="px-2 py-0.5 text-[10px] bg-zinc-800 border border-zinc-700 rounded-full text-zinc-400">mistral:7b</span>
+            <span class="px-2 py-0.5 text-[10px] bg-zinc-800 border border-zinc-700 rounded-full text-zinc-400">codellama:13b</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Feature Assignment tab (shown below for reference) -->
+      <div class="border-t border-zinc-800 pt-6">
+        <h2 class="text-sm font-medium text-zinc-400 mb-4">Feature Assignment (tab preview)</h2>
+        <div class="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+          <table class="w-full text-left">
+            <thead class="sticky top-0 z-10 bg-zinc-900">
+              <tr class="border-b border-zinc-800">
+                <th class="px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Feature</th>
+                <th class="px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Provider</th>
+                <th class="px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Model</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-zinc-800">
+              <tr class="hover:bg-zinc-800/50 transition-colors">
+                <td class="px-4 py-3 text-xs text-zinc-300">chat</td>
+                <td class="px-4 py-3">
+                  <select class="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-300 outline-none">
+                    <option>LM Studio</option><option>Ollama</option>
+                  </select>
+                </td>
+                <td class="px-4 py-3">
+                  <select class="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-300 outline-none">
+                    <option>qwen2.5-coder-7b</option><option>llama-3.1-8b</option>
+                  </select>
+                </td>
+              </tr>
+              <tr class="hover:bg-zinc-800/50 transition-colors">
+                <td class="px-4 py-3 text-xs text-zinc-300">embedding</td>
+                <td class="px-4 py-3">
+                  <select class="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-300 outline-none">
+                    <option>LM Studio</option><option>Ollama</option>
+                  </select>
+                </td>
+                <td class="px-4 py-3">
+                  <select class="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-300 outline-none">
+                    <option>nomic-embed-text</option>
+                  </select>
+                </td>
+              </tr>
+              <tr class="hover:bg-zinc-800/50 transition-colors">
+                <td class="px-4 py-3 text-xs text-zinc-300">reflect</td>
+                <td class="px-4 py-3">
+                  <select class="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-300 outline-none">
+                    <option>LM Studio</option><option>Ollama</option>
+                  </select>
+                </td>
+                <td class="px-4 py-3">
+                  <select class="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-300 outline-none">
+                    <option>qwen2.5-coder-7b</option><option>llama-3.1-8b</option>
+                  </select>
+                </td>
+              </tr>
+              <tr class="hover:bg-zinc-800/50 transition-colors">
+                <td class="px-4 py-3 text-xs text-zinc-300">suggest_lessons</td>
+                <td class="px-4 py-3">
+                  <select class="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-300 outline-none">
+                    <option>LM Studio</option>
+                  </select>
+                </td>
+                <td class="px-4 py-3">
+                  <select class="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-300 outline-none">
+                    <option>qwen2.5-coder-7b</option>
+                  </select>
+                </td>
+              </tr>
+              <tr class="hover:bg-zinc-800/50 transition-colors">
+                <td class="px-4 py-3 text-xs text-zinc-300">generate_faq</td>
+                <td class="px-4 py-3">
+                  <select class="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-300 outline-none">
+                    <option>LM Studio</option>
+                  </select>
+                </td>
+                <td class="px-4 py-3">
+                  <select class="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-300 outline-none">
+                    <option>qwen2.5-coder-7b</option>
+                  </select>
+                </td>
+              </tr>
+              <tr class="hover:bg-zinc-800/50 transition-colors">
+                <td class="px-4 py-3 text-xs text-zinc-300">raptor_summarize</td>
+                <td class="px-4 py-3"><span class="text-xs text-zinc-600">Not assigned</span></td>
+                <td class="px-4 py-3"><span class="text-xs text-zinc-600">--</span></td>
+              </tr>
+              <tr class="hover:bg-zinc-800/50 transition-colors">
+                <td class="px-4 py-3 text-xs text-zinc-300">qc_report</td>
+                <td class="px-4 py-3"><span class="text-xs text-zinc-600">Not assigned</span></td>
+                <td class="px-4 py-3"><span class="text-xs text-zinc-600">--</span></td>
+              </tr>
+              <tr class="hover:bg-zinc-800/50 transition-colors">
+                <td class="px-4 py-3 text-xs text-zinc-300">code_intel</td>
+                <td class="px-4 py-3">
+                  <select class="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-300 outline-none">
+                    <option>LM Studio</option>
+                  </select>
+                </td>
+                <td class="px-4 py-3">
+                  <select class="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-300 outline-none">
+                    <option>qwen2.5-coder-7b</option>
+                  </select>
+                </td>
+              </tr>
+              <tr class="hover:bg-zinc-800/50 transition-colors">
+                <td class="px-4 py-3 text-xs text-zinc-300">benchmark</td>
+                <td class="px-4 py-3"><span class="text-xs text-zinc-600">Not assigned</span></td>
+                <td class="px-4 py-3"><span class="text-xs text-zinc-600">--</span></td>
+              </tr>
+              <tr class="hover:bg-zinc-800/50 transition-colors">
+                <td class="px-4 py-3 text-xs text-zinc-300">rerank</td>
+                <td class="px-4 py-3"><span class="text-xs text-zinc-600">Not assigned</span></td>
+                <td class="px-4 py-3"><span class="text-xs text-zinc-600">--</span></td>
+              </tr>
+              <tr class="hover:bg-zinc-800/50 transition-colors">
+                <td class="px-4 py-3 text-xs text-zinc-300">qc_artifact</td>
+                <td class="px-4 py-3"><span class="text-xs text-zinc-600">Not assigned</span></td>
+                <td class="px-4 py-3"><span class="text-xs text-zinc-600">--</span></td>
+              </tr>
+              <tr class="hover:bg-zinc-800/50 transition-colors">
+                <td class="px-4 py-3 text-xs text-zinc-300">graph_build</td>
+                <td class="px-4 py-3"><span class="text-xs text-zinc-600">Not assigned</span></td>
+                <td class="px-4 py-3"><span class="text-xs text-zinc-600">--</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

@@ -4,6 +4,35 @@
 
 free-context-hub is a local [ContextStream](https://contextstream.io/)-inspired MCP server that gives your AI assistants (Claude Code, Cursor, etc.) **persistent knowledge across sessions and agents** — decisions, preferences, workarounds, and guardrails that survive after a conversation ends.
 
+It also provides a **web GUI** for humans to review, approve, and refine AI-generated knowledge — bridging **AI-to-AI** and **AI-to-Human** collaboration.
+
+---
+
+## Screenshots (Draft Design)
+
+> These are design drafts for the upcoming GUI enhancement phase. The core 14 pages are functional; enhanced features are being implemented.
+
+### Dashboard — Knowledge health, insights, activity feed
+![Dashboard](docs/screenshots/dashboard.png)
+
+### AI Chat — Markdown rendering, tool calls, conversation history
+![Chat](docs/screenshots/chat.png)
+
+### Lessons — Search, filter, import/export, feedback signals
+![Lessons](docs/screenshots/lessons.png)
+
+### Review Inbox — Approve AI-generated lessons, trust levels
+![Review Inbox](docs/screenshots/review-inbox.png)
+
+### Lesson Detail — AI-assisted editor, comments, version history
+![Lesson Detail](docs/screenshots/lesson-detail.png)
+
+### Analytics — Retrieval trends, dead knowledge, agent activity
+![Analytics](docs/screenshots/analytics.png)
+
+### Documents — Upload, link, generate lessons from docs
+![Documents](docs/screenshots/documents.png)
+
 ---
 
 ## Why This Exists
@@ -149,16 +178,41 @@ We tested 8 embedding models and 8 reranker models ([full benchmark](docs/benchm
 - [x] **Phase 5**: Git Intelligence & Automation
 - [x] **Phase 6**: Retrieval Quality Tuning & Tiered Search
 
+**In Progress:**
+- [ ] **Phase 7**: Interactive GUI — web dashboard (Next.js) for browsing lessons, guardrails, and knowledge graph
+  - [x] Core pages: Dashboard, Chat, Lessons, Guardrails, Jobs, Knowledge (Docs/Graph/Search), Projects (Overview/Groups/Git/Sources), Settings (System/Models) — 14 pages functional
+  - [x] Shared component library: Badge, Button, DataTable, CommandPalette, ConfirmDialog, EmptyState, ErrorBanner, FilterChips, LoadingSkeleton, PageHeader, SearchBar, SlideOver, StatCard, Toast, Sidebar
+  - [ ] **GUI Enhancement Phase** (draft complete, implementation pending):
+    - [ ] Replace emoji icons with Lucide React icon library
+    - [ ] Markdown rendering in Chat (react-markdown + syntax highlighting)
+    - [ ] Breadcrumbs on all nested pages
+    - [ ] Sticky table headers, sort indicators, enhanced pagination (page numbers + jump box)
+    - [ ] SlideOver/Toast/Modal animations (slide-in, fade-in, backdrop blur)
+    - [ ] Dashboard redesign (3 focused zones, knowledge health score, insights panel)
+    - [ ] Document management page (upload/link docs, viewer with in-doc search, generate lessons from docs)
+    - [ ] Review Inbox (draft→review→active approval pipeline, agent trust levels)
+    - [ ] Activity & Notifications (timeline feed, notification bell, preferences)
+    - [ ] Knowledge Analytics (retrieval trends, dead knowledge, agent activity)
+    - [ ] Chat enhancements (history sidebar, pinned messages, "Create Lesson from Answer")
+    - [ ] Lesson editing (AI-assisted editor with chunk selection, diff view, per-chunk accept/reject)
+    - [ ] Global search (Cmd+K across lessons, docs, code, guardrails, commits)
+    - [ ] Guided Onboarding (learning path with progress tracker)
+    - [ ] Comments & discussions on lessons
+    - [ ] Feedback signals (thumbs up/down, retrieval count)
+    - [ ] Bookmarks / favorites
+    - [ ] Keyboard shortcuts overlay
+    - [ ] Import/Export (JSON, CSV, Markdown)
+  - Design drafts: [`docs/gui-drafts/`](docs/gui-drafts/) — 21 pages + 16 components as standalone HTML
+
 **Planned:**
-- [ ] **Phase 7**: Interactive GUI — web dashboard for browsing lessons, guardrails, and knowledge graph (also usable from VS Code's built-in browser)
-- [ ] **Phase 8**: Human-in-the-loop Correction
-- [ ] **Phase 9**: Multi-format Ingestion (PDF, DOCX, Images)
-- [ ] **Phase 10**: Knowledge Portability (import/export)
+- [ ] **Phase 8**: Human-in-the-loop Correction — review workflows, knowledge quality management, collaborative editing (partially absorbed into Phase 7 GUI enhancements)
+- [ ] **Phase 9**: Multi-format Ingestion (PDF, DOCX, Images) — document management foundation laid in Phase 7
+- [ ] **Phase 10**: Knowledge Portability (import/export) — basic import/export included in Phase 7, full exchange hub deferred
 
 **Dropped:**
 - ~~Multi-Agent Passive Collection~~ — Parsing agent conversations costs tokens (contradicts "reduce token usage" goal), most conversation is noise, `add_lesson` captures verified conclusions explicitly.
 - ~~Session History Sharing~~ — Transcripts are 50k-200k tokens. The value is conclusions, not the journey. `add_lesson` captures those in ~100 tokens.
-- ~~IDE Native (VS Code extension)~~ — Agents use MCP (done). Humans need a UI, but a web dashboard (Phase 7) works in any browser including VS Code's built-in browser — same reach, fraction of the effort. A dedicated extension adds VS Code API maintenance, version testing, and marketplace publishing overhead for no new capability. If deeper IDE integration is needed later (inline warnings, CodeLens), a lightweight extension can link to the web GUI.
+- ~~IDE Native (VS Code extension)~~ — Agents use MCP (done). Humans need a UI, but a web dashboard (Phase 7) works in any browser including VS Code's built-in browser — same reach, fraction of the effort.
 
 ---
 

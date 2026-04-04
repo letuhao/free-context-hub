@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: Keyboard Shortcuts</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .animate-fadeIn {
+      animation: fadeIn 0.15s ease-out;
+    }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 p-8 font-sans">
+  <h1 class="text-xl font-bold mb-1">Keyboard Shortcuts</h1>
+  <p class="text-sm text-zinc-500 mb-8">Source: gui/src/components/ui/keyboard-shortcuts.tsx</p>
+
+  <!-- Backdrop -->
+  <div class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+    <!-- Modal -->
+    <div class="animate-fadeIn bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col">
+
+      <!-- Header -->
+      <div class="flex items-center justify-between px-5 pt-5 pb-3">
+        <h2 class="text-base font-semibold text-zinc-100">Keyboard Shortcuts</h2>
+        <button class="text-zinc-500 hover:text-zinc-300 transition-colors" title="Close (ESC)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <!-- Search -->
+      <div class="px-5 pb-3">
+        <input type="text" placeholder="Filter shortcuts..." class="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-300 placeholder-zinc-600 outline-none focus:border-zinc-600 transition-colors" />
+      </div>
+
+      <!-- Content -->
+      <div class="flex-1 overflow-y-auto px-5 pb-5">
+        <div class="grid grid-cols-3 gap-6">
+
+          <!-- Column 1: Navigation -->
+          <div>
+            <h3 class="text-[11px] uppercase tracking-wider text-zinc-500 font-medium mb-3">Navigation</h3>
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">Ctrl+K</span>
+                <span class="text-xs text-zinc-400">Open search</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">Ctrl+B</span>
+                <span class="text-xs text-zinc-400">Toggle sidebar</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-1">
+                  <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">G</span>
+                  <span class="text-[10px] text-zinc-600">then</span>
+                  <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">D</span>
+                </div>
+                <span class="text-xs text-zinc-400">Go to Dashboard</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-1">
+                  <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">G</span>
+                  <span class="text-[10px] text-zinc-600">then</span>
+                  <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">L</span>
+                </div>
+                <span class="text-xs text-zinc-400">Go to Lessons</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-1">
+                  <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">G</span>
+                  <span class="text-[10px] text-zinc-600">then</span>
+                  <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">C</span>
+                </div>
+                <span class="text-xs text-zinc-400">Go to Chat</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-1">
+                  <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">G</span>
+                  <span class="text-[10px] text-zinc-600">then</span>
+                  <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">J</span>
+                </div>
+                <span class="text-xs text-zinc-400">Go to Jobs</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-1">
+                  <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">G</span>
+                  <span class="text-[10px] text-zinc-600">then</span>
+                  <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">R</span>
+                </div>
+                <span class="text-xs text-zinc-400">Go to Review Inbox</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-1">
+                  <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">G</span>
+                  <span class="text-[10px] text-zinc-600">then</span>
+                  <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">A</span>
+                </div>
+                <span class="text-xs text-zinc-400">Go to Analytics</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Column 2: Lessons & Editor -->
+          <div>
+            <h3 class="text-[11px] uppercase tracking-wider text-zinc-500 font-medium mb-3">Lessons & Editor</h3>
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">N</span>
+                <span class="text-xs text-zinc-400">New lesson</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">E</span>
+                <span class="text-xs text-zinc-400">Edit selected lesson</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">Ctrl+S</span>
+                <span class="text-xs text-zinc-400">Save changes</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">Ctrl+Z</span>
+                <span class="text-xs text-zinc-400">Undo</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">Ctrl+Shift+Z</span>
+                <span class="text-xs text-zinc-400">Redo</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">/</span>
+                <span class="text-xs text-zinc-400">Focus search</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-1">
+                  <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">J</span>
+                  <span class="text-[10px] text-zinc-600">/</span>
+                  <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">K</span>
+                </div>
+                <span class="text-xs text-zinc-400">Navigate rows</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">X</span>
+                <span class="text-xs text-zinc-400">Toggle select row</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">Escape</span>
+                <span class="text-xs text-zinc-400">Close modal/panel</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Column 3: AI & Actions -->
+          <div>
+            <h3 class="text-[11px] uppercase tracking-wider text-zinc-500 font-medium mb-3">AI & Actions</h3>
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">Ctrl+Enter</span>
+                <span class="text-xs text-zinc-400">Send chat message</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">Ctrl+Shift+A</span>
+                <span class="text-xs text-zinc-400">AI assist on selection</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">Ctrl+Shift+I</span>
+                <span class="text-xs text-zinc-400">Import lessons</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">Ctrl+Shift+E</span>
+                <span class="text-xs text-zinc-400">Export lessons</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-1">
+                  <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">A</span>
+                  <span class="text-[10px] text-zinc-600">then</span>
+                  <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">A</span>
+                </div>
+                <span class="text-xs text-zinc-400">Approve lesson</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-1">
+                  <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">A</span>
+                  <span class="text-[10px] text-zinc-600">then</span>
+                  <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">R</span>
+                </div>
+                <span class="text-xs text-zinc-400">Reject lesson</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">?</span>
+                <span class="text-xs text-zinc-400">Show this dialog</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="border-t border-zinc-800 px-5 py-3 text-center">
+        <span class="text-[11px] text-zinc-600">Press <span class="text-zinc-400">?</span> to toggle &middot; <span class="text-zinc-400">ESC</span> to close</span>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>

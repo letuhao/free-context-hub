@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: Analytics</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeIn 0.2s ease-out; }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen font-sans">
+  <div class="flex h-screen">
+
+    <!-- ===== SIDEBAR ===== -->
+    <aside class="shrink-0 border-r border-zinc-800 bg-zinc-950 flex flex-col w-56">
+      <div class="px-4 py-4 border-b border-zinc-800">
+        <h1 class="text-sm font-semibold tracking-tight text-zinc-100">ContextHub</h1>
+        <p class="text-[11px] text-zinc-600 mt-0.5">Knowledge Dashboard</p>
+      </div>
+      <div class="px-3 py-2 space-y-1.5">
+        <select class="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded-md text-xs text-zinc-300 outline-none appearance-none cursor-pointer">
+          <option>free-context-hub</option>
+          <option>my-saas-app (2 groups)</option>
+          <option>internal-tools</option>
+        </select>
+      </div>
+      <nav class="flex-1 px-2 py-1 space-y-0.5 overflow-y-auto">
+        <a class="flex items-center gap-2.5 rounded-md text-sm transition-colors px-3 py-1.5 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="4" rx="1"/><rect x="14" y="11" width="7" height="10" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+          <span>Dashboard</span>
+        </a>
+        <a class="flex items-center gap-2.5 rounded-md text-sm transition-colors px-3 py-1.5 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+          <span>Chat</span>
+        </a>
+        <div class="mt-3">
+          <div class="px-3 py-1 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Knowledge</div>
+          <div class="space-y-0.5">
+            <a class="flex items-center gap-2.5 rounded-md text-sm transition-colors px-3 py-1.5 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+              <span>Lessons</span>
+            </a>
+            <a class="flex items-center gap-2.5 rounded-md text-sm transition-colors px-3 py-1.5 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <span>Guardrails</span>
+            </a>
+          </div>
+        </div>
+        <div class="mt-3">
+          <div class="px-3 py-1 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">System</div>
+          <div class="space-y-0.5">
+            <a class="flex items-center gap-2.5 rounded-md text-sm transition-colors px-3 py-1.5 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              <span>Jobs</span>
+            </a>
+            <!-- Analytics (active) -->
+            <a class="flex items-center gap-2.5 rounded-md text-sm transition-colors px-3 py-1.5 bg-zinc-800 text-zinc-100">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+              <span>Analytics</span>
+            </a>
+            <a class="flex items-center gap-2.5 rounded-md text-sm transition-colors px-3 py-1.5 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+              <span>Settings</span>
+            </a>
+          </div>
+        </div>
+      </nav>
+      <div class="border-t border-zinc-800 px-3 py-2.5 flex items-center justify-between">
+        <div class="flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+          <span class="text-[11px] text-zinc-600">API connected</span>
+        </div>
+        <button class="text-zinc-600 hover:text-zinc-400 text-xs" title="Collapse (Ctrl+B)">&#x25C0;</button>
+      </div>
+    </aside>
+
+    <!-- ===== MAIN CONTENT ===== -->
+    <main class="flex-1 overflow-y-auto p-6">
+      <p class="text-xs text-zinc-600 mb-4">Draft: pages/analytics | Source: gui/src/app/analytics/page.tsx</p>
+
+      <!-- Breadcrumb -->
+      <div class="flex items-center gap-1.5 text-xs text-zinc-500 mb-4">
+        <span>System</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        <span class="text-zinc-400">Analytics</span>
+      </div>
+
+      <!-- PageHeader -->
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h1 class="text-lg font-semibold text-zinc-100">Knowledge Analytics</h1>
+          <p class="text-xs text-zinc-500 mt-0.5">Track knowledge usage, quality, and trends</p>
+        </div>
+        <div class="flex bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+          <button class="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors">7d</button>
+          <button class="px-3 py-1.5 text-xs bg-zinc-700 text-zinc-200 font-medium">30d</button>
+          <button class="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors">90d</button>
+          <button class="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors">All</button>
+        </div>
+      </div>
+
+      <!-- ===== TOP-LEVEL METRICS (4 cards) ===== -->
+      <div class="grid grid-cols-4 gap-4 mb-6">
+        <!-- Stat 1 -->
+        <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
+          <p class="text-2xl font-semibold text-zinc-100">847</p>
+          <p class="text-xs text-zinc-500 mt-0.5">Total Retrievals</p>
+          <div class="flex items-center gap-1 mt-2">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-emerald-400"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+            <span class="text-[10px] text-emerald-400">+12% vs last period</span>
+          </div>
+        </div>
+        <!-- Stat 2 -->
+        <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
+          <p class="text-2xl font-semibold text-zinc-100">42</p>
+          <p class="text-xs text-zinc-500 mt-0.5">Active Lessons</p>
+          <div class="flex items-center gap-1 mt-2">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-emerald-400"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="5 12 12 5 19 12"/></svg>
+            <span class="text-[10px] text-emerald-400">+3 new this week</span>
+          </div>
+        </div>
+        <!-- Stat 3 -->
+        <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
+          <p class="text-2xl font-semibold text-zinc-100">89%</p>
+          <p class="text-xs text-zinc-500 mt-0.5">Approval Rate</p>
+          <div class="flex items-center gap-1 mt-2">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-zinc-500"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span class="text-[10px] text-zinc-500">Stable</span>
+          </div>
+        </div>
+        <!-- Stat 4 -->
+        <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
+          <p class="text-2xl font-semibold text-amber-400">12</p>
+          <p class="text-xs text-zinc-500 mt-0.5">Stale Lessons</p>
+          <div class="flex items-center gap-1 mt-2">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-amber-400"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span class="text-[10px] text-amber-400">&gt;90 days unreviewed</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== CHARTS SECTION (2 columns) ===== -->
+      <div class="grid grid-cols-2 gap-4 mb-6">
+
+        <!-- LEFT: Retrieval Trends -->
+        <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
+          <h2 class="text-sm font-medium text-zinc-300 mb-4 flex items-center gap-2">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            Retrieval Trends
+          </h2>
+          <!-- Fake area chart -->
+          <div class="relative h-40">
+            <!-- Y axis labels -->
+            <div class="absolute left-0 top-0 bottom-6 w-8 flex flex-col justify-between text-[10px] text-zinc-600 text-right">
+              <span>150</span>
+              <span>100</span>
+              <span>50</span>
+              <span>0</span>
+            </div>
+            <!-- Chart area -->
+            <div class="ml-10 h-full relative">
+              <!-- Grid lines -->
+              <div class="absolute inset-0 flex flex-col justify-between pointer-events-none" style="bottom: 24px;">
+                <div class="border-t border-zinc-800/50"></div>
+                <div class="border-t border-zinc-800/50"></div>
+                <div class="border-t border-zinc-800/50"></div>
+                <div class="border-t border-zinc-800/50"></div>
+              </div>
+              <!-- SVG chart -->
+              <svg viewBox="0 0 280 120" class="w-full" style="height: calc(100% - 24px);" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="rgb(59,130,246)" stop-opacity="0.3"/>
+                    <stop offset="100%" stop-color="rgb(59,130,246)" stop-opacity="0"/>
+                  </linearGradient>
+                </defs>
+                <!-- Area -->
+                <path d="M0,80 L47,55 L94,68 L141,20 L188,35 L235,75 L280,60 L280,120 L0,120Z" fill="url(#areaGrad)"/>
+                <!-- Line -->
+                <polyline points="0,80 47,55 94,68 141,20 188,35 235,75 280,60" fill="none" stroke="rgb(59,130,246)" stroke-width="2"/>
+                <!-- Dots -->
+                <circle cx="0" cy="80" r="3" fill="rgb(59,130,246)"/>
+                <circle cx="47" cy="55" r="3" fill="rgb(59,130,246)"/>
+                <circle cx="94" cy="68" r="3" fill="rgb(59,130,246)"/>
+                <circle cx="141" cy="20" r="4" fill="rgb(59,130,246)" stroke="rgb(9,9,11)" stroke-width="2"/>
+                <circle cx="188" cy="35" r="3" fill="rgb(59,130,246)"/>
+                <circle cx="235" cy="75" r="3" fill="rgb(59,130,246)"/>
+                <circle cx="280" cy="60" r="3" fill="rgb(59,130,246)"/>
+              </svg>
+              <!-- X axis labels -->
+              <div class="flex justify-between text-[10px] text-zinc-600 mt-1">
+                <span>Mon</span>
+                <span>Tue</span>
+                <span>Wed</span>
+                <span>Thu</span>
+                <span>Fri</span>
+                <span>Sat</span>
+                <span>Sun</span>
+              </div>
+            </div>
+          </div>
+          <p class="text-[10px] text-zinc-500 mt-2 ml-10">Peak: <span class="text-blue-400">Thursday 142 retrievals</span></p>
+        </div>
+
+        <!-- RIGHT: Lessons by Type (donut) -->
+        <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
+          <h2 class="text-sm font-medium text-zinc-300 mb-4 flex items-center gap-2">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500"><path d="M21.21 15.89A10 10 0 118 2.83"/><path d="M22 12A10 10 0 0012 2v10z"/></svg>
+            Lessons by Type
+          </h2>
+          <div class="flex items-center justify-center">
+            <!-- CSS conic-gradient donut -->
+            <div class="relative w-36 h-36">
+              <div class="w-full h-full rounded-full" style="background: conic-gradient(
+                rgb(59,130,246) 0deg 162deg,
+                rgb(245,158,11) 162deg 252deg,
+                rgb(239,68,68) 252deg 316.8deg,
+                rgb(168,85,247) 316.8deg 360deg
+              );"></div>
+              <div class="absolute inset-0 flex items-center justify-center">
+                <div class="w-20 h-20 rounded-full bg-zinc-900/60 flex items-center justify-center">
+                  <div class="text-center">
+                    <p class="text-lg font-semibold text-zinc-100">42</p>
+                    <p class="text-[9px] text-zinc-500">total</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Legend -->
+          <div class="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-4">
+            <div class="flex items-center gap-2 text-xs">
+              <span class="w-2.5 h-2.5 rounded-sm bg-blue-500"></span>
+              <span class="text-zinc-400">decision</span>
+              <span class="ml-auto text-zinc-300 font-medium">19</span>
+              <span class="text-zinc-600 text-[10px]">45%</span>
+            </div>
+            <div class="flex items-center gap-2 text-xs">
+              <span class="w-2.5 h-2.5 rounded-sm bg-amber-500"></span>
+              <span class="text-zinc-400">workaround</span>
+              <span class="ml-auto text-zinc-300 font-medium">10</span>
+              <span class="text-zinc-600 text-[10px]">25%</span>
+            </div>
+            <div class="flex items-center gap-2 text-xs">
+              <span class="w-2.5 h-2.5 rounded-sm bg-red-500"></span>
+              <span class="text-zinc-400">guardrail</span>
+              <span class="ml-auto text-zinc-300 font-medium">8</span>
+              <span class="text-zinc-600 text-[10px]">18%</span>
+            </div>
+            <div class="flex items-center gap-2 text-xs">
+              <span class="w-2.5 h-2.5 rounded-sm bg-purple-500"></span>
+              <span class="text-zinc-400">preference</span>
+              <span class="ml-auto text-zinc-300 font-medium">5</span>
+              <span class="text-zinc-600 text-[10px]">12%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== MOST RETRIEVED LESSONS (table) ===== -->
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4 mb-6">
+        <h2 class="text-sm font-medium text-zinc-300 mb-3 flex items-center gap-2">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+          Most Retrieved Lessons
+        </h2>
+        <table class="w-full text-xs">
+          <thead>
+            <tr class="border-b border-zinc-800 text-zinc-500">
+              <th class="text-left py-2 font-medium w-8">#</th>
+              <th class="text-left py-2 font-medium">Title</th>
+              <th class="text-left py-2 font-medium w-20">Type</th>
+              <th class="text-left py-2 font-medium w-40">Retrievals</th>
+              <th class="text-right py-2 font-medium w-20">Last Used</th>
+            </tr>
+          </thead>
+          <tbody class="text-zinc-300">
+            <tr class="border-b border-zinc-800/50">
+              <td class="py-2.5 text-zinc-500">1</td>
+              <td class="py-2.5 font-medium">Use retry with exponential backoff</td>
+              <td class="py-2.5"><span class="px-1.5 py-0.5 text-[10px] bg-blue-500/20 text-blue-400 rounded">decision</span></td>
+              <td class="py-2.5">
+                <div class="flex items-center gap-2">
+                  <div class="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden"><div class="h-full bg-blue-500 rounded-full" style="width: 100%"></div></div>
+                  <span class="text-zinc-400 w-6 text-right">89</span>
+                </div>
+              </td>
+              <td class="py-2.5 text-right text-zinc-500">2h ago</td>
+            </tr>
+            <tr class="border-b border-zinc-800/50">
+              <td class="py-2.5 text-zinc-500">2</td>
+              <td class="py-2.5 font-medium">SQLite WAL mode for concurrent reads</td>
+              <td class="py-2.5"><span class="px-1.5 py-0.5 text-[10px] bg-amber-500/20 text-amber-400 rounded">workaround</span></td>
+              <td class="py-2.5">
+                <div class="flex items-center gap-2">
+                  <div class="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden"><div class="h-full bg-amber-500 rounded-full" style="width: 75%"></div></div>
+                  <span class="text-zinc-400 w-6 text-right">67</span>
+                </div>
+              </td>
+              <td class="py-2.5 text-right text-zinc-500">4h ago</td>
+            </tr>
+            <tr class="border-b border-zinc-800/50">
+              <td class="py-2.5 text-zinc-500">3</td>
+              <td class="py-2.5 font-medium">Validate project_id before MCP exec</td>
+              <td class="py-2.5"><span class="px-1.5 py-0.5 text-[10px] bg-red-500/20 text-red-400 rounded">guardrail</span></td>
+              <td class="py-2.5">
+                <div class="flex items-center gap-2">
+                  <div class="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden"><div class="h-full bg-red-500 rounded-full" style="width: 58%"></div></div>
+                  <span class="text-zinc-400 w-6 text-right">52</span>
+                </div>
+              </td>
+              <td class="py-2.5 text-right text-zinc-500">6h ago</td>
+            </tr>
+            <tr class="border-b border-zinc-800/50">
+              <td class="py-2.5 text-zinc-500">4</td>
+              <td class="py-2.5 font-medium">Batch embedding calls</td>
+              <td class="py-2.5"><span class="px-1.5 py-0.5 text-[10px] bg-blue-500/20 text-blue-400 rounded">decision</span></td>
+              <td class="py-2.5">
+                <div class="flex items-center gap-2">
+                  <div class="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden"><div class="h-full bg-blue-500 rounded-full" style="width: 46%"></div></div>
+                  <span class="text-zinc-400 w-6 text-right">41</span>
+                </div>
+              </td>
+              <td class="py-2.5 text-right text-zinc-500">1d ago</td>
+            </tr>
+            <tr>
+              <td class="py-2.5 text-zinc-500">5</td>
+              <td class="py-2.5 font-medium">Prefer pnpm for monorepos</td>
+              <td class="py-2.5"><span class="px-1.5 py-0.5 text-[10px] bg-purple-500/20 text-purple-400 rounded">preference</span></td>
+              <td class="py-2.5">
+                <div class="flex items-center gap-2">
+                  <div class="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden"><div class="h-full bg-purple-500 rounded-full" style="width: 31%"></div></div>
+                  <span class="text-zinc-400 w-6 text-right">28</span>
+                </div>
+              </td>
+              <td class="py-2.5 text-right text-zinc-500">2d ago</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ===== DEAD KNOWLEDGE ===== -->
+      <div class="bg-amber-500/5 border border-amber-500/20 rounded-lg p-4 mb-6">
+        <h2 class="text-sm font-medium text-amber-400 mb-3 flex items-center gap-2">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-amber-400"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Dead Knowledge &mdash; Never Retrieved
+        </h2>
+        <div class="space-y-2">
+          <div class="flex items-center justify-between py-2 px-3 bg-zinc-900/60 rounded-md">
+            <div class="flex items-center gap-3">
+              <span class="text-xs text-zinc-300 font-medium">Prefer snake_case for DB columns</span>
+              <span class="px-1.5 py-0.5 text-[10px] bg-purple-500/20 text-purple-400 rounded">preference</span>
+              <span class="text-[10px] text-zinc-600">Created 120 days ago</span>
+            </div>
+            <div class="flex gap-1.5">
+              <button class="px-2 py-1 text-[10px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 transition-colors">Archive</button>
+              <button class="px-2 py-1 text-[10px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 transition-colors">Review</button>
+            </div>
+          </div>
+          <div class="flex items-center justify-between py-2 px-3 bg-zinc-900/60 rounded-md">
+            <div class="flex items-center gap-3">
+              <span class="text-xs text-zinc-300 font-medium">Use yarn workspaces for linking</span>
+              <span class="px-1.5 py-0.5 text-[10px] bg-blue-500/20 text-blue-400 rounded">decision</span>
+              <span class="text-[10px] text-zinc-600">Created 95 days ago</span>
+            </div>
+            <div class="flex gap-1.5">
+              <button class="px-2 py-1 text-[10px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 transition-colors">Archive</button>
+              <button class="px-2 py-1 text-[10px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 transition-colors">Review</button>
+            </div>
+          </div>
+          <div class="flex items-center justify-between py-2 px-3 bg-zinc-900/60 rounded-md">
+            <div class="flex items-center gap-3">
+              <span class="text-xs text-zinc-300 font-medium">Always set NODE_ENV in CI</span>
+              <span class="px-1.5 py-0.5 text-[10px] bg-amber-500/20 text-amber-400 rounded">workaround</span>
+              <span class="text-[10px] text-zinc-600">Created 108 days ago</span>
+            </div>
+            <div class="flex gap-1.5">
+              <button class="px-2 py-1 text-[10px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 transition-colors">Archive</button>
+              <button class="px-2 py-1 text-[10px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 transition-colors">Review</button>
+            </div>
+          </div>
+          <div class="flex items-center justify-between py-2 px-3 bg-zinc-900/60 rounded-md">
+            <div class="flex items-center gap-3">
+              <span class="text-xs text-zinc-300 font-medium">Cache npm install in GitHub Actions</span>
+              <span class="px-1.5 py-0.5 text-[10px] bg-amber-500/20 text-amber-400 rounded">workaround</span>
+              <span class="text-[10px] text-zinc-600">Created 92 days ago</span>
+            </div>
+            <div class="flex gap-1.5">
+              <button class="px-2 py-1 text-[10px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 transition-colors">Archive</button>
+              <button class="px-2 py-1 text-[10px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 transition-colors">Review</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== AGENT ACTIVITY ===== -->
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
+        <h2 class="text-sm font-medium text-zinc-300 mb-3 flex items-center gap-2">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+          Agent Activity
+        </h2>
+        <table class="w-full text-xs">
+          <thead>
+            <tr class="border-b border-zinc-800 text-zinc-500">
+              <th class="text-left py-2 font-medium">Agent</th>
+              <th class="text-right py-2 font-medium">Created</th>
+              <th class="text-right py-2 font-medium">Approved</th>
+              <th class="text-right py-2 font-medium">Rejected</th>
+              <th class="text-left py-2 font-medium pl-4 w-32">Approval Rate</th>
+              <th class="text-right py-2 font-medium">Last Active</th>
+            </tr>
+          </thead>
+          <tbody class="text-zinc-300">
+            <tr class="border-b border-zinc-800/50">
+              <td class="py-2.5 flex items-center gap-2">
+                <span class="w-5 h-5 rounded-full bg-purple-500/20 text-purple-400 text-[10px] font-bold flex items-center justify-center">C</span>
+                claude-agent
+              </td>
+              <td class="py-2.5 text-right">45</td>
+              <td class="py-2.5 text-right text-emerald-400">41</td>
+              <td class="py-2.5 text-right text-red-400">4</td>
+              <td class="py-2.5 pl-4">
+                <div class="flex items-center gap-2">
+                  <div class="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden"><div class="h-full bg-emerald-500 rounded-full" style="width: 91%"></div></div>
+                  <span class="text-zinc-400 text-[10px] w-8 text-right">91%</span>
+                </div>
+              </td>
+              <td class="py-2.5 text-right text-zinc-500">2h ago</td>
+            </tr>
+            <tr class="border-b border-zinc-800/50">
+              <td class="py-2.5 flex items-center gap-2">
+                <span class="w-5 h-5 rounded-full bg-sky-500/20 text-sky-400 text-[10px] font-bold flex items-center justify-center">Cu</span>
+                cursor-agent
+              </td>
+              <td class="py-2.5 text-right">18</td>
+              <td class="py-2.5 text-right text-emerald-400">14</td>
+              <td class="py-2.5 text-right text-red-400">4</td>
+              <td class="py-2.5 pl-4">
+                <div class="flex items-center gap-2">
+                  <div class="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden"><div class="h-full bg-amber-500 rounded-full" style="width: 78%"></div></div>
+                  <span class="text-zinc-400 text-[10px] w-8 text-right">78%</span>
+                </div>
+              </td>
+              <td class="py-2.5 text-right text-zinc-500">5h ago</td>
+            </tr>
+            <tr class="border-b border-zinc-800/50">
+              <td class="py-2.5 flex items-center gap-2">
+                <span class="w-5 h-5 rounded-full bg-zinc-700 text-zinc-400 text-[10px] font-bold flex items-center justify-center">G</span>
+                gpt-4-agent
+              </td>
+              <td class="py-2.5 text-right">3</td>
+              <td class="py-2.5 text-right text-emerald-400">2</td>
+              <td class="py-2.5 text-right text-red-400">1</td>
+              <td class="py-2.5 pl-4">
+                <div class="flex items-center gap-2">
+                  <div class="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden"><div class="h-full bg-amber-500 rounded-full" style="width: 67%"></div></div>
+                  <span class="text-zinc-400 text-[10px] w-8 text-right">67%</span>
+                </div>
+              </td>
+              <td class="py-2.5 text-right text-zinc-500">1d ago</td>
+            </tr>
+            <tr>
+              <td class="py-2.5 flex items-center gap-2">
+                <span class="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold flex items-center justify-center">L</span>
+                human (letuhao1994)
+              </td>
+              <td class="py-2.5 text-right">8</td>
+              <td class="py-2.5 text-right text-emerald-400">8</td>
+              <td class="py-2.5 text-right text-zinc-600">0</td>
+              <td class="py-2.5 pl-4">
+                <div class="flex items-center gap-2">
+                  <div class="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden"><div class="h-full bg-emerald-500 rounded-full" style="width: 100%"></div></div>
+                  <span class="text-zinc-400 text-[10px] w-8 text-right">100%</span>
+                </div>
+              </td>
+              <td class="py-2.5 text-right text-zinc-500">30m ago</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+    </main>
+  </div>
+</body>
+</html>

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: Guardrails</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen font-sans">
+  <div class="flex h-screen">
+    <aside class="w-56 shrink-0 border-r border-zinc-800 bg-zinc-950">
+      <div class="px-4 py-4 border-b border-zinc-800">
+        <h1 class="text-sm font-semibold text-zinc-100">ContextHub</h1>
+        <p class="text-[11px] text-zinc-600">Knowledge Dashboard</p>
+      </div>
+    </aside>
+    <main class="flex-1 overflow-y-auto p-6">
+      <p class="text-xs text-zinc-600 mb-4">Draft: pages/guardrails | Source: gui/src/app/guardrails/page.tsx</p>
+
+      <!-- Breadcrumb -->
+      <div class="flex items-center gap-1.5 text-xs text-zinc-500 mb-4">
+        <span>Knowledge</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        <span class="text-zinc-400">Guardrails</span>
+      </div>
+
+      <!-- PageHeader -->
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h1 class="text-lg font-semibold text-zinc-100">Guardrails</h1>
+          <p class="text-xs text-zinc-500 mt-0.5">Pre-action safety checks for free-context-hub</p>
+        </div>
+        <button class="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white transition-colors">+ Add Guardrail</button>
+      </div>
+
+      <!-- Test Action Panel -->
+      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4 mb-6">
+        <!-- Mode toggle header -->
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-medium text-zinc-300">Test Action</h2>
+          <div class="flex bg-zinc-800 border border-zinc-700 rounded-lg overflow-hidden">
+            <button class="px-3 py-1.5 text-[10px] bg-zinc-700 text-zinc-200">Test Action</button>
+            <button class="px-3 py-1.5 text-[10px] text-zinc-500 hover:text-zinc-300">What Would Block?</button>
+          </div>
+        </div>
+
+        <!-- Test Action mode (active) -->
+        <div>
+          <!-- Preset dropdown + input -->
+          <div class="flex gap-2 mb-4">
+            <select class="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-md text-sm text-zinc-300 outline-none appearance-none cursor-pointer w-56 shrink-0">
+              <option>Select preset...</option>
+              <option selected>deploy to production</option>
+              <option>git push --force to main</option>
+              <option>DROP TABLE migration</option>
+              <option>delete workspace data</option>
+              <option>npm publish</option>
+              <option>Custom action...</option>
+            </select>
+            <input type="text" value="deploy to production" class="flex-1 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-md text-sm text-zinc-300 outline-none" />
+            <button class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm text-white transition-colors">Check</button>
+          </div>
+
+          <!-- PASSED result -->
+          <div class="mb-3 border border-emerald-800/50 bg-emerald-500/5 rounded-lg p-3">
+            <div class="flex items-center gap-2 mb-1">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-emerald-500"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              <span class="text-sm font-medium text-emerald-400">PASSED</span>
+            </div>
+            <p class="text-xs text-zinc-400">Action "deploy to staging" passed all 3 guardrails.</p>
+          </div>
+
+          <!-- BLOCKED result -->
+          <div class="border border-red-800/50 bg-red-500/5 rounded-lg p-3">
+            <div class="flex items-center gap-2 mb-2">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-red-500"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+              <span class="text-sm font-medium text-red-400">BLOCKED</span>
+            </div>
+            <p class="text-xs text-zinc-400 mb-2">Action "deploy to production" was blocked by 1 guardrail:</p>
+            <div class="ml-4 space-y-1">
+              <div class="flex items-start gap-2">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-red-400 mt-0.5 shrink-0"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                <div>
+                  <p class="text-xs text-zinc-300 font-medium">No production deploys without QC pass</p>
+                  <p class="text-[10px] text-zinc-500">Production deployments require a passing QC report generated within the last 24 hours.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- "What Would Block?" mode (hidden by default, shown here as reference) -->
+        <div class="hidden mt-4">
+          <div class="flex gap-2 mb-4">
+            <input type="text" placeholder="Describe what you want to do..." class="flex-1 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-md text-sm text-zinc-300 outline-none placeholder-zinc-600" />
+            <button class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm text-white transition-colors">Analyze</button>
+          </div>
+          <div class="space-y-2">
+            <!-- Matching guardrail 1 -->
+            <div class="border border-zinc-700 rounded-lg p-3">
+              <div class="flex items-center justify-between mb-1">
+                <p class="text-xs text-zinc-300 font-medium">No production deploys without QC pass</p>
+                <span class="text-[10px] font-medium text-red-400">85% match</span>
+              </div>
+              <div class="w-full bg-zinc-800 rounded-full h-1.5 mb-1">
+                <div class="bg-red-500 h-1.5 rounded-full" style="width: 85%"></div>
+              </div>
+              <p class="text-[10px] text-zinc-500">Production deployments require a passing QC report generated within the last 24 hours.</p>
+            </div>
+            <!-- Matching guardrail 2 -->
+            <div class="border border-zinc-700 rounded-lg p-3">
+              <div class="flex items-center justify-between mb-1">
+                <p class="text-xs text-zinc-300 font-medium">Validate project_id before MCP tool execution</p>
+                <span class="text-[10px] font-medium text-amber-400">62% match</span>
+              </div>
+              <div class="w-full bg-zinc-800 rounded-full h-1.5 mb-1">
+                <div class="bg-amber-500 h-1.5 rounded-full" style="width: 62%"></div>
+              </div>
+              <p class="text-[10px] text-zinc-500">All MCP tools must verify that project_id exists and the caller has access.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Tests (Test History) -->
+      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4 mb-6">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <h2 class="text-sm font-medium text-zinc-300">Recent Tests</h2>
+          </div>
+          <button class="text-[10px] text-zinc-500 hover:text-zinc-400">Clear History</button>
+        </div>
+        <div class="space-y-2">
+          <!-- Test 1: PASSED -->
+          <div class="flex items-center gap-3 py-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+            <span class="text-xs text-zinc-300 font-mono flex-1 truncate">deploy staging</span>
+            <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-500/20 text-emerald-400 shrink-0">PASSED</span>
+            <span class="text-[10px] text-zinc-600 w-16 text-right shrink-0">10 min ago</span>
+            <button class="text-[10px] text-zinc-500 hover:text-zinc-400 shrink-0">Re-run</button>
+          </div>
+          <!-- Test 2: BLOCKED -->
+          <div class="flex items-center gap-3 py-1.5">
+            <span class="w-2 h-2 rounded-full bg-red-500 shrink-0"></span>
+            <span class="text-xs text-zinc-300 font-mono flex-1 truncate">git push --force origin main</span>
+            <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-red-500/20 text-red-400 shrink-0">BLOCKED (1)</span>
+            <span class="text-[10px] text-zinc-600 w-16 text-right shrink-0">25 min ago</span>
+            <button class="text-[10px] text-zinc-500 hover:text-zinc-400 shrink-0">Re-run</button>
+          </div>
+          <!-- Test 3: PASSED -->
+          <div class="flex items-center gap-3 py-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+            <span class="text-xs text-zinc-300 font-mono flex-1 truncate">npm run build</span>
+            <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-500/20 text-emerald-400 shrink-0">PASSED</span>
+            <span class="text-[10px] text-zinc-600 w-16 text-right shrink-0">1h ago</span>
+            <button class="text-[10px] text-zinc-500 hover:text-zinc-400 shrink-0">Re-run</button>
+          </div>
+          <!-- Test 4: BLOCKED -->
+          <div class="flex items-center gap-3 py-1.5">
+            <span class="w-2 h-2 rounded-full bg-red-500 shrink-0"></span>
+            <span class="text-xs text-zinc-300 font-mono flex-1 truncate">DROP TABLE users</span>
+            <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-red-500/20 text-red-400 shrink-0">BLOCKED (2)</span>
+            <span class="text-[10px] text-zinc-600 w-16 text-right shrink-0">3h ago</span>
+            <button class="text-[10px] text-zinc-500 hover:text-zinc-400 shrink-0">Re-run</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- DataTable -->
+      <div class="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+        <table class="w-full text-left">
+          <thead class="sticky top-0 z-10 bg-zinc-900">
+            <tr class="border-b border-zinc-800">
+              <th class="px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Rule</th>
+              <th class="px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider w-40">Tags</th>
+              <th class="px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider w-24">Status</th>
+              <th class="px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider w-28">Created</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-zinc-800">
+            <tr class="hover:bg-zinc-800/50 cursor-pointer transition-colors">
+              <td class="px-4 py-3">
+                <p class="text-sm text-zinc-300">No production deploys without QC pass</p>
+                <p class="text-[10px] text-zinc-500 mt-0.5">Production deployments require a passing QC report generated within the last 24 hours.</p>
+              </td>
+              <td class="px-4 py-3"><span class="text-[10px] text-zinc-500">deploy, production</span></td>
+              <td class="px-4 py-3"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-500/20 text-emerald-400">active</span></td>
+              <td class="px-4 py-3 text-xs text-zinc-500">3d ago</td>
+            </tr>
+            <tr class="hover:bg-zinc-800/50 cursor-pointer transition-colors">
+              <td class="px-4 py-3">
+                <p class="text-sm text-zinc-300">Validate project_id before MCP tool execution</p>
+                <p class="text-[10px] text-zinc-500 mt-0.5">All MCP tools must verify that project_id exists and the caller has access.</p>
+              </td>
+              <td class="px-4 py-3"><span class="text-[10px] text-zinc-500">security, mcp</span></td>
+              <td class="px-4 py-3"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-500/20 text-emerald-400">active</span></td>
+              <td class="px-4 py-3 text-xs text-zinc-500">5d ago</td>
+            </tr>
+            <tr class="hover:bg-zinc-800/50 cursor-pointer transition-colors">
+              <td class="px-4 py-3">
+                <p class="text-sm text-zinc-300">Never delete data without explicit user confirmation</p>
+                <p class="text-[10px] text-zinc-500 mt-0.5">Destructive operations (DELETE workspace, purge lessons) require a user confirmation prompt.</p>
+              </td>
+              <td class="px-4 py-3"><span class="text-[10px] text-zinc-500">safety, data</span></td>
+              <td class="px-4 py-3"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-500/20 text-emerald-400">active</span></td>
+              <td class="px-4 py-3 text-xs text-zinc-500">1w ago</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

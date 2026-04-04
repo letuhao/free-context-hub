@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: Documents</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.97) translateY(8px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen font-sans">
+  <div class="flex h-screen">
+    <!-- Sidebar placeholder -->
+    <aside class="w-56 shrink-0 border-r border-zinc-800 bg-zinc-950">
+      <div class="px-4 py-4 border-b border-zinc-800">
+        <h1 class="text-sm font-semibold text-zinc-100">ContextHub</h1>
+        <p class="text-[11px] text-zinc-600">Knowledge Dashboard</p>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="flex-1 overflow-y-auto p-6 relative">
+      <p class="text-xs text-zinc-600 mb-4">Draft: pages/documents | Source: gui/src/app/documents/page.tsx</p>
+
+      <!-- Breadcrumb -->
+      <div class="flex items-center gap-1.5 text-xs text-zinc-500 mb-4">
+        <span>Knowledge</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        <span class="text-zinc-400">Documents</span>
+      </div>
+
+      <!-- PageHeader -->
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h1 class="text-lg font-semibold text-zinc-100">Documents</h1>
+          <p class="text-xs text-zinc-500 mt-0.5">Attach reference documents to your project</p>
+        </div>
+        <div class="flex gap-2">
+          <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-md text-zinc-300 transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+            Link URL
+          </button>
+          <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            + Upload Document
+          </button>
+        </div>
+      </div>
+
+      <!-- Stats row -->
+      <div class="grid grid-cols-3 gap-4 mb-6">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+          <div class="flex items-center justify-between mb-1">
+            <p class="text-xs text-zinc-500">Documents</p>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-600"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          </div>
+          <p class="text-2xl font-semibold text-zinc-100">12</p>
+        </div>
+        <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+          <div class="flex items-center justify-between mb-1">
+            <p class="text-xs text-zinc-500">Linked to Lessons</p>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-600"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+          </div>
+          <p class="text-2xl font-semibold text-zinc-100">8</p>
+        </div>
+        <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+          <div class="flex items-center justify-between mb-1">
+            <p class="text-xs text-zinc-500">Pending Review</p>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-600"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <p class="text-2xl font-semibold text-amber-400">3</p>
+        </div>
+      </div>
+
+      <!-- Filter tabs -->
+      <div class="flex gap-1 mb-4 border-b border-zinc-800 pb-0">
+        <button class="px-3 py-2 text-xs font-medium text-blue-400 border-b-2 border-blue-400 -mb-px">All</button>
+        <button class="px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300">PDF</button>
+        <button class="px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300">Markdown</button>
+        <button class="px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300">URL</button>
+        <button class="px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300">Linked</button>
+        <button class="px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300">Unlinked</button>
+      </div>
+
+      <!-- DataTable -->
+      <div class="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden mb-6">
+        <table class="w-full text-left">
+          <thead class="sticky top-0 z-10 bg-zinc-900">
+            <tr class="border-b border-zinc-800">
+              <th class="px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Name</th>
+              <th class="px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider w-24">Type</th>
+              <th class="px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider w-28">Size / URL</th>
+              <th class="px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider w-32">Linked Lessons</th>
+              <th class="px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider w-24">Uploaded</th>
+              <th class="px-4 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider w-56">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-zinc-800">
+            <!-- Row 1 -->
+            <tr class="hover:bg-zinc-800/50 cursor-pointer transition-colors">
+              <td class="px-4 py-3 text-sm text-zinc-300">API Design Guidelines v2.pdf</td>
+              <td class="px-4 py-3"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-red-500/20 text-red-400">PDF</span></td>
+              <td class="px-4 py-3 text-xs text-zinc-500">2.4 MB</td>
+              <td class="px-4 py-3"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-500/20 text-blue-400">5 lessons</span></td>
+              <td class="px-4 py-3 text-xs text-zinc-500">2h ago</td>
+              <td class="px-4 py-3">
+                <div class="flex gap-1.5">
+                  <button class="px-2 py-1 text-[11px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 hover:text-zinc-200 transition-colors">View</button>
+                  <button class="px-2 py-1 text-[11px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 hover:text-zinc-200 transition-colors">Generate Lessons</button>
+                  <button class="px-2 py-1 text-[11px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-red-400/70 hover:text-red-400 transition-colors">Delete</button>
+                </div>
+              </td>
+            </tr>
+            <!-- Row 2 -->
+            <tr class="hover:bg-zinc-800/50 cursor-pointer transition-colors">
+              <td class="px-4 py-3 text-sm text-zinc-300">Retry Strategy RFC.md</td>
+              <td class="px-4 py-3"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-purple-500/20 text-purple-400">Markdown</span></td>
+              <td class="px-4 py-3 text-xs text-zinc-500">12 KB</td>
+              <td class="px-4 py-3"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-500/20 text-blue-400">3 lessons</span></td>
+              <td class="px-4 py-3 text-xs text-zinc-500">1d ago</td>
+              <td class="px-4 py-3">
+                <div class="flex gap-1.5">
+                  <button class="px-2 py-1 text-[11px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 hover:text-zinc-200 transition-colors">View</button>
+                  <button class="px-2 py-1 text-[11px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 hover:text-zinc-200 transition-colors">Generate Lessons</button>
+                  <button class="px-2 py-1 text-[11px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-red-400/70 hover:text-red-400 transition-colors">Delete</button>
+                </div>
+              </td>
+            </tr>
+            <!-- Row 3 -->
+            <tr class="hover:bg-zinc-800/50 cursor-pointer transition-colors">
+              <td class="px-4 py-3 text-sm text-zinc-300">https://docs.example.com/auth-spec</td>
+              <td class="px-4 py-3"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-cyan-500/20 text-cyan-400">URL</span></td>
+              <td class="px-4 py-3 text-xs text-zinc-500">External</td>
+              <td class="px-4 py-3"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-500/20 text-blue-400">2 lessons</span></td>
+              <td class="px-4 py-3 text-xs text-zinc-500">3d ago</td>
+              <td class="px-4 py-3">
+                <div class="flex gap-1.5">
+                  <button class="px-2 py-1 text-[11px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 hover:text-zinc-200 transition-colors">View</button>
+                  <button class="px-2 py-1 text-[11px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 hover:text-zinc-200 transition-colors">Generate Lessons</button>
+                  <button class="px-2 py-1 text-[11px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-red-400/70 hover:text-red-400 transition-colors">Delete</button>
+                </div>
+              </td>
+            </tr>
+            <!-- Row 4 -->
+            <tr class="hover:bg-zinc-800/50 cursor-pointer transition-colors">
+              <td class="px-4 py-3 text-sm text-zinc-300">Database Migration Runbook.pdf</td>
+              <td class="px-4 py-3"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-red-500/20 text-red-400">PDF</span></td>
+              <td class="px-4 py-3 text-xs text-zinc-500">890 KB</td>
+              <td class="px-4 py-3"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-zinc-700/50 text-zinc-500">0 lessons</span></td>
+              <td class="px-4 py-3 text-xs text-zinc-500">5d ago</td>
+              <td class="px-4 py-3">
+                <div class="flex gap-1.5">
+                  <button class="px-2 py-1 text-[11px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 hover:text-zinc-200 transition-colors">View</button>
+                  <button class="px-2 py-1 text-[11px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 hover:text-zinc-200 transition-colors">Generate Lessons</button>
+                  <button class="px-2 py-1 text-[11px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-red-400/70 hover:text-red-400 transition-colors">Delete</button>
+                </div>
+              </td>
+            </tr>
+            <!-- Row 5 -->
+            <tr class="hover:bg-zinc-800/50 cursor-pointer transition-colors">
+              <td class="px-4 py-3 text-sm text-zinc-300">Team Code Review Checklist.md</td>
+              <td class="px-4 py-3"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-purple-500/20 text-purple-400">Markdown</span></td>
+              <td class="px-4 py-3 text-xs text-zinc-500">4 KB</td>
+              <td class="px-4 py-3"><span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-500/20 text-blue-400">1 lesson</span></td>
+              <td class="px-4 py-3 text-xs text-zinc-500">1w ago</td>
+              <td class="px-4 py-3">
+                <div class="flex gap-1.5">
+                  <button class="px-2 py-1 text-[11px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 hover:text-zinc-200 transition-colors">View</button>
+                  <button class="px-2 py-1 text-[11px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 hover:text-zinc-200 transition-colors">Generate Lessons</button>
+                  <button class="px-2 py-1 text-[11px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-red-400/70 hover:text-red-400 transition-colors">Delete</button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ===== Document Viewer Modal (BEHIND upload dialog) ===== -->
+      <div class="fixed inset-0 bg-black/40 backdrop-blur-sm z-30"></div>
+      <div class="fixed inset-0 z-30 flex items-center justify-center p-6">
+        <div class="w-full max-w-3xl max-h-[85vh] bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl flex flex-col" style="animation: fadeIn 0.2s ease-out">
+          <!-- Header -->
+          <div class="px-6 pt-4 pb-2 flex items-center justify-between shrink-0">
+            <div class="flex items-center gap-3">
+              <h2 class="text-base font-semibold text-zinc-100">API Design Guidelines v2.pdf</h2>
+              <span class="px-2 py-0.5 text-[10px] font-medium rounded-full bg-red-500/10 text-red-400">PDF</span>
+              <span class="text-xs text-zinc-600">Uploaded 2 hours ago</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button class="px-2.5 py-1 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white transition-colors">Generate Lessons</button>
+              <button class="px-2.5 py-1 text-xs bg-transparent border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 rounded-md transition-colors flex items-center gap-1">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                Copy
+              </button>
+              <button class="text-zinc-500 hover:text-zinc-300 ml-1">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- In-document search bar -->
+          <div class="px-6 pb-3 border-b border-zinc-800 shrink-0">
+            <div class="flex items-center gap-2 px-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-zinc-500 shrink-0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" placeholder="Search in document..." value="error" class="flex-1 bg-transparent text-xs text-zinc-200 outline-none placeholder:text-zinc-600" />
+              <div class="flex items-center gap-1.5 shrink-0">
+                <span class="text-[10px] text-zinc-500">1 of 4</span>
+                <button class="text-zinc-500 hover:text-zinc-300">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
+                </button>
+                <button class="text-zinc-500 hover:text-zinc-300">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <button class="text-zinc-600 hover:text-zinc-400 text-xs ml-0.5">&times;</button>
+              </div>
+              <kbd class="text-[9px] text-zinc-600 bg-zinc-800 px-1 py-0.5 rounded shrink-0">Ctrl+F</kbd>
+            </div>
+          </div>
+
+          <!-- Content + Sidebar -->
+          <div class="flex flex-1 overflow-hidden">
+            <!-- Scrollable content area -->
+            <div class="flex-1 overflow-y-auto px-6 py-5 text-sm text-zinc-300 leading-relaxed space-y-5">
+              <div>
+                <h3 class="text-base font-semibold text-zinc-100 mb-3">1. RESTful Conventions</h3>
+                <p class="text-zinc-400 leading-relaxed mb-3">All endpoints must follow REST conventions. Resource names should be plural nouns, and nested resources should reflect ownership hierarchy.</p>
+                <h4 class="text-sm font-semibold text-zinc-200 mb-2">1.1 HTTP Methods</h4>
+                <ul class="list-disc list-inside text-zinc-400 space-y-1 ml-2">
+                  <li>GET for retrieval (never mutate state)</li>
+                  <li>POST for creation</li>
+                  <li>PUT/PATCH for updates</li>
+                  <li>DELETE for removal (must be idempotent)</li>
+                </ul>
+              </div>
+              <div class="border-t border-zinc-800/50 pt-5">
+                <h3 class="text-base font-semibold text-zinc-100 mb-3">2. <mark class="bg-amber-500/30 text-amber-200 rounded px-0.5">Error</mark> Handling</h3>
+                <p class="text-zinc-400 leading-relaxed mb-3">All <mark class="bg-amber-500/20 text-amber-200/80 rounded px-0.5">error</mark>s return JSON with <code class="text-[13px] bg-zinc-800 px-1.5 py-0.5 rounded text-emerald-400 font-mono">error_code</code> and <code class="text-[13px] bg-zinc-800 px-1.5 py-0.5 rounded text-emerald-400 font-mono">message</code> fields. HTTP status codes must match the <mark class="bg-amber-500/20 text-amber-200/80 rounded px-0.5">error</mark> category.</p>
+                <div class="bg-zinc-950 border border-zinc-800 rounded-lg p-4 font-mono text-xs text-zinc-300 leading-relaxed">
+<pre>{
+  "<mark class="bg-amber-500/20 text-amber-200/80 rounded px-0.5">error</mark>_code": "VALIDATION_FAILED",
+  "message": "Field 'email' is required",
+  "details": {
+    "field": "email",
+    "constraint": "required"
+  }
+}</pre>
+                </div>
+              </div>
+              <div class="border-t border-zinc-800/50 pt-5">
+                <h3 class="text-base font-semibold text-zinc-100 mb-3">3. Versioning</h3>
+                <p class="text-zinc-400 leading-relaxed">API versioning uses URL path prefix (<code class="text-[13px] bg-zinc-800 px-1.5 py-0.5 rounded text-emerald-400 font-mono">/v1/</code>, <code class="text-[13px] bg-zinc-800 px-1.5 py-0.5 rounded text-emerald-400 font-mono">/v2/</code>). Breaking changes require a major version bump. Non-breaking additions (new optional fields) are allowed within the same version.</p>
+              </div>
+            </div>
+
+            <!-- Sidebar panel -->
+            <div class="w-64 shrink-0 border-l border-zinc-800 overflow-y-auto p-4 space-y-4">
+              <h4 class="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Linked Lessons</h4>
+
+              <!-- Linked lesson card 1 -->
+              <div class="bg-zinc-950 border border-zinc-800 rounded-lg p-3 space-y-2">
+                <div class="flex items-center gap-2">
+                  <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-500/20 text-blue-400">decision</span>
+                  <span class="text-xs text-zinc-300 truncate">Use REST over GraphQL</span>
+                </div>
+                <button class="text-[10px] text-red-400/60 hover:text-red-400 transition-colors">Unlink</button>
+              </div>
+
+              <!-- Linked lesson card 2 -->
+              <div class="bg-zinc-950 border border-zinc-800 rounded-lg p-3 space-y-2">
+                <div class="flex items-center gap-2">
+                  <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-500/20 text-amber-400">preference</span>
+                  <span class="text-xs text-zinc-300 truncate">Plural resource names</span>
+                </div>
+                <button class="text-[10px] text-red-400/60 hover:text-red-400 transition-colors">Unlink</button>
+              </div>
+
+              <!-- Linked lesson card 3 -->
+              <div class="bg-zinc-950 border border-zinc-800 rounded-lg p-3 space-y-2">
+                <div class="flex items-center gap-2">
+                  <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-500/20 text-emerald-400">workaround</span>
+                  <span class="text-xs text-zinc-300 truncate">Error codes enum mapping</span>
+                </div>
+                <button class="text-[10px] text-red-400/60 hover:text-red-400 transition-colors">Unlink</button>
+              </div>
+
+              <button class="w-full px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-md text-zinc-400 hover:text-zinc-200 transition-colors text-center">+ Link Existing Lesson</button>
+
+              <div class="border-t border-zinc-800 pt-4 space-y-3">
+                <h4 class="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Generate from this document</h4>
+                <p class="text-[11px] text-zinc-500 leading-relaxed">AI will analyze this document and suggest lessons</p>
+                <button class="w-full px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white transition-colors">Generate Lessons</button>
+
+                <!-- Suggested lesson 1 -->
+                <div class="bg-zinc-950 border border-zinc-800 rounded-lg p-3 space-y-2">
+                  <div class="flex items-center gap-2">
+                    <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-500/20 text-blue-400">decision</span>
+                    <span class="text-xs text-zinc-300 truncate">URL-based API versioning</span>
+                  </div>
+                  <div class="flex gap-1.5">
+                    <button class="px-2 py-0.5 text-[10px] bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 rounded transition-colors">Accept</button>
+                    <button class="px-2 py-0.5 text-[10px] bg-zinc-800 hover:bg-zinc-700 text-zinc-500 rounded transition-colors">Dismiss</button>
+                  </div>
+                </div>
+
+                <!-- Suggested lesson 2 -->
+                <div class="bg-zinc-950 border border-zinc-800 rounded-lg p-3 space-y-2">
+                  <div class="flex items-center gap-2">
+                    <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-red-500/20 text-red-400">guardrail</span>
+                    <span class="text-xs text-zinc-300 truncate">Structured error responses</span>
+                  </div>
+                  <div class="flex gap-1.5">
+                    <button class="px-2 py-0.5 text-[10px] bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 rounded transition-colors">Accept</button>
+                    <button class="px-2 py-0.5 text-[10px] bg-zinc-800 hover:bg-zinc-700 text-zinc-500 rounded transition-colors">Dismiss</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="px-6 py-3 border-t border-zinc-800 flex items-center justify-between shrink-0">
+            <span class="text-xs text-zinc-600">Document ID: <span class="font-mono">doc_a1b2c3</span></span>
+            <span class="text-[10px] text-zinc-600">Press ESC to close</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Upload Document Modal (on top) ===== -->
+      <div class="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"></div>
+      <div class="fixed inset-0 z-50 flex items-center justify-center p-6">
+        <div class="w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl" style="animation: fadeIn 0.2s ease-out">
+          <!-- Header -->
+          <div class="px-6 pt-5 pb-4 border-b border-zinc-800">
+            <h2 class="text-base font-semibold text-zinc-100">Upload Document</h2>
+          </div>
+
+          <div class="px-6 py-5 space-y-5">
+            <!-- Drag & drop zone -->
+            <div class="border-2 border-dashed border-zinc-700 rounded-lg p-8 text-center hover:border-zinc-500 transition-colors cursor-pointer">
+              <div class="flex justify-center mb-3">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              </div>
+              <p class="text-sm text-zinc-300 mb-1">Drop files here or click to browse</p>
+              <p class="text-[11px] text-zinc-600">PDF, MD, TXT up to 10MB</p>
+            </div>
+
+            <!-- Or divider -->
+            <div class="flex items-center gap-3">
+              <div class="flex-1 border-t border-zinc-800"></div>
+              <span class="text-[10px] text-zinc-600 uppercase tracking-wider">Or</span>
+              <div class="flex-1 border-t border-zinc-800"></div>
+            </div>
+
+            <!-- Link external URL -->
+            <div>
+              <label class="block text-xs text-zinc-400 mb-1.5">Link external URL</label>
+              <div class="flex items-center gap-2 px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500 shrink-0"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+                <input type="text" placeholder="https://docs.example.com/..." class="flex-1 bg-transparent text-xs text-zinc-200 outline-none placeholder:text-zinc-600" />
+              </div>
+            </div>
+
+            <!-- Tags input -->
+            <div>
+              <label class="block text-xs text-zinc-400 mb-1.5">Tags <span class="text-zinc-600">(optional)</span></label>
+              <input type="text" placeholder="api, design, guidelines" class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-zinc-600 transition-colors" />
+            </div>
+
+            <!-- Description textarea -->
+            <div>
+              <label class="block text-xs text-zinc-400 mb-1.5">Description <span class="text-zinc-600">(optional)</span></label>
+              <textarea rows="3" placeholder="Brief description of this document..." class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-200 outline-none placeholder:text-zinc-600 resize-none focus:border-zinc-600 transition-colors"></textarea>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="px-6 py-4 border-t border-zinc-800 flex justify-end gap-2">
+            <button class="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-md text-zinc-400 hover:text-zinc-200 transition-colors">Cancel</button>
+            <button class="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white transition-colors">Upload</button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</body>
+</html>
