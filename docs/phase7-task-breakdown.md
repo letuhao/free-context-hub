@@ -98,7 +98,7 @@
 
 | # | Task | Type | Est | Dep | Status |
 |---|------|------|-----|-----|--------|
-| 7.4.1 | `documents` + `document_lessons` tables + migration | BE | 1d | — | [ ] |
+| 7.4.1 | `documents` + `document_lessons` tables + migration | BE | 1d | — | [✓] |
 | 7.4.2 | CRUD `/api/documents` — upload (multipart), link URL, list, get, delete | BE | 2d | 7.4.1 | [ ] |
 | 7.4.3 | `POST /api/documents/:id/generate-lessons` — AI parses doc, suggest lessons | BE | 2d | 7.4.1 | [ ] |
 | 7.4.4 | Document-Lesson linking: `POST/DELETE /api/documents/:id/lessons/:lessonId` | BE | 0.5d | 7.4.1 | [ ] |
