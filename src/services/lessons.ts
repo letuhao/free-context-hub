@@ -969,6 +969,84 @@ export async function searchLessonsMulti(params: SearchLessonsMultiParams): Prom
   return { matches, explanations };
 }
 
+export async function updateLesson(params: {
+  projectId: string;
+  lessonId: string;
+  title?: string;
+  content?: string;
+  tags?: string[];
+  source_refs?: string[];
+}): Promise<{ status: 'ok' | 'error'; error?: string; re_embedded?: boolean }> {
+  const pool = getDbPool();
+
+  const existing = await pool.query(
+    `SELECT lesson_id, title, content, lesson_type, tags, source_refs FROM lessons WHERE project_id=$1 AND lesson_id=$2`,
+    [params.projectId, params.lessonId],
+  );
+  if (!existing.rowCount) {
+    return { status: 'error', error: 'lesson not found for project' };
+  }
+
+  const row = existing.rows[0];
+  const newTitle = params.title ?? row.title;
+  const newContent = params.content ?? row.content;
+  const newTags = params.tags ?? row.tags;
+  const newSourceRefs = params.source_refs ?? row.source_refs;
+
+  const contentChanged = newTitle !== row.title || newContent !== row.content;
+  let reEmbedded = false;
+
+  if (contentChanged) {
+    const searchAliases = await generateSearchAliases(newTitle, newContent);
+    const embeddingText = searchAliases
+      ? `${newTitle}. ${searchAliases}. ${newContent}`
+      : `${newTitle}. ${newContent}`;
+    const [embedding] = await embedTexts([embeddingText]);
+    const embeddingLiteral = `[${embedding.join(',')}]`;
+
+    const ftsSource = searchAliases
+      ? `${newTitle} ${searchAliases} ${newContent}`
+      : `${newTitle} ${newContent}`;
+    const ftsContent = expandForFtsIndex(ftsSource);
+
+    await pool.query(
+      `UPDATE lessons
+       SET title=$3, content=$4, tags=$5, source_refs=$6,
+           embedding=$7::vector, fts=to_tsvector('english', $8), search_aliases=$9,
+           updated_at=now()
+       WHERE project_id=$1 AND lesson_id=$2`,
+      [params.projectId, params.lessonId, newTitle, newContent, newTags, newSourceRefs,
+       embeddingLiteral, ftsContent, searchAliases || null],
+    );
+
+    await upsertLessonNode({
+      projectId: params.projectId,
+      lessonId: params.lessonId,
+      title: newTitle,
+      lessonType: row.lesson_type,
+    }).catch(() => {});
+
+    await linkLessonToSymbols({
+      projectId: params.projectId,
+      lessonId: params.lessonId,
+      lessonType: row.lesson_type,
+      sourceRefs: newSourceRefs,
+    }).catch(() => {});
+
+    reEmbedded = true;
+  } else {
+    await pool.query(
+      `UPDATE lessons
+       SET tags=$3, source_refs=$4, updated_at=now()
+       WHERE project_id=$1 AND lesson_id=$2`,
+      [params.projectId, params.lessonId, newTags, newSourceRefs],
+    );
+  }
+
+  await rebuildProjectSnapshot(params.projectId).catch(() => {});
+  return { status: 'ok', re_embedded: reEmbedded };
+}
+
 export async function updateLessonStatus(params: {
   projectId: string;
   lessonId: string;

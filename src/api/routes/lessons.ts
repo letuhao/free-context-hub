@@ -4,6 +4,7 @@ import {
   listLessons,
   searchLessons,
   searchLessonsMulti,
+  updateLesson,
   updateLessonStatus,
   resolveProjectIdOrThrow,
   resolveProjectIds,
@@ -73,6 +74,26 @@ router.post('/search', async (req, res, next) => {
     }
 
     const result = await searchLessonsMulti({ projectIds: resolvedIds, query, filters, limit });
+    res.json(result);
+  } catch (e) { next(e); }
+});
+
+/** PUT /api/lessons/:id — update lesson title, content, tags, source_refs */
+router.put('/:id', async (req, res, next) => {
+  try {
+    const projectId = resolveProjectIdOrThrow(req.body.project_id);
+    const result = await updateLesson({
+      projectId,
+      lessonId: req.params.id,
+      title: req.body.title,
+      content: req.body.content,
+      tags: req.body.tags,
+      source_refs: req.body.source_refs,
+    });
+    if (result.status === 'error') {
+      res.status(404).json(result);
+      return;
+    }
     res.json(result);
   } catch (e) { next(e); }
 });

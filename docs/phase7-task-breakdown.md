@@ -59,7 +59,7 @@
 
 | # | Task | Type | Est | Dep | Status |
 |---|------|------|-----|-----|--------|
-| 7.2.1 | `PUT /api/lessons/:id` — update title, content, tags | BE | 1d | — | [ ] |
+| 7.2.1 | `PUT /api/lessons/:id` — update title, content, tags | BE | 1d | — | [✓] |
 | 7.2.2 | `lesson_versions` table + migration, auto-create version on update | BE | 1.5d | 7.2.1 | [ ] |
 | 7.2.3 | `GET /api/lessons/:id/versions` — list versions with diff data | BE | 1d | 7.2.2 | [ ] |
 | 7.2.4 | Lesson detail edit mode — inline title/content/tags editing | FE | 2d | 7.2.1 | [ ] |
