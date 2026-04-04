@@ -117,6 +117,39 @@ free-context-hub/
 └── CLAUDE.md               # This file
 ```
 
+## Development Phases
+
+```
+Phase 1-2 ✅    Phase 3 ✅      Phase 4 ✅      Phase 5 ✅
+Core MVP        Distillation    Knowledge       Git Intelligence
+Lessons,        Reflect,        Graph (Neo4j),  Ingest commits,
+Search,         Compress,       Symbol search,  Suggest lessons,
+Guardrails      Summarize       Impact analysis Commit analysis
+    │               │               │               │
+    ▼               ▼               ▼               ▼
+Phase 6 ✅      Phase 7 🔧      Phase 8 ○       Phase 9 ○       Phase 10 ○
+Retrieval       GUI &           Advanced        Multi-format    Knowledge
+Quality         Human-in-loop   HITL            Ingestion       Portability
+Tiered search,  Web dashboard,  Access control, PDF, DOCX,      Exchange hub,
+Reranking,      Review inbox,   Custom types,   Images,         Cross-instance
+Redis cache,    AI editor,      Rich content,   Parsing         sync
+QC eval loop    Documents,      Agent audit     pipelines
+                Analytics,
+                Chat history
+```
+
+| Phase | Status | Key Deliverables |
+|-------|--------|-----------------|
+| **1-2** | ✅ Complete | Lessons CRUD, semantic search, guardrails, MCP interface |
+| **3** | ✅ Complete | LLM reflection, context compression, project summaries |
+| **4** | ✅ Complete | Neo4j knowledge graph, symbol extraction (ts-morph), dependency tracing |
+| **5** | ✅ Complete | Git commit ingestion, lesson suggestions, impact analysis, job queue |
+| **6** | ✅ Complete | Tiered search (ripgrep→FTS→semantic), reranking, Redis cache, QC eval loop |
+| **7** | 🔧 In progress | GUI (14 pages functional, enhancement drafts complete, implementation pending) |
+| **8** | ○ Planned | Access control (roles), custom lesson types/templates, rich content, agent audit |
+| **9** | ○ Planned | PDF/DOCX/Image ingestion pipelines (document foundation in Phase 7) |
+| **10** | ○ Planned | Import/export exchange hub, cross-instance sync (basic I/O in Phase 7) |
+
 ## Phase 7 — Current Work
 
 **Status:** Core GUI functional (14 pages). Enhancement phase in draft design, implementation pending.
