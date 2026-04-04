@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useProject } from "@/contexts/project-context";
 import { api } from "@/lib/api";
 import { relTime } from "@/lib/rel-time";
-import { PageHeader, DataTable, JobStatusBadge, Button, EmptyState, TableSkeleton, type Column } from "@/components/ui";
+import { Breadcrumb, PageHeader, DataTable, JobStatusBadge, Button, EmptyState, TableSkeleton, type Column } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 
 type Job = {
@@ -137,6 +137,7 @@ export default function JobsPage() {
 
   return (
     <div className="p-6 max-w-[1000px]">
+      <Breadcrumb items={[{ label: "System", href: "/settings" }, { label: "Jobs" }]} />
       <PageHeader
         title="Jobs"
         subtitle="Monitor and manage the async job queue"

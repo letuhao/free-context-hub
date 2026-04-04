@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
-import { PageHeader } from "@/components/ui";
+import { Breadcrumb, PageHeader } from "@/components/ui";
 import { LineSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
 
@@ -51,6 +51,7 @@ export default function SettingsPage() {
 
   return (
     <div className="p-6 max-w-[800px]">
+      <Breadcrumb items={[{ label: "System", href: "/settings" }, { label: "Settings" }]} />
       <PageHeader title="Settings" subtitle="System configuration and feature status" />
 
       {initialLoad ? (

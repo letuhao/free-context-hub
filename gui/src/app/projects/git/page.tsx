@@ -5,6 +5,7 @@ import { useProject } from "@/contexts/project-context";
 import { api } from "@/lib/api";
 import { relTime } from "@/lib/rel-time";
 import {
+  Breadcrumb,
   PageHeader,
   DataTable,
   Button,
@@ -158,6 +159,7 @@ export default function GitHistoryPage() {
 
   return (
     <div className="p-6 max-w-[1000px]">
+      <Breadcrumb items={[{ label: "Project", href: "/projects" }, { label: "Git History" }]} />
       <PageHeader
         title="Git History"
         subtitle="Browse commits, ingest history, suggest lessons"

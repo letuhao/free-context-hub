@@ -3,6 +3,7 @@
 import { useState, useCallback, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { Button } from "./button";
+import { ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
 
 // ── Column definition ──
 export interface Column<T> {
@@ -30,6 +31,9 @@ interface DataTableProps<T> {
   pageLabel?: string;
   // Row actions
   rowActions?: (row: T) => ReactNode;
+  // Sort indicator
+  sortKey?: string;
+  sortOrder?: "asc" | "desc";
 }
 
 export function DataTable<T>({
@@ -47,6 +51,8 @@ export function DataTable<T>({
   onPrevPage,
   pageLabel,
   rowActions,
+  sortKey,
+  sortOrder,
 }: DataTableProps<T>) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -94,9 +100,9 @@ export function DataTable<T>({
       )}
 
       {/* Table */}
-      <div className="border border-zinc-800 rounded-lg overflow-hidden">
+      <div className="border border-zinc-800 rounded-lg overflow-auto max-h-[70vh]">
         <table className="w-full text-sm">
-          <thead>
+          <thead className="sticky top-0 z-10 bg-zinc-900">
             <tr className="border-b border-zinc-800">
               {selectable && (
                 <th className="w-10 px-3 py-2">
@@ -112,9 +118,16 @@ export function DataTable<T>({
                 <th
                   key={col.key}
                   onClick={() => onHeaderClick?.(col.key)}
-                  className={cn("text-left px-3 py-2 text-xs font-medium text-zinc-500", onHeaderClick && "cursor-pointer hover:text-zinc-400", col.className)}
+                  className={cn("text-left px-3 py-2 text-xs font-medium text-zinc-500", onHeaderClick && "cursor-pointer hover:text-zinc-400 select-none", col.className)}
                 >
-                  {col.header}
+                  <span className="inline-flex items-center gap-1">
+                    {col.header}
+                    {onHeaderClick && sortKey === col.key ? (
+                      sortOrder === "desc" ? <ChevronDown size={12} /> : <ChevronUp size={12} />
+                    ) : onHeaderClick ? (
+                      <ChevronsUpDown size={12} className="opacity-20" />
+                    ) : null}
+                  </span>
                 </th>
               ))}
               {rowActions && <th className="w-10" />}

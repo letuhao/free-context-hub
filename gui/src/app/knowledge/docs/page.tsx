@@ -5,6 +5,7 @@ import { useProject } from "@/contexts/project-context";
 import { api } from "@/lib/api";
 import { relTime } from "@/lib/rel-time";
 import {
+  Breadcrumb,
   PageHeader,
   DataTable,
   Badge,
@@ -139,6 +140,7 @@ export default function GeneratedDocsPage() {
 
   return (
     <div className="p-6 max-w-[1100px]">
+      <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Generated Docs" }]} />
       <PageHeader
         title="Generated Documents"
         subtitle="Browse FAQ, RAPTOR summaries, QC reports, and benchmark artifacts"

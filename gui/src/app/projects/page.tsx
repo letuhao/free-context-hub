@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useProject } from "@/contexts/project-context";
 import { api } from "@/lib/api";
 import { relTime } from "@/lib/rel-time";
-import { PageHeader, StatCard, Button, EmptyState } from "@/components/ui";
+import { Breadcrumb, PageHeader, StatCard, Button, EmptyState } from "@/components/ui";
 import { StatCardSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -138,6 +138,7 @@ export default function ProjectsPage() {
 
   return (
     <div className="p-8 max-w-5xl">
+      <Breadcrumb items={[{ label: "Project", href: "/projects" }, { label: "Overview" }]} />
       <PageHeader
         title="Project Overview"
         subtitle={projectId}

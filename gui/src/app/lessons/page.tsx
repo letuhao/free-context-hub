@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useProject } from "@/contexts/project-context";
 import { api } from "@/lib/api";
 import {
+  Breadcrumb,
   PageHeader,
   SearchBar,
   FilterChips,
@@ -186,19 +187,19 @@ export default function LessonsPage() {
       : []),
     {
       key: "title",
-      header: `Title${sortArrow("title")}`,
+      header: `Title`,
       className: "max-w-[320px] cursor-pointer",
       render: (row) => <span className="text-zinc-200">{row.title}</span>,
     },
     {
       key: "type",
-      header: `Type${sortArrow("lesson_type")}`,
+      header: `Type`,
       className: "cursor-pointer",
       render: (row) => <Badge value={row.lesson_type} variant="type" />,
     },
     {
       key: "status",
-      header: `Status${sortArrow("status")}`,
+      header: `Status`,
       className: "cursor-pointer",
       render: (row) => <Badge value={row.status} variant="status" />,
     },
@@ -230,7 +231,7 @@ export default function LessonsPage() {
     },
     {
       key: "created_at",
-      header: `Created${sortArrow("created_at")}`,
+      header: `Created`,
       className: "cursor-pointer",
       render: (row) => <span className="text-zinc-600 text-xs">{relTime(row.created_at)}</span>,
     },
@@ -240,6 +241,7 @@ export default function LessonsPage() {
 
   return (
     <div className="p-6 max-w-[1100px]">
+      <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Lessons" }]} />
       <PageHeader
         title="Lessons"
         subtitle="Browse, search, and manage project knowledge"
@@ -364,6 +366,8 @@ export default function LessonsPage() {
               const field = sortMap[key];
               if (field) handleSort(field);
             }}
+            sortKey={sortField === "lesson_type" ? "type" : sortField === "status" ? "status" : sortField}
+            sortOrder={sortOrder}
             selectable
             bulkActions={[
               { label: "Archive", onClick: handleBulkArchive },

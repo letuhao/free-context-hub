@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useProject } from "@/contexts/project-context";
 import { api } from "@/lib/api";
 import { relTime } from "@/lib/rel-time";
-import { PageHeader, DataTable, Badge, Button, EmptyState, TableSkeleton, type Column } from "@/components/ui";
+import { Breadcrumb, PageHeader, DataTable, Badge, Button, EmptyState, TableSkeleton, type Column } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { AddLessonDialog } from "../lessons/add-lesson-dialog";
 import type { Lesson } from "../lessons/types";
@@ -95,6 +95,7 @@ export default function GuardrailsPage() {
 
   return (
     <div className="p-6 max-w-[1000px]">
+      <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Guardrails" }]} />
       <PageHeader
         title="Guardrails"
         subtitle="Enforce rules and check actions before execution"

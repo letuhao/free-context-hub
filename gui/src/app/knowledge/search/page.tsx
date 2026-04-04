@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useProject } from "@/contexts/project-context";
 import { api } from "@/lib/api";
-import { PageHeader, SearchBar, Badge, EmptyState } from "@/components/ui";
+import { Breadcrumb, PageHeader, SearchBar, Badge, EmptyState } from "@/components/ui";
 import { LineSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
 
@@ -91,6 +91,7 @@ export default function CodeSearchPage() {
 
   return (
     <div className="p-6 max-w-[1100px]">
+      <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Code Search" }]} />
       <PageHeader
         title="Code Search"
         subtitle="Search project code with tiered retrieval"

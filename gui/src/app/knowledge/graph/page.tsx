@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useProject } from "@/contexts/project-context";
 import { api } from "@/lib/api";
-import { PageHeader, Badge, Button, EmptyState, SearchBar } from "@/components/ui";
+import { Breadcrumb, PageHeader, Badge, Button, EmptyState, SearchBar } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 
 interface FeatureCard {
@@ -105,6 +105,7 @@ export default function GraphExplorerPage() {
   if (kgEnabled === false) {
     return (
       <div className="p-6 max-w-[1100px]">
+        <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Graph Explorer" }]} />
         <PageHeader
           title="Knowledge Graph"
           subtitle="Explore symbols, dependencies, and code structure"
@@ -121,6 +122,7 @@ export default function GraphExplorerPage() {
   // ── Main content ──
   return (
     <div className="p-6 max-w-[1100px]">
+      <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Graph Explorer" }]} />
       <PageHeader
         title="Knowledge Graph"
         subtitle="Explore symbols, dependencies, and code structure"

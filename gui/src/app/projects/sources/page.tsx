@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useProject } from "@/contexts/project-context";
 import { api } from "@/lib/api";
-import { PageHeader, Button, EmptyState } from "@/components/ui";
+import { Breadcrumb, PageHeader, Button, EmptyState } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 
 type SourceConfig = {
@@ -133,6 +133,7 @@ export default function SourcesPage() {
   if (initialLoad) {
     return (
       <div className="p-6 max-w-[1000px]">
+        <Breadcrumb items={[{ label: "Project", href: "/projects" }, { label: "Sources" }]} />
         <PageHeader title="Sources" subtitle="Configure project sources and workspace roots" />
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
@@ -145,6 +146,7 @@ export default function SourcesPage() {
 
   return (
     <div className="p-6 max-w-[1000px]">
+      <Breadcrumb items={[{ label: "Project", href: "/projects" }, { label: "Sources" }]} />
       <PageHeader
         title="Sources"
         subtitle="Configure project sources and workspace roots"

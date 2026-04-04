@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { PageHeader, Button, Badge, EmptyState } from "@/components/ui";
+import { Breadcrumb, PageHeader, Button, Badge, EmptyState } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
@@ -136,6 +136,7 @@ export default function ModelProvidersPage() {
 
   return (
     <div className="p-6 max-w-[900px]">
+      <Breadcrumb items={[{ label: "System", href: "/settings" }, { label: "Model Providers" }]} />
       <PageHeader
         title="Model Providers"
         subtitle="Manage AI model providers and feature assignments"

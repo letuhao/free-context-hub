@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
-import { PageHeader, Button, EmptyState, Badge } from "@/components/ui";
+import { Breadcrumb, PageHeader, Button, EmptyState, Badge } from "@/components/ui";
 import { StatCardSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -148,6 +148,7 @@ export default function GroupsPage() {
 
   return (
     <div className="p-8 max-w-5xl">
+      <Breadcrumb items={[{ label: "Project", href: "/projects" }, { label: "Groups" }]} />
       <PageHeader
         title="Project Groups"
         subtitle="Manage shared knowledge groups across projects"

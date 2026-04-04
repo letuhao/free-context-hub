@@ -1,4 +1,5 @@
 export { Badge, JobStatusBadge } from "./badge";
+export { Breadcrumb } from "./breadcrumb";
 export { Button } from "./button";
 export { CommandPalette, type CommandItem } from "./command-palette";
 export { ConfirmDialog } from "./confirm-dialog";
