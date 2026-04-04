@@ -173,6 +173,9 @@
 | 7.7.14 | Documents: drag-drop file upload (needs multipart/FormData BE support) | FE+BE | 1d | 7.4.5 | [ ] |
 | 7.7.15 | Documents: in-doc search scroll-to-match | FE | 0.5d | 7.4.6 | [ ] |
 | 7.7.16 | Lesson detail: linked docs reverse lookup (BE: GET /api/documents?lesson_id=X) | FE+BE | 1d | 7.4.8 | [ ] |
+| 7.7.17 | Import: CSV + Markdown tab implementation | FE | 1d | 7.5.9 | [ ] |
+| 7.7.18 | Import: drag-drop file input for JSON/CSV | FE | 0.5d | 7.5.9 | [ ] |
+| 7.7.19 | Lessons table: Feedback column (needs BE to return counts in list) | FE+BE | 1d | 7.5.6 | [ ] |
 | 7.7.12 | AI editor: floating text selection toolbar ("Ask AI" on selected text) | FE | 2d | 7.3.2 | [ ] |
 | 7.7.13 | AI editor: AI-suggested tags (purple dashed, sparkle icon, accept) | FE+BE | 1d | 7.3.2 | [ ] |
 

@@ -26,16 +26,24 @@ export function ImportDialog({ open, onClose, onImported }: ImportDialogProps) {
   const [importing, setImporting] = useState(false);
   const [parsed, setParsed] = useState(false);
 
-  const handleParse = () => {
+  const handleParse = async () => {
     try {
       const data = JSON.parse(rawInput);
       const lessons = Array.isArray(data) ? data : data.lessons ?? [data];
+
+      // Fetch existing lessons for duplicate check
+      let existingTitles = new Set<string>();
+      try {
+        const existing = await api.listLessons({ project_id: projectId, limit: 200 });
+        existingTitles = new Set((existing.items ?? []).map((l: any) => l.title?.toLowerCase()));
+      } catch {}
+
       const items: PreviewLesson[] = lessons.map((l: any) => ({
         title: l.title ?? "Untitled",
         lesson_type: l.lesson_type ?? "general_note",
         content: l.content ?? "",
         tags: l.tags ?? [],
-        status: "ready" as const,
+        status: existingTitles.has((l.title ?? "").toLowerCase()) ? "duplicate" as const : "ready" as const,
       }));
       setPreview(items);
       setParsed(true);

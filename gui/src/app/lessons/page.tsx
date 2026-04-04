@@ -79,7 +79,7 @@ export default function LessonsPage() {
   }, [searchQuery]);
 
   // Reset page when filters/search change
-  useEffect(() => { setPage(1); }, [debouncedQuery, filterType, filterStatus, filterTags, searchMode, showAllStatuses]);
+  useEffect(() => { setPage(1); }, [debouncedQuery, filterType, filterStatus, filterTags, searchMode, showAllStatuses, showBookmarked]);
 
   // Fetch lessons
   const fetchLessons = useCallback(async () => {
@@ -110,16 +110,27 @@ export default function LessonsPage() {
         if (filterTags.length > 0) params.tags_any = filterTags.join(",");
 
         const result = await api.listLessons(params);
-        setLessons(result.items ?? []);
-        setTotalCount(result.total_count ?? 0);
-        setTotalPages(result.total_pages ?? Math.max(1, Math.ceil((result.total_count ?? 0) / PAGE_SIZE)));
+        let items = result.items ?? [];
+
+        // Client-side bookmark filter
+        if (showBookmarked) {
+          try {
+            const bk = await api.listBookmarks({ user_id: "gui-user", project_id: projectId });
+            const bkIds = new Set((bk.bookmarks ?? []).map((b: any) => b.lesson_id));
+            items = items.filter((l: any) => bkIds.has(l.lesson_id));
+          } catch {}
+        }
+
+        setLessons(items);
+        setTotalCount(showBookmarked ? items.length : (result.total_count ?? 0));
+        setTotalPages(showBookmarked ? 1 : (result.total_pages ?? Math.max(1, Math.ceil((result.total_count ?? 0) / PAGE_SIZE))));
       }
     } catch (err) {
       toast("error", err instanceof Error ? err.message : "Failed to load lessons");
     } finally {
       setLoading(false);
     }
-  }, [projectId, page, debouncedQuery, searchMode, sortField, sortOrder, filterType, filterStatus, filterTags, showAllStatuses, includeGroups, toast]);
+  }, [projectId, page, debouncedQuery, searchMode, sortField, sortOrder, filterType, filterStatus, filterTags, showAllStatuses, showBookmarked, includeGroups, toast]);
 
   useEffect(() => { fetchLessons(); }, [fetchLessons]);
 

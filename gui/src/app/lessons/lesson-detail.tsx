@@ -74,6 +74,7 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick, init
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [newComment, setNewComment] = useState("");
   const [postingComment, setPostingComment] = useState(false);
+  const [replyToId, setReplyToId] = useState<string | null>(null);
 
   // Reset edit state when lesson changes
   useEffect(() => {
@@ -120,6 +121,17 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick, init
       .catch(() => {});
   }, [lesson]);
 
+  // Fetch bookmark state
+  useEffect(() => {
+    if (!lesson) { setBookmarked(false); return; }
+    api.listBookmarks({ user_id: "gui-user", project_id: projectId })
+      .then((res) => {
+        const bkIds = new Set((res.bookmarks ?? []).map((b: any) => b.lesson_id));
+        setBookmarked(bkIds.has(lesson.lesson_id));
+      })
+      .catch(() => setBookmarked(false));
+  }, [lesson, projectId]);
+
   // Fetch comments
   const fetchComments = useCallback(() => {
     if (!lesson) return;
@@ -136,7 +148,9 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick, init
       await api.voteFeedback(lesson.lesson_id, { user_id: "gui-user", vote });
       const res = await api.getFeedback(lesson.lesson_id, "gui-user");
       setFeedback({ up_count: res.up_count ?? 0, down_count: res.down_count ?? 0, user_vote: res.user_vote ?? 0, retrieval_count: res.retrieval_count ?? 0 });
-    } catch {}
+    } catch (err) {
+      toast("error", err instanceof Error ? err.message : "Vote failed");
+    }
   };
 
   const handleToggleBookmark = async () => {
@@ -148,15 +162,18 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick, init
         await api.addBookmark({ user_id: "gui-user", lesson_id: lesson.lesson_id });
       }
       setBookmarked(!bookmarked);
-    } catch {}
+    } catch (err) {
+      toast("error", err instanceof Error ? err.message : "Bookmark failed");
+    }
   };
 
   const handlePostComment = async () => {
     if (!lesson || !newComment.trim()) return;
     setPostingComment(true);
     try {
-      await api.addComment(lesson.lesson_id, { author: "gui-user", content: newComment.trim() });
+      await api.addComment(lesson.lesson_id, { author: "gui-user", content: newComment.trim(), parent_id: replyToId ?? undefined });
       setNewComment("");
+      setReplyToId(null);
       fetchComments();
     } catch (err) {
       toast("error", err instanceof Error ? err.message : "Failed to post comment");
@@ -546,6 +563,7 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick, init
                             <span className="text-[11px] text-zinc-600">{relTime(c.created_at)}</span>
                           </div>
                           <p className="text-sm text-zinc-400 leading-relaxed">{c.content}</p>
+                          <button onClick={() => setReplyToId(c.comment_id)} className="text-[11px] text-zinc-600 hover:text-zinc-400 mt-1 transition-colors">Reply</button>
                           {/* Nested replies */}
                           {c.replies?.map((r: any) => (
                             <div key={r.comment_id} className="flex gap-3 mt-3 pl-2 border-l-2 border-zinc-800">
@@ -564,11 +582,17 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick, init
                     ))}
                     {/* Add comment */}
                     <div className="pt-3 border-t border-zinc-800">
+                      {replyToId && (
+                        <div className="flex items-center gap-2 mb-2 text-[11px] text-zinc-500">
+                          <span>Replying to comment</span>
+                          <button onClick={() => setReplyToId(null)} className="text-zinc-600 hover:text-zinc-400">&times; Cancel</button>
+                        </div>
+                      )}
                       <textarea
                         rows={2}
                         value={newComment}
                         onChange={(e) => setNewComment(e.target.value)}
-                        placeholder="Add a comment..."
+                        placeholder={replyToId ? "Write a reply..." : "Add a comment..."}
                         className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-300 outline-none placeholder-zinc-600 resize-none focus:border-zinc-600 transition-colors"
                       />
                       <div className="flex items-center justify-end mt-2">
