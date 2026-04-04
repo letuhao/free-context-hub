@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useProject } from "@/contexts/project-context";
 import { api } from "@/lib/api";
+import { useToast } from "@/components/ui/toast";
 import { Plus, Search, PanelLeftClose, PanelLeftOpen, Trash2 } from "lucide-react";
 import { relTime } from "@/lib/rel-time";
 
@@ -23,6 +24,7 @@ interface ChatHistorySidebarProps {
 
 export function ChatHistorySidebar({ activeId, onSelect, onNewChat, refreshKey }: ChatHistorySidebarProps) {
   const { projectId } = useProject();
+  const { toast } = useToast();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -32,8 +34,9 @@ export function ChatHistorySidebar({ activeId, onSelect, onNewChat, refreshKey }
     try {
       const res = await api.listConversations({ project_id: projectId });
       setConversations(res.conversations ?? []);
-    } catch {
+    } catch (err) {
       setConversations([]);
+      toast("error", "Failed to load conversations");
     } finally {
       setLoading(false);
     }
@@ -51,7 +54,9 @@ export function ChatHistorySidebar({ activeId, onSelect, onNewChat, refreshKey }
       await api.deleteConversation(id, { project_id: projectId });
       fetchConversations();
       if (activeId === id) onNewChat();
-    } catch {}
+    } catch {
+      toast("error", "Failed to delete conversation");
+    }
   };
 
   if (collapsed) {

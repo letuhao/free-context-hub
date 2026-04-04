@@ -46,7 +46,7 @@ export function ConfirmDialog({
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-[fadeIn_0.15s_ease-out]" onClick={onClose} />
-      <div className="relative w-[400px] bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-2xl animate-[fadeInScale_0.2s_ease-out]">
+      <div role="dialog" aria-label={title} className="relative w-[400px] bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-2xl animate-[fadeInScale_0.2s_ease-out]">
         <h3 className="text-base font-semibold text-zinc-100 mb-2">{title}</h3>
         <p className="text-sm text-zinc-400 mb-4 leading-relaxed">{description}</p>
 

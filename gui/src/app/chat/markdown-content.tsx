@@ -2,6 +2,8 @@
 
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeHighlight from "rehype-highlight";
+import "highlight.js/styles/github-dark-dimmed.min.css";
 import { useState } from "react";
 import { Copy, Check } from "lucide-react";
 
@@ -50,6 +52,7 @@ export function MarkdownContent({ content }: { content: string }) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
+      rehypePlugins={[rehypeHighlight]}
       components={{
         code: CodeBlock,
         h1: ({ children }) => <h1 className="text-base font-semibold text-zinc-100 pb-1 border-b border-zinc-800 mb-2">{children}</h1>,

@@ -7,7 +7,7 @@ import type { UIMessage } from "ai";
 import { useProject } from "@/contexts/project-context";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
-import { Send, Square, Copy, Check, Bookmark, Pencil, RotateCcw, Sparkles, Pin, ChevronUp, ChevronDown, Bot, MessageSquare } from "lucide-react";
+import { Send, Square, Copy, Check, Bookmark, Pencil, RotateCcw, Sparkles, Pin, ChevronUp, ChevronDown, Bot, MessageSquare, Search, Code2, Shield, Wrench, Paperclip } from "lucide-react";
 import { MarkdownContent } from "./markdown-content";
 import { ChatHistorySidebar } from "./chat-history-sidebar";
 import { CreateLessonPopover } from "./create-lesson-popover";
@@ -113,8 +113,10 @@ function ToolCallDisplay({ part }: { part: any }) {
   const result = part.toolInvocation?.result ?? part.result;
   const state: string = part.toolInvocation?.state ?? part.state ?? "call";
 
-  const toolIcons: Record<string, string> = {
-    search_lessons: "🔍", search_code: "💻", check_guardrails: "🛡️",
+  const toolIcons: Record<string, React.ReactNode> = {
+    search_lessons: <Search size={14} className="text-blue-400" />,
+    search_code: <Code2 size={14} className="text-emerald-400" />,
+    check_guardrails: <Shield size={14} className="text-red-400" />,
   };
 
   return (
@@ -123,7 +125,7 @@ function ToolCallDisplay({ part }: { part: any }) {
         onClick={() => setExpanded(!expanded)}
         className="w-full px-3 py-2.5 flex items-center gap-2.5 text-left hover:bg-zinc-800/30 transition-colors"
       >
-        <span className="text-blue-400 text-xs">{toolIcons[toolName] ?? "🔧"}</span>
+        <span className="shrink-0">{toolIcons[toolName] ?? <Wrench size={14} className="text-zinc-400" />}</span>
         <span className="text-xs font-mono text-zinc-300">{toolName}</span>
         <span className="ml-auto">
           {state === "call" ? (
@@ -375,6 +377,13 @@ export default function ChatPage() {
         {/* Input bar */}
         <div className="border-t border-zinc-800 px-6 py-3 shrink-0">
           <div className="max-w-2xl mx-auto flex items-end gap-2 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 focus-within:border-zinc-600 transition-colors">
+            {/* Attachment button */}
+            <button
+              className="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-600 hover:text-zinc-400 transition-colors shrink-0 mb-0.5"
+              title="Attach file"
+            >
+              <Paperclip size={16} />
+            </button>
             <textarea
               ref={textareaRef}
               rows={1}
@@ -390,6 +399,12 @@ export default function ChatPage() {
               autoFocus
             />
             <div className="flex items-center gap-2 shrink-0 mb-0.5">
+              {/* Model selector pill */}
+              <button className="px-2.5 py-1 text-[11px] bg-zinc-800 border border-zinc-700 rounded-full text-zinc-400 hover:border-zinc-600 hover:text-zinc-300 transition-colors flex items-center gap-1">
+                <Bot size={10} />
+                Auto
+                <ChevronDown size={10} />
+              </button>
               {isStreaming ? (
                 <button
                   onClick={() => stop()}

@@ -169,6 +169,9 @@
 | 7.7.8 | Empty state improvements (gradient rings) | FE | 0.5d | — | [ ] |
 | 7.7.9 | Integration testing — all new endpoints + GUI flows | QA | 2d | All | [ ] |
 | 7.7.10 | Update screenshots + docs with final implementation | Docs | 0.5d | All | [ ] |
+| 7.7.11 | Chat: conversation loading on sidebar click (needs useChat reset/separate state) | FE | 1d | 7.3.5 | [ ] |
+| 7.7.12 | AI editor: floating text selection toolbar ("Ask AI" on selected text) | FE | 2d | 7.3.2 | [ ] |
+| 7.7.13 | AI editor: AI-suggested tags (purple dashed, sparkle icon, accept) | FE+BE | 1d | 7.3.2 | [ ] |
 
 **Deliverable:** Phase 7 complete
 

@@ -34,6 +34,8 @@ export function SlideOver({ open, onClose, title, subtitle, children, footer, wi
 
       {/* Panel */}
       <div
+        role="dialog"
+        aria-label={typeof title === "string" ? title : "Panel"}
         className={cn(
           "relative bg-zinc-900 border-l border-zinc-800 flex flex-col h-full animate-[slideInRight_0.2s_ease-out]",
           wide ? "w-[480px]" : "w-[380px]",

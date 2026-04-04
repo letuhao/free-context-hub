@@ -223,7 +223,7 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick, init
 
       {/* Center modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
-        <div className="w-full max-w-3xl max-h-[85vh] bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl flex flex-col animate-[fadeInScale_0.2s_ease-out]">
+        <div role="dialog" aria-label="Lesson detail" className="w-full max-w-3xl max-h-[85vh] bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl flex flex-col animate-[fadeInScale_0.2s_ease-out]">
 
           {/* Header */}
           <div className="px-6 pt-4 pb-3 border-b border-zinc-800 shrink-0">
