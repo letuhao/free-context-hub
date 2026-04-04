@@ -10,7 +10,7 @@ It also provides a **web GUI** for humans to review, approve, and refine AI-gene
 
 ## Screenshots (Draft Design)
 
-> These are design drafts for the upcoming GUI enhancement phase. The core 14 pages are functional; enhanced features are being implemented.
+> Phase 7 GUI complete — 20 pages, 28+ REST endpoints, full human-in-the-loop workflow.
 
 ### Dashboard — Knowledge health, insights, activity feed
 ![Dashboard](docs/screenshots/dashboard.png)
@@ -177,37 +177,19 @@ We tested 8 embedding models and 8 reranker models ([full benchmark](docs/benchm
 - [x] **Phase 4**: Knowledge Graph (Neo4j, symbol-level)
 - [x] **Phase 5**: Git Intelligence & Automation
 - [x] **Phase 6**: Retrieval Quality Tuning & Tiered Search
-
-**In Progress:**
-- [ ] **Phase 7**: Interactive GUI — web dashboard (Next.js) for browsing lessons, guardrails, and knowledge graph
-  - [x] Core pages: Dashboard, Chat, Lessons, Guardrails, Jobs, Knowledge (Docs/Graph/Search), Projects (Overview/Groups/Git/Sources), Settings (System/Models) — 14 pages functional
-  - [x] Shared component library: Badge, Button, DataTable, CommandPalette, ConfirmDialog, EmptyState, ErrorBanner, FilterChips, LoadingSkeleton, PageHeader, SearchBar, SlideOver, StatCard, Toast, Sidebar
-  - [ ] **GUI Enhancement Phase** (draft complete, implementation pending):
-    - [ ] Replace emoji icons with Lucide React icon library
-    - [ ] Markdown rendering in Chat (react-markdown + syntax highlighting)
-    - [ ] Breadcrumbs on all nested pages
-    - [ ] Sticky table headers, sort indicators, enhanced pagination (page numbers + jump box)
-    - [ ] SlideOver/Toast/Modal animations (slide-in, fade-in, backdrop blur)
-    - [ ] Dashboard redesign (3 focused zones, knowledge health score, insights panel)
-    - [ ] Document management page (upload/link docs, viewer with in-doc search, generate lessons from docs)
-    - [ ] Review Inbox (draft→review→active approval pipeline, agent trust levels)
-    - [ ] Activity & Notifications (timeline feed, notification bell, preferences)
-    - [ ] Knowledge Analytics (retrieval trends, dead knowledge, agent activity)
-    - [ ] Chat enhancements (history sidebar, pinned messages, "Create Lesson from Answer")
-    - [ ] Lesson editing (AI-assisted editor with chunk selection, diff view, per-chunk accept/reject)
-    - [ ] Global search (Cmd+K across lessons, docs, code, guardrails, commits)
-    - [ ] Guided Onboarding (learning path with progress tracker)
-    - [ ] Comments & discussions on lessons
-    - [ ] Feedback signals (thumbs up/down, retrieval count)
-    - [ ] Bookmarks / favorites
-    - [ ] Keyboard shortcuts overlay
-    - [ ] Import/Export (JSON, CSV, Markdown)
-  - Design drafts: [`docs/gui-drafts/`](docs/gui-drafts/) — 21 pages + 16 components as standalone HTML
+- [x] **Phase 7**: Interactive GUI & Human-in-the-Loop — 20 pages, 28+ REST endpoints
+  - [x] **7.1**: Foundation — Lucide icons, breadcrumbs, animations, pagination, keyboard shortcuts overlay
+  - [x] **7.2**: Lesson editing — version history (view/restore), review inbox (batch approve/reject), status tabs
+  - [x] **7.3**: AI-assisted features — markdown rendering (syntax highlight), chat history sidebar, create lesson from chat, pinned messages, AI editor (Clarify/Simplify/Expand/Custom + diff view with accept/reject)
+  - [x] **7.4**: Documents — upload/link, viewer with in-doc search, AI lesson generation, linked docs in lesson detail
+  - [x] **7.5**: Collaboration — threaded comments, feedback (thumbs up/down), bookmarks, import/export (JSON)
+  - [x] **7.6**: Observability — activity timeline, analytics (donut chart, dead knowledge, agent activity), getting started (learning path), dashboard insights (health score ring)
+  - [x] **7.7**: Polish — global search Cmd+K, agent trust levels, responsive sidebar, notification settings persistence, feedback column in lessons table
 
 **Planned:**
-- [ ] **Phase 8**: Human-in-the-loop Correction — review workflows, knowledge quality management, collaborative editing (partially absorbed into Phase 7 GUI enhancements)
-- [ ] **Phase 9**: Multi-format Ingestion (PDF, DOCX, Images) — document management foundation laid in Phase 7
-- [ ] **Phase 10**: Knowledge Portability (import/export) — basic import/export included in Phase 7, full exchange hub deferred
+- [ ] **Phase 8**: Advanced HITL — access control (roles/permissions), custom lesson types/templates, rich content editor, agent audit trail
+- [ ] **Phase 9**: Multi-format Ingestion — PDF/DOCX/image parsing pipelines (document foundation from Phase 7)
+- [ ] **Phase 10**: Knowledge Portability — cross-instance sync, exchange hub (basic import/export done in Phase 7)
 
 **Dropped:**
 - ~~Multi-Agent Passive Collection~~ — Parsing agent conversations costs tokens (contradicts "reduce token usage" goal), most conversation is noise, `add_lesson` captures verified conclusions explicitly.

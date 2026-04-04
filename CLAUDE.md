@@ -126,19 +126,19 @@ free-context-hub/
 ├── src/                    # Backend (Node.js + TypeScript)
 │   ├── index.ts            # Main entry — MCP :3000 + REST API :3001
 │   ├── worker.ts           # Background job worker
-│   ├── api/routes/         # REST endpoints (11 route files, 42 endpoints)
+│   ├── api/routes/         # REST endpoints (14 route files, 70+ endpoints)
 │   ├── mcp/                # MCP tools (36 tools)
 │   ├── services/           # Business logic
 │   ├── db/                 # Database utilities
 │   ├── core/               # Logger, migrations, KG bootstrap
 │   └── env.ts              # Environment config
 ├── gui/                    # Frontend (Next.js 16 + React 19 + Tailwind)
-│   ├── src/app/            # Pages (14 functional)
-│   ├── src/components/     # Shared components (15)
+│   ├── src/app/            # Pages (20 functional)
+│   ├── src/components/     # Shared components (18)
 │   ├── src/contexts/       # React contexts
 │   ├── src/lib/            # API client, utilities
 │   └── Dockerfile          # Multi-stage Next.js Docker build
-├── migrations/             # PostgreSQL migrations (30 files)
+├── migrations/             # PostgreSQL migrations (38 files)
 ├── docs/
 │   ├── gui-drafts/         # HTML draft designs (21 pages + 16 components)
 │   ├── screenshots/        # README screenshots
@@ -160,15 +160,15 @@ Search,         Compress,       Symbol search,  Suggest lessons,
 Guardrails      Summarize       Impact analysis Commit analysis
     │               │               │               │
     ▼               ▼               ▼               ▼
-Phase 6 ✅      Phase 7 🔧      Phase 8 ○       Phase 9 ○       Phase 10 ○
+Phase 6 ✅      Phase 7 ✅      Phase 8 ○       Phase 9 ○       Phase 10 ○
 Retrieval       GUI &           Advanced        Multi-format    Knowledge
 Quality         Human-in-loop   HITL            Ingestion       Portability
-Tiered search,  Web dashboard,  Access control, PDF, DOCX,      Exchange hub,
+Tiered search,  20 pages,       Access control, PDF, DOCX,      Exchange hub,
 Reranking,      Review inbox,   Custom types,   Images,         Cross-instance
 Redis cache,    AI editor,      Rich content,   Parsing         sync
 QC eval loop    Documents,      Agent audit     pipelines
                 Analytics,
-                Chat history
+                Global search
 ```
 
 | Phase | Status | Key Deliverables |
@@ -178,28 +178,30 @@ QC eval loop    Documents,      Agent audit     pipelines
 | **4** | ✅ Complete | Neo4j knowledge graph, symbol extraction (ts-morph), dependency tracing |
 | **5** | ✅ Complete | Git commit ingestion, lesson suggestions, impact analysis, job queue |
 | **6** | ✅ Complete | Tiered search (ripgrep→FTS→semantic), reranking, Redis cache, QC eval loop |
-| **7** | 🔧 In progress | GUI (14 pages functional, enhancement drafts complete, implementation pending) |
+| **7** | ✅ Complete | GUI (20 pages, 28+ REST endpoints, 7 sprints, 38 migrations) |
 | **8** | ○ Planned | Access control (roles), custom lesson types/templates, rich content, agent audit |
 | **9** | ○ Planned | PDF/DOCX/Image ingestion pipelines (document foundation in Phase 7) |
 | **10** | ○ Planned | Import/export exchange hub, cross-instance sync (basic I/O in Phase 7) |
 
-## Phase 7 — Current Work
+## Phase 7 — Complete
 
-**Status:** Core GUI functional (14 pages). Enhancement phase in draft design, implementation pending.
+**Status:** All 7 sprints complete. 20 pages, 28+ REST endpoints, 38 migrations.
 
 **Task tracking:** `docs/phase7-task-breakdown.md`
 
 | Sprint | Focus | Status |
 |--------|-------|--------|
-| 7.1 | Foundation & FE refactor (icons, breadcrumbs, animations) | Not started |
-| 7.2 | Lesson editing & review workflow | Not started |
-| 7.3 | AI-assisted features (editor, chat history) | Not started |
-| 7.4 | Documents & knowledge management | Not started |
-| 7.5 | Collaboration & feedback (comments, import/export) | Not started |
-| 7.6 | Activity, analytics & onboarding | Not started |
-| 7.7 | Polish & integration testing | Not started |
+| 7.1 | Foundation & FE refactor (icons, breadcrumbs, animations, keyboard shortcuts) | ✅ |
+| 7.2 | Lesson editing & review workflow (version history, review inbox, status tabs) | ✅ |
+| 7.3 | AI-assisted features (markdown, chat sidebar, AI editor, pinned messages) | ✅ |
+| 7.4 | Documents & knowledge management (upload, viewer, AI lesson generation) | ✅ |
+| 7.5 | Collaboration & feedback (comments, thumbs, bookmarks, import/export) | ✅ |
+| 7.6 | Activity, analytics & onboarding (timeline, donut chart, learning path) | ✅ |
+| 7.7 | Polish (global search Cmd+K, agent trust, responsive, feedback column) | ✅ |
 
-**Design drafts:** Open `docs/gui-drafts/index.html` in browser for full catalog.
+**GUI pages:** Dashboard, Chat, Lessons, Review Inbox, Guardrails, Documents, Getting Started, Activity, Analytics, Generated Docs, Code Search, Graph Explorer, Projects (Overview/Groups/Git/Sources), Jobs, Settings, Model Providers
+
+**Design drafts:** `docs/gui-drafts/` — 21 pages + 16 components as standalone HTML (used as reference during implementation).
 
 ## Dev Commands
 
