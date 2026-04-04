@@ -82,7 +82,7 @@
 | 7.3.1 | `POST /api/lessons/:id/improve` — AI rewrite endpoint (uses chat model) | BE | 2d | — | [ ] |
 | 7.3.2 | AI-assisted editor — chunk selection, Ask AI toolbar, diff view, per-chunk accept/reject | FE | 3d | 7.2.4, 7.3.1 | [ ] |
 | 7.3.3 | `POST /api/chat/conversations` + `GET /api/chat/conversations` — persist chat | BE | 1.5d | 7.3.4 | [ ] |
-| 7.3.4 | `chat_conversations` + `chat_messages` tables + migration | BE | 1d | — | [ ] |
+| 7.3.4 | `chat_conversations` + `chat_messages` tables + migration | BE | 1d | — | [✓] |
 | 7.3.5 | Chat history sidebar, load/switch conversations | FE | 2d | 7.3.3 | [ ] |
 | 7.3.6 | "Create Lesson from Answer" — popover with pre-filled fields | FE | 1d | — | [ ] |
 | 7.3.7 | Chat markdown rendering (`react-markdown` + `rehype-highlight`) | FE | 1d | — | [ ] |
