@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import {
-  getRetrievalStats, getLessonsByType,
+  getRetrievalStats, getLessonsByType, getRetrievalTimeseries,
   getMostRetrievedLessons, getDeadKnowledge, getAgentActivity,
 } from '../../services/analytics.js';
 import { resolveProjectIdOrThrow } from '../../core/index.js';
@@ -40,6 +40,16 @@ router.get('/dead-knowledge', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
     const result = await getDeadKnowledge({ projectId, limit: req.query.limit ? Number(req.query.limit) : undefined });
+    res.json(result);
+  } catch (e) { next(e); }
+});
+
+/** GET /api/analytics/timeseries — daily retrieval counts for charts */
+router.get('/timeseries', async (req, res, next) => {
+  try {
+    const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
+    const days = req.query.days ? Number(req.query.days) : undefined;
+    const result = await getRetrievalTimeseries({ projectId, days });
     res.json(result);
   } catch (e) { next(e); }
 });

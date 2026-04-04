@@ -71,6 +71,32 @@ export async function getLessonsByType(params: {
   return { breakdown };
 }
 
+/** Retrieval timeseries — daily activity counts for charting. */
+export async function getRetrievalTimeseries(params: {
+  projectId: string;
+  days?: number;
+}): Promise<{ points: { date: string; count: number }[] }> {
+  const pool = getDbPool();
+  const days = params.days ?? 30;
+  const result = await pool.query(
+    `SELECT d::date AS date, COALESCE(cnt, 0)::int AS count
+     FROM generate_series(
+       (now() - interval '1 day' * $2)::date,
+       now()::date,
+       '1 day'::interval
+     ) d
+     LEFT JOIN (
+       SELECT created_at::date AS day, COUNT(*) AS cnt
+       FROM activity_log
+       WHERE project_id = $1 AND created_at >= now() - interval '1 day' * $2
+       GROUP BY created_at::date
+     ) a ON a.day = d::date
+     ORDER BY date ASC`,
+    [params.projectId, days],
+  );
+  return { points: result.rows.map((r: any) => ({ date: String(r.date).slice(0, 10), count: r.count })) };
+}
+
 /** Most/least retrieved lessons (using feedback upvotes as proxy for "useful"). */
 export async function getMostRetrievedLessons(params: {
   projectId: string;

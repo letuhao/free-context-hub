@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import multer from 'multer';
 import {
   createDocument,
   listDocuments,
@@ -11,8 +12,34 @@ import {
 import { resolveProjectIdOrThrow } from '../../core/index.js';
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB
 
-/** POST /api/documents — create a document */
+/** POST /api/documents/upload — multipart file upload */
+router.post('/upload', upload.single('file'), async (req, res, next) => {
+  try {
+    const projectId = resolveProjectIdOrThrow(req.body.project_id);
+    const file = req.file;
+    if (!file) { res.status(400).json({ status: 'error', error: 'No file uploaded' }); return; }
+
+    const name = file.originalname;
+    const content = file.buffer.toString('utf-8');
+    const ext = name.split('.').pop()?.toLowerCase();
+    const docType = ext === 'md' ? 'markdown' : ext === 'pdf' ? 'pdf' : 'text';
+
+    const result = await createDocument({
+      projectId,
+      name,
+      docType,
+      content,
+      fileSizeBytes: file.size,
+      description: req.body.description ?? undefined,
+      tags: req.body.tags ? JSON.parse(req.body.tags) : undefined,
+    });
+    res.status(201).json(result);
+  } catch (e) { next(e); }
+});
+
+/** POST /api/documents — create a document (JSON body) */
 router.post('/', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
@@ -38,6 +65,7 @@ router.get('/', async (req, res, next) => {
       projectId,
       docType: req.query.doc_type as string | undefined,
       linked: req.query.linked as 'linked' | 'unlinked' | undefined,
+      lessonId: req.query.lesson_id as string | undefined,
       limit: req.query.limit ? Number(req.query.limit) : undefined,
     });
     res.json(result);

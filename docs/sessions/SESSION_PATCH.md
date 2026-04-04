@@ -8,7 +8,7 @@ phase: BE Complete, FE In Progress
 # Session Patch — 2026-04-04
 
 ## Where We Are
-Phase: **Phase 7 — BE complete (22/22), FE Sprint 7.1-7.6 complete.**
+Phase: **Phase 7 — BE complete (22+6=28), FE Sprint 7.1-7.6 complete, Sprint 7.7 BE complete.**
 
 ## What Was Done This Session
 
@@ -110,8 +110,16 @@ New BE surface:
 - [✓] 7.6.10: Dashboard insights — Knowledge Health Score (SVG circular ring), Insights panel (lightbulb icon, border-left indicators)
 - 10 new API methods, 3 new pages (/activity, /analytics, /getting-started), sidebar links (Activity, Analytics, Getting Started)
 
+### Sprint 7.7 BE — COMPLETE (6/6)
+- [✓] 7.7.16: listDocuments — add `lesson_id` filter (subquery on document_lessons)
+- [✓] 7.7.19: listLessons — return `feedback_up`/`feedback_down` counts via LEFT JOIN on lesson_feedback
+- [✓] 7.7.21: `GET /api/analytics/timeseries` — daily activity counts with generate_series fill
+- [✓] 7.7.14: `POST /api/documents/upload` — multipart file upload via multer (memoryStorage, 10MB limit)
+- [✓] 7.7.13: `POST /api/lessons/:id/suggest-tags` — keyword extraction from title+content, stopword filter
+- [✓] 7.7.20: notification_settings table (migration 0038) + `GET/PUT /api/notifications/settings` CRUD
+
 ## Next Steps
-1. **FE Sprint 7.7** — Global search Cmd+K, guardrail UX, responsive, polish
+1. **FE Sprint 7.7** — Global search Cmd+K, guardrail UX, responsive, agent trust, polish
 
 ## Key Decisions This Session
 - **Drafts before code** — design all enhancements as HTML first, review, then implement

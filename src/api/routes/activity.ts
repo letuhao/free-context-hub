@@ -66,4 +66,41 @@ notifRouter.patch('/mark-read', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+/** GET /api/notifications/settings — get notification settings for a user+project */
+notifRouter.get('/settings', async (req, res, next) => {
+  try {
+    const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
+    const userId = (req.query.user_id as string) ?? 'gui-user';
+    const { getDbPool } = await import('../../db/client.js');
+    const pool = getDbPool();
+    const result = await pool.query(
+      `SELECT setting_key, enabled FROM notification_settings WHERE user_id = $1 AND project_id = $2`,
+      [userId, projectId],
+    );
+    const settings: Record<string, boolean> = {};
+    for (const row of result.rows) settings[row.setting_key] = row.enabled;
+    res.json({ status: 'ok', settings });
+  } catch (e) { next(e); }
+});
+
+/** PUT /api/notifications/settings — update notification settings */
+notifRouter.put('/settings', async (req, res, next) => {
+  try {
+    const projectId = resolveProjectIdOrThrow(req.body.project_id);
+    const userId = req.body.user_id ?? 'gui-user';
+    const settings: Record<string, boolean> = req.body.settings ?? {};
+    const { getDbPool } = await import('../../db/client.js');
+    const pool = getDbPool();
+    for (const [key, enabled] of Object.entries(settings)) {
+      await pool.query(
+        `INSERT INTO notification_settings (user_id, project_id, setting_key, enabled, updated_at)
+         VALUES ($1, $2, $3, $4, now())
+         ON CONFLICT (user_id, project_id, setting_key) DO UPDATE SET enabled = $4, updated_at = now()`,
+        [userId, projectId, key, enabled],
+      );
+    }
+    res.json({ status: 'ok' });
+  } catch (e) { next(e); }
+});
+
 export { notifRouter as notificationsRouter };

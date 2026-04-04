@@ -43,6 +43,7 @@ export async function listDocuments(params: {
   projectId: string;
   docType?: string;
   linked?: 'linked' | 'unlinked';
+  lessonId?: string;
   limit?: number;
 }): Promise<{ items: Document[]; total_count: number }> {
   const pool = getDbPool();
@@ -55,6 +56,11 @@ export async function listDocuments(params: {
   if (params.docType) {
     where += ` AND d.doc_type = $${argIdx++}`;
     args.push(params.docType);
+  }
+
+  if (params.lessonId) {
+    where += ` AND d.doc_id IN (SELECT doc_id FROM document_lessons WHERE lesson_id = $${argIdx++})`;
+    args.push(params.lessonId);
   }
 
   const countRes = await pool.query(

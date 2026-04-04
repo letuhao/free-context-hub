@@ -47,6 +47,8 @@ export type LessonItem = {
   quick_action: string | null;
   status: LessonStatus;
   superseded_by: string | null;
+  feedback_up?: number;
+  feedback_down?: number;
 };
 
 export type AddLessonResult = {
@@ -75,6 +77,8 @@ function mapLessonRow(r: any): LessonItem {
     quick_action: r.quick_action != null ? String(r.quick_action) : null,
     status: String(r.status ?? 'active') as LessonStatus,
     superseded_by: r.superseded_by != null ? String(r.superseded_by) : null,
+    feedback_up: r.feedback_up ?? 0,
+    feedback_down: r.feedback_down ?? 0,
   };
 }
 
@@ -376,6 +380,8 @@ export async function listLessons(params: ListLessonsParams): Promise<ListLesson
   }
 
   const whereSql = whereParts.join(' AND ');
+  // Qualified version for JOIN queries (alias "l")
+  const whereSqlL = whereParts.map(p => p.replace(/^(project_id|lesson_type|tags|status|title|content)/g, 'l.$1')).join(' AND ');
 
   // ── Count ──
   const countRes = await pool.query(
@@ -388,7 +394,7 @@ export async function listLessons(params: ListLessonsParams): Promise<ListLesson
   const dataParams = [...whereParams];
   const useOffset = params.offset !== undefined && params.offset >= 0;
 
-  let dataWhereSql = whereSql;
+  let dataWhereSql = whereSqlL;
   let paginationSql: string;
 
   if (useOffset) {
@@ -401,18 +407,26 @@ export async function listLessons(params: ListLessonsParams): Promise<ListLesson
       const { createdAtIso, lessonId } = decodeCursor(params.after.trim());
       dataParams.push(createdAtIso);
       dataParams.push(lessonId);
-      dataWhereSql += ` AND (created_at, lesson_id) < ($${dataParams.length - 1}::timestamptz, $${dataParams.length}::uuid)`;
+      dataWhereSql += ` AND (l.created_at, l.lesson_id) < ($${dataParams.length - 1}::timestamptz, $${dataParams.length}::uuid)`;
     }
     dataParams.push(limit);
     paginationSql = `LIMIT $${dataParams.length}`;
   }
 
-  const orderSql = `ORDER BY ${sortField} ${sortOrder}, lesson_id ${sortOrder}`;
+  const orderSql = `ORDER BY l.${sortField} ${sortOrder}, l.lesson_id ${sortOrder}`;
 
   const res = await pool.query(
-    `SELECT lesson_id, project_id, lesson_type, title, content, tags, source_refs,
-            created_at, updated_at, captured_by, summary, quick_action, status, superseded_by
-     FROM lessons
+    `SELECT l.lesson_id, l.project_id, l.lesson_type, l.title, l.content, l.tags, l.source_refs,
+            l.created_at, l.updated_at, l.captured_by, l.summary, l.quick_action, l.status, l.superseded_by,
+            COALESCE(fb.up_count, 0)::int AS feedback_up,
+            COALESCE(fb.down_count, 0)::int AS feedback_down
+     FROM lessons l
+     LEFT JOIN (
+       SELECT lesson_id,
+              COUNT(*) FILTER (WHERE vote = 1) AS up_count,
+              COUNT(*) FILTER (WHERE vote = -1) AS down_count
+       FROM lesson_feedback GROUP BY lesson_id
+     ) fb ON fb.lesson_id = l.lesson_id
      WHERE ${dataWhereSql}
      ${orderSql}
      ${paginationSql};`,

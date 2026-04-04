@@ -110,6 +110,46 @@ router.post('/:id/improve', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+/** POST /api/lessons/:id/suggest-tags — AI-suggest tags based on lesson content */
+router.post('/:id/suggest-tags', async (req, res, next) => {
+  try {
+    const projectId = resolveProjectIdOrThrow(req.body.project_id);
+    const { getDbPool } = await import('../../db/client.js');
+    const pool = getDbPool();
+    const existing = await pool.query(
+      `SELECT title, content, tags FROM lessons WHERE project_id=$1 AND lesson_id=$2`,
+      [projectId, req.params.id],
+    );
+    if (existing.rows.length === 0) {
+      res.status(404).json({ status: 'error', error: 'lesson not found' });
+      return;
+    }
+    const lesson = existing.rows[0];
+    const currentTags: string[] = lesson.tags ?? [];
+
+    // Simple keyword extraction — extract meaningful words from title+content not already in tags
+    const text = `${lesson.title} ${lesson.content}`.toLowerCase();
+    const stopWords = new Set(['the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had',
+      'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'shall',
+      'for', 'and', 'but', 'or', 'nor', 'not', 'so', 'yet', 'both', 'either', 'neither',
+      'in', 'on', 'at', 'to', 'from', 'by', 'with', 'of', 'as', 'if', 'when', 'than', 'that', 'this',
+      'it', 'its', 'we', 'our', 'you', 'your', 'they', 'their', 'he', 'she', 'him', 'her',
+      'all', 'each', 'every', 'some', 'any', 'no', 'more', 'most', 'other', 'such',
+      'use', 'using', 'used', 'also', 'just', 'about', 'into', 'over', 'after', 'before']);
+    const words = text.match(/[a-z][a-z0-9_-]{2,}/g) ?? [];
+    const freq: Record<string, number> = {};
+    for (const w of words) {
+      if (!stopWords.has(w) && !currentTags.includes(w)) freq[w] = (freq[w] ?? 0) + 1;
+    }
+    const suggestions = Object.entries(freq)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([tag]) => tag);
+
+    res.json({ status: 'ok', suggestions, current_tags: currentTags });
+  } catch (e) { next(e); }
+});
+
 /** GET /api/lessons/:id/versions — list version history for a lesson */
 router.get('/:id/versions', async (req, res, next) => {
   try {
