@@ -88,7 +88,7 @@ router.patch('/:id/messages/:msgId/pin', async (req, res, next) => {
 /** DELETE /api/chat/conversations/:id — delete conversation + messages */
 router.delete('/:id', async (req, res, next) => {
   try {
-    const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined ?? req.body?.project_id);
+    const projectId = resolveProjectIdOrThrow((req.query.project_id as string | undefined) ?? req.body?.project_id);
     const deleted = await deleteConversation({
       conversationId: req.params.id,
       projectId,

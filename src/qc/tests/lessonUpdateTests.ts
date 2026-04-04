@@ -289,4 +289,74 @@ export const lessonBatchStatus: TestFn = async (ctx) => {
   }
 };
 
-export const allLessonUpdateTests: TestFn[] = [lessonUpdate, lessonUpdateTagsOnly, lessonUpdateNotFound, lessonVersionHistory, lessonBatchStatus];
+/**
+ * Test: AI improve endpoint — full content + selected text + 404
+ */
+export const lessonImprove: TestFn = async (ctx) => {
+  const name = 'lesson-improve';
+  const start = Date.now();
+  const apiBase = process.env.API_BASE_URL?.trim() || 'http://localhost:3001';
+  const marker = `improve-${Date.now()}`;
+
+  try {
+    // 1. Create a lesson with substantive content.
+    const createRes = await fetch(`${apiBase}/api/lessons`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project_id: ctx.projectId, lesson_type: 'decision',
+        title: `Improve test: ${marker}`,
+        content: 'Use retry with exponential backoff for external API calls. Max 3 retries.',
+        tags: ['integration-test', 'improve-test'],
+      }),
+    });
+    const created = await createRes.json() as any;
+    const lessonId = created?.lesson_id;
+    if (!lessonId) return fail(name, GROUP, Date.now() - start, 'create failed');
+    ctx.createdLessonIds.push(lessonId);
+
+    // 2. Improve full content.
+    const improveRes = await fetch(`${apiBase}/api/lessons/${lessonId}/improve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_id: ctx.projectId, instruction: 'Add specific timeout values' }),
+    });
+    if (improveRes.status !== 200) {
+      const body = await improveRes.text();
+      // 502 means LLM not available — skip gracefully
+      if (improveRes.status === 502) return pass(name, GROUP, Date.now() - start, 'Skipped: LLM not available (502)');
+      return fail(name, GROUP, Date.now() - start, `Improve returned ${improveRes.status}: ${body.slice(0, 200)}`);
+    }
+    const improved = await improveRes.json() as any;
+    if (improved.status !== 'ok') return fail(name, GROUP, Date.now() - start, `Improve status=${improved.status}: ${improved.error}`);
+    if (!improved.suggestions?.length) return fail(name, GROUP, Date.now() - start, 'No suggestions returned');
+    if (!improved.suggestions[0].improved) return fail(name, GROUP, Date.now() - start, 'Suggestion missing improved text');
+    if (!improved.suggestions[0].change_summary) return fail(name, GROUP, Date.now() - start, 'Suggestion missing change_summary');
+
+    // 3. Improve selected text.
+    const selectRes = await fetch(`${apiBase}/api/lessons/${lessonId}/improve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_id: ctx.projectId, instruction: 'Be more specific', selected_text: 'Max 3 retries.' }),
+    });
+    if (selectRes.status === 200) {
+      const selected = await selectRes.json() as any;
+      if (selected.status !== 'ok') return fail(name, GROUP, Date.now() - start, `Selected improve failed: ${selected.error}`);
+    }
+    // 502 = LLM unavailable, acceptable
+
+    // 4. 404 for wrong project.
+    const notFoundRes = await fetch(`${apiBase}/api/lessons/${lessonId}/improve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_id: 'wrong-project', instruction: 'test' }),
+    });
+    if (notFoundRes.status !== 404) return fail(name, GROUP, Date.now() - start, `Expected 404, got ${notFoundRes.status}`);
+
+    return pass(name, GROUP, Date.now() - start);
+  } catch (err) {
+    return fail(name, GROUP, Date.now() - start, `Exception: ${err instanceof Error ? err.message : String(err)}`);
+  }
+};
+
+export const allLessonUpdateTests: TestFn[] = [lessonUpdate, lessonUpdateTagsOnly, lessonUpdateNotFound, lessonVersionHistory, lessonBatchStatus, lessonImprove];

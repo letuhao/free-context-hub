@@ -32,6 +32,7 @@ import { allLessonUpdateTests } from './tests/lessonUpdateTests.js';
 import { allGuardrailTests } from './tests/guardrailTests.js';
 import { allBootstrapTests } from './tests/bootstrapTests.js';
 import { allTieredSearchTests } from './tests/tieredSearchTests.js';
+import { allChatHistoryTests } from './tests/chatHistoryTests.js';
 
 dotenv.config();
 
@@ -174,7 +175,11 @@ async function main() {
   console.log('\n── Session Bootstrap ──');
   allResults.push(...await runTests(allBootstrapTests, ctx));
 
-  // Group 4: Tiered Search (P1-P2).
+  // Group 4: Chat History (REST-based).
+  console.log('\n── Chat History ──');
+  allResults.push(...await runTests(allChatHistoryTests, ctx));
+
+  // Group 5: Tiered Search (P1-P2).
   if (!SKIP_TIERED) {
     console.log('\n── Tiered Search ──');
     allResults.push(...await runTests(allTieredSearchTests, ctx));

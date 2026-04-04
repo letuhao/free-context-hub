@@ -2,7 +2,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 
-export type TestGroup = 'lessons' | 'guardrails' | 'bootstrap' | 'tiered-search';
+export type TestGroup = 'lessons' | 'guardrails' | 'bootstrap' | 'tiered-search' | 'chat';
 
 export type TestResult = {
   name: string;
