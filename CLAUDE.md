@@ -1,8 +1,9 @@
 # CLAUDE.md
 
 ## Project
-free-context-hub — self-hosted persistent memory + guardrails for AI agents.
-MCP: `http://localhost:3000/mcp` | project_id: `free-context-hub`
+free-context-hub — self-hosted persistent memory + guardrails for AI agents, with human-in-the-loop GUI.
+MCP: `http://localhost:3000/mcp` | API: `http://localhost:3001` | GUI: `http://localhost:3002`
+project_id: `free-context-hub`
 
 ## Session Start (do these 2 things)
 1. `search_lessons(query: "<your task intent>")` — load relevant prior decisions/workarounds
@@ -44,3 +45,133 @@ Update `docs/sessions/SESSION_PATCH.md` with what was done and what's next.
 ## Tool Reference
 Call `help(output_format: "json_pretty")` for full tool docs, parameters, and examples.
 Don't memorize tool schemas — `help()` is always current.
+
+---
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    AI Agents (MCP)                       │
+│              Claude Code, Cursor, etc.                   │
+│    add_lesson / search_lessons / check_guardrails        │
+└──────────────────────┬──────────────────────────────────┘
+                       │ MCP :3000
+┌──────────────────────┼──────────────────────────────────┐
+│                 ContextHub Backend                       │
+│  ┌───────────┐ ┌──────────┐ ┌─────────┐ ┌───────────┐  │
+│  │ MCP Server│ │ REST API │ │ Worker  │ │ Chat (AI) │  │
+│  │   :3000   │ │  :3001   │ │  (bg)   │ │ streaming │  │
+│  └───────────┘ └──────────┘ └─────────┘ └───────────┘  │
+│         │            │            │            │         │
+│  ┌──────┴────────────┴────────────┴────────────┘        │
+│  │              Services Layer                          │
+│  │  lessons · guardrails · search · git · jobs · docs   │
+│  └──────────────────────┬───────────────────────┘       │
+│                         │                               │
+│  ┌──────────┐ ┌─────────┴──┐ ┌──────────┐ ┌─────────┐  │
+│  │ Postgres │ │  pgvector  │ │  Neo4j   │ │  Redis  │  │
+│  │ (data)   │ │(embeddings)│ │(KG, opt) │ │(cache)  │  │
+│  └──────────┘ └────────────┘ └──────────┘ └─────────┘  │
+└─────────────────────────────────────────────────────────┘
+                       │ REST :3001
+┌──────────────────────┼──────────────────────────────────┐
+│               GUI (Next.js :3002)                       │
+│  Dashboard · Chat · Lessons · Guardrails · Jobs         │
+│  Knowledge (Docs/Graph/Search) · Projects · Settings    │
+│  [Planned] Review Inbox · Documents · Analytics         │
+│            Notifications · Onboarding                   │
+└─────────────────────────────────────────────────────────┘
+                       │
+               Human (browser)
+```
+
+## Project Structure
+
+```
+free-context-hub/
+├── src/                    # Backend (Node.js + TypeScript)
+│   ├── index.ts            # Main entry — MCP :3000 + REST API :3001
+│   ├── worker.ts           # Background job worker
+│   ├── api/routes/         # REST endpoints (11 route files, 42 endpoints)
+│   ├── mcp/                # MCP tools (36 tools)
+│   ├── services/           # Business logic
+│   ├── db/                 # Database utilities
+│   ├── core/               # Logger, migrations, KG bootstrap
+│   └── env.ts              # Environment config
+├── gui/                    # Frontend (Next.js 16 + React 19 + Tailwind)
+│   ├── src/app/            # Pages (14 functional)
+│   ├── src/components/     # Shared components (15)
+│   ├── src/contexts/       # React contexts
+│   ├── src/lib/            # API client, utilities
+│   └── Dockerfile          # Multi-stage Next.js Docker build
+├── migrations/             # PostgreSQL migrations (30 files)
+├── docs/
+│   ├── gui-drafts/         # HTML draft designs (21 pages + 16 components)
+│   ├── screenshots/        # README screenshots
+│   ├── phase7-task-breakdown.md  # Sprint plan (7 sprints, 73 tasks)
+│   └── sessions/           # Session patches
+├── Dockerfile              # Backend Docker build
+├── docker-compose.yml      # Full stack: db, neo4j, rabbitmq, redis, mcp, worker, gui
+├── WHITEPAPER.md           # Project whitepaper (v0.3)
+└── CLAUDE.md               # This file
+```
+
+## Phase 7 — Current Work
+
+**Status:** Core GUI functional (14 pages). Enhancement phase in draft design, implementation pending.
+
+**Task tracking:** `docs/phase7-task-breakdown.md`
+
+| Sprint | Focus | Status |
+|--------|-------|--------|
+| 7.1 | Foundation & FE refactor (icons, breadcrumbs, animations) | Not started |
+| 7.2 | Lesson editing & review workflow | Not started |
+| 7.3 | AI-assisted features (editor, chat history) | Not started |
+| 7.4 | Documents & knowledge management | Not started |
+| 7.5 | Collaboration & feedback (comments, import/export) | Not started |
+| 7.6 | Activity, analytics & onboarding | Not started |
+| 7.7 | Polish & integration testing | Not started |
+
+**Design drafts:** Open `docs/gui-drafts/index.html` in browser for full catalog.
+
+## Dev Commands
+
+```bash
+# Backend
+npm run dev              # Start MCP + API (dev mode, tsx watch)
+npm run worker           # Start background worker
+npm run build            # TypeScript compile
+npm run smoke-test       # Verify basic setup
+
+# GUI
+cd gui && npm run dev    # Start Next.js dev server
+cd gui && npm run build  # Production build
+
+# Docker (full stack)
+docker compose up -d     # Start all services
+docker compose up -d --build  # Rebuild + start
+
+# Testing
+npm test                 # Unit tests
+npm run test:integration # Integration tests
+```
+
+## Key Environment Variables
+
+```bash
+# Required
+DATABASE_URL=postgresql://contexthub:contexthub@localhost:5432/contexthub
+EMBEDDINGS_BASE_URL=http://localhost:1234   # LM Studio or compatible
+
+# Ports
+MCP_PORT=3000
+API_PORT=3001
+GUI_PORT=3002
+
+# Optional features
+KG_ENABLED=false          # Neo4j knowledge graph
+QUEUE_ENABLED=false       # RabbitMQ job queue
+REDIS_ENABLED=false       # Redis cache
+GIT_INGEST_ENABLED=true   # Git history ingestion
+```
