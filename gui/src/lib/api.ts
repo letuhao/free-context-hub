@@ -65,6 +65,25 @@ export const api = {
   improveLessonContent: (id: string, body: { project_id: string; instruction: string; selected_text?: string }) =>
     request<{ status: string; suggestions?: any[] }>("POST", `/api/lessons/${encodeURIComponent(id)}/improve`, body),
 
+  // ── Chat Conversations ──
+  listConversations: (params: { project_id: string }) =>
+    request<{ status: string; conversations?: any[] }>("GET", `/api/chat/conversations?${qs(params)}`),
+
+  createConversation: (body: { project_id: string; title?: string }) =>
+    request<{ status: string; conversation_id?: string }>("POST", "/api/chat/conversations", body),
+
+  getConversation: (id: string, params: { project_id: string }) =>
+    request<{ status: string; conversation?: any; messages?: any[] }>("GET", `/api/chat/conversations/${encodeURIComponent(id)}?${qs(params)}`),
+
+  addMessage: (convId: string, body: { project_id: string; role: string; content: string }) =>
+    request<{ status: string; message?: any }>("POST", `/api/chat/conversations/${encodeURIComponent(convId)}/messages`, body),
+
+  toggleMessagePin: (convId: string, msgId: string) =>
+    request<{ status: string; pinned?: boolean }>("PATCH", `/api/chat/conversations/${encodeURIComponent(convId)}/messages/${encodeURIComponent(msgId)}/pin`, {}),
+
+  deleteConversation: (id: string, params: { project_id: string }) =>
+    request<{ status: string; deleted?: boolean }>("DELETE", `/api/chat/conversations/${encodeURIComponent(id)}?${qs(params)}`),
+
   // ── Guardrails ──
   checkGuardrails: (body: { project_id?: string; action_context: Record<string, unknown> }) =>
     request<any>("POST", "/api/guardrails/check", body),

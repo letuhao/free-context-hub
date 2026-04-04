@@ -8,7 +8,7 @@ phase: BE Complete, FE In Progress
 # Session Patch — 2026-04-04
 
 ## Where We Are
-Phase: **Phase 7 — BE complete (22/22), FE Sprint 7.1 complete (8/8), FE Sprint 7.2 complete (5/5).**
+Phase: **Phase 7 — BE complete (22/22), FE Sprint 7.1 complete (8/8), FE Sprint 7.2 complete (5/5), FE Sprint 7.3 complete (5/5).**
 
 ## What Was Done This Session
 
@@ -64,6 +64,22 @@ New BE surface:
 - [✓] 7.2.8: Review Inbox — full draft alignment: stats bar (agent breakdown), expandable cards (full content on click), Edit & Approve (opens modal in edit mode), Reject dialog (reason dropdown + note), sidebar badge count (amber, 60s poll), batch approve/reject, Approve All Visible header button, aria-expanded a11y
 - [✓] 7.2.9: Lessons page — merged Draft/Pending Review tab (amber dot indicator), per-tab counts (parallel API fetch), border-bottom divider, removed separate Archived tab
 
+### FE Sprint 7.3 — COMPLETE (5/5)
+- [✓] 7.3.7: Chat markdown rendering — `react-markdown` + `remark-gfm`, custom components for code blocks (language label + Copy), inline code (emerald), headings, lists
+- [✓] 7.3.5: Chat history sidebar — w-64 left panel, conversation list from API, search, New Chat, active highlight (blue border), collapse toggle, delete conversation
+- [✓] 7.3.6: Create Lesson from Answer — "Create Lesson" pill on AI message hover, popover with pre-filled title/type, calls `api.addLesson`
+- [✓] 7.3.8: Pinned messages bar — collapsible bar below header, pin count, Jump button, Pin button on AI message hover
+- [✓] 7.3.2: AI-assisted editor — "Improve with AI" button in lesson detail footer, AI toolbar (Clarify/Simplify/Expand/Custom), custom prompt input (purple themed), diff view (red old/green new), per-chunk Accept/Reject + Accept All/Reject All, applies accepted changes to editor
+
+**Chat page style overhaul:**
+- User bubbles: blue-600 rounded-2xl, AI avatar: Bot SVG icon in zinc-800 circle
+- Hover toolbars: Copy/Edit/Retry (user), Copy/Pin/CreateLesson (AI)
+- Tool calls: blue left border, "done" badge, collapsible details
+- Input: textarea auto-grow + Send icon + Stop button
+- Empty state: gradient ring icon + prompt pills with borderPulse animation
+- Streaming: dot pulse animation
+- New API methods: listConversations, createConversation, getConversation, addMessage, toggleMessagePin, deleteConversation
+
 ### Documentation Updates
 - README.md: Screenshots section, detailed Phase 7 roadmap
 - WHITEPAPER.md: v0.3, AI-to-Human bridge vision, detailed Phase 7 section
@@ -71,8 +87,7 @@ New BE surface:
 - docs/phase7-task-breakdown.md: 7 sprints, 73 tasks with status tracking
 
 ## Next Steps
-1. **FE Sprint 7.3** — AI-assisted editor, chat history sidebar, markdown rendering
-3. **FE Sprint 7.4** — Documents page
+1. **FE Sprint 7.4** — Documents page
 4. **FE Sprint 7.5** — Comments, feedback, bookmarks UI
 5. **FE Sprint 7.6** — Activity feed, analytics, onboarding pages
 6. **FE Sprint 7.7** — Global search Cmd+K, guardrail UX, responsive

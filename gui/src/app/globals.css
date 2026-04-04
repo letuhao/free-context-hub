@@ -25,3 +25,17 @@
   from { transform: translateY(16px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
+
+@keyframes dotPulse {
+  0%, 80%, 100% { opacity: 0.3; }
+  40% { opacity: 1; }
+}
+
+@keyframes borderPulse {
+  0%, 100% { border-color: #3f3f46; }
+  50% { border-color: #71717a; }
+}
+
+.prompt-pill:hover {
+  animation: borderPulse 1.5s ease-in-out infinite;
+}

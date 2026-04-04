@@ -5,8 +5,9 @@ import { Badge, Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useProject } from "@/contexts/project-context";
 import { api } from "@/lib/api";
-import { X, Pencil, Save, Undo2, Archive, ArrowRight, RefreshCw, Copy, History, ChevronDown, ChevronRight } from "lucide-react";
+import { X, Pencil, Save, Undo2, Archive, ArrowRight, RefreshCw, Copy, History, ChevronDown, ChevronRight, Sparkles } from "lucide-react";
 import { relTime } from "@/lib/rel-time";
+import { AiEditor } from "./ai-editor";
 import type { Lesson } from "./types";
 
 type LessonVersion = {
@@ -59,6 +60,7 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick, init
   const [versionsLoading, setVersionsLoading] = useState(false);
   const [expandedVersion, setExpandedVersion] = useState<number | null>(null);
   const [restoring, setRestoring] = useState(false);
+  const [aiEditorOpen, setAiEditorOpen] = useState(false);
 
   // Reset edit state when lesson changes
   useEffect(() => {
@@ -345,6 +347,22 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick, init
               </div>
             )}
 
+            {/* AI Editor */}
+            {aiEditorOpen && !editing && lesson && (
+              <AiEditor
+                lessonId={lesson.lesson_id}
+                content={lesson.content}
+                onApply={(newContent) => {
+                  setEditContent(newContent);
+                  setEditTitle(lesson.title);
+                  setEditTags([...lesson.tags]);
+                  setEditing(true);
+                  setAiEditorOpen(false);
+                }}
+                onClose={() => setAiEditorOpen(false)}
+              />
+            )}
+
             {/* Version History — flat row layout matching draft */}
             {!editing && (
               <div>
@@ -485,6 +503,13 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick, init
                     Approve
                   </Button>
                 )}
+                <button
+                  onClick={() => setAiEditorOpen(!aiEditorOpen)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-purple-600/20 hover:bg-purple-600/30 border border-purple-700/50 rounded-md text-purple-400 transition-colors"
+                >
+                  <Sparkles size={13} />
+                  {aiEditorOpen ? "Close AI" : "Improve with AI"}
+                </button>
                 <div className="flex-1" />
                 <Button variant="ghost" size="sm" onClick={copyJson}>
                   <Copy size={13} className="mr-1" /> Copy JSON
