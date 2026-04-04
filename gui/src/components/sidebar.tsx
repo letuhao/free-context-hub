@@ -8,8 +8,8 @@ import { cn } from "@/lib/cn";
 import {
   LayoutDashboard, MessageSquare, BookOpen, Shield,
   FileText, Search, Network, FolderOpen, Users, Files,
-  GitBranch, Link2, Zap, Settings, Bot,
-  PanelLeftClose, PanelLeftOpen, ClipboardCheck,
+  GitBranch, Link2, Zap, Settings, Bot, Bell, BarChart3, CheckCircle2,
+  PanelLeftClose, PanelLeftOpen, ClipboardCheck, Activity,
 } from "lucide-react";
 
 type NavItem = { href: string; label: string; icon: ReactNode; badge?: number };
@@ -18,7 +18,7 @@ type NavGroup = { title: string; items: NavItem[] };
 const ICON_SIZE = 18;
 const ICON_STROKE = 1.5;
 
-const buildNavGroups = (reviewCount: number): (NavItem | NavGroup)[] => [
+const buildNavGroups = (reviewCount: number, notifCount: number): (NavItem | NavGroup)[] => [
   { href: "/", label: "Dashboard", icon: <LayoutDashboard size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
   { href: "/chat", label: "Chat", icon: <MessageSquare size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
   {
@@ -28,6 +28,7 @@ const buildNavGroups = (reviewCount: number): (NavItem | NavGroup)[] => [
       { href: "/review", label: "Review Inbox", icon: <ClipboardCheck size={ICON_SIZE} strokeWidth={ICON_STROKE} />, badge: reviewCount },
       { href: "/guardrails", label: "Guardrails", icon: <Shield size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/documents", label: "Documents", icon: <Files size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
+      { href: "/getting-started", label: "Getting Started", icon: <CheckCircle2 size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/knowledge/docs", label: "Generated Docs", icon: <FileText size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/knowledge/search", label: "Code Search", icon: <Search size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/knowledge/graph", label: "Graph Explorer", icon: <Network size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
@@ -46,6 +47,8 @@ const buildNavGroups = (reviewCount: number): (NavItem | NavGroup)[] => [
     title: "System",
     items: [
       { href: "/jobs", label: "Jobs", icon: <Zap size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
+      { href: "/activity", label: "Activity", icon: <Activity size={ICON_SIZE} strokeWidth={ICON_STROKE} />, badge: notifCount },
+      { href: "/analytics", label: "Analytics", icon: <BarChart3 size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/settings", label: "Settings", icon: <Settings size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/settings/models", label: "Model Providers", icon: <Bot size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
     ],
@@ -67,6 +70,7 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [healthy, setHealthy] = useState(true);
   const [reviewCount, setReviewCount] = useState(0);
+  const [notifCount, setNotifCount] = useState(0);
 
   useEffect(() => {
     const apiUrl = process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "http://localhost:3001";
@@ -96,6 +100,22 @@ export function Sidebar() {
     };
     fetchCount();
     const interval = setInterval(fetchCount, 60_000);
+    return () => { active = false; clearInterval(interval); };
+  }, [projectId]);
+
+  // Fetch notification count
+  useEffect(() => {
+    if (!projectId) return;
+    const apiUrl = process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "http://localhost:3001";
+    let active = true;
+    const fetchNotifs = () => {
+      fetch(`${apiUrl}/api/notifications?project_id=${encodeURIComponent(projectId)}&unread=true&limit=1`)
+        .then(r => r.ok ? r.json() : { total_count: 0 })
+        .then((d) => { if (active) setNotifCount(d.total_count ?? d.unread_count ?? 0); })
+        .catch(() => {});
+    };
+    fetchNotifs();
+    const interval = setInterval(fetchNotifs, 60_000);
     return () => { active = false; clearInterval(interval); };
   }, [projectId]);
 
@@ -192,7 +212,7 @@ export function Sidebar() {
       )}
 
       <nav className="flex-1 px-2 py-1 space-y-0.5 overflow-y-auto">
-        {buildNavGroups(reviewCount).map((entry, i) => {
+        {buildNavGroups(reviewCount, notifCount).map((entry, i) => {
           if (isGroup(entry)) {
             return (
               <div key={entry.title} className="mt-3 first:mt-0">

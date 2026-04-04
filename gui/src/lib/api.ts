@@ -120,6 +120,37 @@ export const api = {
   importLessons: (body: { project_id: string; lessons: any[] }) =>
     request<{ status: string; imported_count?: number; skipped_count?: number; errors?: any[] }>("POST", "/api/lessons/import", body),
 
+  // ── Activity ──
+  listActivity: (params: Record<string, string | number | undefined> = {}) =>
+    request<any>("GET", `/api/activity?${qs(params)}`),
+
+  // ── Notifications ──
+  listNotifications: (params: Record<string, string | number | undefined> = {}) =>
+    request<any>("GET", `/api/notifications?${qs(params)}`),
+
+  markNotificationsRead: (body: { notification_ids?: string[] }) =>
+    request<any>("PATCH", "/api/notifications", body),
+
+  // ── Analytics ──
+  getRetrievalStats: (params: { project_id: string; days?: number }) =>
+    request<any>("GET", `/api/analytics/retrieval-stats?${qs(params)}`),
+
+  getStaleStats: (params: { project_id: string; days?: number }) =>
+    request<any>("GET", `/api/analytics/stale?${qs(params)}`),
+
+  getDeadKnowledge: (params: { project_id: string }) =>
+    request<any>("GET", `/api/analytics/dead-knowledge?${qs(params)}`),
+
+  // ── Learning Paths ──
+  listLearningPaths: (params: { project_id: string }) =>
+    request<any>("GET", `/api/learning-paths?${qs(params)}`),
+
+  getLearningProgress: (pathId: string, params: { user_id: string }) =>
+    request<any>("GET", `/api/learning-paths/${encodeURIComponent(pathId)}/progress?${qs(params)}`),
+
+  updateLearningProgress: (pathId: string, body: { user_id: string; lesson_id: string; completed: boolean }) =>
+    request<any>("PATCH", `/api/learning-paths/${encodeURIComponent(pathId)}/progress`, body),
+
   // ── Documents ──
   listDocuments: (params: Record<string, string | number | undefined> = {}) =>
     request<any>("GET", `/api/documents?${qs(params)}`),

@@ -8,7 +8,7 @@ import { relTime } from "@/lib/rel-time";
 import { PageHeader, StatCard, Badge, Button } from "@/components/ui";
 import { StatCardSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
-import { BookOpen, GitCommit, FileText, Loader } from "lucide-react";
+import { BookOpen, GitCommit, FileText, Loader, Lightbulb, AlertTriangle, TrendingUp } from "lucide-react";
 
 type FeatureStatus = {
   enabled: boolean;
@@ -67,6 +67,8 @@ export default function DashboardPage() {
   const [activeJobs, setActiveJobs] = useState<Job[]>([]);
   const [recentCommits, setRecentCommits] = useState<Commit[]>([]);
   const [generatedDocs, setGeneratedDocs] = useState<GeneratedDoc[]>([]);
+  const [healthScore, setHealthScore] = useState<number | null>(null);
+  const [insights, setInsights] = useState<{ text: string; type: "warning" | "success" }[]>([]);
 
   // FIX #3: Use ref for toast to avoid fetchAll re-creation
   // FIX #2: Reduced from 9 to 6 parallel calls (consolidated lessons queries)
@@ -111,6 +113,21 @@ export default function DashboardPage() {
       setActiveJobs(activeJobItems);
       setRecentCommits(commitsData.items ?? []);
       setGeneratedDocs(docsData.items ?? []);
+
+      // Compute health score (simple heuristic)
+      const lessonCount = lessonsData.total_count ?? 0;
+      const docCount = docsData.items?.length ?? 0;
+      const lessonHealth = Math.min(100, lessonCount * 5);
+      const docHealth = Math.min(100, docCount * 15);
+      const overallHealth = lessonCount > 0 ? Math.round((lessonHealth + docHealth) / 2) : 0;
+      setHealthScore(overallHealth);
+
+      // Build insights
+      const newInsights: { text: string; type: "warning" | "success" }[] = [];
+      if (lessonCount === 0) newInsights.push({ text: "No lessons yet — add your first lesson to get started", type: "warning" });
+      if (activeJobItems.length > 0) newInsights.push({ text: `${activeJobItems.length} job(s) currently running`, type: "success" });
+      if (lessonCount > 10) newInsights.push({ text: `${lessonCount} lessons in knowledge base — good coverage`, type: "success" });
+      setInsights(newInsights);
     } catch {
       toastRef.current("error", "Failed to load dashboard data");
     } finally {
@@ -189,6 +206,51 @@ export default function DashboardPage() {
           <StatCard value={stats.commits} label="Commits" onClick={() => router.push("/projects")} icon={<GitCommit size={18} />} />
           <StatCard value={stats.docs} label="Generated Docs" onClick={() => router.push("/knowledge/docs")} icon={<FileText size={18} />} />
           <StatCard value={stats.jobsActive} label="Active Jobs" highlight={stats.jobsActive > 0} onClick={() => router.push("/jobs")} icon={<Loader size={18} />} />
+          {/* Knowledge Health Score */}
+          {healthScore !== null && (
+            <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 min-w-[180px]">
+              <p className="text-xs text-zinc-500 mb-2">Knowledge Health</p>
+              <div className="flex items-center gap-3">
+                <div className="relative shrink-0">
+                  <svg width="48" height="48" viewBox="0 0 48 48">
+                    <circle cx="24" cy="24" r="20" fill="none" stroke="#27272a" strokeWidth="4" />
+                    <circle cx="24" cy="24" r="20" fill="none"
+                      stroke={healthScore >= 70 ? "#10b981" : healthScore >= 40 ? "#f59e0b" : "#ef4444"}
+                      strokeWidth="4"
+                      strokeDasharray="125.66"
+                      strokeDashoffset={125.66 - (125.66 * healthScore / 100)}
+                      strokeLinecap="round"
+                      transform="rotate(-90 24 24)"
+                    />
+                  </svg>
+                  <span className={`absolute inset-0 flex items-center justify-center text-xs font-semibold ${healthScore >= 70 ? "text-emerald-400" : healthScore >= 40 ? "text-amber-400" : "text-red-400"}`}>
+                    {healthScore}%
+                  </span>
+                </div>
+                <div>
+                  <p className="text-[10px] text-zinc-500">Lessons: <span className="text-zinc-400">{stats.lessons}</span></p>
+                  <p className="text-[10px] text-zinc-500">Docs: <span className="text-zinc-400">{stats.docs}</span></p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Insights Panel */}
+      {!initialLoad && insights.length > 0 && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 mb-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Lightbulb size={18} className="text-amber-400" />
+            <h2 className="text-sm font-medium text-zinc-300">Insights</h2>
+          </div>
+          <div className="space-y-2">
+            {insights.map((ins, i) => (
+              <div key={i} className={`flex items-center justify-between border-l-2 pl-3 py-1 ${ins.type === "warning" ? "border-amber-500" : "border-emerald-500"}`}>
+                <p className="text-xs text-zinc-400">{ins.text}</p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

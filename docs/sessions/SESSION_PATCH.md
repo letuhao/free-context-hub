@@ -8,7 +8,7 @@ phase: BE Complete, FE In Progress
 # Session Patch — 2026-04-04
 
 ## Where We Are
-Phase: **Phase 7 — BE complete (22/22), FE Sprint 7.1-7.5 complete.**
+Phase: **Phase 7 — BE complete (22/22), FE Sprint 7.1-7.6 complete.**
 
 ## What Was Done This Session
 
@@ -102,9 +102,16 @@ New BE surface:
 - [✓] 7.5.10: Export button — JSON file download via blob URL
 - 10 new API methods: comments (list/add/delete), feedback (get/vote), bookmarks (list/add/remove), import, export
 
+### FE Sprint 7.6 — COMPLETE (5/5)
+- [✓] 7.6.4: Activity & Notifications page — timeline feed with colored event icons + unread dots, category tabs (All/Lessons/Jobs/Guardrails/Documents), time filter (Today/Week/Month/All), notification settings panel with toggle switches, Mark All Read
+- [✓] 7.6.5: Notification bell in sidebar — Activity nav item with unread count badge (60s poll)
+- [✓] 7.6.7: Analytics page — 4 stat cards (retrievals/active/approval/stale), Lessons by Type breakdown, Most Retrieved table, Dead Knowledge section (amber, Archive action), Agent Activity table, time range toggle
+- [✓] 7.6.9: Getting Started page — progress bar (X of Y, percentage), learning sections grouped by lesson type, completed/current/not-started states, Reset Progress
+- [✓] 7.6.10: Dashboard insights — Knowledge Health Score (SVG circular ring), Insights panel (lightbulb icon, border-left indicators)
+- 10 new API methods, 3 new pages (/activity, /analytics, /getting-started), sidebar links (Activity, Analytics, Getting Started)
+
 ## Next Steps
-1. **FE Sprint 7.6** — Activity feed, analytics, onboarding pages
-2. **FE Sprint 7.7** — Global search Cmd+K, guardrail UX, responsive
+1. **FE Sprint 7.7** — Global search Cmd+K, guardrail UX, responsive, polish
 
 ## Key Decisions This Session
 - **Drafts before code** — design all enhancements as HTML first, review, then implement
