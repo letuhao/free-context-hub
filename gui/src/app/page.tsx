@@ -8,6 +8,7 @@ import { relTime } from "@/lib/rel-time";
 import { PageHeader, StatCard, Badge, Button } from "@/components/ui";
 import { StatCardSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
+import { BookOpen, GitCommit, FileText, Loader } from "lucide-react";
 
 type FeatureStatus = {
   enabled: boolean;
@@ -184,10 +185,10 @@ export default function DashboardPage() {
         <StatCardSkeleton count={5} />
       ) : (
         <div className="flex gap-3 mb-5 flex-wrap">
-          <StatCard value={stats.lessons} label="Lessons" onClick={() => router.push("/lessons")} />
-          <StatCard value={stats.commits} label="Commits" onClick={() => router.push("/projects")} />
-          <StatCard value={stats.docs} label="Generated Docs" onClick={() => {}} />
-          <StatCard value={stats.jobsActive} label="Active Jobs" highlight={stats.jobsActive > 0} onClick={() => router.push("/jobs")} />
+          <StatCard value={stats.lessons} label="Lessons" onClick={() => router.push("/lessons")} icon={<BookOpen size={18} />} />
+          <StatCard value={stats.commits} label="Commits" onClick={() => router.push("/projects")} icon={<GitCommit size={18} />} />
+          <StatCard value={stats.docs} label="Generated Docs" onClick={() => router.push("/knowledge/docs")} icon={<FileText size={18} />} />
+          <StatCard value={stats.jobsActive} label="Active Jobs" highlight={stats.jobsActive > 0} onClick={() => router.push("/jobs")} icon={<Loader size={18} />} />
         </div>
       )}
 
