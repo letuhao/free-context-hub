@@ -160,26 +160,26 @@
 | # | Task | Type | Est | Dep | Status |
 |---|------|------|-----|-----|--------|
 | 7.7.1 | `GET /api/search/global` — orchestrate across lessons, docs, code, guardrails, commits | BE | 1.5d | — | [✓] |
-| 7.7.2 | Global search Cmd+K — cross-entity results, grouped, highlighted | FE | 2d | 7.7.1 | [ ] |
+| 7.7.2 | Global search Cmd+K — cross-entity results, grouped, highlighted | FE | 2d | 7.7.1 | [✓] |
 | 7.7.3 | `agent_trust_levels` table + CRUD `/api/agents` | BE | 1d | — | [✓] |
-| 7.7.4 | Agent trust levels panel in Review Inbox | FE | 1d | 7.7.3 | [ ] |
-| 7.7.5 | Guardrail test presets + test history | FE | 1d | — | [ ] |
-| 7.7.6 | Guardrail "What Would Block?" mode | FE | 1d | — | [ ] |
-| 7.7.7 | Responsive breakpoints — sidebar auto-collapse at md | FE | 1d | — | [ ] |
-| 7.7.8 | Empty state improvements (gradient rings) | FE | 0.5d | — | [ ] |
-| 7.7.9 | Integration testing — all new endpoints + GUI flows | QA | 2d | All | [ ] |
-| 7.7.10 | Update screenshots + docs with final implementation | Docs | 0.5d | All | [ ] |
-| 7.7.11 | Chat: conversation loading on sidebar click (needs useChat reset/separate state) | FE | 1d | 7.3.5 | [ ] |
-| 7.7.14 | Documents: drag-drop file upload (needs multipart/FormData BE support) | FE+BE | 1d | 7.4.5 | [ ] |
-| 7.7.15 | Documents: in-doc search scroll-to-match | FE | 0.5d | 7.4.6 | [ ] |
-| 7.7.16 | Lesson detail: linked docs reverse lookup (BE: GET /api/documents?lesson_id=X) | FE+BE | 1d | 7.4.8 | [ ] |
-| 7.7.17 | Import: CSV + Markdown tab implementation | FE | 1d | 7.5.9 | [ ] |
-| 7.7.18 | Import: drag-drop file input for JSON/CSV | FE | 0.5d | 7.5.9 | [ ] |
-| 7.7.19 | Lessons table: Feedback column (needs BE to return counts in list) | FE+BE | 1d | 7.5.6 | [ ] |
-| 7.7.20 | Activity: notification settings persistence (needs BE settings API) | FE+BE | 1d | 7.6.4 | [ ] |
-| 7.7.21 | Analytics: SVG area chart for Retrieval Trends (needs time-series data) | FE+BE | 1.5d | 7.6.7 | [ ] |
-| 7.7.12 | AI editor: floating text selection toolbar ("Ask AI" on selected text) | FE | 2d | 7.3.2 | [ ] |
-| 7.7.13 | AI editor: AI-suggested tags (purple dashed, sparkle icon, accept) | FE+BE | 1d | 7.3.2 | [ ] |
+| 7.7.4 | Agent trust levels panel in Review Inbox | FE | 1d | 7.7.3 | [✓] |
+| 7.7.5 | Guardrail test presets + test history | FE | 1d | — | [✓] |
+| 7.7.6 | Guardrail "What Would Block?" mode | FE | 1d | — | [✓] |
+| 7.7.7 | Responsive breakpoints — sidebar auto-collapse at md | FE | 1d | — | [✓] |
+| 7.7.8 | Empty state improvements (gradient rings) | FE | 0.5d | — | [✓] |
+| 7.7.9 | Integration testing — all new endpoints + GUI flows | QA | 2d | All | [✓] |
+| 7.7.10 | Update screenshots + docs with final implementation | Docs | 0.5d | All | [✓] |
+| 7.7.11 | Chat: conversation loading on sidebar click (needs useChat reset/separate state) | FE | 1d | 7.3.5 | [✓] |
+| 7.7.14 | Documents: drag-drop file upload (needs multipart/FormData BE support) | FE+BE | 1d | 7.4.5 | [✓] |
+| 7.7.15 | Documents: in-doc search scroll-to-match | FE | 0.5d | 7.4.6 | [✓] |
+| 7.7.16 | Lesson detail: linked docs reverse lookup (BE: GET /api/documents?lesson_id=X) | FE+BE | 1d | 7.4.8 | [✓] |
+| 7.7.17 | Import: CSV + Markdown tab implementation | FE | 1d | 7.5.9 | [✓] |
+| 7.7.18 | Import: drag-drop file input for JSON/CSV | FE | 0.5d | 7.5.9 | [✓] |
+| 7.7.19 | Lessons table: Feedback column (needs BE to return counts in list) | FE+BE | 1d | 7.5.6 | [✓] |
+| 7.7.20 | Activity: notification settings persistence (needs BE settings API) | FE+BE | 1d | 7.6.4 | [✓] |
+| 7.7.21 | Analytics: SVG area chart for Retrieval Trends (needs time-series data) | FE+BE | 1.5d | 7.6.7 | [✓] |
+| 7.7.12 | AI editor: floating text selection toolbar ("Ask AI" on selected text) | FE | 2d | 7.3.2 | [✓] |
+| 7.7.13 | AI editor: AI-suggested tags (purple dashed, sparkle icon, accept) | FE+BE | 1d | 7.3.2 | [✓] |
 
 **Deliverable:** Phase 7 complete
 

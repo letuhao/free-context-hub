@@ -178,14 +178,14 @@ QC eval loop    Documents,      Agent audit     pipelines
 | **4** | ✅ Complete | Neo4j knowledge graph, symbol extraction (ts-morph), dependency tracing |
 | **5** | ✅ Complete | Git commit ingestion, lesson suggestions, impact analysis, job queue |
 | **6** | ✅ Complete | Tiered search (ripgrep→FTS→semantic), reranking, Redis cache, QC eval loop |
-| **7** | ✅ Complete | GUI (20 pages, 28+ REST endpoints, 7 sprints, 38 migrations) |
+| **7** | ✅ Complete | GUI (20 pages, 30+ REST endpoints, 7 sprints, 38 migrations) |
 | **8** | ○ Planned | Access control (roles), custom lesson types/templates, rich content, agent audit |
 | **9** | ○ Planned | PDF/DOCX/Image ingestion pipelines (document foundation in Phase 7) |
 | **10** | ○ Planned | Import/export exchange hub, cross-instance sync (basic I/O in Phase 7) |
 
 ## Phase 7 — Complete
 
-**Status:** All 7 sprints complete. 20 pages, 28+ REST endpoints, 38 migrations.
+**Status:** All 7 sprints complete. 20 pages, 30+ REST endpoints, 38 migrations.
 
 **Task tracking:** `docs/phase7-task-breakdown.md`
 
@@ -197,7 +197,7 @@ QC eval loop    Documents,      Agent audit     pipelines
 | 7.4 | Documents & knowledge management (upload, viewer, AI lesson generation) | ✅ |
 | 7.5 | Collaboration & feedback (comments, thumbs, bookmarks, import/export) | ✅ |
 | 7.6 | Activity, analytics & onboarding (timeline, donut chart, learning path) | ✅ |
-| 7.7 | Polish (global search Cmd+K, agent trust, responsive, feedback column) | ✅ |
+| 7.7 | Polish (global search, agent trust, guardrail simulate, drag-drop, CSV/MD import, AI editor toolbar, suggested tags, SVG chart, chat history loading) | ✅ |
 
 **GUI pages:** Dashboard, Chat, Lessons, Review Inbox, Guardrails, Documents, Getting Started, Activity, Analytics, Generated Docs, Code Search, Graph Explorer, Projects (Overview/Groups/Git/Sources), Jobs, Settings, Model Providers
 

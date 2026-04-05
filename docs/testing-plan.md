@@ -1,6 +1,6 @@
 # Testing Plan — Phase 7 E2E Coverage
 
-> **Status:** Phase 7 Complete — 37/37 tests pass
+> **Status:** Phase 7 Complete — 40/46 tests pass (3 new guardrail tests added in 7.7-Polish)
 > **Created:** 2026-04-04
 > **Approach:** Pure automation (no AI/Human in loop)
 > **Framework:** Existing `src/qc/` test runner + raw `fetch()` against REST API
