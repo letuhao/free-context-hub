@@ -135,7 +135,7 @@ export default function ModelProvidersPage() {
   };
 
   return (
-    <div className="p-6 max-w-[900px]">
+    <div className="p-6">
       <Breadcrumb items={[{ label: "System", href: "/settings" }, { label: "Model Providers" }]} />
       <PageHeader
         title="Model Providers"

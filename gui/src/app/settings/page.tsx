@@ -50,7 +50,7 @@ export default function SettingsPage() {
   })) : [];
 
   return (
-    <div className="p-6 max-w-[800px]">
+    <div className="p-6">
       <Breadcrumb items={[{ label: "System", href: "/settings" }, { label: "Settings" }]} />
       <PageHeader title="Settings" subtitle="System configuration and feature status" />
 

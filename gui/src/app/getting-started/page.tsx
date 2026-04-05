@@ -33,7 +33,7 @@ export default function GettingStartedPage() {
     setLoading(true);
     try {
       // Try to load learning paths; fallback to building from lessons
-      const res = await api.listLearningPaths({ project_id: projectId });
+      const res = await api.listLearningPaths({ project_id: projectId, user_id: "gui-user" });
       const paths = res.paths ?? res.items ?? [];
 
       if (paths.length > 0) {
@@ -124,7 +124,7 @@ export default function GettingStartedPage() {
   const nextItem = sections.flatMap((s) => s.items).find((i) => !i.completed);
 
   return (
-    <div className="p-6 max-w-[900px]">
+    <div className="p-6">
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Getting Started" }]} />
       <PageHeader
         title="Getting Started"

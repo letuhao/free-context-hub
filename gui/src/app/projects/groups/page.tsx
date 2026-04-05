@@ -147,7 +147,7 @@ export default function GroupsPage() {
   };
 
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="p-6">
       <Breadcrumb items={[{ label: "Project", href: "/projects" }, { label: "Groups" }]} />
       <PageHeader
         title="Project Groups"

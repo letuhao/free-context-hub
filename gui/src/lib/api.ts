@@ -142,7 +142,7 @@ export const api = {
     request<any>("GET", `/api/analytics/dead-knowledge?${qs(params)}`),
 
   // ── Learning Paths ──
-  listLearningPaths: (params: { project_id: string }) =>
+  listLearningPaths: (params: { project_id: string; user_id?: string }) =>
     request<any>("GET", `/api/learning-paths?${qs(params)}`),
 
   getLearningProgress: (pathId: string, params: { user_id: string }) =>
