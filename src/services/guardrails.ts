@@ -33,6 +33,55 @@ function matchTrigger(trigger: string, action: string) {
   return trimmed === action;
 }
 
+export type GuardrailRule = {
+  rule_id: string;
+  trigger: string;
+  requirement: string;
+  verification_method: string;
+  title: string;
+  status: string;
+};
+
+export async function listGuardrailRules(projectId: string): Promise<GuardrailRule[]> {
+  const pool = getDbPool();
+  const { rows } = await pool.query(
+    `SELECT g.rule_id, g.trigger, g.requirement, g.verification_method,
+            l.title, COALESCE(l.status, 'active') AS status
+     FROM guardrails g
+     JOIN lessons l ON l.lesson_id = g.rule_id AND l.project_id = g.project_id
+     WHERE g.project_id = $1
+       AND COALESCE(l.status, 'active') IN ('active', 'draft')
+     ORDER BY g.created_at DESC;`,
+    [projectId],
+  );
+  return rows as GuardrailRule[];
+}
+
+export type SimulateResult = {
+  action: string;
+  pass: boolean;
+  matched_rules: Array<{ rule_id: string; requirement: string; verification_method: string }>;
+};
+
+export async function simulateGuardrails(
+  projectId: string,
+  actions: string[],
+): Promise<SimulateResult[]> {
+  const rules = await listGuardrailRules(projectId);
+  return actions.map((action) => {
+    const matched = rules.filter((r) => matchTrigger(r.trigger, action));
+    return {
+      action,
+      pass: matched.length === 0,
+      matched_rules: matched.map((r) => ({
+        rule_id: r.rule_id,
+        requirement: r.requirement,
+        verification_method: r.verification_method,
+      })),
+    };
+  });
+}
+
 export async function checkGuardrails(projectId: string, actionContext: ActionContext): Promise<GuardrailCheckResult> {
   const pool = getDbPool();
 

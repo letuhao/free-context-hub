@@ -1,7 +1,35 @@
 import { Router } from 'express';
 import { checkGuardrails, resolveProjectIdOrThrow, resolveProjectIds } from '../../core/index.js';
+import { listGuardrailRules, simulateGuardrails } from '../../services/guardrails.js';
 
 const router = Router();
+
+/** GET /api/guardrails/rules — list all active guardrail rules for a project */
+router.get('/rules', async (req, res, next) => {
+  try {
+    const projectId = resolveProjectIdOrThrow(req.query.project_id as string);
+    const rules = await listGuardrailRules(projectId);
+    res.json({ rules });
+  } catch (e) { next(e); }
+});
+
+/** POST /api/guardrails/simulate — bulk "What Would Block?" check (no audit log) */
+router.post('/simulate', async (req, res, next) => {
+  try {
+    const projectId = resolveProjectIdOrThrow(req.body.project_id);
+    const actions = req.body.actions;
+    if (!Array.isArray(actions) || actions.length === 0) {
+      res.status(400).json({ error: 'actions must be a non-empty array of strings' });
+      return;
+    }
+    if (actions.length > 50) {
+      res.status(400).json({ error: 'maximum 50 actions per request' });
+      return;
+    }
+    const results = await simulateGuardrails(projectId, actions.map(String));
+    res.json({ results });
+  } catch (e) { next(e); }
+});
 
 /** POST /api/guardrails/check — check if an action is allowed (supports include_groups) */
 router.post('/check', async (req, res, next) => {

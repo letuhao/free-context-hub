@@ -18,20 +18,23 @@ export default function AnalyticsPage() {
   const [stats, setStats] = useState<any>(null);
   const [stale, setStale] = useState<any[]>([]);
   const [dead, setDead] = useState<any[]>([]);
+  const [timeseries, setTimeseries] = useState<{ date: string; count: number }[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const daysNum = days === "all" ? undefined : Number(days);
-      const [retrieval, staleRes, deadRes] = await Promise.all([
+      const [retrieval, staleRes, deadRes, tsRes] = await Promise.all([
         api.getRetrievalStats({ project_id: projectId, days: daysNum }),
         api.getStaleStats({ project_id: projectId, days: 90 }),
         api.getDeadKnowledge({ project_id: projectId }),
+        api.getRetrievalTimeseries({ project_id: projectId, days: daysNum }),
       ]);
       setStats(retrieval);
       setStale(staleRes.lessons ?? staleRes.items ?? []);
       setDead(deadRes.lessons ?? deadRes.items ?? []);
+      setTimeseries(tsRes.points ?? []);
     } catch (err) {
       toast("error", err instanceof Error ? err.message : "Failed to load analytics");
     } finally {
@@ -109,6 +112,69 @@ export default function AnalyticsPage() {
               </div>
             </div>
           </div>
+
+          {/* Retrieval Trends (SVG area chart) */}
+          {timeseries.length > 0 && (() => {
+            const maxCount = Math.max(...timeseries.map((p) => p.count), 1);
+            const chartW = 280;
+            const chartH = 120;
+            const points = timeseries.map((p, i) => ({
+              x: timeseries.length > 1 ? (i / (timeseries.length - 1)) * chartW : chartW / 2,
+              y: chartH - (p.count / maxCount) * (chartH - 10) - 5,
+              ...p,
+            }));
+            const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+            const areaPath = `${linePath} L${chartW},${chartH} L0,${chartH}Z`;
+            const peak = points.reduce((best, p) => p.count > best.count ? p : best, points[0]);
+            const dayLabels = timeseries.length <= 14
+              ? timeseries.map((p) => new Date(p.date).toLocaleDateString("en", { weekday: "short" }))
+              : timeseries.filter((_, i) => i % Math.ceil(timeseries.length / 7) === 0).map((p) => new Date(p.date).toLocaleDateString("en", { month: "short", day: "numeric" }));
+            const ySteps = [maxCount, Math.round(maxCount * 0.66), Math.round(maxCount * 0.33), 0];
+
+            return (
+              <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4 mb-6">
+                <h2 className="text-sm font-medium text-zinc-300 mb-4 flex items-center gap-2">
+                  <TrendingUp size={16} className="text-blue-400" />
+                  Retrieval Trends
+                </h2>
+                <div className="flex gap-4">
+                  {/* Y-axis labels */}
+                  <div className="flex flex-col justify-between text-[10px] text-zinc-600 h-40 py-1 w-8 text-right shrink-0">
+                    {ySteps.map((v, i) => <span key={i}>{v}</span>)}
+                  </div>
+                  {/* Chart */}
+                  <div className="flex-1 h-40 relative">
+                    {/* Grid lines */}
+                    {[0, 1, 2, 3].map((i) => (
+                      <div key={i} className="absolute w-full border-t border-zinc-800/50" style={{ top: `${(i / 3) * 100}%` }} />
+                    ))}
+                    <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full h-full" preserveAspectRatio="none">
+                      <defs>
+                        <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="rgb(59,130,246)" stopOpacity="0.3" />
+                          <stop offset="100%" stopColor="rgb(59,130,246)" stopOpacity="0" />
+                        </linearGradient>
+                      </defs>
+                      <path d={areaPath} fill="url(#areaGrad)" />
+                      <path d={linePath} fill="none" stroke="rgb(59,130,246)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+                      {points.map((p, i) => (
+                        <circle key={i} cx={p.x} cy={p.y} r={p === peak ? 4 : 2.5} fill="rgb(59,130,246)" stroke={p === peak ? "rgb(24,24,27)" : "none"} strokeWidth={p === peak ? 2 : 0} />
+                      ))}
+                    </svg>
+                    {/* X-axis labels */}
+                    <div className="flex justify-between mt-1.5 text-[10px] text-zinc-600">
+                      {dayLabels.map((label, i) => <span key={i}>{label}</span>)}
+                    </div>
+                  </div>
+                </div>
+                {peak && (
+                  <p className="text-[10px] text-blue-400 mt-2">
+                    Peak: {new Date(peak.date).toLocaleDateString("en", { weekday: "long" })} — {peak.count} retrieval{peak.count !== 1 ? "s" : ""}
+                  </p>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Charts: Lessons by Type (donut) */}
           <div className="grid grid-cols-2 gap-4 mb-6">

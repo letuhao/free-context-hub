@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useProject } from "@/contexts/project-context";
 import { useToast } from "@/components/ui/toast";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui";
-import { FileText, Link2, X } from "lucide-react";
+import { Upload, Link2, X } from "lucide-react";
+
+const ACCEPT = ".pdf,.md,.txt,.markdown,.text";
+const MAX_SIZE = 10 * 1024 * 1024; // 10MB
 
 interface UploadDialogProps {
   open: boolean;
@@ -17,19 +20,42 @@ interface UploadDialogProps {
 export function UploadDialog({ open, onClose, onUploaded, mode }: UploadDialogProps) {
   const { projectId } = useProject();
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
-  const [content, setContent] = useState("");
   const [description, setDescription] = useState("");
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
 
   const addTag = () => {
     const t = tagInput.trim();
     if (t && !tags.includes(t)) { setTags([...tags, t]); setTagInput(""); }
   };
+
+  const handleFile = useCallback((f: File) => {
+    if (f.size > MAX_SIZE) {
+      toast("error", "File too large (max 10MB)");
+      return;
+    }
+    setFile(f);
+    if (!name.trim()) setName(f.name);
+  }, [name, toast]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const f = e.dataTransfer.files[0];
+    if (f) handleFile(f);
+  }, [handleFile]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(true);
+  }, []);
 
   const handleSubmit = async () => {
     setUploading(true);
@@ -45,17 +71,19 @@ export function UploadDialog({ open, onClose, onUploaded, mode }: UploadDialogPr
           tags: tags.length > 0 ? tags : undefined,
         });
       } else {
-        if (!name.trim() || !content.trim()) { toast("error", "Name and content are required"); return; }
-        const docType = name.endsWith(".md") ? "markdown" : name.endsWith(".pdf") ? "pdf" : "text";
-        await api.createDocument({
-          project_id: projectId,
-          name: name.trim(),
-          doc_type: docType,
-          content: content.trim(),
-          file_size_bytes: new Blob([content]).size,
-          description: description.trim() || undefined,
-          tags: tags.length > 0 ? tags : undefined,
-        });
+        if (file) {
+          // Multipart file upload
+          const formData = new FormData();
+          formData.append("file", file);
+          formData.append("project_id", projectId);
+          if (name.trim()) formData.append("name", name.trim());
+          if (description.trim()) formData.append("description", description.trim());
+          if (tags.length > 0) formData.append("tags", JSON.stringify(tags));
+          await api.uploadDocument(formData);
+        } else {
+          toast("error", "Please select a file to upload");
+          return;
+        }
       }
       toast("success", mode === "url" ? "URL linked" : "Document uploaded");
       onUploaded();
@@ -87,9 +115,40 @@ export function UploadDialog({ open, onClose, onUploaded, mode }: UploadDialogPr
           <div className="px-6 py-5 space-y-5">
             {mode === "upload" ? (
               <>
-                {/* Drag & drop zone (simplified — paste/type content) */}
+                {/* Drag & Drop Zone */}
+                <div
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  onDragLeave={() => setDragOver(false)}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+                    dragOver ? "border-blue-500 bg-blue-500/5" : file ? "border-emerald-700 bg-emerald-500/5" : "border-zinc-700 hover:border-zinc-500"
+                  }`}
+                >
+                  <Upload size={24} className={`mx-auto mb-2 ${file ? "text-emerald-500" : "text-zinc-500"}`} />
+                  {file ? (
+                    <>
+                      <p className="text-sm text-zinc-300 mb-1">{file.name}</p>
+                      <p className="text-[11px] text-zinc-600">{(file.size / 1024).toFixed(1)} KB — click or drop to replace</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm text-zinc-300 mb-1">Drop files here or click to browse</p>
+                      <p className="text-[11px] text-zinc-600">PDF, MD, TXT up to 10MB</p>
+                    </>
+                  )}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={ACCEPT}
+                    className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+                  />
+                </div>
+
+                {/* Document name override */}
                 <div>
-                  <label className="block text-xs text-zinc-400 mb-1.5">Document name</label>
+                  <label className="block text-xs text-zinc-400 mb-1.5">Document name <span className="text-zinc-600">(auto-filled from file)</span></label>
                   <input
                     type="text"
                     value={name}
@@ -98,45 +157,34 @@ export function UploadDialog({ open, onClose, onUploaded, mode }: UploadDialogPr
                     className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-zinc-600 transition-colors"
                   />
                 </div>
+              </>
+            ) : (
+              <>
                 <div>
-                  <label className="block text-xs text-zinc-400 mb-1.5">Content</label>
-                  <textarea
-                    rows={8}
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    placeholder="Paste document content here..."
-                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-200 outline-none placeholder:text-zinc-600 resize-y focus:border-zinc-600 transition-colors font-mono"
+                  <label className="block text-xs text-zinc-400 mb-1.5">URL</label>
+                  <div className="flex items-center gap-2 px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg">
+                    <Link2 size={14} className="text-zinc-500 shrink-0" />
+                    <input
+                      type="text"
+                      value={url}
+                      onChange={(e) => setUrl(e.target.value)}
+                      placeholder="https://docs.example.com/..."
+                      className="flex-1 bg-transparent text-xs text-zinc-200 outline-none placeholder:text-zinc-600"
+                      autoFocus
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1.5">Display name <span className="text-zinc-600">(optional)</span></label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Auto-detected from URL"
+                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-zinc-600 transition-colors"
                   />
                 </div>
               </>
-            ) : (
-              <div>
-                <label className="block text-xs text-zinc-400 mb-1.5">URL</label>
-                <div className="flex items-center gap-2 px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg">
-                  <Link2 size={14} className="text-zinc-500 shrink-0" />
-                  <input
-                    type="text"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    placeholder="https://docs.example.com/..."
-                    className="flex-1 bg-transparent text-xs text-zinc-200 outline-none placeholder:text-zinc-600"
-                    autoFocus
-                  />
-                </div>
-              </div>
-            )}
-
-            {mode === "url" && (
-              <div>
-                <label className="block text-xs text-zinc-400 mb-1.5">Display name <span className="text-zinc-600">(optional)</span></label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Auto-detected from URL"
-                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-zinc-600 transition-colors"
-                />
-              </div>
             )}
 
             {/* Tags */}
@@ -178,7 +226,7 @@ export function UploadDialog({ open, onClose, onUploaded, mode }: UploadDialogPr
             <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
             <button
               onClick={handleSubmit}
-              disabled={uploading}
+              disabled={uploading || (mode === "upload" && !file)}
               className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white transition-colors disabled:opacity-50"
             >
               {uploading ? "Saving..." : mode === "url" ? "Link" : "Upload"}

@@ -180,6 +180,16 @@ export const api = {
   checkGuardrails: (body: { project_id?: string; action_context: Record<string, unknown> }) =>
     request<any>("POST", "/api/guardrails/check", body),
 
+  listGuardrailRules: (params: { project_id: string }) =>
+    request<{ rules: Array<{ rule_id: string; trigger: string; requirement: string; verification_method: string; title: string; status: string }> }>(
+      "GET", `/api/guardrails/rules?${qs(params)}`
+    ),
+
+  simulateGuardrails: (body: { project_id: string; actions: string[] }) =>
+    request<{ results: Array<{ action: string; pass: boolean; matched_rules: Array<{ rule_id: string; requirement: string; verification_method: string }> }> }>(
+      "POST", "/api/guardrails/simulate", body
+    ),
+
   // ── Search ──
   searchCode: (body: Record<string, unknown>) =>
     request<any>("POST", "/api/search/code-tiered", body),

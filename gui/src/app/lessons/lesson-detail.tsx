@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Badge, Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useProject } from "@/contexts/project-context";
@@ -62,6 +62,14 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick, init
   const [restoring, setRestoring] = useState(false);
   const [aiEditorOpen, setAiEditorOpen] = useState(false);
   const [linkedDocs, setLinkedDocs] = useState<{ document_id: string; name: string; doc_type: string; file_size_bytes?: number }[]>([]);
+
+  // Selection toolbar
+  const contentRef = useRef<HTMLTextAreaElement>(null);
+  const [selectionToolbar, setSelectionToolbar] = useState<{ show: boolean; top: number; left: number; text: string }>({ show: false, top: 0, left: 0, text: "" });
+
+  // Suggested tags
+  const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
+  const [loadingSuggestedTags, setLoadingSuggestedTags] = useState(false);
 
   // Feedback
   const [feedback, setFeedback] = useState<{ up_count: number; down_count: number; user_vote: number; retrieval_count: number }>({ up_count: 0, down_count: 0, user_vote: 0, retrieval_count: 0 });
@@ -430,12 +438,47 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick, init
             <div>
               <h3 className="text-[11px] uppercase tracking-wide text-zinc-500 mb-2">Content</h3>
               {editing ? (
-                <textarea
-                  value={editContent}
-                  onChange={(e) => setEditContent(e.target.value)}
-                  rows={12}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-sm text-zinc-300 leading-relaxed focus:outline-none focus:border-zinc-500 transition-colors resize-y font-mono"
-                />
+                <div className="relative">
+                  <textarea
+                    ref={contentRef}
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    onSelect={() => {
+                      const ta = contentRef.current;
+                      if (!ta) return;
+                      const selected = ta.value.substring(ta.selectionStart, ta.selectionEnd).trim();
+                      if (selected.length > 0) {
+                        const rect = ta.getBoundingClientRect();
+                        setSelectionToolbar({ show: true, top: -36, left: rect.width / 2, text: selected });
+                      } else {
+                        setSelectionToolbar((s) => ({ ...s, show: false }));
+                      }
+                    }}
+                    onBlur={() => { setTimeout(() => setSelectionToolbar((s) => ({ ...s, show: false })), 200); }}
+                    rows={12}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-sm text-zinc-300 leading-relaxed focus:outline-none focus:border-zinc-500 transition-colors resize-y font-mono"
+                  />
+                  {/* Floating selection toolbar */}
+                  {selectionToolbar.show && (
+                    <div
+                      className="absolute z-10 flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-800 border border-purple-700/50 rounded-lg shadow-xl animate-[fadeIn_0.1s_ease-out]"
+                      style={{ top: selectionToolbar.top, left: selectionToolbar.left, transform: "translateX(-50%)" }}
+                    >
+                      <span className="text-[10px] text-zinc-500">{selectionToolbar.text.length} chars</span>
+                      <button
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setAiEditorOpen(true);
+                          setSelectionToolbar((s) => ({ ...s, show: false }));
+                        }}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] bg-purple-600/20 hover:bg-purple-600/30 border border-purple-700/40 rounded text-purple-400 font-medium transition-colors"
+                      >
+                        <Sparkles size={10} />
+                        Ask AI
+                      </button>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="text-sm text-zinc-400 leading-relaxed whitespace-pre-wrap">
                   {lesson.content}
@@ -465,16 +508,65 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick, init
                     </span>
                   ))}
                   {editing && (
-                    <input
-                      type="text"
-                      value={newTag}
-                      onChange={(e) => setNewTag(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
-                      placeholder="Add tag..."
-                      className="px-2 py-0.5 text-xs bg-zinc-800 border border-dashed border-zinc-600 rounded-full text-zinc-400 placeholder-zinc-600 w-20 focus:outline-none focus:border-zinc-500"
-                    />
+                    <>
+                      <input
+                        type="text"
+                        value={newTag}
+                        onChange={(e) => setNewTag(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
+                        placeholder="Add tag..."
+                        className="px-2 py-0.5 text-xs bg-zinc-800 border border-dashed border-zinc-600 rounded-full text-zinc-400 placeholder-zinc-600 w-20 focus:outline-none focus:border-zinc-500"
+                      />
+                      <button
+                        onClick={async () => {
+                          setLoadingSuggestedTags(true);
+                          setSuggestedTags([]);
+                          try {
+                            const res = await api.suggestTags(lesson.lesson_id, { project_id: projectId });
+                            setSuggestedTags((res.suggestions ?? []).filter((t: string) => !editTags.includes(t)));
+                          } catch {
+                            toast("error", "Failed to suggest tags");
+                          } finally {
+                            setLoadingSuggestedTags(false);
+                          }
+                        }}
+                        disabled={loadingSuggestedTags}
+                        className="px-2 py-0.5 text-[10px] bg-purple-600/15 hover:bg-purple-600/25 border border-purple-700/40 rounded-full text-purple-400 transition-colors disabled:opacity-50 inline-flex items-center gap-0.5"
+                      >
+                        <Sparkles size={10} />
+                        {loadingSuggestedTags ? "..." : "Suggest"}
+                      </button>
+                    </>
                   )}
                 </div>
+                {/* AI-suggested tags */}
+                {editing && suggestedTags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {suggestedTags.map((t) => (
+                      <span
+                        key={t}
+                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs bg-purple-600/10 border border-dashed border-purple-600/30 text-purple-400"
+                      >
+                        <Sparkles size={9} className="opacity-60" />
+                        {t}
+                        <button
+                          onClick={() => { setEditTags([...editTags, t]); setSuggestedTags(suggestedTags.filter((s) => s !== t)); }}
+                          className="hover:text-emerald-400 ml-0.5 transition-colors"
+                          title="Accept"
+                        >
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>
+                        </button>
+                        <button
+                          onClick={() => setSuggestedTags(suggestedTags.filter((s) => s !== t))}
+                          className="hover:text-red-400 transition-colors"
+                          title="Dismiss"
+                        >
+                          <X size={10} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

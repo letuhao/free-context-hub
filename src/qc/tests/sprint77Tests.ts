@@ -262,6 +262,107 @@ export const feedbackInListTest: TestFn = async (ctx) => {
 
 // ════════════════════════════════════════════════════════════════════════
 
+// ════════════════════════════════════════════════════════════════════════
+
+/** Helper: create a guardrail lesson */
+async function createGuardrailLesson(ctx: TestContext, trigger: string, requirement: string): Promise<any> {
+  const res = await (await fetch(`${API_BASE}/api/lessons`, json({
+    project_id: ctx.projectId,
+    lesson_type: 'guardrail',
+    title: `Guardrail ${Date.now()}`,
+    content: requirement,
+    tags: ['integration-test', 'guardrail-test'],
+    guardrail: { trigger, requirement, verification_method: 'user_confirmation' },
+  }))).json() as any;
+  if (res.lesson_id) ctx.createdLessonIds.push(res.lesson_id);
+  return res;
+}
+
+/** Test: GET /api/guardrails/rules returns rules for project */
+export const guardrailRulesListTest: TestFn = async (ctx) => {
+  const name = 'guardrail-rules-list';
+  const start = Date.now();
+
+  try {
+    const lesson = await createGuardrailLesson(ctx, 'git push', 'Must run tests before push');
+    if (!lesson.lesson_id) return fail(name, GROUP, Date.now() - start, 'Failed to create guardrail lesson');
+
+    const res = await (await fetch(`${API_BASE}/api/guardrails/rules?project_id=${ctx.projectId}`)).json() as any;
+    if (!Array.isArray(res.rules)) return fail(name, GROUP, Date.now() - start, 'Expected rules array');
+    const rule = res.rules.find((r: any) => r.rule_id === lesson.lesson_id);
+    if (!rule) return fail(name, GROUP, Date.now() - start, 'Created guardrail not found in rules list');
+    if (rule.trigger !== 'git push') return fail(name, GROUP, Date.now() - start, `Expected trigger 'git push', got '${rule.trigger}'`);
+    if (!rule.title) return fail(name, GROUP, Date.now() - start, 'Rule missing title from joined lesson');
+
+    return pass(name, GROUP, Date.now() - start);
+  } catch (err) {
+    return fail(name, GROUP, Date.now() - start, `Exception: ${err instanceof Error ? err.message : String(err)}`);
+  }
+};
+
+// ════════════════════════════════════════════════════════════════════════
+
+/** Test: POST /api/guardrails/simulate — "What Would Block?" */
+export const guardrailSimulateTest: TestFn = async (ctx) => {
+  const name = 'guardrail-simulate';
+  const start = Date.now();
+
+  try {
+    await createGuardrailLesson(ctx, '/deploy/', 'Deployment requires approval');
+
+    const res = await (await fetch(`${API_BASE}/api/guardrails/simulate`, json({
+      project_id: ctx.projectId,
+      actions: ['deploy to prod', 'git push', 'read file', 'deploy staging'],
+    }))).json() as any;
+
+    if (!Array.isArray(res.results)) return fail(name, GROUP, Date.now() - start, 'Expected results array');
+    if (res.results.length !== 4) return fail(name, GROUP, Date.now() - start, `Expected 4 results, got ${res.results.length}`);
+
+    // 'deploy to prod' and 'deploy staging' should match /deploy/ regex
+    const deployProd = res.results.find((r: any) => r.action === 'deploy to prod');
+    if (!deployProd || deployProd.pass !== false) return fail(name, GROUP, Date.now() - start, 'deploy to prod should be blocked');
+    if (!deployProd.matched_rules?.length) return fail(name, GROUP, Date.now() - start, 'deploy to prod should have matched_rules');
+
+    // 'read file' should pass
+    const readFile = res.results.find((r: any) => r.action === 'read file');
+    if (!readFile || readFile.pass !== true) return fail(name, GROUP, Date.now() - start, 'read file should pass');
+
+    return pass(name, GROUP, Date.now() - start);
+  } catch (err) {
+    return fail(name, GROUP, Date.now() - start, `Exception: ${err instanceof Error ? err.message : String(err)}`);
+  }
+};
+
+// ════════════════════════════════════════════════════════════════════════
+
+/** Test: POST /api/guardrails/simulate — validation */
+export const guardrailSimulateValidationTest: TestFn = async (ctx) => {
+  const name = 'guardrail-simulate-validation';
+  const start = Date.now();
+
+  try {
+    // Empty actions
+    const res1 = await fetch(`${API_BASE}/api/guardrails/simulate`, json({
+      project_id: ctx.projectId,
+      actions: [],
+    }));
+    if (res1.status !== 400) return fail(name, GROUP, Date.now() - start, `Expected 400 for empty actions, got ${res1.status}`);
+
+    // Not an array
+    const res2 = await fetch(`${API_BASE}/api/guardrails/simulate`, json({
+      project_id: ctx.projectId,
+      actions: 'not-an-array',
+    }));
+    if (res2.status !== 400) return fail(name, GROUP, Date.now() - start, `Expected 400 for non-array, got ${res2.status}`);
+
+    return pass(name, GROUP, Date.now() - start);
+  } catch (err) {
+    return fail(name, GROUP, Date.now() - start, `Exception: ${err instanceof Error ? err.message : String(err)}`);
+  }
+};
+
+// ════════════════════════════════════════════════════════════════════════
+
 export const allSprint77Tests: TestFn[] = [
   documentUploadTest,
   documentUploadNoFileTest,
@@ -270,4 +371,7 @@ export const allSprint77Tests: TestFn[] = [
   notificationSettingsTest,
   documentReverseLookupTest,
   feedbackInListTest,
+  guardrailRulesListTest,
+  guardrailSimulateTest,
+  guardrailSimulateValidationTest,
 ];

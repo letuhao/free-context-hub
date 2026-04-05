@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useProject } from "@/contexts/project-context";
 import { useToast } from "@/components/ui/toast";
 import { api } from "@/lib/api";
 import { Badge, Button } from "@/components/ui";
-import { X, Upload } from "lucide-react";
+import { X, Upload, FileText } from "lucide-react";
 
 type ImportTab = "json" | "csv" | "markdown";
 type PreviewLesson = { title: string; lesson_type: string; content: string; tags: string[]; status: "ready" | "duplicate" };
@@ -16,29 +16,126 @@ interface ImportDialogProps {
   onImported: () => void;
 }
 
+function parseCsv(text: string): Array<Record<string, string>> {
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(",").map((h) => h.trim().toLowerCase().replace(/^"|"$/g, ""));
+  return lines.slice(1).map((line) => {
+    const values: string[] = [];
+    let current = "";
+    let inQuotes = false;
+    for (const ch of line) {
+      if (ch === '"') { inQuotes = !inQuotes; continue; }
+      if (ch === "," && !inQuotes) { values.push(current.trim()); current = ""; continue; }
+      current += ch;
+    }
+    values.push(current.trim());
+    const row: Record<string, string> = {};
+    headers.forEach((h, i) => { row[h] = values[i] ?? ""; });
+    return row;
+  });
+}
+
+function parseMarkdownLessons(text: string): Array<{ title: string; content: string }> {
+  const lessons: Array<{ title: string; content: string }> = [];
+  const headingRegex = /^#{1,3}\s+(.+)/;
+  const lines = text.split("\n");
+  let currentTitle = "";
+  let currentContent: string[] = [];
+
+  for (const line of lines) {
+    const match = headingRegex.exec(line);
+    if (match) {
+      if (currentTitle) {
+        lessons.push({ title: currentTitle, content: currentContent.join("\n").trim() });
+      }
+      currentTitle = match[1].trim();
+      currentContent = [];
+    } else if (currentTitle) {
+      currentContent.push(line);
+    }
+  }
+  if (currentTitle) {
+    lessons.push({ title: currentTitle, content: currentContent.join("\n").trim() });
+  }
+  return lessons.filter((l) => l.content.length > 0);
+}
+
 export function ImportDialog({ open, onClose, onImported }: ImportDialogProps) {
   const { projectId } = useProject();
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [tab, setTab] = useState<ImportTab>("json");
   const [rawInput, setRawInput] = useState("");
   const [preview, setPreview] = useState<PreviewLesson[]>([]);
   const [importing, setImporting] = useState(false);
   const [parsed, setParsed] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [fileName, setFileName] = useState("");
+
+  const resetState = () => {
+    setPreview([]);
+    setParsed(false);
+    setRawInput("");
+    setFileName("");
+  };
+
+  const handleFileRead = useCallback((file: File) => {
+    setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      setRawInput(text);
+      setParsed(false);
+    };
+    reader.readAsText(file);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleFileRead(file);
+  }, [handleFileRead]);
+
+  const acceptForTab = tab === "json" ? ".json" : tab === "csv" ? ".csv" : ".md,.markdown,.txt";
 
   const handleParse = async () => {
     try {
-      const data = JSON.parse(rawInput);
-      const lessons = Array.isArray(data) ? data : data.lessons ?? [data];
+      let lessons: Array<{ title: string; lesson_type?: string; content: string; tags?: string[] }> = [];
 
-      // Fetch existing lessons for duplicate check
+      if (tab === "json") {
+        const data = JSON.parse(rawInput);
+        lessons = Array.isArray(data) ? data : data.lessons ?? [data];
+      } else if (tab === "csv") {
+        const rows = parseCsv(rawInput);
+        if (rows.length === 0) { toast("error", "No data rows found. Expected CSV with header row."); return; }
+        lessons = rows.map((r) => ({
+          title: r.title || r.name || "Untitled",
+          lesson_type: r.lesson_type || r.type || "general_note",
+          content: r.content || r.description || r.body || "",
+          tags: (r.tags || "").split(";").map((t: string) => t.trim()).filter(Boolean),
+        }));
+      } else {
+        const parsed = parseMarkdownLessons(rawInput);
+        if (parsed.length === 0) { toast("error", "No headings found. Use # headings to separate lessons."); return; }
+        lessons = parsed.map((l) => ({
+          title: l.title,
+          lesson_type: "general_note",
+          content: l.content,
+          tags: [],
+        }));
+      }
+
+      // Duplicate check
       let existingTitles = new Set<string>();
       try {
         const existing = await api.listLessons({ project_id: projectId, limit: 200 });
         existingTitles = new Set((existing.items ?? []).map((l: any) => l.title?.toLowerCase()));
       } catch {}
 
-      const items: PreviewLesson[] = lessons.map((l: any) => ({
+      const items: PreviewLesson[] = lessons.map((l) => ({
         title: l.title ?? "Untitled",
         lesson_type: l.lesson_type ?? "general_note",
         content: l.content ?? "",
@@ -48,7 +145,7 @@ export function ImportDialog({ open, onClose, onImported }: ImportDialogProps) {
       setPreview(items);
       setParsed(true);
     } catch {
-      toast("error", "Invalid JSON format");
+      toast("error", tab === "json" ? "Invalid JSON format" : "Failed to parse file");
     }
   };
 
@@ -98,7 +195,7 @@ export function ImportDialog({ open, onClose, onImported }: ImportDialogProps) {
             {(["json", "csv", "markdown"] as const).map((t) => (
               <button
                 key={t}
-                onClick={() => { setTab(t); setPreview([]); setParsed(false); setRawInput(""); }}
+                onClick={() => { setTab(t); resetState(); }}
                 className={`px-4 py-2.5 text-xs font-medium transition-colors ${
                   tab === t ? "text-blue-400 border-b-2 border-blue-400 -mb-px" : "text-zinc-500 hover:text-zinc-300"
                 }`}
@@ -110,37 +207,63 @@ export function ImportDialog({ open, onClose, onImported }: ImportDialogProps) {
 
           {/* Content */}
           <div className="p-6">
-            {tab === "json" && (
-              <>
-                <div className="border-2 border-dashed border-zinc-700 rounded-lg p-6 text-center mb-4 hover:border-zinc-600 transition-colors">
-                  <Upload size={18} className="text-zinc-500 mx-auto mb-2" />
-                  <p className="text-xs text-zinc-400">Drop a .json file or paste JSON</p>
-                </div>
-                <textarea
-                  rows={3}
-                  value={rawInput}
-                  onChange={(e) => { setRawInput(e.target.value); setParsed(false); }}
-                  placeholder='Paste JSON here... [{"title": "...", "content": "...", "lesson_type": "decision"}]'
-                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-md text-xs text-zinc-300 outline-none placeholder-zinc-600 resize-none mb-4 font-mono"
-                />
-                {!parsed && rawInput.trim() && (
-                  <div className="flex justify-end mb-4">
-                    <button onClick={handleParse} className="px-3 py-1.5 text-xs bg-zinc-700 hover:bg-zinc-600 rounded-md text-zinc-300 transition-colors">
-                      Parse & Preview
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-            {tab === "csv" && (
-              <div className="text-center py-8">
-                <p className="text-xs text-zinc-500">CSV import coming soon</p>
-              </div>
-            )}
-            {tab === "markdown" && (
-              <div className="border-2 border-dashed border-zinc-700 rounded-lg p-6 text-center hover:border-zinc-600 transition-colors">
-                <FileText size={18} className="text-zinc-500 mx-auto mb-2" />
-                <p className="text-xs text-zinc-400">Paste or upload a .md file. AI will parse it into separate lessons.</p>
+            {/* Shared drag-drop zone for all tabs */}
+            <div
+              onDrop={handleDrop}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onClick={() => fileInputRef.current?.click()}
+              className={`border-2 border-dashed rounded-lg p-6 text-center mb-4 cursor-pointer transition-colors ${
+                dragOver ? "border-blue-500 bg-blue-500/5" : fileName ? "border-emerald-700 bg-emerald-500/5" : "border-zinc-700 hover:border-zinc-600"
+              }`}
+            >
+              {tab === "markdown" ? (
+                <FileText size={18} className={`mx-auto mb-2 ${fileName ? "text-emerald-500" : "text-zinc-500"}`} />
+              ) : (
+                <Upload size={18} className={`mx-auto mb-2 ${fileName ? "text-emerald-500" : "text-zinc-500"}`} />
+              )}
+              {fileName ? (
+                <p className="text-xs text-emerald-400">{fileName}</p>
+              ) : (
+                <>
+                  <p className="text-xs text-zinc-400">
+                    {tab === "json" && "Drop a .json file or paste JSON below"}
+                    {tab === "csv" && "Drop a .csv file or paste CSV below"}
+                    {tab === "markdown" && "Drop a .md file or paste markdown below"}
+                  </p>
+                  <p className="text-[10px] text-zinc-600 mt-1">
+                    {tab === "markdown" && "Each # heading becomes a separate lesson"}
+                    {tab === "csv" && "Expected columns: title, content, lesson_type, tags (semicolon-separated)"}
+                  </p>
+                </>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={acceptForTab}
+                className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileRead(f); }}
+              />
+            </div>
+
+            {/* Text area for paste */}
+            <textarea
+              rows={tab === "json" ? 3 : 5}
+              value={rawInput}
+              onChange={(e) => { setRawInput(e.target.value); setParsed(false); }}
+              placeholder={
+                tab === "json" ? 'Paste JSON here... [{"title": "...", "content": "...", "lesson_type": "decision"}]'
+                : tab === "csv" ? "title,content,lesson_type,tags\n\"My Lesson\",\"Content here\",decision,\"tag1;tag2\""
+                : "# Lesson Title\n\nLesson content goes here...\n\n# Another Lesson\n\nMore content..."
+              }
+              className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-md text-xs text-zinc-300 outline-none placeholder-zinc-600 resize-none mb-4 font-mono"
+            />
+
+            {!parsed && rawInput.trim() && (
+              <div className="flex justify-end mb-4">
+                <button onClick={handleParse} className="px-3 py-1.5 text-xs bg-zinc-700 hover:bg-zinc-600 rounded-md text-zinc-300 transition-colors">
+                  Parse & Preview
+                </button>
               </div>
             )}
 
@@ -175,7 +298,10 @@ export function ImportDialog({ open, onClose, onImported }: ImportDialogProps) {
                     </tbody>
                   </table>
                 </div>
-                <p className="text-[10px] text-zinc-500 mb-4">{readyCount} lesson(s) ready to import</p>
+                <p className="text-[10px] text-zinc-500 mb-4">
+                  {readyCount} lesson(s) ready to import
+                  {preview.length - readyCount > 0 && `, ${preview.length - readyCount} duplicate(s) will be skipped`}
+                </p>
               </>
             )}
 
@@ -197,9 +323,4 @@ export function ImportDialog({ open, onClose, onImported }: ImportDialogProps) {
       </div>
     </>
   );
-}
-
-// For the markdown tab reference
-function FileText(props: any) {
-  return <Upload {...props} />;
 }

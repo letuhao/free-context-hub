@@ -31,7 +31,7 @@ export { tieredSearch } from '../services/tieredRetriever.js';
 
 // ── Services: lessons & guardrails ──
 export { addLesson, batchUpdateLessonStatus, deleteWorkspace, listLessons, listLessonVersions, searchLessons, searchLessonsMulti, updateLesson, updateLessonStatus } from '../services/lessons.js';
-export { checkGuardrails } from '../services/guardrails.js';
+export { checkGuardrails, listGuardrailRules, simulateGuardrails } from '../services/guardrails.js';
 
 // ── Services: distillation & snapshots ──
 export { getProjectSnapshotBody } from '../services/snapshot.js';

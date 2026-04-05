@@ -6,11 +6,14 @@ import { TextStreamChatTransport, isTextUIPart, isToolUIPart } from "ai";
 import type { UIMessage } from "ai";
 import { useProject } from "@/contexts/project-context";
 import { useToast } from "@/components/ui/toast";
+import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { Send, Square, Copy, Check, Bookmark, Pencil, RotateCcw, Sparkles, Pin, ChevronUp, ChevronDown, Bot, MessageSquare, Search, Code2, Shield, Wrench, Paperclip } from "lucide-react";
 import { MarkdownContent } from "./markdown-content";
 import { ChatHistorySidebar } from "./chat-history-sidebar";
 import { CreateLessonPopover } from "./create-lesson-popover";
+
+type HistoricalMessage = { id: string; role: "user" | "assistant"; content: string };
 
 const API_URL = process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "http://localhost:3001";
 const API_TOKEN = process.env.NEXT_PUBLIC_CONTEXTHUB_TOKEN;
@@ -234,6 +237,8 @@ export default function ChatPage() {
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [sidebarRefresh, setSidebarRefresh] = useState(0);
   const [pinnedMessages, setPinnedMessages] = useState<{ id: string; text: string }[]>([]);
+  const [historicalMessages, setHistoricalMessages] = useState<HistoricalMessage[]>([]);
+  const [loadingConv, setLoadingConv] = useState(false);
 
   const { messages, sendMessage, status, stop } = useChat({
     transport: new TextStreamChatTransport({
@@ -276,13 +281,27 @@ export default function ChatPage() {
 
   const handleNewChat = () => {
     setActiveConvId(null);
-    // Note: useChat doesn't expose a reset method — new conversation starts on next send
+    setHistoricalMessages([]);
   };
 
-  const handleSelectConversation = (id: string) => {
+  const handleSelectConversation = useCallback(async (id: string) => {
     setActiveConvId(id);
-    // Loading conversation messages would require resetting useChat — simplified for now
-  };
+    setLoadingConv(true);
+    try {
+      const res = await api.getConversation(id, { project_id: projectId });
+      const msgs: HistoricalMessage[] = (res.messages ?? []).map((m: any, i: number) => ({
+        id: m.message_id ?? `hist-${i}`,
+        role: m.role === "user" ? "user" as const : "assistant" as const,
+        content: m.content ?? "",
+      }));
+      setHistoricalMessages(msgs);
+    } catch {
+      toast("error", "Failed to load conversation");
+      setHistoricalMessages([]);
+    } finally {
+      setLoadingConv(false);
+    }
+  }, [projectId, toast]);
 
   const handlePinMessage = (text: string) => {
     const id = Date.now().toString();
@@ -317,7 +336,11 @@ export default function ChatPage() {
 
         {/* Messages */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4">
-          {messages.length === 0 ? (
+          {loadingConv ? (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-xs text-zinc-500 animate-pulse">Loading conversation...</p>
+            </div>
+          ) : messages.length === 0 && historicalMessages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full max-w-md mx-auto text-center">
               <div className="relative mb-5">
                 <div
@@ -343,6 +366,39 @@ export default function ChatPage() {
             </div>
           ) : (
             <div className="max-w-2xl mx-auto space-y-5">
+              {/* Historical messages from loaded conversation */}
+              {historicalMessages.map((msg) => (
+                <div key={msg.id} className={cn("flex gap-3", msg.role === "user" ? "justify-end" : "justify-start")}>
+                  {msg.role === "assistant" && (
+                    <div className="w-7 h-7 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0 mt-0.5">
+                      <Bot size={14} className="text-zinc-400" />
+                    </div>
+                  )}
+                  <div className={cn(
+                    "max-w-[75%] px-4 py-2.5",
+                    msg.role === "user"
+                      ? "bg-blue-600/80 rounded-2xl rounded-tr-sm text-sm text-white"
+                      : "bg-zinc-900 border border-zinc-800 rounded-2xl rounded-tl-sm"
+                  )}>
+                    {msg.role === "user" ? (
+                      <div>{msg.content}</div>
+                    ) : (
+                      <MarkdownContent content={msg.content} />
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {/* Divider between historical and new messages */}
+              {historicalMessages.length > 0 && messages.length > 0 && (
+                <div className="flex items-center gap-3 py-2">
+                  <div className="flex-1 h-px bg-zinc-800" />
+                  <span className="text-[10px] text-zinc-600">New messages</span>
+                  <div className="flex-1 h-px bg-zinc-800" />
+                </div>
+              )}
+
+              {/* Live streaming messages */}
               {messages.map((message) => (
                 <MessageBubble
                   key={message.id}

@@ -9,6 +9,27 @@ import { useToast } from "@/components/ui/toast";
 import { AddLessonDialog } from "../lessons/add-lesson-dialog";
 import type { Lesson } from "../lessons/types";
 
+const PRESETS = [
+  "deploy to production",
+  "git push --force to main",
+  "DROP TABLE migration",
+  "delete workspace data",
+  "npm publish",
+];
+
+type TestHistoryEntry = {
+  action: string;
+  pass: boolean;
+  matchCount: number;
+  timestamp: number;
+};
+
+type SimulateResult = {
+  action: string;
+  pass: boolean;
+  matched_rules: Array<{ rule_id: string; requirement: string; verification_method: string }>;
+};
+
 export default function GuardrailsPage() {
   const { projectId } = useProject();
   const { toast } = useToast();
@@ -19,10 +40,21 @@ export default function GuardrailsPage() {
   const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
 
-  // Test panel state
+  // Mode toggle
+  const [mode, setMode] = useState<"test" | "block">("test");
+
+  // Test Action state
   const [testAction, setTestAction] = useState("");
-  const [testResult, setTestResult] = useState<{ pass: boolean; violations: any[] } | null>(null);
+  const [testResult, setTestResult] = useState<{ pass: boolean; rules_checked?: number; matched_rules?: any[] } | null>(null);
   const [testing, setTesting] = useState(false);
+
+  // Test history (in-memory)
+  const [history, setHistory] = useState<TestHistoryEntry[]>([]);
+
+  // "What Would Block?" state
+  const [blockActions, setBlockActions] = useState("");
+  const [simResults, setSimResults] = useState<SimulateResult[] | null>(null);
+  const [simulating, setSimulating] = useState(false);
 
   const fetchGuardrails = useCallback(async () => {
     try {
@@ -45,21 +77,50 @@ export default function GuardrailsPage() {
 
   useEffect(() => { fetchGuardrails(); }, [fetchGuardrails]);
 
-  const handleTest = async () => {
-    if (!testAction.trim()) return;
+  const handleTest = async (action?: string) => {
+    const a = (action ?? testAction).trim();
+    if (!a) return;
+    if (!action) setTestAction(a);
     setTesting(true);
     setTestResult(null);
     try {
       const result = await api.checkGuardrails({
         project_id: projectId,
-        action_context: { action: testAction.trim() },
+        action_context: { action: a },
       });
       setTestResult(result);
+      setHistory((prev) => [
+        { action: a, pass: result.pass, matchCount: result.matched_rules?.length ?? 0, timestamp: Date.now() },
+        ...prev.slice(0, 19),
+      ]);
     } catch (err) {
       toastRef.current("error", err instanceof Error ? err.message : "Check failed");
     } finally {
       setTesting(false);
     }
+  };
+
+  const handleSimulate = async () => {
+    const lines = blockActions.split("\n").map((l) => l.trim()).filter(Boolean);
+    if (lines.length === 0) return;
+    setSimulating(true);
+    setSimResults(null);
+    try {
+      const { results } = await api.simulateGuardrails({
+        project_id: projectId,
+        actions: lines,
+      });
+      setSimResults(results);
+    } catch (err) {
+      toastRef.current("error", err instanceof Error ? err.message : "Simulation failed");
+    } finally {
+      setSimulating(false);
+    }
+  };
+
+  const handlePresetSelect = (value: string) => {
+    if (value === "") return;
+    setTestAction(value);
   };
 
   const columns: Column<Lesson>[] = [
@@ -104,34 +165,128 @@ export default function GuardrailsPage() {
         }
       />
 
-      {/* Test Action Panel */}
+      {/* Test Panel */}
       <div className="border border-zinc-800 rounded-lg bg-zinc-900 p-4 mb-5">
-        <div className="text-xs text-zinc-500 mb-2">Test an action against guardrails</div>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={testAction}
-            onChange={(e) => setTestAction(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleTest()}
-            placeholder="e.g. git push --force to main"
-            className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-md text-sm text-zinc-100 outline-none focus:border-zinc-600"
-          />
-          <Button variant="primary" onClick={handleTest} disabled={testing || !testAction.trim()}>
-            {testing ? "Checking..." : "Check ▶"}
-          </Button>
+        {/* Mode toggle */}
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-medium text-zinc-300">
+            {mode === "test" ? "Test Action" : "What Would Block?"}
+          </h2>
+          <div className="flex bg-zinc-800 border border-zinc-700 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setMode("test")}
+              className={`px-3 py-1.5 text-[10px] transition-colors ${mode === "test" ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-300"}`}
+            >
+              Test Action
+            </button>
+            <button
+              onClick={() => setMode("block")}
+              className={`px-3 py-1.5 text-[10px] transition-colors ${mode === "block" ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-300"}`}
+            >
+              What Would Block?
+            </button>
+          </div>
         </div>
 
-        {testResult && (
-          <div className={`mt-3 p-3 rounded-md border ${testResult.pass ? "border-emerald-500/20 bg-emerald-500/5" : "border-red-500/20 bg-red-500/5"}`}>
-            <div className={`text-sm font-semibold ${testResult.pass ? "text-emerald-400" : "text-red-400"}`}>
-              {testResult.pass ? "✓ PASSED — no guardrails violated" : "✕ BLOCKED"}
+        {/* Test Action mode */}
+        {mode === "test" && (
+          <div>
+            <div className="flex gap-2">
+              <select
+                value=""
+                onChange={(e) => handlePresetSelect(e.target.value)}
+                className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-md text-sm text-zinc-300 outline-none appearance-none cursor-pointer w-56 shrink-0"
+              >
+                <option value="">Select preset...</option>
+                {PRESETS.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={testAction}
+                onChange={(e) => setTestAction(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleTest()}
+                placeholder="e.g. git push --force to main"
+                className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-md text-sm text-zinc-100 outline-none focus:border-zinc-600"
+              />
+              <Button variant="primary" onClick={() => handleTest()} disabled={testing || !testAction.trim()}>
+                {testing ? "Checking..." : "Check"}
+              </Button>
             </div>
-            {testResult.violations?.length > 0 && (
-              <div className="mt-2 space-y-1.5">
-                {testResult.violations.map((v: any, i: number) => (
-                  <div key={i} className="text-xs text-zinc-400">
-                    <span className="text-red-400 font-medium">Rule:</span> {v.trigger ?? v.rule_id}
-                    {v.requirement && <span className="text-zinc-500"> — {v.requirement}</span>}
+
+            {testResult && (
+              <div className={`mt-3 p-3 rounded-lg border ${testResult.pass ? "border-emerald-800/50 bg-emerald-500/5" : "border-red-800/50 bg-red-500/5"}`}>
+                <div className={`text-sm font-medium ${testResult.pass ? "text-emerald-400" : "text-red-400"}`}>
+                  {testResult.pass ? "✓ PASSED" : "✕ BLOCKED"}
+                </div>
+                <p className="text-xs text-zinc-400 mt-1">
+                  {testResult.pass
+                    ? `Action "${testAction}" passed all ${testResult.rules_checked ?? 0} guardrails.`
+                    : `Action "${testAction}" was blocked by ${testResult.matched_rules?.length ?? 0} guardrail(s):`}
+                </p>
+                {testResult.matched_rules && testResult.matched_rules.length > 0 && (
+                  <div className="mt-2 ml-4 space-y-1">
+                    {testResult.matched_rules.map((v: any, i: number) => (
+                      <div key={i} className="flex items-start gap-2">
+                        <span className="text-red-400 mt-0.5 shrink-0">✕</span>
+                        <div>
+                          <p className="text-xs text-zinc-300 font-medium">{v.requirement}</p>
+                          {v.verification_method && (
+                            <p className="text-[10px] text-zinc-500">Verification: {v.verification_method}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* "What Would Block?" mode */}
+        {mode === "block" && (
+          <div>
+            <div className="flex gap-2">
+              <textarea
+                value={blockActions}
+                onChange={(e) => setBlockActions(e.target.value)}
+                placeholder={"Enter actions to simulate (one per line)...\ne.g.\ndeploy to production\ngit push --force\ndelete workspace data"}
+                rows={3}
+                className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-md text-sm text-zinc-100 outline-none focus:border-zinc-600 resize-none font-mono"
+              />
+              <Button
+                variant="primary"
+                onClick={handleSimulate}
+                disabled={simulating || !blockActions.trim()}
+              >
+                {simulating ? "Analyzing..." : "Analyze"}
+              </Button>
+            </div>
+
+            {simResults && (
+              <div className="mt-3 space-y-2">
+                {simResults.map((r, i) => (
+                  <div
+                    key={i}
+                    className={`border rounded-lg p-3 ${r.pass ? "border-emerald-800/50 bg-emerald-500/5" : "border-red-800/50 bg-red-500/5"}`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-zinc-300 font-mono">{r.action}</span>
+                      <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${r.pass ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"}`}>
+                        {r.pass ? "PASS" : `BLOCKED (${r.matched_rules.length})`}
+                      </span>
+                    </div>
+                    {r.matched_rules.length > 0 && (
+                      <div className="mt-1.5 space-y-1">
+                        {r.matched_rules.map((rule, j) => (
+                          <p key={j} className="text-[10px] text-zinc-500 ml-2">
+                            <span className="text-red-400">•</span> {rule.requirement}
+                          </p>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -139,6 +294,41 @@ export default function GuardrailsPage() {
           </div>
         )}
       </div>
+
+      {/* Test History */}
+      {history.length > 0 && (
+        <div className="border border-zinc-800 rounded-lg bg-zinc-900 p-4 mb-5">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-medium text-zinc-300">Recent Tests</h2>
+            <button
+              onClick={() => setHistory([])}
+              className="text-[10px] text-zinc-500 hover:text-zinc-400 transition-colors"
+            >
+              Clear History
+            </button>
+          </div>
+          <div className="space-y-1">
+            {history.map((entry, i) => (
+              <div key={i} className="flex items-center gap-3 py-1.5">
+                <span className={`w-2 h-2 rounded-full shrink-0 ${entry.pass ? "bg-emerald-500" : "bg-red-500"}`} />
+                <span className="text-xs text-zinc-300 font-mono flex-1 truncate">{entry.action}</span>
+                <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded shrink-0 ${entry.pass ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"}`}>
+                  {entry.pass ? "PASSED" : `BLOCKED (${entry.matchCount})`}
+                </span>
+                <span className="text-[10px] text-zinc-600 w-16 text-right shrink-0">
+                  {relTime(new Date(entry.timestamp).toISOString())}
+                </span>
+                <button
+                  onClick={() => { setTestAction(entry.action); setMode("test"); handleTest(entry.action); }}
+                  className="text-[10px] text-zinc-500 hover:text-zinc-400 shrink-0 transition-colors"
+                >
+                  Re-run
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Guardrails List */}
       {loading ? (
