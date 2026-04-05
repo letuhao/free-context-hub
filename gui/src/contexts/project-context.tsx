@@ -6,6 +6,8 @@ import { api } from "@/lib/api";
 type ProjectInfo = {
   project_id: string;
   name: string | null;
+  description: string | null;
+  color: string | null;
   groups: Array<{ group_id: string; name: string }>;
   lesson_count: number;
 };

@@ -23,6 +23,7 @@ import { AddLessonDialog } from "./add-lesson-dialog";
 import { ImportDialog } from "./import-dialog";
 import { FilterPanel } from "./filter-panel";
 import { Pagination } from "@/components/ui/pagination";
+import { NoProjectGuard } from "@/components/no-project-guard";
 import type { Lesson } from "./types";
 
 type SortField = "created_at" | "title" | "lesson_type" | "status";
@@ -297,6 +298,7 @@ export default function LessonsPage() {
   ];
 
   return (
+    <NoProjectGuard>
     <div className="p-6">
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Lessons" }]} />
       <PageHeader
@@ -525,5 +527,6 @@ export default function LessonsPage() {
         onImported={() => { fetchLessons(); setImportDialogOpen(false); }}
       />
     </div>
+    </NoProjectGuard>
   );
 }

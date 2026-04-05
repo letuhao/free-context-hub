@@ -5,6 +5,7 @@ import { useProject } from "@/contexts/project-context";
 import { api } from "@/lib/api";
 import { Breadcrumb, PageHeader, Badge, Button, TableSkeleton } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
+import { NoProjectGuard } from "@/components/no-project-guard";
 import { CheckCircle2, Circle, Play, RotateCcw, Share2, ArrowRight } from "lucide-react";
 
 type LearningItem = {
@@ -124,6 +125,7 @@ export default function GettingStartedPage() {
   const nextItem = sections.flatMap((s) => s.items).find((i) => !i.completed);
 
   return (
+    <NoProjectGuard>
     <div className="p-6">
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Getting Started" }]} />
       <PageHeader
@@ -228,5 +230,6 @@ export default function GettingStartedPage() {
         </div>
       )}
     </div>
+    </NoProjectGuard>
   );
 }

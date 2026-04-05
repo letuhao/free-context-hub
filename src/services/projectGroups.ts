@@ -149,6 +149,8 @@ export async function listGroupsForProject(projectId: string): Promise<ProjectGr
 export type ProjectWithGroups = {
   project_id: string;
   name: string | null;
+  description: string | null;
+  color: string | null;
   groups: Array<{ group_id: string; name: string }>;
   lesson_count: number;
 };
@@ -164,6 +166,8 @@ export async function listAllProjects(): Promise<ProjectWithGroups[]> {
     `SELECT
        p.project_id,
        p.name,
+       p.description,
+       p.color,
        COALESCE(lc.cnt, 0)::int AS lesson_count,
        COALESCE(
          json_agg(json_build_object('group_id', g.group_id, 'name', g.name))
@@ -176,16 +180,84 @@ export async function listAllProjects(): Promise<ProjectWithGroups[]> {
      LEFT JOIN LATERAL (
        SELECT count(*)::int AS cnt FROM lessons WHERE project_id = p.project_id
      ) lc ON true
-     GROUP BY p.project_id, p.name, lc.cnt
+     GROUP BY p.project_id, p.name, p.description, p.color, lc.cnt
      ORDER BY p.project_id`,
   );
 
   return (res.rows ?? []).map((r: any) => ({
     project_id: String(r.project_id),
     name: r.name != null ? String(r.name) : null,
+    description: r.description != null ? String(r.description) : null,
+    color: r.color != null ? String(r.color) : null,
     groups: (r.groups ?? []) as Array<{ group_id: string; name: string }>,
     lesson_count: Number(r.lesson_count ?? 0),
   }));
+}
+
+// ── Create / Update project ──
+
+export async function createProject(params: {
+  project_id: string;
+  name?: string;
+  description?: string;
+  color?: string;
+  settings?: Record<string, unknown>;
+}): Promise<{ project_id: string }> {
+  const pool = getDbPool();
+
+  // Validate project_id format
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(params.project_id)) {
+    throw new ContextHubError('BAD_REQUEST', 'Invalid project_id. Use lowercase letters, numbers, and hyphens only.');
+  }
+  if (params.project_id.length > 128) {
+    throw new ContextHubError('BAD_REQUEST', 'project_id must be 128 characters or fewer.');
+  }
+
+  await pool.query(
+    `INSERT INTO projects (project_id, name, description, color, settings)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [
+      params.project_id,
+      params.name ?? params.project_id,
+      params.description ?? null,
+      params.color ?? null,
+      JSON.stringify(params.settings ?? {}),
+    ],
+  );
+
+  return { project_id: params.project_id };
+}
+
+export async function updateProject(
+  projectId: string,
+  params: { name?: string; description?: string; color?: string; settings?: Record<string, unknown> },
+): Promise<{ project_id: string }> {
+  const pool = getDbPool();
+
+  const sets: string[] = [];
+  const vals: unknown[] = [];
+  let idx = 1;
+
+  if (params.name !== undefined) { sets.push(`name = $${idx++}`); vals.push(params.name); }
+  if (params.description !== undefined) { sets.push(`description = $${idx++}`); vals.push(params.description); }
+  if (params.color !== undefined) { sets.push(`color = $${idx++}`); vals.push(params.color); }
+  if (params.settings !== undefined) { sets.push(`settings = $${idx++}`); vals.push(JSON.stringify(params.settings)); }
+
+  if (sets.length === 0) return { project_id: projectId };
+
+  sets.push(`updated_at = now()`);
+  vals.push(projectId);
+
+  const result = await pool.query(
+    `UPDATE projects SET ${sets.join(', ')} WHERE project_id = $${idx}`,
+    vals,
+  );
+
+  if (result.rowCount === 0) {
+    throw new ContextHubError('NOT_FOUND', `Project "${projectId}" not found.`);
+  }
+
+  return { project_id: projectId };
 }
 
 // ── Resolver ──

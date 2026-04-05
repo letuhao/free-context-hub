@@ -8,6 +8,7 @@ import { Breadcrumb, PageHeader, DataTable, Badge, Button, EmptyState, TableSkel
 import { useToast } from "@/components/ui/toast";
 import { Pagination } from "@/components/ui/pagination";
 import { AddLessonDialog } from "../lessons/add-lesson-dialog";
+import { NoProjectGuard } from "@/components/no-project-guard";
 import type { Lesson } from "../lessons/types";
 
 const PRESETS = [
@@ -160,6 +161,7 @@ export default function GuardrailsPage() {
   ];
 
   return (
+    <NoProjectGuard>
     <div className="p-6">
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Guardrails" }]} />
       <PageHeader
@@ -366,5 +368,6 @@ export default function GuardrailsPage() {
         presetType="guardrail"
       />
     </div>
+    </NoProjectGuard>
   );
 }

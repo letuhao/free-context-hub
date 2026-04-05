@@ -7,6 +7,9 @@ import {
   resolveProjectIdOrThrow,
   resolveProjectRoot,
   listAllProjects,
+  createProject,
+  updateProject,
+  addProjectToGroup,
 } from '../../core/index.js';
 
 const router = Router();
@@ -16,6 +19,35 @@ router.get('/', async (req, res, next) => {
   try {
     const projects = await listAllProjects();
     res.json({ projects });
+  } catch (e) { next(e); }
+});
+
+/** POST /api/projects — create a new project */
+router.post('/', async (req, res, next) => {
+  try {
+    const { project_id, name, description, color, settings, group_id } = req.body;
+    if (!project_id || typeof project_id !== 'string') {
+      res.status(400).json({ error: 'project_id is required' });
+      return;
+    }
+    const result = await createProject({ project_id, name, description, color, settings });
+
+    // Optionally add to a group
+    if (group_id && typeof group_id === 'string') {
+      try { await addProjectToGroup(group_id, project_id); } catch { /* ignore if group doesn't exist */ }
+    }
+
+    res.status(201).json({ status: 'created', ...result });
+  } catch (e) { next(e); }
+});
+
+/** PUT /api/projects/:id — update project metadata */
+router.put('/:id', async (req, res, next) => {
+  try {
+    const projectId = resolveProjectIdOrThrow(req.params.id);
+    const { name, description, color, settings } = req.body;
+    const result = await updateProject(projectId, { name, description, color, settings });
+    res.json({ status: 'updated', ...result });
   } catch (e) { next(e); }
 });
 

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui";
 import { SlideOver, SlideOverSection } from "@/components/ui/slide-over";
 import { Pagination } from "@/components/ui/pagination";
+import { NoProjectGuard } from "@/components/no-project-guard";
 import { useToast } from "@/components/ui/toast";
 
 type GeneratedDoc = {
@@ -146,6 +147,7 @@ export default function GeneratedDocsPage() {
   ];
 
   return (
+    <NoProjectGuard>
     <div className="p-6">
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Generated Docs" }]} />
       <PageHeader
@@ -255,5 +257,6 @@ export default function GeneratedDocsPage() {
         )}
       </SlideOver>
     </div>
+    </NoProjectGuard>
   );
 }

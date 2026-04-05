@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useProject } from "@/contexts/project-context";
 import { api } from "@/lib/api";
 import { Breadcrumb, PageHeader, Badge, Button, EmptyState, SearchBar } from "@/components/ui";
+import { NoProjectGuard } from "@/components/no-project-guard";
 import { useToast } from "@/components/ui/toast";
 
 interface FeatureCard {
@@ -121,6 +122,7 @@ export default function GraphExplorerPage() {
 
   // ── Main content ──
   return (
+    <NoProjectGuard>
     <div className="p-6">
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Graph Explorer" }]} />
       <PageHeader
@@ -224,5 +226,6 @@ export default function GraphExplorerPage() {
         KG routes will be added in a future release. The graph engine is powered by the existing code index.
       </div>
     </div>
+    </NoProjectGuard>
   );
 }

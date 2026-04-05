@@ -5,6 +5,7 @@ import { useProject } from "@/contexts/project-context";
 import { api } from "@/lib/api";
 import { relTime } from "@/lib/rel-time";
 import { Breadcrumb, PageHeader, DataTable, JobStatusBadge, Button, EmptyState, TableSkeleton, type Column } from "@/components/ui";
+import { NoProjectGuard } from "@/components/no-project-guard";
 import { useToast } from "@/components/ui/toast";
 import { Pagination } from "@/components/ui/pagination";
 
@@ -142,6 +143,7 @@ export default function JobsPage() {
   ];
 
   return (
+    <NoProjectGuard>
     <div className="p-6">
       <Breadcrumb items={[{ label: "System", href: "/settings" }, { label: "Jobs" }]} />
       <PageHeader
@@ -264,5 +266,6 @@ export default function JobsPage() {
         </div>
       )}
     </div>
+    </NoProjectGuard>
   );
 }

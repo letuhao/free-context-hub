@@ -11,6 +11,7 @@ import { cn } from "@/lib/cn";
 import { Send, Square, Copy, Check, Bookmark, Pencil, RotateCcw, Sparkles, Pin, ChevronUp, ChevronDown, Bot, MessageSquare, Search, Code2, Shield, Wrench, Paperclip } from "lucide-react";
 import { MarkdownContent } from "./markdown-content";
 import { ChatHistorySidebar } from "./chat-history-sidebar";
+import { NoProjectGuard } from "@/components/no-project-guard";
 import { CreateLessonPopover } from "./create-lesson-popover";
 
 type HistoricalMessage = { id: string; role: "user" | "assistant"; content: string };
@@ -314,6 +315,7 @@ export default function ChatPage() {
   };
 
   return (
+    <NoProjectGuard>
     <div className="flex h-full">
       {/* Chat History Sidebar */}
       <ChatHistorySidebar
@@ -484,5 +486,6 @@ export default function ChatPage() {
         </div>
       </div>
     </div>
+    </NoProjectGuard>
   );
 }

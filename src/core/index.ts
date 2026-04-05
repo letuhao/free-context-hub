@@ -72,6 +72,8 @@ export {
   listGroupsForProject,
   resolveProjectIds,
   listAllProjects,
+  createProject,
+  updateProject,
 } from '../services/projectGroups.js';
 export type { ProjectGroup, ProjectGroupWithMembers, ProjectWithGroups } from '../services/projectGroups.js';
 

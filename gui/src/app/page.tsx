@@ -8,7 +8,8 @@ import { relTime } from "@/lib/rel-time";
 import { PageHeader, StatCard, Badge, Button } from "@/components/ui";
 import { StatCardSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
-import { BookOpen, GitCommit, FileText, Loader, Lightbulb, AlertTriangle, TrendingUp } from "lucide-react";
+import { BookOpen, GitCommit, FileText, Loader, Lightbulb, AlertTriangle, TrendingUp, FolderOpen, Shield, MessageSquare, Plus } from "lucide-react";
+import { CreateProjectModal } from "@/components/create-project-modal";
 
 type FeatureStatus = {
   enabled: boolean;
@@ -53,12 +54,12 @@ type Commit = {
 };
 
 export default function DashboardPage() {
-  const { projectId } = useProject();
+  const { projectId, projects } = useProject();
   const { toast } = useToast();
   const toastRef = useRef(toast);
   toastRef.current = toast;
   const router = useRouter();
-
+  const [createModalOpen, setCreateModalOpen] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
   const [stats, setStats] = useState({ lessons: 0, guardrails: 0, commits: 0, docs: 0, jobsActive: 0 });
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
@@ -178,6 +179,54 @@ export default function DashboardPage() {
     qc_artifact: "bg-amber-500/10 text-amber-400",
     benchmark_artifact: "bg-purple-500/10 text-purple-400",
   };
+
+  // First-time user: no projects at all
+  if (projects.length === 0) {
+    return (
+      <div className="p-6">
+        <div className="flex flex-col items-center justify-center min-h-[60vh] max-w-md mx-auto text-center">
+          <div className="relative mb-6">
+            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center shadow-xl" style={{ boxShadow: "0 0 0 6px rgba(59,130,246,0.08), 0 0 0 12px rgba(59,130,246,0.04)" }}>
+              <FolderOpen size={36} className="text-white" strokeWidth={1.5} />
+            </div>
+          </div>
+          <h1 className="text-xl font-semibold text-zinc-100 mb-2">Welcome to ContextHub</h1>
+          <p className="text-sm text-zinc-500 mb-6">Create your first project to start building persistent knowledge for your AI agents.</p>
+          <button
+            onClick={() => setCreateModalOpen(true)}
+            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm text-white font-medium transition-colors flex items-center gap-2 shadow-lg"
+          >
+            <Plus size={16} />
+            Create Your First Project
+          </button>
+          <div className="mt-10 grid grid-cols-3 gap-6 text-left">
+            <div>
+              <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-2">
+                <BookOpen size={16} className="text-blue-400" strokeWidth={1.5} />
+              </div>
+              <p className="text-xs text-zinc-300 font-medium">Lessons</p>
+              <p className="text-[10px] text-zinc-600 mt-0.5">Capture decisions, patterns, and workarounds</p>
+            </div>
+            <div>
+              <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-2">
+                <Shield size={16} className="text-red-400" strokeWidth={1.5} />
+              </div>
+              <p className="text-xs text-zinc-300 font-medium">Guardrails</p>
+              <p className="text-[10px] text-zinc-600 mt-0.5">Pre-action safety checks for your agents</p>
+            </div>
+            <div>
+              <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-2">
+                <MessageSquare size={16} className="text-emerald-400" strokeWidth={1.5} />
+              </div>
+              <p className="text-xs text-zinc-300 font-medium">AI Chat</p>
+              <p className="text-[10px] text-zinc-600 mt-0.5">Query your knowledge base in natural language</p>
+            </div>
+          </div>
+        </div>
+        <CreateProjectModal open={createModalOpen} onClose={() => setCreateModalOpen(false)} />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">

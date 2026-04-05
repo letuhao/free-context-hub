@@ -15,6 +15,7 @@ import { useToast } from "@/components/ui/toast";
 import { relTime } from "@/lib/rel-time";
 import { Check, X, Eye, CheckCheck, Pencil, Shield, ChevronDown, ChevronRight } from "lucide-react";
 import { LessonDetail } from "../lessons/lesson-detail";
+import { NoProjectGuard } from "@/components/no-project-guard";
 import type { Lesson } from "../lessons/types";
 
 type ReviewFilter = "all" | "draft" | "pending_review";
@@ -225,6 +226,7 @@ export default function ReviewInboxPage() {
   const pendingCount = lessons.filter((l) => l.status === "pending_review").length;
 
   return (
+    <NoProjectGuard>
     <div className="p-6">
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Review Inbox" }]} />
       <PageHeader
@@ -542,5 +544,6 @@ export default function ReviewInboxPage() {
         initialEditMode={editAndApprove}
       />
     </div>
+    </NoProjectGuard>
   );
 }

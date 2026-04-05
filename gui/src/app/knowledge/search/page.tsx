@@ -5,6 +5,7 @@ import { useProject } from "@/contexts/project-context";
 import { api } from "@/lib/api";
 import { Breadcrumb, PageHeader, SearchBar, Badge, EmptyState } from "@/components/ui";
 import { LineSkeleton } from "@/components/ui/loading-skeleton";
+import { NoProjectGuard } from "@/components/no-project-guard";
 import { useToast } from "@/components/ui/toast";
 
 type SearchResult = {
@@ -90,6 +91,7 @@ export default function CodeSearchPage() {
   }, [doSearch]);
 
   return (
+    <NoProjectGuard>
     <div className="p-6">
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Code Search" }]} />
       <PageHeader
@@ -192,5 +194,6 @@ export default function CodeSearchPage() {
         </div>
       )}
     </div>
+    </NoProjectGuard>
   );
 }

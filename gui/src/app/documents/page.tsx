@@ -8,6 +8,7 @@ import { useToast } from "@/components/ui/toast";
 import { relTime } from "@/lib/rel-time";
 import { FileText, Link2, Upload, Trash2, Eye, Sparkles } from "lucide-react";
 import { Pagination } from "@/components/ui/pagination";
+import { NoProjectGuard } from "@/components/no-project-guard";
 import { UploadDialog } from "./upload-dialog";
 import { DocumentViewer } from "./document-viewer";
 
@@ -94,6 +95,7 @@ export default function DocumentsPage() {
   ];
 
   return (
+    <NoProjectGuard>
     <div className="p-6">
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Documents" }]} />
       <PageHeader
@@ -223,5 +225,6 @@ export default function DocumentsPage() {
         />
       )}
     </div>
+    </NoProjectGuard>
   );
 }

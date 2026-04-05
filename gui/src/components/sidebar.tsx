@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect, type ReactNode } from "react";
 import { useProject } from "@/contexts/project-context";
+import { ProjectSelector } from "@/components/project-selector";
+import { CreateProjectModal } from "@/components/create-project-modal";
 import { cn } from "@/lib/cn";
 import {
   LayoutDashboard, MessageSquare, BookOpen, Shield,
@@ -41,6 +43,7 @@ const buildNavGroups = (reviewCount: number, notifCount: number): (NavItem | Nav
       { href: "/projects/groups", label: "Groups", icon: <Users size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/projects/git", label: "Git History", icon: <GitBranch size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/projects/sources", label: "Sources", icon: <Link2 size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
+      { href: "/projects/settings", label: "Settings", icon: <Settings size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
     ],
   },
   {
@@ -66,10 +69,11 @@ function isActive(href: string, pathname: string): boolean {
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { projectId, setProjectId, projects, includeGroups, setIncludeGroups } = useProject();
+  const { projectId } = useProject();
   const [collapsed, setCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
 
   // Detect mobile
   useEffect(() => {
@@ -209,39 +213,7 @@ export function Sidebar() {
       </div>
 
       {showLabel && (
-        <div className="px-3 py-2 space-y-1.5">
-          {projects.length > 0 ? (
-            <select
-              value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-              className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded-md text-xs text-zinc-300 outline-none focus:border-zinc-700 appearance-none cursor-pointer"
-            >
-              {projects.map((p) => (
-                <option key={p.project_id} value={p.project_id}>
-                  {p.name ?? p.project_id}
-                  {p.groups.length > 0 ? ` (${p.groups.length} groups)` : ""}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <input
-              type="text"
-              value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-              className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded-md text-xs text-zinc-300 outline-none focus:border-zinc-700"
-              placeholder="Project ID"
-            />
-          )}
-          <label className="flex items-center gap-1.5 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={includeGroups}
-              onChange={(e) => setIncludeGroups(e.target.checked)}
-              className="w-3 h-3 rounded border-zinc-700 bg-zinc-800 accent-blue-500"
-            />
-            <span className="text-[10px] text-zinc-500">Include group knowledge</span>
-          </label>
-        </div>
+        <ProjectSelector onCreateClick={() => setCreateModalOpen(true)} />
       )}
 
       <nav className="flex-1 px-2 py-1 space-y-0.5 overflow-y-auto">
@@ -313,19 +285,24 @@ export function Sidebar() {
             </aside>
           </>
         )}
+
+        <CreateProjectModal open={createModalOpen} onClose={() => setCreateModalOpen(false)} />
       </>
     );
   }
 
   // Desktop/tablet: normal sidebar
   return (
-    <aside
-      className={cn(
-        "shrink-0 border-r border-zinc-800 bg-zinc-950 flex flex-col transition-all duration-150",
-        collapsed ? "w-14" : "w-56",
-      )}
-    >
-      {sidebarContent}
-    </aside>
+    <>
+      <aside
+        className={cn(
+          "shrink-0 border-r border-zinc-800 bg-zinc-950 flex flex-col transition-all duration-150",
+          collapsed ? "w-14" : "w-56",
+        )}
+      >
+        {sidebarContent}
+      </aside>
+      <CreateProjectModal open={createModalOpen} onClose={() => setCreateModalOpen(false)} />
+    </>
   );
 }

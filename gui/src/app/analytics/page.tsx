@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { Breadcrumb, PageHeader, Badge, Button, StatCard, TableSkeleton } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { relTime } from "@/lib/rel-time";
+import { NoProjectGuard } from "@/components/no-project-guard";
 import { TrendingUp, BookOpen, CheckCircle2, AlertTriangle, Archive } from "lucide-react";
 
 type TimeRange = "7" | "30" | "90" | "all";
@@ -61,6 +62,7 @@ export default function AnalyticsPage() {
   ];
 
   return (
+    <NoProjectGuard>
     <div className="p-6">
       <Breadcrumb items={[{ label: "System", href: "/jobs" }, { label: "Analytics" }]} />
       <PageHeader
@@ -347,5 +349,6 @@ export default function AnalyticsPage() {
         </>
       )}
     </div>
+    </NoProjectGuard>
   );
 }

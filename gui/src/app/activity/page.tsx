@@ -7,6 +7,7 @@ import { Breadcrumb, PageHeader, Button, EmptyState, TableSkeleton } from "@/com
 import { Pagination } from "@/components/ui/pagination";
 import { useToast } from "@/components/ui/toast";
 import { relTime } from "@/lib/rel-time";
+import { NoProjectGuard } from "@/components/no-project-guard";
 import { BookOpen, Shield, Zap, FileText, Users, CheckCheck, Settings, X } from "lucide-react";
 
 type ActivityItem = {
@@ -112,6 +113,7 @@ export default function ActivityPage() {
   ];
 
   return (
+    <NoProjectGuard>
     <div className="p-6">
       <Breadcrumb items={[{ label: "System", href: "/jobs" }, { label: "Activity" }]} />
       <PageHeader
@@ -242,5 +244,6 @@ export default function ActivityPage() {
         </div>
       </div>
     </div>
+    </NoProjectGuard>
   );
 }

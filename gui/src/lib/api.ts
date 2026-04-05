@@ -229,6 +229,12 @@ export const api = {
   listProjects: () =>
     request<{ projects: any[] }>("GET", "/api/projects"),
 
+  createProject: (body: { project_id: string; name?: string; description?: string; color?: string; settings?: Record<string, unknown>; group_id?: string }) =>
+    request<{ status: string; project_id: string }>("POST", "/api/projects", body),
+
+  updateProject: (id: string, body: { name?: string; description?: string; color?: string; settings?: Record<string, unknown> }) =>
+    request<{ status: string; project_id: string }>("PUT", `/api/projects/${encodeURIComponent(id)}`, body),
+
   getProjectSummary: (id: string) =>
     request<any>("GET", `/api/projects/${encodeURIComponent(id)}/summary`),
 
