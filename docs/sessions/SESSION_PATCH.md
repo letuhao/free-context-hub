@@ -1,14 +1,14 @@
 ---
-id: CH-77-POLISH-RESPONSIVE
+id: CH-77-POLISH-RESPONSIVE-PAGINATION
 date: 2026-04-05
-module: Sprint-7.7-Polish-Responsive-Pagination
+module: Sprint-7.7-Polish-Responsive-Pagination-Drafts
 phase: COMPLETE
 ---
 
 # Session Patch — 2026-04-05
 
 ## Where We Are
-**Sprint 7.7 Polish + Responsive + Pagination COMPLETE.** All tasks done, screenshots updated, ready for Phase 8.
+**Sprint 7.7 fully complete.** Responsive layout, pagination, bugfixes all done. Multi-project draft designs ready for next session.
 
 ## What Was Done This Session
 
@@ -21,39 +21,41 @@ phase: COMPLETE
 
 ### 2. Bugfixes Found During Review
 - Analytics API URL wrong (`/retrieval-stats` → `/overview`)
+- `getStaleStats` calling non-existent endpoint (stubbed out)
 - Learning-paths missing `user_id` parameter (error toast on Getting Started)
 - Double scrollbar on lessons page (DataTable `max-h-[70vh]` removed)
 - Lesson detail modal not preventing background scroll
 
 ### 3. Responsive Layout Sprint (9 tasks)
-- R1: Mobile hamburger sidebar — hidden below 768px, slide-in overlay with backdrop
-- R2: Removed all hardcoded `max-w-[1000/1100px]` from pages
-- R3-R5: Stats grids use responsive breakpoints (`grid-cols-2 md:grid-cols-4`)
-- R6: Activity layout stacks on mobile (`flex-col-reverse md:flex-row`)
-- R7: Lessons table hides Tags+Feedback columns on mobile
-- R8: Guardrails test panel stacks vertically on mobile
-- R9: Chat history sidebar hidden on mobile
-- Full-width desktop: removed all `max-w-6xl/7xl` caps — content fills screen
+- Mobile hamburger sidebar (hidden <768px, slide-in overlay)
+- Removed all hardcoded max-width from all pages — content fills screen
+- Stats grids use responsive breakpoints
+- Activity layout stacks on mobile
+- Lessons table hides Tags+Feedback columns on mobile
+- Guardrails test panel stacks vertically on mobile
+- Chat history sidebar hidden on mobile
 
 ### 4. Pagination Sprint (12 tasks)
 - BE: Added `offset` + `total_count` to 6 endpoints (Documents, Jobs, Activity, Git Commits, Guardrail Rules, Generated Docs)
-- FE: Added `<Pagination>` component to 6 pages with consistent 20-per-page
+- FE: Added `<Pagination>` component to 6 pages
 - Fixed generated docs return type change in MCP + indexer callers
-- Generic "items" label in Pagination component
 
-### 5. Screenshots
+### 5. Multi-Project Draft Designs (6 drafts)
+- D1: Project selector component (searchable dropdown, create link, empty state)
+- D2: Create project modal (ID, name, description, color, group)
+- D3: Project settings page (general, groups, feature toggles, danger zone)
+- D4: Project overview v2 (header with icon, stats, activity, groups)
+- D5: Dashboard onboarding (first-time welcome + empty project checklist)
+- D6: No project guard component (for data pages without project)
+
+### 6. Screenshots
 - 8 live screenshots from running app via Chrome DevTools MCP
-- Replaced all draft HTML screenshots with real captures
-- Added guardrails page screenshot to README
-
-## Key Decisions
-- **No max-width on pages** — content fills available width; sidebar constrains left side
-- **Mobile sidebar as overlay** — hamburger top bar with slide-in nav, auto-close on navigation
-- **Pagination shows only when needed** — `totalCount > pageSize` condition
-- **Binary guardrail simulate** — pass/block per action, not fuzzy percentage match
+- Retaken after all responsive + pagination fixes
 
 ## Commit Log (this session)
 ```
+1aef13b [Pre-Phase8] Add 6 draft HTML designs for multi-project support
+45d929a [7.7-Docs] Final screenshots + session patch update
 09935a6 [7.7] FE pagination — add Pagination component to 6 pages
 8c2d243 [7.7] BE pagination — add offset + total_count to 6 list endpoints
 31295e5 [7.7] Fix remaining layout inconsistencies + learning-paths user_id bug
@@ -65,5 +67,33 @@ e67cdd0 [7.7-Docs] Replace draft screenshots with live GUI captures + add guardr
 fd1f3fa [7.7-Polish] Complete Sprint 7.7 polish — 13 FE/BE tasks
 ```
 
-## What's Next
-- Phase 8: Access control (roles/permissions), custom lesson types, rich content editor, agent audit trail
+## What's Next (Next Session)
+
+### Pre-Phase 8: Multi-Project Support
+Implement the 6 draft designs. Order:
+
+**BE first:**
+1. `POST /api/projects` — create project (name, description, color, settings)
+2. `PUT /api/projects/:id` — update project (name, description, color, settings)
+3. Add `color`, `description` columns to projects table (migration)
+
+**FE components:**
+4. Project selector component (replace sidebar `<select>`)
+5. Create project modal
+6. No-project guard component
+
+**FE pages:**
+7. Project settings page (`/projects/settings`)
+8. Project overview v2 (redesign `/projects`)
+9. Dashboard onboarding (empty state for `/`)
+
+**FE integration:**
+10. Wire no-project guard into all 13 data pages
+
+**Draft files:** `docs/gui-drafts/components/project-selector.html`, `project-create.html`, `no-project-guard.html`, `pages/project-settings.html`, `project-overview-v2.html`, `dashboard-onboarding.html`
+
+### Then Phase 8:
+- Access control (roles/permissions)
+- Custom lesson types/templates
+- Rich content editor
+- Agent audit trail
