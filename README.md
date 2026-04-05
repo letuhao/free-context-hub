@@ -33,6 +33,9 @@ It also provides a **web GUI** for humans to review, approve, and refine AI-gene
 ### Documents — Upload, link, generate lessons from docs
 ![Documents](docs/screenshots/documents.png)
 
+### Guardrails — Test presets, "What Would Block?" simulate mode
+![Guardrails](docs/screenshots/guardrails.png)
+
 ---
 
 ## Why This Exists
