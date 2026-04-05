@@ -1,75 +1,69 @@
 ---
-id: CH-77-POLISH
+id: CH-77-POLISH-RESPONSIVE
 date: 2026-04-05
-module: Sprint-7.7-Polish
+module: Sprint-7.7-Polish-Responsive-Pagination
 phase: COMPLETE
 ---
 
 # Session Patch — 2026-04-05
 
 ## Where We Are
-**Sprint 7.7 Polish COMPLETE.** All 21 tasks in Sprint 7.7 marked [✓]. 40/46 integration tests pass.
+**Sprint 7.7 Polish + Responsive + Pagination COMPLETE.** All tasks done, screenshots updated, ready for Phase 8.
 
 ## What Was Done This Session
 
-### Sprint 7.7 Polish — 13 tasks delivered (+ 8 already done)
+### 1. Sprint 7.7 Polish (13 tasks)
+- Empty state gradient rings, guardrail presets/history/simulate mode
+- Drag-drop file upload, CSV/Markdown import tabs
+- Chat conversation loading, AI editor selection toolbar, suggested tags
+- Analytics SVG area chart
+- BE: guardrail rules list + simulate endpoints, 3 integration tests
 
-**Mini-Sprint A: UX Polish**
-- 7.7.8: Empty state gradient rings (shared component, affects all 9 pages)
-- 7.7.5: Guardrail test presets dropdown + in-memory test history
-- 7.7.6: "What Would Block?" bulk simulate mode (textarea → multi-action analysis)
+### 2. Bugfixes Found During Review
+- Analytics API URL wrong (`/retrieval-stats` → `/overview`)
+- Learning-paths missing `user_id` parameter (error toast on Getting Started)
+- Double scrollbar on lessons page (DataTable `max-h-[70vh]` removed)
+- Lesson detail modal not preventing background scroll
 
-**Mini-Sprint B: File Handling & Import**
-- 7.7.14: Drag-drop file upload (replaced textarea with proper drop zone + file picker)
-- 7.7.17: CSV + Markdown import tabs (was stub, now functional with parsers)
-- 7.7.18: Drag-drop file input for all import tabs
+### 3. Responsive Layout Sprint (9 tasks)
+- R1: Mobile hamburger sidebar — hidden below 768px, slide-in overlay with backdrop
+- R2: Removed all hardcoded `max-w-[1000/1100px]` from pages
+- R3-R5: Stats grids use responsive breakpoints (`grid-cols-2 md:grid-cols-4`)
+- R6: Activity layout stacks on mobile (`flex-col-reverse md:flex-row`)
+- R7: Lessons table hides Tags+Feedback columns on mobile
+- R8: Guardrails test panel stacks vertically on mobile
+- R9: Chat history sidebar hidden on mobile
+- Full-width desktop: removed all `max-w-6xl/7xl` caps — content fills screen
 
-**Mini-Sprint C: AI & Data Features**
-- 7.7.11: Chat conversation loading on sidebar click (fetches + displays historical messages)
-- 7.7.12: AI editor floating selection toolbar ("Ask AI" on text select)
-- 7.7.13: AI-suggested tags FE (purple dashed tags with accept/dismiss)
-- 7.7.21: Analytics SVG area chart for Retrieval Trends (gradient fill, peak highlight)
+### 4. Pagination Sprint (12 tasks)
+- BE: Added `offset` + `total_count` to 6 endpoints (Documents, Jobs, Activity, Git Commits, Guardrail Rules, Generated Docs)
+- FE: Added `<Pagination>` component to 6 pages with consistent 20-per-page
+- Fixed generated docs return type change in MCP + indexer callers
+- Generic "items" label in Pagination component
 
-**Backend additions:**
-- `GET /api/guardrails/rules` — list active rules for project
-- `POST /api/guardrails/simulate` — bulk "What Would Block?" check (no audit log)
-- 3 new integration tests (guardrail-rules-list, guardrail-simulate, guardrail-simulate-validation)
-
-**Already done (confirmed, no work needed):**
-- 7.7.15: In-doc search scroll-to-match (was already implemented)
-- 7.7.16: Linked docs reverse lookup (was already in lesson detail)
-- 7.7.19: Feedback column in lesson list (BE already done)
-- 7.7.20: Notification settings persistence (FE+BE already done)
-
-### Files Changed (12)
-- `src/services/guardrails.ts` — listGuardrailRules, simulateGuardrails
-- `src/api/routes/guardrails.ts` — GET /rules, POST /simulate
-- `src/core/index.ts` — re-exports
-- `src/qc/tests/sprint77Tests.ts` — 3 new tests
-- `gui/src/components/ui/empty-state.tsx` — gradient rings
-- `gui/src/app/guardrails/page.tsx` — presets, history, simulate mode
-- `gui/src/app/documents/upload-dialog.tsx` — drag-drop file upload
-- `gui/src/app/lessons/import-dialog.tsx` — CSV/MD tabs + drag-drop
-- `gui/src/app/chat/page.tsx` — conversation message loading
-- `gui/src/app/lessons/lesson-detail.tsx` — selection toolbar + suggested tags
-- `gui/src/app/analytics/page.tsx` — SVG area chart
-- `gui/src/lib/api.ts` — new API client methods
-
-### Workflow Applied
-9-phase task workflow per mini-sprint: PLAN → DESIGN → REVIEW → BUILD → TEST → REVIEW → QC → SESSION → COMMIT
+### 5. Screenshots
+- 8 live screenshots from running app via Chrome DevTools MCP
+- Replaced all draft HTML screenshots with real captures
+- Added guardrails page screenshot to README
 
 ## Key Decisions
-- **Historical messages separate from useChat** — displayed above streaming messages with divider, since useChat doesn't support injecting history
-- **Binary simulate (not fuzzy match)** — guardrail triggers are exact/regex, so "What Would Block?" shows pass/block per action (not percentage match)
-- **CSV parser handles quoted fields** — simple state machine, no external dependency
-- **Markdown import splits on headings** — each # heading becomes a separate lesson
-
-## What's Next
-- Phase 7 is fully complete (all 7 sprints, all tasks [✓])
-- Phase 8 (planned): access control, custom lesson types, rich content editor, agent audit trail
-- 3 pre-existing tiered-search test failures remain (unrelated to Phase 7 work)
+- **No max-width on pages** — content fills available width; sidebar constrains left side
+- **Mobile sidebar as overlay** — hamburger top bar with slide-in nav, auto-close on navigation
+- **Pagination shows only when needed** — `totalCount > pageSize` condition
+- **Binary guardrail simulate** — pass/block per action, not fuzzy percentage match
 
 ## Commit Log (this session)
 ```
+09935a6 [7.7] FE pagination — add Pagination component to 6 pages
+8c2d243 [7.7] BE pagination — add offset + total_count to 6 list endpoints
+31295e5 [7.7] Fix remaining layout inconsistencies + learning-paths user_id bug
+63d8d79 [7.7] Remove max-width constraints — content fills available screen width
+5be0e4d [7.7] Responsive layout — mobile hamburger sidebar, grid breakpoints, table columns
+292bbc5 fix multiple vertical scroll bug in lesson screen
+e67cdd0 [7.7-Docs] Replace draft screenshots with live GUI captures + add guardrails
+36d1e8c [7.7-Docs] Update docs — all Sprint 7.7 tasks marked complete
 fd1f3fa [7.7-Polish] Complete Sprint 7.7 polish — 13 FE/BE tasks
 ```
+
+## What's Next
+- Phase 8: Access control (roles/permissions), custom lesson types, rich content editor, agent audit trail
