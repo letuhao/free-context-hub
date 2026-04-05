@@ -206,6 +206,7 @@ export async function listJobs(params: {
   correlationId?: string;
   status?: JobStatus;
   limit?: number;
+  offset?: number;
 }): Promise<{
   items: Array<{
     job_id: string;
@@ -220,9 +221,11 @@ export async function listJobs(params: {
     finished_at: any;
     error_message: string | null;
   }>;
+  total_count: number;
 }> {
   const pool = getDbPool();
   const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
+  const offset = Math.max(params.offset ?? 0, 0);
   const clauses = ['1=1'];
   const values: unknown[] = [];
   if (params.projectId) {
@@ -237,15 +240,18 @@ export async function listJobs(params: {
     values.push(params.status);
     clauses.push(`status=$${values.length}`);
   }
-  values.push(limit);
+  const whereClause = clauses.join(' AND ');
+  const countRes = await pool.query(`SELECT COUNT(*) AS cnt FROM async_jobs WHERE ${whereClause}`, values.slice());
+  const total_count = parseInt(countRes.rows[0]?.cnt ?? '0', 10);
+  values.push(limit, offset);
   const res = await pool.query(
     `SELECT job_id, project_id, job_type, correlation_id, status, attempts, max_attempts, queued_at, started_at, finished_at, error_message
      FROM async_jobs
-     WHERE ${clauses.join(' AND ')}
+     WHERE ${whereClause}
      ORDER BY queued_at DESC
-     LIMIT $${values.length}`,
+     LIMIT $${values.length - 1} OFFSET $${values.length}`,
     values,
   );
-  return { items: (res.rows ?? []) as any };
+  return { items: (res.rows ?? []) as any, total_count };
 }
 

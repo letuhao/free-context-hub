@@ -45,9 +45,11 @@ export async function listDocuments(params: {
   linked?: 'linked' | 'unlinked';
   lessonId?: string;
   limit?: number;
+  offset?: number;
 }): Promise<{ items: Document[]; total_count: number }> {
   const pool = getDbPool();
   const limit = Math.min(params.limit ?? 50, 100);
+  const offset = Math.max(params.offset ?? 0, 0);
 
   let where = 'WHERE d.project_id = $1';
   const args: any[] = [params.projectId];
@@ -80,8 +82,8 @@ export async function listDocuments(params: {
     query += ` AND COALESCE(lc.cnt, 0) = 0`;
   }
 
-  query += ` ORDER BY d.updated_at DESC LIMIT $${argIdx}`;
-  args.push(limit);
+  query += ` ORDER BY d.updated_at DESC LIMIT $${argIdx} OFFSET $${argIdx + 1}`;
+  args.push(limit, offset);
 
   const result = await pool.query(query, args);
   return { items: result.rows, total_count };

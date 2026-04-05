@@ -75,6 +75,7 @@ router.get('/', async (req, res, next) => {
       linked: req.query.linked as 'linked' | 'unlinked' | undefined,
       lessonId: req.query.lesson_id as string | undefined,
       limit: req.query.limit ? Number(req.query.limit) : undefined,
+      offset: req.query.offset ? Number(req.query.offset) : undefined,
     });
     res.json(result);
   } catch (e) { next(e); }

@@ -1118,15 +1118,15 @@ function createMcpToolsServer() {
     async ({ workspace_token, project_id, doc_type, doc_status, include_content, limit, output_format }) => {
       assertWorkspaceToken(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
-      const items = await listGeneratedDocuments({
+      const res = await listGeneratedDocuments({
         projectId,
         docType: doc_type,
         docStatus: doc_status,
         includeContent: include_content,
         limit: Math.min(Math.max(limit ?? 100, 1), 1000),
       });
-      const result = { items };
-      const summary = `list_generated_documents: items=${items.length}`;
+      const result = { items: res.items, total_count: res.total_count };
+      const summary = `list_generated_documents: items=${res.items.length}`;
       return formatToolResponse(result, summary, output_format);
     },
   );

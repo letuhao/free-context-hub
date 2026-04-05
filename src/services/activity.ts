@@ -49,9 +49,11 @@ export async function listActivity(params: {
   eventType?: string;
   since?: string;
   limit?: number;
+  offset?: number;
 }): Promise<{ items: ActivityEntry[]; total_count: number }> {
   const pool = getDbPool();
   const limit = Math.min(params.limit ?? 50, 200);
+  const offset = Math.max(params.offset ?? 0, 0);
 
   let where = 'WHERE project_id = $1';
   const args: any[] = [params.projectId];
@@ -69,9 +71,9 @@ export async function listActivity(params: {
   const countRes = await pool.query(`SELECT COUNT(*) AS cnt FROM activity_log ${where}`, args);
   const total_count = parseInt(countRes.rows[0]?.cnt ?? '0', 10);
 
-  args.push(limit);
+  args.push(limit, offset);
   const result = await pool.query(
-    `SELECT * FROM activity_log ${where} ORDER BY created_at DESC LIMIT $${idx}`, args,
+    `SELECT * FROM activity_log ${where} ORDER BY created_at DESC LIMIT $${idx} OFFSET $${idx + 1}`, args,
   );
 
   return { items: result.rows, total_count };

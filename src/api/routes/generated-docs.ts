@@ -16,6 +16,7 @@ router.get('/', async (req, res, next) => {
       projectId,
       docType: req.query.doc_type as any,
       limit: req.query.limit ? Number(req.query.limit) : undefined,
+      offset: req.query.offset ? Number(req.query.offset) : undefined,
       includeContent: req.query.include_content === 'true',
     });
     res.json(result);

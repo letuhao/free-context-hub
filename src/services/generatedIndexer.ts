@@ -20,7 +20,7 @@ export async function indexGeneratedDocuments(params: {
 }): Promise<{ status: 'ok' | 'error'; docs_indexed: number; chunks_indexed: number; errors: Array<{ doc_key: string; message: string }> }> {
   const pool = getDbPool();
   const env = getEnv();
-  const docs = await listGeneratedDocuments({ projectId: params.projectId, limit: env.GENERATED_INDEX_MAX_DOCS });
+  const { items: docs } = await listGeneratedDocuments({ projectId: params.projectId, limit: env.GENERATED_INDEX_MAX_DOCS });
   const chunkLines = params.linesPerChunk ?? env.CHUNK_LINES;
   const batchSize = params.embeddingBatchSize ?? env.INDEX_EMBEDDING_BATCH_SIZE;
   const errors: Array<{ doc_key: string; message: string }> = [];

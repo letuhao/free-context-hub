@@ -18,6 +18,7 @@ router.get('/', async (req, res, next) => {
       projectId: req.query.project_id as string | undefined,
       status: req.query.status as any,
       limit: req.query.limit ? Number(req.query.limit) : undefined,
+      offset: req.query.offset ? Number(req.query.offset) : undefined,
     });
     res.json(result);
   } catch (e) { next(e); }

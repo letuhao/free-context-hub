@@ -226,22 +226,25 @@ export async function ingestGitHistory(params: {
   }
 }
 
-export async function listCommits(params: { projectId: string; limit?: number }): Promise<ListCommitsResult> {
+export async function listCommits(params: { projectId: string; limit?: number; offset?: number }): Promise<ListCommitsResult & { total_count?: number }> {
   const env = getEnv();
   if (!env.GIT_INGEST_ENABLED) {
     return { items: [], warning: 'GIT_INGEST_ENABLED=false; git intelligence tools are disabled.' };
   }
   const pool = getDbPool();
   const limit = Math.min(Math.max(params.limit ?? 20, 1), 200);
+  const offset = Math.max(params.offset ?? 0, 0);
+  const countRes = await pool.query(`SELECT COUNT(*) AS cnt FROM git_commits WHERE project_id=$1`, [params.projectId]);
+  const total_count = parseInt(countRes.rows[0]?.cnt ?? '0', 10);
   const res = await pool.query(
     `SELECT project_id, sha, parent_shas, author_name, author_email, committed_at, message, summary, ingested_at
      FROM git_commits
      WHERE project_id=$1
      ORDER BY committed_at DESC
-     LIMIT $2`,
-    [params.projectId, limit],
+     LIMIT $2 OFFSET $3`,
+    [params.projectId, limit, offset],
   );
-  return { items: (res.rows ?? []) as ListCommitsResult['items'] };
+  return { items: (res.rows ?? []) as ListCommitsResult['items'], total_count };
 }
 
 export async function getCommit(params: { projectId: string; sha: string }): Promise<GetCommitResult> {

@@ -49,11 +49,12 @@ export async function listGeneratedDocuments(params: {
   projectId: string;
   docType?: GeneratedDocType;
   limit?: number;
+  offset?: number;
   includeContent?: boolean;
   /** When set, filter by metadata.status (`draft` vs not-draft treated as active). */
   docStatus?: 'draft' | 'active';
-}): Promise<
-  Array<{
+}): Promise<{
+  items: Array<{
     doc_id: string;
     doc_type: GeneratedDocType;
     doc_key: string;
@@ -62,8 +63,9 @@ export async function listGeneratedDocuments(params: {
     content: string;
     metadata: Record<string, unknown>;
     updated_at: any;
-  }>
-> {
+  }>;
+  total_count: number;
+}> {
   const pool = getDbPool();
   const values: unknown[] = [params.projectId];
   const clauses = ['project_id=$1'];
@@ -71,14 +73,18 @@ export async function listGeneratedDocuments(params: {
     values.push(params.docType);
     clauses.push(`doc_type=$${values.length}`);
   }
-  values.push(Math.min(Math.max(params.limit ?? 500, 1), 5000));
+  const countRes = await pool.query(`SELECT COUNT(*) AS cnt FROM generated_documents WHERE ${clauses.join(' AND ')}`, values.slice());
+  const total_count = parseInt(countRes.rows[0]?.cnt ?? '0', 10);
+  const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
+  const offset = Math.max(params.offset ?? 0, 0);
+  values.push(limit, offset);
   const contentSelect = params.includeContent ?? false ? 'content,' : "''::text as content,";
   const res = await pool.query(
     `SELECT doc_id, doc_type, doc_key, title, path_hint, ${contentSelect} metadata, updated_at
      FROM generated_documents
      WHERE ${clauses.join(' AND ')}
      ORDER BY updated_at DESC
-     LIMIT $${values.length}`,
+     LIMIT $${values.length - 1} OFFSET $${values.length}`,
     values,
   );
   let rows = res.rows ?? [];
@@ -89,7 +95,7 @@ export async function listGeneratedDocuments(params: {
       return st !== 'draft';
     });
   }
-  return rows.map((r: any) => ({
+  const items = rows.map((r: any) => ({
     doc_id: String(r.doc_id),
     doc_type: String(r.doc_type) as GeneratedDocType,
     doc_key: String(r.doc_key),
@@ -99,6 +105,7 @@ export async function listGeneratedDocuments(params: {
     metadata: (r.metadata ?? {}) as Record<string, unknown>,
     updated_at: r.updated_at,
   }));
+  return { items, total_count };
 }
 
 export async function getGeneratedDocument(params: {

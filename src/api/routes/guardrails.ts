@@ -8,8 +8,11 @@ const router = Router();
 router.get('/rules', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string);
-    const rules = await listGuardrailRules(projectId);
-    res.json({ rules });
+    const result = await listGuardrailRules(projectId, {
+      limit: req.query.limit ? Number(req.query.limit) : undefined,
+      offset: req.query.offset ? Number(req.query.offset) : undefined,
+    });
+    res.json(result);
   } catch (e) { next(e); }
 });
 
