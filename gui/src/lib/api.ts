@@ -321,6 +321,19 @@ export const api = {
   listGroupsForProject: (projectId: string) =>
     request<{ project_id: string; groups: any[] }>("GET", `/api/groups/by-project/${encodeURIComponent(projectId)}`),
 
+  // ── Lesson Types ──
+  listLessonTypes: () =>
+    request<{ types: any[] }>("GET", "/api/lesson-types"),
+
+  createLessonType: (body: { type_key: string; display_name: string; description?: string; color?: string; template?: string }) =>
+    request<any>("POST", "/api/lesson-types", body),
+
+  updateLessonType: (key: string, body: { display_name?: string; description?: string; color?: string; template?: string }) =>
+    request<any>("PUT", `/api/lesson-types/${encodeURIComponent(key)}`, body),
+
+  deleteLessonType: (key: string) =>
+    request<any>("DELETE", `/api/lesson-types/${encodeURIComponent(key)}`),
+
   // ── System ──
   health: () =>
     request<{ status: string; timestamp: string }>("GET", "/api/system/health"),

@@ -48,12 +48,13 @@ f23f88b [Pre-Phase8] Code review fixes — validation, a11y, hydration, cleanup
 - Restart BE + FE dev servers to verify feature toggles in browser
 - Live QC: toggle on/off, reload to verify persistence
 
-### Sprint 8.2: Custom Lesson Types
-1. BE: Migration — lesson_types table (key, display_name, description, color, template, is_builtin)
-2. BE: Seed 5 built-in types, CRUD endpoints for custom types
-3. BE: Change lesson_type from hardcoded enum to FK/lookup
-4. FE: Lesson Types settings page (from draft D2)
-5. FE: Update filter chips + add lesson dialog to use dynamic types
+### Sprint 8.2: Custom Lesson Types -- DONE
+- Migration 0040: lesson_types table + seed 5 built-in + drop CHECK constraint
+- BE: CRUD service + routes (GET/POST/PUT/DELETE /api/lesson-types)
+- BE: Relaxed z.enum() → z.string() in MCP (4 places) + distiller + LessonType alias
+- FE: /settings/lesson-types page with create/edit/delete modals
+- FE: API client methods + sidebar nav link
+- Remaining: update filter chips + add lesson dialog to use dynamic types (minor integration)
 
 ### Sprint 8.3: Agent Audit Trail
 - BE: Audit log endpoints (list agent actions with filters)

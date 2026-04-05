@@ -54,6 +54,7 @@ const buildNavGroups = (reviewCount: number, notifCount: number): (NavItem | Nav
       { href: "/analytics", label: "Analytics", icon: <BarChart3 size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/settings", label: "Settings", icon: <Settings size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/settings/models", label: "Model Providers", icon: <Bot size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
+      { href: "/settings/lesson-types", label: "Lesson Types", icon: <BookOpen size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
     ],
   },
 ];

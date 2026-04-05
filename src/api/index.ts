@@ -21,6 +21,7 @@ import { learningPathsRouter } from './routes/learningPaths.js';
 import { agentsRouter } from './routes/agents.js';
 import { systemRouter } from './routes/system.js';
 import { projectGroupsRouter } from './routes/projectGroups.js';
+import { lessonTypesRouter } from './routes/lessonTypes.js';
 
 /**
  * Creates the REST API Express app.
@@ -60,6 +61,7 @@ export function createApiApp() {
   app.use('/api/learning-paths', learningPathsRouter);
   app.use('/api/agents', agentsRouter);
   app.use('/api/groups', projectGroupsRouter);
+  app.use('/api/lesson-types', lessonTypesRouter);
 
   // ── Error handler (must be last) ──
   app.use(errorHandler);

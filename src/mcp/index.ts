@@ -965,7 +965,7 @@ function createMcpToolsServer() {
           z.object({
             lesson_id: z.string(),
             project_id: z.string(),
-            lesson_type: z.enum(['decision', 'preference', 'guardrail', 'workaround', 'general_note']),
+            lesson_type: z.string(),
             title: z.string(),
             content: z.string(),
             tags: z.array(z.string()),
@@ -1044,7 +1044,7 @@ function createMcpToolsServer() {
           z.object({
             lesson_id: z.string(),
             project_id: z.string().optional(),
-            lesson_type: z.enum(['decision', 'preference', 'guardrail', 'workaround', 'general_note']),
+            lesson_type: z.string(),
             title: z.string(),
             content_snippet: z.string(),
             tags: z.array(z.string()),
@@ -1969,7 +1969,7 @@ function createMcpToolsServer() {
           z.object({
             proposal_id: z.string(),
             commit_sha: z.string(),
-            lesson_type: z.enum(['decision', 'preference', 'guardrail', 'workaround', 'general_note']),
+            lesson_type: z.string(),
             title: z.string(),
             content: z.string(),
             tags: z.array(z.string()),

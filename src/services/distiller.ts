@@ -184,7 +184,7 @@ export async function compressText(input: { text: string; maxOutputChars?: numbe
 }
 
 export type CommitLessonSuggestion = {
-  lesson_type: 'decision' | 'preference' | 'guardrail' | 'workaround' | 'general_note';
+  lesson_type: string;
   title: string;
   content: string;
   tags: string[];
@@ -193,7 +193,7 @@ export type CommitLessonSuggestion = {
 };
 
 const CommitLessonSuggestionSchema = z.object({
-  lesson_type: z.enum(['decision', 'preference', 'guardrail', 'workaround', 'general_note']),
+  lesson_type: z.string().min(1),
   title: z.string().min(1),
   content: z.string().min(1),
   tags: z.array(z.string().min(1)),

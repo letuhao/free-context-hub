@@ -12,7 +12,7 @@ import { createModuleLogger } from '../utils/logger.js';
 
 const logger = createModuleLogger('lessons');
 
-export type LessonType = 'decision' | 'preference' | 'guardrail' | 'workaround' | 'general_note';
+export type LessonType = string;
 export type LessonStatus = 'draft' | 'active' | 'superseded' | 'archived';
 
 export type GuardrailRulePayload = {
