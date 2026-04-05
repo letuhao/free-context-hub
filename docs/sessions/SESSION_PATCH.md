@@ -1,99 +1,69 @@
 ---
-id: CH-77-POLISH-RESPONSIVE-PAGINATION
+id: CH-PRE8-MULTI-PROJECT
 date: 2026-04-05
-module: Sprint-7.7-Polish-Responsive-Pagination-Drafts
+module: Pre-Phase8-Multi-Project-Support
 phase: COMPLETE
 ---
 
-# Session Patch — 2026-04-05
+# Session Patch — 2026-04-05 (Session 2)
 
 ## Where We Are
-**Sprint 7.7 fully complete.** Responsive layout, pagination, bugfixes all done. Multi-project draft designs ready for next session.
+**Pre-Phase 8 multi-project support complete.** All 6 draft designs implemented. Thorough code review pass done with 18 issues fixed.
 
 ## What Was Done This Session
 
-### 1. Sprint 7.7 Polish (13 tasks)
-- Empty state gradient rings, guardrail presets/history/simulate mode
-- Drag-drop file upload, CSV/Markdown import tabs
-- Chat conversation loading, AI editor selection toolbar, suggested tags
-- Analytics SVG area chart
-- BE: guardrail rules list + simulate endpoints, 3 integration tests
+### 1. BE: Migration + Service Layer (3 files)
+- Migration `0039_projects_color_description.sql` — adds `color` + `description` columns to `projects` table
+- `createProject()` — validates project_id format (regex, length), color against allowed list, name/description length limits, catches duplicate key (23505)
+- `updateProject()` — dynamic SET builder with same validation, 404 on missing project
+- `listAllProjects()` — extended query + type with `color`, `description` fields
 
-### 2. Bugfixes Found During Review
-- Analytics API URL wrong (`/retrieval-stats` → `/overview`)
-- `getStaleStats` calling non-existent endpoint (stubbed out)
-- Learning-paths missing `user_id` parameter (error toast on Getting Started)
-- Double scrollbar on lessons page (DataTable `max-h-[70vh]` removed)
-- Lesson detail modal not preventing background scroll
+### 2. BE: REST Routes (1 file)
+- `POST /api/projects` — create project with optional group assignment, returns warning on group add failure
+- `PUT /api/projects/:id` — update project metadata, trims whitespace
 
-### 3. Responsive Layout Sprint (9 tasks)
-- Mobile hamburger sidebar (hidden <768px, slide-in overlay)
-- Removed all hardcoded max-width from all pages — content fills screen
-- Stats grids use responsive breakpoints
-- Activity layout stacks on mobile
-- Lessons table hides Tags+Feedback columns on mobile
-- Guardrails test panel stacks vertically on mobile
-- Chat history sidebar hidden on mobile
+### 3. FE: New Components (4 files)
+- `project-colors.ts` — 7 color presets, `getInitials()` utility
+- `ProjectSelector` — searchable dropdown replacing sidebar `<select>`, 3 states (collapsed/open/empty), a11y attributes, Escape key
+- `CreateProjectModal` — full form (ID/name/desc/color/group), validation synced with BE regex, a11y dialog role, keyboard support
+- `NoProjectGuard` — two variants (no selection + not found), hydration-safe (waits for projects to load)
 
-### 4. Pagination Sprint (12 tasks)
-- BE: Added `offset` + `total_count` to 6 endpoints (Documents, Jobs, Activity, Git Commits, Guardrail Rules, Generated Docs)
-- FE: Added `<Pagination>` component to 6 pages
-- Fixed generated docs return type change in MCP + indexer callers
+### 4. FE: New Pages (1 file)
+- `/projects/settings` — General (name/desc/color), Groups (leave), Danger Zone (delete with confirm dialog)
 
-### 5. Multi-Project Draft Designs (6 drafts)
-- D1: Project selector component (searchable dropdown, create link, empty state)
-- D2: Create project modal (ID, name, description, color, group)
-- D3: Project settings page (general, groups, feature toggles, danger zone)
-- D4: Project overview v2 (header with icon, stats, activity, groups)
-- D5: Dashboard onboarding (first-time welcome + empty project checklist)
-- D6: No project guard component (for data pages without project)
+### 5. FE: Redesigned Pages (2 files)
+- `/projects` overview v2 — project header with color icon, stats grid (2x4 responsive), recent activity + groups cards, collapsible project summary
+- `/` dashboard — first-time onboarding (no projects) with welcome CTA + feature cards, hydration-safe
 
-### 6. Screenshots
-- 8 live screenshots from running app via Chrome DevTools MCP
-- Retaken after all responsive + pagination fixes
+### 6. FE: Integration (14 files)
+- Sidebar — replaced `<select>` with `ProjectSelector`, wired `CreateProjectModal`
+- Project context — extended `ProjectInfo` type with `color` + `description`
+- API client — added `createProject()` + `updateProject()` methods
+- 12 data pages wrapped with `<NoProjectGuard>`: lessons, review, guardrails, documents, getting-started, chat, knowledge/docs, knowledge/search, knowledge/graph, activity, analytics, jobs
+
+### 7. Code Review — 18 Issues Found & Fixed
+- **6 bugs**: duplicate key 500→400, trailing hyphen regex, empty initials, FE/BE regex mismatch, broken dynamic Tailwind classes, useEffect dependency loop
+- **3 security**: color validation, name/description length limits, input trimming
+- **3 logic**: NoProjectGuard hydration flash, dashboard onboarding flash, silent group error
+- **3 a11y**: aria attributes on selector/modal, dialog roles, close button labels
+- **1 UX**: Escape key handlers
+- **2 cleanup**: removed non-functional feature toggles (Phase 8 scope), unused imports
 
 ## Commit Log (this session)
 ```
-1aef13b [Pre-Phase8] Add 6 draft HTML designs for multi-project support
-45d929a [7.7-Docs] Final screenshots + session patch update
-09935a6 [7.7] FE pagination — add Pagination component to 6 pages
-8c2d243 [7.7] BE pagination — add offset + total_count to 6 list endpoints
-31295e5 [7.7] Fix remaining layout inconsistencies + learning-paths user_id bug
-63d8d79 [7.7] Remove max-width constraints — content fills available screen width
-5be0e4d [7.7] Responsive layout — mobile hamburger sidebar, grid breakpoints, table columns
-292bbc5 fix multiple vertical scroll bug in lesson screen
-e67cdd0 [7.7-Docs] Replace draft screenshots with live GUI captures + add guardrails
-36d1e8c [7.7-Docs] Update docs — all Sprint 7.7 tasks marked complete
-fd1f3fa [7.7-Polish] Complete Sprint 7.7 polish — 13 FE/BE tasks
+f23f88b [Pre-Phase8] Code review fixes — validation, a11y, hydration, cleanup
+29b4bf2 [Pre-Phase8] Multi-project support — BE endpoints, project selector, settings page, guards
 ```
 
 ## What's Next (Next Session)
 
-### Pre-Phase 8: Multi-Project Support
-Implement the 6 draft designs. Order:
+### Phase 8: Advanced HITL
+1. Access control (roles/permissions)
+2. Custom lesson types/templates
+3. Rich content editor
+4. Agent audit trail
+5. Feature toggles in project settings (connect to project.settings JSON)
 
-**BE first:**
-1. `POST /api/projects` — create project (name, description, color, settings)
-2. `PUT /api/projects/:id` — update project (name, description, color, settings)
-3. Add `color`, `description` columns to projects table (migration)
-
-**FE components:**
-4. Project selector component (replace sidebar `<select>`)
-5. Create project modal
-6. No-project guard component
-
-**FE pages:**
-7. Project settings page (`/projects/settings`)
-8. Project overview v2 (redesign `/projects`)
-9. Dashboard onboarding (empty state for `/`)
-
-**FE integration:**
-10. Wire no-project guard into all 13 data pages
-
-**Draft files:** `docs/gui-drafts/components/project-selector.html`, `project-create.html`, `no-project-guard.html`, `pages/project-settings.html`, `project-overview-v2.html`, `dashboard-onboarding.html`
-
-### Then Phase 8:
-- Access control (roles/permissions)
-- Custom lesson types/templates
-- Rich content editor
-- Agent audit trail
+### Remaining from drafts
+- Dashboard onboarding "just created" checklist (State 2 from draft) — not yet implemented
+- Project overview v2 recent activity from API (currently shows static stats summary)
