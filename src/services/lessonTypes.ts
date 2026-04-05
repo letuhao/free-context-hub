@@ -1,6 +1,8 @@
 import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
 
+const VALID_TYPE_COLORS = ['blue', 'purple', 'red', 'amber', 'emerald', 'cyan', 'pink', 'zinc'];
+
 export interface LessonType {
   type_key: string;
   display_name: string;
@@ -46,6 +48,9 @@ export async function createLessonType(params: {
   if (params.display_name.length > 128) {
     throw new ContextHubError('BAD_REQUEST', 'display_name must be 128 characters or fewer.');
   }
+  if (params.color && !VALID_TYPE_COLORS.includes(params.color)) {
+    throw new ContextHubError('BAD_REQUEST', `Invalid color "${params.color}". Allowed: ${VALID_TYPE_COLORS.join(', ')}`);
+  }
 
   try {
     const res = await pool.query(
@@ -74,6 +79,10 @@ export async function updateLessonType(
   params: { display_name?: string; description?: string; color?: string; template?: string },
 ): Promise<LessonType> {
   const pool = getDbPool();
+
+  if (params.color !== undefined && !VALID_TYPE_COLORS.includes(params.color)) {
+    throw new ContextHubError('BAD_REQUEST', `Invalid color "${params.color}". Allowed: ${VALID_TYPE_COLORS.join(', ')}`);
+  }
 
   const sets: string[] = [];
   const vals: unknown[] = [];

@@ -92,7 +92,8 @@ export async function validateApiKey(token: string): Promise<ApiKeyEntry | null>
   const tokenHash = hashKey(token);
 
   const res = await pool.query(
-    `SELECT * FROM api_keys
+    `SELECT key_id, name, key_prefix, role, project_scope, expires_at, last_used_at, revoked, created_at
+     FROM api_keys
      WHERE key_hash = $1 AND revoked = false
        AND (expires_at IS NULL OR expires_at > now())`,
     [tokenHash],

@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback } from "react";
 import { cn } from "@/lib/cn";
 import {
-  Bold, Italic, Code, Heading1, List, Link2, SquareCode, Table,
+  Bold, Italic, Code, Heading1, List, Link2, SquareCode,
 } from "lucide-react";
 
 interface RichEditorProps {
@@ -80,8 +80,11 @@ function renderMarkdown(text: string): string {
   // Inline code
   html = html.replace(/`([^`]+)`/g, '<code class="bg-zinc-800 px-1 py-0.5 rounded text-[11px] font-mono text-zinc-300">$1</code>');
 
-  // Links
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-blue-400 hover:underline">$1</a>');
+  // Links (sanitize href — block javascript: protocol)
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, text, href) => {
+    const safeHref = /^javascript:/i.test(href.trim()) ? '#' : href;
+    return `<a href="${safeHref}" class="text-blue-400 hover:underline">${text}</a>`;
+  });
 
   // Bullet lists
   html = html.replace(/^- (.+)$/gm, '<li class="ml-4 list-disc">$1</li>');

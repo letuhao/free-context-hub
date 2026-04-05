@@ -22,6 +22,7 @@ export default function ProjectSettingsPage() {
   const [description, setDescription] = useState("");
   const [color, setColor] = useState<ProjectColorKey>("blue");
   const [saving, setSaving] = useState(false);
+  const [savingFeature, setSavingFeature] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -227,8 +228,8 @@ export default function ProjectSettingsPage() {
             { key: "distillation", label: "AI Distillation", desc: "LLM-powered reflection, compression, and project summaries", icon: <Sparkles size={16} strokeWidth={1.5} />, colorClass: "bg-purple-500/10 border-purple-500/20 text-purple-400", hint: "" },
             { key: "auto_review", label: "Auto Review", desc: "Route AI-generated lessons to review inbox based on agent trust level", icon: <ClipboardCheck size={16} strokeWidth={1.5} />, colorClass: "bg-blue-500/10 border-blue-500/20 text-blue-400", hint: "" },
           ] as const).map((f) => {
-            const features = (current?.settings as any)?.features ?? {};
-            const enabled = features[f.key] ?? false;
+            const features: Record<string, boolean> = (current?.settings as any)?.features ?? {};
+            const enabled = !!features[f.key];
             return (
               <div key={f.key} className="flex items-center justify-between py-3 px-3 rounded-lg hover:bg-zinc-800/30 transition-colors">
                 <div className="flex items-center gap-3">
@@ -244,7 +245,9 @@ export default function ProjectSettingsPage() {
                   </div>
                 </div>
                 <button
+                  disabled={savingFeature}
                   onClick={async () => {
+                    setSavingFeature(true);
                     const currentSettings = (current?.settings ?? {}) as Record<string, unknown>;
                     const currentFeatures = (currentSettings.features ?? {}) as Record<string, boolean>;
                     const newSettings = {
@@ -257,6 +260,8 @@ export default function ProjectSettingsPage() {
                       toastRef.current("success", `${f.label} ${!enabled ? "enabled" : "disabled"}`);
                     } catch (err) {
                       toastRef.current("error", `Failed to update: ${err instanceof Error ? err.message : "Unknown error"}`);
+                    } finally {
+                      setSavingFeature(false);
                     }
                   }}
                   className={cn(

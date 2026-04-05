@@ -37,26 +37,22 @@ export async function listAuditLog(params: {
   const limit = Math.min(params.limit ?? 20, 100);
   const offset = params.offset ?? 0;
 
-  const whereArgs: string[] = [];
-  const vals: unknown[] = [];
-  let idx = 1;
+  // Build WHERE clause parts shared by both queries
+  const baseWhere: string[] = [`project_id = $1`];
+  const baseVals: unknown[] = [params.projectId];
 
-  // Project filter
-  whereArgs.push(`project_id = $${idx++}`);
-  vals.push(params.projectId);
-
-  // Time filter
   if (params.days && params.days > 0) {
-    whereArgs.push(`created_at >= now() - interval '${Math.floor(params.days)} days'`);
+    baseWhere.push(`created_at >= now() - interval '${Math.floor(params.days)} days'`);
   }
 
-  // Agent filter (only applies to lesson entries)
-  const agentFilter = params.agent_id ? `AND agent_id = $${idx++}` : '';
-  if (params.agent_id) vals.push(params.agent_id);
+  const whereClause = `WHERE ${baseWhere.join(' AND ')}`;
 
-  const whereClause = whereArgs.length > 0 ? `WHERE ${whereArgs.join(' AND ')}` : '';
+  // Agent filter only applies to lessons (guardrails don't track agent_id)
+  const lessonAgentWhere = params.agent_id
+    ? `${whereClause} AND captured_by = $2`
+    : whereClause;
+  const lessonVals = params.agent_id ? [...baseVals, params.agent_id] : [...baseVals];
 
-  // Build the UNION query
   const guardrailQuery = `
     SELECT
       audit_id::text AS id,
@@ -87,28 +83,34 @@ export async function listAuditLog(params: {
       NULL::boolean AS pass,
       created_at
     FROM lessons
-    ${whereClause}
-    ${agentFilter}
+    ${lessonAgentWhere}
   `;
 
-  // Action type filter
+  // When using UNION ALL, both sub-queries must use the same param set.
+  // If agent_id filter is active, we can only query lessons (guardrails have no agent).
   let unionQuery: string;
+  let queryVals: unknown[];
+
   if (params.action_type === 'guardrail') {
     unionQuery = guardrailQuery;
-  } else if (params.action_type === 'lesson') {
+    queryVals = baseVals;
+  } else if (params.action_type === 'lesson' || params.agent_id) {
+    // Agent filter forces lesson-only query
     unionQuery = lessonQuery;
+    queryVals = lessonVals;
   } else {
     unionQuery = `(${guardrailQuery}) UNION ALL (${lessonQuery})`;
+    queryVals = baseVals;
   }
 
   // Count
-  const countRes = await pool.query(`SELECT count(*)::int AS cnt FROM (${unionQuery}) sub`, vals);
+  const countRes = await pool.query(`SELECT count(*)::int AS cnt FROM (${unionQuery}) sub`, queryVals);
   const totalCount = countRes.rows?.[0]?.cnt ?? 0;
 
   // Paginated results
   const dataRes = await pool.query(
-    `SELECT * FROM (${unionQuery}) sub ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`,
-    vals,
+    `SELECT * FROM (${unionQuery}) sub ORDER BY created_at DESC LIMIT $${queryVals.length + 1} OFFSET $${queryVals.length + 2}`,
+    [...queryVals, limit, offset],
   );
 
   return {
