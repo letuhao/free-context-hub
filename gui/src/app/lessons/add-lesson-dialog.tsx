@@ -6,7 +6,7 @@ import { useToast } from "@/components/ui/toast";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui";
 import { RichEditor } from "@/components/rich-editor";
-import { LESSON_TYPES } from "./types";
+import { useLessonTypes } from "@/lib/use-lesson-types";
 
 interface AddLessonDialogProps {
   open: boolean;
@@ -20,6 +20,7 @@ const VERIFICATION_METHODS = ["user_confirmation", "recorded_test_event", "cli_e
 export function AddLessonDialog({ open, onClose, onAdded, presetType }: AddLessonDialogProps) {
   const { projectId } = useProject();
   const { toast } = useToast();
+  const { typeKeys } = useLessonTypes();
 
   const [title, setTitle] = useState("");
   const [type, setType] = useState(presetType ?? "decision");
@@ -103,7 +104,7 @@ export function AddLessonDialog({ open, onClose, onAdded, presetType }: AddLesso
         <div className="mb-3.5">
           <label className="block text-xs text-zinc-500 mb-1">Type</label>
           <select value={type} onChange={(e) => setType(e.target.value)} className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-md text-sm text-zinc-100 outline-none">
-            {LESSON_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            {typeKeys.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
 

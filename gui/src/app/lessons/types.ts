@@ -14,5 +14,4 @@ export type Lesson = {
   superseded_by: string | null;
 };
 
-export const LESSON_TYPES = ["decision", "workaround", "preference", "guardrail", "general_note"] as const;
 export const LESSON_STATUSES = ["active", "draft", "pending_review", "superseded", "archived"] as const;

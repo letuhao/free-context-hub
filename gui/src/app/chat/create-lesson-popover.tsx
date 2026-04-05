@@ -5,7 +5,7 @@ import { useProject } from "@/contexts/project-context";
 import { useToast } from "@/components/ui/toast";
 import { api } from "@/lib/api";
 import { X } from "lucide-react";
-import { LESSON_TYPES } from "../lessons/types";
+import { useLessonTypes } from "@/lib/use-lesson-types";
 
 interface CreateLessonPopoverProps {
   content: string;
@@ -16,6 +16,7 @@ interface CreateLessonPopoverProps {
 export function CreateLessonPopover({ content, onClose, onCreated }: CreateLessonPopoverProps) {
   const { projectId } = useProject();
   const { toast } = useToast();
+  const { typeKeys } = useLessonTypes();
 
   const defaultTitle = content.split("\n")[0]?.replace(/^#+\s*/, "").slice(0, 100) || "New lesson";
 
@@ -73,7 +74,7 @@ export function CreateLessonPopover({ content, onClose, onCreated }: CreateLesso
           onChange={(e) => setLessonType(e.target.value)}
           className="w-full bg-zinc-800 border border-zinc-700 rounded-md px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-zinc-500 transition-colors appearance-none"
         >
-          {LESSON_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          {typeKeys.map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
       </div>
       <div>

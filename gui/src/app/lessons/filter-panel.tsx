@@ -2,7 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui";
-import { LESSON_TYPES, LESSON_STATUSES } from "./types";
+import { LESSON_STATUSES } from "./types";
+import { useLessonTypes } from "@/lib/use-lesson-types";
 
 interface FilterPanelProps {
   open: boolean;
@@ -24,6 +25,7 @@ export function FilterPanel({
   onClear,
 }: FilterPanelProps) {
   const ref = useRef<HTMLDivElement>(null);
+  const { typeKeys } = useLessonTypes();
 
   useEffect(() => {
     if (!open) return;
@@ -47,7 +49,7 @@ export function FilterPanel({
         <div className="text-[11px] uppercase tracking-wide text-zinc-500 mb-2">Type</div>
         <div className="flex flex-wrap gap-1">
           <button className={optClass(!filterType)} onClick={() => onTypeChange(undefined)}>All</button>
-          {LESSON_TYPES.map((t) => (
+          {typeKeys.map((t) => (
             <button key={t} className={optClass(filterType === t)} onClick={() => onTypeChange(t)}>
               {t}
             </button>
