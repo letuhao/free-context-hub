@@ -90,7 +90,7 @@ export default function CodeSearchPage() {
   }, [doSearch]);
 
   return (
-    <div className="p-6 max-w-7xl">
+    <div className="p-6">
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Code Search" }]} />
       <PageHeader
         title="Code Search"

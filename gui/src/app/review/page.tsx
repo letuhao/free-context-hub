@@ -225,7 +225,7 @@ export default function ReviewInboxPage() {
   const pendingCount = lessons.filter((l) => l.status === "pending_review").length;
 
   return (
-    <div className="p-6 max-w-7xl">
+    <div className="p-6">
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Review Inbox" }]} />
       <PageHeader
         title="Review Inbox"

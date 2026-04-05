@@ -132,7 +132,7 @@ export default function SourcesPage() {
 
   if (initialLoad) {
     return (
-      <div className="p-6 max-w-6xl">
+      <div className="p-6">
         <Breadcrumb items={[{ label: "Project", href: "/projects" }, { label: "Sources" }]} />
         <PageHeader title="Sources" subtitle="Configure project sources and workspace roots" />
         <div className="space-y-4">
@@ -145,7 +145,7 @@ export default function SourcesPage() {
   }
 
   return (
-    <div className="p-6 max-w-6xl">
+    <div className="p-6">
       <Breadcrumb items={[{ label: "Project", href: "/projects" }, { label: "Sources" }]} />
       <PageHeader
         title="Sources"

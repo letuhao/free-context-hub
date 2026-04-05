@@ -107,7 +107,7 @@ export default function ActivityPage() {
   ];
 
   return (
-    <div className="p-6 max-w-7xl">
+    <div className="p-6">
       <Breadcrumb items={[{ label: "System", href: "/jobs" }, { label: "Activity" }]} />
       <PageHeader
         title="Activity & Notifications"

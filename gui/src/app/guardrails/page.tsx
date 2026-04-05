@@ -155,7 +155,7 @@ export default function GuardrailsPage() {
   ];
 
   return (
-    <div className="p-6 max-w-6xl">
+    <div className="p-6">
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Guardrails" }]} />
       <PageHeader
         title="Guardrails"
