@@ -63,9 +63,11 @@ f23f88b [Pre-Phase8] Code review fixes — validation, a11y, hydration, cleanup
 - FE: Agent detail slide-over with trust level + auto-approve controls
 - FE: Renamed updateAgentTrust → updateAgent, added getAgent API method
 
-### Sprint 8.4: Rich Content Editor
-- FE: Markdown editor component (from draft D3)
-- FE: Replace textarea in lesson add/edit dialogs
+### Sprint 8.4: Rich Content Editor -- DONE
+- FE: RichEditor component — markdown toolbar (Bold/Italic/Code/Heading/List/Link/CodeBlock),
+  Edit/Preview/Split toggle, simple markdown renderer, status bar, Ctrl+B/I shortcuts
+- FE: Wired into add-lesson dialog (replaced Write/Preview toggle + textarea)
+- Decision: kept lesson-detail textarea untouched (AI selection toolbar depends on textarea ref coords)
 
 ### Sprint 8.5: Access Control
 - BE: API keys table, roles, middleware

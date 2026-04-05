@@ -5,6 +5,7 @@ import { useProject } from "@/contexts/project-context";
 import { useToast } from "@/components/ui/toast";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui";
+import { RichEditor } from "@/components/rich-editor";
 import { LESSON_TYPES } from "./types";
 
 interface AddLessonDialogProps {
@@ -28,7 +29,6 @@ export function AddLessonDialog({ open, onClose, onAdded, presetType }: AddLesso
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [sourceRefs, setSourceRefs] = useState("");
   const [capturedBy, setCapturedBy] = useState("");
-  const [previewMode, setPreviewMode] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // Guardrail-specific
@@ -107,20 +107,15 @@ export function AddLessonDialog({ open, onClose, onAdded, presetType }: AddLesso
           </select>
         </div>
 
-        {/* Content with Write/Preview */}
+        {/* Content */}
         <div className="mb-3.5">
           <label className="block text-xs text-zinc-500 mb-1">Content</label>
-          <div className="flex gap-0 mb-1.5">
-            <button onClick={() => setPreviewMode(false)} className={`px-3 py-1 text-xs border-b-2 ${!previewMode ? "text-zinc-200 border-zinc-200" : "text-zinc-600 border-transparent"}`}>Write</button>
-            <button onClick={() => setPreviewMode(true)} className={`px-3 py-1 text-xs border-b-2 ${previewMode ? "text-zinc-200 border-zinc-200" : "text-zinc-600 border-transparent"}`}>Preview</button>
-          </div>
-          {previewMode ? (
-            <div className="px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-md min-h-[120px] text-sm text-zinc-400 leading-relaxed whitespace-pre-wrap">
-              {content || <span className="text-zinc-700 italic">Nothing to preview</span>}
-            </div>
-          ) : (
-            <textarea value={content} onChange={(e) => setContent(e.target.value)} className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-md text-sm text-zinc-100 outline-none min-h-[120px] resize-y font-[family-name:var(--font-geist-sans)]" placeholder="Describe the decision, workaround, or rule..." />
-          )}
+          <RichEditor
+            value={content}
+            onChange={setContent}
+            placeholder="Describe the decision, workaround, or rule..."
+            minHeight={120}
+          />
         </div>
 
         {/* Tags */}
