@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useProject } from "@/contexts/project-context";
 import { api } from "@/lib/api";
 import { Breadcrumb, PageHeader, Button, EmptyState, TableSkeleton } from "@/components/ui";
+import { Pagination } from "@/components/ui/pagination";
 import { useToast } from "@/components/ui/toast";
 import { relTime } from "@/lib/rel-time";
 import { BookOpen, Shield, Zap, FileText, Users, CheckCheck, Settings, X } from "lucide-react";
@@ -49,6 +50,9 @@ export default function ActivityPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<ActivityFilter>("all");
   const [timeRange, setTimeRange] = useState<TimeRange>("today");
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const pageSize = 20;
   const [notifSettings, setNotifSettings] = useState<Record<string, boolean>>(
     Object.fromEntries(NOTIF_TOGGLES.map((t) => [t.key, t.default]))
   );
@@ -67,17 +71,18 @@ export default function ActivityPage() {
   const fetchActivity = useCallback(async () => {
     setLoading(true);
     try {
-      const params: Record<string, string | number | undefined> = { project_id: projectId, limit: 50 };
+      const params: Record<string, string | number | undefined> = { project_id: projectId, limit: pageSize, offset: (page - 1) * pageSize };
       if (filter !== "all") params.entity_type = filter;
       if (timeRange !== "all") params.time_range = timeRange;
       const res = await api.listActivity(params);
       setItems(res.items ?? res.activities ?? []);
+      setTotalCount(res.total_count ?? 0);
     } catch (err) {
       toast("error", err instanceof Error ? err.message : "Failed to load activity");
     } finally {
       setLoading(false);
     }
-  }, [projectId, filter, timeRange, toast]);
+  }, [projectId, filter, timeRange, page, toast]);
 
   useEffect(() => { fetchActivity(); }, [fetchActivity]);
 
@@ -202,6 +207,9 @@ export default function ActivityPage() {
                 );
               })}
             </div>
+          )}
+          {totalCount > pageSize && (
+            <Pagination page={page} totalPages={Math.ceil(totalCount / pageSize)} totalCount={totalCount} pageSize={pageSize} onPageChange={(p) => { setPage(p); window.scrollTo(0, 0); }} />
           )}
         </div>
 

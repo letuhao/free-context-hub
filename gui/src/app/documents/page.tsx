@@ -7,6 +7,7 @@ import { Breadcrumb, PageHeader, Badge, Button, EmptyState, TableSkeleton, StatC
 import { useToast } from "@/components/ui/toast";
 import { relTime } from "@/lib/rel-time";
 import { FileText, Link2, Upload, Trash2, Eye, Sparkles } from "lucide-react";
+import { Pagination } from "@/components/ui/pagination";
 import { UploadDialog } from "./upload-dialog";
 import { DocumentViewer } from "./document-viewer";
 
@@ -47,21 +48,25 @@ export default function DocumentsPage() {
   const [uploadMode, setUploadMode] = useState<"upload" | "url" | null>(null);
   const [viewDoc, setViewDoc] = useState<Doc | null>(null);
   const [autoGenerate, setAutoGenerate] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const pageSize = 20;
 
   const fetchDocs = useCallback(async () => {
     setLoading(true);
     try {
-      const params: Record<string, string | number | undefined> = { project_id: projectId };
+      const params: Record<string, string | number | undefined> = { project_id: projectId, limit: pageSize, offset: (page - 1) * pageSize };
       if (filter === "pdf" || filter === "markdown" || filter === "url") params.doc_type = filter;
       if (filter === "linked" || filter === "unlinked") params.linked = filter;
       const res = await api.listDocuments(params);
       setDocs(res.documents ?? res.items ?? []);
+      setTotalCount(res.total_count ?? 0);
     } catch (err) {
       toast("error", err instanceof Error ? err.message : "Failed to load documents");
     } finally {
       setLoading(false);
     }
-  }, [projectId, filter, toast]);
+  }, [projectId, filter, page, toast]);
 
   useEffect(() => { fetchDocs(); }, [fetchDocs]);
 
@@ -76,7 +81,7 @@ export default function DocumentsPage() {
   };
 
   // Stats
-  const totalCount = docs.length;
+  const displayCount = totalCount || docs.length;
   const linkedCount = docs.filter((d) => (d.linked_lesson_count ?? 0) > 0).length;
 
   const TABS: { label: string; value: DocFilter }[] = [
@@ -141,6 +146,7 @@ export default function DocumentsPage() {
           action={filter === "all" ? <Button variant="primary" onClick={() => setUploadMode("upload")}>+ Upload Document</Button> : undefined}
         />
       ) : (
+        <>
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
           <table className="w-full text-left">
             <thead className="sticky top-0 z-10 bg-zinc-900">
@@ -191,6 +197,10 @@ export default function DocumentsPage() {
             </tbody>
           </table>
         </div>
+        {totalCount > pageSize && (
+          <Pagination page={page} totalPages={Math.ceil(totalCount / pageSize)} totalCount={totalCount} pageSize={pageSize} onPageChange={(p) => { setPage(p); window.scrollTo(0, 0); }} />
+        )}
+        </>
       )}
 
       {/* Upload dialog */}

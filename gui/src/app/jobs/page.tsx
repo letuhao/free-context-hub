@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { relTime } from "@/lib/rel-time";
 import { Breadcrumb, PageHeader, DataTable, JobStatusBadge, Button, EmptyState, TableSkeleton, type Column } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
+import { Pagination } from "@/components/ui/pagination";
 
 type Job = {
   job_id: string;
@@ -48,22 +49,27 @@ export default function JobsPage() {
   const [enqueueType, setEnqueueType] = useState<string>(JOB_TYPES[0]);
   const [enqueuePayload, setEnqueuePayload] = useState("{}");
   const [submitting, setSubmitting] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const pageSize = 20;
 
   const fetchJobs = useCallback(async () => {
     try {
       const params: Record<string, string | number | undefined> = {
         project_id: projectId,
-        limit: 50,
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
       };
       if (activeTab !== "all") params.status = activeTab;
       const result = await api.listJobs(params);
       setJobs(result.items ?? []);
+      setTotalCount(result.total_count ?? 0);
     } catch {
       toastRef.current("error", "Failed to load jobs");
     } finally {
       setInitialLoad(false);
     }
-  }, [projectId, activeTab]);
+  }, [projectId, activeTab, page]);
 
   useEffect(() => { fetchJobs(); }, [fetchJobs]);
 
@@ -184,6 +190,7 @@ export default function JobsPage() {
           action={activeTab === "all" ? <Button variant="primary" onClick={() => setEnqueueOpen(true)}>+ Enqueue Job</Button> : undefined}
         />
       ) : (
+        <>
         <DataTable
           columns={columns}
           data={jobs}
@@ -213,6 +220,10 @@ export default function JobsPage() {
             ) : null
           )}
         />
+        {totalCount > pageSize && (
+          <Pagination page={page} totalPages={Math.ceil(totalCount / pageSize)} totalCount={totalCount} pageSize={pageSize} onPageChange={(p) => { setPage(p); window.scrollTo(0, 0); }} />
+        )}
+        </>
       )}
 
       {/* Enqueue Dialog */}

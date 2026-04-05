@@ -13,6 +13,7 @@ import {
   TableSkeleton,
   type Column,
 } from "@/components/ui";
+import { Pagination } from "@/components/ui/pagination";
 import { useToast } from "@/components/ui/toast";
 
 type Commit = {
@@ -57,17 +58,21 @@ export default function GitHistoryPage() {
   const [suggesting, setSuggesting] = useState(false);
   const [suggestions, setSuggestions] = useState<SuggestedLesson[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const pageSize = 20;
 
   const fetchCommits = useCallback(async () => {
     try {
-      const result = await api.listCommits({ project_id: projectId, limit: 50 });
+      const result = await api.listCommits({ project_id: projectId, limit: pageSize, offset: (page - 1) * pageSize });
       setCommits(result.items ?? []);
+      setTotalCount(result.total_count ?? 0);
     } catch {
       toastRef.current("error", "Failed to load commits");
     } finally {
       setInitialLoad(false);
     }
-  }, [projectId]);
+  }, [projectId, page]);
 
   useEffect(() => { fetchCommits(); }, [fetchCommits]);
 
@@ -227,6 +232,7 @@ export default function GitHistoryPage() {
           }
         />
       ) : (
+        <>
         <DataTable
           columns={columns}
           data={commits}
@@ -300,6 +306,10 @@ export default function GitHistoryPage() {
             ) : null
           }
         />
+        {totalCount > pageSize && (
+          <Pagination page={page} totalPages={Math.ceil(totalCount / pageSize)} totalCount={totalCount} pageSize={pageSize} onPageChange={(p) => { setPage(p); window.scrollTo(0, 0); }} />
+        )}
+        </>
       )}
     </div>
   );

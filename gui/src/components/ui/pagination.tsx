@@ -45,7 +45,7 @@ export function Pagination({ page, totalPages, totalCount, pageSize, onPageChang
 
   return (
     <div className="flex items-center justify-between py-3 text-xs text-zinc-500">
-      <span>Showing {from}–{to} of {totalCount} lessons</span>
+      <span>Showing {from}–{to} of {totalCount} items</span>
       <div className="flex items-center gap-1">
         <button
           className={btnClass(false, page === 1)}

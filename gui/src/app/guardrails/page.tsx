@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { relTime } from "@/lib/rel-time";
 import { Breadcrumb, PageHeader, DataTable, Badge, Button, EmptyState, TableSkeleton, type Column } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
+import { Pagination } from "@/components/ui/pagination";
 import { AddLessonDialog } from "../lessons/add-lesson-dialog";
 import type { Lesson } from "../lessons/types";
 
@@ -39,6 +40,9 @@ export default function GuardrailsPage() {
   const [guardrails, setGuardrails] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const pageSize = 20;
 
   // Mode toggle
   const [mode, setMode] = useState<"test" | "block">("test");
@@ -62,18 +66,19 @@ export default function GuardrailsPage() {
         project_id: projectId,
         lesson_type: "guardrail",
         status: "active",
-        limit: 100,
-        offset: 0,
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
         sort: "created_at",
         order: "desc",
       });
       setGuardrails(result.items ?? []);
+      setTotalCount(result.total_count ?? 0);
     } catch {
       toastRef.current("error", "Failed to load guardrails");
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, page]);
 
   useEffect(() => { fetchGuardrails(); }, [fetchGuardrails]);
 
@@ -342,12 +347,15 @@ export default function GuardrailsPage() {
         />
       ) : (
         <>
-          <div className="text-xs text-zinc-600 mb-2">{guardrails.length} active guardrail{guardrails.length !== 1 ? "s" : ""}</div>
+          <div className="text-xs text-zinc-600 mb-2">{totalCount} active guardrail{totalCount !== 1 ? "s" : ""}</div>
           <DataTable
             columns={columns}
             data={guardrails}
             rowKey={(r) => r.lesson_id}
           />
+          {totalCount > pageSize && (
+            <Pagination page={page} totalPages={Math.ceil(totalCount / pageSize)} totalCount={totalCount} pageSize={pageSize} onPageChange={(p) => { setPage(p); window.scrollTo(0, 0); }} />
+          )}
         </>
       )}
 

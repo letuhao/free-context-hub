@@ -15,6 +15,7 @@ import {
   type Column,
 } from "@/components/ui";
 import { SlideOver, SlideOverSection } from "@/components/ui/slide-over";
+import { Pagination } from "@/components/ui/pagination";
 import { useToast } from "@/components/ui/toast";
 
 type GeneratedDoc = {
@@ -60,20 +61,26 @@ export default function GeneratedDocsPage() {
   const [activeTab, setActiveTab] = useState<DocTypeTab>("all");
   const [selectedDoc, setSelectedDoc] = useState<GeneratedDoc | null>(null);
   const [promoting, setPromoting] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const pageSize = 20;
 
   const fetchDocs = useCallback(async () => {
     try {
       const result = await api.listGeneratedDocs({
         project_id: projectId,
         include_content: "true",
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
       });
       setDocs(result.items ?? []);
+      setTotalCount(result.total_count ?? 0);
     } catch {
       toastRef.current("error", "Failed to load generated documents");
     } finally {
       setInitialLoad(false);
     }
-  }, [projectId]);
+  }, [projectId, page]);
 
   useEffect(() => {
     fetchDocs();
@@ -173,12 +180,17 @@ export default function GeneratedDocsPage() {
           description="Generated documents are created by running FAQ, RAPTOR, or QC jobs. Enqueue a job from the Jobs page to build your first document."
         />
       ) : (
+        <>
         <DataTable
           columns={columns}
           data={filtered}
           rowKey={(r) => r.doc_id}
           onRowClick={(r) => setSelectedDoc(r)}
         />
+        {totalCount > pageSize && (
+          <Pagination page={page} totalPages={Math.ceil(totalCount / pageSize)} totalCount={totalCount} pageSize={pageSize} onPageChange={(p) => { setPage(p); window.scrollTo(0, 0); }} />
+        )}
+        </>
       )}
 
       {/* SlideOver detail panel */}
