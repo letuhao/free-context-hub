@@ -139,7 +139,7 @@ export default function GeneratedDocsPage() {
   ];
 
   return (
-    <div className="p-6 max-w-[1100px]">
+    <div className="p-6 max-w-7xl">
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Generated Docs" }]} />
       <PageHeader
         title="Generated Documents"

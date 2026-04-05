@@ -155,7 +155,7 @@ export default function GuardrailsPage() {
   ];
 
   return (
-    <div className="p-6 max-w-[1000px]">
+    <div className="p-6 max-w-6xl">
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Guardrails" }]} />
       <PageHeader
         title="Guardrails"
@@ -191,11 +191,11 @@ export default function GuardrailsPage() {
         {/* Test Action mode */}
         {mode === "test" && (
           <div>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <select
                 value=""
                 onChange={(e) => handlePresetSelect(e.target.value)}
-                className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-md text-sm text-zinc-300 outline-none appearance-none cursor-pointer w-56 shrink-0"
+                className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-md text-sm text-zinc-300 outline-none appearance-none cursor-pointer sm:w-56 shrink-0"
               >
                 <option value="">Select preset...</option>
                 {PRESETS.map((p) => (

@@ -171,3 +171,5 @@ docker-compose.*.local.yml
 .claude/settings.json
 
 .playwright-mcp/
+
+docs/screenshots/audit/

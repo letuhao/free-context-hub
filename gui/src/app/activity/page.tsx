@@ -107,7 +107,7 @@ export default function ActivityPage() {
   ];
 
   return (
-    <div className="p-6 max-w-[1100px]">
+    <div className="p-6 max-w-7xl">
       <Breadcrumb items={[{ label: "System", href: "/jobs" }, { label: "Activity" }]} />
       <PageHeader
         title="Activity & Notifications"
@@ -155,7 +155,7 @@ export default function ActivityPage() {
       </div>
 
       {/* Feed + Settings */}
-      <div className="flex gap-6">
+      <div className="flex flex-col-reverse md:flex-row gap-6">
         {/* Activity feed */}
         <div className="flex-1 relative">
           {/* Vertical line */}
@@ -206,7 +206,7 @@ export default function ActivityPage() {
         </div>
 
         {/* Notification settings */}
-        <div className="w-72 shrink-0">
+        <div className="w-full md:w-72 shrink-0">
           <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5 sticky top-6">
             <h3 className="text-sm font-semibold text-zinc-100 mb-4">Notification Settings</h3>
             <div className="space-y-3">

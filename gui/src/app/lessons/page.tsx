@@ -243,6 +243,7 @@ export default function LessonsPage() {
     {
       key: "tags",
       header: "Tags",
+      className: "hidden md:table-cell",
       render: (row) => {
         const visible = row.tags.slice(0, 2);
         const rest = row.tags.length - 2;
@@ -269,6 +270,7 @@ export default function LessonsPage() {
     {
       key: "feedback",
       header: "Feedback",
+      className: "hidden md:table-cell",
       render: (row: any) => {
         const up = row.feedback_up ?? 0;
         const down = row.feedback_down ?? 0;
@@ -295,7 +297,7 @@ export default function LessonsPage() {
   ];
 
   return (
-    <div className="p-6 max-w-[1100px]">
+    <div className="p-6 max-w-7xl">
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Lessons" }]} />
       <PageHeader
         title="Lessons"

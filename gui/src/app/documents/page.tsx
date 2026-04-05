@@ -89,7 +89,7 @@ export default function DocumentsPage() {
   ];
 
   return (
-    <div className="p-6 max-w-[1100px]">
+    <div className="p-6 max-w-7xl">
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Documents" }]} />
       <PageHeader
         title="Documents"
@@ -107,7 +107,7 @@ export default function DocumentsPage() {
       />
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <StatCard label="Documents" value={totalCount} icon={<FileText size={16} />} />
         <StatCard label="Linked to Lessons" value={linkedCount} icon={<Link2 size={16} />} />
         <StatCard label="Pending Review" value={totalCount - linkedCount} icon={<Sparkles size={16} />} highlight={totalCount - linkedCount > 0} />

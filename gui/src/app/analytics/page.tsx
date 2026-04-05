@@ -61,7 +61,7 @@ export default function AnalyticsPage() {
   ];
 
   return (
-    <div className="p-6 max-w-[1100px]">
+    <div className="p-6 max-w-7xl">
       <Breadcrumb items={[{ label: "System", href: "/jobs" }, { label: "Analytics" }]} />
       <PageHeader
         title="Knowledge Analytics"
@@ -86,7 +86,7 @@ export default function AnalyticsPage() {
       ) : (
         <>
           {/* Top metrics */}
-          <div className="grid grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
               <p className="text-2xl font-semibold text-zinc-100">{totalRetrievals}</p>
               <p className="text-xs text-zinc-500 mt-0.5">Total Retrievals</p>
@@ -177,7 +177,7 @@ export default function AnalyticsPage() {
           })()}
 
           {/* Charts: Lessons by Type (donut) */}
-          <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             {/* Lessons by Type (donut chart) */}
             <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
               <h2 className="text-sm font-medium text-zinc-300 mb-4">Lessons by Type</h2>

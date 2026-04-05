@@ -61,7 +61,7 @@ export function ChatHistorySidebar({ activeId, onSelect, onNewChat, refreshKey }
 
   if (collapsed) {
     return (
-      <div className="w-10 shrink-0 border-r border-zinc-800 bg-zinc-950 flex flex-col items-center py-3 gap-2">
+      <div className="hidden sm:flex w-10 shrink-0 border-r border-zinc-800 bg-zinc-950 flex-col items-center py-3 gap-2">
         <button
           onClick={() => setCollapsed(false)}
           className="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
@@ -81,7 +81,7 @@ export function ChatHistorySidebar({ activeId, onSelect, onNewChat, refreshKey }
   }
 
   return (
-    <div className="w-64 shrink-0 border-r border-zinc-800 bg-zinc-950 flex flex-col">
+    <div className="hidden sm:flex w-64 shrink-0 border-r border-zinc-800 bg-zinc-950 flex-col">
       {/* Header */}
       <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
         <span className="text-xs font-semibold text-zinc-300">Conversations</span>
