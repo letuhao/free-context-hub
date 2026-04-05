@@ -100,7 +100,7 @@ export function DataTable<T>({
       )}
 
       {/* Table */}
-      <div className="border border-zinc-800 rounded-lg overflow-auto max-h-[70vh]">
+      <div className="border border-zinc-800 rounded-lg overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="sticky top-0 z-10 bg-zinc-900">
             <tr className="border-b border-zinc-800">

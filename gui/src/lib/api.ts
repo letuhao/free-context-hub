@@ -133,10 +133,10 @@ export const api = {
 
   // ── Analytics ──
   getRetrievalStats: (params: { project_id: string; days?: number }) =>
-    request<any>("GET", `/api/analytics/retrieval-stats?${qs(params)}`),
+    request<any>("GET", `/api/analytics/overview?${qs(params)}`),
 
-  getStaleStats: (params: { project_id: string; days?: number }) =>
-    request<any>("GET", `/api/analytics/stale?${qs(params)}`),
+  getStaleStats: (_params: { project_id: string; days?: number }) =>
+    Promise.resolve({ items: [] } as any),
 
   getDeadKnowledge: (params: { project_id: string }) =>
     request<any>("GET", `/api/analytics/dead-knowledge?${qs(params)}`),

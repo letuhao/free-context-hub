@@ -314,6 +314,12 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick, init
     setEditTags(editTags.filter(t => t !== tag));
   };
 
+  // Prevent background scroll when modal is open
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = ""; };
+  }, []);
+
   if (!lesson) return null;
 
   const created = new Date(lesson.created_at);
