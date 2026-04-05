@@ -138,9 +138,9 @@ free-context-hub/
 │   ├── src/contexts/       # React contexts
 │   ├── src/lib/            # API client, utilities
 │   └── Dockerfile          # Multi-stage Next.js Docker build
-├── migrations/             # PostgreSQL migrations (38 files)
+├── migrations/             # PostgreSQL migrations (41 files)
 ├── docs/
-│   ├── gui-drafts/         # HTML draft designs (21 pages + 16 components)
+│   ├── gui-drafts/         # HTML draft designs (24 pages + 18 components)
 │   ├── screenshots/        # README screenshots
 │   ├── phase7-task-breakdown.md  # Sprint plan (7 sprints, 73 tasks)
 │   └── sessions/           # Session patches
@@ -160,7 +160,7 @@ Search,         Compress,       Symbol search,  Suggest lessons,
 Guardrails      Summarize       Impact analysis Commit analysis
     │               │               │               │
     ▼               ▼               ▼               ▼
-Phase 6 ✅      Phase 7 ✅      Phase 8 ○       Phase 9 ○       Phase 10 ○
+Phase 6 ✅      Phase 7 ✅      Phase 8 ✅      Phase 9 ○       Phase 10 ○
 Retrieval       GUI &           Advanced        Multi-format    Knowledge
 Quality         Human-in-loop   HITL            Ingestion       Portability
 Tiered search,  20 pages,       Access control, PDF, DOCX,      Exchange hub,
@@ -179,7 +179,7 @@ QC eval loop    Documents,      Agent audit     pipelines
 | **5** | ✅ Complete | Git commit ingestion, lesson suggestions, impact analysis, job queue |
 | **6** | ✅ Complete | Tiered search (ripgrep→FTS→semantic), reranking, Redis cache, QC eval loop |
 | **7** | ✅ Complete | GUI (20 pages, 30+ REST endpoints, 7 sprints, 38 migrations) |
-| **8** | ○ Planned | Access control (roles), custom lesson types/templates, rich content, agent audit |
+| **8** | ✅ Complete | Access control (API keys/roles), custom lesson types, rich editor, agent audit, feature toggles (7 sprints, 3 migrations, 24 routes) |
 | **9** | ○ Planned | PDF/DOCX/Image ingestion pipelines (document foundation in Phase 7) |
 | **10** | ○ Planned | Import/export exchange hub, cross-instance sync (basic I/O in Phase 7) |
 
@@ -202,6 +202,24 @@ QC eval loop    Documents,      Agent audit     pipelines
 **GUI pages:** Dashboard, Chat, Lessons, Review Inbox, Guardrails, Documents, Getting Started, Activity, Analytics, Generated Docs, Code Search, Graph Explorer, Projects (Overview/Groups/Git/Sources), Jobs, Settings, Model Providers
 
 **Design drafts:** `docs/gui-drafts/` — 21 pages + 16 components as standalone HTML (used as reference during implementation).
+
+## Phase 8 — Complete
+
+**Status:** All 7 sprints complete (8.1–8.6 + review). 3 new migrations, 4 new pages, 24 total routes.
+
+| Sprint | Focus | Status |
+|--------|-------|--------|
+| 8.1 | Feature toggles (settings.features JSONB ↔ project settings UI) | ✅ |
+| 8.2 | Custom lesson types (lesson_types table, CRUD API, settings page, MCP enum relaxed) | ✅ |
+| 8.3 | Agent audit trail (unified timeline from guardrail_audit_logs + lessons, stats, agent slide-over) | ✅ |
+| 8.4 | Rich content editor (markdown toolbar, preview/split, Ctrl+B/I, wired into add-lesson) | ✅ |
+| 8.5 | Access control (api_keys table, SHA-256 hashing, roles, auth middleware, settings page) | ✅ |
+| 8.6 | Dynamic lesson types in FE (useLessonTypes hook, replaced hardcoded arrays in 3 files) | ✅ |
+| Review | Code review fixes (7 issues: SQL params, color validation, XSS, double-click, key_hash exposure) | ✅ |
+
+**New pages:** Lesson Types (`/settings/lesson-types`), Agent Audit (`/agents`), Access Control (`/settings/access`), Project Settings enhanced with feature toggles
+
+**Pre-Phase 8 (also done this session):** Multi-project support — project selector, create modal, no-project guard, project settings, project overview v2, dashboard onboarding
 
 ## Dev Commands
 
