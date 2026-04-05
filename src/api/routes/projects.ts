@@ -30,14 +30,27 @@ router.post('/', async (req, res, next) => {
       res.status(400).json({ error: 'project_id is required' });
       return;
     }
-    const result = await createProject({ project_id, name, description, color, settings });
+    const trimmedName = typeof name === 'string' ? name.trim() : undefined;
+    const trimmedDesc = typeof description === 'string' ? description.trim() : undefined;
+    const result = await createProject({
+      project_id: project_id.trim(),
+      name: trimmedName || undefined,
+      description: trimmedDesc || undefined,
+      color,
+      settings,
+    });
 
     // Optionally add to a group
+    let group_warning: string | undefined;
     if (group_id && typeof group_id === 'string') {
-      try { await addProjectToGroup(group_id, project_id); } catch { /* ignore if group doesn't exist */ }
+      try {
+        await addProjectToGroup(group_id, project_id);
+      } catch (err: any) {
+        group_warning = `Project created but failed to add to group "${group_id}": ${err?.message ?? 'unknown error'}`;
+      }
     }
 
-    res.status(201).json({ status: 'created', ...result });
+    res.status(201).json({ status: 'created', ...result, ...(group_warning ? { warning: group_warning } : {}) });
   } catch (e) { next(e); }
 });
 
@@ -46,7 +59,14 @@ router.put('/:id', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.params.id);
     const { name, description, color, settings } = req.body;
-    const result = await updateProject(projectId, { name, description, color, settings });
+    const trimmedName = typeof name === 'string' ? name.trim() : undefined;
+    const trimmedDesc = typeof description === 'string' ? description.trim() : undefined;
+    const result = await updateProject(projectId, {
+      name: trimmedName,
+      description: trimmedDesc,
+      color,
+      settings,
+    });
     res.json({ status: 'updated', ...result });
   } catch (e) { next(e); }
 });

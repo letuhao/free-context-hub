@@ -7,13 +7,12 @@ import { relTime } from "@/lib/rel-time";
 import { Breadcrumb, Button, EmptyState, StatCard } from "@/components/ui";
 import { StatCardSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { getColorClasses, getInitials } from "@/lib/project-colors";
 import { cn } from "@/lib/cn";
 import Link from "next/link";
 import {
-  Settings, RefreshCw, Sparkles, GitBranch, Activity,
-  Users, ChevronDown, Clock, FolderOpen,
+  Settings, RefreshCw, Activity,
+  Users, ChevronDown, Clock,
 } from "lucide-react";
 
 interface Stats {

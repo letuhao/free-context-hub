@@ -18,7 +18,8 @@ export function NoProjectGuard({ children, onCreateClick }: NoProjectGuardProps)
   const { projectId, projects } = useProject();
 
   // No project selected at all
-  if (!projectId || projectId === "default") {
+  // Only show this when projects have loaded (avoids flash during hydration)
+  if (projects.length > 0 && (!projectId || projectId === "default")) {
     return (
       <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
         <div className="bg-gradient-to-br from-zinc-800 to-zinc-900 rounded-full w-16 h-16 flex items-center justify-center mb-3">

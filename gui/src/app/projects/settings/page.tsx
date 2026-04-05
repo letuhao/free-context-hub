@@ -3,12 +3,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useProject } from "@/contexts/project-context";
 import { api } from "@/lib/api";
-import { Breadcrumb, PageHeader, Button } from "@/components/ui";
+import { Breadcrumb, Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { PROJECT_COLORS, getColorClasses, getInitials, type ProjectColorKey } from "@/lib/project-colors";
 import { cn } from "@/lib/cn";
-import { Copy, Users, Shield, GitBranch, Sparkles, ClipboardCheck, AlertTriangle } from "lucide-react";
+import { Copy, Users, AlertTriangle } from "lucide-react";
 
 export default function ProjectSettingsPage() {
   const { projectId, projects, refreshProjects } = useProject();
@@ -28,13 +28,15 @@ export default function ProjectSettingsPage() {
   // Groups for this project
   const [groups, setGroups] = useState<Array<{ group_id: string; name: string; member_count?: number }>>([]);
 
-  // Load current values
+  // Load current values when project changes (not on every projects array update)
+  const currentName = current?.name ?? "";
+  const currentDescription = current?.description ?? "";
+  const currentColor = (current?.color as ProjectColorKey) ?? "blue";
   useEffect(() => {
-    if (!current) return;
-    setName(current.name ?? "");
-    setDescription(current.description ?? "");
-    setColor((current.color as ProjectColorKey) ?? "blue");
-  }, [current]);
+    setName(currentName);
+    setDescription(currentDescription);
+    setColor(currentColor);
+  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchGroups = useCallback(() => {
     api.listGroupsForProject(projectId)
@@ -43,13 +45,6 @@ export default function ProjectSettingsPage() {
   }, [projectId]);
 
   useEffect(() => { fetchGroups(); }, [fetchGroups]);
-
-  // Feature toggles (stored in project settings JSON)
-  const settings = (current as any)?.settings ?? {};
-  const [gitEnabled, setGitEnabled] = useState(true);
-  const [kgEnabled, setKgEnabled] = useState(false);
-  const [distillEnabled, setDistillEnabled] = useState(false);
-  const [autoReviewEnabled, setAutoReviewEnabled] = useState(true);
 
   const handleSave = async () => {
     setSaving(true);
@@ -216,39 +211,6 @@ export default function ProjectSettingsPage() {
         ) : (
           <p className="text-xs text-zinc-600">Not a member of any groups.</p>
         )}
-      </div>
-
-      {/* Features Section */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 mb-6">
-        <h2 className="text-sm font-semibold text-zinc-200 mb-4">Features</h2>
-        <p className="text-xs text-zinc-500 mb-4">Enable or disable features for this project.</p>
-        <div className="space-y-3">
-          {[
-            { label: "Git Intelligence", desc: "Auto-ingest commits and suggest lessons", icon: <GitBranch size={14} />, value: gitEnabled, set: setGitEnabled },
-            { label: "Knowledge Graph", desc: "Neo4j symbol extraction and dependency tracing", icon: <Shield size={14} />, value: kgEnabled, set: setKgEnabled },
-            { label: "AI Distillation", desc: "LLM-powered reflection and context compression", icon: <Sparkles size={14} />, value: distillEnabled, set: setDistillEnabled },
-            { label: "Auto Review", desc: "Automatically move AI-generated lessons to review inbox", icon: <ClipboardCheck size={14} />, value: autoReviewEnabled, set: setAutoReviewEnabled },
-          ].map((f) => (
-            <div key={f.label} className="flex items-center justify-between py-2">
-              <div>
-                <div className="text-xs text-zinc-300">{f.label}</div>
-                <div className="text-[10px] text-zinc-600">{f.desc}</div>
-              </div>
-              <button
-                onClick={() => f.set(!f.value)}
-                className={cn(
-                  "w-8 h-[18px] rounded-full relative transition-colors",
-                  f.value ? "bg-blue-600" : "bg-zinc-700",
-                )}
-              >
-                <span className={cn(
-                  "absolute top-[2px] w-[14px] h-[14px] rounded-full transition-all shadow-sm",
-                  f.value ? "left-[18px] bg-white" : "left-[2px] bg-zinc-400",
-                )} />
-              </button>
-            </div>
-          ))}
-        </div>
       </div>
 
       {/* Danger Zone */}

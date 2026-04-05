@@ -32,6 +32,16 @@ export function ProjectSelector({ onCreateClick }: { onCreateClick?: () => void 
     }
   }, [open]);
 
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { setOpen(false); e.stopPropagation(); }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [open]);
+
   const current = projects.find((p) => p.project_id === projectId);
   const filtered = projects.filter((p) => {
     if (!search) return true;
@@ -68,6 +78,9 @@ export function ProjectSelector({ onCreateClick }: { onCreateClick?: () => void 
       {/* Trigger button */}
       <button
         onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        aria-label={`Select project, current: ${currentName}`}
         className={cn(
           "w-full flex items-center gap-2.5 px-2.5 py-2 border rounded-lg text-left transition-colors",
           open
@@ -104,7 +117,7 @@ export function ProjectSelector({ onCreateClick }: { onCreateClick?: () => void 
           </div>
 
           {/* Project list */}
-          <div className="max-h-48 overflow-y-auto py-1">
+          <div className="max-h-48 overflow-y-auto py-1" role="listbox" aria-label="Projects">
             {filtered.length === 0 ? (
               <div className="px-3 py-4 text-center text-xs text-zinc-600">No projects found</div>
             ) : (
@@ -116,6 +129,8 @@ export function ProjectSelector({ onCreateClick }: { onCreateClick?: () => void 
                 return (
                   <button
                     key={p.project_id}
+                    role="option"
+                    aria-selected={p.project_id === projectId}
                     onClick={() => { setProjectId(p.project_id); setOpen(false); }}
                     className={cn(
                       "w-full flex items-center gap-2.5 px-3 py-2 transition-colors text-left",

@@ -196,6 +196,16 @@ export async function listAllProjects(): Promise<ProjectWithGroups[]> {
 
 // ── Create / Update project ──
 
+const VALID_COLORS = ['blue', 'emerald', 'purple', 'amber', 'red', 'pink', 'cyan'];
+const MAX_NAME_LENGTH = 256;
+const MAX_DESCRIPTION_LENGTH = 2000;
+
+function validateColor(color: string | undefined): void {
+  if (color !== undefined && !VALID_COLORS.includes(color)) {
+    throw new ContextHubError('BAD_REQUEST', `Invalid color "${color}". Allowed: ${VALID_COLORS.join(', ')}`);
+  }
+}
+
 export async function createProject(params: {
   project_id: string;
   name?: string;
@@ -205,25 +215,39 @@ export async function createProject(params: {
 }): Promise<{ project_id: string }> {
   const pool = getDbPool();
 
-  // Validate project_id format
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(params.project_id)) {
-    throw new ContextHubError('BAD_REQUEST', 'Invalid project_id. Use lowercase letters, numbers, and hyphens only.');
+  // Validate project_id format: lowercase alphanumeric + hyphens, no leading/trailing hyphens
+  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(params.project_id)) {
+    throw new ContextHubError('BAD_REQUEST', 'Invalid project_id. Use lowercase letters, numbers, and hyphens only (no leading/trailing hyphens).');
   }
   if (params.project_id.length > 128) {
     throw new ContextHubError('BAD_REQUEST', 'project_id must be 128 characters or fewer.');
   }
+  if (params.name && params.name.length > MAX_NAME_LENGTH) {
+    throw new ContextHubError('BAD_REQUEST', `Name must be ${MAX_NAME_LENGTH} characters or fewer.`);
+  }
+  if (params.description && params.description.length > MAX_DESCRIPTION_LENGTH) {
+    throw new ContextHubError('BAD_REQUEST', `Description must be ${MAX_DESCRIPTION_LENGTH} characters or fewer.`);
+  }
+  validateColor(params.color);
 
-  await pool.query(
-    `INSERT INTO projects (project_id, name, description, color, settings)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [
-      params.project_id,
-      params.name ?? params.project_id,
-      params.description ?? null,
-      params.color ?? null,
-      JSON.stringify(params.settings ?? {}),
-    ],
-  );
+  try {
+    await pool.query(
+      `INSERT INTO projects (project_id, name, description, color, settings)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        params.project_id,
+        params.name ?? params.project_id,
+        params.description ?? null,
+        params.color ?? null,
+        JSON.stringify(params.settings ?? {}),
+      ],
+    );
+  } catch (err: any) {
+    if (err?.code === '23505') { // unique_violation
+      throw new ContextHubError('BAD_REQUEST', `Project "${params.project_id}" already exists.`);
+    }
+    throw err;
+  }
 
   return { project_id: params.project_id };
 }
@@ -233,6 +257,14 @@ export async function updateProject(
   params: { name?: string; description?: string; color?: string; settings?: Record<string, unknown> },
 ): Promise<{ project_id: string }> {
   const pool = getDbPool();
+
+  if (params.name !== undefined && params.name.length > MAX_NAME_LENGTH) {
+    throw new ContextHubError('BAD_REQUEST', `Name must be ${MAX_NAME_LENGTH} characters or fewer.`);
+  }
+  if (params.description !== undefined && params.description.length > MAX_DESCRIPTION_LENGTH) {
+    throw new ContextHubError('BAD_REQUEST', `Description must be ${MAX_DESCRIPTION_LENGTH} characters or fewer.`);
+  }
+  validateColor(params.color);
 
   const sets: string[] = [];
   const vals: unknown[] = [];

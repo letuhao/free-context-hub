@@ -10,7 +10,7 @@ import { cn } from "@/lib/cn";
 import {
   LayoutDashboard, MessageSquare, BookOpen, Shield,
   FileText, Search, Network, FolderOpen, Users, Files,
-  GitBranch, Link2, Zap, Settings, Bot, Bell, BarChart3, CheckCircle2,
+  GitBranch, Link2, Zap, Settings, Bot, BarChart3, CheckCircle2,
   PanelLeftClose, PanelLeftOpen, ClipboardCheck, Activity, Menu, X,
 } from "lucide-react";
 

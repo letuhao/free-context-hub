@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useProject } from "@/contexts/project-context";
 import { api } from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
@@ -49,7 +49,7 @@ export function CreateProjectModal({ open, onClose }: CreateProjectModalProps) {
 
   const validateId = (id: string): string | null => {
     if (!id) return "Project ID is required.";
-    if (!/^[a-z0-9][a-z0-9-]*$/.test(id)) return "Use lowercase letters, numbers, and hyphens only.";
+    if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(id)) return "Use lowercase letters, numbers, and hyphens only (no leading/trailing hyphens).";
     if (id.length > 128) return "Must be 128 characters or fewer.";
     return null;
   };
@@ -84,6 +84,16 @@ export function CreateProjectModal({ open, onClose }: CreateProjectModalProps) {
     }
   };
 
+  // Keyboard: Escape to close, Enter to submit
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   const previewColor = getColorClasses(color);
@@ -97,16 +107,19 @@ export function CreateProjectModal({ open, onClose }: CreateProjectModalProps) {
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="create-project-title"
           className="w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl pointer-events-auto animate-[fadeIn_0.15s_ease-out]"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
           <div className="px-6 pt-5 pb-4 border-b border-zinc-800 flex items-center justify-between">
             <div>
-              <h2 className="text-base font-semibold text-zinc-100">Create New Project</h2>
+              <h2 id="create-project-title" className="text-base font-semibold text-zinc-100">Create New Project</h2>
               <p className="text-xs text-zinc-500 mt-0.5">Set up a new knowledge container for your codebase</p>
             </div>
-            <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 transition-colors p-1">
+            <button onClick={onClose} aria-label="Close dialog" className="text-zinc-500 hover:text-zinc-300 transition-colors p-1">
               <X size={18} />
             </button>
           </div>
@@ -169,13 +182,14 @@ export function CreateProjectModal({ open, onClose }: CreateProjectModalProps) {
                   <button
                     key={c.key}
                     type="button"
+                    aria-label={`Color: ${c.key}`}
                     onClick={() => setColor(c.key)}
                     className={cn(
                       "w-7 h-7 rounded-md bg-gradient-to-br transition-all",
                       c.from, c.to,
                       color === c.key
                         ? `ring-2 ${c.ring} ring-offset-2 ring-offset-zinc-900`
-                        : `hover:ring-2 hover:${c.ring} hover:ring-offset-2 hover:ring-offset-zinc-900`,
+                        : "hover:scale-110",
                     )}
                   />
                 ))}

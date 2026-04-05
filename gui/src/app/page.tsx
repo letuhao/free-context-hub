@@ -181,7 +181,8 @@ export default function DashboardPage() {
   };
 
   // First-time user: no projects at all
-  if (projects.length === 0) {
+  // Only show after initial data load completes (avoids flash during hydration)
+  if (!initialLoad && projects.length === 0) {
     return (
       <div className="p-6">
         <div className="flex flex-col items-center justify-center min-h-[60vh] max-w-md mx-auto text-center">
