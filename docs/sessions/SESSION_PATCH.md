@@ -56,9 +56,12 @@ f23f88b [Pre-Phase8] Code review fixes — validation, a11y, hydration, cleanup
 - FE: API client methods + sidebar nav link
 - Remaining: update filter chips + add lesson dialog to use dynamic types (minor integration)
 
-### Sprint 8.3: Agent Audit Trail
-- BE: Audit log endpoints (list agent actions with filters)
-- FE: Agent audit page (from draft D1)
+### Sprint 8.3: Agent Audit Trail -- DONE
+- BE: auditLog service — UNION query over guardrail_audit_logs + lessons tables
+- BE: GET /api/audit (timeline, filters, pagination) + GET /api/audit/stats
+- FE: /agents page with timeline, stats, action tabs, time range filter
+- FE: Agent detail slide-over with trust level + auto-approve controls
+- FE: Renamed updateAgentTrust → updateAgent, added getAgent API method
 
 ### Sprint 8.4: Rich Content Editor
 - FE: Markdown editor component (from draft D3)

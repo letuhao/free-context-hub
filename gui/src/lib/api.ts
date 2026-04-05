@@ -222,7 +222,10 @@ export const api = {
   listAgents: (params: { project_id: string }) =>
     request<{ agents?: any[] }>("GET", `/api/agents?${qs(params)}`),
 
-  updateAgentTrust: (agentId: string, body: { project_id: string; trust_level?: string; auto_approve?: boolean }) =>
+  getAgent: (agentId: string, params: { project_id: string }) =>
+    request<any>("GET", `/api/agents/${encodeURIComponent(agentId)}?${qs(params)}`),
+
+  updateAgent: (agentId: string, body: { project_id: string; trust_level?: string; auto_approve?: boolean }) =>
     request<any>("PATCH", `/api/agents/${encodeURIComponent(agentId)}`, body),
 
   // ── Projects ──
@@ -333,6 +336,13 @@ export const api = {
 
   deleteLessonType: (key: string) =>
     request<any>("DELETE", `/api/lesson-types/${encodeURIComponent(key)}`),
+
+  // ── Audit ──
+  listAuditLog: (params: Record<string, string | number | undefined> = {}) =>
+    request<{ items: any[]; total_count: number }>("GET", `/api/audit?${qs(params)}`),
+
+  getAuditStats: (params: { project_id: string }) =>
+    request<any>("GET", `/api/audit/stats?${qs(params)}`),
 
   // ── System ──
   health: () =>

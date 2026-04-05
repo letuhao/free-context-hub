@@ -500,7 +500,7 @@ export default function ReviewInboxPage() {
                         value={a.trust_level ?? "normal"}
                         onChange={async (e) => {
                           try {
-                            await api.updateAgentTrust(a.agent_id, { project_id: projectId, trust_level: e.target.value });
+                            await api.updateAgent(a.agent_id, { project_id: projectId, trust_level: e.target.value });
                             const res = await api.listAgents({ project_id: projectId });
                             setAgents(res.agents ?? []);
                           } catch {}
@@ -516,7 +516,7 @@ export default function ReviewInboxPage() {
                       <button
                         onClick={async () => {
                           try {
-                            await api.updateAgentTrust(a.agent_id, { project_id: projectId, auto_approve: !a.auto_approve });
+                            await api.updateAgent(a.agent_id, { project_id: projectId, auto_approve: !a.auto_approve });
                             const res = await api.listAgents({ project_id: projectId });
                             setAgents(res.agents ?? []);
                           } catch {}

@@ -11,7 +11,7 @@ import {
   LayoutDashboard, MessageSquare, BookOpen, Shield,
   FileText, Search, Network, FolderOpen, Users, Files,
   GitBranch, Link2, Zap, Settings, Bot, BarChart3, CheckCircle2,
-  PanelLeftClose, PanelLeftOpen, ClipboardCheck, Activity, Menu, X,
+  PanelLeftClose, PanelLeftOpen, ClipboardCheck, Activity, Menu, X, Fingerprint,
 } from "lucide-react";
 
 type NavItem = { href: string; label: string; icon: ReactNode; badge?: number };
@@ -55,6 +55,7 @@ const buildNavGroups = (reviewCount: number, notifCount: number): (NavItem | Nav
       { href: "/settings", label: "Settings", icon: <Settings size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/settings/models", label: "Model Providers", icon: <Bot size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/settings/lesson-types", label: "Lesson Types", icon: <BookOpen size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
+      { href: "/agents", label: "Agent Audit", icon: <Fingerprint size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
     ],
   },
 ];
