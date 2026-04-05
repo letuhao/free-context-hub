@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: No Project Guard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 p-8 font-sans">
+  <h1 class="text-xl font-bold mb-1">No Project Guard</h1>
+  <p class="text-sm text-zinc-500 mb-8">Shown on data pages when no project is selected or projectId is empty/invalid. Wraps page content.</p>
+
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">Variant 1: No project selected (dropdown is empty)</h2>
+  <div class="flex flex-col items-center justify-center py-20 px-6 text-center border border-dashed border-zinc-800 rounded-lg">
+    <div class="bg-gradient-to-br from-zinc-800 to-zinc-900 rounded-full w-16 h-16 flex items-center justify-center mb-3">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-600"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+    </div>
+    <div class="text-sm text-zinc-400 mb-1">No project selected</div>
+    <div class="text-xs text-zinc-600 mb-4">Select a project from the sidebar or create a new one to get started.</div>
+    <button class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm text-white font-medium transition-colors flex items-center gap-1.5">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Create Project
+    </button>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">Variant 2: Project not found (invalid projectId in URL/storage)</h2>
+  <div class="flex flex-col items-center justify-center py-20 px-6 text-center border border-dashed border-zinc-800 rounded-lg">
+    <div class="bg-gradient-to-br from-zinc-800 to-zinc-900 rounded-full w-16 h-16 flex items-center justify-center mb-3">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-amber-500"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    </div>
+    <div class="text-sm text-zinc-400 mb-1">Project not found</div>
+    <div class="text-xs text-zinc-600 mb-1">The project <span class="font-mono text-zinc-500">"old-deleted-project"</span> no longer exists.</div>
+    <div class="text-xs text-zinc-600 mb-4">Select another project from the sidebar.</div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">Usage pattern: wrap page content</h2>
+  <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+    <pre class="text-xs text-zinc-500 font-mono">
+{`// In any data page:
+export default function LessonsPage() {
+  const { projectId } = useProject();
+
+  // Guard: if no valid project, show prompt
+  if (!projectId || projectId === "default") {
+    return <NoProjectGuard />;
+  }
+
+  // Normal page content...
+  return <div>...</div>;
+}`}
+    </pre>
+  </div>
+</body>
+</html>

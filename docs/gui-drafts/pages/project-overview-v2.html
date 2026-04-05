@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: Project Overview v2</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen font-sans">
+  <div class="p-6">
+    <p class="text-xs text-zinc-600 mb-4">Draft: pages/project-overview-v2 | Source: gui/src/app/projects/page.tsx</p>
+
+    <!-- Breadcrumb -->
+    <div class="flex items-center gap-1.5 text-xs text-zinc-500 mb-4">
+      <span>Project</span>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      <span class="text-zinc-400">Overview</span>
+    </div>
+
+    <!-- Project Header -->
+    <div class="flex items-start justify-between mb-6">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-base font-bold text-white shadow-lg">FC</div>
+        <div>
+          <h1 class="text-lg font-semibold text-zinc-100">free-context-hub</h1>
+          <p class="text-xs text-zinc-500 mt-0.5">Self-hosted persistent memory + guardrails for AI agents</p>
+          <div class="flex items-center gap-3 mt-1.5">
+            <span class="inline-flex items-center gap-1 text-[10px] text-zinc-600">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Created 30 days ago
+            </span>
+            <span class="inline-flex items-center gap-1 text-[10px] text-zinc-600">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+              Backend Team
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button class="px-3 py-1.5 text-xs border border-zinc-700 rounded-md text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 transition-colors flex items-center gap-1.5">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          Settings
+        </a>
+        <button class="px-3 py-1.5 text-xs border border-zinc-700 rounded-md text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 transition-colors">Re-index</button>
+        <button class="px-3 py-1.5 text-xs border border-zinc-700 rounded-md text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 transition-colors">Reflect</button>
+        <button class="px-3 py-1.5 text-xs border border-zinc-700 rounded-md text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 transition-colors">Ingest Git</button>
+      </div>
+    </div>
+
+    <!-- Stats Grid -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
+        <p class="text-2xl font-semibold text-zinc-100">500</p>
+        <p class="text-xs text-zinc-500 mt-0.5">Lessons</p>
+      </div>
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
+        <p class="text-2xl font-semibold text-zinc-100">75</p>
+        <p class="text-xs text-zinc-500 mt-0.5">Guardrails</p>
+      </div>
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
+        <p class="text-2xl font-semibold text-zinc-100">142</p>
+        <p class="text-xs text-zinc-500 mt-0.5">Commits</p>
+      </div>
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
+        <p class="text-2xl font-semibold text-zinc-100">11</p>
+        <p class="text-xs text-zinc-500 mt-0.5">Documents</p>
+      </div>
+    </div>
+
+    <!-- Quick Info Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <!-- Recent Activity -->
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
+        <h3 class="text-sm font-medium text-zinc-300 mb-3 flex items-center gap-2">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Recent Activity
+        </h3>
+        <div class="space-y-2">
+          <div class="flex items-center gap-2 text-xs">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            <span class="text-zinc-400 flex-1">9 lessons created</span>
+            <span class="text-zinc-600">today</span>
+          </div>
+          <div class="flex items-center gap-2 text-xs">
+            <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+            <span class="text-zinc-400 flex-1">3 documents uploaded</span>
+            <span class="text-zinc-600">today</span>
+          </div>
+          <div class="flex items-center gap-2 text-xs">
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+            <span class="text-zinc-400 flex-1">2 guardrails triggered</span>
+            <span class="text-zinc-600">yesterday</span>
+          </div>
+        </div>
+        <a href="/activity" class="text-[10px] text-blue-400 hover:text-blue-300 mt-3 inline-block">View all activity &rarr;</a>
+      </div>
+
+      <!-- Groups -->
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
+        <h3 class="text-sm font-medium text-zinc-300 mb-3 flex items-center gap-2">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+          Groups
+        </h3>
+        <div class="space-y-2">
+          <div class="flex items-center justify-between px-3 py-2 bg-zinc-800/40 border border-zinc-800 rounded-lg">
+            <div>
+              <div class="text-xs text-zinc-300">Backend Team</div>
+              <div class="text-[10px] text-zinc-600">3 projects &middot; 823 shared lessons</div>
+            </div>
+          </div>
+        </div>
+        <a href="/projects/groups" class="text-[10px] text-blue-400 hover:text-blue-300 mt-3 inline-block">Manage groups &rarr;</a>
+      </div>
+    </div>
+
+    <!-- Project Summary (collapsible) -->
+    <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg">
+      <button class="w-full flex items-center justify-between px-4 py-3 text-left">
+        <span class="text-sm font-medium text-zinc-300">Project Summary</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-zinc-600"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="px-4 pb-4">
+        <div class="text-xs text-zinc-400 leading-relaxed whitespace-pre-wrap bg-zinc-950 border border-zinc-800 rounded-lg p-4 max-h-60 overflow-y-auto">
+# Project snapshot: free-context-hub
+
+Generated: 2026-04-05
+
+- **Max retry attempts must be 3** (guardrail): The system should enforce a maximum of three retry attempts...
+- **Global search test retry pattern** (decision): Implement an exponential backoff strategy...
+        </div>
+        <button class="mt-2 px-3 py-1.5 text-xs border border-zinc-700 rounded-md text-zinc-400 hover:text-zinc-200 transition-colors flex items-center gap-1.5">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+          Refresh Summary
+        </button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

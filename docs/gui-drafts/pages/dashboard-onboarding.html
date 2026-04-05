@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: Dashboard Onboarding</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen font-sans">
+  <div class="p-6">
+    <p class="text-xs text-zinc-600 mb-4">Draft: pages/dashboard-onboarding | Source: gui/src/app/page.tsx (empty state)</p>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <h2 class="text-sm font-medium text-zinc-400 mt-4 mb-3">State 1: No projects at all (first-time user)</h2>
+
+    <div class="flex flex-col items-center justify-center min-h-[60vh] max-w-md mx-auto text-center">
+      <!-- Icon -->
+      <div class="relative mb-6">
+        <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center shadow-xl" style="box-shadow: 0 0 0 6px rgba(59,130,246,0.08), 0 0 0 12px rgba(59,130,246,0.04);">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+        </div>
+      </div>
+
+      <h1 class="text-xl font-semibold text-zinc-100 mb-2">Welcome to ContextHub</h1>
+      <p class="text-sm text-zinc-500 mb-6">Create your first project to start building persistent knowledge for your AI agents.</p>
+
+      <!-- CTA -->
+      <button class="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm text-white font-medium transition-colors flex items-center gap-2 shadow-lg">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Create Your First Project
+      </button>
+
+      <!-- What you get -->
+      <div class="mt-10 grid grid-cols-3 gap-6 text-left">
+        <div>
+          <div class="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-blue-400"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+          </div>
+          <p class="text-xs text-zinc-300 font-medium">Lessons</p>
+          <p class="text-[10px] text-zinc-600 mt-0.5">Capture decisions, patterns, and workarounds</p>
+        </div>
+        <div>
+          <div class="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-red-400"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <p class="text-xs text-zinc-300 font-medium">Guardrails</p>
+          <p class="text-[10px] text-zinc-600 mt-0.5">Pre-action safety checks for your agents</p>
+        </div>
+        <div>
+          <div class="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-emerald-400"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+          </div>
+          <p class="text-xs text-zinc-300 font-medium">AI Chat</p>
+          <p class="text-[10px] text-zinc-600 mt-0.5">Query your knowledge base in natural language</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <h2 class="text-sm font-medium text-zinc-400 mt-16 mb-3">State 2: Project exists but empty (just created)</h2>
+
+    <div class="max-w-2xl">
+      <!-- Header -->
+      <div class="mb-6">
+        <h1 class="text-lg font-semibold text-zinc-100">Dashboard</h1>
+        <p class="text-xs text-zinc-500 mt-0.5">my-new-project - project overview</p>
+      </div>
+
+      <!-- Quick setup checklist -->
+      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-5 mb-6">
+        <h2 class="text-sm font-semibold text-zinc-200 mb-3 flex items-center gap-2">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-blue-400"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          Get Started
+        </h2>
+        <p class="text-xs text-zinc-500 mb-4">Complete these steps to set up your project:</p>
+        <div class="space-y-2">
+          <div class="flex items-center gap-3 px-3 py-2.5 bg-emerald-500/5 border border-emerald-500/20 rounded-lg">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-emerald-400 shrink-0"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            <span class="text-xs text-zinc-300 flex-1">Create project</span>
+            <span class="text-[10px] text-emerald-400">Done</span>
+          </div>
+          <div class="flex items-center gap-3 px-3 py-2.5 bg-zinc-800/40 border border-zinc-800 rounded-lg hover:border-zinc-700 cursor-pointer transition-colors">
+            <div class="w-4 h-4 rounded-full border-2 border-zinc-700 shrink-0"></div>
+            <span class="text-xs text-zinc-300 flex-1">Add your first lesson</span>
+            <button class="text-[10px] text-blue-400 hover:text-blue-300">Start &rarr;</button>
+          </div>
+          <div class="flex items-center gap-3 px-3 py-2.5 bg-zinc-800/40 border border-zinc-800 rounded-lg hover:border-zinc-700 cursor-pointer transition-colors">
+            <div class="w-4 h-4 rounded-full border-2 border-zinc-700 shrink-0"></div>
+            <span class="text-xs text-zinc-300 flex-1">Set up a guardrail</span>
+            <button class="text-[10px] text-blue-400 hover:text-blue-300">Start &rarr;</button>
+          </div>
+          <div class="flex items-center gap-3 px-3 py-2.5 bg-zinc-800/40 border border-zinc-800 rounded-lg hover:border-zinc-700 cursor-pointer transition-colors">
+            <div class="w-4 h-4 rounded-full border-2 border-zinc-700 shrink-0"></div>
+            <span class="text-xs text-zinc-300 flex-1">Connect MCP to your AI agent</span>
+            <button class="text-[10px] text-blue-400 hover:text-blue-300">Guide &rarr;</button>
+          </div>
+          <div class="flex items-center gap-3 px-3 py-2.5 bg-zinc-800/40 border border-zinc-800 rounded-lg hover:border-zinc-700 cursor-pointer transition-colors">
+            <div class="w-4 h-4 rounded-full border-2 border-zinc-700 shrink-0"></div>
+            <span class="text-xs text-zinc-300 flex-1">Ingest git history</span>
+            <button class="text-[10px] text-blue-400 hover:text-blue-300">Start &rarr;</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
