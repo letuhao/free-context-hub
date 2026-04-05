@@ -151,6 +151,7 @@ export type ProjectWithGroups = {
   name: string | null;
   description: string | null;
   color: string | null;
+  settings: Record<string, unknown>;
   groups: Array<{ group_id: string; name: string }>;
   lesson_count: number;
 };
@@ -168,6 +169,7 @@ export async function listAllProjects(): Promise<ProjectWithGroups[]> {
        p.name,
        p.description,
        p.color,
+       p.settings,
        COALESCE(lc.cnt, 0)::int AS lesson_count,
        COALESCE(
          json_agg(json_build_object('group_id', g.group_id, 'name', g.name))
@@ -180,7 +182,7 @@ export async function listAllProjects(): Promise<ProjectWithGroups[]> {
      LEFT JOIN LATERAL (
        SELECT count(*)::int AS cnt FROM lessons WHERE project_id = p.project_id
      ) lc ON true
-     GROUP BY p.project_id, p.name, p.description, p.color, lc.cnt
+     GROUP BY p.project_id, p.name, p.description, p.color, p.settings, lc.cnt
      ORDER BY p.project_id`,
   );
 
@@ -189,6 +191,7 @@ export async function listAllProjects(): Promise<ProjectWithGroups[]> {
     name: r.name != null ? String(r.name) : null,
     description: r.description != null ? String(r.description) : null,
     color: r.color != null ? String(r.color) : null,
+    settings: (r.settings ?? {}) as Record<string, unknown>,
     groups: (r.groups ?? []) as Array<{ group_id: string; name: string }>,
     lesson_count: Number(r.lesson_count ?? 0),
   }));

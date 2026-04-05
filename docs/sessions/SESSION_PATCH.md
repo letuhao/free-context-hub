@@ -1,69 +1,68 @@
 ---
-id: CH-PRE8-MULTI-PROJECT
+id: CH-PHASE8-SPRINT1
 date: 2026-04-05
-module: Pre-Phase8-Multi-Project-Support
-phase: COMPLETE
+module: Phase8-Sprint1-FeatureToggles-Drafts
+phase: IN_PROGRESS
 ---
 
-# Session Patch — 2026-04-05 (Session 2)
+# Session Patch — 2026-04-05 (Session 3)
 
 ## Where We Are
-**Pre-Phase 8 multi-project support complete.** All 6 draft designs implemented. Thorough code review pass done with 18 issues fixed.
+**Phase 8 started.** 5 draft designs created. Sprint 8.1 (Feature Toggles) complete — full 9-phase workflow applied.
 
 ## What Was Done This Session
 
-### 1. BE: Migration + Service Layer (3 files)
-- Migration `0039_projects_color_description.sql` — adds `color` + `description` columns to `projects` table
-- `createProject()` — validates project_id format (regex, length), color against allowed list, name/description length limits, catches duplicate key (23505)
-- `updateProject()` — dynamic SET builder with same validation, 404 on missing project
-- `listAllProjects()` — extended query + type with `color`, `description` fields
+### 1. Pre-Phase 8 Review & QC (from Session 2)
+- Code review: 12 review passes, 18 issues found and fixed
+- Browser QC: 10 pages tested via Playwright, all pass, 0 console errors
+- 4 lessons recorded via MCP (decisions + preferences)
 
-### 2. BE: REST Routes (1 file)
-- `POST /api/projects` — create project with optional group assignment, returns warning on group add failure
-- `PUT /api/projects/:id` — update project metadata, trims whitespace
+### 2. Phase 8 Draft Designs (5 files)
+- D1: Agent audit trail — action timeline, guardrail logs, agent detail slide-over
+- D2: Custom lesson types — built-in + custom types, template editor, add type modal
+- D3: Rich content editor — markdown toolbar, preview/split, AI assist popover
+- D4: Feature toggles — project settings section, icons, dependency warnings
+- D5: Access control — API keys, roles, permissions matrix
+- Updated index.html to v5 (24 pages, 18 components)
 
-### 3. FE: New Components (4 files)
-- `project-colors.ts` — 7 color presets, `getInitials()` utility
-- `ProjectSelector` — searchable dropdown replacing sidebar `<select>`, 3 states (collapsed/open/empty), a11y attributes, Escape key
-- `CreateProjectModal` — full form (ID/name/desc/color/group), validation synced with BE regex, a11y dialog role, keyboard support
-- `NoProjectGuard` — two variants (no selection + not found), hydration-safe (waits for projects to load)
-
-### 4. FE: New Pages (1 file)
-- `/projects/settings` — General (name/desc/color), Groups (leave), Danger Zone (delete with confirm dialog)
-
-### 5. FE: Redesigned Pages (2 files)
-- `/projects` overview v2 — project header with color icon, stats grid (2x4 responsive), recent activity + groups cards, collapsible project summary
-- `/` dashboard — first-time onboarding (no projects) with welcome CTA + feature cards, hydration-safe
-
-### 6. FE: Integration (14 files)
-- Sidebar — replaced `<select>` with `ProjectSelector`, wired `CreateProjectModal`
-- Project context — extended `ProjectInfo` type with `color` + `description`
-- API client — added `createProject()` + `updateProject()` methods
-- 12 data pages wrapped with `<NoProjectGuard>`: lessons, review, guardrails, documents, getting-started, chat, knowledge/docs, knowledge/search, knowledge/graph, activity, analytics, jobs
-
-### 7. Code Review — 18 Issues Found & Fixed
-- **6 bugs**: duplicate key 500→400, trailing hyphen regex, empty initials, FE/BE regex mismatch, broken dynamic Tailwind classes, useEffect dependency loop
-- **3 security**: color validation, name/description length limits, input trimming
-- **3 logic**: NoProjectGuard hydration flash, dashboard onboarding flash, silent group error
-- **3 a11y**: aria attributes on selector/modal, dialog roles, close button labels
-- **1 UX**: Escape key handlers
-- **2 cleanup**: removed non-functional feature toggles (Phase 8 scope), unused imports
+### 3. Sprint 8.1: Feature Toggles (full 9-phase workflow)
+- PLAN: Scope = wire settings.features JSONB to project settings UI
+- DESIGN: Toggle click → PUT /api/projects/:id → merge settings → refreshProjects
+- BUILD BE: Added `settings` to listAllProjects query, type, mapper (3 lines)
+- BUILD FE: Added Features section with 4 toggles (Git Intelligence, Knowledge Graph, AI Distillation, Auto Review), icons, dependency hints, aria labels
+- TEST: BE tsc clean, FE tsc clean, 4/4 tests pass, FE build clean (21 routes)
+- REVIEW: 3 files, +69/-2, no issues found
+- QC: Browser test blocked by dev server cache (code correct, build passes)
+- Total: 3 files changed, minimal diff
 
 ## Commit Log (this session)
 ```
+894548d [Phase8] Add 5 draft HTML designs for Advanced HITL features
+4069d02 [Session] Update session patch — Pre-Phase 8 multi-project support complete
 f23f88b [Pre-Phase8] Code review fixes — validation, a11y, hydration, cleanup
-29b4bf2 [Pre-Phase8] Multi-project support — BE endpoints, project selector, settings page, guards
 ```
 
 ## What's Next (Next Session)
 
-### Phase 8: Advanced HITL
-1. Access control (roles/permissions)
-2. Custom lesson types/templates
-3. Rich content editor
-4. Agent audit trail
-5. Feature toggles in project settings (connect to project.settings JSON)
+### Sprint 8.1 remaining
+- Restart BE + FE dev servers to verify feature toggles in browser
+- Live QC: toggle on/off, reload to verify persistence
 
-### Remaining from drafts
-- Dashboard onboarding "just created" checklist (State 2 from draft) — not yet implemented
-- Project overview v2 recent activity from API (currently shows static stats summary)
+### Sprint 8.2: Custom Lesson Types
+1. BE: Migration — lesson_types table (key, display_name, description, color, template, is_builtin)
+2. BE: Seed 5 built-in types, CRUD endpoints for custom types
+3. BE: Change lesson_type from hardcoded enum to FK/lookup
+4. FE: Lesson Types settings page (from draft D2)
+5. FE: Update filter chips + add lesson dialog to use dynamic types
+
+### Sprint 8.3: Agent Audit Trail
+- BE: Audit log endpoints (list agent actions with filters)
+- FE: Agent audit page (from draft D1)
+
+### Sprint 8.4: Rich Content Editor
+- FE: Markdown editor component (from draft D3)
+- FE: Replace textarea in lesson add/edit dialogs
+
+### Sprint 8.5: Access Control
+- BE: API keys table, roles, middleware
+- FE: Access control page (from draft D5)

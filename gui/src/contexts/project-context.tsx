@@ -8,6 +8,7 @@ type ProjectInfo = {
   name: string | null;
   description: string | null;
   color: string | null;
+  settings: Record<string, unknown>;
   groups: Array<{ group_id: string; name: string }>;
   lesson_count: number;
 };
