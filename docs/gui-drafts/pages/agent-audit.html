@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: Agent Audit Trail</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen font-sans">
+  <div class="p-6">
+    <p class="text-xs text-zinc-600 mb-4">Draft: pages/agent-audit | Source: gui/src/app/agents/page.tsx</p>
+
+    <!-- Breadcrumb -->
+    <div class="flex items-center gap-1.5 text-xs text-zinc-500 mb-4">
+      <span>System</span>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      <span class="text-zinc-400">Agent Audit</span>
+    </div>
+
+    <!-- Page Header -->
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-lg font-semibold text-zinc-100">Agent Audit Trail</h1>
+        <p class="text-xs text-zinc-500 mt-0.5">Track all agent actions, guardrail checks, and lesson modifications</p>
+      </div>
+      <div class="flex gap-2">
+        <select class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-md text-xs text-zinc-300 outline-none appearance-none cursor-pointer">
+          <option>All Agents</option>
+          <option>claude-code</option>
+          <option>cursor-agent</option>
+          <option>github-copilot</option>
+        </select>
+        <select class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-md text-xs text-zinc-300 outline-none appearance-none cursor-pointer">
+          <option>Last 7 days</option>
+          <option>Last 24 hours</option>
+          <option>Last 30 days</option>
+          <option>All time</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
+        <p class="text-2xl font-semibold text-zinc-100">142</p>
+        <p class="text-xs text-zinc-500 mt-0.5">Total Actions</p>
+      </div>
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
+        <p class="text-2xl font-semibold text-emerald-400">89%</p>
+        <p class="text-xs text-zinc-500 mt-0.5">Approval Rate</p>
+      </div>
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
+        <p class="text-2xl font-semibold text-amber-400">7</p>
+        <p class="text-xs text-zinc-500 mt-0.5">Blocked Actions</p>
+      </div>
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
+        <p class="text-2xl font-semibold text-zinc-100">3</p>
+        <p class="text-xs text-zinc-500 mt-0.5">Active Agents</p>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex gap-1 mb-4 border-b border-zinc-800 pb-px">
+      <button class="px-4 py-2 text-xs font-medium text-blue-400 border-b-2 border-blue-400">All Actions</button>
+      <button class="px-4 py-2 text-xs text-zinc-500 hover:text-zinc-300">Lesson Changes</button>
+      <button class="px-4 py-2 text-xs text-zinc-500 hover:text-zinc-300">Guardrail Checks</button>
+      <button class="px-4 py-2 text-xs text-zinc-500 hover:text-zinc-300">Blocked</button>
+    </div>
+
+    <!-- Audit Log Timeline -->
+    <div class="space-y-3">
+      <!-- Entry: Lesson created -->
+      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+        <div class="flex items-start gap-3">
+          <div class="w-8 h-8 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0 mt-0.5">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-emerald-400"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-xs font-medium text-zinc-200">claude-code</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">lesson.created</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">trusted</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">auto-approved</span>
+            </div>
+            <p class="text-xs text-zinc-400 mb-1.5">Created lesson: <span class="text-zinc-300 font-medium">"Multi-project support: color + description on projects table"</span></p>
+            <div class="flex items-center gap-3 text-[10px] text-zinc-600">
+              <span>Type: decision</span>
+              <span>Tags: architecture, database</span>
+              <span>7 minutes ago</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Entry: Guardrail check passed -->
+      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+        <div class="flex items-start gap-3">
+          <div class="w-8 h-8 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0 mt-0.5">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-blue-400"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-xs font-medium text-zinc-200">claude-code</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">guardrail.check</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">passed</span>
+            </div>
+            <p class="text-xs text-zinc-400 mb-1.5">Checked action: <span class="text-zinc-300">"git push to main"</span></p>
+            <div class="flex items-center gap-3 text-[10px] text-zinc-600">
+              <span>Rule: Max retry attempts must be 3</span>
+              <span>Result: pass (no match)</span>
+              <span>15 minutes ago</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Entry: Guardrail BLOCKED -->
+      <div class="bg-zinc-900 border border-red-500/20 rounded-lg p-4">
+        <div class="flex items-start gap-3">
+          <div class="w-8 h-8 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0 mt-0.5">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-red-400"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-xs font-medium text-zinc-200">cursor-agent</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400">guardrail.blocked</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">needs_confirmation</span>
+            </div>
+            <p class="text-xs text-zinc-400 mb-1.5">Blocked action: <span class="text-zinc-300">"deploy to production"</span></p>
+            <div class="bg-zinc-950 border border-zinc-800 rounded-md p-2.5 mt-2 mb-2">
+              <p class="text-[10px] text-zinc-500 mb-1">Prompt shown to agent:</p>
+              <p class="text-xs text-amber-400">"Production deploys require manual approval. Please confirm with the team lead before proceeding."</p>
+            </div>
+            <div class="flex items-center gap-3 text-[10px] text-zinc-600">
+              <span>Rule: Production deploy guard</span>
+              <span>Decision: blocked</span>
+              <span>1 hour ago</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Entry: Lesson updated -->
+      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+        <div class="flex items-start gap-3">
+          <div class="w-8 h-8 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 mt-0.5">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-amber-400"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-xs font-medium text-zinc-200">claude-code</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">lesson.updated</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">v3</span>
+            </div>
+            <p class="text-xs text-zinc-400 mb-1.5">Updated lesson: <span class="text-zinc-300 font-medium">"Global search test retry pattern"</span></p>
+            <p class="text-[10px] text-zinc-500">Change summary: <span class="text-zinc-400">Added exponential backoff parameters and max delay cap</span></p>
+            <div class="flex items-center gap-3 text-[10px] text-zinc-600 mt-1">
+              <span>Version: 2 &rarr; 3</span>
+              <span>Changed by: claude-code</span>
+              <span>3 hours ago</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Entry: Search performed -->
+      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+        <div class="flex items-start gap-3">
+          <div class="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0 mt-0.5">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-zinc-500"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-xs font-medium text-zinc-200">github-copilot</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-zinc-700 text-zinc-400">search.lessons</span>
+            </div>
+            <p class="text-xs text-zinc-400">Query: <span class="text-zinc-300">"authentication middleware patterns"</span> &mdash; 4 results</p>
+            <div class="flex items-center gap-3 text-[10px] text-zinc-600 mt-1">
+              <span>5 hours ago</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pagination -->
+    <div class="flex items-center justify-between mt-6 pt-4 border-t border-zinc-800">
+      <p class="text-xs text-zinc-600">Showing 1-20 of 142 actions</p>
+      <div class="flex gap-1">
+        <button class="px-3 py-1.5 text-xs border border-zinc-700 rounded-md text-zinc-500 cursor-not-allowed opacity-50">Previous</button>
+        <button class="px-3 py-1.5 text-xs bg-blue-600 rounded-md text-white">1</button>
+        <button class="px-3 py-1.5 text-xs border border-zinc-700 rounded-md text-zinc-400 hover:border-zinc-600">2</button>
+        <button class="px-3 py-1.5 text-xs border border-zinc-700 rounded-md text-zinc-400 hover:border-zinc-600">3</button>
+        <button class="px-3 py-1.5 text-xs border border-zinc-700 rounded-md text-zinc-400 hover:border-zinc-600">Next</button>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <h2 class="text-sm font-medium text-zinc-400 mt-12 mb-3">Agent Detail Slide-over (click on agent name)</h2>
+
+    <div class="w-96 bg-zinc-900 border border-zinc-800 rounded-lg p-5">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-sm font-bold text-white">CC</div>
+        <div>
+          <h3 class="text-sm font-semibold text-zinc-100">claude-code</h3>
+          <div class="flex items-center gap-2 mt-0.5">
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">trusted</span>
+            <span class="text-[10px] text-zinc-600">First seen 30 days ago</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-3 gap-3 mb-4">
+        <div class="bg-zinc-950 border border-zinc-800 rounded-md p-2.5 text-center">
+          <p class="text-lg font-semibold text-zinc-100">98</p>
+          <p class="text-[10px] text-zinc-600">Lessons</p>
+        </div>
+        <div class="bg-zinc-950 border border-zinc-800 rounded-md p-2.5 text-center">
+          <p class="text-lg font-semibold text-emerald-400">95%</p>
+          <p class="text-[10px] text-zinc-600">Approved</p>
+        </div>
+        <div class="bg-zinc-950 border border-zinc-800 rounded-md p-2.5 text-center">
+          <p class="text-lg font-semibold text-zinc-100">2</p>
+          <p class="text-[10px] text-zinc-600">Blocked</p>
+        </div>
+      </div>
+
+      <div class="space-y-3">
+        <div class="flex items-center justify-between py-2">
+          <div>
+            <div class="text-xs text-zinc-300">Trust Level</div>
+            <div class="text-[10px] text-zinc-600">Controls review requirements</div>
+          </div>
+          <select class="px-2.5 py-1 bg-zinc-950 border border-zinc-800 rounded-md text-xs text-zinc-300 outline-none appearance-none cursor-pointer">
+            <option>new</option>
+            <option>standard</option>
+            <option selected>trusted</option>
+          </select>
+        </div>
+        <div class="flex items-center justify-between py-2">
+          <div>
+            <div class="text-xs text-zinc-300">Auto-approve</div>
+            <div class="text-[10px] text-zinc-600">Skip review for this agent's lessons</div>
+          </div>
+          <button class="w-8 h-[18px] rounded-full relative bg-blue-600 transition-colors">
+            <span class="absolute top-[2px] left-[18px] w-[14px] h-[14px] bg-white rounded-full transition-all shadow-sm"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

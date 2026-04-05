@@ -12,6 +12,17 @@
 
   <!-- Enhancement Changelog -->
   <details open class="mb-4 border border-zinc-800 rounded-lg bg-zinc-900">
+    <summary class="px-4 py-3 text-sm font-medium text-zinc-300 cursor-pointer hover:text-zinc-100">v5 — Phase 8: Advanced HITL (2026-04-05)</summary>
+    <div class="px-4 py-3 border-t border-zinc-800 text-xs text-zinc-400 space-y-2">
+      <div><span class="text-emerald-400 font-medium">NEW — Agent Audit Trail:</span> Timeline of all agent actions (lesson CRUD, guardrail checks, searches). Blocked actions highlighted in red with prompt shown. Agent detail slide-over with trust level controls, stats, auto-approve toggle. Filter by agent, time range, action type tabs.</div>
+      <div><span class="text-emerald-400 font-medium">NEW — Custom Lesson Types:</span> Settings page to manage lesson categories. 5 built-in types (decision, preference, guardrail, workaround, general_note) + custom types. Template editor modal with markdown default content, color, default tags. Add Custom Type modal.</div>
+      <div><span class="text-emerald-400 font-medium">NEW — Rich Content Editor:</span> Markdown editor component replacing textarea. Toolbar (bold, italic, code, heading, list, link, code block, table). Edit/Preview/Split view toggle. AI Assist popover on text selection (Clarify, Simplify, Expand, Custom). Status bar with char count + save indicator.</div>
+      <div><span class="text-emerald-400 font-medium">NEW — Access Control:</span> API Keys management (generate, revoke, edit scope). 3 built-in roles (admin, writer, reader). Permissions matrix table. Generate Key modal with role, project scope, expiration. Key reveal with copy-once warning.</div>
+      <div><span class="text-blue-400 font-medium">Feature Toggles:</span> Re-designed project settings section. Icons per feature, dependency warnings (e.g. "Requires NEO4J_URI"), hover highlight. Toggles wired to projects.settings JSONB via PUT API. 5 features: Git Intelligence, Knowledge Graph, AI Distillation, Auto Review, Search Reranking.</div>
+    </div>
+  </details>
+
+  <details class="mb-4 border border-zinc-800 rounded-lg bg-zinc-900">
     <summary class="px-4 py-3 text-sm font-medium text-zinc-300 cursor-pointer hover:text-zinc-100">v4 — Human-in-the-Loop & Collaboration (2026-04-04)</summary>
     <div class="px-4 py-3 border-t border-zinc-800 text-xs text-zinc-400 space-y-2">
       <div><span class="text-emerald-400 font-medium">NEW — Review Inbox:</span> Draft→Review→Active approval pipeline, card-based review UI, batch approve/reject, AI confidence scores, agent trust levels with auto-approve toggle.</div>
@@ -53,7 +64,7 @@
   </details>
 
   <!-- Components -->
-  <h2 class="text-lg font-semibold text-zinc-200 mb-3 border-b border-zinc-800 pb-2">Shared Components (16)</h2>
+  <h2 class="text-lg font-semibold text-zinc-200 mb-3 border-b border-zinc-800 pb-2">Shared Components (18)</h2>
   <div class="grid grid-cols-3 gap-3 mb-10">
     <a href="components/badge.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
       <div class="text-sm font-medium text-zinc-200">Badge</div>
@@ -115,14 +126,22 @@
       <div class="text-sm font-medium text-zinc-200">Sidebar</div>
       <div class="text-xs text-zinc-500 mt-0.5">Nav groups, review badge, bookmarks, shortcuts hint</div>
     </a>
-    <a href="components/keyboard-shortcuts.html" class="block p-3 border border-emerald-800/50 rounded-lg hover:border-emerald-600/50 transition-colors">
-      <div class="text-sm font-medium text-emerald-300">Keyboard Shortcuts <span class="text-[10px] text-emerald-500 font-normal ml-1">NEW</span></div>
+    <a href="components/keyboard-shortcuts.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">Keyboard Shortcuts</div>
       <div class="text-xs text-zinc-500 mt-0.5">? overlay, 3-col grid, searchable</div>
+    </a>
+    <a href="components/rich-editor.html" class="block p-3 border border-emerald-800/50 rounded-lg hover:border-emerald-600/50 transition-colors">
+      <div class="text-sm font-medium text-emerald-300">Rich Editor <span class="text-[10px] text-emerald-500 font-normal ml-1">NEW v5</span></div>
+      <div class="text-xs text-zinc-500 mt-0.5">Markdown toolbar, preview, AI assist</div>
+    </a>
+    <a href="components/feature-toggles.html" class="block p-3 border border-emerald-800/50 rounded-lg hover:border-emerald-600/50 transition-colors">
+      <div class="text-sm font-medium text-emerald-300">Feature Toggles <span class="text-[10px] text-emerald-500 font-normal ml-1">NEW v5</span></div>
+      <div class="text-xs text-zinc-500 mt-0.5">Project settings toggles wired to JSONB</div>
     </a>
   </div>
 
   <!-- Pages -->
-  <h2 class="text-lg font-semibold text-zinc-200 mb-3 border-b border-zinc-800 pb-2">Pages (21)</h2>
+  <h2 class="text-lg font-semibold text-zinc-200 mb-3 border-b border-zinc-800 pb-2">Pages (24)</h2>
   <div class="grid grid-cols-3 gap-3 mb-10">
     <a href="pages/layout.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
       <div class="text-sm font-medium text-zinc-200">Layout</div>
@@ -204,14 +223,26 @@
       <div class="text-sm font-medium text-emerald-300">Analytics <span class="text-[10px] text-emerald-500 font-normal ml-1">NEW</span></div>
       <div class="text-xs text-zinc-500 mt-0.5">Usage trends, dead knowledge, agent activity</div>
     </a>
-    <a href="pages/onboarding.html" class="block p-3 border border-emerald-800/50 rounded-lg hover:border-emerald-600/50 transition-colors">
-      <div class="text-sm font-medium text-emerald-300">Getting Started <span class="text-[10px] text-emerald-500 font-normal ml-1">NEW</span></div>
+    <a href="pages/onboarding.html" class="block p-3 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+      <div class="text-sm font-medium text-zinc-200">Getting Started</div>
       <div class="text-xs text-zinc-500 mt-0.5">Learning path, progress tracker, admin editor</div>
+    </a>
+    <a href="pages/agent-audit.html" class="block p-3 border border-emerald-800/50 rounded-lg hover:border-emerald-600/50 transition-colors">
+      <div class="text-sm font-medium text-emerald-300">Agent Audit <span class="text-[10px] text-emerald-500 font-normal ml-1">NEW v5</span></div>
+      <div class="text-xs text-zinc-500 mt-0.5">Agent action timeline, guardrail logs, trust controls</div>
+    </a>
+    <a href="pages/lesson-types.html" class="block p-3 border border-emerald-800/50 rounded-lg hover:border-emerald-600/50 transition-colors">
+      <div class="text-sm font-medium text-emerald-300">Lesson Types <span class="text-[10px] text-emerald-500 font-normal ml-1">NEW v5</span></div>
+      <div class="text-xs text-zinc-500 mt-0.5">Custom types, templates, built-in management</div>
+    </a>
+    <a href="pages/access-control.html" class="block p-3 border border-emerald-800/50 rounded-lg hover:border-emerald-600/50 transition-colors">
+      <div class="text-sm font-medium text-emerald-300">Access Control <span class="text-[10px] text-emerald-500 font-normal ml-1">NEW v5</span></div>
+      <div class="text-xs text-zinc-500 mt-0.5">API keys, roles, permissions matrix</div>
     </a>
   </div>
 
   <div class="text-xs text-zinc-600 border-t border-zinc-800 pt-4">
-    v4 — Updated 2026-04-04. 21 pages, 16 components. Human-in-the-loop features complete.
+    v5 — Updated 2026-04-05. 24 pages, 18 components. Phase 8: Advanced HITL drafts.
   </div>
 </body>
 </html>

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: Feature Toggles</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 p-8 font-sans">
+  <h1 class="text-xl font-bold mb-1">Feature Toggles</h1>
+  <p class="text-sm text-zinc-500 mb-8">Section in /projects/settings. Toggles stored in projects.settings JSONB. Wired to PUT /api/projects/:id.</p>
+
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-4 mb-3">Features Section (in project settings page)</h2>
+
+  <div class="max-w-2xl bg-zinc-900 border border-zinc-800 rounded-lg p-6">
+    <div class="flex items-center justify-between mb-2">
+      <h2 class="text-sm font-semibold text-zinc-200">Features</h2>
+      <span class="text-[10px] text-zinc-600">Saved to project settings</span>
+    </div>
+    <p class="text-xs text-zinc-500 mb-5">Enable or disable features for this project. Changes take effect immediately.</p>
+
+    <div class="space-y-1">
+      <!-- Git Intelligence — enabled -->
+      <div class="flex items-center justify-between py-3 px-3 rounded-lg hover:bg-zinc-800/30 transition-colors">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-emerald-400"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 01-9 9"/></svg>
+          </div>
+          <div>
+            <div class="text-xs text-zinc-200 font-medium">Git Intelligence</div>
+            <div class="text-[10px] text-zinc-600">Auto-ingest commits, suggest lessons from git history</div>
+          </div>
+        </div>
+        <button class="w-9 h-5 rounded-full relative bg-blue-600 transition-colors shrink-0">
+          <span class="absolute top-[3px] left-[19px] w-[14px] h-[14px] bg-white rounded-full transition-all shadow-sm"></span>
+        </button>
+      </div>
+
+      <!-- Knowledge Graph — disabled -->
+      <div class="flex items-center justify-between py-3 px-3 rounded-lg hover:bg-zinc-800/30 transition-colors">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500"><circle cx="12" cy="12" r="3"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="5" r="2"/><circle cx="19" cy="19" r="2"/><circle cx="5" cy="19" r="2"/><line x1="14" y1="10" x2="17.5" y2="6.5"/><line x1="10" y1="10" x2="6.5" y2="6.5"/><line x1="14" y1="14" x2="17.5" y2="17.5"/><line x1="10" y1="14" x2="6.5" y2="17.5"/></svg>
+          </div>
+          <div>
+            <div class="text-xs text-zinc-400 font-medium">Knowledge Graph</div>
+            <div class="text-[10px] text-zinc-600">Neo4j symbol extraction and dependency tracing</div>
+            <div class="text-[10px] text-amber-500 mt-0.5">Requires NEO4J_URI to be configured</div>
+          </div>
+        </div>
+        <button class="w-9 h-5 rounded-full relative bg-zinc-700 transition-colors shrink-0">
+          <span class="absolute top-[3px] left-[3px] w-[14px] h-[14px] bg-zinc-400 rounded-full transition-all shadow-sm"></span>
+        </button>
+      </div>
+
+      <!-- AI Distillation — enabled -->
+      <div class="flex items-center justify-between py-3 px-3 rounded-lg hover:bg-zinc-800/30 transition-colors">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shrink-0">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-purple-400"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+          </div>
+          <div>
+            <div class="text-xs text-zinc-200 font-medium">AI Distillation</div>
+            <div class="text-[10px] text-zinc-600">LLM-powered reflection, compression, and project summaries</div>
+          </div>
+        </div>
+        <button class="w-9 h-5 rounded-full relative bg-blue-600 transition-colors shrink-0">
+          <span class="absolute top-[3px] left-[19px] w-[14px] h-[14px] bg-white rounded-full transition-all shadow-sm"></span>
+        </button>
+      </div>
+
+      <!-- Auto Review — enabled -->
+      <div class="flex items-center justify-between py-3 px-3 rounded-lg hover:bg-zinc-800/30 transition-colors">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-blue-400"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          </div>
+          <div>
+            <div class="text-xs text-zinc-200 font-medium">Auto Review</div>
+            <div class="text-[10px] text-zinc-600">Route AI-generated lessons to review inbox based on agent trust level</div>
+          </div>
+        </div>
+        <button class="w-9 h-5 rounded-full relative bg-blue-600 transition-colors shrink-0">
+          <span class="absolute top-[3px] left-[19px] w-[14px] h-[14px] bg-white rounded-full transition-all shadow-sm"></span>
+        </button>
+      </div>
+
+      <!-- Reranking — disabled -->
+      <div class="flex items-center justify-between py-3 px-3 rounded-lg hover:bg-zinc-800/30 transition-colors">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-zinc-500"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          </div>
+          <div>
+            <div class="text-xs text-zinc-400 font-medium">Search Reranking</div>
+            <div class="text-[10px] text-zinc-600">Cross-encoder reranking for more accurate search results</div>
+          </div>
+        </div>
+        <button class="w-9 h-5 rounded-full relative bg-zinc-700 transition-colors shrink-0">
+          <span class="absolute top-[3px] left-[3px] w-[14px] h-[14px] bg-zinc-400 rounded-full transition-all shadow-sm"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-10 mb-3">Data model (projects.settings JSONB)</h2>
+
+  <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4 max-w-md">
+    <pre class="text-xs text-zinc-500 font-mono whitespace-pre-wrap">{
+  "features": {
+    "git_ingest": true,
+    "knowledge_graph": false,
+    "distillation": true,
+    "auto_review": true,
+    "reranking": false
+  }
+}
+
+// Read: GET /api/projects → project.settings.features
+// Write: PUT /api/projects/:id { settings: {...} }
+// Toggle saves immediately via PUT on click</pre>
+  </div>
+</body>
+</html>

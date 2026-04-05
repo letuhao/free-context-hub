@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: Access Control</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen font-sans">
+  <div class="p-6">
+    <p class="text-xs text-zinc-600 mb-4">Draft: pages/access-control | Source: gui/src/app/settings/access/page.tsx</p>
+
+    <!-- Breadcrumb -->
+    <div class="flex items-center gap-1.5 text-xs text-zinc-500 mb-4">
+      <span>Settings</span>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      <span class="text-zinc-400">Access Control</span>
+    </div>
+
+    <!-- Page Header -->
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-lg font-semibold text-zinc-100">Access Control</h1>
+        <p class="text-xs text-zinc-500 mt-0.5">Manage API keys and permissions for agents and users</p>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex gap-1 mb-6 border-b border-zinc-800 pb-px">
+      <button class="px-4 py-2 text-xs font-medium text-blue-400 border-b-2 border-blue-400">API Keys</button>
+      <button class="px-4 py-2 text-xs text-zinc-500 hover:text-zinc-300">Roles</button>
+      <button class="px-4 py-2 text-xs text-zinc-500 hover:text-zinc-300">Permissions</button>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- Tab 1: API Keys -->
+
+    <div class="mb-8">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-sm font-semibold text-zinc-200">API Keys</h2>
+          <p class="text-xs text-zinc-500 mt-0.5">Tokens used by MCP clients and API consumers to authenticate</p>
+        </div>
+        <button class="px-4 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white font-medium transition-colors flex items-center gap-1.5">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Generate Key
+        </button>
+      </div>
+
+      <div class="space-y-3">
+        <!-- Key 1: Active -->
+        <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-sm font-medium text-zinc-200">Production Agent Key</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">active</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">admin</span>
+              </div>
+              <div class="flex items-center gap-2 mt-1">
+                <code class="text-[11px] font-mono text-zinc-500 bg-zinc-950 px-2 py-0.5 rounded">chub_sk_prod_...a3f8</code>
+                <button class="text-[10px] text-zinc-600 hover:text-zinc-400">Copy</button>
+              </div>
+              <div class="flex items-center gap-3 mt-2 text-[10px] text-zinc-600">
+                <span>Created 30 days ago</span>
+                <span>Last used 5 minutes ago</span>
+                <span>Scope: all projects</span>
+              </div>
+            </div>
+            <div class="flex gap-2 shrink-0">
+              <button class="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Edit</button>
+              <button class="text-xs text-zinc-500 hover:text-red-400 transition-colors">Revoke</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Key 2: Active, scoped -->
+        <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-sm font-medium text-zinc-200">CI/CD Read-Only</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">active</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-zinc-700 text-zinc-400">reader</span>
+              </div>
+              <div class="flex items-center gap-2 mt-1">
+                <code class="text-[11px] font-mono text-zinc-500 bg-zinc-950 px-2 py-0.5 rounded">chub_sk_ci_...b7e2</code>
+                <button class="text-[10px] text-zinc-600 hover:text-zinc-400">Copy</button>
+              </div>
+              <div class="flex items-center gap-3 mt-2 text-[10px] text-zinc-600">
+                <span>Created 14 days ago</span>
+                <span>Last used 2 hours ago</span>
+                <span>Scope: free-context-hub only</span>
+              </div>
+            </div>
+            <div class="flex gap-2 shrink-0">
+              <button class="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Edit</button>
+              <button class="text-xs text-zinc-500 hover:text-red-400 transition-colors">Revoke</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Key 3: Revoked -->
+        <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4 opacity-60">
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-sm font-medium text-zinc-400 line-through">Old Dev Key</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400">revoked</span>
+              </div>
+              <div class="flex items-center gap-3 mt-1 text-[10px] text-zinc-600">
+                <span>Revoked 7 days ago</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <h2 class="text-sm font-medium text-zinc-400 mt-12 mb-3">Tab 2: Roles</h2>
+
+    <div class="mb-8">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-sm font-semibold text-zinc-200">Roles</h2>
+          <p class="text-xs text-zinc-500 mt-0.5">Define permission sets that can be assigned to API keys</p>
+        </div>
+        <button class="px-4 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white font-medium transition-colors flex items-center gap-1.5">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Role
+        </button>
+      </div>
+
+      <div class="space-y-2">
+        <!-- admin -->
+        <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4 flex items-center justify-between">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-sm font-medium text-zinc-200">admin</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">built-in</span>
+              <span class="text-[10px] text-zinc-600">1 key</span>
+            </div>
+            <p class="text-xs text-zinc-500">Full access: read, write, delete, manage settings</p>
+          </div>
+        </div>
+
+        <!-- writer -->
+        <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4 flex items-center justify-between">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-sm font-medium text-zinc-200">writer</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">built-in</span>
+              <span class="text-[10px] text-zinc-600">0 keys</span>
+            </div>
+            <p class="text-xs text-zinc-500">Read + write: add lessons, search, check guardrails, ingest</p>
+          </div>
+        </div>
+
+        <!-- reader -->
+        <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4 flex items-center justify-between">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-sm font-medium text-zinc-200">reader</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">built-in</span>
+              <span class="text-[10px] text-zinc-600">1 key</span>
+            </div>
+            <p class="text-xs text-zinc-500">Read only: search lessons, view summaries, check guardrails</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <h2 class="text-sm font-medium text-zinc-400 mt-12 mb-3">Tab 3: Permissions Matrix</h2>
+
+    <div class="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+      <table class="w-full text-xs">
+        <thead>
+          <tr class="border-b border-zinc-800">
+            <th class="text-left px-4 py-3 text-zinc-500 font-medium">Permission</th>
+            <th class="text-center px-4 py-3 text-zinc-500 font-medium">admin</th>
+            <th class="text-center px-4 py-3 text-zinc-500 font-medium">writer</th>
+            <th class="text-center px-4 py-3 text-zinc-500 font-medium">reader</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="border-b border-zinc-800/50">
+            <td class="px-4 py-2.5 text-zinc-300">Search lessons</td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+          </tr>
+          <tr class="border-b border-zinc-800/50">
+            <td class="px-4 py-2.5 text-zinc-300">Check guardrails</td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+          </tr>
+          <tr class="border-b border-zinc-800/50">
+            <td class="px-4 py-2.5 text-zinc-300">View summaries</td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+          </tr>
+          <tr class="border-b border-zinc-800/50">
+            <td class="px-4 py-2.5 text-zinc-300">Add/update lessons</td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+            <td class="text-center text-zinc-600">&mdash;</td>
+          </tr>
+          <tr class="border-b border-zinc-800/50">
+            <td class="px-4 py-2.5 text-zinc-300">Ingest git / index project</td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+            <td class="text-center text-zinc-600">&mdash;</td>
+          </tr>
+          <tr class="border-b border-zinc-800/50">
+            <td class="px-4 py-2.5 text-zinc-300">Upload documents</td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+            <td class="text-center text-zinc-600">&mdash;</td>
+          </tr>
+          <tr class="border-b border-zinc-800/50">
+            <td class="px-4 py-2.5 text-zinc-300">Delete lessons / workspace</td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+            <td class="text-center text-zinc-600">&mdash;</td>
+            <td class="text-center text-zinc-600">&mdash;</td>
+          </tr>
+          <tr class="border-b border-zinc-800/50">
+            <td class="px-4 py-2.5 text-zinc-300">Manage projects / groups</td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+            <td class="text-center text-zinc-600">&mdash;</td>
+            <td class="text-center text-zinc-600">&mdash;</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2.5 text-zinc-300">Manage API keys / roles</td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+            <td class="text-center text-zinc-600">&mdash;</td>
+            <td class="text-center text-zinc-600">&mdash;</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <h2 class="text-sm font-medium text-zinc-400 mt-12 mb-3">Generate Key Modal</h2>
+
+    <div class="w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl">
+      <div class="px-6 pt-5 pb-4 border-b border-zinc-800">
+        <h2 class="text-base font-semibold text-zinc-100">Generate API Key</h2>
+        <p class="text-xs text-zinc-500 mt-0.5">Create a new token for MCP clients or API consumers</p>
+      </div>
+      <div class="px-6 py-5 space-y-4">
+        <div>
+          <label class="block text-xs text-zinc-400 mb-1.5">Name <span class="text-red-400">*</span></label>
+          <input type="text" placeholder="e.g. Production Agent" class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-zinc-600 transition-colors" />
+        </div>
+        <div>
+          <label class="block text-xs text-zinc-400 mb-1.5">Role</label>
+          <select class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-300 outline-none appearance-none cursor-pointer focus:border-zinc-600">
+            <option>admin</option>
+            <option selected>writer</option>
+            <option>reader</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-zinc-400 mb-1.5">Project Scope</label>
+          <select class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-300 outline-none appearance-none cursor-pointer focus:border-zinc-600">
+            <option>All projects</option>
+            <option>free-context-hub</option>
+            <option>api-gateway</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-zinc-400 mb-1.5">Expiration</label>
+          <select class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-300 outline-none appearance-none cursor-pointer focus:border-zinc-600">
+            <option>Never</option>
+            <option>30 days</option>
+            <option>90 days</option>
+            <option>1 year</option>
+          </select>
+        </div>
+      </div>
+      <div class="px-6 py-4 border-t border-zinc-800 flex justify-end gap-2">
+        <button class="px-3 py-1.5 text-xs border border-zinc-700 rounded-md text-zinc-400">Cancel</button>
+        <button class="px-4 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white font-medium">Generate</button>
+      </div>
+    </div>
+
+    <!-- Key reveal (after generation) -->
+    <div class="w-full max-w-lg mt-4 bg-amber-500/5 border border-amber-500/20 rounded-lg p-4">
+      <div class="flex items-center gap-2 mb-2">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-amber-400"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span class="text-xs text-amber-400 font-medium">Copy this key now — it won't be shown again</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <code class="flex-1 text-sm font-mono text-zinc-200 bg-zinc-950 px-3 py-2 rounded-md border border-zinc-800 select-all">chub_sk_prod_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6</code>
+        <button class="px-3 py-2 text-xs bg-zinc-800 border border-zinc-700 rounded-md text-zinc-300 hover:bg-zinc-700 transition-colors">Copy</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

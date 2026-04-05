@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: Rich Content Editor</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 p-8 font-sans">
+  <h1 class="text-xl font-bold mb-1">Rich Content Editor</h1>
+  <p class="text-sm text-zinc-500 mb-8">Replaces plain textarea in lesson add/edit dialogs. Markdown with toolbar, preview toggle, and AI assist.</p>
+
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">State 1: Edit mode (default)</h2>
+
+  <div class="max-w-2xl bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+    <!-- Toolbar -->
+    <div class="flex items-center gap-0.5 px-2 py-1.5 border-b border-zinc-800 bg-zinc-900">
+      <!-- Formatting group -->
+      <button class="p-1.5 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded transition-colors" title="Bold (Ctrl+B)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 4h8a4 4 0 014 4 4 4 0 01-4 4H6z"/><path d="M6 12h9a4 4 0 014 4 4 4 0 01-4 4H6z"/></svg>
+      </button>
+      <button class="p-1.5 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded transition-colors" title="Italic (Ctrl+I)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg>
+      </button>
+      <button class="p-1.5 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded transition-colors" title="Code">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      </button>
+
+      <div class="w-px h-4 bg-zinc-800 mx-1"></div>
+
+      <!-- Structure group -->
+      <button class="p-1.5 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded transition-colors" title="Heading">
+        <span class="text-xs font-bold">H</span>
+      </button>
+      <button class="p-1.5 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded transition-colors" title="Bullet list">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      </button>
+      <button class="p-1.5 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded transition-colors" title="Link">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+      </button>
+      <button class="p-1.5 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded transition-colors" title="Code block">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><polyline points="9 8 5 12 9 16"/><polyline points="15 8 19 12 15 16"/></svg>
+      </button>
+
+      <div class="w-px h-4 bg-zinc-800 mx-1"></div>
+
+      <!-- Insert -->
+      <button class="p-1.5 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded transition-colors" title="Insert table">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+      </button>
+
+      <!-- Spacer -->
+      <div class="flex-1"></div>
+
+      <!-- AI Assist -->
+      <button class="flex items-center gap-1 px-2 py-1 text-[10px] text-blue-400 hover:bg-blue-500/10 rounded transition-colors">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        AI Assist
+      </button>
+
+      <div class="w-px h-4 bg-zinc-800 mx-1"></div>
+
+      <!-- View toggle -->
+      <div class="flex bg-zinc-800 rounded-md p-0.5">
+        <button class="px-2 py-0.5 text-[10px] bg-zinc-700 text-zinc-200 rounded-sm">Edit</button>
+        <button class="px-2 py-0.5 text-[10px] text-zinc-500">Preview</button>
+        <button class="px-2 py-0.5 text-[10px] text-zinc-500">Split</button>
+      </div>
+    </div>
+
+    <!-- Editor content -->
+    <div class="p-4 min-h-[240px]">
+      <div class="font-mono text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap">## Context
+When implementing large features (20+ files), the initial implementation
+missed several bugs, security gaps, and logic errors.
+
+## Decision
+Always follow up bulk implementation with a **structured code review**
+broken into focused groups:
+- BE service layer
+- BE routes
+- FE components
+- FE pages
+- Integration wiring
+
+## Consequences
+- Extra 30-60 min per large feature
+- Catches ~15-20 issues per review cycle
+- Higher code quality at merge time</div>
+    </div>
+
+    <!-- Status bar -->
+    <div class="flex items-center justify-between px-3 py-1.5 border-t border-zinc-800 bg-zinc-950">
+      <div class="flex items-center gap-3 text-[10px] text-zinc-600">
+        <span>Markdown</span>
+        <span>432 chars</span>
+        <span>Line 18, Col 24</span>
+      </div>
+      <div class="flex items-center gap-2 text-[10px] text-zinc-600">
+        <span class="text-emerald-500">Saved</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-10 mb-3">State 2: Preview mode</h2>
+
+  <div class="max-w-2xl bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+    <!-- Toolbar (preview active) -->
+    <div class="flex items-center gap-0.5 px-2 py-1.5 border-b border-zinc-800 bg-zinc-900">
+      <div class="flex-1"></div>
+      <div class="flex bg-zinc-800 rounded-md p-0.5">
+        <button class="px-2 py-0.5 text-[10px] text-zinc-500">Edit</button>
+        <button class="px-2 py-0.5 text-[10px] bg-zinc-700 text-zinc-200 rounded-sm">Preview</button>
+        <button class="px-2 py-0.5 text-[10px] text-zinc-500">Split</button>
+      </div>
+    </div>
+
+    <!-- Rendered markdown preview -->
+    <div class="p-5 prose prose-invert prose-sm max-w-none">
+      <h2 class="text-sm font-semibold text-zinc-200 mb-2">Context</h2>
+      <p class="text-xs text-zinc-400 mb-3">When implementing large features (20+ files), the initial implementation missed several bugs, security gaps, and logic errors.</p>
+
+      <h2 class="text-sm font-semibold text-zinc-200 mb-2">Decision</h2>
+      <p class="text-xs text-zinc-400 mb-2">Always follow up bulk implementation with a <strong class="text-zinc-200">structured code review</strong> broken into focused groups:</p>
+      <ul class="text-xs text-zinc-400 space-y-1 list-disc list-inside mb-3">
+        <li>BE service layer</li>
+        <li>BE routes</li>
+        <li>FE components</li>
+        <li>FE pages</li>
+        <li>Integration wiring</li>
+      </ul>
+
+      <h2 class="text-sm font-semibold text-zinc-200 mb-2">Consequences</h2>
+      <ul class="text-xs text-zinc-400 space-y-1 list-disc list-inside">
+        <li>Extra 30-60 min per large feature</li>
+        <li>Catches ~15-20 issues per review cycle</li>
+        <li>Higher code quality at merge time</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-10 mb-3">State 3: AI Assist popover (selection-based)</h2>
+
+  <div class="max-w-2xl bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+    <div class="flex items-center gap-0.5 px-2 py-1.5 border-b border-zinc-800 bg-zinc-900">
+      <div class="flex-1"></div>
+    </div>
+
+    <div class="p-4 relative">
+      <div class="font-mono text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap">## Decision
+Always follow up bulk implementation with a <span class="bg-blue-500/20 text-blue-200">structured code review broken into focused groups</span></div>
+
+      <!-- AI popover (anchored to selection) -->
+      <div class="absolute top-12 left-40 w-52 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl p-1 z-10">
+        <button class="w-full text-left px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 rounded-md flex items-center gap-2">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-blue-400"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Clarify
+        </button>
+        <button class="w-full text-left px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 rounded-md flex items-center gap-2">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-emerald-400"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+          Simplify
+        </button>
+        <button class="w-full text-left px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 rounded-md flex items-center gap-2">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-amber-400"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+          Expand
+        </button>
+        <button class="w-full text-left px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 rounded-md flex items-center gap-2">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-purple-400"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          Custom instruction...
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-10 mb-3">Usage: where the editor appears</h2>
+
+  <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4 max-w-md">
+    <pre class="text-xs text-zinc-500 font-mono whitespace-pre-wrap">
+Replaces textarea in:
+1. Add Lesson dialog — content field
+2. Lesson detail — edit mode content
+3. Guardrail add — requirement field
+4. Document viewer — markdown docs
+5. Chat — "Create Lesson" popover content
+
+Props:
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+  minHeight?: number
+  showToolbar?: boolean (default true)
+  showAiAssist?: boolean (default true)
+  showPreview?: boolean (default true)
+    </pre>
+  </div>
+</body>
+</html>
