@@ -69,6 +69,10 @@ f23f88b [Pre-Phase8] Code review fixes — validation, a11y, hydration, cleanup
 - FE: Wired into add-lesson dialog (replaced Write/Preview toggle + textarea)
 - Decision: kept lesson-detail textarea untouched (AI selection toolbar depends on textarea ref coords)
 
-### Sprint 8.5: Access Control
-- BE: API keys table, roles, middleware
-- FE: Access control page (from draft D5)
+### Sprint 8.5: Access Control -- DONE
+- Migration 0041: api_keys table (key_hash, role, project_scope, expires_at, revoked)
+- BE: apiKeys service — generateKey (chub_sk_ prefix, SHA-256 hash), validate, revoke
+- BE: Updated bearerAuth middleware — env var fast path + api_keys DB fallback
+- BE: GET/POST/DELETE /api/api-keys routes
+- FE: /settings/access page — keys list, generate modal with key reveal, revoke,
+  permissions matrix tab (admin/writer/reader)

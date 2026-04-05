@@ -23,6 +23,7 @@ import { systemRouter } from './routes/system.js';
 import { projectGroupsRouter } from './routes/projectGroups.js';
 import { lessonTypesRouter } from './routes/lessonTypes.js';
 import { auditRouter } from './routes/audit.js';
+import { apiKeysRouter } from './routes/apiKeys.js';
 
 /**
  * Creates the REST API Express app.
@@ -64,6 +65,7 @@ export function createApiApp() {
   app.use('/api/groups', projectGroupsRouter);
   app.use('/api/lesson-types', lessonTypesRouter);
   app.use('/api/audit', auditRouter);
+  app.use('/api/api-keys', apiKeysRouter);
 
   // ── Error handler (must be last) ──
   app.use(errorHandler);

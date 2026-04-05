@@ -344,6 +344,16 @@ export const api = {
   getAuditStats: (params: { project_id: string }) =>
     request<any>("GET", `/api/audit/stats?${qs(params)}`),
 
+  // ── API Keys ──
+  listApiKeys: () =>
+    request<{ keys: any[] }>("GET", "/api/api-keys"),
+
+  createApiKey: (body: { name: string; role?: string; project_scope?: string; expires_at?: string }) =>
+    request<any>("POST", "/api/api-keys", body),
+
+  revokeApiKey: (keyId: string) =>
+    request<any>("DELETE", `/api/api-keys/${encodeURIComponent(keyId)}`),
+
   // ── System ──
   health: () =>
     request<{ status: string; timestamp: string }>("GET", "/api/system/health"),
