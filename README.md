@@ -1,16 +1,32 @@
-# free-context-hub
-
-> **Self-hosted persistent memory + guardrails for AI coding agents. Free, local, for small teams.**
-
-free-context-hub is a local [ContextStream](https://contextstream.io/)-inspired MCP server that gives your AI assistants (Claude Code, Cursor, etc.) **persistent knowledge across sessions and agents** — decisions, preferences, workarounds, and guardrails that survive after a conversation ends.
-
-It also provides a **web GUI** for humans to review, approve, and refine AI-generated knowledge — bridging **AI-to-AI** and **AI-to-Human** collaboration.
+<p align="center">
+  <h1 align="center">free-context-hub</h1>
+  <p align="center">
+    <strong>Persistent memory and guardrails for AI coding agents — so they never start from zero again.</strong>
+  </p>
+  <p align="center">
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
+    <img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen" alt="Node 20+">
+    <img src="https://img.shields.io/badge/typescript-5.x-blue" alt="TypeScript">
+    <img src="https://img.shields.io/badge/MCP-compatible-purple" alt="MCP Compatible">
+    <img src="https://img.shields.io/badge/self--hosted-100%25-orange" alt="Self-Hosted">
+  </p>
+</p>
 
 ---
 
-## Screenshots (Draft Design)
+Every AI coding session starts with amnesia. Your agent forgets the architectural decisions you explained yesterday, the workaround you discovered last week, and the deployment rule your team agreed on last month. You re-explain, re-discover, re-enforce — over and over.
 
-> Phase 7 GUI complete — 20 pages, 28+ REST endpoints, full human-in-the-loop workflow.
+**free-context-hub** is a self-hosted, open-source [MCP](https://modelcontextprotocol.io/) server that gives AI assistants (Claude Code, Cursor, etc.) **persistent knowledge across sessions and agents** — decisions, preferences, workarounds, and guardrails that survive after a conversation ends.
+
+It also provides a **web GUI** for humans to review, approve, and refine AI-generated knowledge — bridging **AI-to-AI** and **AI-to-Human** collaboration.
+
+> Inspired by [ContextStream](https://contextstream.io/). Free, local, for small teams.
+
+---
+
+## Screenshots
+
+> 20 pages, 70+ REST endpoints, full human-in-the-loop workflow.
 
 ### Dashboard — Knowledge health, insights, activity feed
 ![Dashboard](docs/screenshots/dashboard.png)
@@ -24,7 +40,7 @@ It also provides a **web GUI** for humans to review, approve, and refine AI-gene
 ### Review Inbox — Approve AI-generated lessons, trust levels
 ![Review Inbox](docs/screenshots/review-inbox.png)
 
-### Lesson Detail — AI-assisted editor, comments, version history
+### Lesson Detail — Rich editor, comments, version history
 ![Lesson Detail](docs/screenshots/lesson-detail.png)
 
 ### Analytics — Retrieval trends, dead knowledge, agent activity
@@ -38,21 +54,57 @@ It also provides a **web GUI** for humans to review, approve, and refine AI-gene
 
 ---
 
-## Why This Exists
+## Tech Stack
 
-Every new AI agent session starts from zero. The agent doesn't know:
-- Why your team chose JWT over sessions
-- That Redis cache must be flushed after deployment
-- That pushing without tests broke production last month
-- Your team's naming conventions and architectural preferences
-
-**free-context-hub solves this.** One agent captures a lesson, every future agent benefits — across sessions, across team members, persistently.
+| Layer | Technology |
+|:------|:-----------|
+| **Backend** | Node.js + TypeScript, MCP protocol server |
+| **Frontend** | Next.js 16, React 19, Tailwind CSS 4 |
+| **Primary Database** | PostgreSQL 16 + pgvector (data + embeddings) |
+| **Knowledge Graph** | Neo4j 5 (optional — symbol extraction via ts-morph) |
+| **Job Queue** | RabbitMQ (background workers for git ingestion, reflection) |
+| **Cache** | Redis (tiered search caching) |
+| **AI Integration** | MCP (Model Context Protocol) — open standard for agent tool use |
+| **Embeddings** | Any OpenAI-compatible endpoint (LM Studio, Ollama, etc.) |
+| **Deployment** | Docker Compose — single-node, self-hosted, zero cloud dependency |
 
 ---
 
-## Core Features (Priority Order)
+## Architecture
 
-### 1. Persistent Lessons & Knowledge (Primary)
+```
+ AI Agents (Claude Code, Cursor, etc.)
+        │ MCP :3000
+        ▼
+ ┌─────────────────────────────────┐
+ │       ContextHub Backend        │
+ │  MCP Server · REST API · Chat   │
+ │  Background Worker (jobs)       │
+ │─────────────────────────────────│
+ │        Services Layer           │
+ │  lessons · guardrails · search  │
+ │  git · jobs · docs · audit      │
+ │─────────────────────────────────│
+ │  Postgres   │ Neo4j  (optional) │
+ │  + pgvector │ Redis  (optional) │
+ │             │ Rabbit (optional) │
+ └──────────────┬──────────────────┘
+                │ REST :3001
+                ▼
+ ┌─────────────────────────────────┐
+ │      GUI (Next.js :3002)        │
+ │  20 pages · AI chat · Review    │
+ │  Inbox · Analytics · Agents     │
+ └─────────────────────────────────┘
+                │
+           Human (browser)
+```
+
+---
+
+## Core Features
+
+### 1. Persistent Lessons & Knowledge
 The main value proposition. Store and retrieve team knowledge that persists across sessions and agents.
 
 - **`add_lesson`** — Capture decisions, preferences, workarounds, guardrails
@@ -68,37 +120,54 @@ Agent B (Thursday): search_lessons("authentication approach") → gets the decis
 Agent C (Next month): Doesn't waste time debating sessions vs JWT
 ```
 
-### 2. Guardrails (Primary)
+### 2. Guardrails
 Prevent repeated mistakes by enforcing team rules before risky actions.
 
 - **`check_guardrails`** — Pre-action safety verification (git push, deploy, migrations)
 - Guardrails are derived from lessons with `lesson_type: "guardrail"`
 - Returns `pass/fail` + prompt for user confirmation when blocked
 
-### 3. Session Bootstrap (Primary)
+### 3. Session Bootstrap
 Quick onboarding for new agent sessions.
 
 - **`get_context`** — Bootstrap with project state + suggested next calls
 - **`get_project_summary`** — Full project briefing in one read
 - **`help`** — Tool discovery and sample workflows
 
-### 4. Code Search (Supplementary)
-Semantic code search assists agents in finding relevant code. This is a **supplementary feature**, not the core goal — agents already have built-in tools (Grep, Glob, Read) for code navigation.
+### 4. Human-in-the-Loop GUI
+A full web dashboard where humans review, approve, and refine AI-generated knowledge.
 
-- **`search_code_tiered`** — Multi-tier search with 3 auto-selected profiles:
-  - *code-search*: ripgrep > symbol > FTS > semantic (for source/config/types)
-  - *relationship*: convention paths > KG imports > filtered ripgrep (for tests)
-  - *semantic-first*: vector similarity > FTS (for docs/scripts)
-- **`search_code`** — Legacy semantic-only search
-- **`index_project`** — Index repository into chunks + embeddings
+- **Review Inbox** — Batch approve/reject AI-generated lessons with trust levels
+- **Rich Content Editor** — Markdown toolbar, live preview, keyboard shortcuts (Ctrl+B/I)
+- **AI Editor** — Clarify, simplify, expand lessons with diff view (accept/reject)
+- **Comments & Feedback** — Threaded comments, thumbs up/down, bookmarks
+- **Activity & Analytics** — Timeline, retrieval trends, dead knowledge detection
+- **Documents** — Upload reference docs, generate lessons from them
+- **Global Search** — Cmd+K across all knowledge
 
-### 5. Git Intelligence (Supplementary)
+### 5. Access Control & Agent Audit
+Secure multi-agent environments with role-based access and full audit trails.
+
+- **API Keys with Roles** — Admin, editor, viewer permissions via SHA-256 hashed keys
+- **Agent Audit Trail** — Unified timeline of all agent actions (guardrail checks, lessons created)
+- **Custom Lesson Types** — Define project-specific types beyond the defaults
+- **Feature Toggles** — Enable/disable capabilities per project
+
+### 6. Code Search (Supplementary)
+Semantic code search assists agents in finding relevant code. Supplementary — agents already have built-in Grep/Glob.
+
+- **`search_code_tiered`** — Multi-tier search with auto-selected profiles:
+  - *code-search*: ripgrep → symbol → FTS → semantic
+  - *relationship*: convention paths → KG imports → filtered ripgrep
+  - *semantic-first*: vector similarity → FTS (for docs/scripts)
+
+### 7. Git Intelligence (Supplementary)
 Auto-collect insights from commit history.
 
-- **`ingest_git_history`** / **`suggest_lessons_from_commits`** — Draft lessons from git history
+- **`ingest_git_history`** / **`suggest_lessons_from_commits`** — Draft lessons from git
 - **`analyze_commit_impact`** — Commit impact over symbol/lesson graph
 
-### 6. Knowledge Graph (Optional)
+### 8. Knowledge Graph (Optional)
 Symbol-level code structure for advanced queries. Requires Neo4j.
 
 - **`search_symbols`** / **`get_symbol_neighbors`** / **`trace_dependency_path`**
@@ -106,30 +175,51 @@ Symbol-level code structure for advanced queries. Requires Neo4j.
 
 ---
 
-## Quickstart (Run Locally)
+## Quickstart
 
-1.  **Configure Environment**:
-    ```bash
-    copy .env.example .env
-    ```
-2.  **Start Infrastructure**:
-    ```bash
-    docker compose up -d
-    ```
-    *(Requires Docker for Postgres + pgvector)*
-3.  **Start Embeddings Server**:
-    Ensure [LM Studio](https://lmstudio.ai/) or a compatible server is running and serving `POST /v1/embeddings`.
-4.  **Launch ContextHub**:
-    ```bash
-    npm install
-    npm run dev
-    ```
-5.  **Verify Setup**:
-    ```bash
-    npm run smoke-test
-    ```
-6.  **Connect Your AI Tool**:
-    Add the MCP server URL in your tool's settings: `http://localhost:3000/mcp`.
+### Prerequisites
+- **Node.js 20+** and **npm**
+- **Docker** (for PostgreSQL + pgvector)
+- **Embeddings server** — [LM Studio](https://lmstudio.ai/) or any OpenAI-compatible endpoint
+
+### Setup
+
+```bash
+# 1. Clone and install
+git clone https://github.com/your-username/free-context-hub.git
+cd free-context-hub
+npm install
+
+# 2. Configure environment
+cp .env.example .env
+# Edit .env — set DATABASE_URL and EMBEDDINGS_BASE_URL
+
+# 3. Start infrastructure
+docker compose up -d
+
+# 4. Launch the backend (MCP + API)
+npm run dev
+
+# 5. Verify everything works
+npm run smoke-test
+
+# 6. (Optional) Launch the GUI
+cd gui && npm install && npm run dev
+```
+
+### Connect Your AI Tool
+
+Add the MCP server URL in your tool's settings:
+
+```
+http://localhost:3000/mcp
+```
+
+| Service | URL |
+|:--------|:----|
+| MCP Server | `http://localhost:3000/mcp` |
+| REST API | `http://localhost:3001` |
+| Web GUI | `http://localhost:3002` |
 
 Detailed setup: [`docs/QUICKSTART.md`](docs/QUICKSTART.md)
 
@@ -144,7 +234,7 @@ ContextHub uses OpenAI-compatible APIs. Run locally with [LM Studio](https://lms
 We tested 8 embedding models and 8 reranker models ([full benchmark](docs/benchmarks/2026-03-28-embedding-model-benchmark.md)). Best combo:
 
 | Role | Model | Config |
-| :--- | :--- | :--- |
+|:-----|:------|:-------|
 | **Embeddings** | `qwen3-embedding-0.6b` | `EMBEDDINGS_DIM=1024` — best accuracy (18/18 pass, avg 0.652) |
 | **Reranker** | `qwen3-4b-instruct-ranker` | `RERANK_MODEL=qwen3-4b-instruct-ranker` — +9% accuracy at 180 lessons |
 | **Distillation** | `qwen2.5-coder-7b-instruct` | `DISTILLATION_ENABLED=true` — reflect, compress, summarize |
@@ -154,7 +244,7 @@ We tested 8 embedding models and 8 reranker models ([full benchmark](docs/benchm
 **Embedding** (8 tested, lesson search accuracy):
 
 | Model | Dims | Pass Rate | Avg Score | Notes |
-| :--- | :--- | :--- | :--- | :--- |
+|:------|:-----|:----------|:----------|:------|
 | **qwen3-embedding-0.6b** | 1024 | 18/18 | 0.652 | Recommended |
 | bge-m3 | 1024 | 18/18 | 0.575 | Fast, solid all-rounder |
 | mxbai-embed-large-v1 | 1024 | 17/18 | 0.648 | Close but 1 failure |
@@ -162,7 +252,7 @@ We tested 8 embedding models and 8 reranker models ([full benchmark](docs/benchm
 **Reranker** (8 tested, 180 lessons / 33 queries):
 
 | Model | Type | Pass Rate | Latency | Notes |
-| :--- | :--- | :--- | :--- | :--- |
+|:------|:-----|:----------|:--------|:------|
 | **qwen3-4b-instruct-ranker** | generative | 85% | 1.8s | Recommended — no thinking overhead |
 | qwen.qwen3-reranker-4b | generative | 85% | 1.9s | Thinking mode, same accuracy |
 | rank_zephyr_7b | generative | 82% | ~2s | RankGPT format |
@@ -180,24 +270,46 @@ We tested 8 embedding models and 8 reranker models ([full benchmark](docs/benchm
 - [x] **Phase 4**: Knowledge Graph (Neo4j, symbol-level)
 - [x] **Phase 5**: Git Intelligence & Automation
 - [x] **Phase 6**: Retrieval Quality Tuning & Tiered Search
-- [x] **Phase 7**: Interactive GUI & Human-in-the-Loop — 20 pages, 28+ REST endpoints
-  - [x] **7.1**: Foundation — Lucide icons, breadcrumbs, animations, pagination, keyboard shortcuts overlay
-  - [x] **7.2**: Lesson editing — version history (view/restore), review inbox (batch approve/reject), status tabs
-  - [x] **7.3**: AI-assisted features — markdown rendering (syntax highlight), chat history sidebar, create lesson from chat, pinned messages, AI editor (Clarify/Simplify/Expand/Custom + diff view with accept/reject)
-  - [x] **7.4**: Documents — upload/link, viewer with in-doc search, AI lesson generation, linked docs in lesson detail
-  - [x] **7.5**: Collaboration — threaded comments, feedback (thumbs up/down), bookmarks, import/export (JSON)
-  - [x] **7.6**: Observability — activity timeline, analytics (donut chart, dead knowledge, agent activity), getting started (learning path), dashboard insights (health score ring)
-  - [x] **7.7**: Polish — global search Cmd+K, agent trust levels, responsive sidebar, notification settings persistence, feedback column in lessons table
+- [x] **Phase 7**: Interactive GUI & Human-in-the-Loop
+  - 20 pages, 70+ REST endpoints, 36 MCP tools, 38 migrations
+  - Dashboard, Chat, Lessons, Review Inbox, Analytics, Documents, Guardrails, Settings, and more
+- [x] **Phase 8**: Advanced HITL
+  - Access control (API keys with roles), custom lesson types, rich content editor, agent audit trail, feature toggles
 
 **Planned:**
-- [ ] **Phase 8**: Advanced HITL — access control (roles/permissions), custom lesson types/templates, rich content editor, agent audit trail
-- [ ] **Phase 9**: Multi-format Ingestion — PDF/DOCX/image parsing pipelines (document foundation from Phase 7)
-- [ ] **Phase 10**: Knowledge Portability — cross-instance sync, exchange hub (basic import/export done in Phase 7)
+- [ ] **Phase 9**: Multi-format Ingestion — PDF/DOCX/image parsing pipelines
+- [ ] **Phase 10**: Knowledge Portability — cross-instance sync, exchange hub
 
-**Dropped:**
-- ~~Multi-Agent Passive Collection~~ — Parsing agent conversations costs tokens (contradicts "reduce token usage" goal), most conversation is noise, `add_lesson` captures verified conclusions explicitly.
-- ~~Session History Sharing~~ — Transcripts are 50k-200k tokens. The value is conclusions, not the journey. `add_lesson` captures those in ~100 tokens.
-- ~~IDE Native (VS Code extension)~~ — Agents use MCP (done). Humans need a UI, but a web dashboard (Phase 7) works in any browser including VS Code's built-in browser — same reach, fraction of the effort.
+**Intentionally Dropped:**
+- ~~Multi-Agent Passive Collection~~ — Parsing agent conversations costs tokens and captures noise. `add_lesson` captures verified conclusions explicitly.
+- ~~Session History Sharing~~ — Transcripts are 50k-200k tokens. The value is conclusions, not the journey.
+- ~~IDE Extension~~ — Agents use MCP (done). Humans use the web GUI — works in any browser including VS Code's built-in browser.
+
+---
+
+## Project Stats
+
+| Metric | Count |
+|:-------|:------|
+| MCP Tools | 36 |
+| REST Endpoints | 70+ |
+| GUI Pages | 20 |
+| Database Migrations | 41 |
+| Development Phases | 8/10 complete |
+
+---
+
+## Contributing
+
+Contributions are welcome! This is a solo project that grew into something useful — fresh eyes and ideas are appreciated.
+
+1. Fork the repo
+2. Create a feature branch (`git checkout -b feature/my-feature`)
+3. Make your changes
+4. Run `npm run smoke-test` to verify
+5. Submit a pull request
+
+Please open an issue first for large changes so we can discuss the approach.
 
 ---
 
@@ -209,4 +321,8 @@ We tested 8 embedding models and 8 reranker models ([full benchmark](docs/benchm
 
 ---
 
-MIT License | [Whitepaper](WHITEPAPER.md) | [Agent Protocol](AGENT_PROTOCOL.md)
+## License
+
+MIT — see [LICENSE](LICENSE) for details.
+
+[Whitepaper](WHITEPAPER.md) | [Agent Protocol](AGENT_PROTOCOL.md) | [Quickstart Guide](docs/QUICKSTART.md)
