@@ -113,7 +113,7 @@ export default function ProjectsPage() {
   const initials = getInitials(current?.name ?? projectId);
 
   return (
-    <div className="p-6">
+    <div className="flex-1 overflow-y-auto p-6">
       <Breadcrumb items={[{ label: "Project", href: "/projects" }, { label: "Overview" }]} />
 
       {/* Project Header */}

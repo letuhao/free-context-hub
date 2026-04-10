@@ -87,7 +87,7 @@ export default function GraphExplorerPage() {
   // ── Loading state ──
   if (loading) {
     return (
-      <div className="p-6">
+      <div className="flex-1 overflow-y-auto p-6">
         <div className="animate-pulse space-y-4">
           <div className="h-8 w-48 bg-zinc-800 rounded" />
           <div className="h-4 w-72 bg-zinc-800/60 rounded" />
@@ -105,7 +105,7 @@ export default function GraphExplorerPage() {
   // ── KG disabled state ──
   if (kgEnabled === false) {
     return (
-      <div className="p-6">
+      <div className="flex-1 overflow-y-auto p-6">
         <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Graph Explorer" }]} />
         <PageHeader
           title="Knowledge Graph"
@@ -123,7 +123,7 @@ export default function GraphExplorerPage() {
   // ── Main content ──
   return (
     <NoProjectGuard>
-    <div className="p-6">
+    <div className="flex-1 overflow-y-auto p-6">
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Graph Explorer" }]} />
       <PageHeader
         title="Knowledge Graph"

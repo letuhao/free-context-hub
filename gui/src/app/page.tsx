@@ -199,7 +199,7 @@ export default function DashboardPage() {
   // Only show after initial data load completes (avoids flash during hydration)
   if (!initialLoad && projects.length === 0) {
     return (
-      <div className="p-6">
+      <div className="flex-1 overflow-y-auto p-6">
         <div className="flex flex-col items-center justify-center min-h-[60vh] max-w-md mx-auto text-center">
           <div className="relative mb-6">
             <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center shadow-xl" style={{ boxShadow: "0 0 0 6px rgba(59,130,246,0.08), 0 0 0 12px rgba(59,130,246,0.04)" }}>
@@ -245,7 +245,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="flex-1 overflow-y-auto p-6">
       <PageHeader
         title="Dashboard"
         subtitle={`${projectId} — project overview`}

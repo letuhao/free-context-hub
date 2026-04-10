@@ -136,7 +136,7 @@ export default function LessonTypesPage() {
   const custom = types.filter((t) => !t.is_builtin);
 
   return (
-    <div className="p-6">
+    <div className="flex-1 overflow-y-auto p-6">
       <Breadcrumb items={[{ label: "Settings", href: "/settings" }, { label: "Lesson Types" }]} />
 
       <div className="flex items-center justify-between mb-6">

@@ -131,7 +131,7 @@ export default function AgentAuditPage() {
   };
 
   return (
-    <div className="p-6">
+    <div className="flex-1 overflow-y-auto p-6">
       <Breadcrumb items={[{ label: "System" }, { label: "Agent Audit" }]} />
 
       <div className="flex items-center justify-between mb-6">

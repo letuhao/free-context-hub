@@ -163,7 +163,7 @@ export default function GitHistoryPage() {
   ];
 
   return (
-    <div className="p-6">
+    <div className="flex-1 overflow-y-auto p-6">
       <Breadcrumb items={[{ label: "Project", href: "/projects" }, { label: "Git History" }]} />
       <PageHeader
         title="Git History"

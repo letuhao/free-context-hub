@@ -135,7 +135,7 @@ export default function ModelProvidersPage() {
   };
 
   return (
-    <div className="p-6">
+    <div className="flex-1 overflow-y-auto p-6">
       <Breadcrumb items={[{ label: "System", href: "/settings" }, { label: "Model Providers" }]} />
       <PageHeader
         title="Model Providers"

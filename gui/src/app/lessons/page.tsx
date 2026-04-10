@@ -299,7 +299,7 @@ export default function LessonsPage() {
 
   return (
     <NoProjectGuard>
-    <div className="p-6">
+    <div className="flex-1 overflow-y-auto p-6">
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Lessons" }]} />
       <PageHeader
         title="Lessons"

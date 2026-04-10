@@ -316,7 +316,7 @@ export default function ChatPage() {
 
   return (
     <NoProjectGuard>
-    <div className="flex h-full">
+    <div className="flex flex-1 min-h-0">
       {/* Chat History Sidebar */}
       <ChatHistorySidebar
         activeId={activeConvId}

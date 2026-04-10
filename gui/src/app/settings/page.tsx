@@ -50,7 +50,7 @@ export default function SettingsPage() {
   })) : [];
 
   return (
-    <div className="p-6">
+    <div className="flex-1 overflow-y-auto p-6">
       <Breadcrumb items={[{ label: "System", href: "/settings" }, { label: "Settings" }]} />
       <PageHeader title="Settings" subtitle="System configuration and feature status" />
 

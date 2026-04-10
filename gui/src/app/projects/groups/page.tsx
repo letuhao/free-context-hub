@@ -147,7 +147,7 @@ export default function GroupsPage() {
   };
 
   return (
-    <div className="p-6">
+    <div className="flex-1 overflow-y-auto p-6">
       <Breadcrumb items={[{ label: "Project", href: "/projects" }, { label: "Groups" }]} />
       <PageHeader
         title="Project Groups"

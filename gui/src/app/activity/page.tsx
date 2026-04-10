@@ -114,7 +114,7 @@ export default function ActivityPage() {
 
   return (
     <NoProjectGuard>
-    <div className="p-6">
+    <div className="flex-1 overflow-y-auto p-6">
       <Breadcrumb items={[{ label: "System", href: "/jobs" }, { label: "Activity" }]} />
       <PageHeader
         title="Activity & Notifications"

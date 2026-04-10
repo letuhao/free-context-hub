@@ -113,7 +113,7 @@ export default function AccessControlPage() {
   const revokedKeys = keys.filter((k) => k.revoked);
 
   return (
-    <div className="p-6">
+    <div className="flex-1 overflow-y-auto p-6">
       <Breadcrumb items={[{ label: "Settings", href: "/settings" }, { label: "Access Control" }]} />
 
       <div className="flex items-center justify-between mb-6">

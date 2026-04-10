@@ -144,7 +144,7 @@ export default function JobsPage() {
 
   return (
     <NoProjectGuard>
-    <div className="p-6">
+    <div className="flex-1 overflow-y-auto p-6">
       <Breadcrumb items={[{ label: "System", href: "/settings" }, { label: "Jobs" }]} />
       <PageHeader
         title="Jobs"
