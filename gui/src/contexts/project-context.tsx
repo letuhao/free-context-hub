@@ -32,6 +32,8 @@ interface ProjectContextValue {
   isAllProjects: boolean;
   /** Resolved array of actual project IDs (expands __ALL__ to all project IDs). */
   effectiveProjectIds: string[];
+  /** True once the projects list has been fetched at least once. */
+  projectsLoaded: boolean;
   /** Refreshes the projects list from the API. */
   refreshProjects: () => void;
 }
@@ -48,6 +50,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   const [projects, setProjects] = useState<ProjectInfo[]>([]);
   const [includeGroups, setIncludeGroupsState] = useState(false);
   const [selectedProjectIds, setSelectedIdsState] = useState<string[]>([DEFAULT_PROJECT]);
+  const [projectsLoaded, setProjectsLoaded] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -89,8 +92,8 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
 
   const refreshProjects = useCallback(() => {
     api.listProjects()
-      .then((res) => setProjects(res.projects ?? []))
-      .catch(() => { /* silent — projects list is optional */ });
+      .then((res) => { setProjects(res.projects ?? []); setProjectsLoaded(true); })
+      .catch(() => { setProjectsLoaded(true); /* silent — projects list is optional */ });
   }, []);
 
   // Fetch projects on mount.
@@ -109,7 +112,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       value={{
         projectId, setProjectId, projects, includeGroups, setIncludeGroups,
         selectedProjectIds, setSelectedProjectIds, isAllProjects, effectiveProjectIds,
-        refreshProjects,
+        projectsLoaded, refreshProjects,
       }}
     >
       {children}

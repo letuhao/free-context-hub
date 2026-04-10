@@ -3,19 +3,9 @@ import {
   getRetrievalStats, getLessonsByType, getRetrievalTimeseries,
   getMostRetrievedLessons, getDeadKnowledge, getAgentActivity,
 } from '../../services/analytics.js';
-import { resolveProjectIdOrThrow } from '../../core/index.js';
+import { resolveProjectParams } from '../middleware/resolveProjectParams.js';
 
 const router = Router();
-
-/** Parse project_ids[] from query string (comma-separated or repeated). Falls back to project_id. */
-function resolveProjectParams(query: any): { projectId?: string; projectIds?: string[] } {
-  const raw = query.project_ids;
-  if (raw) {
-    const ids = Array.isArray(raw) ? raw.map(String) : String(raw).split(',').map((s: string) => s.trim()).filter(Boolean);
-    if (ids.length > 0) return { projectIds: ids };
-  }
-  return { projectId: resolveProjectIdOrThrow(query.project_id as string | undefined) };
-}
 
 /** GET /api/analytics/overview — top-level metrics */
 router.get('/overview', async (req, res, next) => {

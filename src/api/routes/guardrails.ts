@@ -1,19 +1,14 @@
 import { Router } from 'express';
 import { checkGuardrails, resolveProjectIdOrThrow, resolveProjectIds } from '../../core/index.js';
 import { listGuardrailRules, simulateGuardrails } from '../../services/guardrails.js';
+import { resolveProjectIdOrIds } from '../middleware/resolveProjectParams.js';
 
 const router = Router();
 
 /** GET /api/guardrails/rules — list active guardrail rules for a project or projects */
 router.get('/rules', async (req, res, next) => {
   try {
-    const rawIds = req.query.project_ids;
-    let pid: string | string[];
-    if (rawIds) {
-      pid = Array.isArray(rawIds) ? rawIds.map(String) : String(rawIds).split(',').map(s => s.trim()).filter(Boolean);
-    } else {
-      pid = resolveProjectIdOrThrow(req.query.project_id as string);
-    }
+    const pid = resolveProjectIdOrIds(req.query);
     const result = await listGuardrailRules(pid, {
       limit: req.query.limit ? Number(req.query.limit) : undefined,
       offset: req.query.offset ? Number(req.query.offset) : undefined,
