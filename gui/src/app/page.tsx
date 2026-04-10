@@ -56,7 +56,7 @@ type Commit = {
 };
 
 export default function DashboardPage() {
-  const { projectId, projects, isAllProjects, effectiveProjectIds, projectsLoaded } = useProject();
+  const { projectId, setProjectId: switchProject, projects, isAllProjects, effectiveProjectIds, projectsLoaded, refreshProjects } = useProject();
   const { toast } = useToast();
   const toastRef = useRef(toast);
   toastRef.current = toast;
@@ -76,11 +76,25 @@ export default function DashboardPage() {
   const [hasMcpLesson, setHasMcpLesson] = useState(false);
   const [checklistDismissed, setChecklistDismissed] = useState(false);
 
+  // Multi-project state
+  const [allProjectsLessons, setAllProjectsLessons] = useState<any[]>([]);
+  const [allProjectsLoading, setAllProjectsLoading] = useState(false);
+
   // Re-read dismissed state when project changes
   useEffect(() => {
     try { setChecklistDismissed(localStorage.getItem(`chub_checklist_dismissed_${projectId}`) === "1"); }
     catch { setChecklistDismissed(false); }
   }, [projectId]);
+
+  // Fetch cross-project data when in All Projects mode
+  useEffect(() => {
+    if (!isAllProjects || !projectsLoaded || effectiveProjectIds.length === 0) return;
+    setAllProjectsLoading(true);
+    api.listLessonsMulti({ project_ids: effectiveProjectIds, limit: 8, sort: "created_at", order: "desc" })
+      .then((res) => setAllProjectsLessons(res.items ?? []))
+      .catch(() => setAllProjectsLessons([]))
+      .finally(() => setAllProjectsLoading(false));
+  }, [isAllProjects, projectsLoaded, effectiveProjectIds]);
 
   // FIX #3: Use ref for toast to avoid fetchAll re-creation
   // FIX #2: Reduced from 9 to 6 parallel calls (consolidated lessons queries)
@@ -255,15 +269,13 @@ export default function DashboardPage() {
           title="Dashboard"
           projectBadge={<ProjectBadge />}
           subtitle={`Overview across ${projects.length} projects`}
-          actions={<Button variant="outline" size="sm" onClick={fetchAll}>↻ Refresh</Button>}
+          actions={<Button variant="outline" size="sm" onClick={() => { refreshProjects(); }}>↻ Refresh</Button>}
         />
 
-        {/* Aggregate stats */}
+        {/* Aggregate stats (computed from projects array — no API call needed) */}
         <div className="flex gap-3 mb-5 flex-wrap">
           <StatCard value={totalLessons} label="Total Lessons" icon={<BookOpen size={18} />} />
           <StatCard value={projects.length} label="Projects" icon={<FolderOpen size={18} />} />
-          <StatCard value={stats.guardrails} label="Guardrails" icon={<Shield size={18} />} />
-          <StatCard value={stats.jobsActive} label="Active Jobs" highlight={stats.jobsActive > 0} icon={<Loader size={18} />} />
         </div>
 
         {/* Project cards */}
@@ -277,7 +289,7 @@ export default function DashboardPage() {
             return (
               <div
                 key={p.project_id}
-                onClick={() => router.push("/")}
+                onClick={() => switchProject(p.project_id)}
                 className="border border-zinc-800 rounded-lg bg-zinc-900 p-4 hover:border-zinc-700 cursor-pointer transition-colors"
               >
                 <div className="flex items-center justify-between mb-3">
@@ -315,13 +327,20 @@ export default function DashboardPage() {
         </div>
 
         {/* Cross-project recent lessons */}
-        {recentLessons.length > 0 && (
+        {allProjectsLoading && (
+          <div className="border border-zinc-800 rounded-lg bg-zinc-900 p-4">
+            <div className="animate-pulse space-y-3">
+              {[1, 2, 3].map(i => <div key={i} className="h-8 bg-zinc-800 rounded" />)}
+            </div>
+          </div>
+        )}
+        {!allProjectsLoading && allProjectsLessons.length > 0 && (
           <div className="border border-zinc-800 rounded-lg bg-zinc-900 overflow-hidden">
             <div className="px-4 py-3 border-b border-zinc-800">
               <h3 className="text-sm font-semibold text-zinc-300">Recent Lessons (All Projects)</h3>
             </div>
             <div className="px-4 py-1">
-              {recentLessons.map((l: any) => {
+              {allProjectsLessons.map((l: any) => {
                 const lProject = projects.find(p => p.project_id === l.project_id);
                 const lColor = getColorClasses(lProject?.color);
                 return (
