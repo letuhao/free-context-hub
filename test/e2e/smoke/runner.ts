@@ -10,9 +10,9 @@ import path from 'node:path';
 import { bootstrapContext, teardownContext, runTests, generateReport } from '../shared/testContext.js';
 import type { TestFn } from '../shared/testContext.js';
 
-// Test imports (will be added in Sprint 2-4)
-// import { allApiSmokeTests } from './api-smoke.test.js';
-// import { allMcpSmokeTests } from './mcp-smoke.test.js';
+// Test imports
+import { allApiSmokeTests } from './api-smoke.test.js';
+// import { allMcpSmokeTests } from './mcp-smoke.test.js';  // Sprint 4
 
 async function main() {
   const startMs = Date.now();
@@ -24,15 +24,11 @@ async function main() {
   const ctx = await bootstrapContext({ withMcp: true });
 
   const allTests: TestFn[] = [
-    // ...allApiSmokeTests,   // Sprint 2
+    ...allApiSmokeTests,
     // ...allMcpSmokeTests,   // Sprint 4
   ];
 
-  if (allTests.length === 0) {
-    console.log('  No smoke tests registered yet. Add tests in Sprint 2-4.\n');
-    await teardownContext(ctx);
-    return;
-  }
+  console.log(`  ${allTests.length} tests registered.\n`);
 
   let results;
   try {
