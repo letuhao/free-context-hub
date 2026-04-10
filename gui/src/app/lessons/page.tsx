@@ -30,7 +30,7 @@ type SortField = "created_at" | "title" | "lesson_type" | "status";
 type SortOrder = "asc" | "desc";
 type SearchMode = "text" | "semantic";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 12;
 
 export default function LessonsPage() {
   const { projectId, includeGroups } = useProject();

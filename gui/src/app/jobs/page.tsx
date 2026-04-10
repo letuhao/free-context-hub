@@ -52,7 +52,7 @@ export default function JobsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const pageSize = 20;
+  const pageSize = 12;
 
   const fetchJobs = useCallback(async () => {
     try {
@@ -223,7 +223,7 @@ export default function JobsPage() {
           )}
         />
         {totalCount > pageSize && (
-          <Pagination page={page} totalPages={Math.ceil(totalCount / pageSize)} totalCount={totalCount} pageSize={pageSize} onPageChange={(p) => { setPage(p); window.scrollTo(0, 0); }} />
+          <Pagination page={page} totalPages={Math.ceil(totalCount / pageSize)} totalCount={totalCount} pageSize={pageSize} onPageChange={(p) => { setPage(p);}} />
         )}
         </>
       )}

@@ -64,7 +64,7 @@ export default function AgentAuditPage() {
   const [tab, setTab] = useState("");
   const [days, setDays] = useState(7);
   const [page, setPage] = useState(1);
-  const pageSize = 20;
+  const pageSize = 12;
 
   // Agent detail slide-over
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);

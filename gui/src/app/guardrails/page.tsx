@@ -43,7 +43,7 @@ export default function GuardrailsPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const pageSize = 20;
+  const pageSize = 12;
 
   // Mode toggle
   const [mode, setMode] = useState<"test" | "block">("test");
@@ -356,7 +356,7 @@ export default function GuardrailsPage() {
             rowKey={(r) => r.lesson_id}
           />
           {totalCount > pageSize && (
-            <Pagination page={page} totalPages={Math.ceil(totalCount / pageSize)} totalCount={totalCount} pageSize={pageSize} onPageChange={(p) => { setPage(p); window.scrollTo(0, 0); }} />
+            <Pagination page={page} totalPages={Math.ceil(totalCount / pageSize)} totalCount={totalCount} pageSize={pageSize} onPageChange={(p) => { setPage(p);}} />
           )}
         </>
       )}

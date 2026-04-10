@@ -53,7 +53,7 @@ export default function ActivityPage() {
   const [timeRange, setTimeRange] = useState<TimeRange>("today");
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const pageSize = 20;
+  const pageSize = 12;
   const [notifSettings, setNotifSettings] = useState<Record<string, boolean>>(
     Object.fromEntries(NOTIF_TOGGLES.map((t) => [t.key, t.default]))
   );
@@ -211,7 +211,7 @@ export default function ActivityPage() {
             </div>
           )}
           {totalCount > pageSize && (
-            <Pagination page={page} totalPages={Math.ceil(totalCount / pageSize)} totalCount={totalCount} pageSize={pageSize} onPageChange={(p) => { setPage(p); window.scrollTo(0, 0); }} />
+            <Pagination page={page} totalPages={Math.ceil(totalCount / pageSize)} totalCount={totalCount} pageSize={pageSize} onPageChange={(p) => { setPage(p);}} />
           )}
         </div>
 
