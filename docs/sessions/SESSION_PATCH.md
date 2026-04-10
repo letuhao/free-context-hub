@@ -1,91 +1,109 @@
 ---
-id: CH-E2E-MULTIPROJECT
+id: CH-PHASE9-IN-PROGRESS
 date: 2026-04-11
-module: E2E-Tests-and-MultiProject-Design
-phase: E2E complete, Multi-project V2 designed
+module: Phase9-MultiProject-UX
+phase: Sprints 9.1–9.5 complete
 ---
 
-# Session Patch — 2026-04-10/11 (Session 4)
+# Session Patch — 2026-04-10/11 (Sessions 4+5)
 
 ## Where We Are
-**E2E test suite complete (198/198 pass). Multi-project UX redesign designed (8 V2 drafts). Layout fixes shipped.**
+**Phase 9 in progress — 5 of 10 sprints done.** Multi-project foundation, UI components, and two major page redesigns shipped. Branch: `feature/multi-project-ux`.
 
-## What Was Done This Session
+## What Was Done (Session 4 — 2026-04-10)
 
-### Phase 8D — Deferred Improvements (1 commit)
-- Feature toggles BE: `isFeatureEnabled()` service with 30s cache, gates git/KG/distillation per-project
-- Role enforcement: `requireRole()` middleware (reader/writer/admin) on all write routes
-- Rich editor: RichEditor component in lesson detail edit mode
-- Dashboard onboarding checklist (4 items, data-driven, dismissible)
-- Code review: 4 issues found and fixed (reader GET access, promote route, stale checklist, orphaned comment)
+### Phase 8D — Deferred Improvements
+- Feature toggles BE, role enforcement middleware, rich editor in detail, onboarding checklist
+- Code review: 4 issues found and fixed
 
-### TS Strict Fixes (1 commit)
-- Fixed 11 pre-existing `req.params` type errors (`string | string[]` → `String()`) that blocked Docker build
+### E2E Test Suite (198 tests, all passing)
+- Layer 1: API smoke (75), GUI smoke (23), MCP smoke (36)
+- Layer 2: API scenarios (34), GUI scenarios (21), Agent visual (9)
+- Infrastructure: Playwright, shared utilities, 3 runners
 
-### E2E Test Suite (9 sprints, 9 commits)
-- **Layer 1 — Smoke (134 tests):** API smoke (75 endpoints), GUI smoke (23 pages + screenshots), MCP smoke (36 tools)
-- **Layer 2 — Scenarios (64 tests):** Auth roles (7), Lessons CRUD (8), Guardrails (6), Documents (5), Search (4), System (3), GUI Dashboard (5), GUI Lessons (7), GUI Guardrails (4), GUI Settings (5), Agent MCP→GUI (9)
-- **Total: 198 tests, all passing**
-- Infrastructure: Playwright, shared test utilities, 3 runners, screenshot baselines
+### Layout Fixes
+- `h-screen` + component-level scroll on all 24 pages
+- Page size 20→12 for tables, minor polish
 
-### Layout Fixes (3 commits)
-- `h-screen` + component-level scroll on all 24 pages (no more page-level vertical scroll)
-- Page size 20→12 for tables (fits 1080p viewport with pagination)
-- Minor polish: badge contrast, compact stat cards, neutral "Coming Soon" tags
+### Multi-Project Design Phase
+- 23-page audit, 8 V2 draft HTMLs
+- MemPalace investigation and comparison
 
-### Multi-Project UX Redesign — Design Phase (2 commits)
-- Full 23-page audit: which pages need cross-project view, which must stay per-project
-- 8 V2 draft HTMLs: PageHeader, Project Selector, Dashboard, Lessons, Analytics, Graph Explorer, Guardrails, Review Inbox
-- Key decisions: Graph Explorer stays per-project (company-wide graph is useless), "All Projects" is first-class mode
+## What Was Done (Session 5 — 2026-04-11)
 
-### MemPalace Investigation
-- Cloned and analyzed milla-jovovich/mempalace (38K stars, ChromaDB-based memory system)
-- Compared with free-context-hub: different philosophies (raw recall vs structured knowledge management)
-- Conclusion: benchmark gap is storage philosophy, not technology — ChromaDB won't help us
+### Sprint 9.1 — Context & API Foundation ✅
+- BE: Extended 6 services + 6 routes with `project_ids[]` support
+- BE: Shared `resolveProjectParams` middleware
+- FE: `selectedProjectIds`, `isAllProjects`, `effectiveProjectIds` in context
+- FE: 9 `*Multi` API methods in api.ts
+- Review: 5 issues fixed (shared helper, `projectsLoaded` guard)
 
-## Commit Log (this session)
+### Sprint 9.2 — ProjectSelector V2 + PageHeader V2 ✅
+- "All Projects" first-class option, checkbox multi-select, 3 trigger modes
+- `projectBadge` prop on PageHeader
+- Review: 2 issues fixed (aria-label, uncheck-last → All Projects)
+
+### Sprint 9.3 — NoProjectGuard V2 + ProjectBadge ✅
+- `ProjectBadge` component (3 render modes)
+- `requireSingleProject` prop with amber warning + inline project picker
+- Guarded: Graph Explorer, Code Search, Sources, Project Settings
+- Review: 4 issues fixed (guard before early returns, grammar, overflow, unused import)
+
+### Sprint 9.4 — Dashboard V2 ✅
+- All Projects: aggregate stats, project cards with health scores, cross-project activity
+- Single project: ProjectBadge in header
+- Review: 4 issues fixed (card click, multi-project fetch, loading state, stats source)
+
+### Sprint 9.5 — Lessons V2 ✅
+- All Projects: Project column with color badges, listLessonsMulti, cross-project search
+- Disabled: Add/Import/Export/bulk actions in All Projects mode
+- Review: 5 issues fixed (Tailwind purge, useMemo, bulk ops, empty state, unused import)
+
+## Commit Log (feature/multi-project-ux branch)
 ```
-7982dda [Design] V2 drafts: graph explorer, guardrails, review inbox + full page audit
-557381e [Design] V2 draft HTMLs — multi-project UX redesign + user review brief
-31ab149 [E2E] Sprint 9 — Agent MCP→GUI visual tests (9/9 pass)
-2ac2e34 [E2E] Sprint 8 — GUI scenarios: guardrails + settings (9/9 pass)
-fd83845 [E2E] Sprint 7 — GUI scenarios: dashboard + lessons (12/12 pass)
-8d64231 [E2E] Sprint 6 — API scenarios: documents, search, system (34/34 pass)
-d32d16e [E2E] Sprint 5 — API scenario tests: auth, lessons, guardrails (22/22 pass)
-0013a8a [GUI] Minor layout polish — badge contrast, compact stat cards, neutral tags
-4f7f6b6 [GUI] Reduce page size 20→12 to fit viewport, remove window.scrollTo
-2c43387 [GUI] Fix viewport layout — component-level scroll instead of page scroll
-2298767 [E2E] Sprint 4 — MCP tool smoke tests, 111/111 pass (full Layer 1)
-5cacc7e [E2E] Sprint 3 — GUI smoke tests, 23/23 pass + screenshots
-991c191 [E2E] Sprint 2 — API smoke tests, 75/75 pass
-256b58b [E2E] Sprint 1 — test infrastructure setup, shared utilities, smoke runner
-904f63b Fix TS strict errors — String() cast on req.params to satisfy Express types
-60b9ee5 [Phase8D] Deferred improvements — feature toggles BE, role enforcement, rich editor, onboarding checklist
+4b7fec7 [9.5] Review fixes — Tailwind purge, useMemo, disabled bulk ops, empty state
+1e5b1f8 [9.5] Lessons V2 — project column, cross-project fetch, disabled actions
+1ca65e5 [9.4] Review fixes — card click switches project, multi-project fetch, loading state
+fefb25e [9.4] Dashboard V2 — All Projects mode with project cards + aggregate stats
+7f30baf [9.3] Review fixes — guard before early returns, grammar, overflow, unused import
+1b2cfaa [9.3] NoProjectGuard V2 + ProjectBadge — per-project enforcement + reusable badge
+8243969 [9.2] Review fixes — aria-label restored, uncheck-last switches to All Projects
+30d4630 [9.2] ProjectSelector V2 + PageHeader V2 — multi-select UI foundation
+db48662 [9.1] Review fixes — shared resolveProjectParams helper, projectsLoaded guard
+3f7945e [9.1] Context & API Foundation — multi-project support across 14 files
+2861619 [Phase9] Task breakdown — 10 sprints for multi-project UX redesign
 ```
 
-## What's Next
+## What's Next (Sprint 9.6–9.10)
 
-### Phase 9: Multi-Project UX Redesign (NEW — replaces original Phase 9)
-Branch: `feature/multi-project-ux`
-Design: `docs/gui-drafts/v2/` (8 draft HTMLs + audit)
+### Sprint 9.6 — Review Inbox V2
+- Group pending lessons by project with per-project approve/reject
+- Collapsible project sections
 
-**Implementation scope:**
-1. Project selector V2 — multi-select, "All Projects" mode, Ctrl+N shortcuts
-2. PageHeader V2 — project badge in breadcrumb, "All Projects" indicator
-3. Backend: cross-project query support (`project_ids` array param on list/search endpoints)
-4. Dashboard V2 — aggregate stats + project cards + cross-project activity
-5. Lessons V2 — project column, cross-project search
-6. Guardrails V2 — cross-project check, project column in rules
-7. Review Inbox V2 — grouped by project, per-project batch actions
-8. Analytics V2 — per-project comparison table + stacked charts
-9. Graph Explorer V2 — enforce per-project, "All Projects" warning
-10. Minor pages — project badge in header for remaining pages
+### Sprint 9.7 — Guardrails V2
+- Cross-project check with per-project BLOCKED/ALLOWED results
+- Project column in rules table
 
-### Phase 10: Multi-Format Ingestion (moved from Phase 9)
-- PDF/DOCX/Image ingestion pipelines
-- Document parsing and chunk extraction
-- Lesson generation from uploaded documents
+### Sprint 9.8 — Analytics V2
+- Per-project comparison table
+- Aggregate stat cards with trends
 
-### Phase 11: Knowledge Portability (moved from Phase 10)
-- Import/export exchange hub
-- Cross-instance sync
+### Sprint 9.9 — Minor Pages (11 pages)
+- ProjectBadge in headers for Chat, Documents, Getting Started, Generated Docs, Git History
+- Multi-project fetch for Jobs, Activity, Agent Audit
+
+### Sprint 9.10 — Graph Explorer V2 + E2E Cleanup
+- Polished per-project warning with inline picker
+- 30 new multi-project E2E tests (target: 228+ total)
+
+## Key Files Changed
+- `gui/src/contexts/project-context.tsx` — multi-project state + useMemo
+- `gui/src/components/project-selector.tsx` — V2 multi-select
+- `gui/src/components/project-badge.tsx` — NEW reusable badge
+- `gui/src/components/no-project-guard.tsx` — V2 with requireSingleProject
+- `gui/src/components/ui/page-header.tsx` — projectBadge prop
+- `gui/src/app/page.tsx` — Dashboard V2 with All Projects mode
+- `gui/src/app/lessons/page.tsx` — Lessons V2 with project column
+- `src/api/middleware/resolveProjectParams.ts` — NEW shared helper
+- `src/services/analytics.ts` — projectFilter helper, all functions accept projectIds[]
+- 6 API routes extended with project_ids[] param

@@ -25,14 +25,14 @@ The current UI treats multi-project as an afterthought — users can only view o
 
 ## Sprint Breakdown (10 sprints)
 
-| Sprint | Name | Scope | Effort | Depends |
-|--------|------|-------|--------|---------|
-| 9.1 | Context & API Foundation | BE: 6 multi-project endpoints. FE: context + api.ts | Large | — |
-| 9.2 | ProjectSelector V2 + PageHeader V2 | FE: multi-select selector, project badge prop | Medium | 9.1 |
-| 9.3 | NoProjectGuard V2 + ProjectBadge | FE: reusable badge, per-project-only guards | Small | 9.1, 9.2 |
-| 9.4 | Dashboard V2 | FE: aggregate stats + project cards | Medium | 9.1–9.3 |
-| 9.5 | Lessons V2 | FE: project column, cross-project search | Medium | 9.1–9.3 |
-| 9.6 | Review Inbox V2 | FE: grouped by project, per-project batch | Medium | 9.1–9.3 |
+| Sprint | Name | Scope | Effort | Status |
+|--------|------|-------|--------|--------|
+| 9.1 | Context & API Foundation | BE: 6 multi-project endpoints. FE: context + api.ts | Large | ✅ |
+| 9.2 | ProjectSelector V2 + PageHeader V2 | FE: multi-select selector, project badge prop | Medium | ✅ |
+| 9.3 | NoProjectGuard V2 + ProjectBadge | FE: reusable badge, per-project-only guards | Small | ✅ |
+| 9.4 | Dashboard V2 | FE: aggregate stats + project cards | Medium | ✅ |
+| 9.5 | Lessons V2 | FE: project column, cross-project search | Medium | ✅ |
+| 9.6 | Review Inbox V2 | FE: grouped by project, per-project batch | Medium | Next |
 | 9.7 | Guardrails V2 | FE+BE: cross-project check, project column | Medium | 9.1–9.3 |
 | 9.8 | Analytics V2 | FE: per-project comparison, aggregate charts | Large | 9.1–9.3 |
 | 9.9 | Minor Pages (11 pages) | FE: badges + multi-project fetch for 3 pages | Small | 9.1–9.3 |
