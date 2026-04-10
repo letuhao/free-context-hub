@@ -81,6 +81,33 @@ When playing each role, shift perspective accordingly. Architect thinks about sy
 
 ---
 
+## Test Workflow (E2E / QC tasks)
+
+For writing tests (not features), use this lighter workflow instead of the 9-phase task workflow.
+
+```
+Phase     │ What Happens
+──────────┼──────────────────────────────────────
+1. SETUP  │ Install deps, create shared utilities, verify infra runs
+2. WRITE  │ Write tests (one sprint at a time from test plan)
+3. RUN    │ Execute tests against live stack (docker compose)
+4. FIX    │ Triage failures: test bug vs real bug, fix both
+5. REPORT │ Generate report, update session patch, commit
+```
+
+Repeat phases 2–5 per sprint. No design review or PO sign-off needed.
+
+**Status tracking:** `[ ]` not started · `[S]` setup · `[W]` writing · `[R]` running · `[F]` fixing · `[✓]` done
+
+**Failure triage:**
+- **Test bug** — wrong selector, bad assertion, missing cleanup → fix the test
+- **Real bug** — endpoint 500s, page crashes, wrong data → fix the product code, then re-run
+- **Infra issue** — Docker not ready, embeddings unavailable → mark test as `skip`, don't fail the suite
+
+**Test plan:** `docs/qc/e2e-test-plan.md` — Layer 1 (smoke) + Layer 2 (scenarios), 191 total tests.
+
+---
+
 ## Architecture Overview
 
 ```

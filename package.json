@@ -16,6 +16,11 @@
     "test": "tsx --test src/services/gitCommitFileParse.test.ts src/services/gitLessonProposalUpsert.test.ts",
     "test:integration": "tsx src/qc/integrationTestRunner.ts",
     "smoke-test": "tsx src/smoke/smokeTest.ts",
+    "test:e2e:smoke": "tsx test/e2e/smoke/runner.ts",
+    "test:e2e:api": "tsx test/e2e/api/runner.ts",
+    "test:e2e:gui": "npx playwright test --config=test/e2e/gui/playwright.config.ts",
+    "test:e2e:agent": "tsx test/e2e/agent/runner.ts",
+    "test:e2e": "npm run test:e2e:smoke && npm run test:e2e:api && npm run test:e2e:gui && npm run test:e2e:agent",
     "bench:phase5": "tsx src/smoke/phase5ValidationBenchmark.ts",
     "validate:phase5-worker": "tsx src/smoke/phase5WorkerValidation.ts",
     "qc:rag": "tsx src/qc/ragQcRunner.ts",
@@ -70,6 +75,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^25.5.0",
