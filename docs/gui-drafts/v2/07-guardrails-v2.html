@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft V2: Guardrails — Cross-Project View</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 font-sans">
+  <div class="flex h-screen">
+    <aside class="shrink-0 w-56 border-r border-zinc-800 bg-zinc-950 flex flex-col">
+      <div class="px-4 py-4 border-b border-zinc-800">
+        <h1 class="text-sm font-semibold">ContextHub</h1>
+      </div>
+      <div class="px-3 py-2">
+        <button class="w-full flex items-center gap-2.5 px-2.5 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-left">
+          <div class="w-7 h-7 rounded-md bg-gradient-to-r from-blue-600 via-purple-600 to-emerald-600 flex items-center justify-center shrink-0">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </div>
+          <div class="flex-1">
+            <div class="text-xs text-zinc-200 font-medium">All Projects</div>
+            <div class="text-[10px] text-zinc-600">4 projects</div>
+          </div>
+        </button>
+      </div>
+      <nav class="flex-1 px-2 py-1 overflow-y-auto">
+        <a class="flex items-center gap-2.5 rounded-md text-sm px-3 py-1.5 bg-zinc-800 text-zinc-100">🛡️ Guardrails</a>
+      </nav>
+    </aside>
+
+    <main class="flex-1 flex flex-col min-h-0">
+      <div class="flex-1 overflow-y-auto p-6">
+
+        <!-- Header -->
+        <div class="border-b border-zinc-800 pb-4 mb-5">
+          <div class="flex items-center gap-1.5 text-xs text-zinc-500 mb-1.5">
+            <span class="w-2 h-2 rounded-full bg-gradient-to-r from-blue-500 via-purple-500 to-emerald-500"></span>
+            <span class="text-zinc-400 font-medium">All Projects</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-zinc-600"><polyline points="9 18 15 12 9 6"/></svg>
+            <span class="text-zinc-400">Guardrails</span>
+          </div>
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="flex items-center gap-2">
+                <h1 class="text-lg font-semibold text-zinc-100">Guardrails</h1>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400">89 rules across 4 projects</span>
+              </div>
+              <p class="text-sm text-zinc-500 mt-0.5">Safety rules enforced before risky AI agent actions.</p>
+            </div>
+            <button class="rounded-md px-3.5 py-1.5 text-sm bg-zinc-100 text-zinc-900">+ Add Guardrail</button>
+          </div>
+        </div>
+
+        <!-- ═══ TEST ACTION (cross-project) ═══ -->
+        <div class="border border-zinc-800 rounded-lg bg-zinc-900 p-4 mb-5">
+          <h3 class="text-sm font-medium text-zinc-300 mb-2">Test Action Across All Projects</h3>
+          <p class="text-[10px] text-zinc-500 mb-3">Check if an action would be blocked by any project's guardrails.</p>
+          <div class="flex gap-2">
+            <input type="text" value="deploy to production" placeholder="Enter an action to test..." class="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-300 outline-none focus:border-zinc-600" />
+            <button class="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm text-white font-medium">Check All</button>
+          </div>
+
+          <!-- Cross-project results -->
+          <div class="mt-3 space-y-2">
+            <div class="flex items-center gap-3 px-3 py-2 bg-red-500/5 border border-red-500/20 rounded-lg">
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 font-medium">BLOCKED</span>
+              <div class="flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                <span class="text-xs text-zinc-300">free-context-hub</span>
+              </div>
+              <span class="text-xs text-zinc-500 flex-1">Must run full test suite before deploying</span>
+            </div>
+            <div class="flex items-center gap-3 px-3 py-2 bg-red-500/5 border border-red-500/20 rounded-lg">
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 font-medium">BLOCKED</span>
+              <div class="flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                <span class="text-xs text-zinc-300">my-saas-app</span>
+              </div>
+              <span class="text-xs text-zinc-500 flex-1">Deploy only during maintenance window (Sat 2am-4am)</span>
+            </div>
+            <div class="flex items-center gap-3 px-3 py-2 bg-emerald-500/5 border border-emerald-500/20 rounded-lg">
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-medium">ALLOWED</span>
+              <div class="flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-purple-500"></span>
+                <span class="text-xs text-zinc-300">internal-tools</span>
+              </div>
+              <span class="text-xs text-zinc-500 flex-1">No matching guardrails</span>
+            </div>
+            <div class="flex items-center gap-3 px-3 py-2 bg-emerald-500/5 border border-emerald-500/20 rounded-lg">
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-medium">ALLOWED</span>
+              <div class="flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                <span class="text-xs text-zinc-300">mobile-app</span>
+              </div>
+              <span class="text-xs text-zinc-500 flex-1">No guardrails configured</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══ RULES TABLE (cross-project with project column) ═══ -->
+        <div class="border border-zinc-800 rounded-lg overflow-hidden">
+          <table class="w-full">
+            <thead>
+              <tr class="border-b border-zinc-800 bg-zinc-900/50">
+                <th class="text-left text-[11px] text-zinc-500 font-medium px-4 py-2.5">Rule</th>
+                <th class="text-left text-[11px] text-zinc-500 font-medium px-4 py-2.5 w-[120px]">Project</th>
+                <th class="text-left text-[11px] text-zinc-500 font-medium px-4 py-2.5 w-[100px]">Trigger</th>
+                <th class="text-left text-[11px] text-zinc-500 font-medium px-4 py-2.5 w-[80px]">Status</th>
+                <th class="text-left text-[11px] text-zinc-500 font-medium px-4 py-2.5 w-[80px]">Blocks</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="border-b border-zinc-800/50 hover:bg-zinc-900/30">
+                <td class="px-4 py-2.5 text-xs text-zinc-300">Must run full test suite before deploying to staging</td>
+                <td class="px-4 py-2.5">
+                  <span class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">
+                    <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> free-context-hub
+                  </span>
+                </td>
+                <td class="px-4 py-2.5 text-[10px] text-zinc-500 font-mono">deploy</td>
+                <td class="px-4 py-2.5"><span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400">active</span></td>
+                <td class="px-4 py-2.5 text-xs text-zinc-400 font-medium">23</td>
+              </tr>
+              <tr class="border-b border-zinc-800/50 hover:bg-zinc-900/30">
+                <td class="px-4 py-2.5 text-xs text-zinc-300">Database migration only in maintenance window</td>
+                <td class="px-4 py-2.5">
+                  <span class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> my-saas-app
+                  </span>
+                </td>
+                <td class="px-4 py-2.5 text-[10px] text-zinc-500 font-mono">migration</td>
+                <td class="px-4 py-2.5"><span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400">active</span></td>
+                <td class="px-4 py-2.5 text-xs text-zinc-400 font-medium">8</td>
+              </tr>
+              <tr class="border-b border-zinc-800/50 hover:bg-zinc-900/30">
+                <td class="px-4 py-2.5 text-xs text-zinc-300">Never push directly to main without PR review</td>
+                <td class="px-4 py-2.5">
+                  <span class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">
+                    <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> free-context-hub
+                  </span>
+                </td>
+                <td class="px-4 py-2.5 text-[10px] text-zinc-500 font-mono">git push</td>
+                <td class="px-4 py-2.5"><span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400">active</span></td>
+                <td class="px-4 py-2.5 text-xs text-zinc-400 font-medium">15</td>
+              </tr>
+              <tr class="hover:bg-zinc-900/30">
+                <td class="px-4 py-2.5 text-xs text-zinc-300">Docker healthcheck timeout minimum 30s</td>
+                <td class="px-4 py-2.5">
+                  <span class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400">
+                    <span class="w-1.5 h-1.5 rounded-full bg-purple-500"></span> internal-tools
+                  </span>
+                </td>
+                <td class="px-4 py-2.5 text-[10px] text-zinc-500 font-mono">docker</td>
+                <td class="px-4 py-2.5"><span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400">active</span></td>
+                <td class="px-4 py-2.5 text-xs text-zinc-400 font-medium">2</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</body>
+</html>

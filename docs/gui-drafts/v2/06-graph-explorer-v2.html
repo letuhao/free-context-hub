@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft V2: Knowledge Graph — Project-Scoped</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 font-sans">
+  <div class="flex h-screen">
+
+    <!-- Sidebar -->
+    <aside class="shrink-0 w-56 border-r border-zinc-800 bg-zinc-950 flex flex-col">
+      <div class="px-4 py-4 border-b border-zinc-800">
+        <h1 class="text-sm font-semibold">ContextHub</h1>
+        <p class="text-[11px] text-zinc-600">Knowledge Dashboard</p>
+      </div>
+      <!-- Single project selected -->
+      <div class="px-3 py-2">
+        <button class="w-full flex items-center gap-2.5 px-2.5 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-left">
+          <div class="w-7 h-7 rounded-md bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-[11px] font-bold text-white shrink-0">FC</div>
+          <div class="flex-1 min-w-0">
+            <div class="text-xs text-zinc-200 font-medium truncate">free-context-hub</div>
+            <div class="text-[10px] text-zinc-600">506 lessons</div>
+          </div>
+        </button>
+      </div>
+      <nav class="flex-1 px-2 py-1 overflow-y-auto">
+        <div class="mt-3 px-3 py-1 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Knowledge</div>
+        <a class="flex items-center gap-2.5 rounded-md text-sm px-3 py-1.5 bg-zinc-800 text-zinc-100">🔗 Graph Explorer</a>
+      </nav>
+    </aside>
+
+    <!-- Main -->
+    <main class="flex-1 flex flex-col min-h-0">
+      <div class="flex-1 overflow-y-auto p-6">
+
+        <!-- Header: project-scoped -->
+        <div class="border-b border-zinc-800 pb-4 mb-5">
+          <div class="flex items-center gap-1.5 text-xs text-zinc-500 mb-1.5">
+            <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+            <span class="text-zinc-400 font-medium">free-context-hub</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-zinc-600"><polyline points="9 18 15 12 9 6"/></svg>
+            <span class="text-zinc-400">Knowledge Graph</span>
+          </div>
+          <div class="flex items-start justify-between">
+            <div>
+              <h1 class="text-lg font-semibold text-zinc-100">Knowledge Graph</h1>
+              <p class="text-sm text-zinc-500 mt-0.5">Explore symbols, dependencies, and relationships in this project.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button class="rounded-md px-2.5 py-1 text-xs border border-zinc-700 text-zinc-300">Re-index</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══ GRAPH STATS (project-scoped) ═══ -->
+        <div class="flex gap-3 mb-5">
+          <div class="flex-1 px-4 py-3 border border-zinc-800 rounded-lg bg-zinc-900">
+            <div class="text-xl font-bold text-zinc-100">234</div>
+            <div class="text-[11px] text-zinc-500 mt-0.5">Symbols</div>
+          </div>
+          <div class="flex-1 px-4 py-3 border border-zinc-800 rounded-lg bg-zinc-900">
+            <div class="text-xl font-bold text-zinc-100">48</div>
+            <div class="text-[11px] text-zinc-500 mt-0.5">Files</div>
+          </div>
+          <div class="flex-1 px-4 py-3 border border-zinc-800 rounded-lg bg-zinc-900">
+            <div class="text-xl font-bold text-zinc-100">512</div>
+            <div class="text-[11px] text-zinc-500 mt-0.5">Relationships</div>
+          </div>
+          <div class="flex-1 px-4 py-3 border border-zinc-800 rounded-lg bg-zinc-900">
+            <div class="text-xl font-bold text-zinc-100">18</div>
+            <div class="text-[11px] text-zinc-500 mt-0.5">Lessons Linked</div>
+          </div>
+        </div>
+
+        <!-- ═══ SEARCH + GRAPH AREA ═══ -->
+        <div class="grid grid-cols-3 gap-4 mb-5">
+          <!-- Left: Search & Filters -->
+          <div class="col-span-1 border border-zinc-800 rounded-lg bg-zinc-900 p-4">
+            <h3 class="text-sm font-medium text-zinc-300 mb-3">Search Symbols</h3>
+            <div class="flex items-center gap-2 px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg mb-3">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-zinc-500"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" value="addLesson" placeholder="Search functions, classes..." class="bg-transparent text-xs text-zinc-300 outline-none w-full" />
+            </div>
+
+            <!-- Search results -->
+            <div class="space-y-1">
+              <div class="px-3 py-2 bg-blue-500/10 border border-blue-500/20 rounded-lg cursor-pointer">
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 font-mono">fn</span>
+                  <span class="text-xs text-zinc-200 font-mono">addLesson</span>
+                </div>
+                <div class="text-[10px] text-zinc-500 mt-1">src/services/lessons.ts:180</div>
+              </div>
+              <div class="px-3 py-2 hover:bg-zinc-800/50 rounded-lg cursor-pointer">
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 font-mono">type</span>
+                  <span class="text-xs text-zinc-400 font-mono">AddLessonParams</span>
+                </div>
+                <div class="text-[10px] text-zinc-500 mt-1">src/services/lessons.ts:140</div>
+              </div>
+              <div class="px-3 py-2 hover:bg-zinc-800/50 rounded-lg cursor-pointer">
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-mono">route</span>
+                  <span class="text-xs text-zinc-400 font-mono">POST /api/lessons</span>
+                </div>
+                <div class="text-[10px] text-zinc-500 mt-1">src/api/routes/lessons.ts:48</div>
+              </div>
+            </div>
+
+            <!-- Filters -->
+            <h4 class="text-[11px] text-zinc-500 font-medium mt-4 mb-2">Filter by type</h4>
+            <div class="flex flex-wrap gap-1">
+              <button class="px-2 py-0.5 text-[10px] rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">functions</button>
+              <button class="px-2 py-0.5 text-[10px] rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">types</button>
+              <button class="px-2 py-0.5 text-[10px] rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">routes</button>
+              <button class="px-2 py-0.5 text-[10px] rounded-full text-zinc-500 border border-zinc-800">classes</button>
+              <button class="px-2 py-0.5 text-[10px] rounded-full text-zinc-500 border border-zinc-800">imports</button>
+            </div>
+
+            <!-- Connected lessons -->
+            <h4 class="text-[11px] text-zinc-500 font-medium mt-4 mb-2">Linked Lessons</h4>
+            <div class="space-y-1">
+              <div class="px-2 py-1.5 rounded bg-zinc-800/50 cursor-pointer hover:bg-zinc-800">
+                <div class="text-[10px] text-zinc-300">Lesson CRUD must validate project_id</div>
+                <div class="text-[10px] text-zinc-600">guardrail · 3 symbols linked</div>
+              </div>
+              <div class="px-2 py-1.5 rounded bg-zinc-800/50 cursor-pointer hover:bg-zinc-800">
+                <div class="text-[10px] text-zinc-300">Distillation generates summary on add</div>
+                <div class="text-[10px] text-zinc-600">decision · 2 symbols linked</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Graph Visualization -->
+          <div class="col-span-2 border border-zinc-800 rounded-lg bg-zinc-900 p-4 min-h-[400px] flex flex-col">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-sm font-medium text-zinc-300">Dependency Graph</h3>
+              <div class="flex gap-1">
+                <button class="px-2 py-0.5 text-[10px] rounded bg-zinc-800 text-zinc-400">1 hop</button>
+                <button class="px-2 py-0.5 text-[10px] rounded bg-zinc-700 text-zinc-300">2 hops</button>
+                <button class="px-2 py-0.5 text-[10px] rounded bg-zinc-800 text-zinc-400">3 hops</button>
+              </div>
+            </div>
+
+            <!-- Placeholder graph visualization -->
+            <div class="flex-1 flex items-center justify-center relative">
+              <!-- Center node -->
+              <div class="absolute" style="top: 50%; left: 50%; transform: translate(-50%, -50%);">
+                <div class="w-20 h-20 rounded-full bg-blue-600/20 border-2 border-blue-500 flex items-center justify-center">
+                  <div class="text-center">
+                    <div class="text-[10px] font-bold text-blue-400">addLesson</div>
+                    <div class="text-[8px] text-zinc-500">fn · 180 lines</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Connected nodes -->
+              <div class="absolute" style="top: 15%; left: 30%;">
+                <div class="w-16 h-16 rounded-full bg-purple-600/10 border border-purple-500/50 flex items-center justify-center">
+                  <div class="text-center">
+                    <div class="text-[9px] text-purple-400">embedTexts</div>
+                    <div class="text-[7px] text-zinc-600">fn</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="absolute" style="top: 20%; left: 65%;">
+                <div class="w-16 h-16 rounded-full bg-emerald-600/10 border border-emerald-500/50 flex items-center justify-center">
+                  <div class="text-center">
+                    <div class="text-[9px] text-emerald-400">distillLesson</div>
+                    <div class="text-[7px] text-zinc-600">fn</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="absolute" style="top: 70%; left: 25%;">
+                <div class="w-14 h-14 rounded-full bg-amber-600/10 border border-amber-500/50 flex items-center justify-center">
+                  <div class="text-center">
+                    <div class="text-[9px] text-amber-400">getDbPool</div>
+                    <div class="text-[7px] text-zinc-600">fn</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="absolute" style="top: 75%; left: 70%;">
+                <div class="w-14 h-14 rounded-full bg-red-600/10 border border-red-500/50 flex items-center justify-center">
+                  <div class="text-center">
+                    <div class="text-[9px] text-red-400">guardrails</div>
+                    <div class="text-[7px] text-zinc-600">table</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Connection lines (SVG) -->
+              <svg class="absolute inset-0 w-full h-full" style="pointer-events: none;">
+                <line x1="45%" y1="42%" x2="35%" y2="25%" stroke="#3b82f6" stroke-width="1" stroke-opacity="0.3"/>
+                <line x1="55%" y1="42%" x2="68%" y2="28%" stroke="#3b82f6" stroke-width="1" stroke-opacity="0.3"/>
+                <line x1="45%" y1="58%" x2="30%" y2="72%" stroke="#3b82f6" stroke-width="1" stroke-opacity="0.3"/>
+                <line x1="55%" y1="58%" x2="72%" y2="75%" stroke="#3b82f6" stroke-width="1" stroke-opacity="0.3"/>
+              </svg>
+            </div>
+
+            <!-- Graph info bar -->
+            <div class="flex items-center justify-between border-t border-zinc-800 pt-2 mt-2">
+              <span class="text-[10px] text-zinc-500">Showing 5 nodes, 4 edges (2 hops from addLesson)</span>
+              <div class="flex gap-2">
+                <button class="text-[10px] text-zinc-500 hover:text-zinc-300">Reset view</button>
+                <button class="text-[10px] text-zinc-500 hover:text-zinc-300">Export SVG</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══ "ALL PROJECTS" WARNING (shown when user selects All Projects for graph) ═══ -->
+        <div class="border border-amber-500/20 rounded-lg bg-amber-500/5 p-4">
+          <div class="flex items-start gap-3">
+            <span class="text-amber-400 text-lg mt-0.5">⚠️</span>
+            <div>
+              <h3 class="text-sm font-medium text-amber-300">Graph Explorer requires a single project</h3>
+              <p class="text-xs text-zinc-400 mt-1">
+                Knowledge graphs are scoped to individual projects. A company-wide graph would be too large and unfocused to be useful.
+                Select a specific project from the sidebar to explore its symbol relationships and dependencies.
+              </p>
+              <div class="flex gap-2 mt-3">
+                <button class="px-3 py-1.5 text-xs bg-zinc-800 border border-zinc-700 rounded-md text-zinc-300 hover:border-zinc-600">
+                  Switch to free-context-hub
+                </button>
+                <button class="px-3 py-1.5 text-xs bg-zinc-800 border border-zinc-700 rounded-md text-zinc-300 hover:border-zinc-600">
+                  Switch to my-saas-app
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</body>
+</html>

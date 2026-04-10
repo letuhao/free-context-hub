@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft V2: Review Inbox — Cross-Project</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 font-sans">
+  <div class="flex h-screen">
+    <aside class="shrink-0 w-56 border-r border-zinc-800 bg-zinc-950 flex flex-col">
+      <div class="px-4 py-4 border-b border-zinc-800"><h1 class="text-sm font-semibold">ContextHub</h1></div>
+      <div class="px-3 py-2">
+        <button class="w-full flex items-center gap-2.5 px-2.5 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-left">
+          <div class="w-7 h-7 rounded-md bg-gradient-to-r from-blue-600 via-purple-600 to-emerald-600 flex items-center justify-center shrink-0">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </div>
+          <div class="flex-1"><div class="text-xs text-zinc-200 font-medium">All Projects</div></div>
+        </button>
+      </div>
+      <nav class="flex-1 px-2 py-1 overflow-y-auto">
+        <a class="flex items-center gap-2.5 rounded-md text-sm px-3 py-1.5 bg-zinc-800 text-zinc-100">📋 Review Inbox</a>
+      </nav>
+    </aside>
+
+    <main class="flex-1 flex flex-col min-h-0">
+      <div class="flex-1 overflow-y-auto p-6">
+        <div class="border-b border-zinc-800 pb-4 mb-5">
+          <div class="flex items-center gap-1.5 text-xs text-zinc-500 mb-1.5">
+            <span class="w-2 h-2 rounded-full bg-gradient-to-r from-blue-500 via-purple-500 to-emerald-500"></span>
+            <span class="text-zinc-400 font-medium">All Projects</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-zinc-600"><polyline points="9 18 15 12 9 6"/></svg>
+            <span class="text-zinc-400">Review Inbox</span>
+          </div>
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="flex items-center gap-2">
+                <h1 class="text-lg font-semibold text-zinc-100">Review Inbox</h1>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 font-medium">12 pending</span>
+              </div>
+              <p class="text-sm text-zinc-500 mt-0.5">AI-generated lessons awaiting human review across all projects.</p>
+            </div>
+            <div class="flex gap-1">
+              <button class="px-2.5 py-1 text-xs rounded-md bg-emerald-600 text-white">Approve All</button>
+              <button class="px-2.5 py-1 text-xs rounded-md border border-zinc-700 text-zinc-300">Reject All</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Status tabs with per-project counts -->
+        <div class="flex gap-1 mb-4">
+          <button class="px-3 py-1.5 text-xs rounded-md bg-zinc-100 text-zinc-900 font-medium">All Pending <span class="text-zinc-500">12</span></button>
+          <button class="px-3 py-1.5 text-xs rounded-md text-zinc-500 hover:bg-zinc-800">Draft <span class="text-zinc-600">5</span></button>
+          <button class="px-3 py-1.5 text-xs rounded-md text-zinc-500 hover:bg-zinc-800">Pending Review <span class="text-zinc-600">7</span></button>
+        </div>
+
+        <!-- Per-project grouping -->
+        <div class="space-y-4">
+          <!-- Project: free-context-hub (7 pending) -->
+          <div class="border border-zinc-800 rounded-lg overflow-hidden">
+            <div class="flex items-center gap-2.5 px-4 py-2.5 bg-zinc-900/80 border-b border-zinc-800">
+              <div class="w-5 h-5 rounded-md bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-[8px] font-bold text-white">FC</div>
+              <span class="text-xs text-zinc-200 font-medium">free-context-hub</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400">7 pending</span>
+              <div class="ml-auto flex gap-1">
+                <button class="text-[10px] text-emerald-400 hover:text-emerald-300">Approve all</button>
+                <span class="text-zinc-700">·</span>
+                <button class="text-[10px] text-zinc-500 hover:text-zinc-300">Reject all</button>
+              </div>
+            </div>
+            <div class="divide-y divide-zinc-800/50">
+              <div class="flex items-center gap-3 px-4 py-3 hover:bg-zinc-900/30">
+                <input type="checkbox" class="w-3.5 h-3.5 rounded border-zinc-700 bg-zinc-800" />
+                <div class="flex-1">
+                  <div class="text-xs text-zinc-300">Phase 8 code review fixes — SQL params, color validation</div>
+                  <div class="text-[10px] text-zinc-600 mt-0.5">AI-generated · claude-code · 2h ago</div>
+                </div>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400">decision</span>
+                <div class="flex gap-1">
+                  <button class="px-2 py-0.5 text-[10px] bg-emerald-600/20 text-emerald-400 rounded hover:bg-emerald-600/30">✓</button>
+                  <button class="px-2 py-0.5 text-[10px] bg-red-600/20 text-red-400 rounded hover:bg-red-600/30">✕</button>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 px-4 py-3 hover:bg-zinc-900/30">
+                <input type="checkbox" class="w-3.5 h-3.5 rounded border-zinc-700 bg-zinc-800" />
+                <div class="flex-1">
+                  <div class="text-xs text-zinc-300">Feature toggles should gate services per-project</div>
+                  <div class="text-[10px] text-zinc-600 mt-0.5">AI-generated · claude-code · 3h ago</div>
+                </div>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400">decision</span>
+                <div class="flex gap-1">
+                  <button class="px-2 py-0.5 text-[10px] bg-emerald-600/20 text-emerald-400 rounded hover:bg-emerald-600/30">✓</button>
+                  <button class="px-2 py-0.5 text-[10px] bg-red-600/20 text-red-400 rounded hover:bg-red-600/30">✕</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Project: my-saas-app (3 pending) -->
+          <div class="border border-zinc-800 rounded-lg overflow-hidden">
+            <div class="flex items-center gap-2.5 px-4 py-2.5 bg-zinc-900/80 border-b border-zinc-800">
+              <div class="w-5 h-5 rounded-md bg-gradient-to-br from-emerald-600 to-emerald-800 flex items-center justify-center text-[8px] font-bold text-white">MS</div>
+              <span class="text-xs text-zinc-200 font-medium">my-saas-app</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400">3 pending</span>
+            </div>
+            <div class="divide-y divide-zinc-800/50">
+              <div class="flex items-center gap-3 px-4 py-3 hover:bg-zinc-900/30">
+                <input type="checkbox" class="w-3.5 h-3.5 rounded border-zinc-700 bg-zinc-800" />
+                <div class="flex-1">
+                  <div class="text-xs text-zinc-300">Stripe webhook retry strategy — exponential backoff</div>
+                  <div class="text-[10px] text-zinc-600 mt-0.5">AI-generated · cursor · 5h ago</div>
+                </div>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400">workaround</span>
+                <div class="flex gap-1">
+                  <button class="px-2 py-0.5 text-[10px] bg-emerald-600/20 text-emerald-400 rounded hover:bg-emerald-600/30">✓</button>
+                  <button class="px-2 py-0.5 text-[10px] bg-red-600/20 text-red-400 rounded hover:bg-red-600/30">✕</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Project: mobile-app (2 pending) -->
+          <div class="border border-zinc-800 rounded-lg overflow-hidden">
+            <div class="flex items-center gap-2.5 px-4 py-2.5 bg-zinc-900/80 border-b border-zinc-800">
+              <div class="w-5 h-5 rounded-md bg-gradient-to-br from-amber-600 to-amber-800 flex items-center justify-center text-[8px] font-bold text-white">MO</div>
+              <span class="text-xs text-zinc-200 font-medium">mobile-app</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400">2 pending</span>
+            </div>
+            <div class="divide-y divide-zinc-800/50">
+              <div class="flex items-center gap-3 px-4 py-3 hover:bg-zinc-900/30">
+                <input type="checkbox" class="w-3.5 h-3.5 rounded border-zinc-700 bg-zinc-800" />
+                <div class="flex-1">
+                  <div class="text-xs text-zinc-300">React Native navigation must use Stack over Tab for deep links</div>
+                  <div class="text-[10px] text-zinc-600 mt-0.5">AI-generated · claude-code · 1d ago</div>
+                </div>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400">pattern</span>
+                <div class="flex gap-1">
+                  <button class="px-2 py-0.5 text-[10px] bg-emerald-600/20 text-emerald-400 rounded hover:bg-emerald-600/30">✓</button>
+                  <button class="px-2 py-0.5 text-[10px] bg-red-600/20 text-red-400 rounded hover:bg-red-600/30">✕</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</body>
+</html>
