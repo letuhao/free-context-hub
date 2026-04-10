@@ -59,7 +59,7 @@ router.post('/', requireRole('writer'), async (req, res, next) => {
 /** PUT /api/projects/:id — update project metadata */
 router.put('/:id', requireRole('writer'), async (req, res, next) => {
   try {
-    const projectId = resolveProjectIdOrThrow(req.params.id);
+    const projectId = resolveProjectIdOrThrow(String(req.params.id));
     const { name, description, color, settings } = req.body;
     const trimmedName = typeof name === 'string' ? name.trim() : undefined;
     const trimmedDesc = typeof description === 'string' ? description.trim() : undefined;
@@ -77,7 +77,7 @@ router.put('/:id', requireRole('writer'), async (req, res, next) => {
 /** GET /api/projects/:id/summary — project summary snapshot */
 router.get('/:id/summary', async (req, res, next) => {
   try {
-    const projectId = resolveProjectIdOrThrow(req.params.id);
+    const projectId = resolveProjectIdOrThrow(String(req.params.id));
     const body = await getProjectSnapshotBody(projectId);
     if (body === null) {
       res.status(404).json({ error: 'No summary found for project', project_id: projectId });
@@ -90,7 +90,7 @@ router.get('/:id/summary', async (req, res, next) => {
 /** POST /api/projects/:id/index — trigger project indexing */
 router.post('/:id/index', requireRole('writer'), async (req, res, next) => {
   try {
-    const projectId = resolveProjectIdOrThrow(req.params.id);
+    const projectId = resolveProjectIdOrThrow(String(req.params.id));
     const root = await resolveProjectRoot(projectId, req.body.root);
     const result = await indexProject({
       projectId,
@@ -105,7 +105,7 @@ router.post('/:id/index', requireRole('writer'), async (req, res, next) => {
 /** POST /api/projects/:id/reflect — reflect on a topic */
 router.post('/:id/reflect', requireRole('writer'), async (req, res, next) => {
   try {
-    const projectId = resolveProjectIdOrThrow(req.params.id);
+    const projectId = resolveProjectIdOrThrow(String(req.params.id));
     const result = await reflectOnTopic({
       topic: req.body.topic,
       bullets: req.body.bullets ?? [],
@@ -117,7 +117,7 @@ router.post('/:id/reflect', requireRole('writer'), async (req, res, next) => {
 /** DELETE /api/projects/:id — delete workspace data */
 router.delete('/:id', requireRole('admin'), async (req, res, next) => {
   try {
-    const projectId = resolveProjectIdOrThrow(req.params.id);
+    const projectId = resolveProjectIdOrThrow(String(req.params.id));
     const result = await deleteWorkspace(projectId);
     res.json(result);
   } catch (e) { next(e); }

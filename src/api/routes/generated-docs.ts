@@ -41,7 +41,7 @@ router.get('/:id', async (req, res, next) => {
 router.post('/:id/promote', requireRole('writer'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
-    const result = await promoteGeneratedDocument({ projectId, docId: req.params.id });
+    const result = await promoteGeneratedDocument({ projectId, docId: String(req.params.id) });
     res.json(result);
   } catch (e) { next(e); }
 });

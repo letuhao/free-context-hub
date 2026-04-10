@@ -21,7 +21,7 @@ router.get('/:id/comments', async (req, res, next) => {
 router.post('/:id/comments', requireRole('writer'), async (req, res, next) => {
   try {
     const result = await addComment({
-      lessonId: req.params.id,
+      lessonId: String(req.params.id),
       parentId: req.body.parent_id,
       author: req.body.author,
       content: req.body.content,
@@ -32,7 +32,7 @@ router.post('/:id/comments', requireRole('writer'), async (req, res, next) => {
 
 router.delete('/:id/comments/:commentId', requireRole('writer'), async (req, res, next) => {
   try {
-    const deleted = await deleteComment({ commentId: req.params.commentId });
+    const deleted = await deleteComment({ commentId: String(req.params.commentId) });
     if (!deleted) { res.status(404).json({ status: 'error', error: 'comment not found' }); return; }
     res.json({ status: 'ok' });
   } catch (e) { next(e); }
@@ -55,7 +55,7 @@ router.post('/:id/feedback', requireRole('writer'), async (req, res, next) => {
     const vote = Number(req.body.vote);
     if (vote !== 1 && vote !== -1) { res.status(400).json({ status: 'error', error: 'vote must be 1 or -1' }); return; }
     const result = await voteFeedback({
-      lessonId: req.params.id,
+      lessonId: String(req.params.id),
       userId: req.body.user_id,
       vote: vote as 1 | -1,
     });
@@ -66,8 +66,8 @@ router.post('/:id/feedback', requireRole('writer'), async (req, res, next) => {
 router.delete('/:id/feedback', requireRole('writer'), async (req, res, next) => {
   try {
     const deleted = await removeFeedback({
-      lessonId: req.params.id,
-      userId: (req.query.user_id as string) ?? req.body?.user_id,
+      lessonId: String(req.params.id),
+      userId: String(req.query.user_id ?? req.body?.user_id ?? ''),
     });
     if (!deleted) { res.status(404).json({ status: 'error', error: 'feedback not found' }); return; }
     res.json({ status: 'ok' });

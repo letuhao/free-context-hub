@@ -174,7 +174,7 @@ router.put('/:id', requireRole('writer'), async (req, res, next) => {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await updateLesson({
       projectId,
-      lessonId: req.params.id,
+      lessonId: String(req.params.id),
       title: req.body.title,
       content: req.body.content,
       tags: req.body.tags,
@@ -213,7 +213,7 @@ router.patch('/:id/status', requireRole('writer'), async (req, res, next) => {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await updateLessonStatus({
       projectId,
-      lessonId: req.params.id,
+      lessonId: String(req.params.id),
       status: req.body.status,
       supersededBy: req.body.superseded_by,
     });
