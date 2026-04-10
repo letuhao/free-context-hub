@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft V2: Project Selector — Multi-Select</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 p-8 font-sans">
+  <h1 class="text-xl font-bold mb-1">Project Selector V2 — Multi-Select</h1>
+  <p class="text-sm text-zinc-500 mb-8">Replaces single-project dropdown with multi-select, "All Projects" first-class option, and project color coding.</p>
+
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">State 1: Single project selected (default)</h2>
+  <div class="w-56 bg-zinc-950 border-r border-zinc-800 p-3">
+    <button class="w-full flex items-center gap-2.5 px-2.5 py-2 bg-zinc-900 border border-zinc-800 rounded-lg hover:border-zinc-700 transition-colors text-left">
+      <div class="w-7 h-7 rounded-md bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-[11px] font-bold text-white shrink-0">FC</div>
+      <div class="flex-1 min-w-0">
+        <div class="text-xs text-zinc-200 font-medium truncate">free-context-hub</div>
+        <div class="text-[10px] text-zinc-600">506 lessons</div>
+      </div>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-zinc-600 shrink-0"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">State 2: Dropdown open — multi-select mode</h2>
+  <div class="w-56 bg-zinc-950 border-r border-zinc-800 p-3">
+    <!-- Trigger -->
+    <button class="w-full flex items-center gap-2.5 px-2.5 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-left">
+      <div class="w-7 h-7 rounded-md bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-[11px] font-bold text-white shrink-0">FC</div>
+      <div class="flex-1 min-w-0">
+        <div class="text-xs text-zinc-200 font-medium truncate">free-context-hub</div>
+      </div>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-zinc-400 shrink-0 rotate-180"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+
+    <!-- Dropdown -->
+    <div class="mt-2 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl overflow-hidden">
+      <!-- Search -->
+      <div class="px-3 py-2 border-b border-zinc-800">
+        <div class="flex items-center gap-2 px-2.5 py-1.5 bg-zinc-800 border border-zinc-700 rounded-md">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-zinc-500 shrink-0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" placeholder="Search projects..." class="bg-transparent text-xs text-zinc-300 outline-none w-full placeholder-zinc-600" />
+        </div>
+      </div>
+
+      <!-- "All Projects" option -->
+      <div class="px-2 py-1.5 border-b border-zinc-800">
+        <button class="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md hover:bg-zinc-800 transition-colors text-left">
+          <div class="w-5 h-5 rounded-md bg-gradient-to-r from-blue-600 via-purple-600 to-emerald-600 flex items-center justify-center shrink-0">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </div>
+          <span class="text-xs text-zinc-300 font-medium">All Projects</span>
+          <span class="text-[10px] text-zinc-600 ml-auto">Ctrl+0</span>
+        </button>
+      </div>
+
+      <!-- Project list with checkboxes -->
+      <div class="max-h-[240px] overflow-y-auto py-1 px-2">
+        <!-- Project 1 (selected) -->
+        <button class="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md bg-zinc-800/50 text-left mb-0.5">
+          <div class="w-4 h-4 rounded border border-blue-500 bg-blue-500 flex items-center justify-center shrink-0">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div class="w-5 h-5 rounded-md bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-[9px] font-bold text-white shrink-0">FC</div>
+          <div class="flex-1 min-w-0">
+            <div class="text-xs text-zinc-200 truncate">free-context-hub</div>
+            <div class="text-[10px] text-zinc-600">506 lessons</div>
+          </div>
+          <span class="text-[10px] text-zinc-700">Ctrl+1</span>
+        </button>
+
+        <!-- Project 2 (unselected) -->
+        <button class="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md hover:bg-zinc-800/30 text-left mb-0.5">
+          <div class="w-4 h-4 rounded border border-zinc-700 shrink-0"></div>
+          <div class="w-5 h-5 rounded-md bg-gradient-to-br from-emerald-600 to-emerald-800 flex items-center justify-center text-[9px] font-bold text-white shrink-0">MS</div>
+          <div class="flex-1 min-w-0">
+            <div class="text-xs text-zinc-400 truncate">my-saas-app</div>
+            <div class="text-[10px] text-zinc-600">142 lessons</div>
+          </div>
+          <span class="text-[10px] text-zinc-700">Ctrl+2</span>
+        </button>
+
+        <!-- Project 3 (unselected) -->
+        <button class="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md hover:bg-zinc-800/30 text-left mb-0.5">
+          <div class="w-4 h-4 rounded border border-zinc-700 shrink-0"></div>
+          <div class="w-5 h-5 rounded-md bg-gradient-to-br from-purple-600 to-purple-800 flex items-center justify-center text-[9px] font-bold text-white shrink-0">IT</div>
+          <div class="flex-1 min-w-0">
+            <div class="text-xs text-zinc-400 truncate">internal-tools</div>
+            <div class="text-[10px] text-zinc-600">38 lessons</div>
+          </div>
+          <span class="text-[10px] text-zinc-700">Ctrl+3</span>
+        </button>
+
+        <!-- Project 4 -->
+        <button class="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md hover:bg-zinc-800/30 text-left mb-0.5">
+          <div class="w-4 h-4 rounded border border-zinc-700 shrink-0"></div>
+          <div class="w-5 h-5 rounded-md bg-gradient-to-br from-amber-600 to-amber-800 flex items-center justify-center text-[9px] font-bold text-white shrink-0">MO</div>
+          <div class="flex-1 min-w-0">
+            <div class="text-xs text-zinc-400 truncate">mobile-app</div>
+            <div class="text-[10px] text-zinc-600">75 lessons</div>
+          </div>
+          <span class="text-[10px] text-zinc-700">Ctrl+4</span>
+        </button>
+      </div>
+
+      <!-- Footer -->
+      <div class="border-t border-zinc-800 px-3 py-2 flex items-center justify-between">
+        <button class="text-[10px] text-blue-400 hover:text-blue-300">+ New Project</button>
+        <button class="text-[10px] text-zinc-500 hover:text-zinc-300">Manage →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">State 3: "All Projects" selected</h2>
+  <div class="w-56 bg-zinc-950 border-r border-zinc-800 p-3">
+    <button class="w-full flex items-center gap-2.5 px-2.5 py-2 bg-zinc-900 border border-zinc-800 rounded-lg hover:border-zinc-700 transition-colors text-left">
+      <div class="w-7 h-7 rounded-md bg-gradient-to-r from-blue-600 via-purple-600 to-emerald-600 flex items-center justify-center shrink-0">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="text-xs text-zinc-200 font-medium truncate">All Projects</div>
+        <div class="text-[10px] text-zinc-600">4 projects · 761 lessons</div>
+      </div>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-zinc-600 shrink-0"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <h2 class="text-sm font-medium text-zinc-400 mt-8 mb-3">State 4: Multiple projects selected (2 of 4)</h2>
+  <div class="w-56 bg-zinc-950 border-r border-zinc-800 p-3">
+    <button class="w-full flex items-center gap-2.5 px-2.5 py-2 bg-zinc-900 border border-zinc-800 rounded-lg hover:border-zinc-700 transition-colors text-left">
+      <div class="flex -space-x-1 shrink-0">
+        <div class="w-6 h-6 rounded-md bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-[9px] font-bold text-white border border-zinc-950">FC</div>
+        <div class="w-6 h-6 rounded-md bg-gradient-to-br from-emerald-600 to-emerald-800 flex items-center justify-center text-[9px] font-bold text-white border border-zinc-950">MS</div>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="text-xs text-zinc-200 font-medium truncate">2 projects</div>
+        <div class="text-[10px] text-zinc-600">648 lessons</div>
+      </div>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-zinc-600 shrink-0"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+  </div>
+</body>
+</html>

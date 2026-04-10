@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft V2: Lessons — Multi-Project View</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 font-sans">
+  <div class="flex h-screen">
+
+    <!-- Sidebar (simplified) -->
+    <aside class="shrink-0 w-56 border-r border-zinc-800 bg-zinc-950 flex flex-col">
+      <div class="px-4 py-4 border-b border-zinc-800">
+        <h1 class="text-sm font-semibold">ContextHub</h1>
+        <p class="text-[11px] text-zinc-600">Knowledge Dashboard</p>
+      </div>
+      <div class="px-3 py-2">
+        <button class="w-full flex items-center gap-2.5 px-2.5 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-left">
+          <div class="w-7 h-7 rounded-md bg-gradient-to-r from-blue-600 via-purple-600 to-emerald-600 flex items-center justify-center shrink-0">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="text-xs text-zinc-200 font-medium">All Projects</div>
+            <div class="text-[10px] text-zinc-600">4 projects</div>
+          </div>
+        </button>
+      </div>
+      <nav class="flex-1 px-2 py-1 overflow-y-auto">
+        <a class="flex items-center gap-2.5 rounded-md text-sm px-3 py-1.5 text-zinc-500">📊 Dashboard</a>
+        <div class="mt-3 px-3 py-1 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Knowledge</div>
+        <a class="flex items-center gap-2.5 rounded-md text-sm px-3 py-1.5 bg-zinc-800 text-zinc-100">📖 Lessons</a>
+        <a class="flex items-center gap-2.5 rounded-md text-sm px-3 py-1.5 text-zinc-500">🛡️ Guardrails</a>
+      </nav>
+    </aside>
+
+    <!-- Main -->
+    <main class="flex-1 flex flex-col min-h-0">
+      <div class="flex-1 overflow-y-auto p-6">
+
+        <!-- Header: All Projects > Lessons -->
+        <div class="border-b border-zinc-800 pb-4 mb-5">
+          <div class="flex items-center gap-1.5 text-xs text-zinc-500 mb-1.5">
+            <span class="w-2 h-2 rounded-full bg-gradient-to-r from-blue-500 via-purple-500 to-emerald-500"></span>
+            <span class="text-zinc-400 font-medium">All Projects</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-zinc-600"><polyline points="9 18 15 12 9 6"/></svg>
+            <span class="text-zinc-400">Lessons</span>
+          </div>
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="flex items-center gap-2">
+                <h1 class="text-lg font-semibold text-zinc-100">Lessons</h1>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400">761 total</span>
+              </div>
+              <p class="text-sm text-zinc-500 mt-0.5">Viewing lessons across all 4 projects.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button class="rounded-md px-2.5 py-1 text-xs border border-zinc-700 text-zinc-300">Export</button>
+              <button class="rounded-md px-3.5 py-1.5 text-sm bg-zinc-100 text-zinc-900">+ Add Lesson</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Search + Filters -->
+        <div class="flex items-center gap-3 mb-4">
+          <div class="flex-1 flex items-center gap-2 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-zinc-500"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" placeholder="Search across all projects..." class="bg-transparent text-sm text-zinc-300 outline-none w-full placeholder-zinc-600" />
+          </div>
+          <div class="flex gap-1">
+            <button class="px-2.5 py-1.5 text-xs rounded-md bg-zinc-100 text-zinc-900 font-medium">Active <span class="text-zinc-500">648</span></button>
+            <button class="px-2.5 py-1.5 text-xs rounded-md text-zinc-500 hover:bg-zinc-800">Draft <span class="text-zinc-600">45</span></button>
+            <button class="px-2.5 py-1.5 text-xs rounded-md text-zinc-500 hover:bg-zinc-800">Superseded <span class="text-zinc-600">68</span></button>
+          </div>
+        </div>
+
+        <!-- Table with PROJECT column -->
+        <div class="border border-zinc-800 rounded-lg overflow-hidden">
+          <table class="w-full">
+            <thead>
+              <tr class="border-b border-zinc-800 bg-zinc-900/50">
+                <th class="text-left text-[11px] text-zinc-500 font-medium px-4 py-2.5 w-8"><input type="checkbox" class="w-3 h-3 rounded border-zinc-700 bg-zinc-800" /></th>
+                <th class="text-left text-[11px] text-zinc-500 font-medium px-4 py-2.5">Title</th>
+                <th class="text-left text-[11px] text-zinc-500 font-medium px-4 py-2.5 w-[100px]">Project</th>
+                <th class="text-left text-[11px] text-zinc-500 font-medium px-4 py-2.5 w-[100px]">Type</th>
+                <th class="text-left text-[11px] text-zinc-500 font-medium px-4 py-2.5 w-[80px]">Status</th>
+                <th class="text-left text-[11px] text-zinc-500 font-medium px-4 py-2.5 w-[100px]">Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Row 1: free-context-hub -->
+              <tr class="border-b border-zinc-800/50 hover:bg-zinc-900/30 cursor-pointer">
+                <td class="px-4 py-2.5"><input type="checkbox" class="w-3 h-3 rounded border-zinc-700 bg-zinc-800" /></td>
+                <td class="px-4 py-2.5 text-xs text-zinc-300">API rate limiting strategy for production endpoints</td>
+                <td class="px-4 py-2.5">
+                  <span class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">
+                    <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> free-context-hub
+                  </span>
+                </td>
+                <td class="px-4 py-2.5"><span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400">decision</span></td>
+                <td class="px-4 py-2.5"><span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400">active</span></td>
+                <td class="px-4 py-2.5 text-[11px] text-zinc-600">2m ago</td>
+              </tr>
+
+              <!-- Row 2: my-saas-app -->
+              <tr class="border-b border-zinc-800/50 hover:bg-zinc-900/30 cursor-pointer">
+                <td class="px-4 py-2.5"><input type="checkbox" class="w-3 h-3 rounded border-zinc-700 bg-zinc-800" /></td>
+                <td class="px-4 py-2.5 text-xs text-zinc-300">Use Stripe for payment processing, not custom solution</td>
+                <td class="px-4 py-2.5">
+                  <span class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> my-saas-app
+                  </span>
+                </td>
+                <td class="px-4 py-2.5"><span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400">decision</span></td>
+                <td class="px-4 py-2.5"><span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400">active</span></td>
+                <td class="px-4 py-2.5 text-[11px] text-zinc-600">15m ago</td>
+              </tr>
+
+              <!-- Row 3: mobile-app -->
+              <tr class="border-b border-zinc-800/50 hover:bg-zinc-900/30 cursor-pointer">
+                <td class="px-4 py-2.5"><input type="checkbox" class="w-3 h-3 rounded border-zinc-700 bg-zinc-800" /></td>
+                <td class="px-4 py-2.5 text-xs text-zinc-300">React Native navigation must use Stack navigator, not Tab</td>
+                <td class="px-4 py-2.5">
+                  <span class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">
+                    <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> mobile-app
+                  </span>
+                </td>
+                <td class="px-4 py-2.5"><span class="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400">pattern</span></td>
+                <td class="px-4 py-2.5"><span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400">active</span></td>
+                <td class="px-4 py-2.5 text-[11px] text-zinc-600">1h ago</td>
+              </tr>
+
+              <!-- Row 4: free-context-hub (guardrail) -->
+              <tr class="border-b border-zinc-800/50 hover:bg-zinc-900/30 cursor-pointer">
+                <td class="px-4 py-2.5"><input type="checkbox" class="w-3 h-3 rounded border-zinc-700 bg-zinc-800" /></td>
+                <td class="px-4 py-2.5 text-xs text-zinc-300">Never deploy without running the full test suite</td>
+                <td class="px-4 py-2.5">
+                  <span class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">
+                    <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> free-context-hub
+                  </span>
+                </td>
+                <td class="px-4 py-2.5"><span class="text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400">guardrail</span></td>
+                <td class="px-4 py-2.5"><span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400">active</span></td>
+                <td class="px-4 py-2.5 text-[11px] text-zinc-600">3h ago</td>
+              </tr>
+
+              <!-- Row 5: internal-tools -->
+              <tr class="border-b border-zinc-800/50 hover:bg-zinc-900/30 cursor-pointer">
+                <td class="px-4 py-2.5"><input type="checkbox" class="w-3 h-3 rounded border-zinc-700 bg-zinc-800" /></td>
+                <td class="px-4 py-2.5 text-xs text-zinc-300">Docker compose healthcheck timeout must be 30s minimum</td>
+                <td class="px-4 py-2.5">
+                  <span class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400">
+                    <span class="w-1.5 h-1.5 rounded-full bg-purple-500"></span> internal-tools
+                  </span>
+                </td>
+                <td class="px-4 py-2.5"><span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400">workaround</span></td>
+                <td class="px-4 py-2.5"><span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400">active</span></td>
+                <td class="px-4 py-2.5 text-[11px] text-zinc-600">5h ago</td>
+              </tr>
+
+              <!-- Row 6: my-saas-app (guardrail) -->
+              <tr class="hover:bg-zinc-900/30 cursor-pointer">
+                <td class="px-4 py-2.5"><input type="checkbox" class="w-3 h-3 rounded border-zinc-700 bg-zinc-800" /></td>
+                <td class="px-4 py-2.5 text-xs text-zinc-300">Must run database migration in maintenance window only</td>
+                <td class="px-4 py-2.5">
+                  <span class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> my-saas-app
+                  </span>
+                </td>
+                <td class="px-4 py-2.5"><span class="text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400">guardrail</span></td>
+                <td class="px-4 py-2.5"><span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400">active</span></td>
+                <td class="px-4 py-2.5 text-[11px] text-zinc-600">1d ago</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="flex items-center justify-between mt-3 text-xs text-zinc-500">
+          <span>Showing 1–6 of 761 lessons</span>
+          <div class="flex items-center gap-1">
+            <button class="px-2.5 py-1 rounded bg-zinc-800 text-zinc-300">1</button>
+            <button class="px-2.5 py-1 rounded hover:bg-zinc-800 text-zinc-500">2</button>
+            <button class="px-2.5 py-1 rounded hover:bg-zinc-800 text-zinc-500">3</button>
+            <span class="px-1">...</span>
+            <button class="px-2.5 py-1 rounded hover:bg-zinc-800 text-zinc-500">127</button>
+            <button class="px-2.5 py-1 rounded hover:bg-zinc-800 text-zinc-500">→</button>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</body>
+</html>

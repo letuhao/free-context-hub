@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft V2: Cross-Project Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 font-sans">
+  <div class="flex h-screen">
+
+    <!-- Sidebar (simplified) -->
+    <aside class="shrink-0 w-56 border-r border-zinc-800 bg-zinc-950 flex flex-col">
+      <div class="px-4 py-4 border-b border-zinc-800">
+        <h1 class="text-sm font-semibold">ContextHub</h1>
+        <p class="text-[11px] text-zinc-600">Knowledge Dashboard</p>
+      </div>
+      <!-- "All Projects" selected -->
+      <div class="px-3 py-2">
+        <button class="w-full flex items-center gap-2.5 px-2.5 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-left">
+          <div class="w-7 h-7 rounded-md bg-gradient-to-r from-blue-600 via-purple-600 to-emerald-600 flex items-center justify-center shrink-0">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="text-xs text-zinc-200 font-medium">All Projects</div>
+            <div class="text-[10px] text-zinc-600">4 projects · 761 lessons</div>
+          </div>
+        </button>
+      </div>
+      <nav class="flex-1 px-2 py-1 space-y-0.5 overflow-y-auto">
+        <a class="flex items-center gap-2.5 rounded-md text-sm px-3 py-1.5 bg-zinc-800 text-zinc-100">📊 Dashboard</a>
+        <a class="flex items-center gap-2.5 rounded-md text-sm px-3 py-1.5 text-zinc-500">💬 Chat</a>
+        <div class="mt-3 px-3 py-1 text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Knowledge</div>
+        <a class="flex items-center gap-2.5 rounded-md text-sm px-3 py-1.5 text-zinc-500">📖 Lessons</a>
+        <a class="flex items-center gap-2.5 rounded-md text-sm px-3 py-1.5 text-zinc-500">🛡️ Guardrails</a>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col min-h-0">
+      <div class="flex-1 overflow-y-auto p-6">
+
+        <!-- Page Header (All Projects mode) -->
+        <div class="border-b border-zinc-800 pb-4 mb-5">
+          <div class="flex items-center gap-1.5 text-xs text-zinc-500 mb-1.5">
+            <span class="w-2 h-2 rounded-full bg-gradient-to-r from-blue-500 via-purple-500 to-emerald-500"></span>
+            <span class="text-zinc-400 font-medium">All Projects</span>
+          </div>
+          <div class="flex items-start justify-between">
+            <div>
+              <h1 class="text-lg font-semibold text-zinc-100">Dashboard</h1>
+              <p class="text-sm text-zinc-500 mt-0.5">Overview across all 4 projects</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-[11px] text-zinc-600">Auto-refresh 60s</span>
+              <button class="rounded-md px-2.5 py-1 text-xs border border-zinc-700 text-zinc-300">↻ Refresh</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══ AGGREGATE STATS ═══ -->
+        <div class="flex gap-3 mb-5">
+          <div class="flex-1 px-4 py-3 border border-zinc-800 rounded-lg bg-zinc-900">
+            <div class="text-xl font-bold text-zinc-100">761</div>
+            <div class="text-[11px] text-zinc-500 mt-0.5">Total Lessons</div>
+          </div>
+          <div class="flex-1 px-4 py-3 border border-zinc-800 rounded-lg bg-zinc-900">
+            <div class="text-xl font-bold text-zinc-100">4</div>
+            <div class="text-[11px] text-zinc-500 mt-0.5">Projects</div>
+          </div>
+          <div class="flex-1 px-4 py-3 border border-zinc-800 rounded-lg bg-zinc-900">
+            <div class="text-xl font-bold text-zinc-100">89</div>
+            <div class="text-[11px] text-zinc-500 mt-0.5">Guardrails</div>
+          </div>
+          <div class="flex-1 px-4 py-3 border border-zinc-800 rounded-lg bg-zinc-900">
+            <div class="text-xl font-bold text-amber-400">3</div>
+            <div class="text-[11px] text-zinc-500 mt-0.5">Active Jobs</div>
+          </div>
+        </div>
+
+        <!-- ═══ PROJECT CARDS (mini dashboards) ═══ -->
+        <h2 class="text-sm font-medium text-zinc-300 mb-3">Projects</h2>
+        <div class="grid grid-cols-2 gap-3 mb-5">
+          <!-- Project Card 1 -->
+          <div class="border border-zinc-800 rounded-lg bg-zinc-900 p-4 hover:border-zinc-700 cursor-pointer transition-colors">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-md bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-xs font-bold text-white">FC</div>
+                <div>
+                  <div class="text-sm font-medium text-zinc-200">free-context-hub</div>
+                  <div class="text-[10px] text-zinc-600">Main knowledge base</div>
+                </div>
+              </div>
+              <!-- Health score -->
+              <div class="relative w-10 h-10">
+                <svg width="40" height="40" viewBox="0 0 40 40">
+                  <circle cx="20" cy="20" r="16" fill="none" stroke="#27272a" stroke-width="3"/>
+                  <circle cx="20" cy="20" r="16" fill="none" stroke="#10b981" stroke-width="3" stroke-dasharray="100.5" stroke-dashoffset="20" stroke-linecap="round" transform="rotate(-90 20 20)"/>
+                </svg>
+                <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-emerald-400">80%</span>
+              </div>
+            </div>
+            <div class="flex gap-4 text-[10px] text-zinc-500">
+              <span><span class="text-zinc-300 font-medium">506</span> lessons</span>
+              <span><span class="text-zinc-300 font-medium">75</span> guardrails</span>
+              <span><span class="text-zinc-300 font-medium">82</span> commits</span>
+            </div>
+          </div>
+
+          <!-- Project Card 2 -->
+          <div class="border border-zinc-800 rounded-lg bg-zinc-900 p-4 hover:border-zinc-700 cursor-pointer transition-colors">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-md bg-gradient-to-br from-emerald-600 to-emerald-800 flex items-center justify-center text-xs font-bold text-white">MS</div>
+                <div>
+                  <div class="text-sm font-medium text-zinc-200">my-saas-app</div>
+                  <div class="text-[10px] text-zinc-600">Production SaaS</div>
+                </div>
+              </div>
+              <div class="relative w-10 h-10">
+                <svg width="40" height="40" viewBox="0 0 40 40">
+                  <circle cx="20" cy="20" r="16" fill="none" stroke="#27272a" stroke-width="3"/>
+                  <circle cx="20" cy="20" r="16" fill="none" stroke="#f59e0b" stroke-width="3" stroke-dasharray="100.5" stroke-dashoffset="55" stroke-linecap="round" transform="rotate(-90 20 20)"/>
+                </svg>
+                <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-amber-400">45%</span>
+              </div>
+            </div>
+            <div class="flex gap-4 text-[10px] text-zinc-500">
+              <span><span class="text-zinc-300 font-medium">142</span> lessons</span>
+              <span><span class="text-zinc-300 font-medium">12</span> guardrails</span>
+              <span><span class="text-zinc-300 font-medium">0</span> commits</span>
+            </div>
+          </div>
+
+          <!-- Project Card 3 -->
+          <div class="border border-zinc-800 rounded-lg bg-zinc-900 p-4 hover:border-zinc-700 cursor-pointer transition-colors">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-md bg-gradient-to-br from-purple-600 to-purple-800 flex items-center justify-center text-xs font-bold text-white">IT</div>
+                <div>
+                  <div class="text-sm font-medium text-zinc-200">internal-tools</div>
+                  <div class="text-[10px] text-zinc-600">DevOps tooling</div>
+                </div>
+              </div>
+              <div class="relative w-10 h-10">
+                <svg width="40" height="40" viewBox="0 0 40 40">
+                  <circle cx="20" cy="20" r="16" fill="none" stroke="#27272a" stroke-width="3"/>
+                  <circle cx="20" cy="20" r="16" fill="none" stroke="#ef4444" stroke-width="3" stroke-dasharray="100.5" stroke-dashoffset="80" stroke-linecap="round" transform="rotate(-90 20 20)"/>
+                </svg>
+                <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-red-400">20%</span>
+              </div>
+            </div>
+            <div class="flex gap-4 text-[10px] text-zinc-500">
+              <span><span class="text-zinc-300 font-medium">38</span> lessons</span>
+              <span><span class="text-zinc-300 font-medium">2</span> guardrails</span>
+              <span><span class="text-zinc-300 font-medium">15</span> commits</span>
+            </div>
+          </div>
+
+          <!-- Project Card 4 -->
+          <div class="border border-zinc-800 rounded-lg bg-zinc-900 p-4 hover:border-zinc-700 cursor-pointer transition-colors">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-md bg-gradient-to-br from-amber-600 to-amber-800 flex items-center justify-center text-xs font-bold text-white">MO</div>
+                <div>
+                  <div class="text-sm font-medium text-zinc-200">mobile-app</div>
+                  <div class="text-[10px] text-zinc-600">iOS + Android</div>
+                </div>
+              </div>
+              <div class="relative w-10 h-10">
+                <svg width="40" height="40" viewBox="0 0 40 40">
+                  <circle cx="20" cy="20" r="16" fill="none" stroke="#27272a" stroke-width="3"/>
+                  <circle cx="20" cy="20" r="16" fill="none" stroke="#10b981" stroke-width="3" stroke-dasharray="100.5" stroke-dashoffset="30" stroke-linecap="round" transform="rotate(-90 20 20)"/>
+                </svg>
+                <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-emerald-400">70%</span>
+              </div>
+            </div>
+            <div class="flex gap-4 text-[10px] text-zinc-500">
+              <span><span class="text-zinc-300 font-medium">75</span> lessons</span>
+              <span><span class="text-zinc-300 font-medium">0</span> guardrails</span>
+              <span><span class="text-zinc-300 font-medium">23</span> commits</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══ CROSS-PROJECT ACTIVITY ═══ -->
+        <div class="border border-zinc-800 rounded-lg bg-zinc-900 overflow-hidden">
+          <div class="px-4 py-3 border-b border-zinc-800">
+            <h3 class="text-sm font-semibold text-zinc-300">Recent Activity (All Projects)</h3>
+          </div>
+          <div class="px-4 py-1">
+            <!-- Activity row with project badge -->
+            <div class="flex items-center gap-3 py-2.5 border-b border-zinc-800/50">
+              <div class="w-5 h-5 rounded-md bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-[8px] font-bold text-white shrink-0">FC</div>
+              <span class="text-xs text-zinc-300 flex-1">Created lesson: "API rate limiting strategy"</span>
+              <span class="text-[10px] text-zinc-600">2m ago</span>
+            </div>
+            <div class="flex items-center gap-3 py-2.5 border-b border-zinc-800/50">
+              <div class="w-5 h-5 rounded-md bg-gradient-to-br from-emerald-600 to-emerald-800 flex items-center justify-center text-[8px] font-bold text-white shrink-0">MS</div>
+              <span class="text-xs text-zinc-300 flex-1">Guardrail blocked: "deploy to production without tests"</span>
+              <span class="text-[10px] text-zinc-600">5m ago</span>
+            </div>
+            <div class="flex items-center gap-3 py-2.5 border-b border-zinc-800/50">
+              <div class="w-5 h-5 rounded-md bg-gradient-to-br from-purple-600 to-purple-800 flex items-center justify-center text-[8px] font-bold text-white shrink-0">IT</div>
+              <span class="text-xs text-zinc-300 flex-1">Indexed 15 new commits</span>
+              <span class="text-[10px] text-zinc-600">12m ago</span>
+            </div>
+            <div class="flex items-center gap-3 py-2.5 border-b border-zinc-800/50">
+              <div class="w-5 h-5 rounded-md bg-gradient-to-br from-amber-600 to-amber-800 flex items-center justify-center text-[8px] font-bold text-white shrink-0">MO</div>
+              <span class="text-xs text-zinc-300 flex-1">Created lesson: "React Native navigation patterns"</span>
+              <span class="text-[10px] text-zinc-600">1h ago</span>
+            </div>
+            <div class="flex items-center gap-3 py-2.5">
+              <div class="w-5 h-5 rounded-md bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-[8px] font-bold text-white shrink-0">FC</div>
+              <span class="text-xs text-zinc-300 flex-1">AI chat: "What are the key database decisions?"</span>
+              <span class="text-[10px] text-zinc-600">2h ago</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</body>
+</html>
