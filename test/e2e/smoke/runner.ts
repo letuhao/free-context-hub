@@ -12,7 +12,7 @@ import type { TestFn } from '../shared/testContext.js';
 
 // Test imports
 import { allApiSmokeTests } from './api-smoke.test.js';
-// import { allMcpSmokeTests } from './mcp-smoke.test.js';  // Sprint 4
+import { allMcpSmokeTests } from './mcp-smoke.test.js';
 
 async function main() {
   const startMs = Date.now();
@@ -25,7 +25,7 @@ async function main() {
 
   const allTests: TestFn[] = [
     ...allApiSmokeTests,
-    // ...allMcpSmokeTests,   // Sprint 4
+    ...allMcpSmokeTests,
   ];
 
   console.log(`  ${allTests.length} tests registered.\n`);
