@@ -3,7 +3,6 @@
 import { useProject } from "@/contexts/project-context";
 import { getColorClasses, getInitials } from "@/lib/project-colors";
 import { cn } from "@/lib/cn";
-import { LayoutGrid } from "lucide-react";
 
 /**
  * ProjectBadge — inline badge showing current project context.

@@ -21,7 +21,7 @@ type WorkspaceRoot = {
 };
 
 export default function SourcesPage() {
-  const { projectId } = useProject();
+  const { projectId, isAllProjects, selectedProjectIds } = useProject();
   const { toast } = useToast();
   const toastRef = useRef(toast);
   toastRef.current = toast;
@@ -130,6 +130,15 @@ export default function SourcesPage() {
   };
 
   const isRemote = source?.source_type === "remote_git" || sourceType === "remote_git";
+
+  // Per-project guard (must be before loading early return)
+  if (isAllProjects || selectedProjectIds.length > 1) {
+    return (
+      <NoProjectGuard requireSingleProject pageName="Sources">
+        <></>
+      </NoProjectGuard>
+    );
+  }
 
   if (initialLoad) {
     return (

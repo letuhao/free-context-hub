@@ -32,7 +32,7 @@ export function NoProjectGuard({ children, onCreateClick, requireSingleProject, 
           <div className="flex items-start gap-3">
             <AlertTriangle size={20} className="text-amber-400 mt-0.5 shrink-0" />
             <div>
-              <h3 className="text-sm font-medium text-amber-300">{label} requires a single project</h3>
+              <h3 className="text-sm font-medium text-amber-300">The {label} page requires a single project</h3>
               <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
                 {label} cannot be used in All Projects mode. Select a specific project to continue.
               </p>
@@ -53,6 +53,9 @@ export function NoProjectGuard({ children, onCreateClick, requireSingleProject, 
                     </button>
                   );
                 })}
+                {projects.length > 6 && (
+                  <span className="flex items-center px-2 text-[10px] text-zinc-600">+{projects.length - 6} more</span>
+                )}
               </div>
             </div>
           </div>

@@ -41,7 +41,7 @@ const KG_FEATURES: FeatureCard[] = [
 ];
 
 export default function GraphExplorerPage() {
-  const { projectId } = useProject();
+  const { projectId, isAllProjects, selectedProjectIds } = useProject();
   const { toast } = useToast();
 
   const [kgEnabled, setKgEnabled] = useState<boolean | null>(null);
@@ -83,6 +83,15 @@ export default function GraphExplorerPage() {
     },
     [projectId, toast],
   );
+
+  // ── Per-project guard (must be before loading/disabled early returns) ──
+  if (isAllProjects || selectedProjectIds.length > 1) {
+    return (
+      <NoProjectGuard requireSingleProject pageName="Graph Explorer">
+        <></>
+      </NoProjectGuard>
+    );
+  }
 
   // ── Loading state ──
   if (loading) {
