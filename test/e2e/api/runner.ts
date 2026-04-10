@@ -13,6 +13,9 @@ import type { TestFn } from '../shared/testContext.js';
 import { allAuthTests } from './auth.test.js';
 import { allLessonTests } from './lessons.test.js';
 import { allGuardrailTests } from './guardrails.test.js';
+import { allDocumentTests } from './documents.test.js';
+import { allSearchTests } from './search.test.js';
+import { allSystemTests } from './system.test.js';
 
 async function main() {
   const startMs = Date.now();
@@ -27,6 +30,9 @@ async function main() {
     ...allAuthTests,
     ...allLessonTests,
     ...allGuardrailTests,
+    ...allDocumentTests,
+    ...allSearchTests,
+    ...allSystemTests,
   ];
 
   console.log(`  ${allTests.length} tests registered.\n`);

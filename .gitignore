@@ -181,3 +181,5 @@ docs/qc/*-e2e-smoke-report.md
 docs/qc/screenshots/
 
 test-results/.last-run.json
+
+docs/qc/*-e2e-api-scenario-report.md
