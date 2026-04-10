@@ -5,6 +5,7 @@ import {
   addBookmark, removeBookmark, listBookmarks,
 } from '../../services/collaboration.js';
 import { resolveProjectIdOrThrow } from '../../core/index.js';
+import { requireRole } from '../middleware/requireRole.js';
 
 const router = Router();
 
@@ -17,7 +18,7 @@ router.get('/:id/comments', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-router.post('/:id/comments', async (req, res, next) => {
+router.post('/:id/comments', requireRole('writer'), async (req, res, next) => {
   try {
     const result = await addComment({
       lessonId: req.params.id,
@@ -29,7 +30,7 @@ router.post('/:id/comments', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-router.delete('/:id/comments/:commentId', async (req, res, next) => {
+router.delete('/:id/comments/:commentId', requireRole('writer'), async (req, res, next) => {
   try {
     const deleted = await deleteComment({ commentId: req.params.commentId });
     if (!deleted) { res.status(404).json({ status: 'error', error: 'comment not found' }); return; }
@@ -49,7 +50,7 @@ router.get('/:id/feedback', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-router.post('/:id/feedback', async (req, res, next) => {
+router.post('/:id/feedback', requireRole('writer'), async (req, res, next) => {
   try {
     const vote = Number(req.body.vote);
     if (vote !== 1 && vote !== -1) { res.status(400).json({ status: 'error', error: 'vote must be 1 or -1' }); return; }
@@ -62,7 +63,7 @@ router.post('/:id/feedback', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-router.delete('/:id/feedback', async (req, res, next) => {
+router.delete('/:id/feedback', requireRole('writer'), async (req, res, next) => {
   try {
     const deleted = await removeFeedback({
       lessonId: req.params.id,

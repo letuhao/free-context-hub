@@ -11,6 +11,7 @@ import {
   resolveProjectIdOrThrow,
   resolveProjectIds,
 } from '../../core/index.js';
+import { requireRole } from '../middleware/requireRole.js';
 
 const router = Router();
 
@@ -44,7 +45,7 @@ router.get('/', async (req, res, next) => {
 });
 
 /** POST /api/lessons — add a lesson */
-router.post('/', async (req, res, next) => {
+router.post('/', requireRole('writer'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await addLesson({ ...req.body, project_id: projectId });
@@ -81,7 +82,7 @@ router.post('/search', async (req, res, next) => {
 });
 
 /** POST /api/lessons/:id/improve — AI-suggested improvements for lesson content */
-router.post('/:id/improve', async (req, res, next) => {
+router.post('/:id/improve', requireRole('writer'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const { getDbPool } = await import('../../db/client.js');
@@ -111,7 +112,7 @@ router.post('/:id/improve', async (req, res, next) => {
 });
 
 /** POST /api/lessons/:id/suggest-tags — AI-suggest tags based on lesson content */
-router.post('/:id/suggest-tags', async (req, res, next) => {
+router.post('/:id/suggest-tags', requireRole('writer'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const { getDbPool } = await import('../../db/client.js');
@@ -168,7 +169,7 @@ router.get('/:id/versions', async (req, res, next) => {
 });
 
 /** PUT /api/lessons/:id — update lesson title, content, tags, source_refs */
-router.put('/:id', async (req, res, next) => {
+router.put('/:id', requireRole('writer'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await updateLesson({
@@ -190,7 +191,7 @@ router.put('/:id', async (req, res, next) => {
 });
 
 /** POST /api/lessons/batch-status — bulk approve/reject/archive up to 50 lessons */
-router.post('/batch-status', async (req, res, next) => {
+router.post('/batch-status', requireRole('writer'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await batchUpdateLessonStatus({
@@ -207,7 +208,7 @@ router.post('/batch-status', async (req, res, next) => {
 });
 
 /** PATCH /api/lessons/:id/status — update lesson lifecycle status */
-router.patch('/:id/status', async (req, res, next) => {
+router.patch('/:id/status', requireRole('writer'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await updateLessonStatus({
@@ -240,7 +241,7 @@ router.get('/export', async (req, res, next) => {
 });
 
 /** POST /api/lessons/import — import lessons from JSON array */
-router.post('/import', async (req, res, next) => {
+router.post('/import', requireRole('writer'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const { importLessons } = await import('../../services/lessonImportExport.js');

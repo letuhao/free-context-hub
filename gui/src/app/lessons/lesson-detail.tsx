@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Badge, Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useProject } from "@/contexts/project-context";
@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import { X, Pencil, Save, Undo2, Archive, ArrowRight, RefreshCw, Copy, History, ChevronDown, ChevronRight, Sparkles, FileText, Link2, Plus, ThumbsUp, ThumbsDown, Bookmark, MessageSquare } from "lucide-react";
 import { relTime } from "@/lib/rel-time";
 import { AiEditor } from "./ai-editor";
+import { RichEditor } from "@/components/rich-editor";
 import type { Lesson } from "./types";
 
 type LessonVersion = {
@@ -62,10 +63,6 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick, init
   const [restoring, setRestoring] = useState(false);
   const [aiEditorOpen, setAiEditorOpen] = useState(false);
   const [linkedDocs, setLinkedDocs] = useState<{ document_id: string; name: string; doc_type: string; file_size_bytes?: number }[]>([]);
-
-  // Selection toolbar
-  const contentRef = useRef<HTMLTextAreaElement>(null);
-  const [selectionToolbar, setSelectionToolbar] = useState<{ show: boolean; top: number; left: number; text: string }>({ show: false, top: 0, left: 0, text: "" });
 
   // Suggested tags
   const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
@@ -444,47 +441,14 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick, init
             <div>
               <h3 className="text-[11px] uppercase tracking-wide text-zinc-500 mb-2">Content</h3>
               {editing ? (
-                <div className="relative">
-                  <textarea
-                    ref={contentRef}
-                    value={editContent}
-                    onChange={(e) => setEditContent(e.target.value)}
-                    onSelect={() => {
-                      const ta = contentRef.current;
-                      if (!ta) return;
-                      const selected = ta.value.substring(ta.selectionStart, ta.selectionEnd).trim();
-                      if (selected.length > 0) {
-                        const rect = ta.getBoundingClientRect();
-                        setSelectionToolbar({ show: true, top: -36, left: rect.width / 2, text: selected });
-                      } else {
-                        setSelectionToolbar((s) => ({ ...s, show: false }));
-                      }
-                    }}
-                    onBlur={() => { setTimeout(() => setSelectionToolbar((s) => ({ ...s, show: false })), 200); }}
-                    rows={12}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-sm text-zinc-300 leading-relaxed focus:outline-none focus:border-zinc-500 transition-colors resize-y font-mono"
-                  />
-                  {/* Floating selection toolbar */}
-                  {selectionToolbar.show && (
-                    <div
-                      className="absolute z-10 flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-800 border border-purple-700/50 rounded-lg shadow-xl animate-[fadeIn_0.1s_ease-out]"
-                      style={{ top: selectionToolbar.top, left: selectionToolbar.left, transform: "translateX(-50%)" }}
-                    >
-                      <span className="text-[10px] text-zinc-500">{selectionToolbar.text.length} chars</span>
-                      <button
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          setAiEditorOpen(true);
-                          setSelectionToolbar((s) => ({ ...s, show: false }));
-                        }}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] bg-purple-600/20 hover:bg-purple-600/30 border border-purple-700/40 rounded text-purple-400 font-medium transition-colors"
-                      >
-                        <Sparkles size={10} />
-                        Ask AI
-                      </button>
-                    </div>
-                  )}
-                </div>
+                <RichEditor
+                  value={editContent}
+                  onChange={setEditContent}
+                  placeholder="Lesson content (markdown supported)"
+                  minHeight={200}
+                  showToolbar
+                  showPreview
+                />
               ) : (
                 <div className="text-sm text-zinc-400 leading-relaxed whitespace-pre-wrap">
                   {lesson.content}

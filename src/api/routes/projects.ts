@@ -11,6 +11,8 @@ import {
   updateProject,
   addProjectToGroup,
 } from '../../core/index.js';
+import { invalidateFeatureCache } from '../../services/featureToggles.js';
+import { requireRole } from '../middleware/requireRole.js';
 
 const router = Router();
 
@@ -23,7 +25,7 @@ router.get('/', async (req, res, next) => {
 });
 
 /** POST /api/projects — create a new project */
-router.post('/', async (req, res, next) => {
+router.post('/', requireRole('writer'), async (req, res, next) => {
   try {
     const { project_id, name, description, color, settings, group_id } = req.body;
     if (!project_id || typeof project_id !== 'string') {
@@ -55,7 +57,7 @@ router.post('/', async (req, res, next) => {
 });
 
 /** PUT /api/projects/:id — update project metadata */
-router.put('/:id', async (req, res, next) => {
+router.put('/:id', requireRole('writer'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.params.id);
     const { name, description, color, settings } = req.body;
@@ -67,6 +69,7 @@ router.put('/:id', async (req, res, next) => {
       color,
       settings,
     });
+    invalidateFeatureCache(projectId);
     res.json({ status: 'updated', ...result });
   } catch (e) { next(e); }
 });
@@ -85,7 +88,7 @@ router.get('/:id/summary', async (req, res, next) => {
 });
 
 /** POST /api/projects/:id/index — trigger project indexing */
-router.post('/:id/index', async (req, res, next) => {
+router.post('/:id/index', requireRole('writer'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.params.id);
     const root = await resolveProjectRoot(projectId, req.body.root);
@@ -100,7 +103,7 @@ router.post('/:id/index', async (req, res, next) => {
 });
 
 /** POST /api/projects/:id/reflect — reflect on a topic */
-router.post('/:id/reflect', async (req, res, next) => {
+router.post('/:id/reflect', requireRole('writer'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.params.id);
     const result = await reflectOnTopic({
@@ -112,7 +115,7 @@ router.post('/:id/reflect', async (req, res, next) => {
 });
 
 /** DELETE /api/projects/:id — delete workspace data */
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', requireRole('admin'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.params.id);
     const result = await deleteWorkspace(projectId);

@@ -8,7 +8,7 @@ import { relTime } from "@/lib/rel-time";
 import { PageHeader, StatCard, Badge, Button } from "@/components/ui";
 import { StatCardSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
-import { BookOpen, GitCommit, FileText, Loader, Lightbulb, AlertTriangle, TrendingUp, FolderOpen, Shield, MessageSquare, Plus } from "lucide-react";
+import { BookOpen, GitCommit, FileText, Loader, Lightbulb, AlertTriangle, TrendingUp, FolderOpen, Shield, MessageSquare, Plus, CheckCircle2, Circle, Key, Cpu } from "lucide-react";
 import { CreateProjectModal } from "@/components/create-project-modal";
 
 type FeatureStatus = {
@@ -70,12 +70,21 @@ export default function DashboardPage() {
   const [generatedDocs, setGeneratedDocs] = useState<GeneratedDoc[]>([]);
   const [healthScore, setHealthScore] = useState<number | null>(null);
   const [insights, setInsights] = useState<{ text: string; type: "warning" | "success" }[]>([]);
+  const [hasApiKey, setHasApiKey] = useState(false);
+  const [hasMcpLesson, setHasMcpLesson] = useState(false);
+  const [checklistDismissed, setChecklistDismissed] = useState(false);
+
+  // Re-read dismissed state when project changes
+  useEffect(() => {
+    try { setChecklistDismissed(localStorage.getItem(`chub_checklist_dismissed_${projectId}`) === "1"); }
+    catch { setChecklistDismissed(false); }
+  }, [projectId]);
 
   // FIX #3: Use ref for toast to avoid fetchAll re-creation
   // FIX #2: Reduced from 9 to 6 parallel calls (consolidated lessons queries)
   const fetchAll = useCallback(async () => {
     try {
-      const [lessonsRes, guardrailsRes, jobsRes, commitsRes, infoRes, docsRes, summaryRes] = await Promise.allSettled([
+      const [lessonsRes, guardrailsRes, jobsRes, commitsRes, infoRes, docsRes, summaryRes, apiKeysRes] = await Promise.allSettled([
         api.listLessons({ project_id: projectId, limit: 5, offset: 0, sort: "created_at", order: "desc" }),
         api.listLessons({ project_id: projectId, lesson_type: "guardrail", limit: 1 }),
         api.listJobs({ project_id: projectId, limit: 10 }),
@@ -83,6 +92,7 @@ export default function DashboardPage() {
         api.info(),
         api.listGeneratedDocs({ project_id: projectId, limit: 10 }),
         api.getProjectSummary(projectId),
+        api.listApiKeys(),
       ]);
 
       const val = <T,>(r: PromiseSettledResult<T>, fallback: T): T => r.status === "fulfilled" ? r.value : fallback;
@@ -94,6 +104,11 @@ export default function DashboardPage() {
       const infoData = val(infoRes, null);
       const docsData = val(docsRes, { items: [] });
       const summaryData = val(summaryRes, null);
+      const apiKeysData = val(apiKeysRes, { keys: [] });
+
+      // Checklist: API keys and MCP-connected lessons
+      setHasApiKey((apiKeysData.keys?.length ?? 0) > 0);
+      setHasMcpLesson((lessonsData.items ?? []).some((l: any) => l.added_by === "mcp"));
 
       const jobItems: Job[] = jobsData.items ?? [];
       const activeJobItems = jobItems.filter((j: Job) => j.status === "running" || j.status === "queued");
@@ -300,6 +315,64 @@ export default function DashboardPage() {
             ))}
           </div>
         </div>
+      )}
+
+      {/* ═══ SETUP CHECKLIST ═══ */}
+      {!initialLoad && !checklistDismissed && stats.lessons < 3 && (
+        (() => {
+          const items = [
+            { done: stats.lessons > 0, label: "Add your first lesson", desc: "Record a decision, workaround, or guardrail", href: "/lessons", icon: <BookOpen size={14} /> },
+            { done: stats.guardrails > 0, label: "Set up a guardrail", desc: "Define safety rules for AI agents", href: "/guardrails", icon: <Shield size={14} /> },
+            { done: hasApiKey, label: "Create an API key", desc: "Enable authenticated access to your project", href: "/settings/access", icon: <Key size={14} /> },
+            { done: hasMcpLesson, label: "Connect an agent via MCP", desc: "Have an AI agent add a lesson through the MCP server", href: "/getting-started", icon: <Cpu size={14} /> },
+          ];
+          const doneCount = items.filter(i => i.done).length;
+          const allDone = doneCount === items.length;
+          return (
+            <div className="border border-zinc-800 rounded-lg bg-zinc-900 mb-5 overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={16} className="text-blue-400" />
+                  <h3 className="text-sm font-semibold text-zinc-300">Setup Checklist</h3>
+                  <span className="text-[10px] text-zinc-600">{doneCount}/{items.length}</span>
+                </div>
+                <button
+                  onClick={() => { setChecklistDismissed(true); try { localStorage.setItem(`chub_checklist_dismissed_${projectId}`, "1"); } catch {} }}
+                  className="text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors"
+                >
+                  {allDone ? "Done!" : "Dismiss"}
+                </button>
+              </div>
+              <div className="p-3 grid grid-cols-2 gap-2">
+                {items.map((item) => (
+                  <button
+                    key={item.label}
+                    onClick={() => router.push(item.href)}
+                    className="flex items-start gap-3 p-3 rounded-lg text-left hover:bg-zinc-800/50 transition-colors group"
+                  >
+                    <span className="mt-0.5 shrink-0">
+                      {item.done ? (
+                        <CheckCircle2 size={16} className="text-emerald-500" />
+                      ) : (
+                        <Circle size={16} className="text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+                      )}
+                    </span>
+                    <div>
+                      <span className={`text-xs font-medium ${item.done ? "text-zinc-500 line-through" : "text-zinc-300"}`}>{item.label}</span>
+                      <p className="text-[10px] text-zinc-600 mt-0.5">{item.desc}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              {/* Progress bar */}
+              <div className="px-4 pb-3">
+                <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
+                  <div className="h-full bg-blue-600 rounded-full transition-all duration-500" style={{ width: `${(doneCount / items.length) * 100}%` }} />
+                </div>
+              </div>
+            </div>
+          );
+        })()
       )}
 
       {/* ═══ ONBOARDING ═══ */}

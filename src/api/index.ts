@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 
 import { bearerAuth } from './middleware/auth.js';
+import { requireRole } from './middleware/requireRole.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { lessonsRouter } from './routes/lessons.js';
 import { searchRouter } from './routes/search.js';
@@ -42,30 +43,34 @@ export function createApiApp() {
   // All other routes require Bearer token
   app.use('/api', bearerAuth);
 
-  // ── Routes ──
+  // ── Routes: read (reader+) ──
   app.use('/api/lessons', lessonsRouter);
   app.use('/api/search', searchRouter);
   app.use('/api/guardrails', guardrailsRouter);
-  app.use('/api/projects', projectsRouter);
-  app.use('/api/git', gitRouter);
-  app.use('/api/jobs', jobsRouter);
-  app.use('/api/generated-docs', generatedDocsRouter);
-  app.use('/api/workspace', workspaceRouter);
-  app.use('/api', workspaceRouter); // mounts /api/sources/* routes
-  app.use('/api/chat', chatRouter);
-  app.use('/api/chat/conversations', chatHistoryRouter);
-  app.use('/api/documents', documentsRouter);
-  app.use('/api/lessons', collaborationRouter); // comments + feedback under /api/lessons/:id/*
-  app.use('/api/bookmarks', bookmarkRouter);
+  app.use('/api/projects', projectsRouter);       // mixed — write routes gated inside
+  app.use('/api/analytics', analyticsRouter);
   app.use('/api/activity', activityRouter);
   app.use('/api/notifications', notificationsRouter);
-  app.use('/api/analytics', analyticsRouter);
-  app.use('/api/learning-paths', learningPathsRouter);
-  app.use('/api/agents', agentsRouter);
-  app.use('/api/groups', projectGroupsRouter);
-  app.use('/api/lesson-types', lessonTypesRouter);
   app.use('/api/audit', auditRouter);
-  app.use('/api/api-keys', apiKeysRouter);
+  app.use('/api/agents', agentsRouter);
+  app.use('/api/generated-docs', generatedDocsRouter); // mixed — promote gated inside
+  app.use('/api/lessons', collaborationRouter); // comments + feedback under /api/lessons/:id/*
+  app.use('/api/bookmarks', bookmarkRouter);
+
+  // ── Routes: write (writer+) ──
+  app.use('/api/git', requireRole('writer'), gitRouter);
+  app.use('/api/jobs', requireRole('writer'), jobsRouter);
+  app.use('/api/workspace', requireRole('writer'), workspaceRouter);
+  app.use('/api', requireRole('writer'), workspaceRouter); // mounts /api/sources/* routes
+  app.use('/api/chat', requireRole('writer'), chatRouter);
+  app.use('/api/chat/conversations', requireRole('writer'), chatHistoryRouter);
+  app.use('/api/documents', requireRole('writer'), documentsRouter);
+  app.use('/api/learning-paths', requireRole('writer'), learningPathsRouter);
+  app.use('/api/groups', requireRole('writer'), projectGroupsRouter);
+
+  // ── Routes: admin ──
+  app.use('/api/lesson-types', requireRole('admin'), lessonTypesRouter);
+  app.use('/api/api-keys', requireRole('admin'), apiKeysRouter);
 
   // ── Error handler (must be last) ──
   app.use(errorHandler);

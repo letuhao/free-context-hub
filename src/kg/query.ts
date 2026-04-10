@@ -1,8 +1,9 @@
 import { getEnv } from '../env.js';
 import { getNeo4jDriver } from './client.js';
+import { isFeatureEnabled } from '../services/featureToggles.js';
 
 function kgDisabledWarning() {
-  return { warning: 'KG_ENABLED=false or Neo4j unavailable; graph tools return empty results.' };
+  return { warning: 'Knowledge graph is disabled (env or project toggle).' };
 }
 
 export type SearchSymbolsMatch = {
@@ -19,7 +20,7 @@ export async function searchSymbols(params: {
   limit?: number;
 }): Promise<{ matches: SearchSymbolsMatch[]; warning?: string }> {
   const env = getEnv();
-  if (!env.KG_ENABLED) {
+  if (!env.KG_ENABLED || !(await isFeatureEnabled(params.projectId, 'knowledge_graph'))) {
     return { matches: [], ...kgDisabledWarning() };
   }
   const driver = getNeo4jDriver();
@@ -84,7 +85,7 @@ export async function getSymbolNeighbors(params: {
   warning?: string;
 }> {
   const env = getEnv();
-  if (!env.KG_ENABLED) {
+  if (!env.KG_ENABLED || !(await isFeatureEnabled(params.projectId, 'knowledge_graph'))) {
     return { center: null, neighbors: [], edges: [], ...kgDisabledWarning() };
   }
   const driver = getNeo4jDriver();
@@ -195,7 +196,7 @@ export async function traceDependencyPath(params: {
   warning?: string;
 }> {
   const env = getEnv();
-  if (!env.KG_ENABLED) {
+  if (!env.KG_ENABLED || !(await isFeatureEnabled(params.projectId, 'knowledge_graph'))) {
     return { found: false, path_nodes: [], path_edges: [], hops: 0, ...kgDisabledWarning() };
   }
   const driver = getNeo4jDriver();
@@ -262,12 +263,12 @@ export async function getLessonImpact(params: {
   warning?: string;
 }> {
   const env = getEnv();
-  if (!env.KG_ENABLED) {
+  if (!env.KG_ENABLED || !(await isFeatureEnabled(params.projectId, 'knowledge_graph'))) {
     return {
       lesson: null,
       linked_symbols: [],
       affected_files: [],
-      rationale: 'Knowledge graph disabled; no lesson-to-symbol links available.',
+      rationale: 'Knowledge graph is disabled (env or project toggle).',
       ...kgDisabledWarning(),
     };
   }

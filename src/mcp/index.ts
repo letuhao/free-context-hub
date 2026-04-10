@@ -61,6 +61,7 @@ import {
   resolveProjectIds,
 } from '../core/index.js';
 import { formatToolResponse, OutputFormatSchema } from './formatters.js';
+import { isFeatureEnabled } from '../services/featureToggles.js';
 
 // ── MCP error boundary: convert ContextHubError → McpError at protocol edge ──
 const CONTEXT_HUB_TO_MCP_CODE: Record<string, number> = {
@@ -1611,6 +1612,9 @@ function createMcpToolsServer() {
     async ({ workspace_token, project_id, topic, output_format }) => {
       assertWorkspaceToken(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
+      if (!(await isFeatureEnabled(pid, 'distillation'))) {
+        return formatToolResponse({ answer: '', warning: 'Distillation is disabled for this project.' }, 'reflect: disabled', output_format);
+      }
       const retrieved = await searchLessons({
         projectId: pid,
         query: topic,

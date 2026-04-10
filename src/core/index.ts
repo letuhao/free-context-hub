@@ -77,6 +77,9 @@ export {
 } from '../services/projectGroups.js';
 export type { ProjectGroup, ProjectGroupWithMembers, ProjectWithGroups } from '../services/projectGroups.js';
 
+// ── Feature toggles ──
+export { isFeatureEnabled, invalidateFeatureCache } from '../services/featureToggles.js';
+
 // ── Utils ──
 export { resolveProjectRoot } from '../utils/resolveProjectRoot.js';
 export { createModuleLogger } from '../utils/logger.js';

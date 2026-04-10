@@ -4,6 +4,7 @@ import { promisify } from 'node:util';
 
 import { getEnv } from '../env.js';
 import { getDbPool } from '../db/client.js';
+import { isFeatureEnabled } from './featureToggles.js';
 import { getNeo4jDriver } from '../kg/client.js';
 import { linkLessonToSymbols } from '../kg/linker.js';
 import type { LessonType } from './lessons.js';
@@ -118,13 +119,13 @@ export async function ingestGitHistory(params: {
   maxCommits?: number;
 }): Promise<IngestGitHistoryResult> {
   const env = getEnv();
-  if (!env.GIT_INGEST_ENABLED) {
+  if (!env.GIT_INGEST_ENABLED || !(await isFeatureEnabled(params.projectId, 'git_ingest'))) {
     return {
       status: 'skipped',
       commits_seen: 0,
       commits_upserted: 0,
       files_upserted: 0,
-      warning: 'GIT_INGEST_ENABLED=false; git intelligence tools are disabled.',
+      warning: 'Git intelligence is disabled (env or project toggle).',
     };
   }
 
@@ -228,8 +229,8 @@ export async function ingestGitHistory(params: {
 
 export async function listCommits(params: { projectId: string; limit?: number; offset?: number }): Promise<ListCommitsResult & { total_count?: number }> {
   const env = getEnv();
-  if (!env.GIT_INGEST_ENABLED) {
-    return { items: [], warning: 'GIT_INGEST_ENABLED=false; git intelligence tools are disabled.' };
+  if (!env.GIT_INGEST_ENABLED || !(await isFeatureEnabled(params.projectId, 'git_ingest'))) {
+    return { items: [], warning: 'Git intelligence is disabled (env or project toggle).' };
   }
   const pool = getDbPool();
   const limit = Math.min(Math.max(params.limit ?? 20, 1), 200);
@@ -249,8 +250,8 @@ export async function listCommits(params: { projectId: string; limit?: number; o
 
 export async function getCommit(params: { projectId: string; sha: string }): Promise<GetCommitResult> {
   const env = getEnv();
-  if (!env.GIT_INGEST_ENABLED) {
-    return { commit: null, files: [], warning: 'GIT_INGEST_ENABLED=false; git intelligence tools are disabled.' };
+  if (!env.GIT_INGEST_ENABLED || !(await isFeatureEnabled(params.projectId, 'git_ingest'))) {
+    return { commit: null, files: [], warning: 'Git intelligence is disabled (env or project toggle).' };
   }
   const pool = getDbPool();
   const c = await pool.query(
@@ -319,8 +320,8 @@ export async function suggestLessonsFromCommits(params: {
   limit?: number;
 }): Promise<{ proposals: SuggestedLessonProposal[]; warning?: string }> {
   const env = getEnv();
-  if (!env.GIT_INGEST_ENABLED) {
-    return { proposals: [], warning: 'GIT_INGEST_ENABLED=false; git intelligence tools are disabled.' };
+  if (!env.GIT_INGEST_ENABLED || !(await isFeatureEnabled(params.projectId, 'git_ingest'))) {
+    return { proposals: [], warning: 'Git intelligence is disabled (env or project toggle).' };
   }
 
   const pool = getDbPool();
@@ -413,8 +414,8 @@ export async function linkCommitToLesson(params: {
   lessonId: string;
 }): Promise<{ status: 'ok' | 'error' | 'skipped'; linked_refs: number; warning?: string; error?: string }> {
   const env = getEnv();
-  if (!env.GIT_INGEST_ENABLED) {
-    return { status: 'skipped', linked_refs: 0, warning: 'GIT_INGEST_ENABLED=false; git intelligence tools are disabled.' };
+  if (!env.GIT_INGEST_ENABLED || !(await isFeatureEnabled(params.projectId, 'git_ingest'))) {
+    return { status: 'skipped', linked_refs: 0, warning: 'Git intelligence is disabled (env or project toggle).' };
   }
 
   const pool = getDbPool();
@@ -469,13 +470,13 @@ export async function analyzeCommitImpact(params: {
   warning?: string;
 }> {
   const env = getEnv();
-  if (!env.GIT_INGEST_ENABLED) {
+  if (!env.GIT_INGEST_ENABLED || !(await isFeatureEnabled(params.projectId, 'git_ingest'))) {
     return {
       commit_sha: params.commitSha,
       affected_files: [],
       affected_symbols: [],
       related_lessons: [],
-      warning: 'GIT_INGEST_ENABLED=false; git intelligence tools are disabled.',
+      warning: 'Git intelligence is disabled (env or project toggle).',
     };
   }
   const pool = getDbPool();
