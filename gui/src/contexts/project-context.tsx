@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import { api } from "@/lib/api";
 
 type ProjectInfo = {
@@ -103,9 +103,12 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
 
   // Derived state
   const isAllProjects = selectedProjectIds.length === 1 && selectedProjectIds[0] === ALL_PROJECTS_SENTINEL;
-  const effectiveProjectIds = isAllProjects
-    ? projects.map(p => p.project_id)
-    : selectedProjectIds.filter(id => id !== ALL_PROJECTS_SENTINEL);
+  const effectiveProjectIds = useMemo(
+    () => isAllProjects
+      ? projects.map(p => p.project_id)
+      : selectedProjectIds.filter(id => id !== ALL_PROJECTS_SENTINEL),
+    [isAllProjects, projects, selectedProjectIds],
+  );
 
   return (
     <ProjectContext.Provider

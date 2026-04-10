@@ -25,7 +25,7 @@ import { FilterPanel } from "./filter-panel";
 import { Pagination } from "@/components/ui/pagination";
 import { NoProjectGuard } from "@/components/no-project-guard";
 import { ProjectBadge } from "@/components/project-badge";
-import { getColorClasses, getInitials } from "@/lib/project-colors";
+import { getColorClasses } from "@/lib/project-colors";
 import type { Lesson } from "./types";
 
 type SortField = "created_at" | "title" | "lesson_type" | "status";
@@ -238,7 +238,7 @@ export default function LessonsPage() {
             const color = getColorClasses(p?.color);
             const name = p?.name ?? row.project_id;
             return (
-              <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-${color.from.replace('from-', '')}/10 text-zinc-400`}>
+              <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
                 <span className={`w-1.5 h-1.5 rounded-full bg-gradient-to-br ${color.from} ${color.to}`} />
                 <span className="truncate max-w-[90px]">{name}</span>
               </span>
@@ -496,7 +496,7 @@ export default function LessonsPage() {
           icon="📚"
           title="No lessons found"
           description={debouncedQuery ? "Try a different search query or clear filters" : "Add your first lesson to start building project knowledge"}
-          action={!debouncedQuery ? <Button variant="primary" onClick={() => setAddDialogOpen(true)}>+ Add Lesson</Button> : undefined}
+          action={!debouncedQuery && !isAllProjects ? <Button variant="primary" onClick={() => setAddDialogOpen(true)}>+ Add Lesson</Button> : undefined}
         />
       ) : (
         <div className={compact ? "[&_table]:text-xs [&_td]:py-1.5 [&_th]:py-1.5" : ""}>
@@ -512,8 +512,8 @@ export default function LessonsPage() {
             }}
             sortKey={sortField === "lesson_type" ? "type" : sortField === "status" ? "status" : sortField}
             sortOrder={sortOrder}
-            selectable
-            bulkActions={[
+            selectable={!isAllProjects}
+            bulkActions={isAllProjects ? [] : [
               { label: "Archive", onClick: handleBulkArchive },
               { label: "Export JSON", onClick: (ids) => {
                 const selected = lessons.filter((l) => ids.includes(l.lesson_id));
