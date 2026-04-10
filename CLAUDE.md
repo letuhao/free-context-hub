@@ -187,15 +187,24 @@ Search,         Compress,       Symbol search,  Suggest lessons,
 Guardrails      Summarize       Impact analysis Commit analysis
     │               │               │               │
     ▼               ▼               ▼               ▼
-Phase 6 ✅      Phase 7 ✅      Phase 8 ✅      Phase 9 ○       Phase 10 ○
-Retrieval       GUI &           Advanced        Multi-format    Knowledge
-Quality         Human-in-loop   HITL            Ingestion       Portability
-Tiered search,  20 pages,       Access control, PDF, DOCX,      Exchange hub,
-Reranking,      Review inbox,   Custom types,   Images,         Cross-instance
-Redis cache,    AI editor,      Rich content,   Parsing         sync
-QC eval loop    Documents,      Agent audit     pipelines
+Phase 6 ✅      Phase 7 ✅      Phase 8 ✅      Phase 8D ✅     Phase 8E ✅
+Retrieval       GUI &           Advanced        Deferred        E2E Tests
+Quality         Human-in-loop   HITL            Improvements    198 tests,
+Tiered search,  20 pages,       Access control, Feature toggles Smoke + Scenario
+Reranking,      Review inbox,   Custom types,   Role enforce,   + Agent visual
+Redis cache,    AI editor,      Rich content,   Rich editor,    Layout fixes
+QC eval loop    Documents,      Agent audit     Onboarding
                 Analytics,
                 Global search
+    │               │               │               │               │
+    ▼               ▼               ▼               ▼               ▼
+Phase 9 ○       Phase 10 ○      Phase 11 ○
+Multi-Project   Multi-format    Knowledge
+UX Redesign     Ingestion       Portability
+Cross-project   PDF, DOCX,      Exchange hub,
+views, project  Images,         Cross-instance
+selector V2,    Parsing         sync
+"All Projects"  pipelines
 ```
 
 | Phase | Status | Key Deliverables |
@@ -207,8 +216,11 @@ QC eval loop    Documents,      Agent audit     pipelines
 | **6** | ✅ Complete | Tiered search (ripgrep→FTS→semantic), reranking, Redis cache, QC eval loop |
 | **7** | ✅ Complete | GUI (20 pages, 30+ REST endpoints, 7 sprints, 38 migrations) |
 | **8** | ✅ Complete | Access control (API keys/roles), custom lesson types, rich editor, agent audit, feature toggles (7 sprints, 3 migrations, 24 routes) |
-| **9** | ○ Planned | PDF/DOCX/Image ingestion pipelines (document foundation in Phase 7) |
-| **10** | ○ Planned | Import/export exchange hub, cross-instance sync (basic I/O in Phase 7) |
+| **8D** | ✅ Complete | Feature toggles BE, role enforcement middleware, rich editor in detail, onboarding checklist |
+| **8E** | ✅ Complete | E2E test suite (198 tests: API smoke 75, GUI smoke 23, MCP smoke 36, API scenarios 34, GUI scenarios 21, Agent visual 9), layout fixes |
+| **9** | ○ Designed | Multi-project UX redesign — "All Projects" mode, cross-project views, project selector V2 (8 V2 drafts in `docs/gui-drafts/v2/`) |
+| **10** | ○ Planned | PDF/DOCX/Image ingestion pipelines (document foundation in Phase 7) |
+| **11** | ○ Planned | Import/export exchange hub, cross-instance sync (basic I/O in Phase 7) |
 
 ## Phase 7 — Complete
 

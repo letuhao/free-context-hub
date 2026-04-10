@@ -271,14 +271,22 @@ We tested 8 embedding models and 8 reranker models ([full benchmark](docs/benchm
 - [x] **Phase 5**: Git Intelligence & Automation
 - [x] **Phase 6**: Retrieval Quality Tuning & Tiered Search
 - [x] **Phase 7**: Interactive GUI & Human-in-the-Loop
-  - 20 pages, 70+ REST endpoints, 36 MCP tools, 38 migrations
+  - 23 pages, 105 REST endpoints, 45 MCP tools, 41 migrations
   - Dashboard, Chat, Lessons, Review Inbox, Analytics, Documents, Guardrails, Settings, and more
 - [x] **Phase 8**: Advanced HITL
   - Access control (API keys with roles), custom lesson types, rich content editor, agent audit trail, feature toggles
+- [x] **Phase 8D/E**: Polish & Testing
+  - Feature toggles BE, role enforcement middleware, layout fixes (viewport scroll, page sizing)
+  - E2E test suite: 198 tests (API smoke 75, GUI smoke 23, MCP smoke 36, API scenarios 34, GUI scenarios 21, Agent visual 9)
+
+**In Progress:**
+- [ ] **Phase 9**: Multi-Project UX Redesign — "All Projects" mode, cross-project views, project selector V2
+  - 8 V2 draft designs in `docs/gui-drafts/v2/`
+  - Full 23-page audit: which pages need cross-project view, which must stay per-project
 
 **Planned:**
-- [ ] **Phase 9**: Multi-format Ingestion — PDF/DOCX/image parsing pipelines
-- [ ] **Phase 10**: Knowledge Portability — cross-instance sync, exchange hub
+- [ ] **Phase 10**: Multi-format Ingestion — PDF/DOCX/image parsing pipelines
+- [ ] **Phase 11**: Knowledge Portability — cross-instance sync, exchange hub
 
 **Intentionally Dropped:**
 - ~~Multi-Agent Passive Collection~~ — Parsing agent conversations costs tokens and captures noise. `add_lesson` captures verified conclusions explicitly.
@@ -291,11 +299,12 @@ We tested 8 embedding models and 8 reranker models ([full benchmark](docs/benchm
 
 | Metric | Count |
 |:-------|:------|
-| MCP Tools | 36 |
-| REST Endpoints | 70+ |
-| GUI Pages | 20 |
+| MCP Tools | 45 |
+| REST Endpoints | 105 |
+| GUI Pages | 23 |
 | Database Migrations | 41 |
-| Development Phases | 8/10 complete |
+| E2E Tests | 198 (all passing) |
+| Development Phases | 8/11 complete |
 
 ---
 

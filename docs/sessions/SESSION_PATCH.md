@@ -1,111 +1,91 @@
 ---
-id: CH-PHASE8-COMPLETE
-date: 2026-04-05
-module: Phase8-Advanced-HITL
-phase: COMPLETE
+id: CH-E2E-MULTIPROJECT
+date: 2026-04-11
+module: E2E-Tests-and-MultiProject-Design
+phase: E2E complete, Multi-project V2 designed
 ---
 
-# Session Patch — 2026-04-05 (Session 3)
+# Session Patch — 2026-04-10/11 (Session 4)
 
 ## Where We Are
-**Phase 8 complete.** All 5 Advanced HITL features implemented across 7 sprints. Full task workflow (9 phases) applied to each sprint. Code review found and fixed 7 issues. Smoke tested 13 API + 7 GUI = 20 tests, all pass.
+**E2E test suite complete (198/198 pass). Multi-project UX redesign designed (8 V2 drafts). Layout fixes shipped.**
 
 ## What Was Done This Session
 
-### Pre-Phase 8 Review & QC
-- Code review of Pre-Phase 8 work: 12 review passes, 18 issues found and fixed
-- Browser QC: 10 pages tested via Playwright, all pass
-- 4 lessons recorded via MCP
+### Phase 8D — Deferred Improvements (1 commit)
+- Feature toggles BE: `isFeatureEnabled()` service with 30s cache, gates git/KG/distillation per-project
+- Role enforcement: `requireRole()` middleware (reader/writer/admin) on all write routes
+- Rich editor: RichEditor component in lesson detail edit mode
+- Dashboard onboarding checklist (4 items, data-driven, dismissible)
+- Code review: 4 issues found and fixed (reader GET access, promote route, stale checklist, orphaned comment)
 
-### Phase 8 Draft Designs (5 files)
-- D1: Agent audit trail — action timeline, guardrail logs, agent detail
-- D2: Custom lesson types — built-in + custom, template editor
-- D3: Rich content editor — markdown toolbar, preview/split, AI assist
-- D4: Feature toggles — project settings section, icons, dependency warnings
-- D5: Access control — API keys, roles, permissions matrix
+### TS Strict Fixes (1 commit)
+- Fixed 11 pre-existing `req.params` type errors (`string | string[]` → `String()`) that blocked Docker build
 
-### Sprint 8.1: Feature Toggles
-- BE: `settings` exposed in `listAllProjects` query + type
-- FE: Features section with 4 toggles wired to `settings.features` JSONB via PUT
+### E2E Test Suite (9 sprints, 9 commits)
+- **Layer 1 — Smoke (134 tests):** API smoke (75 endpoints), GUI smoke (23 pages + screenshots), MCP smoke (36 tools)
+- **Layer 2 — Scenarios (64 tests):** Auth roles (7), Lessons CRUD (8), Guardrails (6), Documents (5), Search (4), System (3), GUI Dashboard (5), GUI Lessons (7), GUI Guardrails (4), GUI Settings (5), Agent MCP→GUI (9)
+- **Total: 198 tests, all passing**
+- Infrastructure: Playwright, shared test utilities, 3 runners, screenshot baselines
 
-### Sprint 8.2: Custom Lesson Types
-- Migration 0040: `lesson_types` table, 5 built-in seeds, CHECK constraint dropped
-- BE: CRUD service + routes (`/api/lesson-types`)
-- BE: Relaxed `z.enum()` → `z.string()` in MCP (4 places) + distiller + LessonType alias
-- FE: `/settings/lesson-types` page with create/edit/delete modals
+### Layout Fixes (3 commits)
+- `h-screen` + component-level scroll on all 24 pages (no more page-level vertical scroll)
+- Page size 20→12 for tables (fits 1080p viewport with pagination)
+- Minor polish: badge contrast, compact stat cards, neutral "Coming Soon" tags
 
-### Sprint 8.3: Agent Audit Trail
-- BE: `auditLog` service — UNION query over `guardrail_audit_logs` + `lessons`
-- BE: `GET /api/audit` (timeline + filters + pagination) + `GET /api/audit/stats`
-- FE: `/agents` page with stats, tabs, timeline, agent detail slide-over
+### Multi-Project UX Redesign — Design Phase (2 commits)
+- Full 23-page audit: which pages need cross-project view, which must stay per-project
+- 8 V2 draft HTMLs: PageHeader, Project Selector, Dashboard, Lessons, Analytics, Graph Explorer, Guardrails, Review Inbox
+- Key decisions: Graph Explorer stays per-project (company-wide graph is useless), "All Projects" is first-class mode
 
-### Sprint 8.4: Rich Content Editor
-- FE: `RichEditor` component — markdown toolbar, Edit/Preview/Split, Ctrl+B/I, status bar
-- FE: Wired into add-lesson dialog (replaced old Write/Preview + textarea)
-
-### Sprint 8.5: Access Control
-- Migration 0041: `api_keys` table (SHA-256 hash, role, scope, expiration)
-- BE: `apiKeys` service — generate (`chub_sk_` prefix), validate, revoke
-- BE: Updated `bearerAuth` middleware — env var fast path + DB lookup fallback
-- FE: `/settings/access` page — keys list, generate modal with one-time reveal, permissions matrix
-
-### Phase 8 Code Review (7 fixes)
-- 8.1: Added `savingFeature` state to prevent double-click
-- 8.2: Validated color against allowed list in lesson type create/update
-- 8.3: Fixed UNION query param bug — agent filter with "All Actions" would crash
-- 8.3: Parameterized LIMIT/OFFSET in SQL
-- 8.4: Sanitized `javascript:` protocol in markdown link hrefs
-- 8.4: Removed unused `Table` import
-- 8.5: Limited SELECT columns in `validateApiKey` to avoid exposing key_hash
-
-### Sprint 8.6: Dynamic Lesson Types Integration
-- FE: `useLessonTypes` hook — fetches from API with built-in fallback
-- FE: Wired into add-lesson dialog, filter panel, chat create-lesson popover
-- FE: Removed hardcoded `LESSON_TYPES` constant
-
-### Smoke Testing (20/20 pass)
-**API (13 tests):** MCP add_lesson built-in type, custom type via REST, guardrail check, audit log, audit stats, API key generate/list/revoke, feature toggles save/load, deletion guards (built-in + in-use)
-**GUI (7 tests):** lesson-types page, agents page, access control keys+permissions tabs, feature toggles in settings, rich editor in add-lesson dialog, dynamic type dropdown
+### MemPalace Investigation
+- Cloned and analyzed milla-jovovich/mempalace (38K stars, ChromaDB-based memory system)
+- Compared with free-context-hub: different philosophies (raw recall vs structured knowledge management)
+- Conclusion: benchmark gap is storage philosophy, not technology — ChromaDB won't help us
 
 ## Commit Log (this session)
 ```
-9b55021 [8.6] Dynamic lesson types in FE — replace hardcoded LESSON_TYPES with API
-c075f5e [Phase8] Code review fixes — SQL params, color validation, XSS, double-click
-1e3b12d [8.5] Access control — API keys with roles, auth middleware, settings page
-5d48189 [8.4] Rich content editor — markdown toolbar, preview, Ctrl+B/I shortcuts
-b4dc876 [8.3] Agent audit trail — unified timeline, stats, agent detail slide-over
-7403c06 [8.2] Custom lesson types — lesson_types table, CRUD API, settings page
-27ca737 [8.1] Feature toggles — wire settings.features JSONB to project settings UI
-894548d [Phase8] Add 5 draft HTML designs for Advanced HITL features
-4069d02 [Session] Update session patch
-f23f88b [Pre-Phase8] Code review fixes — validation, a11y, hydration, cleanup
-29b4bf2 [Pre-Phase8] Multi-project support — BE endpoints, project selector, settings page, guards
+7982dda [Design] V2 drafts: graph explorer, guardrails, review inbox + full page audit
+557381e [Design] V2 draft HTMLs — multi-project UX redesign + user review brief
+31ab149 [E2E] Sprint 9 — Agent MCP→GUI visual tests (9/9 pass)
+2ac2e34 [E2E] Sprint 8 — GUI scenarios: guardrails + settings (9/9 pass)
+fd83845 [E2E] Sprint 7 — GUI scenarios: dashboard + lessons (12/12 pass)
+8d64231 [E2E] Sprint 6 — API scenarios: documents, search, system (34/34 pass)
+d32d16e [E2E] Sprint 5 — API scenario tests: auth, lessons, guardrails (22/22 pass)
+0013a8a [GUI] Minor layout polish — badge contrast, compact stat cards, neutral tags
+4f7f6b6 [GUI] Reduce page size 20→12 to fit viewport, remove window.scrollTo
+2c43387 [GUI] Fix viewport layout — component-level scroll instead of page scroll
+2298767 [E2E] Sprint 4 — MCP tool smoke tests, 111/111 pass (full Layer 1)
+5cacc7e [E2E] Sprint 3 — GUI smoke tests, 23/23 pass + screenshots
+991c191 [E2E] Sprint 2 — API smoke tests, 75/75 pass
+256b58b [E2E] Sprint 1 — test infrastructure setup, shared utilities, smoke runner
+904f63b Fix TS strict errors — String() cast on req.params to satisfy Express types
+60b9ee5 [Phase8D] Deferred improvements — feature toggles BE, role enforcement, rich editor, onboarding checklist
 ```
 
-## Phase 8 Summary
+## What's Next
 
-| Metric | Value |
-|--------|-------|
-| Sprints | 7 (8.1–8.6 + review) |
-| Migrations | 3 (0039, 0040, 0041) |
-| New pages | 4 (/settings/lesson-types, /agents, /settings/access, /projects/settings enhanced) |
-| New components | 2 (RichEditor, useLessonTypes hook) |
-| Total routes | 24 |
-| BE services | 3 new (lessonTypes, auditLog, apiKeys) |
-| BE routes | 3 new (lesson-types, audit, api-keys) |
-| Commits | 11 |
-| Issues found in review | 7 |
-| Smoke tests | 20/20 pass |
+### Phase 9: Multi-Project UX Redesign (NEW — replaces original Phase 9)
+Branch: `feature/multi-project-ux`
+Design: `docs/gui-drafts/v2/` (8 draft HTMLs + audit)
 
-## What's Next (Next Session)
+**Implementation scope:**
+1. Project selector V2 — multi-select, "All Projects" mode, Ctrl+N shortcuts
+2. PageHeader V2 — project badge in breadcrumb, "All Projects" indicator
+3. Backend: cross-project query support (`project_ids` array param on list/search endpoints)
+4. Dashboard V2 — aggregate stats + project cards + cross-project activity
+5. Lessons V2 — project column, cross-project search
+6. Guardrails V2 — cross-project check, project column in rules
+7. Review Inbox V2 — grouped by project, per-project batch actions
+8. Analytics V2 — per-project comparison table + stacked charts
+9. Graph Explorer V2 — enforce per-project, "All Projects" warning
+10. Minor pages — project badge in header for remaining pages
 
-### Phase 9: Multi-format Ingestion
+### Phase 10: Multi-Format Ingestion (moved from Phase 9)
 - PDF/DOCX/Image ingestion pipelines
 - Document parsing and chunk extraction
 - Lesson generation from uploaded documents
 
-### Phase 8 Deferred (low priority, can be done incrementally)
-- Role enforcement middleware (per-route permission checks using `req.apiKeyRole`)
-- Feature toggles controlling BE behavior (read `settings.features` in services)
-- Rich editor in lesson-detail edit mode (blocked by AI selection toolbar)
-- Dashboard "just created" checklist (State 2 onboarding)
+### Phase 11: Knowledge Portability (moved from Phase 10)
+- Import/export exchange hub
+- Cross-instance sync
