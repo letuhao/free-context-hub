@@ -173,3 +173,11 @@ docker-compose.*.local.yml
 .playwright-mcp/
 
 docs/screenshots/audit/
+
+docs/qc/playwright-report/
+
+docs/qc/*-e2e-smoke-report.md
+
+docs/qc/screenshots/
+
+test-results/.last-run.json

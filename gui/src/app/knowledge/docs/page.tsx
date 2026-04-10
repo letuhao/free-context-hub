@@ -46,8 +46,8 @@ const DOC_TYPE_LABELS: Record<string, string> = {
 const DOC_TYPE_COLORS: Record<string, string> = {
   faq: "bg-emerald-500/10 text-emerald-400",
   raptor: "bg-blue-500/10 text-blue-400",
-  qc_report: "bg-amber-500/10 text-amber-400",
-  qc_artifact: "bg-amber-500/10 text-amber-400",
+  qc_report: "bg-amber-500/15 text-amber-300",
+  qc_artifact: "bg-orange-500/15 text-orange-300",
   benchmark_artifact: "bg-purple-500/10 text-purple-400",
 };
 
