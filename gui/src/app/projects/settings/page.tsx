@@ -8,6 +8,7 @@ import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { PROJECT_COLORS, getColorClasses, getInitials, type ProjectColorKey } from "@/lib/project-colors";
 import { cn } from "@/lib/cn";
+import { NoProjectGuard } from "@/components/no-project-guard";
 import { Copy, Users, AlertTriangle, GitBranch, Sparkles, ClipboardCheck, Activity } from "lucide-react";
 
 export default function ProjectSettingsPage() {
@@ -92,6 +93,7 @@ export default function ProjectSettingsPage() {
   const initials = getInitials(name || projectId);
 
   return (
+    <NoProjectGuard requireSingleProject pageName="Project Settings">
     <div className="flex-1 overflow-y-auto p-6">
       <Breadcrumb items={[{ label: "Project", href: "/projects" }, { label: "Settings" }]} />
 
@@ -310,5 +312,6 @@ export default function ProjectSettingsPage() {
         destructive
       />
     </div>
+    </NoProjectGuard>
   );
 }

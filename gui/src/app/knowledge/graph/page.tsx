@@ -122,7 +122,7 @@ export default function GraphExplorerPage() {
 
   // ── Main content ──
   return (
-    <NoProjectGuard>
+    <NoProjectGuard requireSingleProject pageName="Graph Explorer">
     <div className="flex-1 overflow-y-auto p-6">
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Graph Explorer" }]} />
       <PageHeader

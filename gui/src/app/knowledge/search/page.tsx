@@ -91,7 +91,7 @@ export default function CodeSearchPage() {
   }, [doSearch]);
 
   return (
-    <NoProjectGuard>
+    <NoProjectGuard requireSingleProject pageName="Code Search">
     <div className="flex-1 overflow-y-auto p-6">
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Code Search" }]} />
       <PageHeader

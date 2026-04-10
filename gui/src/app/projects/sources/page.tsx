@@ -5,6 +5,7 @@ import { useProject } from "@/contexts/project-context";
 import { api } from "@/lib/api";
 import { Breadcrumb, PageHeader, Button, EmptyState } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
+import { NoProjectGuard } from "@/components/no-project-guard";
 
 type SourceConfig = {
   source_type: string;
@@ -145,6 +146,7 @@ export default function SourcesPage() {
   }
 
   return (
+    <NoProjectGuard requireSingleProject pageName="Sources">
     <div className="flex-1 overflow-y-auto p-6">
       <Breadcrumb items={[{ label: "Project", href: "/projects" }, { label: "Sources" }]} />
       <PageHeader
@@ -282,5 +284,6 @@ export default function SourcesPage() {
         </div>
       </div>
     </div>
+    </NoProjectGuard>
   );
 }
