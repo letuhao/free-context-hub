@@ -54,7 +54,8 @@ export function ProjectSelector({ onCreateClick }: { onCreateClick?: () => void 
     const next = selectedProjectIds.includes(pid)
       ? selectedProjectIds.filter(id => id !== pid)
       : [...selectedProjectIds, pid];
-    if (next.length === 0) return;
+    // If all unchecked, switch to "All Projects" instead of silent no-op
+    if (next.length === 0) { setSelectedProjectIds([ALL_PROJECTS_SENTINEL]); return; }
     setSelectedProjectIds(next);
   };
 
@@ -142,6 +143,7 @@ export function ProjectSelector({ onCreateClick }: { onCreateClick?: () => void 
         onClick={() => setOpen(!open)}
         aria-expanded={open}
         aria-haspopup="listbox"
+        aria-label={isAllProjects ? "Select project, current: All Projects" : selectedProjectIds.length > 1 ? `Select project, ${selectedProjectIds.length} selected` : `Select project, current: ${current?.name ?? projectId}`}
         className={cn(
           "w-full flex items-center gap-2.5 px-2.5 py-2 border rounded-lg text-left transition-colors",
           open ? "bg-zinc-800 border-zinc-700" : "bg-zinc-900 border-zinc-800 hover:border-zinc-700",
