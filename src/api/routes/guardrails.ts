@@ -4,11 +4,17 @@ import { listGuardrailRules, simulateGuardrails } from '../../services/guardrail
 
 const router = Router();
 
-/** GET /api/guardrails/rules — list all active guardrail rules for a project */
+/** GET /api/guardrails/rules — list active guardrail rules for a project or projects */
 router.get('/rules', async (req, res, next) => {
   try {
-    const projectId = resolveProjectIdOrThrow(req.query.project_id as string);
-    const result = await listGuardrailRules(projectId, {
+    const rawIds = req.query.project_ids;
+    let pid: string | string[];
+    if (rawIds) {
+      pid = Array.isArray(rawIds) ? rawIds.map(String) : String(rawIds).split(',').map(s => s.trim()).filter(Boolean);
+    } else {
+      pid = resolveProjectIdOrThrow(req.query.project_id as string);
+    }
+    const result = await listGuardrailRules(pid, {
       limit: req.query.limit ? Number(req.query.limit) : undefined,
       offset: req.query.offset ? Number(req.query.offset) : undefined,
     });

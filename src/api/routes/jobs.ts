@@ -11,11 +11,16 @@ router.post('/', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-/** GET /api/jobs — list jobs */
+/** GET /api/jobs — list jobs (supports project_ids[] for multi-project) */
 router.get('/', async (req, res, next) => {
   try {
+    const rawIds = req.query.project_ids;
+    const projectIds = rawIds
+      ? (Array.isArray(rawIds) ? rawIds.map(String) : String(rawIds).split(',').map(s => s.trim()).filter(Boolean))
+      : undefined;
     const result = await listJobs({
-      projectId: req.query.project_id as string | undefined,
+      projectId: projectIds ? undefined : (req.query.project_id as string | undefined),
+      projectIds,
       status: req.query.status as any,
       limit: req.query.limit ? Number(req.query.limit) : undefined,
       offset: req.query.offset ? Number(req.query.offset) : undefined,

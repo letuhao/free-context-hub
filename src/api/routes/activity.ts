@@ -7,12 +7,20 @@ import { resolveProjectIdOrThrow } from '../../core/index.js';
 
 const router = Router();
 
-/** GET /api/activity — list activity feed for a project */
+/** GET /api/activity — list activity feed for a project or projects */
 router.get('/', async (req, res, next) => {
   try {
-    const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
+    const rawIds = req.query.project_ids;
+    let projectId: string | undefined;
+    let projectIds: string[] | undefined;
+    if (rawIds) {
+      projectIds = (Array.isArray(rawIds) ? rawIds.map(String) : String(rawIds).split(',').map(s => s.trim()).filter(Boolean));
+    } else {
+      projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
+    }
     const result = await listActivity({
       projectId,
+      projectIds,
       eventType: req.query.event_type as string | undefined,
       since: req.query.since as string | undefined,
       limit: req.query.limit ? Number(req.query.limit) : undefined,

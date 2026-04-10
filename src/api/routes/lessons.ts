@@ -18,11 +18,19 @@ const router = Router();
 /** GET /api/lessons — list lessons with pagination, sorting, filters, text search */
 router.get('/', async (req, res, next) => {
   try {
-    const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
+    const rawIds = req.query.project_ids;
+    let projectId: string | undefined;
+    let projectIds: string[] | undefined;
+    if (rawIds) {
+      projectIds = (Array.isArray(rawIds) ? rawIds.map(String) : String(rawIds).split(',').map(s => s.trim()).filter(Boolean));
+    } else {
+      projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
+    }
     const limit = req.query.limit ? Math.min(Number(req.query.limit), 100) : 20;
 
     const result = await listLessons({
       projectId,
+      projectIds,
       limit,
       // Offset-based pagination (page numbers)
       offset: req.query.offset !== undefined ? Number(req.query.offset) : undefined,

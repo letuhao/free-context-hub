@@ -45,7 +45,8 @@ export async function logActivity(params: {
 
 /** List activity for a project with optional filters. */
 export async function listActivity(params: {
-  projectId: string;
+  projectId?: string;
+  projectIds?: string[];
   eventType?: string;
   since?: string;
   limit?: number;
@@ -55,8 +56,10 @@ export async function listActivity(params: {
   const limit = Math.min(params.limit ?? 50, 200);
   const offset = Math.max(params.offset ?? 0, 0);
 
-  let where = 'WHERE project_id = $1';
-  const args: any[] = [params.projectId];
+  const ids = params.projectIds ?? (params.projectId ? [params.projectId] : []);
+  const projectClause = ids.length === 1 ? 'project_id = $1' : 'project_id = ANY($1::text[])';
+  let where = `WHERE ${projectClause}`;
+  const args: any[] = [ids.length === 1 ? ids[0] : ids];
   let idx = 2;
 
   if (params.eventType) {

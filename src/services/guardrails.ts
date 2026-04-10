@@ -42,25 +42,28 @@ export type GuardrailRule = {
   status: string;
 };
 
-export async function listGuardrailRules(projectId: string, opts?: { limit?: number; offset?: number }): Promise<{ rules: GuardrailRule[]; total_count: number }> {
+export async function listGuardrailRules(projectIdOrIds: string | string[], opts?: { limit?: number; offset?: number }): Promise<{ rules: GuardrailRule[]; total_count: number }> {
   const pool = getDbPool();
   const limit = Math.min(opts?.limit ?? 50, 200);
   const offset = Math.max(opts?.offset ?? 0, 0);
-  const whereClause = `WHERE g.project_id = $1 AND COALESCE(l.status, 'active') IN ('active', 'draft')`;
+  const isArray = Array.isArray(projectIdOrIds);
+  const pClause = isArray ? 'g.project_id = ANY($1::text[])' : 'g.project_id = $1';
+  const param = isArray ? projectIdOrIds : projectIdOrIds;
+  const whereClause = `WHERE ${pClause} AND COALESCE(l.status, 'active') IN ('active', 'draft')`;
   const countRes = await pool.query(
     `SELECT COUNT(*) AS cnt FROM guardrails g JOIN lessons l ON l.lesson_id = g.rule_id AND l.project_id = g.project_id ${whereClause}`,
-    [projectId],
+    [param],
   );
   const total_count = parseInt(countRes.rows[0]?.cnt ?? '0', 10);
   const { rows } = await pool.query(
-    `SELECT g.rule_id, g.trigger, g.requirement, g.verification_method,
+    `SELECT g.rule_id, g.project_id, g.trigger, g.requirement, g.verification_method,
             l.title, COALESCE(l.status, 'active') AS status
      FROM guardrails g
      JOIN lessons l ON l.lesson_id = g.rule_id AND l.project_id = g.project_id
      ${whereClause}
      ORDER BY g.created_at DESC
      LIMIT $2 OFFSET $3`,
-    [projectId, limit, offset],
+    [param, limit, offset],
   );
   return { rules: rows as GuardrailRule[], total_count };
 }

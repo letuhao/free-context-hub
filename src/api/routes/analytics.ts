@@ -7,12 +7,22 @@ import { resolveProjectIdOrThrow } from '../../core/index.js';
 
 const router = Router();
 
+/** Parse project_ids[] from query string (comma-separated or repeated). Falls back to project_id. */
+function resolveProjectParams(query: any): { projectId?: string; projectIds?: string[] } {
+  const raw = query.project_ids;
+  if (raw) {
+    const ids = Array.isArray(raw) ? raw.map(String) : String(raw).split(',').map((s: string) => s.trim()).filter(Boolean);
+    if (ids.length > 0) return { projectIds: ids };
+  }
+  return { projectId: resolveProjectIdOrThrow(query.project_id as string | undefined) };
+}
+
 /** GET /api/analytics/overview — top-level metrics */
 router.get('/overview', async (req, res, next) => {
   try {
-    const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
+    const p = resolveProjectParams(req.query);
     const days = req.query.days ? Number(req.query.days) : undefined;
-    const result = await getRetrievalStats({ projectId, days });
+    const result = await getRetrievalStats({ ...p, days });
     res.json(result);
   } catch (e) { next(e); }
 });
@@ -20,8 +30,8 @@ router.get('/overview', async (req, res, next) => {
 /** GET /api/analytics/by-type — lesson count breakdown by type */
 router.get('/by-type', async (req, res, next) => {
   try {
-    const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
-    const result = await getLessonsByType({ projectId });
+    const p = resolveProjectParams(req.query);
+    const result = await getLessonsByType(p);
     res.json(result);
   } catch (e) { next(e); }
 });
@@ -29,8 +39,8 @@ router.get('/by-type', async (req, res, next) => {
 /** GET /api/analytics/top-lessons — most useful lessons */
 router.get('/top-lessons', async (req, res, next) => {
   try {
-    const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
-    const result = await getMostRetrievedLessons({ projectId, limit: req.query.limit ? Number(req.query.limit) : undefined });
+    const p = resolveProjectParams(req.query);
+    const result = await getMostRetrievedLessons({ ...p, limit: req.query.limit ? Number(req.query.limit) : undefined });
     res.json(result);
   } catch (e) { next(e); }
 });
@@ -38,8 +48,8 @@ router.get('/top-lessons', async (req, res, next) => {
 /** GET /api/analytics/dead-knowledge — lessons with zero feedback */
 router.get('/dead-knowledge', async (req, res, next) => {
   try {
-    const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
-    const result = await getDeadKnowledge({ projectId, limit: req.query.limit ? Number(req.query.limit) : undefined });
+    const p = resolveProjectParams(req.query);
+    const result = await getDeadKnowledge({ ...p, limit: req.query.limit ? Number(req.query.limit) : undefined });
     res.json(result);
   } catch (e) { next(e); }
 });
@@ -47,9 +57,9 @@ router.get('/dead-knowledge', async (req, res, next) => {
 /** GET /api/analytics/timeseries — daily retrieval counts for charts */
 router.get('/timeseries', async (req, res, next) => {
   try {
-    const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
+    const p = resolveProjectParams(req.query);
     const days = req.query.days ? Number(req.query.days) : undefined;
-    const result = await getRetrievalTimeseries({ projectId, days });
+    const result = await getRetrievalTimeseries({ ...p, days });
     res.json(result);
   } catch (e) { next(e); }
 });
@@ -57,8 +67,8 @@ router.get('/timeseries', async (req, res, next) => {
 /** GET /api/analytics/agents — agent activity with approval rates */
 router.get('/agents', async (req, res, next) => {
   try {
-    const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
-    const result = await getAgentActivity({ projectId });
+    const p = resolveProjectParams(req.query);
+    const result = await getAgentActivity(p);
     res.json(result);
   } catch (e) { next(e); }
 });
