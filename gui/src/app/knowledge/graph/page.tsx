@@ -5,6 +5,7 @@ import { useProject } from "@/contexts/project-context";
 import { api } from "@/lib/api";
 import { Breadcrumb, PageHeader, Badge, Button, EmptyState, SearchBar } from "@/components/ui";
 import { NoProjectGuard } from "@/components/no-project-guard";
+import { ProjectBadge } from "@/components/project-badge";
 import { useToast } from "@/components/ui/toast";
 
 interface FeatureCard {
@@ -87,9 +88,17 @@ export default function GraphExplorerPage() {
   // ── Per-project guard (must be before loading/disabled early returns) ──
   if (isAllProjects || selectedProjectIds.length > 1) {
     return (
-      <NoProjectGuard requireSingleProject pageName="Graph Explorer">
-        <></>
-      </NoProjectGuard>
+      <div className="flex-1 overflow-y-auto p-6">
+        <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Graph Explorer" }]} />
+        <PageHeader
+          title="Knowledge Graph"
+          projectBadge={<ProjectBadge />}
+          subtitle="Explore symbols, dependencies, and code structure"
+        />
+        <NoProjectGuard requireSingleProject pageName="Graph Explorer">
+          <></>
+        </NoProjectGuard>
+      </div>
     );
   }
 
@@ -136,6 +145,7 @@ export default function GraphExplorerPage() {
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Graph Explorer" }]} />
       <PageHeader
         title="Knowledge Graph"
+        projectBadge={<ProjectBadge />}
         subtitle="Explore symbols, dependencies, and code structure"
         actions={
           <Badge value="Preview" variant="type" />
