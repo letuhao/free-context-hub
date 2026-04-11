@@ -41,7 +41,7 @@ function formatSize(bytes: number | null): string {
 }
 
 export default function DocumentsPage() {
-  const { projectId } = useProject();
+  const { projectId, isAllProjects } = useProject();
   const { toast } = useToast();
 
   const [docs, setDocs] = useState<Doc[]>([]);
@@ -104,14 +104,16 @@ export default function DocumentsPage() {
         title="Documents"
         subtitle="Attach reference documents to your project"
         actions={
-          <>
-            <Button variant="outline" onClick={() => setUploadMode("url")}>
-              <Link2 size={14} className="mr-1" /> Link URL
-            </Button>
-            <Button variant="primary" onClick={() => setUploadMode("upload")}>
-              <Upload size={14} className="mr-1" /> + Upload Document
-            </Button>
-          </>
+          !isAllProjects ? (
+            <>
+              <Button variant="outline" onClick={() => setUploadMode("url")}>
+                <Link2 size={14} className="mr-1" /> Link URL
+              </Button>
+              <Button variant="primary" onClick={() => setUploadMode("upload")}>
+                <Upload size={14} className="mr-1" /> + Upload Document
+              </Button>
+            </>
+          ) : undefined
         }
       />
 
@@ -147,7 +149,7 @@ export default function DocumentsPage() {
           icon="📄"
           title="No documents"
           description={filter !== "all" ? "No documents match this filter" : "Upload or link your first document"}
-          action={filter === "all" ? <Button variant="primary" onClick={() => setUploadMode("upload")}>+ Upload Document</Button> : undefined}
+          action={filter === "all" && !isAllProjects ? <Button variant="primary" onClick={() => setUploadMode("upload")}>+ Upload Document</Button> : undefined}
         />
       ) : (
         <>
