@@ -83,7 +83,7 @@ export default function ActivityPage() {
           })
         : await api.listActivity({
             project_id: projectId, limit: pageSize, offset: (page - 1) * pageSize,
-            ...(filter !== "all" ? { entity_type: filter } : {}),
+            ...(filter !== "all" ? { event_type: filter } : {}),
             ...(timeRange !== "all" ? { time_range: timeRange } : {}),
           });
       setItems(res.items ?? res.activities ?? []);

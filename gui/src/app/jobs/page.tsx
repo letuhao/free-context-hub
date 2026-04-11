@@ -159,7 +159,7 @@ export default function JobsPage() {
         projectBadge={<ProjectBadge />}
         subtitle="Monitor and manage the async job queue"
         actions={
-          <Button variant="primary" onClick={() => setEnqueueOpen(true)}>+ Enqueue Job</Button>
+          !isAllProjects ? <Button variant="primary" onClick={() => setEnqueueOpen(true)}>+ Enqueue Job</Button> : undefined
         }
       />
 
