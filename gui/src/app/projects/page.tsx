@@ -9,10 +9,11 @@ import { StatCardSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
 import { getColorClasses, getInitials } from "@/lib/project-colors";
 import { cn } from "@/lib/cn";
+import { ProjectBadge } from "@/components/project-badge";
 import Link from "next/link";
 import {
   Settings, RefreshCw, Activity,
-  Users, ChevronDown, Clock,
+  Users, ChevronDown, Clock, FolderOpen,
 } from "lucide-react";
 
 interface Stats {
@@ -23,7 +24,7 @@ interface Stats {
 }
 
 export default function ProjectsPage() {
-  const { projectId, projects } = useProject();
+  const { projectId, projects, isAllProjects, setProjectId: switchProject } = useProject();
   const { toast } = useToast();
   const toastRef = useRef(toast);
   toastRef.current = toast;
@@ -111,6 +112,56 @@ export default function ProjectsPage() {
 
   const headerColor = getColorClasses(current?.color);
   const initials = getInitials(current?.name ?? projectId);
+
+  // ═══ ALL PROJECTS VIEW ═══
+  if (isAllProjects) {
+    const totalLessons = projects.reduce((sum, p) => sum + (p.lesson_count ?? 0), 0);
+    return (
+      <div className="flex-1 overflow-y-auto p-6">
+        <Breadcrumb items={[{ label: "Project" }, { label: "All Projects" }]} />
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <div className="flex items-center gap-1.5 text-xs text-zinc-500 mb-1"><ProjectBadge /></div>
+            <h1 className="text-lg font-semibold text-zinc-100">All Projects</h1>
+            <p className="text-xs text-zinc-500 mt-0.5">{projects.length} projects · {totalLessons} lessons</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {projects.map((p) => {
+            const color = getColorClasses(p.color);
+            const name = p.name ?? p.project_id;
+            const initials = getInitials(name);
+            return (
+              <div
+                key={p.project_id}
+                onClick={() => switchProject(p.project_id)}
+                className="border border-zinc-800 rounded-lg bg-zinc-900 p-4 hover:border-zinc-700 cursor-pointer transition-colors"
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <div className={cn("w-10 h-10 rounded-lg bg-gradient-to-br flex items-center justify-center text-sm font-bold text-white", color.from, color.to)}>
+                    {initials}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-zinc-200">{name}</div>
+                    <div className="text-[10px] text-zinc-600">{p.description || p.project_id}</div>
+                  </div>
+                </div>
+                <div className="flex gap-4 text-[10px] text-zinc-500">
+                  <span><span className="text-zinc-300 font-medium">{p.lesson_count}</span> lessons</span>
+                  <span><span className="text-zinc-300 font-medium">{p.groups?.length ?? 0}</span> groups</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {projects.length === 0 && (
+          <EmptyState icon="📁" title="No projects yet" description="Create a project from the sidebar to get started." />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 overflow-y-auto p-6">

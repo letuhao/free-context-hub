@@ -43,7 +43,6 @@ const buildNavGroups = (reviewCount: number, notifCount: number): (NavItem | Nav
       { href: "/projects/groups", label: "Groups", icon: <Users size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/projects/git", label: "Git History", icon: <GitBranch size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/projects/sources", label: "Sources", icon: <Link2 size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
-      { href: "/projects/settings", label: "Settings", icon: <Settings size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
     ],
   },
   {

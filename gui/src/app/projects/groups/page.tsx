@@ -224,7 +224,7 @@ export default function GroupsPage() {
       ) : groups.length === 0 ? (
         <EmptyState
           title="No groups yet"
-          description="Create a group to share knowledge across multiple projects. Projects in the same group can search each other's lessons."
+          description="Groups let projects share knowledge. When you enable 'Include group knowledge' in the project selector, searches will include lessons from all projects in the same group."
           action={
             <Button size="sm" onClick={() => setCreateOpen(true)}>
               Create Your First Group
