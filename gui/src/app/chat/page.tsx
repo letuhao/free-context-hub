@@ -263,11 +263,6 @@ export default function ChatPage() {
 
   const isStreaming = status === "streaming" || status === "submitted";
 
-  // Auto-scroll
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages]);
-
   // Auto-resize textarea
   useEffect(() => {
     const ta = textareaRef.current;
@@ -277,89 +272,108 @@ export default function ChatPage() {
     }
   }, [inputValue]);
 
-  // Persist conversation when streaming completes
-  const wasStreamingRef = useRef(false);
-  const persistedCountRef = useRef(0);
+  // Auto-scroll on new messages
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages]);
+
+  // Persist conversation after assistant replies.
+  // useChat + TextStreamChatTransport has stale closure issues — messages captured
+  // in callbacks are never the latest. We read the DOM directly to extract text.
+  const activeConvIdRef = useRef(activeConvId);
+  activeConvIdRef.current = activeConvId;
+  const hasPersisted = useRef(false);
+
+  const persistFromDOM = useCallback(async (userText: string) => {
+    if (hasPersisted.current) return;
+    hasPersisted.current = true;
+
+    // Extract assistant response text from the DOM
+    const container = scrollRef.current;
+    if (!container) return;
+
+    // Assistant bubbles have the bot avatar + rounded-tl-sm class
+    const assistantBubbles = container.querySelectorAll(".rounded-tl-sm");
+    const lastBubble = assistantBubbles[assistantBubbles.length - 1];
+    const assistantText = lastBubble?.textContent?.trim() ?? "";
+
+    if (!assistantText) return;
+
+    try {
+      let convId = activeConvIdRef.current;
+      if (!convId) {
+        const title = userText.slice(0, 60) || "New conversation";
+        const res = await api.createConversation({ project_id: projectId, title });
+        convId = res.conversation_id ?? null;
+        if (convId) {
+          activeConvIdRef.current = convId;
+          setActiveConvId(convId);
+        }
+      }
+      if (!convId) return;
+
+      await api.addMessage(convId, { project_id: projectId, role: "user", content: userText });
+      await api.addMessage(convId, { project_id: projectId, role: "assistant", content: assistantText });
+      setSidebarRefresh((k) => k + 1);
+    } catch {
+      // Silent — don't interrupt chat UX
+      hasPersisted.current = false; // allow retry
+    }
+  }, [projectId, setActiveConvId, setSidebarRefresh]);
+
+  // MutationObserver to detect when streaming ends (DOM stops changing)
+  const pendingUserTextRef = useRef<string | null>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (isStreaming) {
-      wasStreamingRef.current = true;
-      return;
-    }
-    // isStreaming just went false — check if we were streaming and have new messages
-    if (!wasStreamingRef.current || messages.length < 2) return;
-    wasStreamingRef.current = false;
+    const el = scrollRef.current;
+    if (!el) return;
 
-    const newMessages = messages.slice(persistedCountRef.current);
-    if (newMessages.length === 0) return;
-
-    const persistConversation = async () => {
-      try {
-        let convId = activeConvId;
-
-        // Create conversation on first exchange
-        if (!convId) {
-          const firstUserMsg = messages.find((m) => m.role === "user");
-          const title = firstUserMsg?.parts
-            .filter(isTextUIPart)
-            .map((p) => p.text)
-            .join("")
-            .slice(0, 60) || "New conversation";
-          const res = await api.createConversation({ project_id: projectId, title });
-          convId = res.conversation_id ?? null;
-          if (convId) setActiveConvId(convId);
+    const observer = new MutationObserver(() => {
+      if (!pendingUserTextRef.current) return;
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = setTimeout(() => {
+        const text = pendingUserTextRef.current;
+        if (text) {
+          pendingUserTextRef.current = null;
+          persistFromDOM(text);
         }
+      }, 3000);
+    });
 
-        if (!convId) return;
-
-        // Save only new (unpersisted) messages
-        for (const msg of newMessages) {
-          const text = msg.parts
-            .filter(isTextUIPart)
-            .map((p) => p.text)
-            .join("\n");
-          if (text) {
-            await api.addMessage(convId, {
-              project_id: projectId,
-              role: msg.role,
-              content: text,
-            });
-          }
-        }
-
-        persistedCountRef.current = messages.length;
-        setSidebarRefresh((k) => k + 1);
-      } catch {
-        // Silent — don't interrupt chat UX for persistence failures
-      }
-    };
-
-    persistConversation();
+    observer.observe(el, { childList: true, subtree: true, characterData: true });
+    return () => observer.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isStreaming]);
+  }, []);
 
   const handleSend = () => {
     const text = inputValue.trim();
     if (!text || isStreaming) return;
     sendMessage({ text });
     setInputValue("");
+    hasPersisted.current = false;
+    pendingUserTextRef.current = text;
   };
 
   const handlePromptClick = (prompt: string) => {
     sendMessage({ text: prompt });
+    hasPersisted.current = false;
+    pendingUserTextRef.current = prompt;
   };
 
   const handleNewChat = () => {
     setActiveConvId(null);
     setHistoricalMessages([]);
     setChatKey((k) => k + 1);
-    persistedCountRef.current = 0;
+    hasPersisted.current = false;
+    pendingUserTextRef.current = null;
   };
 
   const handleSelectConversation = useCallback(async (id: string) => {
     setActiveConvId(id);
     setChatKey((k) => k + 1);
-    persistedCountRef.current = 0;
+    hasPersisted.current = false;
+    pendingUserTextRef.current = null;
     setLoadingConv(true);
     try {
       const res = await api.getConversation(id, { project_id: projectId });

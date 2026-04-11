@@ -67,7 +67,7 @@ export const api = {
 
   // ── Chat Conversations ──
   listConversations: (params: { project_id: string }) =>
-    request<{ status: string; conversations?: any[] }>("GET", `/api/chat/conversations?${qs(params)}`),
+    request<{ status: string; conversations?: any[]; items?: any[] }>("GET", `/api/chat/conversations?${qs(params)}`),
 
   createConversation: (body: { project_id: string; title?: string }) =>
     request<{ status: string; conversation_id?: string }>("POST", "/api/chat/conversations", body),

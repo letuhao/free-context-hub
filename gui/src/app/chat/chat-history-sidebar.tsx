@@ -33,7 +33,7 @@ export function ChatHistorySidebar({ activeId, onSelect, onNewChat, refreshKey }
   const fetchConversations = useCallback(async () => {
     try {
       const res = await api.listConversations({ project_id: projectId });
-      setConversations(res.conversations ?? []);
+      setConversations(res.conversations ?? res.items ?? []);
     } catch (err) {
       setConversations([]);
       toast("error", "Failed to load conversations");
