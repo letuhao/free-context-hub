@@ -17,7 +17,7 @@ import { Check, X, Eye, CheckCheck, Pencil, Shield, ChevronDown, ChevronRight } 
 import { LessonDetail } from "../lessons/lesson-detail";
 import { NoProjectGuard } from "@/components/no-project-guard";
 import { ProjectBadge } from "@/components/project-badge";
-import { getColorClasses, getInitials } from "@/lib/project-colors";
+import { getColorClasses } from "@/lib/project-colors";
 import type { Lesson } from "../lessons/types";
 
 type ReviewFilter = "all" | "draft" | "pending_review";
@@ -184,7 +184,7 @@ export default function ReviewInboxPage() {
         const byProject: Record<string, string[]> = {};
         for (const id of ids) {
           const lesson = lessons.find(l => l.lesson_id === id);
-          const pid = (lesson as any)?.project_id ?? projectId;
+          const pid = lesson?.project_id ?? projectId;
           (byProject[pid] ??= []).push(id);
         }
         let totalUpdated = 0;
@@ -209,7 +209,7 @@ export default function ReviewInboxPage() {
 
   const singleAction = async (lesson: Lesson, status: string) => {
     try {
-      const pid = (lesson as any).project_id ?? projectId;
+      const pid = lesson.project_id ?? projectId;
       await api.updateLessonStatus(lesson.lesson_id, { project_id: pid, status });
       toast("success", `Lesson ${status === "active" ? "approved" : status === "archived" ? "rejected" : status}`);
       fetchReviewItems();
@@ -220,7 +220,7 @@ export default function ReviewInboxPage() {
 
   const handleReject = async (lesson: Lesson, reason: string, note: string) => {
     try {
-      const pid = (lesson as any).project_id ?? projectId;
+      const pid = lesson.project_id ?? projectId;
       await api.updateLessonStatus(lesson.lesson_id, { project_id: pid, status: "archived" });
       toast("success", `Lesson rejected: ${reason}${note ? ` — ${note}` : ""}`);
       setRejectTarget(null);
@@ -389,11 +389,11 @@ export default function ReviewInboxPage() {
                       <Badge value={lesson.status} variant="status" />
                       <Badge value={lesson.lesson_type} variant="type" />
                       {isAllProjects && (() => {
-                        const lp = projects.find(p => p.project_id === (lesson as any).project_id);
+                        const lp = projects.find(p => p.project_id === lesson.project_id);
                         if (!lp) return null;
                         const lc = getColorClasses(lp.color);
                         return (
-                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 shrink-0">
+                          <span key="proj" className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 shrink-0">
                             <span className={`w-1.5 h-1.5 rounded-full bg-gradient-to-br ${lc.from} ${lc.to}`} />
                             {lp.name ?? lp.project_id}
                           </span>
