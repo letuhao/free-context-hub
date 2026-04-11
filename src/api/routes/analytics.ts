@@ -7,13 +7,25 @@ import { resolveProjectParams } from '../middleware/resolveProjectParams.js';
 
 const router = Router();
 
-/** GET /api/analytics/overview — top-level metrics */
+/** GET /api/analytics/overview — top-level metrics + type breakdown + top lessons */
 router.get('/overview', async (req, res, next) => {
   try {
     const p = resolveProjectParams(req.query);
     const days = req.query.days ? Number(req.query.days) : undefined;
-    const result = await getRetrievalStats({ ...p, days });
-    res.json(result);
+    const [stats, byType, topLessons] = await Promise.all([
+      getRetrievalStats({ ...p, days }),
+      getLessonsByType(p),
+      getMostRetrievedLessons({ ...p, limit: 5 }),
+    ]);
+    const type_breakdown: Record<string, number> = {};
+    for (const entry of byType.breakdown) {
+      type_breakdown[entry.lesson_type] = entry.count;
+    }
+    const top_lessons = topLessons.items.map((l: any) => ({
+      ...l,
+      retrieval_count: l.upvotes ?? 0,
+    }));
+    res.json({ ...stats, type_breakdown, top_lessons });
   } catch (e) { next(e); }
 });
 

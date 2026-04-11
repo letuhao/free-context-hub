@@ -537,15 +537,19 @@ export default function DashboardPage() {
       {!initialLoad && !isEmpty && (
         <div className="flex gap-2 flex-wrap mb-5">
           {[
-            { icon: "📝", label: "Add Lesson", href: "/lessons" },
-            { icon: "💬", label: "Ask AI", href: "/chat" },
-            { icon: "🔄", label: "Re-index", href: "/projects" },
-            { icon: "🛡", label: "Check Guardrail", href: "/guardrails" },
-            { icon: "📦", label: "Ingest Git", href: "/projects" },
+            { icon: "📝", label: "Add Lesson", action: () => router.push("/lessons") },
+            { icon: "💬", label: "Ask AI", action: () => router.push("/chat") },
+            { icon: "🔄", label: "Re-index", action: async () => {
+              try { await api.indexProject(projectId); toastRef.current("success", "Re-index job started"); } catch { toastRef.current("error", "Re-index failed"); }
+            }},
+            { icon: "🛡", label: "Check Guardrail", action: () => router.push("/guardrails") },
+            { icon: "📦", label: "Ingest Git", action: async () => {
+              try { await api.ingestGit({ project_id: projectId }); toastRef.current("success", "Git ingestion started"); } catch { toastRef.current("error", "Git ingestion failed"); }
+            }},
           ].map((a) => (
             <button
               key={a.label}
-              onClick={() => router.push(a.href)}
+              onClick={a.action}
               className="flex items-center gap-1.5 px-3 py-2 border border-zinc-800 rounded-lg bg-zinc-900 text-xs text-zinc-400 hover:border-zinc-700 hover:text-zinc-200 transition-colors"
             >
               <span>{a.icon}</span> {a.label}

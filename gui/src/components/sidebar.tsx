@@ -65,7 +65,7 @@ function isGroup(item: NavItem | NavGroup): item is NavGroup {
 }
 
 function isActive(href: string, pathname: string): boolean {
-  if (href === "/") return pathname === "/";
+  if (href === "/" || href === "/projects" || href === "/settings") return pathname === href;
   return pathname === href || pathname.startsWith(href + "/");
 }
 

@@ -76,15 +76,9 @@ export default function GraphExplorerPage() {
   const handleSearch = useCallback(
     async (query: string) => {
       if (!query.trim()) return;
-      try {
-        // Placeholder: uses searchCode as a stand-in until KG REST routes exist
-        await api.searchCode({ project_id: projectId, query, kind: "symbol" });
-        toast("info", "KG search endpoints are not yet available as REST routes");
-      } catch {
-        toast("info", "Knowledge Graph API routes coming soon");
-      }
+      toast("info", "Knowledge Graph search is coming soon");
     },
-    [projectId, toast],
+    [toast],
   );
 
   // ── Per-project guard (must be before loading/disabled early returns) ──

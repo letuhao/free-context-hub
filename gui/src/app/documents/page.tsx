@@ -14,7 +14,7 @@ import { UploadDialog } from "./upload-dialog";
 import { DocumentViewer } from "./document-viewer";
 
 type Doc = {
-  document_id: string;
+  doc_id: string;
   name: string;
   doc_type: string;
   url: string | null;
@@ -74,7 +74,7 @@ export default function DocumentsPage() {
 
   const handleDelete = async (doc: Doc) => {
     try {
-      await api.deleteDocument(doc.document_id, { project_id: projectId });
+      await api.deleteDocument(doc.doc_id, { project_id: projectId });
       toast("success", "Document deleted");
       fetchDocs();
     } catch (err) {
@@ -167,7 +167,7 @@ export default function DocumentsPage() {
             </thead>
             <tbody className="divide-y divide-zinc-800">
               {docs.map((doc) => (
-                <tr key={doc.document_id} className="hover:bg-zinc-800/50 cursor-pointer transition-colors" onClick={() => setViewDoc(doc)}>
+                <tr key={doc.doc_id} className="hover:bg-zinc-800/50 cursor-pointer transition-colors" onClick={() => setViewDoc(doc)}>
                   <td className="px-4 py-3 text-sm text-zinc-300 truncate max-w-[260px]">{doc.name}</td>
                   <td className="px-4 py-3">
                     <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${TYPE_BADGES[doc.doc_type] ?? TYPE_BADGES.text}`}>

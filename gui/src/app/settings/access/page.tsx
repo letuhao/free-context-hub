@@ -146,7 +146,11 @@ export default function AccessControlPage() {
       {tab === "keys" && (
         <div className="space-y-3">
           {activeKeys.length === 0 && !loading && (
-            <p className="text-xs text-zinc-600 py-8 text-center">No API keys yet. Click &quot;Generate Key&quot; to create one.</p>
+            <p className="text-xs text-zinc-600 py-8 text-center">
+              {revokedKeys.length > 0
+                ? "All API keys have been revoked. Click \"Generate Key\" to create a new one."
+                : "No API keys yet. Click \"Generate Key\" to create one."}
+            </p>
           )}
           {activeKeys.map((k) => (
             <div key={k.key_id} className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">

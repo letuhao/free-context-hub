@@ -493,10 +493,21 @@ export default function LessonsPage() {
         <TableSkeleton rows={8} />
       ) : lessons.length === 0 ? (
         <EmptyState
-          icon="📚"
-          title="No lessons found"
-          description={debouncedQuery ? "Try a different search query or clear filters" : "Add your first lesson to start building project knowledge"}
-          action={!debouncedQuery && !isAllProjects ? <Button variant="primary" onClick={() => setAddDialogOpen(true)}>+ Add Lesson</Button> : undefined}
+          icon={showBookmarked ? "🔖" : searchMode === "semantic" && debouncedQuery ? "🤖" : "📚"}
+          title={showBookmarked ? "No bookmarked lessons" : searchMode === "semantic" && debouncedQuery ? "No semantic results" : "No lessons found"}
+          description={
+            showBookmarked ? "Bookmark lessons to save them here for quick access"
+            : searchMode === "semantic" && debouncedQuery ? "Semantic search requires the embeddings service (LM Studio). Try switching to Text search."
+            : debouncedQuery ? "Try a different search query or clear filters"
+            : "Add your first lesson to start building project knowledge"
+          }
+          action={
+            searchMode === "semantic" && debouncedQuery
+              ? <Button variant="outline" onClick={() => setSearchMode("text")}>Switch to Text Search</Button>
+              : !debouncedQuery && !showBookmarked && !isAllProjects
+                ? <Button variant="primary" onClick={() => setAddDialogOpen(true)}>+ Add Lesson</Button>
+                : undefined
+          }
         />
       ) : (
         <div className={compact ? "[&_table]:text-xs [&_td]:py-1.5 [&_th]:py-1.5" : ""}>

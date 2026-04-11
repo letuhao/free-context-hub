@@ -31,61 +31,57 @@ export default function GettingStartedPage() {
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  // Load/save completion state from localStorage
+  const storageKey = `contexthub-progress-${projectId}`;
+  const loadCompletedIds = (): Set<string> => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch { return new Set(); }
+  };
+  const saveCompletedIds = (ids: Set<string>) => {
+    localStorage.setItem(storageKey, JSON.stringify([...ids]));
+  };
+
   const fetchPath = useCallback(async () => {
     setLoading(true);
     try {
-      // Try to load learning paths; fallback to building from lessons
-      const res = await api.listLearningPaths({ project_id: projectId, user_id: "gui-user" });
-      const paths = res.paths ?? res.items ?? [];
+      const completedIds = loadCompletedIds();
 
-      if (paths.length > 0) {
-        // Use learning path data
-        setSections(paths.map((p: any) => ({
-          title: p.title ?? "Section",
-          icon: p.icon ?? "📚",
-          items: (p.lessons ?? []).map((l: any) => ({
-            lesson_id: l.lesson_id,
-            title: l.title,
-            lesson_type: l.lesson_type ?? "general_note",
-            content: l.content ?? "",
-            completed: l.completed ?? false,
-          })),
-        })));
-      } else {
-        // Fallback: build sections from active lessons grouped by type
-        const lessonsRes = await api.listLessons({ project_id: projectId, status: "active", limit: 50 });
-        const lessons = lessonsRes.items ?? [];
-        const grouped: Record<string, LearningItem[]> = {};
-        for (const l of lessons) {
-          const type = l.lesson_type ?? "general_note";
-          (grouped[type] ??= []).push({
-            lesson_id: l.lesson_id,
-            title: l.title,
-            lesson_type: type,
-            content: l.content ?? "",
-            completed: false,
-          });
-        }
-        const sectionNames: Record<string, string> = {
-          decision: "Architecture & Design",
-          preference: "Code Conventions",
-          workaround: "Known Workarounds",
-          guardrail: "Safety & Guardrails",
-          general_note: "General Knowledge",
-        };
-        setSections(
-          Object.entries(grouped).map(([type, items]) => ({
-            title: sectionNames[type] ?? type,
-            icon: type,
-            items,
-          }))
-        );
+      // Build sections from active lessons grouped by type
+      const lessonsRes = await api.listLessons({ project_id: projectId, status: "active", limit: 50 });
+      const lessons = lessonsRes.items ?? [];
+      const grouped: Record<string, LearningItem[]> = {};
+      for (const l of lessons) {
+        const type = l.lesson_type ?? "general_note";
+        (grouped[type] ??= []).push({
+          lesson_id: l.lesson_id,
+          title: l.title,
+          lesson_type: type,
+          content: l.content ?? "",
+          completed: completedIds.has(l.lesson_id),
+        });
       }
+      const sectionNames: Record<string, string> = {
+        decision: "Architecture & Design",
+        preference: "Code Conventions",
+        workaround: "Known Workarounds",
+        guardrail: "Safety & Guardrails",
+        general_note: "General Knowledge",
+      };
+      setSections(
+        Object.entries(grouped).map(([type, items]) => ({
+          title: sectionNames[type] ?? type,
+          icon: type,
+          items,
+        }))
+      );
     } catch (err) {
       toast("error", err instanceof Error ? err.message : "Failed to load learning path");
     } finally {
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, toast]);
 
   useEffect(() => { fetchPath(); }, [fetchPath]);
@@ -94,32 +90,22 @@ export default function GettingStartedPage() {
   const completedItems = sections.reduce((s, sec) => s + sec.items.filter((i) => i.completed).length, 0);
   const progressPct = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
 
-  const toggleComplete = async (lessonId: string) => {
-    // Optimistic update
-    const wasCompleted = sections.flatMap(s => s.items).find(i => i.lesson_id === lessonId)?.completed ?? false;
+  const toggleComplete = (lessonId: string) => {
+    const completedIds = loadCompletedIds();
+    if (completedIds.has(lessonId)) {
+      completedIds.delete(lessonId);
+    } else {
+      completedIds.add(lessonId);
+    }
+    saveCompletedIds(completedIds);
     setSections((prev) =>
       prev.map((sec) => ({
         ...sec,
         items: sec.items.map((item) =>
-          item.lesson_id === lessonId ? { ...item, completed: !item.completed } : item
+          item.lesson_id === lessonId ? { ...item, completed: completedIds.has(lessonId) } : item
         ),
       }))
     );
-    // Persist to API
-    try {
-      await api.updateLearningProgress("default", { user_id: "gui-user", lesson_id: lessonId, completed: !wasCompleted });
-    } catch {
-      // Revert on failure
-      setSections((prev) =>
-        prev.map((sec) => ({
-          ...sec,
-          items: sec.items.map((item) =>
-            item.lesson_id === lessonId ? { ...item, completed: wasCompleted } : item
-          ),
-        }))
-      );
-      toast("error", "Failed to save progress");
-    }
   };
 
   // Find next uncompleted item
@@ -135,7 +121,7 @@ export default function GettingStartedPage() {
         subtitle="Learn your project's key decisions, patterns, and guardrails"
         actions={
           <>
-            <Button variant="outline" onClick={() => { setSections((s) => s.map((sec) => ({ ...sec, items: sec.items.map((i) => ({ ...i, completed: false })) }))); }}>
+            <Button variant="outline" onClick={() => { localStorage.removeItem(storageKey); setSections((s) => s.map((sec) => ({ ...sec, items: sec.items.map((i) => ({ ...i, completed: false })) }))); }}>
               <RotateCcw size={14} className="mr-1" /> Reset Progress
             </Button>
           </>

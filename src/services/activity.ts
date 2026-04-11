@@ -63,8 +63,15 @@ export async function listActivity(params: {
   let idx = 2;
 
   if (params.eventType) {
-    where += ` AND event_type = $${idx++}`;
-    args.push(params.eventType);
+    if (params.eventType.includes('.')) {
+      // Exact event type match (e.g. "lesson.created")
+      where += ` AND event_type = $${idx++}`;
+      args.push(params.eventType);
+    } else {
+      // Category prefix match (e.g. "lesson" matches "lesson.created", "lesson.updated", etc.)
+      where += ` AND event_type LIKE $${idx++}`;
+      args.push(`${params.eventType}.%`);
+    }
   }
   if (params.since) {
     where += ` AND created_at >= $${idx++}`;

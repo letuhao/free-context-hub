@@ -9,7 +9,7 @@ import { X, Search, ChevronUp, ChevronDown, Copy, Check, Sparkles, Link2 } from 
 import { MarkdownContent } from "../chat/markdown-content";
 
 type Doc = {
-  document_id: string;
+  doc_id: string;
   name: string;
   doc_type: string;
   url: string | null;
@@ -63,11 +63,11 @@ export function DocumentViewer({ doc, onClose, onChanged, autoGenerate }: Docume
   // Fetch document content
   useEffect(() => {
     setLoadingContent(true);
-    api.getDocument(doc.document_id, { project_id: projectId })
+    api.getDocument(doc.doc_id, { project_id: projectId })
       .then((res) => setContent(res.content ?? ""))
       .catch(() => setContent("(Failed to load content)"))
       .finally(() => setLoadingContent(false));
-  }, [doc.document_id, projectId]);
+  }, [doc.doc_id, projectId]);
 
   // Auto-generate if requested
   useEffect(() => {
@@ -78,10 +78,10 @@ export function DocumentViewer({ doc, onClose, onChanged, autoGenerate }: Docume
 
   // Fetch linked lessons
   const fetchLinked = useCallback(() => {
-    api.listDocLessons(doc.document_id, { project_id: projectId })
+    api.listDocLessons(doc.doc_id, { project_id: projectId })
       .then((res) => setLinkedLessons(res.lessons ?? []))
       .catch(() => setLinkedLessons([]));
-  }, [doc.document_id, projectId]);
+  }, [doc.doc_id, projectId]);
 
   useEffect(() => { fetchLinked(); }, [fetchLinked]);
 
@@ -118,7 +118,7 @@ export function DocumentViewer({ doc, onClose, onChanged, autoGenerate }: Docume
     setGenerating(true);
     setSuggestions([]);
     try {
-      const res = await api.generateLessonsFromDoc(doc.document_id, { project_id: projectId });
+      const res = await api.generateLessonsFromDoc(doc.doc_id, { project_id: projectId });
       const items: Suggestion[] = (res.suggestions ?? []).map((s: any) => ({
         title: s.title ?? "Untitled",
         lesson_type: s.lesson_type ?? "decision",
@@ -150,7 +150,7 @@ export function DocumentViewer({ doc, onClose, onChanged, autoGenerate }: Docume
       // Link lesson to document
       const lessonId = res.lesson_id ?? res.id;
       if (lessonId) {
-        await api.linkDocLesson(doc.document_id, lessonId, { project_id: projectId });
+        await api.linkDocLesson(doc.doc_id, lessonId, { project_id: projectId });
       }
       setSuggestions((prev) => prev.map((s, i) => i === idx ? { ...s, accepted: true } : s));
       fetchLinked();
@@ -179,7 +179,7 @@ export function DocumentViewer({ doc, onClose, onChanged, autoGenerate }: Docume
 
   const handleLinkLesson = async (lessonId: string) => {
     try {
-      await api.linkDocLesson(doc.document_id, lessonId, { project_id: projectId });
+      await api.linkDocLesson(doc.doc_id, lessonId, { project_id: projectId });
       fetchLinked();
       onChanged();
       setLinkSearchOpen(false);
@@ -192,7 +192,7 @@ export function DocumentViewer({ doc, onClose, onChanged, autoGenerate }: Docume
 
   const handleUnlink = async (lessonId: string) => {
     try {
-      await api.unlinkDocLesson(doc.document_id, lessonId, { project_id: projectId });
+      await api.unlinkDocLesson(doc.doc_id, lessonId, { project_id: projectId });
       fetchLinked();
       onChanged();
       toast("success", "Lesson unlinked");
@@ -390,7 +390,7 @@ export function DocumentViewer({ doc, onClose, onChanged, autoGenerate }: Docume
 
           {/* Footer */}
           <div className="px-6 py-3 border-t border-zinc-800 flex items-center justify-between shrink-0">
-            <span className="text-xs text-zinc-600">Document ID: <span className="font-mono">{doc.document_id.slice(0, 12)}</span></span>
+            <span className="text-xs text-zinc-600">Document ID: <span className="font-mono">{doc.doc_id.slice(0, 12)}</span></span>
             <span className="text-[10px] text-zinc-600">Press ESC to close</span>
           </div>
         </div>

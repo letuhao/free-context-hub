@@ -422,6 +422,7 @@ export default function GuardrailsPage() {
         onClose={() => setAddOpen(false)}
         onAdded={() => { fetchGuardrails(); setAddOpen(false); }}
         presetType="guardrail"
+        dialogTitle="Add Guardrail"
       />
     </div>
     </NoProjectGuard>

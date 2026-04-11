@@ -50,15 +50,21 @@ export default function CodeSearchPage() {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [kind, setKind] = useState<Kind>("all");
+  const [debouncedKind, setDebouncedKind] = useState<Kind>("all");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
 
-  // Debounce query (300ms)
+  // Debounce query and kind (300ms)
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query), 300);
     return () => clearTimeout(timer);
   }, [query]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedKind(kind), 300);
+    return () => clearTimeout(timer);
+  }, [kind]);
 
   const doSearch = useCallback(async () => {
     if (!debouncedQuery.trim()) {
@@ -75,7 +81,7 @@ export default function CodeSearchPage() {
         query: debouncedQuery.trim(),
         max_files: 30,
       };
-      if (kind !== "all") params.kind = kind;
+      if (debouncedKind !== "all") params.kind = debouncedKind;
 
       const res = await api.searchCode(params);
       setResults(res.results ?? res.items ?? res.files ?? []);
@@ -85,7 +91,7 @@ export default function CodeSearchPage() {
     } finally {
       setLoading(false);
     }
-  }, [projectId, debouncedQuery, kind, toast]);
+  }, [projectId, debouncedQuery, debouncedKind, toast]);
 
   useEffect(() => {
     doSearch();
@@ -137,7 +143,7 @@ export default function CodeSearchPage() {
       {/* Empty: no query yet */}
       {!loading && !searched && (
         <EmptyState
-          icon="\uD83D\uDD0D"
+          icon="🔍"
           title="Enter a search query to find code"
           description="Search across project files by name, content, or semantic meaning"
         />
@@ -146,7 +152,7 @@ export default function CodeSearchPage() {
       {/* Empty: no results */}
       {!loading && searched && results.length === 0 && (
         <EmptyState
-          icon="\uD83D\uDDC2\uFE0F"
+          icon="🗂️"
           title={`No results found for "${debouncedQuery}"`}
           description="Try a different query or change the kind filter"
         />

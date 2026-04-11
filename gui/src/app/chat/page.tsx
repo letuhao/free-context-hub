@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useState, useCallback } from "react";
+import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import { useChat } from "@ai-sdk/react";
 import { TextStreamChatTransport, isTextUIPart, isToolUIPart } from "ai";
 import type { UIMessage } from "ai";
@@ -237,13 +237,14 @@ export default function ChatPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [inputValue, setInputValue] = useState("");
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
+  const [chatKey, setChatKey] = useState(0);
   const [sidebarRefresh, setSidebarRefresh] = useState(0);
   const [pinnedMessages, setPinnedMessages] = useState<{ id: string; text: string }[]>([]);
   const [historicalMessages, setHistoricalMessages] = useState<HistoricalMessage[]>([]);
   const [loadingConv, setLoadingConv] = useState(false);
 
-  const { messages, sendMessage, status, stop } = useChat({
-    transport: new TextStreamChatTransport({
+  const transport = useMemo(
+    () => new TextStreamChatTransport({
       api: `${API_URL}/api/chat`,
       headers: {
         ...(API_TOKEN ? { Authorization: `Bearer ${API_TOKEN}` } : {}),
@@ -252,6 +253,12 @@ export default function ChatPage() {
         project_id: projectId,
       },
     }),
+    [projectId],
+  );
+
+  const { messages, sendMessage, status, stop } = useChat({
+    id: `chat-${chatKey}`,
+    transport,
   });
 
   const isStreaming = status === "streaming" || status === "submitted";
@@ -270,6 +277,67 @@ export default function ChatPage() {
     }
   }, [inputValue]);
 
+  // Persist conversation when streaming completes
+  const wasStreamingRef = useRef(false);
+  const persistedCountRef = useRef(0);
+
+  useEffect(() => {
+    if (isStreaming) {
+      wasStreamingRef.current = true;
+      return;
+    }
+    // isStreaming just went false — check if we were streaming and have new messages
+    if (!wasStreamingRef.current || messages.length < 2) return;
+    wasStreamingRef.current = false;
+
+    const newMessages = messages.slice(persistedCountRef.current);
+    if (newMessages.length === 0) return;
+
+    const persistConversation = async () => {
+      try {
+        let convId = activeConvId;
+
+        // Create conversation on first exchange
+        if (!convId) {
+          const firstUserMsg = messages.find((m) => m.role === "user");
+          const title = firstUserMsg?.parts
+            .filter(isTextUIPart)
+            .map((p) => p.text)
+            .join("")
+            .slice(0, 60) || "New conversation";
+          const res = await api.createConversation({ project_id: projectId, title });
+          convId = res.conversation_id ?? null;
+          if (convId) setActiveConvId(convId);
+        }
+
+        if (!convId) return;
+
+        // Save only new (unpersisted) messages
+        for (const msg of newMessages) {
+          const text = msg.parts
+            .filter(isTextUIPart)
+            .map((p) => p.text)
+            .join("\n");
+          if (text) {
+            await api.addMessage(convId, {
+              project_id: projectId,
+              role: msg.role,
+              content: text,
+            });
+          }
+        }
+
+        persistedCountRef.current = messages.length;
+        setSidebarRefresh((k) => k + 1);
+      } catch {
+        // Silent — don't interrupt chat UX for persistence failures
+      }
+    };
+
+    persistConversation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStreaming]);
+
   const handleSend = () => {
     const text = inputValue.trim();
     if (!text || isStreaming) return;
@@ -284,10 +352,14 @@ export default function ChatPage() {
   const handleNewChat = () => {
     setActiveConvId(null);
     setHistoricalMessages([]);
+    setChatKey((k) => k + 1);
+    persistedCountRef.current = 0;
   };
 
   const handleSelectConversation = useCallback(async (id: string) => {
     setActiveConvId(id);
+    setChatKey((k) => k + 1);
+    persistedCountRef.current = 0;
     setLoadingConv(true);
     try {
       const res = await api.getConversation(id, { project_id: projectId });

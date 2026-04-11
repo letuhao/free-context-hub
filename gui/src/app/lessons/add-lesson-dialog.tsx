@@ -13,11 +13,12 @@ interface AddLessonDialogProps {
   onClose: () => void;
   onAdded: () => void;
   presetType?: string;
+  dialogTitle?: string;
 }
 
 const VERIFICATION_METHODS = ["user_confirmation", "recorded_test_event", "cli_exit_code"];
 
-export function AddLessonDialog({ open, onClose, onAdded, presetType }: AddLessonDialogProps) {
+export function AddLessonDialog({ open, onClose, onAdded, presetType, dialogTitle }: AddLessonDialogProps) {
   const { projectId } = useProject();
   const { toast } = useToast();
   const { typeKeys } = useLessonTypes();
@@ -92,7 +93,7 @@ export function AddLessonDialog({ open, onClose, onAdded, presetType }: AddLesso
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative w-[520px] max-h-[80vh] overflow-y-auto bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-2xl">
-        <h3 className="text-base font-semibold text-zinc-100 mb-5">Add Lesson</h3>
+        <h3 className="text-base font-semibold text-zinc-100 mb-5">{dialogTitle ?? "Add Lesson"}</h3>
 
         {/* Title */}
         <div className="mb-3.5">
@@ -173,7 +174,7 @@ export function AddLessonDialog({ open, onClose, onAdded, presetType }: AddLesso
         <div className="flex justify-end gap-2 mt-5 pt-4 border-t border-zinc-800">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button variant="primary" onClick={handleSubmit} disabled={submitting}>
-            {submitting ? "Adding..." : "Add Lesson"}
+            {submitting ? "Adding..." : (dialogTitle ?? "Add Lesson")}
           </Button>
         </div>
       </div>

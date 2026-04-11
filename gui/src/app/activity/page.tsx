@@ -14,25 +14,54 @@ import { BookOpen, Shield, Zap, FileText, Users, CheckCheck, Settings, X } from 
 type ActivityItem = {
   activity_id: string;
   event_type: string;
-  entity_type: string;
-  entity_id: string;
-  description: string;
+  title: string;
+  detail: string | null;
+  actor: string | null;
   metadata: any;
   created_at: string;
-  is_read?: boolean;
+  project_id?: string;
 };
 
 type ActivityFilter = "all" | "lessons" | "jobs" | "guardrails" | "documents";
 type TimeRange = "today" | "week" | "month" | "all";
 
+/** Map frontend filter labels to backend event_type prefix */
+const FILTER_TO_EVENT_PREFIX: Record<string, string> = {
+  lessons: "lesson",
+  jobs: "job",
+  guardrails: "guardrail",
+  documents: "document",
+};
+
 const EVENT_ICONS: Record<string, { icon: React.ReactNode; color: string }> = {
-  lesson_created: { icon: <BookOpen size={14} />, color: "bg-blue-500/10 border-blue-500/20 text-blue-400" },
-  lesson_updated: { icon: <BookOpen size={14} />, color: "bg-amber-500/10 border-amber-500/20 text-amber-400" },
-  guardrail_triggered: { icon: <Shield size={14} />, color: "bg-red-500/10 border-red-500/20 text-red-400" },
-  job_succeeded: { icon: <Zap size={14} />, color: "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" },
-  job_failed: { icon: <X size={14} />, color: "bg-red-500/10 border-red-500/20 text-red-400" },
-  document_uploaded: { icon: <FileText size={14} />, color: "bg-purple-500/10 border-purple-500/20 text-purple-400" },
-  group_created: { icon: <Users size={14} />, color: "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" },
+  "lesson.created": { icon: <BookOpen size={14} />, color: "bg-blue-500/10 border-blue-500/20 text-blue-400" },
+  "lesson.updated": { icon: <BookOpen size={14} />, color: "bg-amber-500/10 border-amber-500/20 text-amber-400" },
+  "lesson.status_changed": { icon: <BookOpen size={14} />, color: "bg-amber-500/10 border-amber-500/20 text-amber-400" },
+  "lesson.deleted": { icon: <X size={14} />, color: "bg-red-500/10 border-red-500/20 text-red-400" },
+  "guardrail.triggered": { icon: <Shield size={14} />, color: "bg-red-500/10 border-red-500/20 text-red-400" },
+  "guardrail.passed": { icon: <Shield size={14} />, color: "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" },
+  "job.queued": { icon: <Zap size={14} />, color: "bg-zinc-500/10 border-zinc-500/20 text-zinc-400" },
+  "job.succeeded": { icon: <Zap size={14} />, color: "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" },
+  "job.failed": { icon: <X size={14} />, color: "bg-red-500/10 border-red-500/20 text-red-400" },
+  "document.uploaded": { icon: <FileText size={14} />, color: "bg-purple-500/10 border-purple-500/20 text-purple-400" },
+  "document.deleted": { icon: <FileText size={14} />, color: "bg-red-500/10 border-red-500/20 text-red-400" },
+  "group.created": { icon: <Users size={14} />, color: "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" },
+  "comment.added": { icon: <BookOpen size={14} />, color: "bg-blue-500/10 border-blue-500/20 text-blue-400" },
+};
+
+const DEFAULT_EVENT_ICON = { icon: <Zap size={14} />, color: "bg-zinc-500/10 border-zinc-500/20 text-zinc-400" };
+
+/** Derive entity type from event_type (e.g. "lesson.created" → "lesson") */
+function entityFromEvent(eventType: string): string | null {
+  const dot = eventType.indexOf(".");
+  return dot > 0 ? eventType.slice(0, dot) : null;
+}
+
+const ENTITY_LINKS: Record<string, { href: string; label: string }> = {
+  lesson: { href: "/lessons", label: "View Lesson →" },
+  job: { href: "/jobs", label: "View Job →" },
+  guardrail: { href: "/guardrails", label: "View Guardrail →" },
+  document: { href: "/documents", label: "View Document →" },
 };
 
 const NOTIF_TOGGLES = [
@@ -74,16 +103,17 @@ export default function ActivityPage() {
     setLoading(true);
     try {
       const useMulti = isAllProjects && projectsLoaded && effectiveProjectIds.length > 0;
+      const eventPrefix = filter !== "all" ? FILTER_TO_EVENT_PREFIX[filter] : undefined;
       const res = useMulti
         ? await api.listActivityMulti({
             project_ids: effectiveProjectIds,
-            event_type: filter !== "all" ? filter : undefined,
+            event_type: eventPrefix,
             limit: pageSize,
             offset: (page - 1) * pageSize,
           })
         : await api.listActivity({
             project_id: projectId, limit: pageSize, offset: (page - 1) * pageSize,
-            ...(filter !== "all" ? { event_type: filter } : {}),
+            ...(eventPrefix ? { event_type: eventPrefix } : {}),
             ...(timeRange !== "all" ? { time_range: timeRange } : {}),
           });
       setItems(res.items ?? res.activities ?? []);
@@ -186,35 +216,31 @@ export default function ActivityPage() {
           ) : (
             <div className="space-y-0">
               {items.map((item) => {
-                const evt = EVENT_ICONS[item.event_type] ?? EVENT_ICONS.lesson_created;
+                const evt = EVENT_ICONS[item.event_type] ?? DEFAULT_EVENT_ICON;
+                const entity = entityFromEvent(item.event_type);
+                const entityLink = entity ? ENTITY_LINKS[entity] : null;
                 return (
                   <div key={item.activity_id} className="flex gap-4 p-4 rounded-lg hover:bg-zinc-900/50 transition-colors relative">
-                    {!item.is_read && (
-                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-blue-500" />
-                    )}
                     <div className={`w-8 h-8 rounded-full border flex items-center justify-center shrink-0 z-10 ${evt.color}`}>
                       {evt.icon}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-zinc-200">{item.description}</p>
+                      <p className="text-sm text-zinc-200">{item.title}</p>
+                      {item.detail && (
+                        <p className="text-xs text-zinc-500 mt-0.5">{item.detail}</p>
+                      )}
                       <div className="flex items-center gap-3 mt-1.5">
                         <span className="text-[11px] text-zinc-600">{relTime(item.created_at)}</span>
-                        <span className="text-[11px] text-zinc-600">Project: <span className="text-zinc-500">{projectId}</span></span>
+                        {item.actor && (
+                          <span className="text-[11px] text-zinc-600">by <span className="text-zinc-500">{item.actor}</span></span>
+                        )}
+                        <span className="text-[11px] text-zinc-600">Project: <span className="text-zinc-500">{item.project_id ?? projectId}</span></span>
                       </div>
-                      <div className="flex gap-3 mt-2">
-                        {item.entity_type === "lesson" && (
-                          <a href="/lessons" className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors">View Lesson →</a>
-                        )}
-                        {item.entity_type === "job" && (
-                          <a href="/jobs" className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors">View Job →</a>
-                        )}
-                        {item.entity_type === "guardrail" && (
-                          <a href="/guardrails" className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors">View Guardrail →</a>
-                        )}
-                        {item.entity_type === "document" && (
-                          <a href="/documents" className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors">View Document →</a>
-                        )}
-                      </div>
+                      {entityLink && (
+                        <div className="flex gap-3 mt-2">
+                          <a href={entityLink.href} className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors">{entityLink.label}</a>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
