@@ -13,7 +13,7 @@ import { ProjectBadge } from "@/components/project-badge";
 import Link from "next/link";
 import {
   Settings, RefreshCw, Activity,
-  Users, ChevronDown, Clock, FolderOpen,
+  Users, ChevronDown, Clock,
 } from "lucide-react";
 
 interface Stats {
@@ -131,7 +131,7 @@ export default function ProjectsPage() {
           {projects.map((p) => {
             const color = getColorClasses(p.color);
             const name = p.name ?? p.project_id;
-            const initials = getInitials(name);
+            const pInitials = getInitials(name);
             return (
               <div
                 key={p.project_id}
@@ -140,7 +140,7 @@ export default function ProjectsPage() {
               >
                 <div className="flex items-center gap-3 mb-3">
                   <div className={cn("w-10 h-10 rounded-lg bg-gradient-to-br flex items-center justify-center text-sm font-bold text-white", color.from, color.to)}>
-                    {initials}
+                    {pInitials}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-zinc-200">{name}</div>
