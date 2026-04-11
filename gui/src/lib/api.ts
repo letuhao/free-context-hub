@@ -177,7 +177,7 @@ export const api = {
     request<any>("GET", `/api/documents/${encodeURIComponent(docId)}/lessons?${qs(params)}`),
 
   // ── Guardrails ──
-  checkGuardrails: (body: { project_id?: string; action_context: Record<string, unknown> }) =>
+  checkGuardrails: (body: { project_id?: string; action_context: Record<string, unknown>; include_groups?: boolean }) =>
     request<any>("POST", "/api/guardrails/check", body),
 
   listGuardrailRules: (params: { project_id: string }) =>
