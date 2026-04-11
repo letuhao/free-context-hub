@@ -86,6 +86,7 @@ export default function GraphExplorerPage() {
   );
 
   // ── Per-project guard (must be before loading/disabled early returns) ──
+  // Renders inline warning instead of NoProjectGuard wrapper to avoid nested flex containers
   if (isAllProjects || selectedProjectIds.length > 1) {
     return (
       <div className="flex-1 overflow-y-auto p-6">
@@ -95,9 +96,18 @@ export default function GraphExplorerPage() {
           projectBadge={<ProjectBadge />}
           subtitle="Explore symbols, dependencies, and code structure"
         />
-        <NoProjectGuard requireSingleProject pageName="Graph Explorer">
-          <></>
-        </NoProjectGuard>
+        <div className="border border-amber-500/20 rounded-lg bg-amber-500/5 p-5 max-w-2xl mt-4">
+          <div className="flex items-start gap-3">
+            <span className="text-amber-400 text-lg mt-0.5">⚠️</span>
+            <div>
+              <h3 className="text-sm font-medium text-amber-300">The Graph Explorer page requires a single project</h3>
+              <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
+                A company-wide knowledge graph would be too large and unfocused.
+                Select a specific project from the sidebar to explore its symbols and dependencies.
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
