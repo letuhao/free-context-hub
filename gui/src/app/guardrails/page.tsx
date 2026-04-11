@@ -103,16 +103,21 @@ export default function GuardrailsPage() {
     setTesting(true);
     setTestResult(null);
     try {
-      const result = isAllProjects
-        ? await api.checkGuardrails({
-            project_id: projectId,
-            action_context: { action: a },
-            include_groups: true,
-          })
-        : await api.checkGuardrails({
-            project_id: projectId,
-            action_context: { action: a },
-          });
+      let result: any;
+      if (isAllProjects && effectiveProjectIds.length > 0) {
+        // Check across all projects, merge results
+        const checks = await Promise.all(
+          effectiveProjectIds.map(pid =>
+            api.checkGuardrails({ project_id: pid, action_context: { action: a } })
+          )
+        );
+        const anyBlocked = checks.some(c => c.pass === false);
+        const allMatched = checks.flatMap(c => c.matched_rules ?? []);
+        const totalChecked = checks.reduce((sum, c) => sum + (c.rules_checked ?? 0), 0);
+        result = { pass: !anyBlocked, rules_checked: totalChecked, matched_rules: allMatched };
+      } else {
+        result = await api.checkGuardrails({ project_id: projectId, action_context: { action: a } });
+      }
       setTestResult(result);
       setHistory((prev) => [
         { action: a, pass: result.pass, matchCount: result.matched_rules?.length ?? 0, timestamp: Date.now() },
@@ -131,11 +136,25 @@ export default function GuardrailsPage() {
     setSimulating(true);
     setSimResults(null);
     try {
-      const { results } = await api.simulateGuardrails({
-        project_id: projectId,
-        actions: lines,
-      });
-      setSimResults(results);
+      if (isAllProjects && effectiveProjectIds.length > 0) {
+        // Simulate across all projects, merge per-action results
+        const allSims = await Promise.all(
+          effectiveProjectIds.map(pid =>
+            api.simulateGuardrails({ project_id: pid, actions: lines })
+          )
+        );
+        // Merge: for each action, combine matched_rules from all projects
+        const merged: SimulateResult[] = lines.map((action) => {
+          const allMatched = allSims.flatMap(sim =>
+            (sim.results ?? []).filter((r: any) => r.action === action).flatMap((r: any) => r.matched_rules ?? [])
+          );
+          return { action, pass: allMatched.length === 0, matched_rules: allMatched };
+        });
+        setSimResults(merged);
+      } else {
+        const { results } = await api.simulateGuardrails({ project_id: projectId, actions: lines });
+        setSimResults(results);
+      }
     } catch (err) {
       toastRef.current("error", err instanceof Error ? err.message : "Simulation failed");
     } finally {
