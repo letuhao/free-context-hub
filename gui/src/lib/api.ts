@@ -177,7 +177,7 @@ export const api = {
     request<any>("GET", `/api/documents/${encodeURIComponent(docId)}/lessons?${qs(params)}`),
 
   // ── Guardrails ──
-  checkGuardrails: (body: { project_id?: string; action_context: Record<string, unknown> }) =>
+  checkGuardrails: (body: { project_id?: string; action_context: Record<string, unknown>; include_groups?: boolean }) =>
     request<any>("POST", "/api/guardrails/check", body),
 
   listGuardrailRules: (params: { project_id: string }) =>
@@ -360,4 +360,75 @@ export const api = {
 
   info: () =>
     request<any>("GET", "/api/system/info"),
+
+  // ── Multi-Project (Phase 9) ──
+
+  /** List lessons across multiple projects. */
+  listLessonsMulti: (params: { project_ids: string[]; limit?: number; offset?: number; sort?: string; order?: string; lesson_type?: string; status?: string; tags_any?: string; q?: string }) => {
+    const qs = new URLSearchParams();
+    qs.set("project_ids", params.project_ids.join(","));
+    if (params.limit) qs.set("limit", String(params.limit));
+    if (params.offset) qs.set("offset", String(params.offset));
+    if (params.sort) qs.set("sort", params.sort);
+    if (params.order) qs.set("order", params.order);
+    if (params.lesson_type) qs.set("lesson_type", params.lesson_type);
+    if (params.status) qs.set("status", params.status);
+    if (params.tags_any) qs.set("tags_any", params.tags_any);
+    if (params.q) qs.set("q", params.q);
+    return request<any>("GET", `/api/lessons?${qs.toString()}`);
+  },
+
+  /** Analytics overview across multiple projects. */
+  getRetrievalStatsMulti: (params: { project_ids: string[]; days?: number }) => {
+    const qs = new URLSearchParams({ project_ids: params.project_ids.join(",") });
+    if (params.days) qs.set("days", String(params.days));
+    return request<any>("GET", `/api/analytics/overview?${qs.toString()}`);
+  },
+
+  /** Analytics timeseries across multiple projects. */
+  getRetrievalTimeseriesMulti: (params: { project_ids: string[]; days?: number }) => {
+    const qs = new URLSearchParams({ project_ids: params.project_ids.join(",") });
+    if (params.days) qs.set("days", String(params.days));
+    return request<any>("GET", `/api/analytics/timeseries?${qs.toString()}`);
+  },
+
+  /** Activity feed across multiple projects. */
+  listActivityMulti: (params: { project_ids: string[]; event_type?: string; limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams({ project_ids: params.project_ids.join(",") });
+    if (params.event_type) qs.set("event_type", params.event_type);
+    if (params.limit) qs.set("limit", String(params.limit));
+    if (params.offset) qs.set("offset", String(params.offset));
+    return request<any>("GET", `/api/activity?${qs.toString()}`);
+  },
+
+  /** Audit log across multiple projects. */
+  listAuditLogMulti: (params: { project_ids: string[]; limit?: number; offset?: number; agent_id?: string; days?: number }) => {
+    const qs = new URLSearchParams({ project_ids: params.project_ids.join(",") });
+    if (params.limit) qs.set("limit", String(params.limit));
+    if (params.offset) qs.set("offset", String(params.offset));
+    if (params.agent_id) qs.set("agent_id", params.agent_id);
+    if (params.days) qs.set("days", String(params.days));
+    return request<any>("GET", `/api/audit?${qs.toString()}`);
+  },
+
+  /** Audit stats across multiple projects. */
+  getAuditStatsMulti: (params: { project_ids: string[] }) =>
+    request<any>("GET", `/api/audit/stats?project_ids=${params.project_ids.join(",")}`),
+
+  /** Guardrail rules across multiple projects. */
+  listGuardrailRulesMulti: (params: { project_ids: string[]; limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams({ project_ids: params.project_ids.join(",") });
+    if (params.limit) qs.set("limit", String(params.limit));
+    if (params.offset) qs.set("offset", String(params.offset));
+    return request<any>("GET", `/api/guardrails/rules?${qs.toString()}`);
+  },
+
+  /** Jobs across multiple projects. */
+  listJobsMulti: (params: { project_ids: string[]; limit?: number; offset?: number; status?: string }) => {
+    const qs = new URLSearchParams({ project_ids: params.project_ids.join(",") });
+    if (params.limit) qs.set("limit", String(params.limit));
+    if (params.offset) qs.set("offset", String(params.offset));
+    if (params.status) qs.set("status", params.status);
+    return request<any>("GET", `/api/jobs?${qs.toString()}`);
+  },
 };

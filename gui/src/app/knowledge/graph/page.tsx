@@ -5,6 +5,9 @@ import { useProject } from "@/contexts/project-context";
 import { api } from "@/lib/api";
 import { Breadcrumb, PageHeader, Badge, Button, EmptyState, SearchBar } from "@/components/ui";
 import { NoProjectGuard } from "@/components/no-project-guard";
+import { ProjectBadge } from "@/components/project-badge";
+import { getColorClasses, getInitials } from "@/lib/project-colors";
+import { cn } from "@/lib/cn";
 import { useToast } from "@/components/ui/toast";
 
 interface FeatureCard {
@@ -41,7 +44,7 @@ const KG_FEATURES: FeatureCard[] = [
 ];
 
 export default function GraphExplorerPage() {
-  const { projectId } = useProject();
+  const { projectId, projects, isAllProjects, selectedProjectIds, setProjectId } = useProject();
   const { toast } = useToast();
 
   const [kgEnabled, setKgEnabled] = useState<boolean | null>(null);
@@ -84,6 +87,49 @@ export default function GraphExplorerPage() {
     [projectId, toast],
   );
 
+  // ── Per-project guard (must be before loading/disabled early returns) ──
+  // Renders inline warning instead of NoProjectGuard wrapper to avoid nested flex containers
+  if (isAllProjects || selectedProjectIds.length > 1) {
+    return (
+      <div className="flex-1 overflow-y-auto p-6">
+        <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Graph Explorer" }]} />
+        <PageHeader
+          title="Knowledge Graph"
+          projectBadge={<ProjectBadge />}
+          subtitle="Explore symbols, dependencies, and code structure"
+        />
+        <div className="border border-amber-500/20 rounded-lg bg-amber-500/5 p-5 max-w-2xl mt-4">
+          <div className="flex items-start gap-3">
+            <span className="text-amber-400 text-lg mt-0.5">⚠️</span>
+            <div>
+              <h3 className="text-sm font-medium text-amber-300">The Graph Explorer page requires a single project</h3>
+              <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
+                A company-wide knowledge graph would be too large and unfocused.
+                Select a specific project to explore its symbols and dependencies.
+              </p>
+              <div className="flex flex-wrap gap-2 mt-4">
+                {projects.slice(0, 6).map((p) => {
+                  const color = getColorClasses(p.color);
+                  const name = p.name ?? p.project_id;
+                  return (
+                    <button key={p.project_id} onClick={() => setProjectId(p.project_id)}
+                      className="flex items-center gap-2 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-md text-xs text-zinc-300 hover:border-zinc-500 transition-colors">
+                      <div className={cn("w-4 h-4 rounded bg-gradient-to-br flex items-center justify-center text-[7px] font-bold text-white", color.from, color.to)}>
+                        {getInitials(name)}
+                      </div>
+                      {name}
+                    </button>
+                  );
+                })}
+                {projects.length > 6 && <span className="flex items-center px-2 text-[10px] text-zinc-600">+{projects.length - 6} more</span>}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ── Loading state ──
   if (loading) {
     return (
@@ -122,11 +168,12 @@ export default function GraphExplorerPage() {
 
   // ── Main content ──
   return (
-    <NoProjectGuard>
+    <NoProjectGuard requireSingleProject pageName="Graph Explorer">
     <div className="flex-1 overflow-y-auto p-6">
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Graph Explorer" }]} />
       <PageHeader
         title="Knowledge Graph"
+        projectBadge={<ProjectBadge />}
         subtitle="Explore symbols, dependencies, and code structure"
         actions={
           <Badge value="Preview" variant="type" />

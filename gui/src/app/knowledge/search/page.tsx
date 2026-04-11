@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { Breadcrumb, PageHeader, SearchBar, Badge, EmptyState } from "@/components/ui";
 import { LineSkeleton } from "@/components/ui/loading-skeleton";
 import { NoProjectGuard } from "@/components/no-project-guard";
+import { ProjectBadge } from "@/components/project-badge";
 import { useToast } from "@/components/ui/toast";
 
 type SearchResult = {
@@ -91,11 +92,12 @@ export default function CodeSearchPage() {
   }, [doSearch]);
 
   return (
-    <NoProjectGuard>
+    <NoProjectGuard requireSingleProject pageName="Code Search">
     <div className="flex-1 overflow-y-auto p-6">
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Code Search" }]} />
       <PageHeader
         title="Code Search"
+        projectBadge={<ProjectBadge />}
         subtitle="Search project code with tiered retrieval"
       />
 

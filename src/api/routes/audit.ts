@@ -1,15 +1,15 @@
 import { Router } from 'express';
 import { listAuditLog, getAuditStats } from '../../services/auditLog.js';
-import { resolveProjectIdOrThrow } from '../../core/index.js';
+import { resolveProjectParams, resolveProjectIdOrIds } from '../middleware/resolveProjectParams.js';
 
 const router = Router();
 
 /** GET /api/audit — unified audit timeline */
 router.get('/', async (req, res, next) => {
   try {
-    const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
+    const p = resolveProjectParams(req.query);
     const result = await listAuditLog({
-      projectId,
+      ...p,
       limit: req.query.limit ? Number(req.query.limit) : undefined,
       offset: req.query.offset ? Number(req.query.offset) : undefined,
       agent_id: req.query.agent_id as string | undefined,
@@ -23,8 +23,8 @@ router.get('/', async (req, res, next) => {
 /** GET /api/audit/stats — audit statistics */
 router.get('/stats', async (req, res, next) => {
   try {
-    const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
-    const stats = await getAuditStats(projectId);
+    const pid = resolveProjectIdOrIds(req.query);
+    const stats = await getAuditStats(pid);
     res.json(stats);
   } catch (e) { next(e); }
 });

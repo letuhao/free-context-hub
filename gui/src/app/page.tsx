@@ -10,6 +10,8 @@ import { StatCardSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
 import { BookOpen, GitCommit, FileText, Loader, Lightbulb, AlertTriangle, TrendingUp, FolderOpen, Shield, MessageSquare, Plus, CheckCircle2, Circle, Key, Cpu } from "lucide-react";
 import { CreateProjectModal } from "@/components/create-project-modal";
+import { ProjectBadge } from "@/components/project-badge";
+import { getColorClasses, getInitials } from "@/lib/project-colors";
 
 type FeatureStatus = {
   enabled: boolean;
@@ -54,7 +56,7 @@ type Commit = {
 };
 
 export default function DashboardPage() {
-  const { projectId, projects } = useProject();
+  const { projectId, setProjectId: switchProject, projects, isAllProjects, effectiveProjectIds, projectsLoaded, refreshProjects } = useProject();
   const { toast } = useToast();
   const toastRef = useRef(toast);
   toastRef.current = toast;
@@ -74,11 +76,25 @@ export default function DashboardPage() {
   const [hasMcpLesson, setHasMcpLesson] = useState(false);
   const [checklistDismissed, setChecklistDismissed] = useState(false);
 
+  // Multi-project state
+  const [allProjectsLessons, setAllProjectsLessons] = useState<any[]>([]);
+  const [allProjectsLoading, setAllProjectsLoading] = useState(false);
+
   // Re-read dismissed state when project changes
   useEffect(() => {
     try { setChecklistDismissed(localStorage.getItem(`chub_checklist_dismissed_${projectId}`) === "1"); }
     catch { setChecklistDismissed(false); }
   }, [projectId]);
+
+  // Fetch cross-project data when in All Projects mode
+  useEffect(() => {
+    if (!isAllProjects || !projectsLoaded || effectiveProjectIds.length === 0) return;
+    setAllProjectsLoading(true);
+    api.listLessonsMulti({ project_ids: effectiveProjectIds, limit: 8, sort: "created_at", order: "desc" })
+      .then((res) => setAllProjectsLessons(res.items ?? []))
+      .catch(() => setAllProjectsLessons([]))
+      .finally(() => setAllProjectsLoading(false));
+  }, [isAllProjects, projectsLoaded, effectiveProjectIds]);
 
   // FIX #3: Use ref for toast to avoid fetchAll re-creation
   // FIX #2: Reduced from 9 to 6 parallel calls (consolidated lessons queries)
@@ -244,10 +260,117 @@ export default function DashboardPage() {
     );
   }
 
+  // ═══ ALL PROJECTS VIEW ═══
+  if (isAllProjects && projectsLoaded) {
+    const totalLessons = projects.reduce((sum, p) => sum + (p.lesson_count ?? 0), 0);
+    return (
+      <div className="flex-1 overflow-y-auto p-6">
+        <PageHeader
+          title="Dashboard"
+          projectBadge={<ProjectBadge />}
+          subtitle={`Overview across ${projects.length} projects`}
+          actions={<Button variant="outline" size="sm" onClick={() => { refreshProjects(); }}>↻ Refresh</Button>}
+        />
+
+        {/* Aggregate stats (computed from projects array — no API call needed) */}
+        <div className="flex gap-3 mb-5 flex-wrap">
+          <StatCard value={totalLessons} label="Total Lessons" icon={<BookOpen size={18} />} />
+          <StatCard value={projects.length} label="Projects" icon={<FolderOpen size={18} />} />
+        </div>
+
+        {/* Project cards */}
+        <h2 className="text-sm font-medium text-zinc-300 mb-3">Projects</h2>
+        <div className="grid grid-cols-2 gap-3 mb-5">
+          {projects.map((p) => {
+            const color = getColorClasses(p.color);
+            const name = p.name ?? p.project_id;
+            const initials = getInitials(name);
+            const health = p.lesson_count > 0 ? Math.min(100, p.lesson_count * 5) : 0;
+            return (
+              <div
+                key={p.project_id}
+                onClick={() => switchProject(p.project_id)}
+                className="border border-zinc-800 rounded-lg bg-zinc-900 p-4 hover:border-zinc-700 cursor-pointer transition-colors"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className={`w-8 h-8 rounded-md bg-gradient-to-br ${color.from} ${color.to} flex items-center justify-center text-xs font-bold text-white`}>
+                      {initials}
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-zinc-200">{name}</div>
+                      <div className="text-[10px] text-zinc-600">{p.description || p.project_id}</div>
+                    </div>
+                  </div>
+                  {/* Health dot */}
+                  <div className="relative w-10 h-10">
+                    <svg width="40" height="40" viewBox="0 0 40 40">
+                      <circle cx="20" cy="20" r="16" fill="none" stroke="#27272a" strokeWidth="3" />
+                      <circle cx="20" cy="20" r="16" fill="none"
+                        stroke={health >= 70 ? "#10b981" : health >= 40 ? "#f59e0b" : "#ef4444"}
+                        strokeWidth="3" strokeDasharray="100.5"
+                        strokeDashoffset={100.5 - (100.5 * health / 100)}
+                        strokeLinecap="round" transform="rotate(-90 20 20)" />
+                    </svg>
+                    <span className={`absolute inset-0 flex items-center justify-center text-[10px] font-semibold ${health >= 70 ? "text-emerald-400" : health >= 40 ? "text-amber-400" : "text-red-400"}`}>
+                      {health}%
+                    </span>
+                  </div>
+                </div>
+                <div className="flex gap-4 text-[10px] text-zinc-500">
+                  <span><span className="text-zinc-300 font-medium">{p.lesson_count}</span> lessons</span>
+                  <span><span className="text-zinc-300 font-medium">{p.groups?.length ?? 0}</span> groups</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Cross-project recent lessons */}
+        {allProjectsLoading && (
+          <div className="border border-zinc-800 rounded-lg bg-zinc-900 p-4">
+            <div className="animate-pulse space-y-3">
+              {[1, 2, 3].map(i => <div key={i} className="h-8 bg-zinc-800 rounded" />)}
+            </div>
+          </div>
+        )}
+        {!allProjectsLoading && allProjectsLessons.length > 0 && (
+          <div className="border border-zinc-800 rounded-lg bg-zinc-900 overflow-hidden">
+            <div className="px-4 py-3 border-b border-zinc-800">
+              <h3 className="text-sm font-semibold text-zinc-300">Recent Lessons (All Projects)</h3>
+            </div>
+            <div className="px-4 py-1">
+              {allProjectsLessons.map((l: any) => {
+                const lProject = projects.find(p => p.project_id === l.project_id);
+                const lColor = getColorClasses(lProject?.color);
+                return (
+                  <div key={l.lesson_id} onClick={() => router.push("/lessons")} className="flex items-center gap-2 py-2 border-b border-zinc-800/50 last:border-0 cursor-pointer hover:bg-zinc-800/30 -mx-4 px-4 transition-colors">
+                    {lProject && (
+                      <div className={`w-4 h-4 rounded bg-gradient-to-br ${lColor.from} ${lColor.to} flex items-center justify-center text-[7px] font-bold text-white shrink-0`}>
+                        {getInitials(lProject.name ?? lProject.project_id)}
+                      </div>
+                    )}
+                    <Badge value={l.lesson_type} variant="type" />
+                    <span className="text-xs text-zinc-300 flex-1 truncate">{l.title}</span>
+                    <span className="text-[10px] text-zinc-600 shrink-0">{relTime(l.created_at)}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <button onClick={() => router.push("/lessons")} className="block w-full text-center py-2 text-[11px] text-blue-500 border-t border-zinc-800 cursor-pointer hover:bg-zinc-800/30">View all lessons →</button>
+          </div>
+        )}
+
+        <CreateProjectModal open={createModalOpen} onClose={() => setCreateModalOpen(false)} />
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 overflow-y-auto p-6">
       <PageHeader
         title="Dashboard"
+        projectBadge={<ProjectBadge />}
         subtitle={`${projectId} — project overview`}
         actions={
           <div className="flex items-center gap-3">

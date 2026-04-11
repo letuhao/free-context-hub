@@ -12,6 +12,7 @@ import { Send, Square, Copy, Check, Bookmark, Pencil, RotateCcw, Sparkles, Pin, 
 import { MarkdownContent } from "./markdown-content";
 import { ChatHistorySidebar } from "./chat-history-sidebar";
 import { NoProjectGuard } from "@/components/no-project-guard";
+import { ProjectBadge } from "@/components/project-badge";
 import { CreateLessonPopover } from "./create-lesson-popover";
 
 type HistoricalMessage = { id: string; role: "user" | "assistant"; content: string };
@@ -329,8 +330,9 @@ export default function ChatPage() {
       <div className="flex-1 flex flex-col h-full min-w-0">
         {/* Header */}
         <div className="px-6 py-4 border-b border-zinc-800 shrink-0">
+          <div className="flex items-center gap-1.5 text-xs text-zinc-500 mb-1"><ProjectBadge /></div>
           <h1 className="text-lg font-semibold text-zinc-100">Chat</h1>
-          <p className="text-xs text-zinc-500">Ask questions about {projectId} — AI searches your knowledge base</p>
+          <p className="text-xs text-zinc-500">Ask questions about your project — AI searches your knowledge base</p>
         </div>
 
         {/* Pinned messages */}

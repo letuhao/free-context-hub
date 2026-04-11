@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { Breadcrumb, PageHeader, Badge, Button, TableSkeleton } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { NoProjectGuard } from "@/components/no-project-guard";
+import { ProjectBadge } from "@/components/project-badge";
 import { CheckCircle2, Circle, Play, RotateCcw, Share2, ArrowRight } from "lucide-react";
 
 type LearningItem = {
@@ -129,6 +130,7 @@ export default function GettingStartedPage() {
     <div className="flex-1 overflow-y-auto p-6">
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Getting Started" }]} />
       <PageHeader
+        projectBadge={<ProjectBadge />}
         title="Getting Started"
         subtitle="Learn your project's key decisions, patterns, and guardrails"
         actions={

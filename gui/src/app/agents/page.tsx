@@ -9,6 +9,7 @@ import { StatCardSkeleton } from "@/components/ui/loading-skeleton";
 import { Pagination } from "@/components/ui/pagination";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
+import { ProjectBadge } from "@/components/project-badge";
 import { Plus, Shield, Edit3, Search, Ban, Check, X } from "lucide-react";
 
 interface AuditEntry {
@@ -51,7 +52,7 @@ const TIME_RANGES = [
 ] as const;
 
 export default function AgentAuditPage() {
-  const { projectId } = useProject();
+  const { projectId, isAllProjects, effectiveProjectIds, projectsLoaded } = useProject();
   const { toast } = useToast();
   const toastRef = useRef(toast);
   toastRef.current = toast;
@@ -72,15 +73,25 @@ export default function AgentAuditPage() {
 
   const fetchData = useCallback(async () => {
     try {
+      const useMulti = isAllProjects && projectsLoaded && effectiveProjectIds.length > 0;
       const [logRes, statsRes] = await Promise.all([
-        api.listAuditLog({
-          project_id: projectId,
-          limit: pageSize,
-          offset: (page - 1) * pageSize,
-          action_type: tab || undefined,
-          days: days || undefined,
-        }),
-        api.getAuditStats({ project_id: projectId }),
+        useMulti
+          ? api.listAuditLogMulti({
+              project_ids: effectiveProjectIds,
+              limit: pageSize,
+              offset: (page - 1) * pageSize,
+              days: days || undefined,
+            })
+          : api.listAuditLog({
+              project_id: projectId,
+              limit: pageSize,
+              offset: (page - 1) * pageSize,
+              action_type: tab || undefined,
+              days: days || undefined,
+            }),
+        useMulti
+          ? api.getAuditStatsMulti({ project_ids: effectiveProjectIds })
+          : api.getAuditStats({ project_id: projectId }),
       ]);
       setItems(logRes.items ?? []);
       setTotalCount(logRes.total_count ?? 0);
@@ -90,7 +101,7 @@ export default function AgentAuditPage() {
     } finally {
       setInitialLoad(false);
     }
-  }, [projectId, tab, days, page]);
+  }, [projectId, tab, days, page, isAllProjects, effectiveProjectIds, projectsLoaded]);
 
   useEffect(() => { setInitialLoad(true); fetchData(); }, [fetchData]);
 
@@ -136,6 +147,7 @@ export default function AgentAuditPage() {
 
       <div className="flex items-center justify-between mb-6">
         <div>
+          <div className="flex items-center gap-1.5 text-xs text-zinc-500 mb-1"><ProjectBadge /></div>
           <h1 className="text-lg font-semibold text-zinc-100">Agent Audit Trail</h1>
           <p className="text-xs text-zinc-500 mt-0.5">Track agent actions, guardrail checks, and lesson modifications</p>
         </div>

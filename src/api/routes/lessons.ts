@@ -12,17 +12,18 @@ import {
   resolveProjectIds,
 } from '../../core/index.js';
 import { requireRole } from '../middleware/requireRole.js';
+import { resolveProjectParams } from '../middleware/resolveProjectParams.js';
 
 const router = Router();
 
 /** GET /api/lessons — list lessons with pagination, sorting, filters, text search */
 router.get('/', async (req, res, next) => {
   try {
-    const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
+    const p = resolveProjectParams(req.query);
     const limit = req.query.limit ? Math.min(Number(req.query.limit), 100) : 20;
 
     const result = await listLessons({
-      projectId,
+      ...p,
       limit,
       // Offset-based pagination (page numbers)
       offset: req.query.offset !== undefined ? Number(req.query.offset) : undefined,

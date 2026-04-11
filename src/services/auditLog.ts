@@ -26,7 +26,8 @@ export interface AuditStats {
  * Returns most recent actions first.
  */
 export async function listAuditLog(params: {
-  projectId: string;
+  projectId?: string;
+  projectIds?: string[];
   limit?: number;
   offset?: number;
   agent_id?: string;
@@ -38,8 +39,11 @@ export async function listAuditLog(params: {
   const offset = params.offset ?? 0;
 
   // Build WHERE clause parts shared by both queries
-  const baseWhere: string[] = [`project_id = $1`];
-  const baseVals: unknown[] = [params.projectId];
+  const ids = params.projectIds ?? (params.projectId ? [params.projectId] : []);
+  const projectClause = ids.length === 1 ? `project_id = $1` : `project_id = ANY($1::text[])`;
+  const projectParam = ids.length === 1 ? ids[0] : ids;
+  const baseWhere: string[] = [projectClause];
+  const baseVals: unknown[] = [projectParam];
 
   if (params.days && params.days > 0) {
     baseWhere.push(`created_at >= now() - interval '${Math.floor(params.days)} days'`);
@@ -128,15 +132,18 @@ export async function listAuditLog(params: {
   };
 }
 
-/** Get audit stats for a project. */
-export async function getAuditStats(projectId: string): Promise<AuditStats> {
+/** Get audit stats for a project or multiple projects. */
+export async function getAuditStats(projectIdOrIds: string | string[]): Promise<AuditStats> {
   const pool = getDbPool();
+  const isArray = Array.isArray(projectIdOrIds);
+  const clause = isArray ? `project_id = ANY($1::text[])` : `project_id = $1`;
+  const param = isArray ? projectIdOrIds : projectIdOrIds;
 
   const [guardrailRes, blockedRes, lessonRes, agentRes] = await Promise.all([
-    pool.query(`SELECT count(*)::int AS cnt FROM guardrail_audit_logs WHERE project_id = $1`, [projectId]),
-    pool.query(`SELECT count(*)::int AS cnt FROM guardrail_audit_logs WHERE project_id = $1 AND pass = false`, [projectId]),
-    pool.query(`SELECT count(*)::int AS cnt FROM lessons WHERE project_id = $1`, [projectId]),
-    pool.query(`SELECT count(DISTINCT captured_by)::int AS cnt FROM lessons WHERE project_id = $1 AND captured_by IS NOT NULL`, [projectId]),
+    pool.query(`SELECT count(*)::int AS cnt FROM guardrail_audit_logs WHERE ${clause}`, [param]),
+    pool.query(`SELECT count(*)::int AS cnt FROM guardrail_audit_logs WHERE ${clause} AND pass = false`, [param]),
+    pool.query(`SELECT count(*)::int AS cnt FROM lessons WHERE ${clause}`, [param]),
+    pool.query(`SELECT count(DISTINCT captured_by)::int AS cnt FROM lessons WHERE ${clause} AND captured_by IS NOT NULL`, [param]),
   ]);
 
   const guardrailChecks = guardrailRes.rows?.[0]?.cnt ?? 0;

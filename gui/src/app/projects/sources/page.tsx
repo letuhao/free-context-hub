@@ -5,6 +5,7 @@ import { useProject } from "@/contexts/project-context";
 import { api } from "@/lib/api";
 import { Breadcrumb, PageHeader, Button, EmptyState } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
+import { NoProjectGuard } from "@/components/no-project-guard";
 
 type SourceConfig = {
   source_type: string;
@@ -20,7 +21,7 @@ type WorkspaceRoot = {
 };
 
 export default function SourcesPage() {
-  const { projectId } = useProject();
+  const { projectId, isAllProjects, selectedProjectIds } = useProject();
   const { toast } = useToast();
   const toastRef = useRef(toast);
   toastRef.current = toast;
@@ -130,6 +131,15 @@ export default function SourcesPage() {
 
   const isRemote = source?.source_type === "remote_git" || sourceType === "remote_git";
 
+  // Per-project guard (must be before loading early return)
+  if (isAllProjects || selectedProjectIds.length > 1) {
+    return (
+      <NoProjectGuard requireSingleProject pageName="Sources">
+        <></>
+      </NoProjectGuard>
+    );
+  }
+
   if (initialLoad) {
     return (
       <div className="flex-1 overflow-y-auto p-6">
@@ -145,6 +155,7 @@ export default function SourcesPage() {
   }
 
   return (
+    <NoProjectGuard requireSingleProject pageName="Sources">
     <div className="flex-1 overflow-y-auto p-6">
       <Breadcrumb items={[{ label: "Project", href: "/projects" }, { label: "Sources" }]} />
       <PageHeader
@@ -282,5 +293,6 @@ export default function SourcesPage() {
         </div>
       </div>
     </div>
+    </NoProjectGuard>
   );
 }

@@ -203,6 +203,7 @@ export async function failJob(jobId: string, attempts: number, maxAttempts: numb
 
 export async function listJobs(params: {
   projectId?: string;
+  projectIds?: string[];
   correlationId?: string;
   status?: JobStatus;
   limit?: number;
@@ -228,7 +229,10 @@ export async function listJobs(params: {
   const offset = Math.max(params.offset ?? 0, 0);
   const clauses = ['1=1'];
   const values: unknown[] = [];
-  if (params.projectId) {
+  if (params.projectIds && params.projectIds.length > 0) {
+    values.push(params.projectIds);
+    clauses.push(`project_id = ANY($${values.length}::text[])`);
+  } else if (params.projectId) {
     values.push(params.projectId);
     clauses.push(`project_id=$${values.length}`);
   }

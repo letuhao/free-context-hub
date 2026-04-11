@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { relTime } from "@/lib/rel-time";
 import { Breadcrumb, PageHeader, DataTable, JobStatusBadge, Button, EmptyState, TableSkeleton, type Column } from "@/components/ui";
 import { NoProjectGuard } from "@/components/no-project-guard";
+import { ProjectBadge } from "@/components/project-badge";
 import { useToast } from "@/components/ui/toast";
 import { Pagination } from "@/components/ui/pagination";
 
@@ -35,7 +36,7 @@ const JOB_TYPES = [
 ] as const;
 
 export default function JobsPage() {
-  const { projectId } = useProject();
+  const { projectId, isAllProjects, effectiveProjectIds, projectsLoaded } = useProject();
   const { toast } = useToast();
   const toastRef = useRef(toast);
   toastRef.current = toast;
@@ -56,13 +57,20 @@ export default function JobsPage() {
 
   const fetchJobs = useCallback(async () => {
     try {
-      const params: Record<string, string | number | undefined> = {
-        project_id: projectId,
-        limit: pageSize,
-        offset: (page - 1) * pageSize,
-      };
-      if (activeTab !== "all") params.status = activeTab;
-      const result = await api.listJobs(params);
+      const useMulti = isAllProjects && projectsLoaded && effectiveProjectIds.length > 0;
+      const result = useMulti
+        ? await api.listJobsMulti({
+            project_ids: effectiveProjectIds,
+            limit: pageSize,
+            offset: (page - 1) * pageSize,
+            status: activeTab !== "all" ? activeTab : undefined,
+          })
+        : await api.listJobs({
+            project_id: projectId,
+            limit: pageSize,
+            offset: (page - 1) * pageSize,
+            status: activeTab !== "all" ? activeTab : undefined,
+          });
       setJobs(result.items ?? []);
       setTotalCount(result.total_count ?? 0);
     } catch {
@@ -70,7 +78,7 @@ export default function JobsPage() {
     } finally {
       setInitialLoad(false);
     }
-  }, [projectId, activeTab, page]);
+  }, [projectId, activeTab, page, isAllProjects, effectiveProjectIds, projectsLoaded]);
 
   useEffect(() => { fetchJobs(); }, [fetchJobs]);
 
@@ -148,9 +156,10 @@ export default function JobsPage() {
       <Breadcrumb items={[{ label: "System", href: "/settings" }, { label: "Jobs" }]} />
       <PageHeader
         title="Jobs"
+        projectBadge={<ProjectBadge />}
         subtitle="Monitor and manage the async job queue"
         actions={
-          <Button variant="primary" onClick={() => setEnqueueOpen(true)}>+ Enqueue Job</Button>
+          !isAllProjects ? <Button variant="primary" onClick={() => setEnqueueOpen(true)}>+ Enqueue Job</Button> : undefined
         }
       />
 

@@ -9,6 +9,7 @@ import { relTime } from "@/lib/rel-time";
 import { FileText, Link2, Upload, Trash2, Eye, Sparkles } from "lucide-react";
 import { Pagination } from "@/components/ui/pagination";
 import { NoProjectGuard } from "@/components/no-project-guard";
+import { ProjectBadge } from "@/components/project-badge";
 import { UploadDialog } from "./upload-dialog";
 import { DocumentViewer } from "./document-viewer";
 
@@ -40,7 +41,7 @@ function formatSize(bytes: number | null): string {
 }
 
 export default function DocumentsPage() {
-  const { projectId } = useProject();
+  const { projectId, isAllProjects } = useProject();
   const { toast } = useToast();
 
   const [docs, setDocs] = useState<Doc[]>([]);
@@ -99,17 +100,20 @@ export default function DocumentsPage() {
     <div className="flex-1 overflow-y-auto p-6">
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Documents" }]} />
       <PageHeader
+        projectBadge={<ProjectBadge />}
         title="Documents"
         subtitle="Attach reference documents to your project"
         actions={
-          <>
-            <Button variant="outline" onClick={() => setUploadMode("url")}>
-              <Link2 size={14} className="mr-1" /> Link URL
-            </Button>
-            <Button variant="primary" onClick={() => setUploadMode("upload")}>
-              <Upload size={14} className="mr-1" /> + Upload Document
-            </Button>
-          </>
+          !isAllProjects ? (
+            <>
+              <Button variant="outline" onClick={() => setUploadMode("url")}>
+                <Link2 size={14} className="mr-1" /> Link URL
+              </Button>
+              <Button variant="primary" onClick={() => setUploadMode("upload")}>
+                <Upload size={14} className="mr-1" /> + Upload Document
+              </Button>
+            </>
+          ) : undefined
         }
       />
 
@@ -145,7 +149,7 @@ export default function DocumentsPage() {
           icon="📄"
           title="No documents"
           description={filter !== "all" ? "No documents match this filter" : "Upload or link your first document"}
-          action={filter === "all" ? <Button variant="primary" onClick={() => setUploadMode("upload")}>+ Upload Document</Button> : undefined}
+          action={filter === "all" && !isAllProjects ? <Button variant="primary" onClick={() => setUploadMode("upload")}>+ Upload Document</Button> : undefined}
         />
       ) : (
         <>

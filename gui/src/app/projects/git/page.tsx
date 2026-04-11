@@ -13,6 +13,7 @@ import {
   TableSkeleton,
   type Column,
 } from "@/components/ui";
+import { ProjectBadge } from "@/components/project-badge";
 import { Pagination } from "@/components/ui/pagination";
 import { useToast } from "@/components/ui/toast";
 
@@ -166,6 +167,7 @@ export default function GitHistoryPage() {
     <div className="flex-1 overflow-y-auto p-6">
       <Breadcrumb items={[{ label: "Project", href: "/projects" }, { label: "Git History" }]} />
       <PageHeader
+        projectBadge={<ProjectBadge />}
         title="Git History"
         subtitle="Browse commits, ingest history, suggest lessons"
         actions={

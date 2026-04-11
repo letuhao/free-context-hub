@@ -7,12 +7,14 @@ import { Breadcrumb, PageHeader, Badge, Button, StatCard, TableSkeleton } from "
 import { useToast } from "@/components/ui/toast";
 import { relTime } from "@/lib/rel-time";
 import { NoProjectGuard } from "@/components/no-project-guard";
-import { TrendingUp, BookOpen, CheckCircle2, AlertTriangle, Archive } from "lucide-react";
+import { ProjectBadge } from "@/components/project-badge";
+import { getColorClasses } from "@/lib/project-colors";
+import { TrendingUp, AlertTriangle } from "lucide-react";
 
 type TimeRange = "7" | "30" | "90" | "all";
 
 export default function AnalyticsPage() {
-  const { projectId } = useProject();
+  const { projectId, projects, isAllProjects, effectiveProjectIds, projectsLoaded } = useProject();
   const { toast } = useToast();
 
   const [days, setDays] = useState<TimeRange>("30");
@@ -26,11 +28,22 @@ export default function AnalyticsPage() {
     setLoading(true);
     try {
       const daysNum = days === "all" ? undefined : Number(days);
+      const useMulti = isAllProjects && projectsLoaded && effectiveProjectIds.length > 0;
       const [retrieval, staleRes, deadRes, tsRes] = await Promise.all([
-        api.getRetrievalStats({ project_id: projectId, days: daysNum }),
-        api.getStaleStats({ project_id: projectId, days: 90 }),
-        api.getDeadKnowledge({ project_id: projectId }),
-        api.getRetrievalTimeseries({ project_id: projectId, days: daysNum }),
+        useMulti
+          ? api.getRetrievalStatsMulti({ project_ids: effectiveProjectIds, days: daysNum })
+          : api.getRetrievalStats({ project_id: projectId, days: daysNum }),
+        // getStaleStats is a stub — skip in multi mode
+        useMulti
+          ? Promise.resolve({ items: [] })
+          : api.getStaleStats({ project_id: projectId, days: 90 }),
+        // Backend accepts project_ids query param (Sprint 9.1); type cast needed until api.ts updated
+        api.getDeadKnowledge((useMulti
+          ? { project_ids: effectiveProjectIds.join(",") }
+          : { project_id: projectId }) as any),
+        useMulti
+          ? api.getRetrievalTimeseriesMulti({ project_ids: effectiveProjectIds, days: daysNum })
+          : api.getRetrievalTimeseries({ project_id: projectId, days: daysNum }),
       ]);
       setStats(retrieval);
       setStale(staleRes.lessons ?? staleRes.items ?? []);
@@ -41,7 +54,7 @@ export default function AnalyticsPage() {
     } finally {
       setLoading(false);
     }
-  }, [projectId, days, toast]);
+  }, [projectId, days, isAllProjects, effectiveProjectIds, projectsLoaded, toast]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -67,7 +80,8 @@ export default function AnalyticsPage() {
       <Breadcrumb items={[{ label: "System", href: "/jobs" }, { label: "Analytics" }]} />
       <PageHeader
         title="Knowledge Analytics"
-        subtitle="Track knowledge usage, quality, and trends"
+        projectBadge={<ProjectBadge />}
+        subtitle={isAllProjects ? `Analytics across ${projects.length} projects` : "Track knowledge usage, quality, and trends"}
         actions={
           <div className="flex bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
             {TIME_TABS.map((t) => (
@@ -114,6 +128,41 @@ export default function AnalyticsPage() {
               </div>
             </div>
           </div>
+
+          {/* Per-project comparison (All Projects mode only) */}
+          {isAllProjects && projects.length > 1 && (
+            <div className="border border-zinc-800 rounded-lg overflow-hidden mb-6">
+              <div className="px-4 py-3 border-b border-zinc-800 bg-zinc-900/50">
+                <h2 className="text-sm font-medium text-zinc-300">Project Comparison</h2>
+              </div>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-zinc-800 text-zinc-500">
+                    <th className="text-left px-4 py-2 font-medium">Project</th>
+                    <th className="text-right px-4 py-2 font-medium">Lessons</th>
+                    <th className="text-right px-4 py-2 font-medium">Groups</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {projects.map((p) => {
+                    const color = getColorClasses(p.color);
+                    return (
+                      <tr key={p.project_id} className="border-b border-zinc-800/50">
+                        <td className="px-4 py-2.5">
+                          <div className="flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full bg-gradient-to-br ${color.from} ${color.to}`} />
+                            <span className="text-zinc-200">{p.name ?? p.project_id}</span>
+                          </div>
+                        </td>
+                        <td className="text-right px-4 py-2.5 text-zinc-300 font-medium">{p.lesson_count}</td>
+                        <td className="text-right px-4 py-2.5 text-zinc-400">{p.groups?.length ?? 0}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* Retrieval Trends (SVG area chart) */}
           {timeseries.length > 0 && (() => {
@@ -282,7 +331,7 @@ export default function AnalyticsPage() {
                       <button
                         onClick={async () => {
                           try {
-                            await api.updateLessonStatus(l.lesson_id, { project_id: projectId, status: "archived" });
+                            await api.updateLessonStatus(l.lesson_id, { project_id: l.project_id ?? projectId, status: "archived" });
                             toast("success", "Lesson archived");
                             fetchData();
                           } catch (err) {

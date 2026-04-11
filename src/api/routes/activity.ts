@@ -4,15 +4,16 @@ import {
   listNotifications, markNotificationsRead,
 } from '../../services/activity.js';
 import { resolveProjectIdOrThrow } from '../../core/index.js';
+import { resolveProjectParams } from '../middleware/resolveProjectParams.js';
 
 const router = Router();
 
-/** GET /api/activity — list activity feed for a project */
+/** GET /api/activity — list activity feed for a project or projects */
 router.get('/', async (req, res, next) => {
   try {
-    const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
+    const p = resolveProjectParams(req.query);
     const result = await listActivity({
-      projectId,
+      ...p,
       eventType: req.query.event_type as string | undefined,
       since: req.query.since as string | undefined,
       limit: req.query.limit ? Number(req.query.limit) : undefined,

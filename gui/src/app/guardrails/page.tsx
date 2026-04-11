@@ -9,6 +9,8 @@ import { useToast } from "@/components/ui/toast";
 import { Pagination } from "@/components/ui/pagination";
 import { AddLessonDialog } from "../lessons/add-lesson-dialog";
 import { NoProjectGuard } from "@/components/no-project-guard";
+import { ProjectBadge } from "@/components/project-badge";
+import { getColorClasses } from "@/lib/project-colors";
 import type { Lesson } from "../lessons/types";
 
 const PRESETS = [
@@ -33,7 +35,7 @@ type SimulateResult = {
 };
 
 export default function GuardrailsPage() {
-  const { projectId } = useProject();
+  const { projectId, projects, isAllProjects, effectiveProjectIds, projectsLoaded } = useProject();
   const { toast } = useToast();
   const toastRef = useRef(toast);
   toastRef.current = toast;
@@ -63,15 +65,26 @@ export default function GuardrailsPage() {
 
   const fetchGuardrails = useCallback(async () => {
     try {
-      const result = await api.listLessons({
-        project_id: projectId,
-        lesson_type: "guardrail",
-        status: "active",
-        limit: pageSize,
-        offset: (page - 1) * pageSize,
-        sort: "created_at",
-        order: "desc",
-      });
+      const useMulti = isAllProjects && projectsLoaded && effectiveProjectIds.length > 0;
+      const result = useMulti
+        ? await api.listLessonsMulti({
+            project_ids: effectiveProjectIds,
+            lesson_type: "guardrail",
+            status: "active",
+            limit: pageSize,
+            offset: (page - 1) * pageSize,
+            sort: "created_at",
+            order: "desc",
+          })
+        : await api.listLessons({
+            project_id: projectId,
+            lesson_type: "guardrail",
+            status: "active",
+            limit: pageSize,
+            offset: (page - 1) * pageSize,
+            sort: "created_at",
+            order: "desc",
+          });
       setGuardrails(result.items ?? []);
       setTotalCount(result.total_count ?? 0);
     } catch {
@@ -79,7 +92,7 @@ export default function GuardrailsPage() {
     } finally {
       setLoading(false);
     }
-  }, [projectId, page]);
+  }, [projectId, page, isAllProjects, effectiveProjectIds, projectsLoaded]);
 
   useEffect(() => { fetchGuardrails(); }, [fetchGuardrails]);
 
@@ -90,10 +103,21 @@ export default function GuardrailsPage() {
     setTesting(true);
     setTestResult(null);
     try {
-      const result = await api.checkGuardrails({
-        project_id: projectId,
-        action_context: { action: a },
-      });
+      let result: any;
+      if (isAllProjects && effectiveProjectIds.length > 0) {
+        // Check across all projects, merge results
+        const checks = await Promise.all(
+          effectiveProjectIds.map(pid =>
+            api.checkGuardrails({ project_id: pid, action_context: { action: a } })
+          )
+        );
+        const anyBlocked = checks.some(c => c.pass === false);
+        const allMatched = checks.flatMap(c => c.matched_rules ?? []);
+        const totalChecked = checks.reduce((sum, c) => sum + (c.rules_checked ?? 0), 0);
+        result = { pass: !anyBlocked, rules_checked: totalChecked, matched_rules: allMatched };
+      } else {
+        result = await api.checkGuardrails({ project_id: projectId, action_context: { action: a } });
+      }
       setTestResult(result);
       setHistory((prev) => [
         { action: a, pass: result.pass, matchCount: result.matched_rules?.length ?? 0, timestamp: Date.now() },
@@ -112,11 +136,25 @@ export default function GuardrailsPage() {
     setSimulating(true);
     setSimResults(null);
     try {
-      const { results } = await api.simulateGuardrails({
-        project_id: projectId,
-        actions: lines,
-      });
-      setSimResults(results);
+      if (isAllProjects && effectiveProjectIds.length > 0) {
+        // Simulate across all projects, merge per-action results
+        const allSims = await Promise.all(
+          effectiveProjectIds.map(pid =>
+            api.simulateGuardrails({ project_id: pid, actions: lines })
+          )
+        );
+        // Merge: for each action, combine matched_rules from all projects
+        const merged: SimulateResult[] = lines.map((action) => {
+          const allMatched = allSims.flatMap(sim =>
+            (sim.results ?? []).filter((r: any) => r.action === action).flatMap((r: any) => r.matched_rules ?? [])
+          );
+          return { action, pass: allMatched.length === 0, matched_rules: allMatched };
+        });
+        setSimResults(merged);
+      } else {
+        const { results } = await api.simulateGuardrails({ project_id: projectId, actions: lines });
+        setSimResults(results);
+      }
     } catch (err) {
       toastRef.current("error", err instanceof Error ? err.message : "Simulation failed");
     } finally {
@@ -130,6 +168,23 @@ export default function GuardrailsPage() {
   };
 
   const columns: Column<Lesson>[] = [
+    // Project column in multi-project mode
+    ...(isAllProjects ? [{
+      key: "project_id" as const,
+      header: "Project",
+      className: "w-[130px]",
+      render: (row: Lesson) => {
+        const p = projects.find(proj => proj.project_id === row.project_id);
+        const color = getColorClasses(p?.color);
+        const name = p?.name ?? row.project_id;
+        return (
+          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
+            <span className={`w-1.5 h-1.5 rounded-full bg-gradient-to-br ${color.from} ${color.to}`} />
+            <span className="truncate max-w-[90px]">{name}</span>
+          </span>
+        );
+      },
+    }] : []),
     {
       key: "title",
       header: "Rule",
@@ -166,9 +221,10 @@ export default function GuardrailsPage() {
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Guardrails" }]} />
       <PageHeader
         title="Guardrails"
-        subtitle="Enforce rules and check actions before execution"
+        projectBadge={<ProjectBadge />}
+        subtitle={isAllProjects ? `Safety rules across ${projects.length} projects` : "Enforce rules and check actions before execution"}
         actions={
-          <Button variant="primary" onClick={() => setAddOpen(true)}>+ Add Guardrail</Button>
+          !isAllProjects ? <Button variant="primary" onClick={() => setAddOpen(true)}>+ Add Guardrail</Button> : undefined
         }
       />
 
@@ -345,7 +401,7 @@ export default function GuardrailsPage() {
           icon="🛡"
           title="No guardrails defined"
           description="Add guardrails to enforce rules before risky actions"
-          action={<Button variant="primary" onClick={() => setAddOpen(true)}>+ Add Guardrail</Button>}
+          action={!isAllProjects ? <Button variant="primary" onClick={() => setAddOpen(true)}>+ Add Guardrail</Button> : undefined}
         />
       ) : (
         <>

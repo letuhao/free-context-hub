@@ -310,7 +310,8 @@ export type LessonSortField = 'created_at' | 'title' | 'lesson_type' | 'status';
 export type SortOrder = 'asc' | 'desc';
 
 export type ListLessonsParams = {
-  projectId: string;
+  projectId?: string;
+  projectIds?: string[];
   limit?: number;
   /** Cursor-based pagination (legacy, still supported). */
   after?: string;
@@ -356,10 +357,12 @@ export async function listLessons(params: ListLessonsParams): Promise<ListLesson
   const sortOrder = params.order === 'asc' ? 'ASC' : 'DESC';
 
   // ── Build WHERE clause (shared by count + data queries) ──
-  // Build WHERE parts — unqualified for COUNT, qualified (l.) for JOIN query
-  const whereParams: any[] = [params.projectId];
-  const whereParts: string[] = ['project_id = $1'];
-  const wherePartsL: string[] = ['l.project_id = $1'];
+  const ids = params.projectIds ?? (params.projectId ? [params.projectId] : []);
+  const projectClause = ids.length === 1 ? 'project_id = $1' : 'project_id = ANY($1::text[])';
+  const projectClauseL = ids.length === 1 ? 'l.project_id = $1' : 'l.project_id = ANY($1::text[])';
+  const whereParams: any[] = [ids.length === 1 ? ids[0] : ids];
+  const whereParts: string[] = [projectClause];
+  const wherePartsL: string[] = [projectClauseL];
 
   if (lessonType) {
     whereParams.push(lessonType);

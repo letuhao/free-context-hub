@@ -24,6 +24,8 @@ import { ImportDialog } from "./import-dialog";
 import { FilterPanel } from "./filter-panel";
 import { Pagination } from "@/components/ui/pagination";
 import { NoProjectGuard } from "@/components/no-project-guard";
+import { ProjectBadge } from "@/components/project-badge";
+import { getColorClasses } from "@/lib/project-colors";
 import type { Lesson } from "./types";
 
 type SortField = "created_at" | "title" | "lesson_type" | "status";
@@ -33,7 +35,7 @@ type SearchMode = "text" | "semantic";
 const PAGE_SIZE = 12;
 
 export default function LessonsPage() {
-  const { projectId, includeGroups } = useProject();
+  const { projectId, includeGroups, projects, isAllProjects, effectiveProjectIds, projectsLoaded } = useProject();
   const { toast } = useToast();
 
   // Data
@@ -82,20 +84,39 @@ export default function LessonsPage() {
   // Reset page when filters/search change
   useEffect(() => { setPage(1); }, [debouncedQuery, filterType, filterStatus, filterTags, searchMode, showAllStatuses, showBookmarked]);
 
-  // Fetch lessons
+  // Fetch lessons (branches for single vs multi-project)
   const fetchLessons = useCallback(async () => {
     setLoading(true);
     try {
+      // Multi-project mode: semantic search supports project_ids[], list uses listLessonsMulti
+      const useMulti = isAllProjects && projectsLoaded && effectiveProjectIds.length > 0;
+
       if (debouncedQuery && searchMode === "semantic") {
         const result = await api.searchLessons({
-          project_id: projectId,
-          include_groups: includeGroups || undefined,
+          ...(useMulti ? { project_ids: effectiveProjectIds } : { project_id: projectId }),
+          include_groups: (!useMulti && includeGroups) || undefined,
           query: debouncedQuery,
           limit: PAGE_SIZE,
         });
         setLessons(result.results ?? result.items ?? []);
         setTotalCount(result.results?.length ?? result.items?.length ?? 0);
         setTotalPages(1);
+      } else if (useMulti) {
+        const effectiveStatus = showAllStatuses ? undefined : (filterStatus ?? "active");
+        const result = await api.listLessonsMulti({
+          project_ids: effectiveProjectIds,
+          limit: PAGE_SIZE,
+          offset: (page - 1) * PAGE_SIZE,
+          sort: sortField,
+          order: sortOrder,
+          q: (debouncedQuery && searchMode === "text") ? debouncedQuery : undefined,
+          lesson_type: filterType,
+          status: effectiveStatus,
+          tags_any: filterTags.length > 0 ? filterTags.join(",") : undefined,
+        });
+        setLessons(result.items ?? []);
+        setTotalCount(result.total_count ?? 0);
+        setTotalPages(result.total_pages ?? Math.max(1, Math.ceil((result.total_count ?? 0) / PAGE_SIZE)));
       } else {
         const params: Record<string, string | number | undefined> = {
           project_id: projectId,
@@ -131,7 +152,7 @@ export default function LessonsPage() {
     } finally {
       setLoading(false);
     }
-  }, [projectId, page, debouncedQuery, searchMode, sortField, sortOrder, filterType, filterStatus, filterTags, showAllStatuses, showBookmarked, includeGroups, toast]);
+  }, [projectId, page, debouncedQuery, searchMode, sortField, sortOrder, filterType, filterStatus, filterTags, showAllStatuses, showBookmarked, includeGroups, isAllProjects, effectiveProjectIds, projectsLoaded, toast]);
 
   useEffect(() => { fetchLessons(); }, [fetchLessons]);
 
@@ -204,23 +225,25 @@ export default function LessonsPage() {
   };
 
   // ── Table columns ──
+  const showProjectColumn = isAllProjects || (includeGroups && searchMode === "semantic" && debouncedQuery);
   const columns: Column<Lesson>[] = [
-    // Show source project column when searching across groups.
-    ...(includeGroups && searchMode === "semantic" && debouncedQuery
+    // Show project column in multi-project or cross-group search mode
+    ...(showProjectColumn
       ? [{
           key: "project_id" as const,
-          header: "Source",
-          render: (row: Lesson) => (
-            <span
-              className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                row.project_id === projectId
-                  ? "bg-zinc-800 text-zinc-400"
-                  : "bg-blue-900/30 text-blue-400 border border-blue-800/40"
-              }`}
-            >
-              {row.project_id}
-            </span>
-          ),
+          header: "Project",
+          className: "w-[130px]",
+          render: (row: Lesson) => {
+            const p = projects.find(proj => proj.project_id === row.project_id);
+            const color = getColorClasses(p?.color);
+            const name = p?.name ?? row.project_id;
+            return (
+              <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
+                <span className={`w-1.5 h-1.5 rounded-full bg-gradient-to-br ${color.from} ${color.to}`} />
+                <span className="truncate max-w-[90px]">{name}</span>
+              </span>
+            );
+          },
         }]
       : []),
     {
@@ -303,25 +326,30 @@ export default function LessonsPage() {
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Lessons" }]} />
       <PageHeader
         title="Lessons"
-        subtitle="Browse, search, and manage project knowledge"
+        projectBadge={<ProjectBadge />}
+        subtitle={isAllProjects ? `Viewing lessons across ${projects.length} projects` : "Browse, search, and manage project knowledge"}
         actions={
           <>
-            <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
-              <Upload size={12} className="mr-1" /> Import
-            </Button>
-            <Button variant="outline" onClick={async () => {
-              try {
-                const data = await api.exportLessons({ project_id: projectId, format: "json" });
-                const blob = new Blob([JSON.stringify(data.lessons ?? data, null, 2)], { type: "application/json" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a"); a.href = url; a.download = `${projectId}-lessons.json`; a.click();
-                URL.revokeObjectURL(url);
-                toast("success", "Lessons exported");
-              } catch (err) { toast("error", err instanceof Error ? err.message : "Export failed"); }
-            }}>
-              <Download size={12} className="mr-1" /> Export
-            </Button>
-            <Button variant="primary" onClick={() => setAddDialogOpen(true)}>+ Add Lesson</Button>
+            {!isAllProjects && (
+              <>
+                <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
+                  <Upload size={12} className="mr-1" /> Import
+                </Button>
+                <Button variant="outline" onClick={async () => {
+                  try {
+                    const data = await api.exportLessons({ project_id: projectId, format: "json" });
+                    const blob = new Blob([JSON.stringify(data.lessons ?? data, null, 2)], { type: "application/json" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a"); a.href = url; a.download = `${projectId}-lessons.json`; a.click();
+                    URL.revokeObjectURL(url);
+                    toast("success", "Lessons exported");
+                  } catch (err) { toast("error", err instanceof Error ? err.message : "Export failed"); }
+                }}>
+                  <Download size={12} className="mr-1" /> Export
+                </Button>
+                <Button variant="primary" onClick={() => setAddDialogOpen(true)}>+ Add Lesson</Button>
+              </>
+            )}
           </>
         }
       />
@@ -468,7 +496,7 @@ export default function LessonsPage() {
           icon="📚"
           title="No lessons found"
           description={debouncedQuery ? "Try a different search query or clear filters" : "Add your first lesson to start building project knowledge"}
-          action={!debouncedQuery ? <Button variant="primary" onClick={() => setAddDialogOpen(true)}>+ Add Lesson</Button> : undefined}
+          action={!debouncedQuery && !isAllProjects ? <Button variant="primary" onClick={() => setAddDialogOpen(true)}>+ Add Lesson</Button> : undefined}
         />
       ) : (
         <div className={compact ? "[&_table]:text-xs [&_td]:py-1.5 [&_th]:py-1.5" : ""}>
@@ -484,8 +512,8 @@ export default function LessonsPage() {
             }}
             sortKey={sortField === "lesson_type" ? "type" : sortField === "status" ? "status" : sortField}
             sortOrder={sortOrder}
-            selectable
-            bulkActions={[
+            selectable={!isAllProjects}
+            bulkActions={isAllProjects ? [] : [
               { label: "Archive", onClick: handleBulkArchive },
               { label: "Export JSON", onClick: (ids) => {
                 const selected = lessons.filter((l) => ids.includes(l.lesson_id));

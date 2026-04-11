@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { enqueueJob, listJobs, runNextJob } from '../../core/index.js';
+import { resolveProjectParams } from '../middleware/resolveProjectParams.js';
 
 const router = Router();
 
@@ -11,11 +12,15 @@ router.post('/', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-/** GET /api/jobs — list jobs */
+/** GET /api/jobs — list jobs (supports project_ids[] for multi-project) */
 router.get('/', async (req, res, next) => {
   try {
+    // Jobs list is special: project_id is optional (shows all if omitted).
+    // Use resolveProjectParams only if project_id or project_ids is present.
+    const hasProjectParam = req.query.project_id || req.query.project_ids;
+    const p = hasProjectParam ? resolveProjectParams(req.query) : {};
     const result = await listJobs({
-      projectId: req.query.project_id as string | undefined,
+      ...p,
       status: req.query.status as any,
       limit: req.query.limit ? Number(req.query.limit) : undefined,
       offset: req.query.offset ? Number(req.query.offset) : undefined,
