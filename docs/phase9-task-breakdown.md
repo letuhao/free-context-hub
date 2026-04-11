@@ -32,11 +32,11 @@ The current UI treats multi-project as an afterthought — users can only view o
 | 9.3 | NoProjectGuard V2 + ProjectBadge | FE: reusable badge, per-project-only guards | Small | ✅ |
 | 9.4 | Dashboard V2 | FE: aggregate stats + project cards | Medium | ✅ |
 | 9.5 | Lessons V2 | FE: project column, cross-project search | Medium | ✅ |
-| 9.6 | Review Inbox V2 | FE: grouped by project, per-project batch | Medium | Next |
-| 9.7 | Guardrails V2 | FE+BE: cross-project check, project column | Medium | 9.1–9.3 |
-| 9.8 | Analytics V2 | FE: per-project comparison, aggregate charts | Large | 9.1–9.3 |
-| 9.9 | Minor Pages (11 pages) | FE: badges + multi-project fetch for 3 pages | Small | 9.1–9.3 |
-| 9.10 | Graph Explorer V2 + E2E Cleanup | FE: polished warning. Tests: 228+ total | Medium | All |
+| 9.6 | Review Inbox V2 | FE: grouped by project, per-project batch | Medium | ✅ |
+| 9.7 | Guardrails V2 | FE+BE: cross-project check, project column | Medium | ✅ |
+| 9.8 | Analytics V2 | FE: per-project comparison, aggregate charts | Large | ✅ |
+| 9.9 | Minor Pages (8 pages) | FE: badges + multi-project fetch for 3 pages | Small | ✅ |
+| 9.10 | Graph Explorer V2 + E2E Cleanup | FE: polished warning. 198/198 tests pass | Medium | ✅ |
 
 ---
 
