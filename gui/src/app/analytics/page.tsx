@@ -9,7 +9,7 @@ import { relTime } from "@/lib/rel-time";
 import { NoProjectGuard } from "@/components/no-project-guard";
 import { ProjectBadge } from "@/components/project-badge";
 import { getColorClasses } from "@/lib/project-colors";
-import { TrendingUp, BookOpen, CheckCircle2, AlertTriangle, Archive } from "lucide-react";
+import { TrendingUp, AlertTriangle } from "lucide-react";
 
 type TimeRange = "7" | "30" | "90" | "all";
 
@@ -29,17 +29,18 @@ export default function AnalyticsPage() {
     try {
       const daysNum = days === "all" ? undefined : Number(days);
       const useMulti = isAllProjects && projectsLoaded && effectiveProjectIds.length > 0;
-      const pParams = useMulti
-        ? { project_ids: effectiveProjectIds.join(",") }
-        : { project_id: projectId };
       const [retrieval, staleRes, deadRes, tsRes] = await Promise.all([
         useMulti
           ? api.getRetrievalStatsMulti({ project_ids: effectiveProjectIds, days: daysNum })
           : api.getRetrievalStats({ project_id: projectId, days: daysNum }),
-        api.getStaleStats(pParams as any),
+        // getStaleStats is a stub — skip in multi mode
         useMulti
-          ? api.getDeadKnowledge({ ...pParams } as any)
-          : api.getDeadKnowledge({ project_id: projectId }),
+          ? Promise.resolve({ items: [] })
+          : api.getStaleStats({ project_id: projectId, days: 90 }),
+        // Backend accepts project_ids query param (Sprint 9.1); type cast needed until api.ts updated
+        api.getDeadKnowledge((useMulti
+          ? { project_ids: effectiveProjectIds.join(",") }
+          : { project_id: projectId }) as any),
         useMulti
           ? api.getRetrievalTimeseriesMulti({ project_ids: effectiveProjectIds, days: daysNum })
           : api.getRetrievalTimeseries({ project_id: projectId, days: daysNum }),
@@ -330,7 +331,7 @@ export default function AnalyticsPage() {
                       <button
                         onClick={async () => {
                           try {
-                            await api.updateLessonStatus(l.lesson_id, { project_id: projectId, status: "archived" });
+                            await api.updateLessonStatus(l.lesson_id, { project_id: l.project_id ?? projectId, status: "archived" });
                             toast("success", "Lesson archived");
                             fetchData();
                           } catch (err) {
