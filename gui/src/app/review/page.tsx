@@ -16,6 +16,8 @@ import { relTime } from "@/lib/rel-time";
 import { Check, X, Eye, CheckCheck, Pencil, Shield, ChevronDown, ChevronRight } from "lucide-react";
 import { LessonDetail } from "../lessons/lesson-detail";
 import { NoProjectGuard } from "@/components/no-project-guard";
+import { ProjectBadge } from "@/components/project-badge";
+import { getColorClasses, getInitials } from "@/lib/project-colors";
 import type { Lesson } from "../lessons/types";
 
 type ReviewFilter = "all" | "draft" | "pending_review";
@@ -100,7 +102,7 @@ function RejectDialog({ open, lessonTitle, onReject, onClose }: {
 }
 
 export default function ReviewInboxPage() {
-  const { projectId } = useProject();
+  const { projectId, projects, isAllProjects, effectiveProjectIds, projectsLoaded } = useProject();
   const { toast } = useToast();
 
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -120,10 +122,13 @@ export default function ReviewInboxPage() {
   const fetchReviewItems = useCallback(async () => {
     setLoading(true);
     try {
+      const useMulti = isAllProjects && projectsLoaded && effectiveProjectIds.length > 0;
       const statuses = filter === "all" ? ["draft", "pending_review"] : [filter];
       const results = await Promise.all(
         statuses.map((status) =>
-          api.listLessons({ project_id: projectId, status, limit: 100 })
+          useMulti
+            ? api.listLessonsMulti({ project_ids: effectiveProjectIds, status, limit: 100 })
+            : api.listLessons({ project_id: projectId, status, limit: 100 })
         )
       );
       const all = results.flatMap((r) => r.items ?? []);
@@ -140,7 +145,7 @@ export default function ReviewInboxPage() {
     } finally {
       setLoading(false);
     }
-  }, [projectId, filter, toast]);
+  }, [projectId, filter, isAllProjects, effectiveProjectIds, projectsLoaded, toast]);
 
   useEffect(() => { fetchReviewItems(); }, [fetchReviewItems]);
 
@@ -174,13 +179,25 @@ export default function ReviewInboxPage() {
     if (ids.length === 0) return;
     setActing(true);
     try {
-      const result = await api.batchUpdateLessonStatus({
-        project_id: projectId,
-        lesson_ids: ids,
-        status,
-      });
-      const count = result.updated_count ?? ids.length;
-      toast("success", `${count} lesson(s) ${status === "active" ? "approved" : "archived"}`);
+      if (isAllProjects) {
+        // Group by project_id and batch per project
+        const byProject: Record<string, string[]> = {};
+        for (const id of ids) {
+          const lesson = lessons.find(l => l.lesson_id === id);
+          const pid = (lesson as any)?.project_id ?? projectId;
+          (byProject[pid] ??= []).push(id);
+        }
+        let totalUpdated = 0;
+        await Promise.all(Object.entries(byProject).map(async ([pid, lessonIds]) => {
+          const result = await api.batchUpdateLessonStatus({ project_id: pid, lesson_ids: lessonIds, status });
+          totalUpdated += result.updated_count ?? lessonIds.length;
+        }));
+        toast("success", `${totalUpdated} lesson(s) ${status === "active" ? "approved" : "archived"} across ${Object.keys(byProject).length} project(s)`);
+      } else {
+        const result = await api.batchUpdateLessonStatus({ project_id: projectId, lesson_ids: ids, status });
+        const count = result.updated_count ?? ids.length;
+        toast("success", `${count} lesson(s) ${status === "active" ? "approved" : "archived"}`);
+      }
       setSelectedIds(new Set());
       fetchReviewItems();
     } catch (err) {
@@ -192,7 +209,8 @@ export default function ReviewInboxPage() {
 
   const singleAction = async (lesson: Lesson, status: string) => {
     try {
-      await api.updateLessonStatus(lesson.lesson_id, { project_id: projectId, status });
+      const pid = (lesson as any).project_id ?? projectId;
+      await api.updateLessonStatus(lesson.lesson_id, { project_id: pid, status });
       toast("success", `Lesson ${status === "active" ? "approved" : status === "archived" ? "rejected" : status}`);
       fetchReviewItems();
     } catch (err) {
@@ -202,7 +220,8 @@ export default function ReviewInboxPage() {
 
   const handleReject = async (lesson: Lesson, reason: string, note: string) => {
     try {
-      await api.updateLessonStatus(lesson.lesson_id, { project_id: projectId, status: "archived" });
+      const pid = (lesson as any).project_id ?? projectId;
+      await api.updateLessonStatus(lesson.lesson_id, { project_id: pid, status: "archived" });
       toast("success", `Lesson rejected: ${reason}${note ? ` — ${note}` : ""}`);
       setRejectTarget(null);
       fetchReviewItems();
@@ -231,7 +250,8 @@ export default function ReviewInboxPage() {
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Review Inbox" }]} />
       <PageHeader
         title="Review Inbox"
-        subtitle="Review and approve AI-generated lessons"
+        projectBadge={<ProjectBadge />}
+        subtitle={isAllProjects ? `Pending reviews across ${projects.length} projects` : "Review and approve AI-generated lessons"}
         actions={
           lessons.length > 0 ? (
             <Button variant="primary" onClick={() => batchAction("active")} disabled={acting}>
@@ -368,6 +388,17 @@ export default function ReviewInboxPage() {
                       <h3 className="text-sm font-medium text-zinc-100 truncate">{lesson.title}</h3>
                       <Badge value={lesson.status} variant="status" />
                       <Badge value={lesson.lesson_type} variant="type" />
+                      {isAllProjects && (() => {
+                        const lp = projects.find(p => p.project_id === (lesson as any).project_id);
+                        if (!lp) return null;
+                        const lc = getColorClasses(lp.color);
+                        return (
+                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 shrink-0">
+                            <span className={`w-1.5 h-1.5 rounded-full bg-gradient-to-br ${lc.from} ${lc.to}`} />
+                            {lp.name ?? lp.project_id}
+                          </span>
+                        );
+                      })()}
                     </div>
                     <div className="flex items-center gap-2 text-xs text-zinc-500">
                       {lesson.captured_by && (
