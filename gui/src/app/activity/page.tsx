@@ -8,6 +8,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { useToast } from "@/components/ui/toast";
 import { relTime } from "@/lib/rel-time";
 import { NoProjectGuard } from "@/components/no-project-guard";
+import { ProjectBadge } from "@/components/project-badge";
 import { BookOpen, Shield, Zap, FileText, Users, CheckCheck, Settings, X } from "lucide-react";
 
 type ActivityItem = {
@@ -44,7 +45,7 @@ const NOTIF_TOGGLES = [
 ];
 
 export default function ActivityPage() {
-  const { projectId } = useProject();
+  const { projectId, isAllProjects, effectiveProjectIds, projectsLoaded } = useProject();
   const { toast } = useToast();
 
   const [items, setItems] = useState<ActivityItem[]>([]);
@@ -72,10 +73,19 @@ export default function ActivityPage() {
   const fetchActivity = useCallback(async () => {
     setLoading(true);
     try {
-      const params: Record<string, string | number | undefined> = { project_id: projectId, limit: pageSize, offset: (page - 1) * pageSize };
-      if (filter !== "all") params.entity_type = filter;
-      if (timeRange !== "all") params.time_range = timeRange;
-      const res = await api.listActivity(params);
+      const useMulti = isAllProjects && projectsLoaded && effectiveProjectIds.length > 0;
+      const res = useMulti
+        ? await api.listActivityMulti({
+            project_ids: effectiveProjectIds,
+            event_type: filter !== "all" ? filter : undefined,
+            limit: pageSize,
+            offset: (page - 1) * pageSize,
+          })
+        : await api.listActivity({
+            project_id: projectId, limit: pageSize, offset: (page - 1) * pageSize,
+            ...(filter !== "all" ? { entity_type: filter } : {}),
+            ...(timeRange !== "all" ? { time_range: timeRange } : {}),
+          });
       setItems(res.items ?? res.activities ?? []);
       setTotalCount(res.total_count ?? 0);
     } catch (err) {
@@ -83,7 +93,7 @@ export default function ActivityPage() {
     } finally {
       setLoading(false);
     }
-  }, [projectId, filter, timeRange, page, toast]);
+  }, [projectId, filter, timeRange, page, isAllProjects, effectiveProjectIds, projectsLoaded, toast]);
 
   useEffect(() => { fetchActivity(); }, [fetchActivity]);
 
@@ -118,6 +128,7 @@ export default function ActivityPage() {
       <Breadcrumb items={[{ label: "System", href: "/jobs" }, { label: "Activity" }]} />
       <PageHeader
         title="Activity & Notifications"
+        projectBadge={<ProjectBadge />}
         subtitle="Track changes made by agents and team members"
         actions={
           <>

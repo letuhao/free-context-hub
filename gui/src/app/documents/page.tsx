@@ -9,6 +9,7 @@ import { relTime } from "@/lib/rel-time";
 import { FileText, Link2, Upload, Trash2, Eye, Sparkles } from "lucide-react";
 import { Pagination } from "@/components/ui/pagination";
 import { NoProjectGuard } from "@/components/no-project-guard";
+import { ProjectBadge } from "@/components/project-badge";
 import { UploadDialog } from "./upload-dialog";
 import { DocumentViewer } from "./document-viewer";
 
@@ -99,6 +100,7 @@ export default function DocumentsPage() {
     <div className="flex-1 overflow-y-auto p-6">
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Documents" }]} />
       <PageHeader
+        projectBadge={<ProjectBadge />}
         title="Documents"
         subtitle="Attach reference documents to your project"
         actions={

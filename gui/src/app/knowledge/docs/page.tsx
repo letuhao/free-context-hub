@@ -17,6 +17,7 @@ import {
 import { SlideOver, SlideOverSection } from "@/components/ui/slide-over";
 import { Pagination } from "@/components/ui/pagination";
 import { NoProjectGuard } from "@/components/no-project-guard";
+import { ProjectBadge } from "@/components/project-badge";
 import { useToast } from "@/components/ui/toast";
 
 type GeneratedDoc = {
@@ -151,6 +152,7 @@ export default function GeneratedDocsPage() {
     <div className="flex-1 overflow-y-auto p-6">
       <Breadcrumb items={[{ label: "Knowledge", href: "/lessons" }, { label: "Generated Docs" }]} />
       <PageHeader
+        projectBadge={<ProjectBadge />}
         title="Generated Documents"
         subtitle="Browse FAQ, RAPTOR summaries, QC reports, and benchmark artifacts"
       />
