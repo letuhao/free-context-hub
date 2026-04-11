@@ -198,7 +198,7 @@ QC eval loop    Documents,      Agent audit     Onboarding
                 Global search
     │               │               │               │               │
     ▼               ▼               ▼               ▼               ▼
-Phase 9 ○       Phase 10 ○      Phase 11 ○
+Phase 9 ✅      Phase 10 ○      Phase 11 ○
 Multi-Project   Multi-format    Knowledge
 UX Redesign     Ingestion       Portability
 Cross-project   PDF, DOCX,      Exchange hub,
@@ -218,7 +218,7 @@ selector V2,    Parsing         sync
 | **8** | ✅ Complete | Access control (API keys/roles), custom lesson types, rich editor, agent audit, feature toggles (7 sprints, 3 migrations, 24 routes) |
 | **8D** | ✅ Complete | Feature toggles BE, role enforcement middleware, rich editor in detail, onboarding checklist |
 | **8E** | ✅ Complete | E2E test suite (198 tests: API smoke 75, GUI smoke 23, MCP smoke 36, API scenarios 34, GUI scenarios 21, Agent visual 9), layout fixes |
-| **9** | ○ Designed | Multi-project UX redesign — "All Projects" mode, cross-project views, project selector V2 (8 V2 drafts in `docs/gui-drafts/v2/`) |
+| **9** | ✅ Complete | Multi-project UX redesign — "All Projects" mode, project selector V2, ProjectBadge, cross-project views on all pages, per-project guards (11 sprints, 26 commits, 41 files) |
 | **10** | ○ Planned | PDF/DOCX/Image ingestion pipelines (document foundation in Phase 7) |
 | **11** | ○ Planned | Import/export exchange hub, cross-instance sync (basic I/O in Phase 7) |
 

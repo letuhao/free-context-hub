@@ -37,6 +37,9 @@ The current UI treats multi-project as an afterthought — users can only view o
 | 9.8 | Analytics V2 | FE: per-project comparison, aggregate charts | Large | ✅ |
 | 9.9 | Minor Pages (8 pages) | FE: badges + multi-project fetch for 3 pages | Small | ✅ |
 | 9.10 | Graph Explorer V2 + E2E Cleanup | FE: polished warning. 198/198 tests pass | Medium | ✅ |
+| 9.11 | Project Pages Consolidation | FE: All Projects view, sidebar cleanup, groups text | Small | ✅ |
+
+**Phase 9 COMPLETE** — merged to main via PR #9.
 
 ---
 

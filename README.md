@@ -278,11 +278,12 @@ We tested 8 embedding models and 8 reranker models ([full benchmark](docs/benchm
 - [x] **Phase 8D/E**: Polish & Testing
   - Feature toggles BE, role enforcement middleware, layout fixes (viewport scroll, page sizing)
   - E2E test suite: 198 tests (API smoke 75, GUI smoke 23, MCP smoke 36, API scenarios 34, GUI scenarios 21, Agent visual 9)
-
-**In Progress:**
-- [ ] **Phase 9**: Multi-Project UX Redesign — "All Projects" mode, cross-project views, project selector V2
-  - 8 V2 draft designs in `docs/gui-drafts/v2/`
-  - Full 23-page audit: which pages need cross-project view, which must stay per-project
+- [x] **Phase 9**: Multi-Project UX Redesign
+  - "All Projects" first-class mode with project selector V2 (multi-select, checkboxes)
+  - ProjectBadge on all 23 pages, cross-project data on 8 pages (Dashboard, Lessons, Guardrails, Review, Analytics, Jobs, Activity, Agents)
+  - Per-project guards on 4 pages (Graph Explorer, Code Search, Sources, Settings)
+  - 6 backend services extended with `project_ids[]`, 9 `*Multi` API methods
+  - 11 sprints, 26 commits, 41 files changed
 
 **Planned:**
 - [ ] **Phase 10**: Multi-format Ingestion — PDF/DOCX/image parsing pipelines
@@ -304,7 +305,7 @@ We tested 8 embedding models and 8 reranker models ([full benchmark](docs/benchm
 | GUI Pages | 23 |
 | Database Migrations | 41 |
 | E2E Tests | 198 (all passing) |
-| Development Phases | 8/11 complete |
+| Development Phases | 9/11 complete |
 
 ---
 
