@@ -72,6 +72,17 @@ export function CommandPalette() {
         for (const d of res.documents ?? []) {
           items.push({ id: d.document_id ?? d.doc_id, title: d.name ?? d.title, subtitle: d.doc_type, href: "/documents", group: "Documents" });
         }
+        for (const c of (res as any).chunks ?? []) {
+          const pageBit = c.page_number !== null && c.page_number !== undefined ? ` · p${c.page_number}` : "";
+          const subtitle = `${c.doc_name}${pageBit}${c.heading ? ` — ${c.heading}` : ""}`;
+          items.push({
+            id: c.chunk_id,
+            title: String(c.snippet ?? "").slice(0, 120),
+            subtitle,
+            href: "/documents",
+            group: "Chunks",
+          });
+        }
         for (const g of res.guardrails ?? []) {
           items.push({ id: g.lesson_id ?? g.id, title: g.title ?? g.name, group: "Guardrails", href: "/guardrails" });
         }

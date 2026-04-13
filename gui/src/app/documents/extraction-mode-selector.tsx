@@ -68,7 +68,11 @@ interface Estimate {
 export function ExtractionModeSelector({ open, doc, onClose, onExtracted }: ExtractionModeSelectorProps) {
   const { projectId } = useProject();
   const { toast } = useToast();
-  const [selected, setSelected] = useState<ExtractionMode>("fast");
+  // Images can only be extracted via vision — preselect it so the user
+  // isn't shown the "Fast Text" card by default on an image doc.
+  const [selected, setSelected] = useState<ExtractionMode>(
+    doc.doc_type === "image" ? "vision" : "fast",
+  );
   const [extracting, setExtracting] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -234,7 +238,11 @@ export function ExtractionModeSelector({ open, doc, onClose, onExtracted }: Extr
             {(["fast", "quality", "vision"] as ExtractionMode[]).map((mode) => {
               const info = MODE_INFO[mode];
               const isSelected = selected === mode;
-              const isDisabled = mode === "vision" && visionUnsupported;
+              // Images can only be extracted via vision — disable fast/quality
+              const isImage = doc.doc_type === "image";
+              const isDisabled =
+                (mode === "vision" && visionUnsupported) ||
+                (isImage && mode !== "vision");
               return (
                 <button
                   key={mode}

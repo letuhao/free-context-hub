@@ -62,6 +62,7 @@ import {
 } from '../core/index.js';
 import { formatToolResponse, OutputFormatSchema } from './formatters.js';
 import { isFeatureEnabled } from '../services/featureToggles.js';
+import { searchChunks } from '../services/documentChunks.js';
 
 // ── MCP error boundary: convert ContextHubError → McpError at protocol edge ──
 const CONTEXT_HUB_TO_MCP_CODE: Record<string, number> = {
@@ -1085,6 +1086,69 @@ function createMcpToolsServer() {
       const result = await searchLessonsMulti({ projectIds: resolvedIds, query, limit, filters: filtersTyped });
       const summary = `search_lessons: matches=${result.matches.length} (multi-project: ${resolvedIds.length})`;
       return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'search_document_chunks',
+    {
+      description:
+        'Hybrid semantic + FTS search over extracted document chunks (PDFs, DOCX, images). ' +
+        'Returns chunks with parent document name, page number, heading, and chunk type ' +
+        'so agents can cite the exact source. Use this for questions about content in ' +
+        'uploaded documents rather than lessons or code.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional().describe('Workspace token (required only if MCP_AUTH_ENABLED=true).'),
+        project_id: z.string().min(1).optional().describe('Project identifier. Optional if DEFAULT_PROJECT_ID is set.'),
+        query: z.string().min(1).describe('Natural language query to embed and match against chunks.'),
+        chunk_types: z
+          .array(z.enum(['text', 'table', 'code', 'diagram_description', 'mermaid']))
+          .optional()
+          .describe('Filter to specific chunk types (e.g. only "table" when asking about tabular data).'),
+        doc_ids: z.array(z.string().min(1)).optional().describe('Restrict the search to specific documents.'),
+        limit: z.number().int().positive().optional().describe('Max matches to return (default: 10; max: 50).'),
+        min_score: z
+          .number()
+          .min(0)
+          .max(1)
+          .optional()
+          .describe('Minimum hybrid score to keep a match (0..1). Use 0.3 to filter noise.'),
+        output_format: OutputFormatSchema.default('auto_both').describe('Response format: auto_both | json_only | json_pretty | summary_only.'),
+      }),
+      outputSchema: z.object({
+        matches: z.array(
+          z.object({
+            chunk_id: z.string(),
+            doc_id: z.string(),
+            doc_name: z.string(),
+            doc_type: z.string(),
+            chunk_index: z.number(),
+            page_number: z.number().nullable(),
+            heading: z.string().nullable(),
+            chunk_type: z.string(),
+            extraction_mode: z.string().nullable(),
+            content_snippet: z.string(),
+            score: z.number(),
+            sem_score: z.number(),
+            fts_score: z.number(),
+          }),
+        ),
+        explanations: z.array(z.string()),
+      }),
+    },
+    async ({ workspace_token, project_id, query, chunk_types, doc_ids, limit, min_score, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      const result = await searchChunks({
+        projectId,
+        query,
+        limit,
+        chunkTypes: chunk_types as any,
+        docIds: doc_ids,
+        minScore: min_score,
+      });
+      const summary = `search_document_chunks: matches=${result.matches.length}`;
+      return formatToolResponse(result as any, summary, output_format);
     },
   );
 

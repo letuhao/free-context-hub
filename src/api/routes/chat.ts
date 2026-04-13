@@ -10,6 +10,7 @@ import {
   tieredSearch,
   createModuleLogger,
 } from '../../core/index.js';
+import { searchChunks } from '../../services/documentChunks.js';
 
 const logger = createModuleLogger('chat');
 const router = Router();
@@ -41,9 +42,10 @@ router.post('/', async (req, res, next) => {
     const result = streamText({
       model,
       system: `You are a knowledge assistant for the project "${projectId}".
-You help users understand their project by searching lessons, checking guardrails, and finding code.
+You help users understand their project by searching lessons, documents, guardrails, and code.
 Use the available tools to look up information before answering.
-Always cite which lessons or code files your answer is based on.
+Prefer search_documents when the user asks about content that lives in uploaded PDFs, DOCX, or image files.
+Always cite which lessons, documents (with page numbers if available), or code files your answer is based on.
 Be concise and direct. Use markdown formatting.`,
       messages: modelMessages,
       tools: {
@@ -65,6 +67,40 @@ Be concise and direct. Use markdown formatting.`,
           execute: async ({ action }) => {
             logger.info({ projectId, action }, 'chat tool: check_guardrails');
             return checkGuardrails(projectId, { action });
+          },
+        }),
+        search_documents: tool({
+          description:
+            'Search extracted document chunks (PDFs, DOCX, images) by semantic similarity. ' +
+            'Returns chunks with the parent document name, page number, and heading so ' +
+            'answers can cite the exact source.',
+          inputSchema: z.object({
+            query: z.string().describe('Natural language search query'),
+            chunk_types: z
+              .array(z.enum(['text', 'table', 'code', 'diagram_description', 'mermaid']))
+              .optional()
+              .describe('Optional filter to specific chunk types'),
+          }),
+          execute: async ({ query, chunk_types }) => {
+            logger.info({ projectId, query, chunk_types }, 'chat tool: search_documents');
+            const res = await searchChunks({
+              projectId,
+              query,
+              limit: 5,
+              chunkTypes: chunk_types as any,
+            });
+            // Return a shape optimized for the LLM: doc name + page + heading + snippet
+            return {
+              matches: res.matches.map((m) => ({
+                doc_name: m.doc_name,
+                doc_id: m.doc_id,
+                page: m.page_number,
+                heading: m.heading,
+                chunk_type: m.chunk_type,
+                snippet: m.content_snippet,
+                score: m.score,
+              })),
+            };
           },
         }),
         search_code: tool({

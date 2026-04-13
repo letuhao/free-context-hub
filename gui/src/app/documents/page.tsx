@@ -15,14 +15,31 @@ import { DocumentViewer } from "./document-viewer";
 import { ExtractionModeSelector } from "./extraction-mode-selector";
 import { ExtractionReview } from "./extraction-review";
 import { ExtractionProgress } from "./extraction-progress";
+import { ChunkSearchPanel } from "./chunk-search-panel";
 import type { Doc, DocFilter, DocumentChunk } from "./types";
 
 const TYPE_BADGES: Record<string, string> = {
   pdf: "bg-red-500/20 text-red-400",
   markdown: "bg-purple-500/20 text-purple-400",
   url: "bg-cyan-500/20 text-cyan-400",
+  image: "bg-emerald-500/20 text-emerald-400",
   text: "bg-zinc-700 text-zinc-300",
 };
+
+/** Decode a stored `data:base64;...` image content into a browser-usable
+ *  data URL. Falls back to null if the content is missing or malformed. */
+function imageThumbDataUrl(doc: { doc_type: string; content?: string; name: string }): string | null {
+  if (doc.doc_type !== "image" || !doc.content) return null;
+  if (!doc.content.startsWith("data:base64;")) return null;
+  const b64 = doc.content.slice("data:base64;".length);
+  // Sniff mime from filename extension
+  const ext = doc.name.split(".").pop()?.toLowerCase();
+  const mime =
+    ext === "jpg" || ext === "jpeg" ? "image/jpeg" :
+    ext === "webp" ? "image/webp" :
+    "image/png";
+  return `data:${mime};base64,${b64}`;
+}
 
 function formatSize(bytes: number | null): string {
   if (!bytes) return "—";
@@ -122,6 +139,11 @@ export default function DocumentsPage() {
         <StatCard label="Pending Review" value={totalCount - linkedCount} icon={<Sparkles size={16} />} highlight={totalCount - linkedCount > 0} />
       </div>
 
+      {/* Phase 10.5: chunk search panel */}
+      <ChunkSearchPanel
+        onOpenDocument={(d) => setReviewDoc({ doc: d as any })}
+      />
+
       {/* Filter tabs */}
       <div className="flex gap-1 mb-4 border-b border-zinc-800 pb-0">
         {TABS.map((tab) => (
@@ -164,9 +186,22 @@ export default function DocumentsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800">
-              {docs.map((doc) => (
+              {docs.map((doc) => {
+                const thumb = imageThumbDataUrl(doc);
+                return (
                 <tr key={doc.doc_id} className="hover:bg-zinc-800/50 cursor-pointer transition-colors" onClick={() => setViewDoc(doc)}>
-                  <td className="px-4 py-3 text-sm text-zinc-300 truncate max-w-[260px]">{doc.name}</td>
+                  <td className="px-4 py-3 text-sm text-zinc-300 truncate max-w-[260px]">
+                    <div className="flex items-center gap-2">
+                      {thumb && (
+                        <img
+                          src={thumb}
+                          alt=""
+                          className="w-8 h-8 object-cover rounded border border-zinc-800 shrink-0"
+                        />
+                      )}
+                      <span className="truncate">{doc.name}</span>
+                    </div>
+                  </td>
                   <td className="px-4 py-3">
                     <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${TYPE_BADGES[doc.doc_type] ?? TYPE_BADGES.text}`}>
                       {doc.doc_type.toUpperCase()}
@@ -203,7 +238,8 @@ export default function DocumentsPage() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -255,6 +255,35 @@ export const api = {
       `/api/documents/${encodeURIComponent(docId)}/chunks/${encodeURIComponent(chunkId)}?${qs(params)}`,
     ),
 
+  // Phase 10.5: semantic search over document chunks
+  searchDocumentChunks: (body: {
+    project_id: string;
+    query: string;
+    limit?: number;
+    chunk_types?: ("text" | "table" | "code" | "diagram_description" | "mermaid")[];
+    doc_ids?: string[];
+    min_score?: number;
+  }) =>
+    request<{
+      status: string;
+      matches: Array<{
+        chunk_id: string;
+        doc_id: string;
+        doc_name: string;
+        doc_type: string;
+        chunk_index: number;
+        content_snippet: string;
+        page_number: number | null;
+        heading: string | null;
+        chunk_type: string;
+        extraction_mode: string | null;
+        score: number;
+        sem_score: number;
+        fts_score: number;
+      }>;
+      explanations: string[];
+    }>("POST", "/api/documents/chunks/search", body),
+
   getDocumentChunks: (id: string, params: { project_id: string }) =>
     request<{
       total: number;

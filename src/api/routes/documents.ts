@@ -11,6 +11,8 @@ import {
   listDocumentLessons,
 } from '../../services/documents.js';
 import { runExtraction, listDocumentChunks, updateChunk, deleteChunk } from '../../services/extraction/pipeline.js';
+import { searchChunks } from '../../services/documentChunks.js';
+import type { ChunkTypeFilter } from '../../services/documentChunks.js';
 import { getPdfPageCount } from '../../services/extraction/pdfRender.js';
 import { estimateVisionCost } from '../../services/extraction/vision.js';
 import { enqueueJob, cancelJob } from '../../services/jobQueue.js';
@@ -587,6 +589,58 @@ router.post('/:id/jobs/:jobId/cancel', async (req, res, next) => {
       [req.params.id, projectId],
     );
     res.json({ status: 'ok' });
+  } catch (e) { next(e); }
+});
+
+/** POST /api/documents/chunks/search — Phase 10.5: hybrid semantic+FTS chunk search
+ *
+ * Body: { project_id, query, limit?, chunk_types?[], doc_ids?[], min_score? }
+ * Returns: { matches: ChunkMatch[], explanations: string[] }
+ *
+ * This is THE endpoint that makes document_chunks first-class in retrieval.
+ * Callers: GUI chunk-search panel, global search, chat tool, MCP tool.
+ */
+const VALID_CHUNK_TYPES: readonly ChunkTypeFilter[] = ['text', 'table', 'code', 'diagram_description', 'mermaid'] as const;
+
+router.post('/chunks/search', async (req, res, next) => {
+  try {
+    const projectId = resolveProjectIdOrThrow(req.body.project_id);
+    const query = typeof req.body.query === 'string' ? req.body.query.trim() : '';
+    if (!query) {
+      res.status(400).json({ status: 'error', error: 'query is required' });
+      return;
+    }
+
+    // Validate chunk_types — reject unknown values rather than silently drop
+    let chunkTypes: ChunkTypeFilter[] | undefined;
+    if (Array.isArray(req.body.chunk_types) && req.body.chunk_types.length > 0) {
+      const bad = req.body.chunk_types.find(
+        (t: unknown) => typeof t !== 'string' || !VALID_CHUNK_TYPES.includes(t as ChunkTypeFilter),
+      );
+      if (bad !== undefined) {
+        res.status(400).json({ status: 'error', error: `Invalid chunk_type: ${String(bad)}` });
+        return;
+      }
+      chunkTypes = req.body.chunk_types as ChunkTypeFilter[];
+    }
+
+    const docIds = Array.isArray(req.body.doc_ids)
+      ? (req.body.doc_ids as unknown[]).filter((x): x is string => typeof x === 'string')
+      : undefined;
+
+    const limit = Number.isFinite(req.body.limit) ? Number(req.body.limit) : 10;
+    const minScore = Number.isFinite(req.body.min_score) ? Number(req.body.min_score) : 0;
+
+    const result = await searchChunks({
+      projectId,
+      query,
+      limit,
+      chunkTypes,
+      docIds,
+      minScore,
+    });
+
+    res.json({ status: 'ok', ...result });
   } catch (e) { next(e); }
 });
 

@@ -23,6 +23,9 @@ export interface Doc {
   description: string | null;
   created_at: string;
   linked_lesson_count?: number;
+  /** Raw stored content (`data:base64;...` for binary formats). Used by F2
+   * image thumbnails — decoded client-side to a data URL. */
+  content?: string;
 }
 
 export type ChunkType = "text" | "table" | "diagram_description" | "mermaid" | "code";

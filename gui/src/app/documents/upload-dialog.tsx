@@ -1,14 +1,21 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useProject } from "@/contexts/project-context";
 import { useToast } from "@/components/ui/toast";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui";
-import { Upload, Link2, X } from "lucide-react";
+import { Upload, Link2, X, Image as ImageIcon, Eye } from "lucide-react";
 
-const ACCEPT = ".pdf,.docx,.md,.txt,.markdown,.text,.epub,.odt,.rtf,.html,.htm";
+const ACCEPT = ".pdf,.docx,.md,.txt,.markdown,.text,.epub,.odt,.rtf,.html,.htm,.png,.jpg,.jpeg,.webp";
 const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "webp"]);
+
+function isImageFile(f: File): boolean {
+  if (f.type.startsWith("image/")) return true;
+  const ext = f.name.split(".").pop()?.toLowerCase();
+  return !!ext && IMAGE_EXTS.has(ext);
+}
 
 interface UploadDialogProps {
   open: boolean;
@@ -23,6 +30,7 @@ export function UploadDialog({ open, onClose, onUploaded, mode }: UploadDialogPr
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null); // image data URL for thumb preview
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [description, setDescription] = useState("");
@@ -43,7 +51,21 @@ export function UploadDialog({ open, onClose, onUploaded, mode }: UploadDialogPr
     }
     setFile(f);
     if (!name.trim()) setName(f.name);
+    // Generate a preview for images (object URL freed in effect below)
+    if (isImageFile(f)) {
+      const url = URL.createObjectURL(f);
+      setPreview(url);
+    } else {
+      setPreview(null);
+    }
   }, [name, toast]);
+
+  // Free the object URL when it changes or the dialog unmounts
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview);
+    };
+  }, [preview]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -135,16 +157,29 @@ export function UploadDialog({ open, onClose, onUploaded, mode }: UploadDialogPr
                     dragOver ? "border-blue-500 bg-blue-500/5" : file ? "border-emerald-700 bg-emerald-500/5" : "border-zinc-700 hover:border-zinc-500"
                   }`}
                 >
-                  <Upload size={24} className={`mx-auto mb-2 ${file ? "text-emerald-500" : "text-zinc-500"}`} />
+                  {preview ? (
+                    <img src={preview} alt="preview" className="mx-auto max-h-32 rounded mb-2 border border-zinc-800" />
+                  ) : file && isImageFile(file) ? (
+                    <ImageIcon size={24} className="mx-auto mb-2 text-emerald-500" />
+                  ) : (
+                    <Upload size={24} className={`mx-auto mb-2 ${file ? "text-emerald-500" : "text-zinc-500"}`} />
+                  )}
                   {file ? (
                     <>
                       <p className="text-sm text-zinc-300 mb-1">{file.name}</p>
-                      <p className="text-[11px] text-zinc-600">{(file.size / 1024).toFixed(1)} KB — click or drop to replace</p>
+                      <p className="text-[11px] text-zinc-600">
+                        {(file.size / 1024).toFixed(1)} KB — click or drop to replace
+                      </p>
+                      {isImageFile(file) && (
+                        <p className="mt-2 text-[10px] text-purple-300 inline-flex items-center gap-1">
+                          <Eye size={10} /> Images will be extracted via Vision mode
+                        </p>
+                      )}
                     </>
                   ) : (
                     <>
                       <p className="text-sm text-zinc-300 mb-1">Drop files here or click to browse</p>
-                      <p className="text-[11px] text-zinc-600">PDF, DOCX, MD, EPUB, ODT, RTF, HTML up to 10MB</p>
+                      <p className="text-[11px] text-zinc-600">PDF, DOCX, MD, EPUB, ODT, RTF, HTML, PNG/JPG/WebP up to 10MB</p>
                     </>
                   )}
                   <input

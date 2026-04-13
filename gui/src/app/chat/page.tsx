@@ -121,8 +121,16 @@ function ToolCallDisplay({ part }: { part: any }) {
   const toolIcons: Record<string, React.ReactNode> = {
     search_lessons: <Search size={14} className="text-blue-400" />,
     search_code: <Code2 size={14} className="text-emerald-400" />,
+    search_documents: <Search size={14} className="text-purple-400" />,
     check_guardrails: <Shield size={14} className="text-red-400" />,
   };
+
+  // Specialized rendering for search_documents — show chunks with doc name + page + snippet
+  const isDocChunks =
+    toolName === "search_documents" &&
+    result &&
+    typeof result === "object" &&
+    Array.isArray((result as any).matches);
 
   return (
     <div className="my-2 bg-zinc-900/60 border border-zinc-800 rounded-lg overflow-hidden border-l-2 border-l-blue-500">
@@ -141,10 +149,45 @@ function ToolCallDisplay({ part }: { part: any }) {
         </span>
       </button>
       {expanded && result && (
-        <div className="px-3 py-2 border-t border-zinc-800/60 max-h-[200px] overflow-y-auto">
-          <pre className="text-[11px] text-zinc-500 whitespace-pre-wrap font-mono">
-            {typeof result === "string" ? result : JSON.stringify(result, null, 2)}
-          </pre>
+        <div className="px-3 py-2 border-t border-zinc-800/60 max-h-[260px] overflow-y-auto">
+          {isDocChunks ? (
+            <div className="space-y-2">
+              {((result as any).matches as any[]).length === 0 ? (
+                <p className="text-[11px] text-zinc-600">no matching chunks</p>
+              ) : (
+                ((result as any).matches as any[]).map((m: any, i: number) => (
+                  <a
+                    key={i}
+                    href={`/documents#doc-${m.doc_id}`}
+                    className="block p-2 bg-zinc-950/40 border border-zinc-800 rounded hover:border-zinc-700 hover:bg-zinc-900/60 transition-colors"
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[11px] font-medium text-zinc-200 truncate">{m.doc_name}</span>
+                      {m.page !== null && m.page !== undefined && (
+                        <span className="text-[9px] text-zinc-600">p{m.page}</span>
+                      )}
+                      {m.chunk_type && (
+                        <span className="text-[9px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-400">
+                          {m.chunk_type}
+                        </span>
+                      )}
+                      <span className="ml-auto text-[9px] font-mono text-purple-400">
+                        {m.score !== undefined ? `${Math.round(m.score * 100)}%` : ""}
+                      </span>
+                    </div>
+                    {m.heading && (
+                      <p className="text-[10px] text-zinc-500 mb-0.5 truncate">§ {m.heading}</p>
+                    )}
+                    <p className="text-[11px] text-zinc-400 line-clamp-2">{m.snippet}</p>
+                  </a>
+                ))
+              )}
+            </div>
+          ) : (
+            <pre className="text-[11px] text-zinc-500 whitespace-pre-wrap font-mono">
+              {typeof result === "string" ? result : JSON.stringify(result, null, 2)}
+            </pre>
+          )}
         </div>
       )}
     </div>
