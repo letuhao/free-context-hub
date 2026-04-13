@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { Breadcrumb, PageHeader, Badge, Button, EmptyState, TableSkeleton, StatCard } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { relTime } from "@/lib/rel-time";
-import { FileText, Link2, Upload, Trash2, Eye, Sparkles } from "lucide-react";
+import { FileText, Link2, Upload, Trash2, Eye, Sparkles, Wand2 } from "lucide-react";
 import { Pagination } from "@/components/ui/pagination";
 import { NoProjectGuard } from "@/components/no-project-guard";
 import { ProjectBadge } from "@/components/project-badge";
@@ -116,6 +116,25 @@ export default function DocumentsPage() {
         actions={
           !isAllProjects ? (
             <>
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  if (!confirm("Re-extract all PDF and image documents with Vision mode?\n\nThis will replace existing chunks and may take several minutes depending on document count and vision model speed.")) return;
+                  try {
+                    const r = await api.bulkExtract({ project_id: projectId });
+                    toast(
+                      r.errors > 0 ? "info" : "success",
+                      `Queued ${r.queued} vision extraction${r.queued !== 1 ? "s" : ""}${r.errors > 0 ? ` · ${r.errors} failed to enqueue` : ""}`,
+                    );
+                    fetchDocs();
+                  } catch (err) {
+                    toast("error", err instanceof Error ? err.message : "Bulk extract failed");
+                  }
+                }}
+                title="Queue vision extraction for every PDF and image document in this project"
+              >
+                <Wand2 size={14} className="mr-1" /> Re-extract All
+              </Button>
               <Button variant="outline" onClick={() => setUploadMode("url")}>
                 <Link2 size={14} className="mr-1" /> Link URL
               </Button>

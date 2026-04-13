@@ -63,7 +63,9 @@ function snippet(content: string, maxChars = 240): string {
 
 export async function searchChunks(params: SearchChunksParams): Promise<SearchChunksResult> {
   const pool = getDbPool();
-  const limit = Math.min(Math.max(params.limit ?? 10, 1), 50);
+  // Hard-cap at 100 — chunks are shorter than lessons so a wider pool is
+  // fine, and the GUI's "Load more" button walks up to this ceiling.
+  const limit = Math.min(Math.max(params.limit ?? 10, 1), 100);
   const minScore = params.minScore ?? 0;
 
   // Tokenize for FTS

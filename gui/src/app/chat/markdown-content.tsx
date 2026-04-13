@@ -6,12 +6,22 @@ import rehypeHighlight from "rehype-highlight";
 import "highlight.js/styles/github-dark-dimmed.min.css";
 import { useState } from "react";
 import { Copy, Check } from "lucide-react";
+import { MermaidChunk } from "../documents/mermaid-chunk";
 
 function CodeBlock({ className, children, ...props }: any) {
   const match = /language-(\w+)/.exec(className || "");
   const lang = match ? match[1] : "";
   const code = String(children).replace(/\n$/, "");
   const [copied, setCopied] = useState(false);
+
+  // P4: mermaid fenced blocks render as live diagrams instead of code.
+  if (lang === "mermaid") {
+    return (
+      <div className="my-2">
+        <MermaidChunk code={`\`\`\`mermaid\n${code}\n\`\`\``} />
+      </div>
+    );
+  }
 
   const handleCopy = () => {
     navigator.clipboard.writeText(code);

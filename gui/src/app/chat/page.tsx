@@ -110,9 +110,57 @@ function MessageToolbar({ role, onCopy, onPin, onCreateLesson }: {
   );
 }
 
+/** Inline chunk citations card — used when the LLM calls search_documents.
+ *  Phase 10.6 P1: auto-expanded, top 3 previewed inline, rest behind a toggle. */
+function ChunkCitations({ matches }: { matches: any[] }) {
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? matches : matches.slice(0, 3);
+  if (matches.length === 0) {
+    return <p className="text-[11px] text-zinc-600 px-3 py-2">no matching chunks</p>;
+  }
+  return (
+    <div className="space-y-1.5 px-3 py-2">
+      {visible.map((m, i) => (
+        <a
+          key={i}
+          href={`/documents#doc-${m.doc_id}`}
+          className="block p-2 bg-zinc-950/40 border border-zinc-800 rounded hover:border-zinc-700 hover:bg-zinc-900/60 transition-colors"
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[11px] font-medium text-zinc-200 truncate">{m.doc_name}</span>
+            {m.page !== null && m.page !== undefined && (
+              <span className="text-[9px] text-zinc-600">p{m.page}</span>
+            )}
+            {m.chunk_type && (
+              <span className="text-[9px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-400">
+                {m.chunk_type}
+              </span>
+            )}
+            <span className="ml-auto text-[9px] font-mono text-purple-400">
+              {m.score !== undefined ? `${Math.round(m.score * 100)}%` : ""}
+            </span>
+          </div>
+          {m.heading && (
+            <p className="text-[10px] text-zinc-500 mb-0.5 truncate">§ {m.heading}</p>
+          )}
+          <p className="text-[11px] text-zinc-400 line-clamp-2">{m.snippet}</p>
+        </a>
+      ))}
+      {matches.length > 3 && (
+        <button
+          type="button"
+          onClick={() => setShowAll((s) => !s)}
+          className="text-[10px] text-zinc-500 hover:text-zinc-300 px-1 py-0.5"
+        >
+          {showAll ? "show fewer" : `show ${matches.length - 3} more`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ── Tool Call Display (restyled) ──
 function ToolCallDisplay({ part }: { part: any }) {
-  const [expanded, setExpanded] = useState(false);
   const toolName: string = part.toolInvocation?.toolName ?? part.toolName ?? "tool";
   const args = part.toolInvocation?.args ?? part.args ?? {};
   const result = part.toolInvocation?.result ?? part.result;
@@ -125,21 +173,33 @@ function ToolCallDisplay({ part }: { part: any }) {
     check_guardrails: <Shield size={14} className="text-red-400" />,
   };
 
-  // Specialized rendering for search_documents — show chunks with doc name + page + snippet
+  // Specialized rendering for search_documents — chunks shown inline by
+  // default (no expand click). Other tools keep the collapsed JSON view.
   const isDocChunks =
     toolName === "search_documents" &&
     result &&
     typeof result === "object" &&
     Array.isArray((result as any).matches);
 
+  // Non-doc-chunks tools: keep expand-to-see-JSON affordance
+  const [expanded, setExpanded] = useState(false);
+
   return (
     <div className="my-2 bg-zinc-900/60 border border-zinc-800 rounded-lg overflow-hidden border-l-2 border-l-blue-500">
       <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full px-3 py-2.5 flex items-center gap-2.5 text-left hover:bg-zinc-800/30 transition-colors"
+        onClick={() => !isDocChunks && setExpanded(!expanded)}
+        disabled={isDocChunks}
+        className={`w-full px-3 py-2.5 flex items-center gap-2.5 text-left ${
+          isDocChunks ? "cursor-default" : "hover:bg-zinc-800/30 transition-colors"
+        }`}
       >
         <span className="shrink-0">{toolIcons[toolName] ?? <Wrench size={14} className="text-zinc-400" />}</span>
         <span className="text-xs font-mono text-zinc-300">{toolName}</span>
+        {isDocChunks && (
+          <span className="text-[10px] text-zinc-500">
+            · {((result as any).matches as any[]).length} chunk{((result as any).matches as any[]).length !== 1 ? "s" : ""}
+          </span>
+        )}
         <span className="ml-auto">
           {state === "call" ? (
             <span className="text-zinc-600 text-[10px] animate-pulse">running...</span>
@@ -148,46 +208,19 @@ function ToolCallDisplay({ part }: { part: any }) {
           )}
         </span>
       </button>
-      {expanded && result && (
+
+      {/* Always-inline citations for search_documents */}
+      {isDocChunks && (
+        <div className="border-t border-zinc-800/60 max-h-[360px] overflow-y-auto">
+          <ChunkCitations matches={(result as any).matches as any[]} />
+        </div>
+      )}
+
+      {!isDocChunks && expanded && result && (
         <div className="px-3 py-2 border-t border-zinc-800/60 max-h-[260px] overflow-y-auto">
-          {isDocChunks ? (
-            <div className="space-y-2">
-              {((result as any).matches as any[]).length === 0 ? (
-                <p className="text-[11px] text-zinc-600">no matching chunks</p>
-              ) : (
-                ((result as any).matches as any[]).map((m: any, i: number) => (
-                  <a
-                    key={i}
-                    href={`/documents#doc-${m.doc_id}`}
-                    className="block p-2 bg-zinc-950/40 border border-zinc-800 rounded hover:border-zinc-700 hover:bg-zinc-900/60 transition-colors"
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[11px] font-medium text-zinc-200 truncate">{m.doc_name}</span>
-                      {m.page !== null && m.page !== undefined && (
-                        <span className="text-[9px] text-zinc-600">p{m.page}</span>
-                      )}
-                      {m.chunk_type && (
-                        <span className="text-[9px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-400">
-                          {m.chunk_type}
-                        </span>
-                      )}
-                      <span className="ml-auto text-[9px] font-mono text-purple-400">
-                        {m.score !== undefined ? `${Math.round(m.score * 100)}%` : ""}
-                      </span>
-                    </div>
-                    {m.heading && (
-                      <p className="text-[10px] text-zinc-500 mb-0.5 truncate">§ {m.heading}</p>
-                    )}
-                    <p className="text-[11px] text-zinc-400 line-clamp-2">{m.snippet}</p>
-                  </a>
-                ))
-              )}
-            </div>
-          ) : (
-            <pre className="text-[11px] text-zinc-500 whitespace-pre-wrap font-mono">
-              {typeof result === "string" ? result : JSON.stringify(result, null, 2)}
-            </pre>
-          )}
+          <pre className="text-[11px] text-zinc-500 whitespace-pre-wrap font-mono">
+            {typeof result === "string" ? result : JSON.stringify(result, null, 2)}
+          </pre>
         </div>
       )}
     </div>

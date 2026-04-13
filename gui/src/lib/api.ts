@@ -255,6 +255,18 @@ export const api = {
       `/api/documents/${encodeURIComponent(docId)}/chunks/${encodeURIComponent(chunkId)}?${qs(params)}`,
     ),
 
+  // Phase 10.6: bulk vision re-extract for an entire project
+  bulkExtract: (body: { project_id: string; prompt_template?: "default" | "mermaid" }) =>
+    request<{
+      status: string;
+      mode: string;
+      prompt_template: string;
+      total: number;
+      queued: number;
+      errors: number;
+      jobs: Array<{ doc_id: string; job_id?: string; status: string; error?: string }>;
+    }>("POST", "/api/documents/bulk-extract", body),
+
   // Phase 10.5: semantic search over document chunks
   searchDocumentChunks: (body: {
     project_id: string;

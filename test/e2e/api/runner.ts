@@ -16,6 +16,7 @@ import { allGuardrailTests } from './guardrails.test.js';
 import { allDocumentTests } from './documents.test.js';
 import { allSearchTests } from './search.test.js';
 import { allSystemTests } from './system.test.js';
+import { allPhase10Tests } from './phase10.test.js';
 
 async function main() {
   const startMs = Date.now();
@@ -24,7 +25,9 @@ async function main() {
   console.log('║   E2E API Scenario Tests — Layer 2       ║');
   console.log('╚══════════════════════════════════════════╝\n');
 
-  const ctx = await bootstrapContext();
+  // Phase 10.6: pass withMcp so phase10-mcp-chunk-search-tool can exercise
+  // the MCP search_document_chunks tool end-to-end.
+  const ctx = await bootstrapContext({ withMcp: true });
 
   const allTests: TestFn[] = [
     ...allAuthTests,
@@ -33,6 +36,7 @@ async function main() {
     ...allDocumentTests,
     ...allSearchTests,
     ...allSystemTests,
+    ...allPhase10Tests,
   ];
 
   console.log(`  ${allTests.length} tests registered.\n`);

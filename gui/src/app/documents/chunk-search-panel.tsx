@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Loader2, FileText, Table as TableIcon, Code, FileImage, X } from "lucide-react";
+import { Search, Loader2, FileText, Table as TableIcon, Code, FileImage, X, AlertTriangle, RefreshCw } from "lucide-react";
 import { api } from "@/lib/api";
 import { useProject } from "@/contexts/project-context";
 import { useToast } from "@/components/ui/toast";
@@ -49,11 +49,18 @@ interface ChunkSearchPanelProps {
 export function ChunkSearchPanel({ onOpenDocument }: ChunkSearchPanelProps) {
   const { projectId } = useProject();
   const { toast } = useToast();
+  const PAGE_SIZE = 20;
+  const MAX_RESULTS = 100;
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [results, setResults] = useState<ChunkSearchResult[] | null>(null);
   const [selectedTypes, setSelectedTypes] = useState<Set<ChunkTypeFilter>>(new Set());
   const [explanations, setExplanations] = useState<string[]>([]);
+  /** Has the latest request likely hit the server-side cap? We can't know
+   *  for sure without a cursor, so "more available" = last batch returned
+   *  a full PAGE_SIZE AND total < MAX_RESULTS. */
+  const [hasMore, setHasMore] = useState(false);
 
   const toggleType = (t: ChunkTypeFilter) => {
     setSelectedTypes((prev) => {
@@ -72,16 +79,42 @@ export function ChunkSearchPanel({ onOpenDocument }: ChunkSearchPanelProps) {
       const res = await api.searchDocumentChunks({
         project_id: projectId,
         query: q,
-        limit: 20,
+        limit: PAGE_SIZE,
         chunk_types: selectedTypes.size > 0 ? Array.from(selectedTypes) : undefined,
       });
       setResults(res.matches);
       setExplanations(res.explanations ?? []);
+      setHasMore(res.matches.length >= PAGE_SIZE);
     } catch (err) {
       toast("error", err instanceof Error ? err.message : "Search failed");
       setResults([]);
+      setHasMore(false);
     } finally {
       setLoading(false);
+    }
+  };
+
+  /** Load more results. The backend endpoint doesn't support offset yet,
+   *  so we re-query with a larger limit and slice off the head we already
+   *  have. Capped at MAX_RESULTS to bound the largest single request. */
+  const loadMore = async () => {
+    const q = query.trim();
+    if (!q || !results) return;
+    const nextLimit = Math.min(results.length + PAGE_SIZE, MAX_RESULTS);
+    setLoadingMore(true);
+    try {
+      const res = await api.searchDocumentChunks({
+        project_id: projectId,
+        query: q,
+        limit: nextLimit,
+        chunk_types: selectedTypes.size > 0 ? Array.from(selectedTypes) : undefined,
+      });
+      setResults(res.matches);
+      setHasMore(res.matches.length >= nextLimit && nextLimit < MAX_RESULTS);
+    } catch (err) {
+      toast("error", err instanceof Error ? err.message : "Load more failed");
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -160,6 +193,30 @@ export function ChunkSearchPanel({ onOpenDocument }: ChunkSearchPanelProps) {
       {/* Results */}
       {results !== null && (
         <div className="mt-3 pt-3 border-t border-zinc-800/60">
+          {/* P3: embedding-down warning banner — surfaces the fallback
+              explanation from searchChunks so users know results are
+              keyword-only, not semantic. */}
+          {explanations.some((e) => e.toLowerCase().includes("embedding service unavailable")) && (
+            <div className="mb-2 border border-amber-500/30 bg-amber-500/5 rounded-md p-2 flex items-start gap-2">
+              <AlertTriangle size={12} className="text-amber-400 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] text-amber-300 font-medium mb-0.5">
+                  Semantic search unavailable
+                </p>
+                <p className="text-[10px] text-zinc-500 break-words">
+                  Results are ranked by keyword match only. Check the embeddings service and retry.
+                </p>
+              </div>
+              <button
+                onClick={runSearch}
+                disabled={loading}
+                className="shrink-0 text-[10px] text-amber-300 hover:text-amber-200 flex items-center gap-1"
+              >
+                <RefreshCw size={10} className={loading ? "animate-spin" : ""} /> retry
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] text-zinc-500">
               {results.length} result{results.length !== 1 ? "s" : ""}
@@ -206,6 +263,24 @@ export function ChunkSearchPanel({ onOpenDocument }: ChunkSearchPanelProps) {
                   </button>
                 );
               })}
+              {hasMore && (
+                <button
+                  onClick={loadMore}
+                  disabled={loadingMore || results.length >= MAX_RESULTS}
+                  className="w-full py-2 text-[11px] text-zinc-400 hover:text-zinc-200 border border-zinc-800 bg-zinc-900/40 hover:bg-zinc-800/40 rounded-md transition-colors flex items-center justify-center gap-1.5"
+                >
+                  {loadingMore ? (
+                    <><Loader2 size={11} className="animate-spin" /> Loading…</>
+                  ) : (
+                    <>Load more ({MAX_RESULTS - results.length} max)</>
+                  )}
+                </button>
+              )}
+              {results.length >= MAX_RESULTS && (
+                <p className="text-[10px] text-zinc-600 text-center py-1">
+                  Reached maximum of {MAX_RESULTS} results — refine your query for narrower matches
+                </p>
+              )}
             </div>
           )}
         </div>

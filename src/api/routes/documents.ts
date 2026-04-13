@@ -592,6 +592,69 @@ router.post('/:id/jobs/:jobId/cancel', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+/** POST /api/documents/bulk-extract — Phase 10.6: enqueue vision extraction
+ * for every PDF/image document in a project. Returns the list of queued
+ * job IDs so the GUI can poll progress. Non-supported doc types are skipped.
+ */
+router.post('/bulk-extract', async (req, res, next) => {
+  try {
+    const projectId = resolveProjectIdOrThrow(req.body.project_id);
+    // Currently vision-only — the worker job queue only handles the vision
+    // pipeline. Bulk fast/quality would need to run inline and block the
+    // request for potentially minutes; better to require individual extract.
+    const promptTemplate = req.body.prompt_template ?? 'default';
+    if (!['default', 'mermaid'].includes(promptTemplate)) {
+      res.status(400).json({ status: 'error', error: `Invalid prompt_template: ${promptTemplate}` });
+      return;
+    }
+
+    const pool = getDbPool();
+    const docsRes = await pool.query(
+      `SELECT doc_id, doc_type FROM documents
+       WHERE project_id = $1 AND doc_type = ANY($2::text[])
+       ORDER BY updated_at DESC`,
+      [projectId, ['pdf', 'image']],
+    );
+
+    const queued: { doc_id: string; job_id?: string; status: string; error?: string }[] = [];
+    for (const row of docsRes.rows) {
+      try {
+        await pool.query(
+          `UPDATE documents SET extraction_status = 'processing' WHERE doc_id = $1`,
+          [row.doc_id],
+        );
+        const job = await enqueueJob({
+          project_id: projectId,
+          job_type: 'document.extract.vision' as any,
+          payload: {
+            doc_id: row.doc_id,
+            template: 'auto',
+            prompt_template: promptTemplate,
+          },
+          max_attempts: 1,
+        });
+        queued.push({ doc_id: row.doc_id, job_id: job.job_id, status: 'queued' });
+      } catch (err) {
+        queued.push({
+          doc_id: row.doc_id,
+          status: 'error',
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    res.status(202).json({
+      status: 'ok',
+      mode: 'vision',
+      prompt_template: promptTemplate,
+      total: queued.length,
+      queued: queued.filter((q) => q.status === 'queued').length,
+      errors: queued.filter((q) => q.status === 'error').length,
+      jobs: queued,
+    });
+  } catch (e) { next(e); }
+});
+
 /** GET /api/documents/:id/thumbnail — Phase 10.5: serve the raw bytes of an
  * image document so the list view can <img src=…> without embedding the full
  * base64 content in the JSON response. Returns 404 if doc is not an image.
