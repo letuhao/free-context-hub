@@ -1,9 +1,33 @@
 ---
-id: CH-PHASE10-S106
+id: CH-PHASE10-S107
 date: 2026-04-13
-module: Phase10-Sprint10.6
-phase: COMPLETE
+module: Phase10-Sprint10.7
+phase: IN_PROGRESS
 ---
+
+# Session Patch — 2026-04-13 (Sprint 10.7 — URL ingestion)
+
+## Where We Are
+**Sprint 10.7 complete and live-tested (commit 232d758).** URL ingestion with an SSRF-hardened fetcher closes the "paste a link" onboarding gap and enables Playwright browser tests to drive the upload flow via URL strings instead of file pickers. 47/47 E2E tests passing, including 3 new URL ingestion tests + all Phase 10.1-10.6 tests.
+
+### What shipped
+- **`src/services/urlFetch.ts`** — SSRF-safe downloader: scheme allowlist, DNS-based private-range rejection (loopback / RFC1918 / link-local / CGNAT / cloud metadata), manual redirect re-validation (max 5, strips auth), streaming 10MB cap, 30s AbortSignal timeout, Content-Type allowlist (pdf/docx/epub/odt/rtf/html/markdown/plain/png/jpeg/webp), Content-Disposition filename derivation. Defuses DNS rebinding by resolving IPs before connecting.
+- **`POST /api/documents/ingest-url`** — mirrors the multipart upload pipeline (content_hash dedupe → createDocument → extraction-ready). Maps UrlFetchError codes to 400/403/413/415/502/504.
+- **`ALLOW_PRIVATE_FETCH_FOR_TESTS` env flag** — simultaneously (a) relaxes the SSRF private-range check and (b) mounts `/test-static/` serving `test-data/` so the E2E harness can ingest its own fixtures from loopback. Defaults to false; docker-compose wires it through for local dev.
+- **Upload dialog URL tab** — the pre-existing "Link URL" tab now calls `ingest-url` instead of creating a useless `url` stub. Duplicate detection surfaces same toast as file uploads. Helper text warns about 10MB + SSRF limits.
+
+### Live test results (Sprint 10.7)
+```
+47/47 passed, 0 failed (159806ms)
+phase10-ingest-url-markdown-happy      11ms   ✓ test-static loopback fetch + doc_type detection
+phase10-ingest-url-ssrf-blocked        5ms    ✓ file:/// ftp:/// gopher:/// empty / malformed all 4xx
+phase10-ingest-url-bad-content-type    3ms    ✓ application/json rejected (not in allowlist)
+```
+
+### Why this unlocks browser tests
+Before 10.7, Playwright tests would need `page.setInputFiles(path)` workarounds to attach real binary files. Now they can type a URL string pointing at `http://host.docker.internal:3001/test-static/sample.pdf` — no file picker dance. Sprint 10.8 (browser tests) can proceed cleanly.
+
+## Sprint 10.6 history (prev)
 
 # Session Patch — 2026-04-13 (Sprint 10.6 — Phase 10 COMPLETE)
 
