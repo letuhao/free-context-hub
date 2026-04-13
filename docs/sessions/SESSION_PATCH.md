@@ -246,7 +246,7 @@ Created comprehensive design document: `docs/phase10-extraction-pipeline.md`
 | `cd1862e` | Phase 10 Sprint 10.2: Extraction Review UI | 6 |
 | `60daa55` | [10.2] Review fixes — 6 issues from Sprint 10.2 code review | 5 |
 | `5d375b5` | [Session] Add per-sprint session-update rule + Sprint 10.2 patch entry | 2 |
-| (pending) | Phase 10 Sprint 10.3: Vision extraction backend + live test fixes | 11 |
+| `5e1700d` | Phase 10 Sprint 10.3: Vision extraction backend | 12 |
 
 ## Summary
 
