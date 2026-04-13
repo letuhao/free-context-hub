@@ -70,12 +70,42 @@ export async function searchChunks(params: SearchChunksParams): Promise<SearchCh
   const queryTokens = params.query.match(/[A-Za-z_][A-Za-z0-9_]{1,}/g) ?? [];
   const ftsQuery = buildFtsQuery(queryTokens, 'or');
 
-  // Embed query
-  const [vec] = await embedTexts([params.query]);
-  const vector = `[${vec.join(',')}]`;
+  // Embed query — if the embedding service is unavailable, degrade to
+  // FTS-only ranking instead of 500'ing the whole request. Chunks still
+  // return relevance-ordered results, just without semantic boost.
+  let vector: string | null = null;
+  let embedFailure: string | null = null;
+  try {
+    const [vec] = await embedTexts([params.query]);
+    vector = `[${vec.join(',')}]`;
+  } catch (err) {
+    embedFailure = err instanceof Error ? err.message : String(err);
+    logger.warn({ err: embedFailure }, 'chunk search: embedding failed, falling back to FTS-only');
+    if (!ftsQuery) {
+      // No embedding AND no keyword tokens → nothing to search on
+      return {
+        matches: [],
+        explanations: [
+          `embedding service unavailable (${embedFailure}) and no keyword tokens — cannot search`,
+        ],
+      };
+    }
+  }
 
-  const sqlParams: any[] = [params.projectId, vector];
-  const whereParts: string[] = ['c.project_id = $1', 'c.embedding IS NOT NULL'];
+  // Build param list: $1=project_id, [$2=vector if semantic], ...
+  const sqlParams: any[] = [params.projectId];
+  const whereParts: string[] = ['c.project_id = $1'];
+  // Defense-in-depth: also enforce doc row is in same tenant (MED #8).
+  // The FK makes this already true, but explicit filter protects against
+  // any future schema drift.
+  whereParts.push('d.project_id = c.project_id');
+
+  let vectorParam = '';
+  if (vector !== null) {
+    sqlParams.push(vector);
+    vectorParam = `$${sqlParams.length}`;
+    whereParts.push('c.embedding IS NOT NULL');
+  }
 
   if (params.chunkTypes && params.chunkTypes.length > 0) {
     sqlParams.push(params.chunkTypes);
@@ -90,8 +120,8 @@ export async function searchChunks(params: SearchChunksParams): Promise<SearchCh
   sqlParams.push(limit);
   const limitParam = `$${sqlParams.length}`;
 
-  // Hybrid score: semantic + 0.30 * fts (chunks are shorter than lessons —
-  // keyword match carries relatively more weight than in the lesson search).
+  // Hybrid score: semantic + 0.30 * fts. If embedding failed, score is
+  // FTS-only and we still return ordered results.
   let ftsScoreExpr = '0';
   let ftsJoin = '';
   if (ftsQuery) {
@@ -102,9 +132,20 @@ export async function searchChunks(params: SearchChunksParams): Promise<SearchCh
       WHERE c.fts IS NOT NULL AND c.fts @@ to_tsquery('english', ${ftsParam})
     ) fts_sub ON true`;
     ftsScoreExpr = 'COALESCE(fts_sub.fts_rank, 0)';
+    // If we're FTS-only, require at least one FTS hit so we don't return junk
+    if (vector === null) {
+      whereParts.push(`c.fts @@ to_tsquery('english', ${ftsParam})`);
+    }
   }
 
   const whereClause = whereParts.join(' AND ');
+
+  const semScoreExpr = vectorParam
+    ? `GREATEST(0, 1 - (c.embedding <=> ${vectorParam}::vector))`
+    : '0';
+  const hybridScoreExpr = vectorParam
+    ? `LEAST(1.0, ${semScoreExpr} + 0.30 * ${ftsScoreExpr})`
+    : ftsScoreExpr;
 
   const sql = `
     SELECT
@@ -119,20 +160,22 @@ export async function searchChunks(params: SearchChunksParams): Promise<SearchCh
       c.extraction_mode,
       d.name AS doc_name,
       d.doc_type AS doc_type,
-      GREATEST(0, 1 - (c.embedding <=> $2::vector)) AS sem_score,
+      ${semScoreExpr} AS sem_score,
       ${ftsScoreExpr} AS fts_score,
-      LEAST(1.0, GREATEST(0, 1 - (c.embedding <=> $2::vector)) + 0.30 * ${ftsScoreExpr}) AS score
+      ${hybridScoreExpr} AS score
     FROM document_chunks c
     JOIN documents d ON d.doc_id = c.doc_id
     ${ftsJoin}
     WHERE ${whereClause}
-    ORDER BY score DESC, sem_score DESC
+    ORDER BY score DESC${vectorParam ? `, sem_score DESC` : ''}
     LIMIT ${limitParam}`;
 
   const res = await pool.query(sql, sqlParams);
 
   const explanations: string[] = [];
-  if (ftsQuery) {
+  if (embedFailure) {
+    explanations.push(`embedding service unavailable (${embedFailure}) — results ranked by FTS only`);
+  } else if (ftsQuery) {
     const ftsHits = (res.rows ?? []).filter((r: any) => Number(r.fts_score) > 0).length;
     explanations.push(`hybrid: sem + 0.30*fts, fts_hits=${ftsHits}/${(res.rows ?? []).length}`);
   } else {

@@ -88,19 +88,22 @@ export async function globalSearch(params: {
       logger.warn({ error: err instanceof Error ? err.message : String(err) }, 'git_commits query failed (table may not exist)');
       return { rows: [] };
     }),
-    // Document chunks — FTS-only for speed (Cmd+K must stay snappy).
-    // Semantic chunk search is available via POST /api/documents/chunks/search
-    // for higher-quality retrieval from the dedicated panel / chat / MCP.
+    // Document chunks — FTS @@ to_tsquery uses the GIN index for O(log n)
+    // lookup instead of ILIKE's full table scan. plainto_tsquery accepts
+    // arbitrary user input safely (no ts_query syntax required).
+    // Semantic chunk search lives at POST /api/documents/chunks/search.
     pool.query(
       `SELECT c.chunk_id, c.doc_id, c.chunk_type, c.page_number, c.heading,
               LEFT(c.content, 160) AS snippet,
-              d.name AS doc_name
+              d.name AS doc_name,
+              ts_rank(c.fts, plainto_tsquery('english', $2)) AS rank
        FROM document_chunks c
        JOIN documents d ON d.doc_id = c.doc_id
-       WHERE c.project_id = $1 AND c.content ILIKE $2
-       ORDER BY c.chunk_index ASC
+       WHERE c.project_id = $1
+         AND c.fts @@ plainto_tsquery('english', $2)
+       ORDER BY rank DESC, c.chunk_index ASC
        LIMIT $3`,
-      [params.projectId, pattern, limit],
+      [params.projectId, q, limit],
     ).catch((err) => {
       logger.warn({ error: err instanceof Error ? err.message : String(err) }, 'document_chunks query failed');
       return { rows: [] };

@@ -26,19 +26,14 @@ const TYPE_BADGES: Record<string, string> = {
   text: "bg-zinc-700 text-zinc-300",
 };
 
-/** Decode a stored `data:base64;...` image content into a browser-usable
- *  data URL. Falls back to null if the content is missing or malformed. */
-function imageThumbDataUrl(doc: { doc_type: string; content?: string; name: string }): string | null {
-  if (doc.doc_type !== "image" || !doc.content) return null;
-  if (!doc.content.startsWith("data:base64;")) return null;
-  const b64 = doc.content.slice("data:base64;".length);
-  // Sniff mime from filename extension
-  const ext = doc.name.split(".").pop()?.toLowerCase();
-  const mime =
-    ext === "jpg" || ext === "jpeg" ? "image/jpeg" :
-    ext === "webp" ? "image/webp" :
-    "image/png";
-  return `data:${mime};base64,${b64}`;
+/** Build a URL to the thumbnail endpoint for an image doc. Returns null for
+ *  non-image docs. The list response no longer carries raw base64 content
+ *  (perf) — the browser fetches image bytes directly from this endpoint.
+ */
+function imageThumbUrl(doc: { doc_id: string; doc_type: string }, projectId: string): string | null {
+  if (doc.doc_type !== "image") return null;
+  const API_URL = process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "http://localhost:3001";
+  return `${API_URL}/api/documents/${encodeURIComponent(doc.doc_id)}/thumbnail?project_id=${encodeURIComponent(projectId)}`;
 }
 
 function formatSize(bytes: number | null): string {
@@ -187,7 +182,7 @@ export default function DocumentsPage() {
             </thead>
             <tbody className="divide-y divide-zinc-800">
               {docs.map((doc) => {
-                const thumb = imageThumbDataUrl(doc);
+                const thumb = imageThumbUrl(doc, projectId);
                 return (
                 <tr key={doc.doc_id} className="hover:bg-zinc-800/50 cursor-pointer transition-colors" onClick={() => setViewDoc(doc)}>
                   <td className="px-4 py-3 text-sm text-zinc-300 truncate max-w-[260px]">

@@ -51,21 +51,22 @@ export function UploadDialog({ open, onClose, onUploaded, mode }: UploadDialogPr
     }
     setFile(f);
     if (!name.trim()) setName(f.name);
-    // Generate a preview for images (object URL freed in effect below)
-    if (isImageFile(f)) {
-      const url = URL.createObjectURL(f);
-      setPreview(url);
-    } else {
-      setPreview(null);
-    }
+    // Generate a preview for images. Revoke the PREVIOUS object URL
+    // synchronously here — waiting for useEffect cleanup would leak on
+    // rapid re-selection (race between setPreview and cleanup fire order).
+    setPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return isImageFile(f) ? URL.createObjectURL(f) : null;
+    });
   }, [name, toast]);
 
-  // Free the object URL when it changes or the dialog unmounts
+  // Final cleanup on dialog unmount
   useEffect(() => {
     return () => {
       if (preview) URL.revokeObjectURL(preview);
     };
-  }, [preview]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();

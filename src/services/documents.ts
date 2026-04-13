@@ -71,8 +71,16 @@ export async function listDocuments(params: {
   );
   const total_count = parseInt(countRes.rows[0]?.cnt ?? '0', 10);
 
+  // Phase 10.5 perf fix: exclude the `content` column from the list query.
+  // Binary docs (image/pdf/docx) store their base64 content here — a single
+  // 10MB image times 12 rows = 120MB per page load. Callers that need the
+  // raw content use GET /api/documents/:id instead.
   let query = `
-    SELECT d.*, COALESCE(lc.cnt, 0)::int AS linked_lesson_count
+    SELECT d.doc_id, d.project_id, d.name, d.doc_type, d.url, d.storage_path,
+           d.description, d.file_size_bytes, d.content_hash, d.tags,
+           d.extraction_status, d.extraction_mode, d.extracted_at,
+           d.created_at, d.updated_at,
+           COALESCE(lc.cnt, 0)::int AS linked_lesson_count
     FROM documents d
     LEFT JOIN (SELECT doc_id, COUNT(*) AS cnt FROM document_lessons GROUP BY doc_id) lc ON lc.doc_id = d.doc_id
     ${where}`;

@@ -592,6 +592,39 @@ router.post('/:id/jobs/:jobId/cancel', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+/** GET /api/documents/:id/thumbnail — Phase 10.5: serve the raw bytes of an
+ * image document so the list view can <img src=…> without embedding the full
+ * base64 content in the JSON response. Returns 404 if doc is not an image.
+ */
+router.get('/:id/thumbnail', async (req, res, next) => {
+  try {
+    const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
+    const pool = getDbPool();
+    const r = await pool.query(
+      `SELECT doc_type, content, name FROM documents WHERE doc_id = $1 AND project_id = $2`,
+      [req.params.id, projectId],
+    );
+    if (r.rowCount === 0) { res.status(404).end(); return; }
+    const doc = r.rows[0];
+    if (doc.doc_type !== 'image') { res.status(404).end(); return; }
+    if (typeof doc.content !== 'string' || !doc.content.startsWith('data:base64;')) {
+      res.status(404).end();
+      return;
+    }
+    const b64 = doc.content.slice('data:base64;'.length);
+    const buf = Buffer.from(b64, 'base64');
+    const ext = String(doc.name || '').split('.').pop()?.toLowerCase();
+    const mime =
+      ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' :
+      ext === 'webp' ? 'image/webp' :
+      'image/png';
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Cache-Control', 'private, max-age=300'); // 5 min
+    res.setHeader('Content-Length', String(buf.length));
+    res.end(buf);
+  } catch (e) { next(e); }
+});
+
 /** POST /api/documents/chunks/search — Phase 10.5: hybrid semantic+FTS chunk search
  *
  * Body: { project_id, query, limit?, chunk_types?[], doc_ids?[], min_score? }
