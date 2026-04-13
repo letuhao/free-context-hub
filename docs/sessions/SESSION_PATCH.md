@@ -1,14 +1,14 @@
 ---
-id: CH-BUGFIX-PHASE10-PLAN
+id: CH-PHASE10-S101
 date: 2026-04-13
-module: BugFixes-Phase10-Planning
-phase: COMPLETE
+module: Phase10-Sprint10.1
+phase: IN_PROGRESS
 ---
 
 # Session Patch — 2026-04-13 (Session 7)
 
 ## Where We Are
-**Bug fix session + Phase 10 planning.** Fixed 18 UI bugs from a deep review across 4 sprints, all visually verified via browser. Designed the Phase 10 multi-format extraction pipeline with 8 review rounds and 3 HTML drafts. Ready to start Sprint 10.1 implementation.
+**Sprint 10.1 complete and live-tested.** Backend text extraction pipeline (Fast Text + Quality Text modes) is working end-to-end against real PDF/DOCX/Markdown files. Code review found 12 issues, all fixed. Live Docker testing exposed 3 more real bugs (embedding dim, pdf-parse v2 API, migration backfill collision) — all fixed and verified. Ready to start Sprint 10.2 (GUI components).
 
 ## What Was Done This Session
 
@@ -83,13 +83,74 @@ Created comprehensive design document: `docs/phase10-extraction-pipeline.md`
 - `extraction-review.html` — Full-width split-pane (PDF preview + markdown editor), per-page actions including "Extract as Mermaid", Mermaid preview panel with rendered diagram + source code, page navigator with color-coded confidence states
 - `extraction-progress.html` — Overall progress bar, per-page status grid, early review prompt, failed page retry
 
+### Phase 10 Sprint 10.1 — Text Extraction Foundation ✅
+
+**Backend pipeline (no GUI yet) — 3 commits, ~1400 lines.**
+
+#### Migrations
+- `0042_document_chunks.sql` — new table with embeddings, FTS, bbox columns, HNSW + GIN indexes, auto-update trigger. Embedding column initially `vector(768)`, corrected to `vector(1024)` after live test.
+- `0043_documents_extraction.sql` — expand doc_type to include docx/image/epub/odt/rtf/html, add content_hash + extraction_status + extraction_mode + extracted_at columns, unique index per project on content_hash. Backfills existing rows with `legacy:<doc_id>` to avoid collisions.
+- `0044_document_chunks_dim_1024.sql` — corrects 0042's hardcoded vector dim to match `EMBEDDINGS_DIM=1024`.
+
+#### Services (`src/services/extraction/`)
+- `types.ts` — ExtractionMode, ChunkType, DocumentChunk, ChunkOptions
+- `fastText.ts` — pdf-parse v2 (PDFParse class API) + mammoth + turndown. Per-page extraction for PDFs.
+- `qualityText.ts` — pdftotext (poppler-utils) + pandoc subprocess via stdin/stdout. Falls back to fast on missing binaries. Supports PDF, DOCX, ODT, RTF, EPUB, HTML.
+- `chunker.ts` — naive + hierarchical strategies with auto-select. Preserves heading levels (#, ##, ###). Tables and code blocks emit as their own chunks for precise type filtering. Bounded code-block fence search prevents infinite loops on malformed markdown.
+- `pipeline.ts` — orchestrator with transactional DELETE+INSERT, batch INSERT (single multi-row statement), magic byte verification, XSS sanitization, embedding before DB writes (data-loss safe).
+
+#### API endpoints (`src/api/routes/documents.ts`)
+- `POST /api/documents/upload` — adds SHA-256 dedup, atomic content_hash insert, filename sanitization, base64-encoded binary storage, expanded doc_type detection
+- `POST /api/documents/:id/extract` — runs pipeline, returns chunks, surfaces 422 for content errors and 501 for vision mode
+- `GET /api/documents/:id/chunks` — returns persisted chunks
+
+#### Dockerfile
+- Added `poppler-utils` and `pandoc` to alpine base for Quality Text mode
+
+#### Code Review Round 1 — 12 issues fixed (commit `1cdca39`)
+1. **HIGH** Pipeline data loss on failed re-extraction → transactional replaceChunks()
+2. **MED** N+1 chunk INSERTs → single multi-row statement with auto-batching
+3. **LOW** Dead pagerender callback in fastText
+4. **LOW** Hierarchical chunker flattened H1/H3 to ## → preserve original level
+5. **MED** splitIntoBlocks unbounded fence search swallowed entire doc → bounded MAX_CODE_BLOCK_LINES
+6. **MED** Upload dedup race condition → atomic INSERT + unique constraint catch
+7. **LOW** NULL content_hash blocked future dedup → backfill via pgcrypto digest
+8. **MED** No magic byte verification → verify %PDF, PK, {\rtf
+9. **LOW** Confusing error when pandoc missing → clear install message
+10. **LOW** bufType promotion imprecise → tables/code always own chunks
+11. **MED** No XSS sanitization → strip script/iframe/event handlers/javascript URIs
+12. **LOW** No filename sanitization → strip control chars, path traversal, leading dots
+
+#### Live Test — 3 more real bugs found (commit `06e32a4`)
+- **Embedding dim mismatch**: 0042 hardcoded vector(768) but EMBEDDINGS_DIM=1024 → fixed in 0042 and added 0044 ALTER. Transaction safety verified: failed extraction rolled back cleanly with no orphan chunks.
+- **pdf-parse v2 API**: v2 has class-based PDFParse, not v1 function. All PDF uploads threw "pdfParse is not a function" → rewrote extractPdfFast() to instantiate PDFParse and call .getText().
+- **Migration backfill collision**: 9 seeded duplicates of "Retry Strategy RFC.md" produced identical hashes, blocking unique index → backfill now uses `legacy:<doc_id>`. New uploads use real SHA-256.
+- API error handling: extraction errors that are content/format problems return HTTP 422 with actual message instead of generic 500.
+
+#### Live Verification (against real Docker stack)
+| Format | Mode | Result |
+|---|---|---|
+| Markdown | Fast | 7 chunks, types detected (text/table/code), headings preserved |
+| DOCX | Fast | 7 chunks (table structure lost — known turndown limitation) |
+| DOCX | Quality | 7 chunks, table chunk_type correctly detected via pandoc |
+| PDF (3 pages) | Fast | 3 chunks, one per page, page numbers tracked |
+| PDF (3 pages) | Quality | 3 chunks via pdftotext, transactional re-extract |
+| Vision | — | HTTP 501 with "Sprint 10.3" message |
+| Fake PDF | Fast | HTTP 422 "magic bytes mismatch" |
+| Dedup re-upload | — | HTTP 409 with existing_doc_id |
+| Concurrent dedup | — | Both return 409 |
+| Cascade delete | — | Chunks removed when document deleted |
+
 ## Commits This Session
 
 | Commit | Description | Files |
 |--------|-------------|-------|
 | `8aaa754` | Fix 17 UI bugs from deep review — Sprints 1-4 | 16 |
 | `d32a3f8` | Fix chat persistence — sidebar field mismatch + DOM-based save | 3 |
-| (pending) | Phase 10 design: extraction pipeline doc + 3 HTML drafts | 4 |
+| `ba34d30` | [Session] Bug fix + Phase 10 planning — pipeline doc + 3 HTML drafts | 5 |
+| `39e1252` | Phase 10 Sprint 10.1: Text extraction foundation | 11 |
+| `1cdca39` | [10.1] Review fixes — 12 issues from Sprint 10.1 code review | 7 |
+| `06e32a4` | [10.1] Live test fixes — 3 bugs caught by real PDF/DOCX/MD pipeline tests | 7 |
 
 ## Summary
 
@@ -107,22 +168,27 @@ Created comprehensive design document: `docs/phase10-extraction-pipeline.md`
 
 ## What's Next
 
-### Sprint 10.1 — Text Extraction Foundation
-- Migration: new `document_chunks` table with embeddings + FTS + bbox columns
-- Migration: add `docx` and `image` to `documents.doc_type` CHECK constraint
-- Migration: add `content_hash` to documents for deduplication
-- Backend: text extraction service (pdf-parse for PDF, mammoth for DOCX)
-- Backend: chunking service (naive + hierarchical strategies)
-- Backend: new API endpoints (POST /api/documents/:id/extract, GET/PUT extraction)
-- Backend: embedding pipeline for chunks (batch via existing `embedTexts`)
-
-### Sprint 10.2 — Extraction Review UI
-- New components: ExtractionModeSelector, ExtractionReview (split-pane), PageNavigator
-- Wire to backend APIs
+### Sprint 10.2 — Extraction Review UI (next)
+- API client methods for `POST /extract`, `GET /chunks`
+- New React components:
+  - `ExtractionModeSelector` — Fast/Quality/Vision picker (drafted in HTML)
+  - `ExtractionReview` — split-pane with original preview + markdown editor (drafted)
+  - `PageNavigator` — page strip with confidence indicators (drafted)
+- Wire "Extract" button into existing DocumentViewer
 - Per-page accept/edit/skip/save flow
+- Deduplication 409 handling in upload UI
 
-### Sprint 10.3-10.6
-- Vision extraction backend (pdfjs-dist + model provider)
-- Vision mode UI + cost estimate + Mermaid extraction
-- Image upload support
-- Polish + integration tests
+### Sprint 10.3 — Vision Extraction Backend
+- pdfjs-dist page rendering to images (server-side via sharp)
+- Model provider integration for vision (Anthropic/OpenAI/local VLM)
+- Single-prompt vision extraction with typed output (text/table/diagram/code/mermaid)
+- Job queue integration for long-running vision jobs
+
+### Sprint 10.4 — Vision Mode UI + Mermaid + Per-page mode
+- Vision mode in ExtractionModeSelector
+- Cost estimate before vision extraction
+- Mermaid diagram preview in review UI (renderer + editable source)
+- Per-page mode selection (mix Fast/Quality/Vision in one document)
+
+### Sprint 10.5 — Image upload + auto-recommendation
+### Sprint 10.6 — Polish + integration tests
