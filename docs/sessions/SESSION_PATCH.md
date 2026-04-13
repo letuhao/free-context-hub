@@ -1,13 +1,25 @@
 ---
-id: CH-PHASE10-S104
+id: CH-PHASE10-S105
 date: 2026-04-13
-module: Phase10-Sprint10.4
+module: Phase10-Sprint10.5
 phase: IN_PROGRESS
 ---
 
-# Session Patch — 2026-04-13 (Sprint 10.4)
+# Session Patch — 2026-04-13 (Sprint 10.5)
 
 ## Where We Are
+**Sprint 10.5 complete and live-tested (commit 41f9cf4).** Document chunks are now first-class in retrieval — hybrid pgvector+FTS search, Cmd+K palette, chat tool, MCP tool. Image upload UX closed: upload dialog accepts png/jpg/webp with live thumbnail, extraction selector preselects Vision for images, documents list shows inline thumbnails. 12 tasks (7 backend + 5 frontend). Both typechecks clean.
+
+### Live-test results (Sprint 10.5)
+- ✅ `POST /api/documents/chunks/search` hybrid retrieval: "retry strategy exponential backoff" → 3 results, top hit 0.83 score (correct chunk)
+- ✅ `chunk_types=[text]` filter narrows correctly
+- ✅ Invalid chunk_type returns 400
+- ✅ `/api/search/global` now returns `chunks` array alongside lessons/docs
+- ✅ MCP `search_document_chunks` tool registered
+- ✅ Chat `search_documents` tool wired, specialized rendering of chunk matches
+
+## Sprint 10.4 history
+
 **Sprint 10.4 complete and live-tested.** Vision UI + mermaid + chunk edit/delete + async progress/cancel. Backend B0–B6 (migration 0046, updateChunk/deleteChunk with optimistic lock + re-embed, updateJobProgress/isJobCancelled/cancelJob, mermaid prompt template, 3 new endpoints) and frontend F1–F10 (Vision card enabled, cost estimate panel, ExtractionProgress modal with polling + cancel, mermaid renderer via npm `mermaid`, editable chunks with save/delete, confidence-aware page navigator + legend, "Extract as Mermaid" shortcut) all implemented. Both typechecks pass. Live-tested all flows end-to-end against real Docker stack + LM Studio (zai-org/glm-4.6v-flash).
 
 ### Sprint 10.4 code review — 6 issues found + fixed (commit e6c6935)
