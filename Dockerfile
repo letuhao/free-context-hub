@@ -2,7 +2,7 @@ FROM node:23-alpine AS base
 
 WORKDIR /app
 
-RUN apk add --no-cache git ripgrep
+RUN apk add --no-cache git ripgrep poppler-utils pandoc
 
 COPY package.json package-lock.json* ./
 ARG NPM_STRICT_SSL=true
@@ -28,7 +28,7 @@ FROM ca-base AS with-ca
 
 WORKDIR /app
 
-RUN apk add --no-cache git ripgrep
+RUN apk add --no-cache git ripgrep poppler-utils pandoc
 
 COPY package.json package-lock.json* ./
 ARG NPM_STRICT_SSL=true

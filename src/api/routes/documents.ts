@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
+import { createHash } from 'node:crypto';
 import {
   createDocument,
   listDocuments,
@@ -9,7 +10,10 @@ import {
   unlinkDocumentFromLesson,
   listDocumentLessons,
 } from '../../services/documents.js';
+import { runExtraction, listDocumentChunks } from '../../services/extraction/pipeline.js';
+import type { ExtractionMode, ChunkTemplate } from '../../services/extraction/types.js';
 import { resolveProjectIdOrThrow } from '../../core/index.js';
+import { getDbPool } from '../../db/client.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB
@@ -24,10 +28,49 @@ router.post('/upload', upload.single('file'), async (req, res, next) => {
     const name = file.originalname;
     const ext = name.split('.').pop()?.toLowerCase();
 
-    // PDF files: store as binary indicator, not raw UTF-8 (binary would be garbled)
+    // Compute content hash for deduplication (Phase 10)
+    const contentHash = createHash('sha256').update(file.buffer).digest('hex');
+
+    // Check for duplicate within the same project
+    const pool = getDbPool();
+    const dupRes = await pool.query(
+      `SELECT doc_id, name, created_at FROM documents
+       WHERE project_id = $1 AND content_hash = $2
+       LIMIT 1`,
+      [projectId, contentHash],
+    );
+    if (dupRes.rows.length > 0) {
+      const existing = dupRes.rows[0];
+      res.status(409).json({
+        status: 'duplicate',
+        error: 'Document already uploaded',
+        existing_doc_id: existing.doc_id,
+        existing_name: existing.name,
+        existing_uploaded_at: existing.created_at,
+      });
+      return;
+    }
+
+    // Detect doc_type from extension
     const isPdf = ext === 'pdf' || file.mimetype === 'application/pdf';
-    const content = isPdf ? `[PDF file: ${name}, ${file.size} bytes]` : file.buffer.toString('utf-8');
-    const docType = ext === 'md' ? 'markdown' : isPdf ? 'pdf' : 'text';
+    const isDocx = ext === 'docx';
+    const isImage = file.mimetype.startsWith('image/');
+    const docType = isPdf ? 'pdf'
+      : isDocx ? 'docx'
+      : isImage ? 'image'
+      : ext === 'md' ? 'markdown'
+      : ext === 'epub' ? 'epub'
+      : ext === 'odt' ? 'odt'
+      : ext === 'rtf' ? 'rtf'
+      : ext === 'html' || ext === 'htm' ? 'html'
+      : 'text';
+
+    // For binary formats (pdf, docx, image), store base64 in content so the
+    // extraction pipeline can recover the bytes. Text formats stay as utf-8.
+    const isBinary = isPdf || isDocx || isImage || ext === 'epub' || ext === 'odt' || ext === 'rtf';
+    const content = isBinary
+      ? `data:base64;${file.buffer.toString('base64')}`
+      : file.buffer.toString('utf-8');
 
     let tags: string[] | undefined;
     if (req.body.tags) {
@@ -43,6 +86,15 @@ router.post('/upload', upload.single('file'), async (req, res, next) => {
       description: req.body.description ?? undefined,
       tags,
     });
+
+    // Persist content_hash on the new document
+    if (result.doc_id) {
+      await pool.query(
+        `UPDATE documents SET content_hash = $1 WHERE doc_id = $2`,
+        [contentHash, result.doc_id],
+      );
+    }
+
     res.status(201).json(result);
   } catch (e) { next(e); }
 });
@@ -168,6 +220,54 @@ router.delete('/:id/lessons/:lessonId', async (req, res, next) => {
 router.get('/:id/lessons', async (req, res, next) => {
   try {
     const result = await listDocumentLessons({ docId: req.params.id });
+    res.json(result);
+  } catch (e) { next(e); }
+});
+
+/** POST /api/documents/:id/extract — Phase 10: run extraction pipeline */
+router.post('/:id/extract', async (req, res, next) => {
+  try {
+    const projectId = resolveProjectIdOrThrow(req.body.project_id);
+    const mode = (req.body.mode ?? 'fast') as ExtractionMode;
+    const template = req.body.template as ChunkTemplate | undefined;
+
+    if (!['fast', 'quality', 'vision'].includes(mode)) {
+      res.status(400).json({ status: 'error', error: `Invalid mode: ${mode}` });
+      return;
+    }
+    if (mode === 'vision') {
+      res.status(501).json({
+        status: 'error',
+        error: 'Vision extraction is not yet implemented (Sprint 10.3)',
+      });
+      return;
+    }
+
+    const result = await runExtraction({
+      docId: req.params.id,
+      projectId,
+      mode,
+      template,
+    });
+    res.json({ status: 'ok', mode, ...result });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg === 'Document not found') {
+      res.status(404).json({ status: 'error', error: msg });
+      return;
+    }
+    next(e);
+  }
+});
+
+/** GET /api/documents/:id/chunks — Phase 10: list extracted chunks */
+router.get('/:id/chunks', async (req, res, next) => {
+  try {
+    const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
+    const result = await listDocumentChunks({
+      docId: req.params.id,
+      projectId,
+    });
     res.json(result);
   } catch (e) { next(e); }
 });

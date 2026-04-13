@@ -4,7 +4,7 @@ export interface Document {
   doc_id: string;
   project_id: string;
   name: string;
-  doc_type: 'pdf' | 'markdown' | 'url' | 'text';
+  doc_type: 'pdf' | 'markdown' | 'url' | 'text' | 'docx' | 'image' | 'epub' | 'odt' | 'rtf' | 'html';
   url: string | null;
   storage_path: string | null;
   content: string | null;
@@ -20,7 +20,7 @@ export interface Document {
 export async function createDocument(params: {
   projectId: string;
   name: string;
-  docType: 'pdf' | 'markdown' | 'url' | 'text';
+  docType: 'pdf' | 'markdown' | 'url' | 'text' | 'docx' | 'image' | 'epub' | 'odt' | 'rtf' | 'html';
   url?: string;
   content?: string;
   fileSizeBytes?: number;
