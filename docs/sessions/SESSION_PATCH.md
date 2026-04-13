@@ -141,6 +141,47 @@ Created comprehensive design document: `docs/phase10-extraction-pipeline.md`
 | Concurrent dedup | — | Both return 409 |
 | Cascade delete | — | Chunks removed when document deleted |
 
+### Phase 10 Sprint 10.2 — Extraction Review UI ✅
+
+**Frontend pipeline (no backend changes) — 2 commits, ~720 lines.**
+
+#### New components (`gui/src/app/documents/`)
+- `types.ts` — Shared `Doc`, `DocumentChunk`, `ChunkType`, `ExtractionMode`, `DocType` (consolidates duplicated local types).
+- `extraction-mode-selector.tsx` — Three mode cards (Fast / Quality / Vision-disabled). Vision shows "Coming Sprint 10.3" badge. Per-card icons, feature tags, selection ring. Calls `api.extractDocument`. **Includes full progress UX**: blue banner with spinner, elapsed-seconds counter, dimmed cards, disabled Cancel, no overlay-close mid-request.
+- `extraction-review.tsx` — Read-only chunk viewer. Left rail = chunk list with type badges + page indicators. Right pane = active chunk (markdown rendered for text/table, monospace `<pre>` for code/mermaid). Footer = page navigator (only shown when multi-page). Empty state shows "Extract Now" CTA when no chunks exist.
+
+#### API client (`gui/src/lib/api.ts`)
+- `extractDocument()` and `getDocumentChunks()` with full chunk types
+- `uploadDocument()` now surfaces 409 dedup as `{ status: "duplicate", existing_doc_id, ... }` instead of throwing
+
+#### Documents page + DocumentViewer
+- New row actions: Extract (blue), Chunks
+- Extract button in DocumentViewer header
+- Re-extract loop wired between Review and Mode Selector
+- UploadDialog accepts `.docx/.epub/.odt/.rtf/.html`, friendly toast for duplicates
+
+#### Code Review Round 1 — 6 fixed, 2 deferred (commit `60daa55`)
+- **MED** #6 No extraction progress UI → blue spinner banner with elapsed-seconds counter
+- **LOW** #1 Duplicate Doc type → consolidated `types.ts`
+- **LOW** #2 Chunks button empty-array indirection → state shape `chunks?: DocumentChunk[]`
+- **LOW** #4 initialChunks prop changes don't sync → `useEffect` syncs state
+- **LOW** #5 activeChunkIdx out-of-bounds on shrink → clamp effect
+- **LOW** #8 "Re-extract" CTA shown for never-extracted docs → "Extract Now" button via onReExtract
+- **LOW** #11 Page-count limit → deferred to Sprint 10.4
+- **LOW** #12 MarkdownContent cross-feature import → deferred (small, contained)
+
+#### Live Verification (against Docker stack)
+| Test | Result |
+|---|---|
+| Documents row actions visible | ✅ Extract / Chunks / Lessons / Delete buttons per row |
+| Click Chunks on sample.md | ✅ Modal opens, 7 chunks in rail with text/table/code badges |
+| Click table chunk | ✅ Pipe-formatted markdown table renders correctly |
+| Click code chunk | ✅ TypeScript monospace pre block |
+| Click Extract on sample.pdf | ✅ Mode selector opens with metadata |
+| Select Quality + Start | ✅ Toast "Extracted 3 chunks from 3 pages", review opens |
+| Page navigator | ✅ Footer shows `p1 (1) | p2 (1) | p3 (1)` with active page highlighted |
+| Extraction progress UI (3s simulated delay) | ✅ Blue banner + spinner + elapsed counter + dimmed cards + disabled Cancel |
+
 ## Commits This Session
 
 | Commit | Description | Files |
@@ -151,6 +192,9 @@ Created comprehensive design document: `docs/phase10-extraction-pipeline.md`
 | `39e1252` | Phase 10 Sprint 10.1: Text extraction foundation | 11 |
 | `1cdca39` | [10.1] Review fixes — 12 issues from Sprint 10.1 code review | 7 |
 | `06e32a4` | [10.1] Live test fixes — 3 bugs caught by real PDF/DOCX/MD pipeline tests | 7 |
+| `157ac32` | [Session] Sprint 10.1 complete — update session patch | 1 |
+| `cd1862e` | Phase 10 Sprint 10.2: Extraction Review UI | 6 |
+| `60daa55` | [10.2] Review fixes — 6 issues from Sprint 10.2 code review | 5 |
 
 ## Summary
 
@@ -168,17 +212,7 @@ Created comprehensive design document: `docs/phase10-extraction-pipeline.md`
 
 ## What's Next
 
-### Sprint 10.2 — Extraction Review UI (next)
-- API client methods for `POST /extract`, `GET /chunks`
-- New React components:
-  - `ExtractionModeSelector` — Fast/Quality/Vision picker (drafted in HTML)
-  - `ExtractionReview` — split-pane with original preview + markdown editor (drafted)
-  - `PageNavigator` — page strip with confidence indicators (drafted)
-- Wire "Extract" button into existing DocumentViewer
-- Per-page accept/edit/skip/save flow
-- Deduplication 409 handling in upload UI
-
-### Sprint 10.3 — Vision Extraction Backend
+### Sprint 10.3 — Vision Extraction Backend (next)
 - pdfjs-dist page rendering to images (server-side via sharp)
 - Model provider integration for vision (Anthropic/OpenAI/local VLM)
 - Single-prompt vision extraction with typed output (text/table/diagram/code/mermaid)
@@ -189,6 +223,7 @@ Created comprehensive design document: `docs/phase10-extraction-pipeline.md`
 - Cost estimate before vision extraction
 - Mermaid diagram preview in review UI (renderer + editable source)
 - Per-page mode selection (mix Fast/Quality/Vision in one document)
+- Page-count guard for huge documents (deferred from 10.2 #11)
 
 ### Sprint 10.5 — Image upload + auto-recommendation
 ### Sprint 10.6 — Polish + integration tests

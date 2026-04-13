@@ -79,6 +79,25 @@ Phase     │ Role              │ What Happens
 
 When playing each role, shift perspective accordingly. Architect thinks about system boundaries. PO thinks about user value and acceptance. Lead thinks about code quality and maintainability. Developer thinks about correctness and efficiency. QA thinks about what can break.
 
+### Session Patch Update Rule (always)
+
+**Update `docs/sessions/SESSION_PATCH.md` after EVERY sprint completes.** Don't wait until the end of a multi-sprint session. The session patch is the durable narrative — it's how the next session understands what happened.
+
+What to include per sprint:
+- Sprint number and one-line outcome
+- Migrations (if any)
+- New files / modified files / commits
+- Code review issues found and how they were fixed
+- Live test results (real stack, not mocked)
+- What's next
+
+When to update:
+- After Phase 8 (SESSION) of the 9-phase task workflow
+- After Phase 5 (REPORT) of the test workflow
+- Before moving to a new sprint (don't batch)
+
+This rule applies to all sprints, all phases, all sessions — never skip it.
+
 ---
 
 ## Test Workflow (E2E / QC tasks)
