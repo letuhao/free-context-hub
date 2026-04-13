@@ -284,9 +284,17 @@ We tested 8 embedding models and 8 reranker models ([full benchmark](docs/benchm
   - Per-project guards on 4 pages (Graph Explorer, Code Search, Sources, Settings)
   - 6 backend services extended with `project_ids[]`, 9 `*Multi` API methods
   - 11 sprints, 26 commits, 41 files changed
+- [x] **Phase 10**: Multi-Format Extraction Pipeline
+  - Fast text (pdf-parse + mammoth), Quality text (pdftotext + pandoc), Vision (LLM via OpenAI-compatible API with per-page async jobs, progress reporting, cancel)
+  - Chunking + pgvector embeddings with hierarchical/naive strategies, table/code/mermaid detection
+  - Hybrid semantic + FTS chunk search across 4 surfaces: REST endpoint, Cmd+K global search, chat `search_documents` tool, MCP `search_document_chunks` tool
+  - Chunk edit/delete with optimistic locking + re-embed; bulk vision re-extract
+  - Image upload UX (drag-drop + thumbnail preview + auto-Vision preselect)
+  - Mermaid diagram rendering everywhere MarkdownContent is used
+  - SSRF-hardened URL ingestion (private-range DNS check, redirect re-validation, streaming size cap)
+  - 7 sprints, 7 migrations, 47-test E2E suite incl real vision runs
 
 **Planned:**
-- [ ] **Phase 10**: Multi-format Ingestion — PDF/DOCX/image parsing pipelines
 - [ ] **Phase 11**: Knowledge Portability — cross-instance sync, exchange hub
 
 **Intentionally Dropped:**

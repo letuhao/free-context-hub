@@ -217,13 +217,13 @@ QC eval loop    Documents,      Agent audit     Onboarding
                 Global search
     │               │               │               │               │
     ▼               ▼               ▼               ▼               ▼
-Phase 9 ✅      Phase 10 ○      Phase 11 ○
+Phase 9 ✅      Phase 10 ✅     Phase 11 ○
 Multi-Project   Multi-format    Knowledge
 UX Redesign     Ingestion       Portability
 Cross-project   PDF, DOCX,      Exchange hub,
-views, project  Images,         Cross-instance
-selector V2,    Parsing         sync
-"All Projects"  pipelines
+views, project  Images, URL,    Cross-instance
+selector V2,    Vision + hybrid sync
+"All Projects"  chunk search
 ```
 
 | Phase | Status | Key Deliverables |
@@ -238,7 +238,7 @@ selector V2,    Parsing         sync
 | **8D** | ✅ Complete | Feature toggles BE, role enforcement middleware, rich editor in detail, onboarding checklist |
 | **8E** | ✅ Complete | E2E test suite (198 tests: API smoke 75, GUI smoke 23, MCP smoke 36, API scenarios 34, GUI scenarios 21, Agent visual 9), layout fixes |
 | **9** | ✅ Complete | Multi-project UX redesign — "All Projects" mode, project selector V2, ProjectBadge, cross-project views on all pages, per-project guards (11 sprints, 26 commits, 41 files) |
-| **10** | ○ Planned | PDF/DOCX/Image ingestion pipelines (document foundation in Phase 7) |
+| **10** | ✅ Complete | Multi-format extraction (fast/quality/vision), chunking + embeddings, chunk edit/delete with optimistic lock, hybrid semantic+FTS chunk search (REST/Cmd+K/chat tool/MCP tool), vision async jobs with progress+cancel, mermaid rendering, image upload UX, SSRF-hardened URL ingestion, 47-test E2E suite (7 sprints, 7 migrations) |
 | **11** | ○ Planned | Import/export exchange hub, cross-instance sync (basic I/O in Phase 7) |
 
 ## Phase 7 — Complete

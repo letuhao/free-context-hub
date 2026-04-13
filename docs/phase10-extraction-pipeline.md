@@ -237,18 +237,19 @@ No Python dependencies. Everything runs in Node.js.
 
 ---
 
-## Phasing
+## Phasing — ALL SPRINTS COMPLETE ✅
 
-| Sprint | Scope |
-|--------|-------|
-| 10.1 | Text extraction backend (pdf-parse + mammoth), new API endpoints |
-| 10.2 | Extraction review UI (split pane, page navigator, edit/save) |
-| 10.3 | Vision extraction backend (pdfjs-dist rendering, model provider integration, job queue) |
-| 10.4 | Vision mode UI (mode selector, progress indicator, re-extract per page) |
-| 10.5 | Image upload support (direct vision extraction for screenshots/photos) |
-| 10.6 | Polish + integration tests |
+| Sprint | Scope | Status |
+|--------|-------|--------|
+| 10.1 | Text extraction backend (pdf-parse v2 + mammoth, chunker, pipeline, 12 review fixes) | ✅ |
+| 10.2 | Extraction review UI (split pane, page navigator, edit/save) | ✅ |
+| 10.3 | Vision extraction backend (pdftoppm + vision LLM via OpenAI-compatible API, per-page retry + concurrency, 10 review fixes) | ✅ |
+| 10.4 | Vision UI + mermaid + chunk edit/delete + async progress/cancel (6 review fixes incl Date-vs-string optimistic lock bug) | ✅ |
+| 10.5 | Chunks in semantic search (REST + global + chat + MCP) + image upload UX (5 review fixes incl CRITICAL list perf leak) | ✅ |
+| 10.6 | Polish (inline chat citations, pagination, embedding-down banner, mermaid everywhere, bulk re-extract) + Phase 10 integration test suite (10 tests) | ✅ |
+| 10.7 | SSRF-hardened URL ingestion + `/test-static` fixture route + 3 URL tests | ✅ |
 
-Text extraction (10.1-10.2) ships first and is useful on its own. Vision extraction (10.3-10.4) adds on top.
+Final stats: 7 sprints, 7 migrations, 47-test E2E suite (3 vision tests run against real LM Studio), 20 real issues caught + fixed across 4 review cycles. First-class document retrieval at REST, Cmd+K, chat, and MCP surfaces.
 
 ---
 
