@@ -23,16 +23,17 @@ export async function createDocument(params: {
   docType: 'pdf' | 'markdown' | 'url' | 'text' | 'docx' | 'image' | 'epub' | 'odt' | 'rtf' | 'html';
   url?: string;
   content?: string;
+  contentHash?: string;
   fileSizeBytes?: number;
   description?: string;
   tags?: string[];
 }): Promise<Document> {
   const pool = getDbPool();
   const result = await pool.query(
-    `INSERT INTO documents (project_id, name, doc_type, url, content, file_size_bytes, description, tags)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    `INSERT INTO documents (project_id, name, doc_type, url, content, content_hash, file_size_bytes, description, tags)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
     [params.projectId, params.name, params.docType, params.url ?? null,
-     params.content ?? null, params.fileSizeBytes ?? null,
+     params.content ?? null, params.contentHash ?? null, params.fileSizeBytes ?? null,
      params.description ?? null, params.tags ?? []],
   );
   return result.rows[0];

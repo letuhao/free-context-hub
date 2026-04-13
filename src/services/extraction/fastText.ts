@@ -36,50 +36,26 @@ export async function extractFast(
   }
 }
 
-/** PDF extraction via pdf-parse. Returns text per page when possible. */
+/** PDF extraction via pdf-parse. Splits pages on form-feed if present. */
 async function extractPdfFast(buffer: Buffer): Promise<ExtractionResult> {
   // pdf-parse v2 ESM export
   const pdfParseModule: any = await import('pdf-parse');
   const pdfParse = pdfParseModule.pdf ?? pdfParseModule.default ?? pdfParseModule;
 
-  // pdf-parse returns concatenated text by default. We use a pagerender callback
-  // to capture each page individually and produce page-level chunks.
-  const pages: ExtractedPage[] = [];
-
-  const data = await (pdfParse as any)(buffer, {
-    // pagerender is called per page with a TextContent-like object
-    pagerender: async (pageData: any) => {
-      const textContent = await pageData.getTextContent();
-      let pageText = '';
-      let lastY = 0;
-      for (const item of textContent.items) {
-        // Insert newline when y position changes significantly (new line/paragraph)
-        if (lastY && Math.abs(item.transform[5] - lastY) > 5) {
-          pageText += '\n';
-        }
-        pageText += item.str;
-        lastY = item.transform[5];
-      }
-      return pageText;
-    },
-  });
-
-  // Split the concatenated text by form-feed character (pdf-parse delimiter between pages)
-  // Fall back to splitting by data.numpages worth of equal-ish chunks if no FF chars
+  const data = await (pdfParse as any)(buffer);
   const totalPages: number = data.numpages ?? 1;
   const fullText: string = data.text ?? '';
 
-  // pdf-parse separates pages with \n\n — we use that as a heuristic to split
-  // Note: the pagerender hook above is the more reliable path, but pdf-parse
-  // doesn't always invoke it in v2.x. The simpler and reliable approach is to
-  // pass the full text as a single page when we can't reliably split.
-  if (totalPages === 1 || !fullText.includes('\f')) {
-    pages.push({ page_number: 1, content: fullText.trim() });
-  } else {
+  // pdf-parse separates pages with form-feed \f. If the form-feed isn't present
+  // (some PDFs), fall back to a single page chunk.
+  const pages: ExtractedPage[] = [];
+  if (totalPages > 1 && fullText.includes('\f')) {
     const split = fullText.split('\f');
     split.forEach((pageText, i) => {
       pages.push({ page_number: i + 1, content: pageText.trim() });
     });
+  } else {
+    pages.push({ page_number: 1, content: fullText.trim() });
   }
 
   logger.info({ pages: pages.length, chars: fullText.length }, 'pdf fast extraction complete');

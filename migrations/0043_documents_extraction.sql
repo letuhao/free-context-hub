@@ -25,6 +25,17 @@ ALTER TABLE documents ADD COLUMN IF NOT EXISTS extraction_mode TEXT
 -- Extracted timestamp
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS extracted_at TIMESTAMPTZ;
 
+-- Backfill content_hash for existing documents from their content column.
+-- Best-effort: only works for text content. Documents uploaded via the legacy
+-- flow (PDF placeholder strings like "[PDF file: name, bytes]") will get a hash
+-- of that placeholder text — which is fine because they're not real binary
+-- content and won't dedupe against actual file uploads.
+-- pgcrypto provides digest()
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+UPDATE documents
+SET content_hash = encode(digest(COALESCE(content, '')::bytea, 'sha256'), 'hex')
+WHERE content_hash IS NULL;
+
 -- Unique constraint per project on content_hash (allows same file in different projects)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_project_hash
   ON documents(project_id, content_hash)

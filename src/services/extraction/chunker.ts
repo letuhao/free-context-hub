@@ -66,6 +66,7 @@ function hasHeadings(markdown: string): boolean {
 
 /**
  * Hierarchical chunker: splits at H1/H2/H3 headings, one chunk per section.
+ * Preserves the original heading level (#, ##, ###).
  * If a section exceeds maxTokens, it is further split via naive chunker.
  */
 function hierarchicalChunk(
@@ -74,20 +75,21 @@ function hierarchicalChunk(
   maxTokens: number,
 ): PreChunk[] {
   const lines = markdown.split('\n');
-  const sections: { heading: string | null; content: string[] }[] = [];
-  let current: { heading: string | null; content: string[] } = {
-    heading: null,
-    content: [],
-  };
+  type Section = { level: string; heading: string | null; content: string[] };
+  const sections: Section[] = [];
+  let current: Section = { level: '##', heading: null, content: [] };
 
   for (const line of lines) {
-    const headingMatch = line.match(/^#{1,3}\s+(.+)$/);
+    const headingMatch = line.match(/^(#{1,3})\s+(.+)$/);
     if (headingMatch) {
-      // Flush current section if it has content
       if (current.content.length > 0 || current.heading) {
         sections.push(current);
       }
-      current = { heading: headingMatch[1].trim(), content: [] };
+      current = {
+        level: headingMatch[1],
+        heading: headingMatch[2].trim(),
+        content: [],
+      };
     } else {
       current.content.push(line);
     }
@@ -103,8 +105,9 @@ function hierarchicalChunk(
     const body = section.content.join('\n').trim();
     if (!body && !section.heading) continue;
 
+    // Preserve original heading level (Issue #4)
     const fullContent = section.heading
-      ? `## ${section.heading}\n\n${body}`
+      ? `${section.level} ${section.heading}\n\n${body}`
       : body;
 
     if (fullContent.length <= maxChars) {
@@ -120,7 +123,7 @@ function hierarchicalChunk(
       subChunks.forEach((sub, i) => {
         chunks.push({
           content: section.heading
-            ? `## ${section.heading} (part ${i + 1})\n\n${sub.content}`
+            ? `${section.level} ${section.heading} (part ${i + 1})\n\n${sub.content}`
             : sub.content,
           page_number: pageNumber,
           heading: section.heading,
@@ -137,7 +140,8 @@ function hierarchicalChunk(
  * Naive chunker: splits text by paragraph, accumulates until token budget,
  * preserves overlap tokens at chunk boundaries.
  *
- * Tables (lines starting with |) and code blocks (```) are kept intact.
+ * Tables and code blocks are kept intact AND emit as their own chunks so
+ * chunk_type filtering is precise (Issue #10).
  */
 function naiveChunk(
   content: string,
@@ -153,7 +157,6 @@ function naiveChunk(
 
   const chunks: PreChunk[] = [];
   let buf = '';
-  let bufType: ChunkType = 'text';
 
   const flush = () => {
     if (buf.trim()) {
@@ -161,16 +164,16 @@ function naiveChunk(
         content: buf.trim(),
         page_number: pageNumber,
         heading: null,
-        chunk_type: bufType,
+        chunk_type: 'text',
       });
     }
     buf = '';
-    bufType = 'text';
   };
 
   for (const block of blocks) {
-    // If this block alone exceeds the budget, emit it as its own chunk
-    if (block.text.length > maxChars) {
+    // Non-text blocks (table, code) ALWAYS emit as their own chunk for
+    // accurate chunk_type filtering. They are never merged with text.
+    if (block.type !== 'text') {
       flush();
       chunks.push({
         content: block.text.trim(),
@@ -181,25 +184,34 @@ function naiveChunk(
       continue;
     }
 
-    // Adding this block would overflow — flush first
+    // If this text block alone exceeds the budget, emit it as its own chunk
+    if (block.text.length > maxChars) {
+      flush();
+      chunks.push({
+        content: block.text.trim(),
+        page_number: pageNumber,
+        heading: null,
+        chunk_type: 'text',
+      });
+      continue;
+    }
+
+    // Adding this block would overflow — flush first with overlap
     if (buf.length + block.text.length + 2 > maxChars) {
-      // Apply overlap: keep the tail of the current buffer as the start of the next
       const tail = overlapChars > 0 ? buf.slice(-overlapChars) : '';
       flush();
       buf = tail;
-      bufType = 'text';
     }
 
     buf += (buf ? '\n\n' : '') + block.text;
-    // Promote chunk type if a table or code block was added
-    if (block.type !== 'text' && bufType === 'text') {
-      bufType = block.type;
-    }
   }
   flush();
 
   return chunks;
 }
+
+/** Max lines a code block is allowed to span before we treat it as malformed. */
+const MAX_CODE_BLOCK_LINES = 500;
 
 /** Split markdown content into blocks: paragraphs, tables, code blocks. */
 function splitIntoBlocks(content: string): { text: string; type: ChunkType }[] {
@@ -214,7 +226,18 @@ function splitIntoBlocks(content: string): { text: string; type: ChunkType }[] {
     if (line.trim().startsWith('```')) {
       const start = i;
       i++;
-      while (i < lines.length && !lines[i].trim().startsWith('```')) i++;
+      // Bounded search for closing fence (Issue #5)
+      const searchLimit = Math.min(lines.length, start + MAX_CODE_BLOCK_LINES);
+      while (i < searchLimit && !lines[i].trim().startsWith('```')) i++;
+
+      if (i >= searchLimit) {
+        // Unclosed code block (or one too large) — treat the opening line
+        // as ordinary text and continue parsing from the next line.
+        blocks.push({ text: lines[start], type: 'text' });
+        i = start + 1;
+        continue;
+      }
+
       const codeText = lines.slice(start, i + 1).join('\n');
       blocks.push({ text: codeText, type: 'code' });
       i++;

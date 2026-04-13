@@ -18,6 +18,20 @@ import { getDbPool } from '../../db/client.js';
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB
 
+/**
+ * Sanitize a filename: strip path traversal sequences, null bytes, control
+ * characters. Limit length to avoid abuse. (Issue #12)
+ */
+function sanitizeFilename(name: string): string {
+  return name
+    .replace(/[\x00-\x1f\x7f]/g, '') // control chars
+    .replace(/\.\.+/g, '_')           // .. → _
+    .replace(/[\\\/]/g, '_')           // path separators → _
+    .replace(/^\.+/, '')               // leading dots
+    .slice(0, 255)
+    .trim() || 'unnamed';
+}
+
 /** POST /api/documents/upload — multipart file upload */
 router.post('/upload', upload.single('file'), async (req, res, next) => {
   try {
@@ -25,13 +39,15 @@ router.post('/upload', upload.single('file'), async (req, res, next) => {
     const file = req.file;
     if (!file) { res.status(400).json({ status: 'error', error: 'No file uploaded' }); return; }
 
-    const name = file.originalname;
+    // Sanitize filename (Issue #12)
+    const name = sanitizeFilename(file.originalname);
     const ext = name.split('.').pop()?.toLowerCase();
 
     // Compute content hash for deduplication (Phase 10)
     const contentHash = createHash('sha256').update(file.buffer).digest('hex');
 
-    // Check for duplicate within the same project
+    // Pre-check for duplicate (best-effort UX — gives a clean response).
+    // The unique index on (project_id, content_hash) is the actual guarantee.
     const pool = getDbPool();
     const dupRes = await pool.query(
       `SELECT doc_id, name, created_at FROM documents
@@ -65,8 +81,8 @@ router.post('/upload', upload.single('file'), async (req, res, next) => {
       : ext === 'html' || ext === 'htm' ? 'html'
       : 'text';
 
-    // For binary formats (pdf, docx, image), store base64 in content so the
-    // extraction pipeline can recover the bytes. Text formats stay as utf-8.
+    // For binary formats, store base64 in content so the extraction pipeline
+    // can recover the bytes. Text formats stay as utf-8.
     const isBinary = isPdf || isDocx || isImage || ext === 'epub' || ext === 'odt' || ext === 'rtf';
     const content = isBinary
       ? `data:base64;${file.buffer.toString('base64')}`
@@ -77,25 +93,42 @@ router.post('/upload', upload.single('file'), async (req, res, next) => {
       try { tags = JSON.parse(req.body.tags); } catch { tags = undefined; }
     }
 
-    const result = await createDocument({
-      projectId,
-      name,
-      docType,
-      content,
-      fileSizeBytes: file.size,
-      description: req.body.description ?? undefined,
-      tags,
-    });
-
-    // Persist content_hash on the new document
-    if (result.doc_id) {
-      await pool.query(
-        `UPDATE documents SET content_hash = $1 WHERE doc_id = $2`,
-        [contentHash, result.doc_id],
-      );
+    // Atomic insert with content_hash (Issue #6 — race-safe via unique index).
+    // If a concurrent upload of the same file slipped past the pre-check, the
+    // unique index fires here and we return 409.
+    try {
+      const result = await createDocument({
+        projectId,
+        name,
+        docType,
+        content,
+        contentHash,
+        fileSizeBytes: file.size,
+        description: req.body.description ?? undefined,
+        tags,
+      });
+      res.status(201).json(result);
+    } catch (insErr: any) {
+      // Postgres unique violation = 23505
+      if (insErr?.code === '23505' && insErr?.constraint === 'idx_documents_project_hash') {
+        // Re-query to return existing doc info
+        const existing = await pool.query(
+          `SELECT doc_id, name, created_at FROM documents
+           WHERE project_id = $1 AND content_hash = $2 LIMIT 1`,
+          [projectId, contentHash],
+        );
+        const ex = existing.rows[0];
+        res.status(409).json({
+          status: 'duplicate',
+          error: 'Document already uploaded',
+          existing_doc_id: ex?.doc_id,
+          existing_name: ex?.name,
+          existing_uploaded_at: ex?.created_at,
+        });
+        return;
+      }
+      throw insErr;
     }
-
-    res.status(201).json(result);
   } catch (e) { next(e); }
 });
 

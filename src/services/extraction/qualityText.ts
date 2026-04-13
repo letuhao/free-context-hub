@@ -47,6 +47,15 @@ export async function extractQuality(
     if (normalized === 'pdf' || normalized === 'docx') {
       return extractFast(buffer, normalized);
     }
+    // Formats with no fast-mode fallback — give a clear error
+    const isToolMissing = /not available/.test(msg);
+    if (isToolMissing) {
+      throw new Error(
+        `${normalized.toUpperCase()} extraction requires pandoc to be installed. ` +
+          `It's included in the Docker image but missing in this environment. ` +
+          `Install pandoc or use a supported format (pdf, docx, markdown, text).`,
+      );
+    }
     throw err;
   }
 }
