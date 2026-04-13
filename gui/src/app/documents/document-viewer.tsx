@@ -5,8 +5,10 @@ import { useProject } from "@/contexts/project-context";
 import { useToast } from "@/components/ui/toast";
 import { api } from "@/lib/api";
 import { Badge, Button } from "@/components/ui";
-import { X, Search, ChevronUp, ChevronDown, Copy, Check, Sparkles, Link2 } from "lucide-react";
+import { X, Search, ChevronUp, ChevronDown, Copy, Check, Sparkles, Link2, Zap } from "lucide-react";
 import { MarkdownContent } from "../chat/markdown-content";
+import { ExtractionModeSelector } from "./extraction-mode-selector";
+import { ExtractionReview } from "./extraction-review";
 
 type Doc = {
   doc_id: string;
@@ -59,6 +61,9 @@ export function DocumentViewer({ doc, onClose, onChanged, autoGenerate }: Docume
   const [linkSearchOpen, setLinkSearchOpen] = useState(false);
   const [linkSearchQuery, setLinkSearchQuery] = useState("");
   const [linkSearchResults, setLinkSearchResults] = useState<{ lesson_id: string; title: string; lesson_type: string }[]>([]);
+  // Phase 10: extraction
+  const [extractOpen, setExtractOpen] = useState(false);
+  const [reviewChunks, setReviewChunks] = useState<any[] | null>(null);
 
   // Fetch document content
   useEffect(() => {
@@ -219,6 +224,14 @@ export function DocumentViewer({ doc, onClose, onChanged, autoGenerate }: Docume
               <span className="text-xs text-zinc-600 shrink-0">Uploaded {dateStr}</span>
             </div>
             <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => setExtractOpen(true)}
+                className="px-2.5 py-1 text-xs bg-blue-600/15 hover:bg-blue-600/25 border border-blue-500/40 rounded-md text-blue-400 transition-colors flex items-center gap-1"
+                title="Extract document content into searchable chunks"
+              >
+                <Zap size={12} />
+                Extract
+              </button>
               <button
                 onClick={handleGenerateLessons}
                 disabled={generating}
@@ -395,6 +408,43 @@ export function DocumentViewer({ doc, onClose, onChanged, autoGenerate }: Docume
           </div>
         </div>
       </div>
+
+      {/* Phase 10: Extraction mode selector */}
+      {extractOpen && (
+        <ExtractionModeSelector
+          open={true}
+          doc={{
+            doc_id: doc.doc_id,
+            name: doc.name,
+            doc_type: doc.doc_type,
+            file_size_bytes: doc.file_size_bytes,
+          }}
+          onClose={() => setExtractOpen(false)}
+          onExtracted={(chunks) => {
+            setReviewChunks(chunks);
+            setExtractOpen(false);
+            onChanged();
+          }}
+        />
+      )}
+
+      {/* Phase 10: Extraction review */}
+      {reviewChunks && (
+        <ExtractionReview
+          open={true}
+          doc={{
+            doc_id: doc.doc_id,
+            name: doc.name,
+            doc_type: doc.doc_type,
+          }}
+          initialChunks={reviewChunks}
+          onClose={() => setReviewChunks(null)}
+          onReExtract={() => {
+            setReviewChunks(null);
+            setExtractOpen(true);
+          }}
+        />
+      )}
     </>
   );
 }

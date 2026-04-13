@@ -167,6 +167,45 @@ export const api = {
   generateLessonsFromDoc: (id: string, body: { project_id: string; max_lessons?: number }) =>
     request<{ status: string; suggestions?: any[] }>("POST", `/api/documents/${encodeURIComponent(id)}/generate-lessons`, body),
 
+  // ── Phase 10: extraction pipeline ──
+  extractDocument: (id: string, body: { project_id: string; mode: "fast" | "quality" | "vision"; template?: "auto" | "naive" | "hierarchical" }) =>
+    request<{
+      status: string;
+      mode: string;
+      pages: number;
+      chunks: Array<{
+        chunk_id: string;
+        doc_id: string;
+        project_id: string;
+        chunk_index: number;
+        content: string;
+        page_number: number | null;
+        heading: string | null;
+        chunk_type: "text" | "table" | "diagram_description" | "mermaid" | "code";
+        extraction_mode: "fast" | "quality" | "vision" | null;
+        confidence: number | null;
+        created_at: string;
+      }>;
+    }>("POST", `/api/documents/${encodeURIComponent(id)}/extract`, body),
+
+  getDocumentChunks: (id: string, params: { project_id: string }) =>
+    request<{
+      total: number;
+      chunks: Array<{
+        chunk_id: string;
+        doc_id: string;
+        project_id: string;
+        chunk_index: number;
+        content: string;
+        page_number: number | null;
+        heading: string | null;
+        chunk_type: "text" | "table" | "diagram_description" | "mermaid" | "code";
+        extraction_mode: "fast" | "quality" | "vision" | null;
+        confidence: number | null;
+        created_at: string;
+      }>;
+    }>("GET", `/api/documents/${encodeURIComponent(id)}/chunks?${qs(params)}`),
+
   linkDocLesson: (docId: string, lessonId: string, body: { project_id: string }) =>
     request<any>("POST", `/api/documents/${encodeURIComponent(docId)}/lessons/${encodeURIComponent(lessonId)}`, body),
 
@@ -211,11 +250,20 @@ export const api = {
   getRetrievalTimeseries: (params: { project_id: string; days?: number }) =>
     request<{ points?: { date: string; count: number }[] }>("GET", `/api/analytics/timeseries?${qs(params)}`),
 
-  uploadDocument: async (body: FormData) => {
+  uploadDocument: async (body: FormData): Promise<any> => {
     const API_URL = process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "http://localhost:3001";
     const res = await fetch(`${API_URL}/api/documents/upload`, { method: "POST", body });
-    if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-    return res.json();
+    const json: any = await res.json().catch(() => ({}));
+
+    // Phase 10: surface duplicate (409) as a distinguishable result, not a thrown error.
+    // The caller can check { status: "duplicate", existing_doc_id, ... }.
+    if (res.status === 409 && json?.status === "duplicate") {
+      return json;
+    }
+    if (!res.ok) {
+      throw new Error(json?.error ?? `Upload failed: ${res.status}`);
+    }
+    return json;
   },
 
   // ── Agents ──

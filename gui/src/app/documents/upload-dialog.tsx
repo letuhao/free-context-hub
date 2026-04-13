@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui";
 import { Upload, Link2, X } from "lucide-react";
 
-const ACCEPT = ".pdf,.md,.txt,.markdown,.text";
+const ACCEPT = ".pdf,.docx,.md,.txt,.markdown,.text,.epub,.odt,.rtf,.html,.htm";
 const MAX_SIZE = 10 * 1024 * 1024; // 10MB
 
 interface UploadDialogProps {
@@ -79,7 +79,17 @@ export function UploadDialog({ open, onClose, onUploaded, mode }: UploadDialogPr
           if (name.trim()) formData.append("name", name.trim());
           if (description.trim()) formData.append("description", description.trim());
           if (tags.length > 0) formData.append("tags", JSON.stringify(tags));
-          await api.uploadDocument(formData);
+          const result = await api.uploadDocument(formData);
+          // Phase 10: handle deduplication response (HTTP 409 returned as result)
+          if (result?.status === "duplicate") {
+            toast(
+              "info",
+              `Already uploaded as "${result.existing_name}" — using existing document`,
+            );
+            onUploaded();
+            onClose();
+            return;
+          }
         } else {
           toast("error", "Please select a file to upload");
           return;
@@ -134,7 +144,7 @@ export function UploadDialog({ open, onClose, onUploaded, mode }: UploadDialogPr
                   ) : (
                     <>
                       <p className="text-sm text-zinc-300 mb-1">Drop files here or click to browse</p>
-                      <p className="text-[11px] text-zinc-600">PDF, MD, TXT up to 10MB</p>
+                      <p className="text-[11px] text-zinc-600">PDF, DOCX, MD, EPUB, ODT, RTF, HTML up to 10MB</p>
                     </>
                   )}
                   <input
