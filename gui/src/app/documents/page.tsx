@@ -14,19 +14,7 @@ import { UploadDialog } from "./upload-dialog";
 import { DocumentViewer } from "./document-viewer";
 import { ExtractionModeSelector } from "./extraction-mode-selector";
 import { ExtractionReview } from "./extraction-review";
-
-type Doc = {
-  doc_id: string;
-  name: string;
-  doc_type: string;
-  url: string | null;
-  file_size_bytes: number | null;
-  description: string | null;
-  created_at: string;
-  linked_lesson_count?: number;
-};
-
-type DocFilter = "all" | "pdf" | "markdown" | "url" | "linked" | "unlinked";
+import type { Doc, DocFilter, DocumentChunk } from "./types";
 
 const TYPE_BADGES: Record<string, string> = {
   pdf: "bg-red-500/20 text-red-400",
@@ -54,7 +42,9 @@ export default function DocumentsPage() {
   const [autoGenerate, setAutoGenerate] = useState(false);
   // Phase 10: extraction
   const [extractMode, setExtractMode] = useState<Doc | null>(null);
-  const [reviewDoc, setReviewDoc] = useState<{ doc: Doc; chunks: any[] } | null>(null);
+  // chunks is undefined when opened from the "Chunks" button (will be fetched);
+  // it's an array when opened immediately after a successful extraction.
+  const [reviewDoc, setReviewDoc] = useState<{ doc: Doc; chunks?: DocumentChunk[] } | null>(null);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const pageSize = 12;
@@ -198,7 +188,7 @@ export default function DocumentsPage() {
                       <button onClick={() => setExtractMode(doc)} className="px-2 py-1 text-[11px] bg-blue-600/15 hover:bg-blue-600/25 border border-blue-500/40 rounded text-blue-400 transition-colors">
                         Extract
                       </button>
-                      <button onClick={() => setReviewDoc({ doc, chunks: [] })} className="px-2 py-1 text-[11px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 hover:text-zinc-200 transition-colors">
+                      <button onClick={() => setReviewDoc({ doc })} className="px-2 py-1 text-[11px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 hover:text-zinc-200 transition-colors">
                         Chunks
                       </button>
                       <button onClick={() => { setAutoGenerate(true); setViewDoc(doc); }} className="px-2 py-1 text-[11px] bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-400 hover:text-zinc-200 transition-colors">
@@ -244,12 +234,7 @@ export default function DocumentsPage() {
       {extractMode && (
         <ExtractionModeSelector
           open={true}
-          doc={{
-            doc_id: extractMode.doc_id,
-            name: extractMode.name,
-            doc_type: extractMode.doc_type,
-            file_size_bytes: extractMode.file_size_bytes,
-          }}
+          doc={extractMode}
           onClose={() => setExtractMode(null)}
           onExtracted={(chunks) => {
             setReviewDoc({ doc: extractMode, chunks });
@@ -263,12 +248,8 @@ export default function DocumentsPage() {
       {reviewDoc && (
         <ExtractionReview
           open={true}
-          doc={{
-            doc_id: reviewDoc.doc.doc_id,
-            name: reviewDoc.doc.name,
-            doc_type: reviewDoc.doc.doc_type,
-          }}
-          initialChunks={reviewDoc.chunks.length > 0 ? reviewDoc.chunks : undefined}
+          doc={reviewDoc.doc}
+          initialChunks={reviewDoc.chunks}
           onClose={() => setReviewDoc(null)}
           onReExtract={() => {
             setExtractMode(reviewDoc.doc);

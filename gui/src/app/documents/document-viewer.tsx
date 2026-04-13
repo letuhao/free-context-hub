@@ -9,15 +9,7 @@ import { X, Search, ChevronUp, ChevronDown, Copy, Check, Sparkles, Link2, Zap } 
 import { MarkdownContent } from "../chat/markdown-content";
 import { ExtractionModeSelector } from "./extraction-mode-selector";
 import { ExtractionReview } from "./extraction-review";
-
-type Doc = {
-  doc_id: string;
-  name: string;
-  doc_type: string;
-  url: string | null;
-  file_size_bytes: number | null;
-  created_at: string;
-};
+import type { Doc, DocumentChunk } from "./types";
 
 type LinkedLesson = {
   lesson_id: string;
@@ -63,7 +55,7 @@ export function DocumentViewer({ doc, onClose, onChanged, autoGenerate }: Docume
   const [linkSearchResults, setLinkSearchResults] = useState<{ lesson_id: string; title: string; lesson_type: string }[]>([]);
   // Phase 10: extraction
   const [extractOpen, setExtractOpen] = useState(false);
-  const [reviewChunks, setReviewChunks] = useState<any[] | null>(null);
+  const [reviewChunks, setReviewChunks] = useState<DocumentChunk[] | null>(null);
 
   // Fetch document content
   useEffect(() => {
@@ -413,12 +405,7 @@ export function DocumentViewer({ doc, onClose, onChanged, autoGenerate }: Docume
       {extractOpen && (
         <ExtractionModeSelector
           open={true}
-          doc={{
-            doc_id: doc.doc_id,
-            name: doc.name,
-            doc_type: doc.doc_type,
-            file_size_bytes: doc.file_size_bytes,
-          }}
+          doc={doc}
           onClose={() => setExtractOpen(false)}
           onExtracted={(chunks) => {
             setReviewChunks(chunks);
@@ -432,11 +419,7 @@ export function DocumentViewer({ doc, onClose, onChanged, autoGenerate }: Docume
       {reviewChunks && (
         <ExtractionReview
           open={true}
-          doc={{
-            doc_id: doc.doc_id,
-            name: doc.name,
-            doc_type: doc.doc_type,
-          }}
+          doc={doc}
           initialChunks={reviewChunks}
           onClose={() => setReviewChunks(null)}
           onReExtract={() => {

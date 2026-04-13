@@ -7,30 +7,17 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui";
 import { X, FileText, Table as TableIcon, Code, FileImage, Hash } from "lucide-react";
 import { MarkdownContent } from "../chat/markdown-content";
-
-type Chunk = {
-  chunk_id: string;
-  doc_id: string;
-  project_id: string;
-  chunk_index: number;
-  content: string;
-  page_number: number | null;
-  heading: string | null;
-  chunk_type: "text" | "table" | "diagram_description" | "mermaid" | "code";
-  extraction_mode: "fast" | "quality" | "vision" | null;
-  confidence: number | null;
-  created_at: string;
-};
+import type { Doc, DocumentChunk, ChunkType } from "./types";
 
 interface ExtractionReviewProps {
   open: boolean;
-  doc: { doc_id: string; name: string; doc_type: string };
-  initialChunks?: Chunk[];
+  doc: Pick<Doc, "doc_id" | "name" | "doc_type">;
+  initialChunks?: DocumentChunk[];
   onClose: () => void;
   onReExtract?: () => void;
 }
 
-const TYPE_BADGE: Record<Chunk["chunk_type"], { label: string; cls: string; icon: any }> = {
+const TYPE_BADGE: Record<ChunkType, { label: string; cls: string; icon: any }> = {
   text: { label: "text", cls: "bg-zinc-700 text-zinc-300", icon: FileText },
   table: { label: "table", cls: "bg-amber-500/15 text-amber-400", icon: TableIcon },
   code: { label: "code", cls: "bg-blue-500/15 text-blue-400", icon: Code },
@@ -42,7 +29,7 @@ export function ExtractionReview({ open, doc, initialChunks, onClose, onReExtrac
   const { projectId } = useProject();
   const { toast } = useToast();
 
-  const [chunks, setChunks] = useState<Chunk[]>(initialChunks ?? []);
+  const [chunks, setChunks] = useState<DocumentChunk[]>(initialChunks ?? []);
   const [loading, setLoading] = useState(!initialChunks);
   const [activeChunkIdx, setActiveChunkIdx] = useState(0);
 
@@ -65,6 +52,23 @@ export function ExtractionReview({ open, doc, initialChunks, onClose, onReExtrac
     if (open && !initialChunks) fetchChunks();
   }, [open, initialChunks, fetchChunks]);
 
+  // Sync state when initialChunks prop changes (e.g. after re-extraction).
+  // Also reset the active chunk pointer to avoid out-of-bounds when chunk
+  // count shrinks.
+  useEffect(() => {
+    if (initialChunks) {
+      setChunks(initialChunks);
+      setActiveChunkIdx(0);
+    }
+  }, [initialChunks]);
+
+  // Clamp activeChunkIdx if chunks array shrinks for any reason
+  useEffect(() => {
+    if (activeChunkIdx >= chunks.length && chunks.length > 0) {
+      setActiveChunkIdx(0);
+    }
+  }, [chunks.length, activeChunkIdx]);
+
   // ESC closes
   useEffect(() => {
     if (!open) return;
@@ -75,7 +79,7 @@ export function ExtractionReview({ open, doc, initialChunks, onClose, onReExtrac
 
   // Group chunks by page for the navigator
   const pages = useMemo(() => {
-    const map = new Map<number | string, Chunk[]>();
+    const map = new Map<number | string, DocumentChunk[]>();
     for (const c of chunks) {
       const key = c.page_number ?? "all";
       if (!map.has(key)) map.set(key, []);
@@ -116,7 +120,7 @@ export function ExtractionReview({ open, doc, initialChunks, onClose, onReExtrac
               )}
             </div>
             <div className="flex items-center gap-2">
-              {onReExtract && (
+              {onReExtract && chunks.length > 0 && (
                 <Button variant="outline" size="sm" onClick={onReExtract}>
                   Re-extract
                 </Button>
@@ -134,7 +138,16 @@ export function ExtractionReview({ open, doc, initialChunks, onClose, onReExtrac
           ) : chunks.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-3">
               <p className="text-sm text-zinc-400">No chunks for this document yet</p>
-              <p className="text-xs text-zinc-600">Click Re-extract to run the extraction pipeline</p>
+              {onReExtract ? (
+                <button
+                  onClick={onReExtract}
+                  className="px-4 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white font-medium"
+                >
+                  Extract Now
+                </button>
+              ) : (
+                <p className="text-xs text-zinc-600">Use the Extract button to run the extraction pipeline</p>
+              )}
             </div>
           ) : (
             <div className="flex flex-1 min-h-0">
