@@ -255,6 +255,33 @@ export const api = {
       `/api/documents/${encodeURIComponent(docId)}/chunks/${encodeURIComponent(chunkId)}?${qs(params)}`,
     ),
 
+  // Phase 10.7: ingest a URL server-side (fetch → extract → store)
+  ingestUrl: async (body: {
+    project_id: string;
+    source_url: string;
+    name?: string;
+    description?: string;
+    tags?: string[];
+  }): Promise<any> => {
+    // Use the same duplicate-surface shape as uploadDocument so callers
+    // can branch on { status: 'duplicate', existing_doc_id, ... } without
+    // having to catch an error.
+    const API_URL = process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "http://localhost:3001";
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (API_TOKEN) headers["Authorization"] = `Bearer ${API_TOKEN}`;
+    const res = await fetch(`${API_URL}/api/documents/ingest-url`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+    const json: any = await res.json().catch(() => ({}));
+    if (res.status === 409 && json?.status === "duplicate") return json;
+    if (!res.ok) {
+      throw new Error(json?.error ?? `ingest-url failed: ${res.status}`);
+    }
+    return json;
+  },
+
   // Phase 10.6: bulk vision re-extract for an entire project
   bulkExtract: (body: { project_id: string; prompt_template?: "default" | "mermaid" }) =>
     request<{

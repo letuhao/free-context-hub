@@ -40,6 +40,31 @@ export function createApiApp() {
   // Health endpoint is public (no auth)
   app.use('/api/system', systemRouter);
 
+  // Phase 10.7 test-only static fixtures. Enabled ONLY when
+  // ALLOW_PRIVATE_FETCH_FOR_TESTS=true (matches the SSRF bypass flag) so
+  // production deployments never expose the filesystem. Used by the E2E
+  // harness and Playwright tests to ingest local fixtures via the
+  // ingest-url endpoint without external network dependencies.
+  if (process.env.ALLOW_PRIVATE_FETCH_FOR_TESTS === 'true') {
+    // Resolve test-data relative to the compiled module, not cwd, so it
+    // works regardless of how the process was launched. In the Docker
+    // image we COPY . . to /app, so /app/test-data/ is present next to
+    // /app/dist/api/index.js.
+    const testDataDir = new URL('../../test-data/', import.meta.url).pathname;
+    app.use(
+      '/test-static',
+      express.static(testDataDir, {
+        fallthrough: false,
+        maxAge: 0,
+        setHeaders: (res, filePath) => {
+          // Ensure the MIME whitelist in urlFetch will accept these
+          if (filePath.endsWith('.md')) res.setHeader('Content-Type', 'text/markdown');
+          else if (filePath.endsWith('.txt')) res.setHeader('Content-Type', 'text/plain');
+        },
+      }),
+    );
+  }
+
   // All other routes require Bearer token
   app.use('/api', bearerAuth);
 

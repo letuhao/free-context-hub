@@ -86,6 +86,10 @@ services:
       REDIS_PREFIX: ${REDIS_PREFIX:-contexthub}
       REDIS_RETRIEVAL_TTL_SECONDS: ${REDIS_RETRIEVAL_TTL_SECONDS:-900}
       REDIS_RERANK_TTL_SECONDS: ${REDIS_RERANK_TTL_SECONDS:-7200}
+      # Phase 10.7: enable SSRF bypass + /test-static fixtures ONLY for
+      # local dev / E2E. In production leave unset so ingest-url refuses
+      # to fetch from private addresses.
+      ALLOW_PRIVATE_FETCH_FOR_TESTS: ${ALLOW_PRIVATE_FETCH_FOR_TESTS:-false}
     ports:
       - "3000:3000"
       - "3001:3001"

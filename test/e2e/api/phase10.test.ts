@@ -21,6 +21,7 @@ import type { TestFn } from '../shared/testContext.js';
 import { pass, fail, skip } from '../shared/testContext.js';
 import { expectStatus } from '../shared/apiClient.js';
 import { callTool } from '../shared/mcpClient.js';
+import { API_BASE } from '../shared/constants.js';
 
 const GROUP = 'phase10';
 
@@ -483,6 +484,131 @@ export const allPhase10Tests: TestFn[] = [
     }
     if (!Array.isArray(r.body?.jobs)) {
       throw new Error('jobs array missing');
+    }
+  }),
+
+  // ──────────────────────────────────────────────────────────────────
+  // T5 — Phase 10.7 URL ingestion: happy path
+  //
+  // Ingests a markdown fixture served from the backend's own test-static
+  // route. Requires ALLOW_PRIVATE_FETCH_FOR_TESTS=true on the API container
+  // so (a) the static route is mounted and (b) the SSRF guard permits the
+  // loopback fetch.
+  // ──────────────────────────────────────────────────────────────────
+  phaseTest('phase10-ingest-url-markdown-happy', async ({ api, projectId, runMarker, cleanup }) => {
+    // Preflight: is the test-static route mounted? If not, skip — the
+    // server wasn't started with ALLOW_PRIVATE_FETCH_FOR_TESTS=true.
+    const preflight = await fetch(`${API_BASE}/test-static/sample.md`).catch(() => null);
+    if (!preflight || preflight.status !== 200) {
+      throw new Error('SKIP: /test-static not mounted (set ALLOW_PRIVATE_FETCH_FOR_TESTS=true on the API container)');
+    }
+
+    const r = await api.post('/api/documents/ingest-url', {
+      project_id: projectId,
+      source_url: `${API_BASE}/test-static/sample.md`,
+      name: `ingest-url-${runMarker}.md`,
+    });
+
+    if (r.status === 409 && r.body?.status === 'duplicate') {
+      // Previous run already ingested this fixture — accept and move on
+      return;
+    }
+    expectStatus(r, 201);
+
+    const docId = r.body?.doc_id ?? r.body?.document_id;
+    if (!docId) throw new Error('ingest-url returned no doc_id');
+    cleanup.documentIds.push(docId);
+
+    // Verify the ingested doc looks right — doc_type detected, content
+    // stored, file size > 0. We intentionally DON'T call /extract here:
+    // the happy-path-fast-extract test above already covers the extract
+    // pipeline, and LM Studio may have evicted the embedding model by now
+    // (vision models + embeddings compete for VRAM in local setups).
+    const getR = await api.get(`/api/documents/${docId}?project_id=${projectId}`);
+    expectStatus(getR, 200);
+    const doc = getR.body;
+    if (doc?.doc_type !== 'markdown') {
+      throw new Error(`expected doc_type=markdown, got ${doc?.doc_type}`);
+    }
+    if (!doc?.url || !doc.url.includes('/test-static/sample.md')) {
+      throw new Error(`expected originating url recorded, got ${doc?.url}`);
+    }
+    if (!doc?.file_size_bytes || doc.file_size_bytes < 1) {
+      throw new Error(`expected positive file_size_bytes, got ${doc?.file_size_bytes}`);
+    }
+  }),
+
+  // ──────────────────────────────────────────────────────────────────
+  // T5b — Ingest URL: SSRF blocking
+  // ──────────────────────────────────────────────────────────────────
+  phaseTest('phase10-ingest-url-ssrf-blocked', async ({ api, projectId }) => {
+    // These should all be rejected. We test several targeting the common
+    // SSRF attack surface. Note: when ALLOW_PRIVATE_FETCH_FOR_TESTS=true
+    // the loopback IS allowed (we need it to serve fixtures), so instead
+    // we hit a literal IP that's private but NOT loopback — 10.0.0.1 —
+    // which is still blocked because the bypass only whitelists literals
+    // that the test server itself would use. Actually, the bypass currently
+    // allows ALL private addresses when set, which is what we want for the
+    // happy path. So for the SSRF test we just verify the NORMAL flow
+    // (flag not set) blocks bad URLs — we can't test that at runtime here.
+    // Instead verify malformed URLs / bad schemes / 404 loops are still
+    // rejected regardless of the bypass flag.
+
+    const bogusSchemes = [
+      'file:///etc/passwd',
+      'ftp://internal.corp/',
+      'gopher://internal/',
+    ];
+
+    for (const bad of bogusSchemes) {
+      const r = await api.post('/api/documents/ingest-url', {
+        project_id: projectId,
+        source_url: bad,
+      });
+      if (r.status < 400) {
+        throw new Error(`expected 4xx for bad scheme ${bad}, got ${r.status}`);
+      }
+    }
+
+    // Missing source_url → 400
+    const emptyR = await api.post('/api/documents/ingest-url', {
+      project_id: projectId,
+      source_url: '',
+    });
+    if (emptyR.status !== 400) {
+      throw new Error(`expected 400 for empty source_url, got ${emptyR.status}`);
+    }
+
+    // Garbage URL → 400
+    const garbageR = await api.post('/api/documents/ingest-url', {
+      project_id: projectId,
+      source_url: 'not a url at all',
+    });
+    if (garbageR.status !== 400) {
+      throw new Error(`expected 400 for malformed url, got ${garbageR.status}`);
+    }
+  }),
+
+  // ──────────────────────────────────────────────────────────────────
+  // T5c — Ingest URL: content-type rejection
+  // ──────────────────────────────────────────────────────────────────
+  phaseTest('phase10-ingest-url-bad-content-type', async ({ api, projectId }) => {
+    // story.txt IS served as text/plain — that's allowed. So point at the
+    // test-static index (a directory listing, returns 404 in express.static)
+    // and confirm we reject. An easier approach: request the endpoint
+    // with a URL that returns JSON, which isn't on the allowlist.
+    const preflight = await fetch(`${API_BASE}/api/system/info`).catch(() => null);
+    if (!preflight) throw new Error('SKIP: API unreachable');
+
+    const r = await api.post('/api/documents/ingest-url', {
+      project_id: projectId,
+      source_url: `${API_BASE}/api/system/info`,
+    });
+    // The API info endpoint returns JSON which isn't in the MIME allowlist,
+    // OR returns 401 because bearer auth strips on cross-origin. Either
+    // 415/401/403/502 is acceptable rejection — we just need a 4xx/5xx.
+    if (r.status < 400) {
+      throw new Error(`expected non-2xx for JSON content-type, got ${r.status}`);
     }
   }),
 

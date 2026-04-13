@@ -85,14 +85,24 @@ export function UploadDialog({ open, onClose, onUploaded, mode }: UploadDialogPr
     try {
       if (mode === "url") {
         if (!url.trim()) { toast("error", "URL is required"); return; }
-        await api.createDocument({
+        // Phase 10.7: server-side fetch + ingest as extractable doc, not
+        // just a URL stub. Supports PDF/DOCX/Markdown/HTML/image content.
+        const result = await api.ingestUrl({
           project_id: projectId,
-          name: name.trim() || url.trim(),
-          doc_type: "url",
-          url: url.trim(),
+          source_url: url.trim(),
+          name: name.trim() || undefined,
           description: description.trim() || undefined,
           tags: tags.length > 0 ? tags : undefined,
         });
+        if (result?.status === "duplicate") {
+          toast(
+            "info",
+            `Already ingested as "${result.existing_name}" — using existing document`,
+          );
+          onUploaded();
+          onClose();
+          return;
+        }
       } else {
         if (file) {
           // Multipart file upload
@@ -214,11 +224,15 @@ export function UploadDialog({ open, onClose, onUploaded, mode }: UploadDialogPr
                       type="text"
                       value={url}
                       onChange={(e) => setUrl(e.target.value)}
-                      placeholder="https://docs.example.com/..."
+                      placeholder="https://example.com/paper.pdf"
                       className="flex-1 bg-transparent text-xs text-zinc-200 outline-none placeholder:text-zinc-600"
                       autoFocus
                     />
                   </div>
+                  <p className="text-[10px] text-zinc-600 mt-1.5 leading-relaxed">
+                    We fetch and ingest the file server-side (PDF, DOCX, images, HTML, MD).
+                    10MB max. Private / local URLs are blocked for security.
+                  </p>
                 </div>
                 <div>
                   <label className="block text-xs text-zinc-400 mb-1.5">Display name <span className="text-zinc-600">(optional)</span></label>

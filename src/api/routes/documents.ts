@@ -13,6 +13,7 @@ import {
 import { runExtraction, listDocumentChunks, updateChunk, deleteChunk } from '../../services/extraction/pipeline.js';
 import { searchChunks } from '../../services/documentChunks.js';
 import type { ChunkTypeFilter } from '../../services/documentChunks.js';
+import { fetchUrlAsDocument, UrlFetchError } from '../../services/urlFetch.js';
 import { getPdfPageCount } from '../../services/extraction/pdfRender.js';
 import { estimateVisionCost } from '../../services/extraction/vision.js';
 import { enqueueJob, cancelJob } from '../../services/jobQueue.js';
@@ -120,6 +121,111 @@ router.post('/upload', upload.single('file'), async (req, res, next) => {
       // Postgres unique violation = 23505
       if (insErr?.code === '23505' && insErr?.constraint === 'idx_documents_project_hash') {
         // Re-query to return existing doc info
+        const existing = await pool.query(
+          `SELECT doc_id, name, created_at FROM documents
+           WHERE project_id = $1 AND content_hash = $2 LIMIT 1`,
+          [projectId, contentHash],
+        );
+        const ex = existing.rows[0];
+        res.status(409).json({
+          status: 'duplicate',
+          error: 'Document already uploaded',
+          existing_doc_id: ex?.doc_id,
+          existing_name: ex?.name,
+          existing_uploaded_at: ex?.created_at,
+        });
+        return;
+      }
+      throw insErr;
+    }
+  } catch (e) { next(e); }
+});
+
+/** POST /api/documents/ingest-url — Phase 10.7: download a URL server-side
+ *  and store it as a document, matching the shape returned by /upload.
+ *  SSRF-hardened via services/urlFetch.ts (private-range DNS check, manual
+ *  redirect handling, streaming size cap, MIME allowlist).
+ *
+ *  Body: { project_id, source_url, name?, description?, tags? }
+ *  Returns 201 with the created document, 409 on content_hash duplicate,
+ *  or 400/403/413/415/502/504 on fetch-specific errors.
+ */
+router.post('/ingest-url', async (req, res, next) => {
+  try {
+    const projectId = resolveProjectIdOrThrow(req.body.project_id);
+    const sourceUrl = typeof req.body.source_url === 'string' ? req.body.source_url.trim() : '';
+    if (!sourceUrl) {
+      res.status(400).json({ status: 'error', error: 'source_url is required' });
+      return;
+    }
+
+    let fetched;
+    try {
+      fetched = await fetchUrlAsDocument(sourceUrl);
+    } catch (err) {
+      if (err instanceof UrlFetchError) {
+        res.status(err.httpStatus).json({ status: 'error', error: err.message, code: err.code });
+        return;
+      }
+      throw err;
+    }
+
+    // Reuse the same sanitization + content_hash + storage flow as /upload
+    const name = sanitizeFilename(
+      typeof req.body.name === 'string' && req.body.name.trim() ? req.body.name.trim() : fetched.filename,
+    );
+    const contentHash = createHash('sha256').update(fetched.buffer).digest('hex');
+
+    const pool = getDbPool();
+    const dupRes = await pool.query(
+      `SELECT doc_id, name, created_at FROM documents
+       WHERE project_id = $1 AND content_hash = $2
+       LIMIT 1`,
+      [projectId, contentHash],
+    );
+    if (dupRes.rows.length > 0) {
+      const existing = dupRes.rows[0];
+      res.status(409).json({
+        status: 'duplicate',
+        error: 'Document already uploaded',
+        existing_doc_id: existing.doc_id,
+        existing_name: existing.name,
+        existing_uploaded_at: existing.created_at,
+      });
+      return;
+    }
+
+    // Binary formats: base64; text formats: utf-8 (matches /upload)
+    const isBinary = ['pdf', 'docx', 'image', 'epub', 'odt', 'rtf'].includes(fetched.docType);
+    const content = isBinary
+      ? `data:base64;${fetched.buffer.toString('base64')}`
+      : fetched.buffer.toString('utf-8');
+
+    let tags: string[] | undefined;
+    if (req.body.tags) {
+      if (Array.isArray(req.body.tags)) tags = req.body.tags.filter((t: any) => typeof t === 'string');
+      else if (typeof req.body.tags === 'string') {
+        try { tags = JSON.parse(req.body.tags); } catch { tags = undefined; }
+      }
+    }
+
+    try {
+      const result = await createDocument({
+        projectId,
+        name,
+        docType: fetched.docType as any,
+        // Store the originating URL in the url column so users can see where
+        // this doc came from, without it being a pure url-type stub.
+        url: fetched.finalUrl,
+        content,
+        contentHash,
+        fileSizeBytes: fetched.buffer.length,
+        description: req.body.description ?? undefined,
+        tags,
+      });
+      res.status(201).json(result);
+    } catch (insErr: any) {
+      if (insErr?.code === '23505' && insErr?.constraint === 'idx_documents_project_hash') {
         const existing = await pool.query(
           `SELECT doc_id, name, created_at FROM documents
            WHERE project_id = $1 AND content_hash = $2 LIMIT 1`,
