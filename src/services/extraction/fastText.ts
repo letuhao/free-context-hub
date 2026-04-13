@@ -36,33 +36,38 @@ export async function extractFast(
   }
 }
 
-/** PDF extraction via pdf-parse. Splits pages on form-feed if present. */
+/** PDF extraction via pdf-parse v2 (class-based API). */
 async function extractPdfFast(buffer: Buffer): Promise<ExtractionResult> {
-  // pdf-parse v2 ESM export
-  const pdfParseModule: any = await import('pdf-parse');
-  const pdfParse = pdfParseModule.pdf ?? pdfParseModule.default ?? pdfParseModule;
+  // pdf-parse v2 exports a PDFParse class
+  const { PDFParse } = await import('pdf-parse');
+  // Cast to Uint8Array for pdf-parse compatibility
+  const parser = new (PDFParse as any)({ data: new Uint8Array(buffer) });
 
-  const data = await (pdfParse as any)(buffer);
-  const totalPages: number = data.numpages ?? 1;
-  const fullText: string = data.text ?? '';
+  const result: any = await parser.getText();
+  await parser.destroy();
 
-  // pdf-parse separates pages with form-feed \f. If the form-feed isn't present
-  // (some PDFs), fall back to a single page chunk.
+  // pdf-parse v2 returns { text, pages: [...], info, ... }
+  // The pages array contains per-page text objects when available
   const pages: ExtractedPage[] = [];
-  if (totalPages > 1 && fullText.includes('\f')) {
-    const split = fullText.split('\f');
-    split.forEach((pageText, i) => {
+  if (Array.isArray(result.pages) && result.pages.length > 0) {
+    result.pages.forEach((p: any, i: number) => {
+      const pageText = typeof p === 'string' ? p : (p?.text ?? '');
       pages.push({ page_number: i + 1, content: pageText.trim() });
     });
   } else {
+    // Fallback: single page from concatenated text
+    const fullText: string = result.text ?? '';
     pages.push({ page_number: 1, content: fullText.trim() });
   }
 
-  logger.info({ pages: pages.length, chars: fullText.length }, 'pdf fast extraction complete');
+  const totalPages = pages.length || 1;
+  const totalChars = pages.reduce((s, p) => s + p.content.length, 0);
+
+  logger.info({ pages: totalPages, chars: totalChars }, 'pdf fast extraction complete');
 
   return {
     mode: 'fast',
-    pages,
+    pages: pages.length > 0 ? pages : [{ page_number: 1, content: '' }],
     total_pages: totalPages,
   };
 }

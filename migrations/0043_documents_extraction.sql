@@ -26,17 +26,19 @@ ALTER TABLE documents ADD COLUMN IF NOT EXISTS extraction_mode TEXT
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS extracted_at TIMESTAMPTZ;
 
 -- Backfill content_hash for existing documents from their content column.
--- Best-effort: only works for text content. Documents uploaded via the legacy
--- flow (PDF placeholder strings like "[PDF file: name, bytes]") will get a hash
--- of that placeholder text — which is fine because they're not real binary
--- content and won't dedupe against actual file uploads.
--- pgcrypto provides digest()
+-- Each existing document gets a hash that includes its doc_id as a suffix,
+-- making it unique. This means existing documents WON'T dedupe against future
+-- uploads (their hash isn't a real SHA-256 of file bytes), but it lets us
+-- enforce dedup on all NEW uploads going forward without destroying existing
+-- data — including pre-Phase-10 duplicates from test fixtures.
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 UPDATE documents
-SET content_hash = encode(digest(COALESCE(content, '')::bytea, 'sha256'), 'hex')
+SET content_hash = 'legacy:' || doc_id::text
 WHERE content_hash IS NULL;
 
--- Unique constraint per project on content_hash (allows same file in different projects)
+-- Unique constraint per project on content_hash (allows same file in different projects).
+-- Legacy rows have unique 'legacy:<uuid>' values so they pass the constraint.
+-- New uploads from the Phase 10 endpoint use real SHA-256 hashes and dedupe correctly.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_project_hash
   ON documents(project_id, content_hash)
   WHERE content_hash IS NOT NULL;

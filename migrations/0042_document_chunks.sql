@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS document_chunks (
   bbox_y0 REAL,
   bbox_x1 REAL,
   bbox_y1 REAL,
-  embedding vector(768),
+  embedding vector(1024),
   fts tsvector,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

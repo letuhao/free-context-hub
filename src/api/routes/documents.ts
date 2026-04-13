@@ -289,6 +289,14 @@ router.post('/:id/extract', async (req, res, next) => {
       res.status(404).json({ status: 'error', error: msg });
       return;
     }
+    // Surface client-actionable extraction errors as 422 (Unprocessable Entity)
+    // instead of generic 500. These are content/format problems, not server bugs.
+    const isClientError =
+      /magic bytes|legacy flow|produced no content|Chunking produced|does not support/i.test(msg);
+    if (isClientError) {
+      res.status(422).json({ status: 'error', error: msg });
+      return;
+    }
     next(e);
   }
 });
