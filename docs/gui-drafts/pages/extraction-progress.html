@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: Extraction Progress</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.97) translateY(8px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .animate-pulse { animation: pulse 2s ease-in-out infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .animate-spin { animation: spin 1s linear infinite; }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen font-sans">
+  <div class="flex h-screen">
+    <!-- Sidebar placeholder -->
+    <aside class="w-56 shrink-0 border-r border-zinc-800 bg-zinc-950">
+      <div class="px-4 py-4 border-b border-zinc-800">
+        <h1 class="text-sm font-semibold text-zinc-100">ContextHub</h1>
+        <p class="text-[11px] text-zinc-600">Knowledge Dashboard</p>
+      </div>
+    </aside>
+
+    <main class="flex-1 overflow-y-auto p-6">
+      <p class="text-xs text-zinc-600 mb-4">Draft: pages/extraction-progress | Phase 10</p>
+
+      <!-- Breadcrumb -->
+      <div class="flex items-center gap-1.5 text-xs text-zinc-500 mb-4">
+        <a href="#" class="hover:text-zinc-300">Documents</a>
+        <span>&rsaquo;</span>
+        <span class="text-zinc-300">Extracting...</span>
+      </div>
+
+      <!-- Header -->
+      <div class="mb-6">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">free-context-hub</span>
+        </div>
+        <h1 class="text-lg font-semibold text-zinc-100">Extracting Document</h1>
+        <p class="text-xs text-zinc-500 mt-0.5">Architecture-Decision-Records.pdf &middot; Vision mode &middot; qwen2-vl-7b</p>
+      </div>
+
+      <!-- Overall progress -->
+      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-5 mb-6">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full border-2 border-blue-500 border-t-transparent animate-spin"></div>
+            <div>
+              <p class="text-sm font-medium text-zinc-200">Processing page 8 of 24</p>
+              <p class="text-xs text-zinc-500">Estimated time remaining: ~1m 30s</p>
+            </div>
+          </div>
+          <button class="px-3 py-1.5 text-xs border border-red-500/30 rounded-md text-red-400 hover:bg-red-500/10 transition-colors">
+            Cancel
+          </button>
+        </div>
+        <div class="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
+          <div class="h-full bg-blue-500 rounded-full transition-all" style="width: 33%"></div>
+        </div>
+        <div class="flex justify-between mt-2 text-[10px] text-zinc-600">
+          <span>33% complete</span>
+          <span>7 succeeded &middot; 1 processing &middot; 16 queued</span>
+        </div>
+      </div>
+
+      <!-- Per-page status grid -->
+      <h2 class="text-sm font-medium text-zinc-300 mb-3">Page status</h2>
+      <div class="grid grid-cols-6 md:grid-cols-8 lg:grid-cols-12 gap-2 mb-6">
+        <!-- Page 1: done -->
+        <div class="aspect-[3/4] rounded-lg border border-emerald-500/30 bg-emerald-500/5 flex flex-col items-center justify-center p-1.5 relative">
+          <span class="text-[10px] text-emerald-400 font-medium">1</span>
+          <span class="text-[8px] text-emerald-500 mt-0.5">342 chars</span>
+          <span class="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+        </div>
+
+        <!-- Page 2: done -->
+        <div class="aspect-[3/4] rounded-lg border border-emerald-500/30 bg-emerald-500/5 flex flex-col items-center justify-center p-1.5 relative">
+          <span class="text-[10px] text-emerald-400 font-medium">2</span>
+          <span class="text-[8px] text-emerald-500 mt-0.5">518 chars</span>
+          <span class="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+        </div>
+
+        <!-- Page 3: done, low confidence -->
+        <div class="aspect-[3/4] rounded-lg border border-amber-500/30 bg-amber-500/5 flex flex-col items-center justify-center p-1.5 relative">
+          <span class="text-[10px] text-amber-400 font-medium">3</span>
+          <span class="text-[8px] text-amber-500 mt-0.5">89 chars</span>
+          <span class="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+        </div>
+
+        <!-- Page 4-7: done -->
+        <div class="aspect-[3/4] rounded-lg border border-emerald-500/30 bg-emerald-500/5 flex flex-col items-center justify-center p-1.5 relative">
+          <span class="text-[10px] text-emerald-400 font-medium">4</span>
+          <span class="text-[8px] text-emerald-500 mt-0.5">621 chars</span>
+          <span class="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+        </div>
+        <div class="aspect-[3/4] rounded-lg border border-emerald-500/30 bg-emerald-500/5 flex flex-col items-center justify-center p-1.5 relative">
+          <span class="text-[10px] text-emerald-400 font-medium">5</span>
+          <span class="text-[8px] text-emerald-500 mt-0.5">405 chars</span>
+          <span class="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+        </div>
+        <div class="aspect-[3/4] rounded-lg border border-emerald-500/30 bg-emerald-500/5 flex flex-col items-center justify-center p-1.5 relative">
+          <span class="text-[10px] text-emerald-400 font-medium">6</span>
+          <span class="text-[8px] text-emerald-500 mt-0.5">156 chars</span>
+          <span class="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+        </div>
+        <div class="aspect-[3/4] rounded-lg border border-red-500/30 bg-red-500/5 flex flex-col items-center justify-center p-1.5 relative">
+          <span class="text-[10px] text-red-400 font-medium">7</span>
+          <span class="text-[8px] text-red-500 mt-0.5">Failed</span>
+          <span class="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-red-500"></span>
+        </div>
+
+        <!-- Page 8: processing -->
+        <div class="aspect-[3/4] rounded-lg border border-blue-500/50 bg-blue-500/10 flex flex-col items-center justify-center p-1.5 relative">
+          <span class="text-[10px] text-blue-400 font-medium">8</span>
+          <div class="w-4 h-4 rounded-full border-2 border-blue-400 border-t-transparent animate-spin mt-0.5"></div>
+        </div>
+
+        <!-- Pages 9-12: queued -->
+        <div class="aspect-[3/4] rounded-lg border border-zinc-800 bg-zinc-900/30 flex flex-col items-center justify-center p-1.5">
+          <span class="text-[10px] text-zinc-600 font-medium">9</span>
+          <span class="text-[8px] text-zinc-700 mt-0.5">queued</span>
+        </div>
+        <div class="aspect-[3/4] rounded-lg border border-zinc-800 bg-zinc-900/30 flex flex-col items-center justify-center p-1.5">
+          <span class="text-[10px] text-zinc-600 font-medium">10</span>
+          <span class="text-[8px] text-zinc-700 mt-0.5">queued</span>
+        </div>
+        <div class="aspect-[3/4] rounded-lg border border-zinc-800 bg-zinc-900/30 flex flex-col items-center justify-center p-1.5">
+          <span class="text-[10px] text-zinc-600 font-medium">11</span>
+          <span class="text-[8px] text-zinc-700 mt-0.5">queued</span>
+        </div>
+        <div class="aspect-[3/4] rounded-lg border border-zinc-800 bg-zinc-900/30 flex flex-col items-center justify-center p-1.5">
+          <span class="text-[10px] text-zinc-600 font-medium">12</span>
+          <span class="text-[8px] text-zinc-700 mt-0.5">queued</span>
+        </div>
+      </div>
+
+      <!-- Early review prompt -->
+      <div class="bg-blue-500/5 border border-blue-500/20 rounded-lg p-4 mb-6">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+            <svg class="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+            </svg>
+          </div>
+          <div class="flex-1">
+            <p class="text-xs text-blue-300 font-medium">7 pages ready for review</p>
+            <p class="text-[10px] text-zinc-500">You can start reviewing completed pages while the rest are still processing.</p>
+          </div>
+          <button class="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white font-medium transition-colors">
+            Start Review
+          </button>
+        </div>
+      </div>
+
+      <!-- Failed page retry -->
+      <div class="bg-red-500/5 border border-red-500/20 rounded-lg p-4">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
+            <svg class="w-4 h-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+            </svg>
+          </div>
+          <div class="flex-1">
+            <p class="text-xs text-red-300 font-medium">Page 7 failed to extract</p>
+            <p class="text-[10px] text-zinc-500">Model returned an error. You can retry this page or skip it.</p>
+          </div>
+          <div class="flex gap-2">
+            <button class="px-3 py-1.5 text-xs border border-zinc-700 rounded-md text-zinc-400 hover:text-zinc-200 transition-colors">Skip</button>
+            <button class="px-3 py-1.5 text-xs border border-amber-500/30 rounded-md text-amber-400 hover:bg-amber-500/10 transition-colors">Retry</button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</body>
+</html>
