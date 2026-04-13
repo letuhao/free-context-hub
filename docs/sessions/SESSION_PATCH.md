@@ -10,6 +10,14 @@ phase: IN_PROGRESS
 ## Where We Are
 **Sprint 10.4 complete and live-tested.** Vision UI + mermaid + chunk edit/delete + async progress/cancel. Backend B0–B6 (migration 0046, updateChunk/deleteChunk with optimistic lock + re-embed, updateJobProgress/isJobCancelled/cancelJob, mermaid prompt template, 3 new endpoints) and frontend F1–F10 (Vision card enabled, cost estimate panel, ExtractionProgress modal with polling + cancel, mermaid renderer via npm `mermaid`, editable chunks with save/delete, confidence-aware page navigator + legend, "Extract as Mermaid" shortcut) all implemented. Both typechecks pass. Live-tested all flows end-to-end against real Docker stack + LM Studio (zai-org/glm-4.6v-flash).
 
+### Sprint 10.4 code review — 6 issues found + fixed (commit e6c6935)
+- **HIGH** Cancel endpoint allowed cross-tenant job cancellation via leaked job_id → `cancelJob` now takes optional `projectId`, scoped SQL
+- **HIGH** `updateChunk` returned TIMESTAMPTZ as Date → second edit always 409'd → normalize Date → ISO in the RETURNING path
+- **HIGH** ExtractionProgress polling effect re-ran on every parent re-render (stale closure / callback double-fire risk) → callback refs + `fireTerminal` single-fire guard
+- **MED** `prompt_template` validated only by TypeScript → server 400 validation added
+- **MED** Duplicate unreachable `includes('```mermaid')` check in `detectChunkType` → removed
+- **MED** Chunk switch silently discarded unsaved edit buffer → `switchToChunk` confirm gate
+
 ### Live-test results (Sprint 10.4)
 - ✅ `POST /extract/estimate` → 3 pages, glm-4.6v-flash provider, 30s ETA
 - ✅ `POST /extract` vision → 202 queued, job_id returned
