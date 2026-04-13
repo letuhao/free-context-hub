@@ -1,13 +1,47 @@
 ---
-id: CH-PHASE10-S105
+id: CH-PHASE10-S106
 date: 2026-04-13
-module: Phase10-Sprint10.5
-phase: IN_PROGRESS
+module: Phase10-Sprint10.6
+phase: COMPLETE
 ---
 
-# Session Patch — 2026-04-13 (Sprint 10.5)
+# Session Patch — 2026-04-13 (Sprint 10.6 — Phase 10 COMPLETE)
 
 ## Where We Are
+**Sprint 10.6 complete and live-tested (commit f2418f8). Phase 10 is DONE.** Polish + Phase 10 integration test suite shipped. Full E2E harness runs **44/44 tests passing** in ~135 s including real vision extraction via LM Studio glm-4.6v-flash (~25 s for 3-page PDF). Every Sprint 10.1-10.5 feature is now regression-tested at the API + MCP boundaries.
+
+### Sprint 10.6 polish (P1-P5)
+- **P1** Chat search_documents tool result auto-expanded with inline top-3 chunk citations + "show N more" toggle (no click-to-see-sources)
+- **P2** Chunk search panel gained "Load more" button + backend limit raised 50 → 100 with MAX_RESULTS=100 ceiling + tip
+- **P3** Embedding-down amber banner with retry in chunk search panel (reads explanations.includes('embedding service unavailable'))
+- **P4** Mermaid fenced blocks now render as live diagrams everywhere via MermaidChunk (wired into MarkdownContent CodeBlock component)
+- **P5** "Re-extract All" header button + POST /api/documents/bulk-extract endpoint for project-wide vision re-extraction
+
+### Sprint 10.6 tests (T1-T4)
+- `test/e2e/api/phase10.test.ts` — 10 tests covering happy path (fast extract + optimistic lock + cascade delete), chunk search hybrid + validation, global search chunks group, image thumbnail endpoint, vision async flow + cancel + bulk, MCP search_document_chunks tool
+- Runner registers the suite and opts into MCP (`withMcp: true`)
+- `uploadFixture` helper gracefully reuses existing_doc_id on 409 duplicate (content_hash dedupe) — matches real re-upload flow
+- Vision tests gated on `SKIP_VISION_TESTS=false` so CI without LLM still passes
+
+### Live E2E results
+```
+44/44 passed, 0 failed (135553ms)
+phase10-happy-path-fast-extract      522ms
+phase10-chunk-search-hybrid          144ms
+phase10-chunk-search-invalid-type    1ms
+phase10-chunk-search-empty-query     1ms
+phase10-global-search-chunks-group   135ms
+phase10-image-thumbnail-endpoint     55ms
+phase10-vision-async-flow            25626ms (real LM Studio)
+phase10-vision-cancel-flow           579ms
+phase10-bulk-extract-smoke           63ms
+phase10-mcp-chunk-search-tool        2706ms
+```
+
+## Phase 10 Complete
+6 sprints, 41 files modified, 12 commits (including 4 review-fix commits catching 20 real issues before prod). End-to-end: upload any format → extract (fast / quality / vision) → chunk → embed → hybrid search (REST + Cmd+K + chat tool + MCP tool) with chunk edit/delete + optimistic locking + async job progress/cancel + bulk re-extract + mermaid rendering + image UX closed. First-class document retrieval for agents.
+
+## Sprint 10.5 history (prev)
 **Sprint 10.5 complete and live-tested (commit 41f9cf4).** Document chunks are now first-class in retrieval — hybrid pgvector+FTS search, Cmd+K palette, chat tool, MCP tool. Image upload UX closed: upload dialog accepts png/jpg/webp with live thumbnail, extraction selector preselects Vision for images, documents list shows inline thumbnails. 12 tasks (7 backend + 5 frontend). Both typechecks clean.
 
 ### Sprint 10.5 code review — 5 issues found + fixed (commit 4dab5b8)
