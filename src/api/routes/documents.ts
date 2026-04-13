@@ -11,6 +11,9 @@ import {
   listDocumentLessons,
 } from '../../services/documents.js';
 import { runExtraction, listDocumentChunks } from '../../services/extraction/pipeline.js';
+import { getPdfPageCount } from '../../services/extraction/pdfRender.js';
+import { estimateVisionCost } from '../../services/extraction/vision.js';
+import { enqueueJob } from '../../services/jobQueue.js';
 import type { ExtractionMode, ChunkTemplate } from '../../services/extraction/types.js';
 import { resolveProjectIdOrThrow } from '../../core/index.js';
 import { getDbPool } from '../../db/client.js';
@@ -257,7 +260,10 @@ router.get('/:id/lessons', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-/** POST /api/documents/:id/extract — Phase 10: run extraction pipeline */
+/** POST /api/documents/:id/extract — Phase 10: run extraction pipeline.
+ *  - fast/quality: synchronous, returns chunks immediately
+ *  - vision: enqueues an async job, returns { status: 'queued', job_id }
+ */
 router.post('/:id/extract', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
@@ -268,14 +274,45 @@ router.post('/:id/extract', async (req, res, next) => {
       res.status(400).json({ status: 'error', error: `Invalid mode: ${mode}` });
       return;
     }
+
+    // Vision mode is async — enqueue a job and return job_id
     if (mode === 'vision') {
-      res.status(501).json({
-        status: 'error',
-        error: 'Vision extraction is not yet implemented (Sprint 10.3)',
+      // Verify the document exists before enqueueing
+      const pool = getDbPool();
+      const exists = await pool.query(
+        `SELECT 1 FROM documents WHERE doc_id = $1 AND project_id = $2`,
+        [req.params.id, projectId],
+      );
+      if (exists.rowCount === 0) {
+        res.status(404).json({ status: 'error', error: 'Document not found' });
+        return;
+      }
+
+      // Mark document as processing
+      await pool.query(
+        `UPDATE documents SET extraction_status = 'processing' WHERE doc_id = $1`,
+        [req.params.id],
+      );
+
+      const job = await enqueueJob({
+        project_id: projectId,
+        job_type: 'document.extract.vision' as any,
+        payload: {
+          doc_id: req.params.id,
+          template: template ?? 'auto',
+        },
+        max_attempts: 1, // vision is expensive — don't retry by default
+      });
+      res.status(202).json({
+        status: 'queued',
+        mode: 'vision',
+        job_id: job.job_id,
+        backend: job.backend,
       });
       return;
     }
 
+    // Sync path for fast/quality
     const result = await runExtraction({
       docId: req.params.id,
       projectId,
@@ -299,6 +336,135 @@ router.post('/:id/extract', async (req, res, next) => {
     }
     next(e);
   }
+});
+
+/** POST /api/documents/:id/extract/estimate — Phase 10: cost/time estimate before extraction */
+router.post('/:id/extract/estimate', async (req, res, next) => {
+  try {
+    const projectId = resolveProjectIdOrThrow(req.body.project_id);
+    const mode = (req.body.mode ?? 'vision') as ExtractionMode;
+
+    const pool = getDbPool();
+    const docRes = await pool.query(
+      `SELECT doc_id, doc_type, content, file_size_bytes FROM documents
+       WHERE doc_id = $1 AND project_id = $2`,
+      [req.params.id, projectId],
+    );
+    if (docRes.rowCount === 0) {
+      res.status(404).json({ status: 'error', error: 'Document not found' });
+      return;
+    }
+    const doc = docRes.rows[0];
+
+    // For non-vision modes, return zero cost
+    if (mode !== 'vision') {
+      res.json({
+        mode,
+        page_count: null,
+        estimated_usd: 0,
+        per_page: 0,
+        provider: 'local',
+        estimated_seconds: 5,
+      });
+      return;
+    }
+
+    // Vision: count pages and apply pricing model
+    let pageCount = 1;
+    if (doc.doc_type === 'pdf') {
+      try {
+        const rawContent: string = doc.content ?? '';
+        const buffer = rawContent.startsWith('data:base64;')
+          ? Buffer.from(rawContent.slice('data:base64;'.length), 'base64')
+          : Buffer.from(rawContent, 'utf-8');
+        pageCount = await getPdfPageCount(buffer);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        res.status(422).json({ status: 'error', error: `Could not count PDF pages: ${msg}` });
+        return;
+      }
+    } else if (doc.doc_type === 'image') {
+      pageCount = 1;
+    } else {
+      // DOCX/EPUB/etc — page count unknown without converting
+      pageCount = 1;
+    }
+
+    const cost = estimateVisionCost(pageCount);
+    // Rough wall-clock estimate: ~10s/page for local models, ~3s/page for cloud
+    const secondsPerPage = cost.estimated_usd === null ? 10 : 3;
+
+    res.json({
+      mode,
+      page_count: pageCount,
+      estimated_usd: cost.estimated_usd,
+      per_page: cost.per_page,
+      provider: cost.provider,
+      estimated_seconds: pageCount * secondsPerPage,
+    });
+  } catch (e) { next(e); }
+});
+
+/** GET /api/documents/:id/extraction-status — Phase 10: poll for vision job status */
+router.get('/:id/extraction-status', async (req, res, next) => {
+  try {
+    const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
+    const pool = getDbPool();
+
+    // Fetch document status
+    const docRes = await pool.query(
+      `SELECT doc_id, extraction_status, extraction_mode, extracted_at FROM documents
+       WHERE doc_id = $1 AND project_id = $2`,
+      [req.params.id, projectId],
+    );
+    if (docRes.rowCount === 0) {
+      res.status(404).json({ status: 'error', error: 'Document not found' });
+      return;
+    }
+    const doc = docRes.rows[0];
+
+    // Fetch latest extraction job for this document
+    const jobRes = await pool.query(
+      `SELECT job_id, status, error_message, started_at, finished_at, attempts, max_attempts
+       FROM async_jobs
+       WHERE project_id = $1
+         AND payload->>'doc_id' = $2
+         AND job_type = 'document.extract.vision'
+       ORDER BY queued_at DESC
+       LIMIT 1`,
+      [projectId, req.params.id],
+    );
+    const job = jobRes.rows[0] ?? null;
+
+    // Count chunks if extraction is complete
+    let chunkCount: number | null = null;
+    if (doc.extraction_status === 'complete') {
+      const chunkRes = await pool.query(
+        `SELECT COUNT(*) AS cnt FROM document_chunks WHERE doc_id = $1`,
+        [req.params.id],
+      );
+      chunkCount = parseInt(chunkRes.rows[0]?.cnt ?? '0', 10);
+    }
+
+    res.json({
+      doc_id: doc.doc_id,
+      extraction_status: doc.extraction_status,
+      extraction_mode: doc.extraction_mode,
+      extracted_at: doc.extracted_at,
+      chunk_count: chunkCount,
+      job: job
+        ? {
+            job_id: job.job_id,
+            status: job.status,
+            error_message: job.error_message,
+            started_at: job.started_at,
+            finished_at: job.finished_at,
+            attempts: job.attempts,
+            max_attempts: job.max_attempts,
+          }
+        : null,
+    });
+  } catch (e) { next(e); }
 });
 
 /** GET /api/documents/:id/chunks — Phase 10: list extracted chunks */

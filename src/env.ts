@@ -195,6 +195,17 @@ const EnvSchema = z.object({
   JUDGE_AGENT_MODEL: z.string().min(1).optional(),
   JUDGE_AGENT_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(12_000),
 
+  // Phase 10: optional dedicated vision model endpoint for document extraction.
+  // Falls back to DISTILLATION_* then EMBEDDINGS_BASE_URL if unset.
+  VISION_BASE_URL: z.string().min(1).optional(),
+  VISION_API_KEY: z.string().optional(),
+  VISION_MODEL: z.string().min(1).optional(),
+  VISION_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(300_000),
+  /** Per-page DPI for PDF rendering (vision mode). 150 = good quality, 300 = high quality + larger. */
+  VISION_PDF_DPI: z.coerce.number().int().positive().optional().default(150),
+  /** Max tokens per page response. Thinking models need more. */
+  VISION_MAX_TOKENS: z.coerce.number().int().positive().optional().default(8192),
+
   // Phase 7: optional Redis cache for retrieval + rerank.
   REDIS_ENABLED: z
     .preprocess(v => parseBooleanEnv(v), z.boolean().optional())

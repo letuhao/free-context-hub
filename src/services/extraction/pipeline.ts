@@ -10,6 +10,7 @@ import { embedTexts } from '../embedder.js';
 import { createModuleLogger } from '../../utils/logger.js';
 import { extractFast } from './fastText.js';
 import { extractQuality } from './qualityText.js';
+import { extractVision } from './visionExtract.js';
 import { chunkDocument } from './chunker.js';
 import type {
   ExtractionMode,
@@ -40,9 +41,7 @@ export async function runExtraction(params: {
   const { docId, projectId, mode, template } = params;
   const pool = getDbPool();
 
-  if (mode === 'vision') {
-    throw new Error('Vision extraction not yet supported (Sprint 10.3)');
-  }
+  // Vision mode is supported as of Sprint 10.3
 
   // 1. Load document
   const docRes = await pool.query(
@@ -72,9 +71,11 @@ export async function runExtraction(params: {
 
     // 4. Extract
     const extraction: ExtractionResult =
-      mode === 'quality'
-        ? await extractQuality(buffer, ext)
-        : await extractFast(buffer, ext);
+      mode === 'vision'
+        ? await extractVision(buffer, ext, doc.doc_type)
+        : mode === 'quality'
+          ? await extractQuality(buffer, ext)
+          : await extractFast(buffer, ext);
 
     if (extraction.pages.length === 0 || extraction.pages.every((p) => !p.content.trim())) {
       throw new Error('Extraction produced no content');

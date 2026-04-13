@@ -470,6 +470,25 @@ async function executeByType(
       }
       return res as unknown as Record<string, unknown>;
     }
+    case 'document.extract.vision': {
+      if (!projectId) throw new Error('project_id is required for document.extract.vision');
+      const docId = String(payload.doc_id ?? '');
+      if (!docId) throw new Error('payload.doc_id is required');
+      const template = (payload.template ?? 'auto') as 'auto' | 'naive' | 'hierarchical';
+      // Lazy import to avoid circular deps
+      const { runExtraction } = await import('./extraction/pipeline.js');
+      const result = await runExtraction({
+        docId,
+        projectId,
+        mode: 'vision',
+        template,
+      });
+      return {
+        status: 'ok',
+        chunks: result.chunks.length,
+        pages: result.pages,
+      };
+    }
     default:
       throw new Error(`Unsupported job type: ${String(jobType)}`);
   }

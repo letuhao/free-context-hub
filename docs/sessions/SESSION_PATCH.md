@@ -182,6 +182,56 @@ Created comprehensive design document: `docs/phase10-extraction-pipeline.md`
 | Page navigator | ✅ Footer shows `p1 (1) | p2 (1) | p3 (1)` with active page highlighted |
 | Extraction progress UI (3s simulated delay) | ✅ Blue banner + spinner + elapsed counter + dimmed cards + disabled Cancel |
 
+### Phase 10 Sprint 10.3 — Vision Extraction Backend ✅
+
+**Backend pipeline (no GUI yet) — async via job queue, vision model integration.**
+
+#### Migrations
+- `0045_document_extract_vision_job.sql` — adds `document.extract.vision` to the `async_jobs.job_type` CHECK constraint. **Bug caught by live test:** initial enqueue failed with constraint violation, fixed in this migration.
+
+#### New services (`src/services/extraction/`)
+- `pdfRender.ts` — `renderPdfPages()` via `pdftoppm` (poppler-utils) returning per-page PNG buffers; `getPdfPageCount()` via `pdfinfo`. Uses temp dirs, cleans up after itself.
+- `vision.ts` — `extractPageVision()` calls OpenAI-compatible `/v1/chat/completions` with image_url content blocks (base64 data URI). Handles thinking-model `reasoning_content` fallback. Strips outer markdown fences. Plus `estimateVisionCost()` for known cloud models, returns null for local.
+- `visionExtract.ts` — high-level orchestrator: `extractVision(buffer, ext, docType)` dispatches PDF→render+per-page-loop, image→direct, DOCX/EPUB/etc→pandoc-to-PDF→render. Per-page errors captured as placeholder chunks (confidence: 0).
+
+#### Pipeline integration
+- `pipeline.ts` — `runExtraction()` now handles `mode === 'vision'` by calling `extractVision()`. Vision is no longer 501.
+
+#### Job queue integration
+- `jobQueue.ts` — added `'document.extract.vision'` to `JobType` union.
+- `jobExecutor.ts` — new `case 'document.extract.vision'` handler. Lazy-imports `runExtraction` to avoid circular deps.
+- `worker.ts` — already polls/consumes from RabbitMQ, no change needed.
+
+#### API endpoints (`documents.ts`)
+- `POST /api/documents/:id/extract` — for `mode: 'vision'`, marks document as `processing`, enqueues `document.extract.vision` job, returns HTTP 202 with `job_id`. For `fast`/`quality`, sync as before.
+- `POST /api/documents/:id/extract/estimate` — counts PDF pages via `pdfinfo`, applies cost model, returns `page_count`, `estimated_usd`, `per_page`, `provider`, `estimated_seconds`. Local models return null cost.
+- `GET /api/documents/:id/extraction-status` — polls document status + latest extraction job + chunk count. Used by the GUI to track async vision jobs.
+
+#### Environment
+- `env.ts` — new optional vars: `VISION_BASE_URL`, `VISION_API_KEY`, `VISION_MODEL`, `VISION_TIMEOUT_MS` (default 300s), `VISION_PDF_DPI` (default 150), `VISION_MAX_TOKENS` (default 8192).
+- `.env` — added `VISION_MODEL=zai-org/glm-4.6v-flash` + `VISION_BASE_URL=http://host.docker.internal:1234` for local LM Studio testing.
+- `Dockerfile` — added `ttf-dejavu fontconfig` to base image so pdftoppm renders text correctly (caught when test PDFs rendered as blank pages).
+
+#### Live Verification (against Docker stack + LM Studio + glm-4.6v-flash)
+| Test | Result |
+|---|---|
+| Cost estimate for 3-page PDF | ✅ 3 pages, null USD (local), provider `zai-org/glm-4.6v-flash`, 30s estimate |
+| Vision extraction enqueue | ✅ HTTP 202, `job_id`, `backend: rabbitmq` |
+| Worker picks up job (RabbitMQ) | ✅ Job claimed, transitions queued→running |
+| PDF rendering via pdftoppm | ✅ 3 pages → PNG buffers, fonts render correctly |
+| Per-page vision extraction | ✅ 3/3 pages, 0 failures, 18s total wall clock |
+| Chunk creation | ✅ 3 chunks, page 2 detected as `chunk_type: table` |
+| Table reproduction | ✅ Vision model produced perfect markdown table with pipe syntax |
+| Status polling endpoint | ✅ Returns extraction_status, mode, chunk_count, full job details |
+| Image upload + direct vision extract | ✅ PNG uploaded as `doc_type: image`, extracted in 14s, perfect markdown |
+| Job marked succeeded | ✅ `succeeded` status, finished_at set |
+
+#### Code review issues found and fixed during live test
+1. **Real bug**: `async_jobs.job_type` CHECK constraint rejected `document.extract.vision`. Fix: migration 0045.
+2. **Real bug**: `pdftoppm` produced blank PNGs without fonts ("Couldn't find a font for 'Helvetica'"). Fix: add `ttf-dejavu fontconfig` to Dockerfile.
+3. **Real bug**: `docker compose restart` did not reload `.env` changes. Fix: `up -d --force-recreate` (operational note, no code change).
+4. **Real bug**: New migration files require Docker rebuild (not just restart) since they're baked into the image at build time. Fix: `up -d --build mcp worker` (operational note).
+
 ## Commits This Session
 
 | Commit | Description | Files |
@@ -195,6 +245,8 @@ Created comprehensive design document: `docs/phase10-extraction-pipeline.md`
 | `157ac32` | [Session] Sprint 10.1 complete — update session patch | 1 |
 | `cd1862e` | Phase 10 Sprint 10.2: Extraction Review UI | 6 |
 | `60daa55` | [10.2] Review fixes — 6 issues from Sprint 10.2 code review | 5 |
+| `5d375b5` | [Session] Add per-sprint session-update rule + Sprint 10.2 patch entry | 2 |
+| (pending) | Phase 10 Sprint 10.3: Vision extraction backend + live test fixes | 11 |
 
 ## Summary
 
@@ -212,18 +264,20 @@ Created comprehensive design document: `docs/phase10-extraction-pipeline.md`
 
 ## What's Next
 
-### Sprint 10.3 — Vision Extraction Backend (next)
-- pdfjs-dist page rendering to images (server-side via sharp)
-- Model provider integration for vision (Anthropic/OpenAI/local VLM)
-- Single-prompt vision extraction with typed output (text/table/diagram/code/mermaid)
-- Job queue integration for long-running vision jobs
-
-### Sprint 10.4 — Vision Mode UI + Mermaid + Per-page mode
-- Vision mode in ExtractionModeSelector
-- Cost estimate before vision extraction
+### Sprint 10.4 — Vision Mode UI + Mermaid + Per-page mode (next)
+- Enable Vision mode card in `ExtractionModeSelector` (currently shows "Coming Sprint 10.3")
+- Cost estimate display in the selector (call `/extract/estimate` before user picks mode)
+- Async polling in the GUI: enqueue → poll `extraction-status` → show progress → display chunks
 - Mermaid diagram preview in review UI (renderer + editable source)
+- "Extract as Mermaid" per-page action (separate vision prompt)
 - Per-page mode selection (mix Fast/Quality/Vision in one document)
 - Page-count guard for huge documents (deferred from 10.2 #11)
 
-### Sprint 10.5 — Image upload + auto-recommendation
+### Sprint 10.5 — Auto-recommendation
+- Backend: detect document characteristics (text density, page complexity)
+- Frontend: "Recommended: Quality mode" hint based on detection
+
 ### Sprint 10.6 — Polish + integration tests
+- Quality benchmarking test set
+- E2E tests for the full extract flow
+- Documentation updates

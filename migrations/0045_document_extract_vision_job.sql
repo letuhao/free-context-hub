@@ -1,0 +1,23 @@
+-- Phase 10 Sprint 10.3: vision extraction job type.
+
+ALTER TABLE async_jobs
+  DROP CONSTRAINT IF EXISTS async_jobs_job_type_check;
+
+ALTER TABLE async_jobs
+  ADD CONSTRAINT async_jobs_job_type_check CHECK (
+    job_type IN (
+      'repo.sync',
+      'workspace.scan',
+      'workspace.delta_index',
+      'index.run',
+      'git.ingest',
+      'quality.eval',
+      'knowledge.refresh',
+      'faq.build',
+      'raptor.build',
+      'knowledge.loop.shallow',
+      'knowledge.loop.deep',
+      'knowledge.memory.build',
+      'document.extract.vision'
+    )
+  );
