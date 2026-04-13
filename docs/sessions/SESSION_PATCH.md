@@ -1,14 +1,30 @@
 ---
-id: CH-PHASE10-S101
+id: CH-PHASE10-S104
 date: 2026-04-13
-module: Phase10-Sprint10.1
+module: Phase10-Sprint10.4
 phase: IN_PROGRESS
 ---
 
-# Session Patch — 2026-04-13 (Session 7)
+# Session Patch — 2026-04-13 (Sprint 10.4)
 
 ## Where We Are
-**Sprint 10.1 complete and live-tested.** Backend text extraction pipeline (Fast Text + Quality Text modes) is working end-to-end against real PDF/DOCX/Markdown files. Code review found 12 issues, all fixed. Live Docker testing exposed 3 more real bugs (embedding dim, pdf-parse v2 API, migration backfill collision) — all fixed and verified. Ready to start Sprint 10.2 (GUI components).
+**Sprint 10.4 complete and live-tested.** Vision UI + mermaid + chunk edit/delete + async progress/cancel. Backend B0–B6 (migration 0046, updateChunk/deleteChunk with optimistic lock + re-embed, updateJobProgress/isJobCancelled/cancelJob, mermaid prompt template, 3 new endpoints) and frontend F1–F10 (Vision card enabled, cost estimate panel, ExtractionProgress modal with polling + cancel, mermaid renderer via npm `mermaid`, editable chunks with save/delete, confidence-aware page navigator + legend, "Extract as Mermaid" shortcut) all implemented. Both typechecks pass. Live-tested all flows end-to-end against real Docker stack + LM Studio (zai-org/glm-4.6v-flash).
+
+### Live-test results (Sprint 10.4)
+- ✅ `POST /extract/estimate` → 3 pages, glm-4.6v-flash provider, 30s ETA
+- ✅ `POST /extract` vision → 202 queued, job_id returned
+- ✅ Progress reporting: 0% "Extracting 3 pages" → 33% "1/3 pages (1 ok, 0 failed)" → 100% "3/3 pages"
+- ✅ Cancel mid-flight: `POST /jobs/:id/cancel` → status=cancelled, doc marked failed
+- ✅ Chunk update stale TS → 409 conflict (caught a real bug: node-pg returns TIMESTAMPTZ as Date, not string — fixed via toISOString normalization)
+- ✅ Chunk update fresh TS → 200 ok, content updated + re-embedded
+- ✅ Chunk delete → 200 ok
+- ✅ Mermaid prompt template → chunks correctly typed as `mermaid` by chunker (fenceLang detection)
+
+### Sprint 10.3 history
+Vision extraction backend shipped: pdftoppm PDF rendering, LM Studio + OpenAI vision API, per-page retry + concurrency + timeout + progress confidence, prompt templating, Alpine font fix. Code review found 10 quality issues — all fixed.
+
+### Sprint 10.1 history
+Backend text extraction pipeline (Fast + Quality modes) working end-to-end against real PDF/DOCX/Markdown files. 12 review issues + 3 live bugs fixed.
 
 ## What Was Done This Session
 

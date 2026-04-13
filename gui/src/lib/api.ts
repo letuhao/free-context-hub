@@ -168,12 +168,13 @@ export const api = {
     request<{ status: string; suggestions?: any[] }>("POST", `/api/documents/${encodeURIComponent(id)}/generate-lessons`, body),
 
   // ── Phase 10: extraction pipeline ──
-  extractDocument: (id: string, body: { project_id: string; mode: "fast" | "quality" | "vision"; template?: "auto" | "naive" | "hierarchical" }) =>
+  extractDocument: (id: string, body: { project_id: string; mode: "fast" | "quality" | "vision"; template?: "auto" | "naive" | "hierarchical"; prompt_template?: "default" | "mermaid" }) =>
     request<{
-      status: string;
+      status: string; // 'ok' (sync) | 'queued' (vision async)
       mode: string;
-      pages: number;
-      chunks: Array<{
+      // Sync fields (fast/quality)
+      pages?: number;
+      chunks?: Array<{
         chunk_id: string;
         doc_id: string;
         project_id: string;
@@ -186,7 +187,73 @@ export const api = {
         confidence: number | null;
         created_at: string;
       }>;
+      // Async fields (vision)
+      job_id?: string;
+      backend?: string;
     }>("POST", `/api/documents/${encodeURIComponent(id)}/extract`, body),
+
+  extractEstimate: (id: string, body: { project_id: string; mode: "fast" | "quality" | "vision" }) =>
+    request<{
+      mode: string;
+      page_count: number | null;
+      estimated_usd: number | null;
+      per_page: number | null;
+      provider: string;
+      estimated_seconds: number;
+    }>("POST", `/api/documents/${encodeURIComponent(id)}/extract/estimate`, body),
+
+  getExtractionStatus: (id: string, params: { project_id: string }) =>
+    request<{
+      doc_id: string;
+      extraction_status: string | null;
+      extraction_mode: string | null;
+      extracted_at: string | null;
+      chunk_count: number | null;
+      job: {
+        job_id: string;
+        status: string;
+        error_message: string | null;
+        started_at: string | null;
+        finished_at: string | null;
+        attempts: number;
+        max_attempts: number;
+        progress_pct: number | null;
+        progress_message: string | null;
+      } | null;
+    }>("GET", `/api/documents/${encodeURIComponent(id)}/extraction-status?${qs(params)}`),
+
+  cancelExtractionJob: (docId: string, jobId: string, body: { project_id: string }) =>
+    request<{ status: string }>(
+      "POST",
+      `/api/documents/${encodeURIComponent(docId)}/jobs/${encodeURIComponent(jobId)}/cancel`,
+      body,
+    ),
+
+  updateDocumentChunk: (docId: string, chunkId: string, body: { project_id: string; content: string; expected_updated_at?: string }) =>
+    request<{
+      status: string;
+      chunk?: {
+        chunk_id: string;
+        doc_id: string;
+        project_id: string;
+        chunk_index: number;
+        content: string;
+        page_number: number | null;
+        heading: string | null;
+        chunk_type: "text" | "table" | "diagram_description" | "mermaid" | "code";
+        extraction_mode: "fast" | "quality" | "vision" | null;
+        confidence: number | null;
+        created_at: string;
+        updated_at: string;
+      };
+      current?: any;
+    }>("PUT", `/api/documents/${encodeURIComponent(docId)}/chunks/${encodeURIComponent(chunkId)}`, body),
+
+  deleteDocumentChunk: (docId: string, chunkId: string, params: { project_id: string }) =>
+    request<{ status: string }>(
+      "DELETE",
+      `/api/documents/${encodeURIComponent(docId)}/chunks/${encodeURIComponent(chunkId)}?${qs(params)}`,
+    ),
 
   getDocumentChunks: (id: string, params: { project_id: string }) =>
     request<{

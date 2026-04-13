@@ -41,4 +41,5 @@ export interface DocumentChunk {
   extraction_mode: ExtractionMode | null;
   confidence: number | null;
   created_at: string;
+  updated_at?: string;
 }

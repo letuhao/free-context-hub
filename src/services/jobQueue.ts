@@ -19,7 +19,7 @@ export type JobType =
   | 'knowledge.memory.build'
   | 'document.extract.vision';
 
-type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'dead_letter';
+type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'dead_letter' | 'cancelled';
 
 type QueuePayload = {
   project_id?: string;
@@ -176,10 +176,53 @@ export async function completeJob(jobId: string): Promise<void> {
   const pool = getDbPool();
   await pool.query(
     `UPDATE async_jobs
-     SET status='succeeded', finished_at=now(), error_message=NULL
+     SET status='succeeded', finished_at=now(), error_message=NULL, progress_pct=100
      WHERE job_id=$1`,
     [jobId],
   );
+}
+
+/**
+ * Update job progress (called by long-running job handlers).
+ * progress is 0..100, message is a short human-readable status.
+ */
+export async function updateJobProgress(jobId: string, progress: number, message?: string): Promise<void> {
+  const pool = getDbPool();
+  await pool.query(
+    `UPDATE async_jobs
+     SET progress_pct = $2, progress_message = $3
+     WHERE job_id = $1`,
+    [jobId, Math.max(0, Math.min(100, progress)), message ?? null],
+  );
+}
+
+/**
+ * Check if a job has been cancelled. Long-running job handlers should call
+ * this between expensive steps (e.g., between pages in vision extraction).
+ * Returns true if the job is now in 'cancelled' status.
+ */
+export async function isJobCancelled(jobId: string): Promise<boolean> {
+  const pool = getDbPool();
+  const res = await pool.query(
+    `SELECT status FROM async_jobs WHERE job_id = $1`,
+    [jobId],
+  );
+  return res.rows[0]?.status === 'cancelled';
+}
+
+/**
+ * Mark a job as cancelled. Idempotent — if the job is already in a terminal
+ * state (succeeded/failed/dead_letter/cancelled), returns false.
+ */
+export async function cancelJob(jobId: string): Promise<boolean> {
+  const pool = getDbPool();
+  const res = await pool.query(
+    `UPDATE async_jobs
+     SET status = 'cancelled', finished_at = now(), error_message = 'Cancelled by user'
+     WHERE job_id = $1 AND status IN ('queued', 'running')`,
+    [jobId],
+  );
+  return (res.rowCount ?? 0) > 0;
 }
 
 export async function failJob(jobId: string, attempts: number, maxAttempts: number, error: string): Promise<JobStatus> {

@@ -475,6 +475,7 @@ async function executeByType(
       const docId = String(payload.doc_id ?? '');
       if (!docId) throw new Error('payload.doc_id is required');
       const template = (payload.template ?? 'auto') as 'auto' | 'naive' | 'hierarchical';
+      const promptTemplate = (payload.prompt_template ?? 'default') as 'default' | 'mermaid';
       // Lazy import to avoid circular deps
       const { runExtraction } = await import('./extraction/pipeline.js');
       const result = await runExtraction({
@@ -482,6 +483,8 @@ async function executeByType(
         projectId,
         mode: 'vision',
         template,
+        jobId: sourceJobId, // pass through for progress + cancel checks
+        promptTemplate,
       });
       return {
         status: 'ok',

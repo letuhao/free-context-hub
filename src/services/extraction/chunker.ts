@@ -239,7 +239,10 @@ function splitIntoBlocks(content: string): { text: string; type: ChunkType }[] {
       }
 
       const codeText = lines.slice(start, i + 1).join('\n');
-      blocks.push({ text: codeText, type: 'code' });
+      // Detect mermaid fence: ```mermaid → chunk_type 'mermaid' instead of generic 'code'
+      const fenceLang = lines[start].trim().slice(3).trim().toLowerCase();
+      const blockType: ChunkType = fenceLang === 'mermaid' ? 'mermaid' : 'code';
+      blocks.push({ text: codeText, type: blockType });
       i++;
       continue;
     }
@@ -279,6 +282,8 @@ function splitIntoBlocks(content: string): { text: string; type: ChunkType }[] {
 
 /** Detect chunk type from content (used for hierarchical sections). */
 function detectChunkType(content: string): ChunkType {
+  // Mermaid fence has priority over generic code (matches ```mermaid prefix)
+  if (content.includes('```mermaid')) return 'mermaid';
   if (content.includes('```')) return 'code';
   // Multi-line table heuristic: 2+ lines starting with |
   const tableLines = content.split('\n').filter((l) => l.trim().startsWith('|'));

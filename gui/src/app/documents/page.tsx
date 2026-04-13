@@ -14,6 +14,7 @@ import { UploadDialog } from "./upload-dialog";
 import { DocumentViewer } from "./document-viewer";
 import { ExtractionModeSelector } from "./extraction-mode-selector";
 import { ExtractionReview } from "./extraction-review";
+import { ExtractionProgress } from "./extraction-progress";
 import type { Doc, DocFilter, DocumentChunk } from "./types";
 
 const TYPE_BADGES: Record<string, string> = {
@@ -45,6 +46,8 @@ export default function DocumentsPage() {
   // chunks is undefined when opened from the "Chunks" button (will be fetched);
   // it's an array when opened immediately after a successful extraction.
   const [reviewDoc, setReviewDoc] = useState<{ doc: Doc; chunks?: DocumentChunk[] } | null>(null);
+  // Standalone vision job progress (used by "Extract as Mermaid" shortcut)
+  const [mermaidJob, setMermaidJob] = useState<{ doc: Doc; jobId: string } | null>(null);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const pageSize = 12;
@@ -255,6 +258,56 @@ export default function DocumentsPage() {
             setExtractMode(reviewDoc.doc);
             setReviewDoc(null);
           }}
+          onReExtractAsMermaid={async () => {
+            const docType = reviewDoc.doc.doc_type;
+            if (docType !== "pdf" && docType !== "image") {
+              toast("error", "Vision (Mermaid) mode supports PDF and images only");
+              return;
+            }
+            try {
+              const res = await api.extractDocument(reviewDoc.doc.doc_id, {
+                project_id: projectId,
+                mode: "vision",
+                prompt_template: "mermaid",
+              });
+              if (res.status === "queued" && res.job_id) {
+                setMermaidJob({ doc: reviewDoc.doc, jobId: res.job_id });
+                setReviewDoc(null);
+              } else {
+                toast("error", "Expected async vision job but got sync response");
+              }
+            } catch (err) {
+              toast("error", err instanceof Error ? err.message : "Failed to start mermaid extraction");
+            }
+          }}
+        />
+      )}
+
+      {/* F8: standalone vision-as-mermaid job progress */}
+      {mermaidJob && (
+        <ExtractionProgress
+          docId={mermaidJob.doc.doc_id}
+          docName={mermaidJob.doc.name}
+          jobId={mermaidJob.jobId}
+          onDone={async () => {
+            try {
+              const res = await api.getDocumentChunks(mermaidJob.doc.doc_id, { project_id: projectId });
+              setReviewDoc({ doc: mermaidJob.doc, chunks: res.chunks as DocumentChunk[] });
+              toast("success", `Mermaid extraction complete — ${res.chunks.length} chunks`);
+            } catch (err) {
+              toast("error", err instanceof Error ? err.message : "Failed to load chunks");
+            }
+            setMermaidJob(null);
+          }}
+          onCancelled={() => {
+            toast("info", "Mermaid extraction cancelled");
+            setMermaidJob(null);
+          }}
+          onFailed={(msg) => {
+            toast("error", msg || "Mermaid extraction failed");
+            setMermaidJob(null);
+          }}
+          onClose={() => setMermaidJob(null)}
         />
       )}
     </div>

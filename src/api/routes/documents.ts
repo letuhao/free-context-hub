@@ -10,10 +10,10 @@ import {
   unlinkDocumentFromLesson,
   listDocumentLessons,
 } from '../../services/documents.js';
-import { runExtraction, listDocumentChunks } from '../../services/extraction/pipeline.js';
+import { runExtraction, listDocumentChunks, updateChunk, deleteChunk } from '../../services/extraction/pipeline.js';
 import { getPdfPageCount } from '../../services/extraction/pdfRender.js';
 import { estimateVisionCost } from '../../services/extraction/vision.js';
-import { enqueueJob } from '../../services/jobQueue.js';
+import { enqueueJob, cancelJob } from '../../services/jobQueue.js';
 import type { ExtractionMode, ChunkTemplate } from '../../services/extraction/types.js';
 import { resolveProjectIdOrThrow } from '../../core/index.js';
 import { getDbPool } from '../../db/client.js';
@@ -315,6 +315,7 @@ router.post('/:id/extract', async (req, res, next) => {
         payload: {
           doc_id: req.params.id,
           template: template ?? 'auto',
+          prompt_template: req.body.prompt_template ?? 'default',
         },
         max_attempts: 1, // vision is expensive — don't retry by default
       });
@@ -440,7 +441,8 @@ router.get('/:id/extraction-status', async (req, res, next) => {
 
     // Fetch latest extraction job for this document
     const jobRes = await pool.query(
-      `SELECT job_id, status, error_message, started_at, finished_at, attempts, max_attempts
+      `SELECT job_id, status, error_message, started_at, finished_at, attempts, max_attempts,
+              progress_pct, progress_message
        FROM async_jobs
        WHERE project_id = $1
          AND payload->>'doc_id' = $2
@@ -476,6 +478,8 @@ router.get('/:id/extraction-status', async (req, res, next) => {
             finished_at: job.finished_at,
             attempts: job.attempts,
             max_attempts: job.max_attempts,
+            progress_pct: job.progress_pct,
+            progress_message: job.progress_message,
           }
         : null,
     });
@@ -491,6 +495,85 @@ router.get('/:id/chunks', async (req, res, next) => {
       projectId,
     });
     res.json(result);
+  } catch (e) { next(e); }
+});
+
+/** PUT /api/documents/:id/chunks/:chunkId — Phase 10.4: edit a single chunk's content. */
+router.put('/:id/chunks/:chunkId', async (req, res, next) => {
+  try {
+    const projectId = resolveProjectIdOrThrow(req.body.project_id);
+    const content = String(req.body.content ?? '').trim();
+    if (!content) {
+      res.status(400).json({ status: 'error', error: 'content is required' });
+      return;
+    }
+    const expectedUpdatedAt: string | undefined = req.body.expected_updated_at;
+
+    const result = await updateChunk({
+      docId: req.params.id,
+      chunkId: req.params.chunkId,
+      projectId,
+      content,
+      expectedUpdatedAt,
+    });
+
+    if (result.status === 'not_found') {
+      res.status(404).json({ status: 'error', error: 'chunk not found' });
+      return;
+    }
+    if (result.status === 'conflict') {
+      res.status(409).json({
+        status: 'conflict',
+        error: 'Chunk was modified by another request. Reload and try again.',
+        current: result.current,
+      });
+      return;
+    }
+    res.json({ status: 'ok', chunk: result.chunk });
+  } catch (e) { next(e); }
+});
+
+/** DELETE /api/documents/:id/chunks/:chunkId — Phase 10.4: remove a chunk (skip). */
+router.delete('/:id/chunks/:chunkId', async (req, res, next) => {
+  try {
+    const projectId = resolveProjectIdOrThrow(
+      (req.query.project_id as string | undefined) ?? req.body?.project_id,
+    );
+    const deleted = await deleteChunk({
+      docId: req.params.id,
+      chunkId: req.params.chunkId,
+      projectId,
+    });
+    if (!deleted) {
+      res.status(404).json({ status: 'error', error: 'chunk not found' });
+      return;
+    }
+    res.json({ status: 'ok' });
+  } catch (e) { next(e); }
+});
+
+/** POST /api/documents/:id/jobs/:jobId/cancel — Phase 10.4: cancel a running extraction job. */
+router.post('/:id/jobs/:jobId/cancel', async (req, res, next) => {
+  try {
+    resolveProjectIdOrThrow(req.body.project_id);
+    const cancelled = await cancelJob(req.params.jobId);
+    if (!cancelled) {
+      res.status(409).json({
+        status: 'error',
+        error: 'Job is not in a cancellable state (already finished or never started)',
+      });
+      return;
+    }
+    // Also reset the document's extraction_status from 'processing' so the GUI can re-extract.
+    const { getDbPool } = await import('../../db/client.js');
+    const pool = getDbPool();
+    await pool.query(
+      `UPDATE documents
+       SET extraction_status = 'failed'
+       WHERE doc_id = $1 AND extraction_status = 'processing'`,
+      [req.params.id],
+    );
+    res.json({ status: 'ok' });
   } catch (e) { next(e); }
 });
 

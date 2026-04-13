@@ -18,9 +18,50 @@ import { createModuleLogger } from '../../utils/logger.js';
 import { renderPdfPages } from './pdfRender.js';
 import { extractPageVision } from './vision.js';
 import { getEnv } from '../../env.js';
+import { isJobCancelled, updateJobProgress } from '../jobQueue.js';
 import type { ExtractionResult, ExtractedPage } from './types.js';
 
 const logger = createModuleLogger('extraction:vision-extract');
+
+/** Custom error thrown when the user cancels an in-progress job. */
+export class JobCancelledError extends Error {
+  constructor(message = 'Job cancelled by user') {
+    super(message);
+    this.name = 'JobCancelledError';
+  }
+}
+
+export interface VisionExtractOptions {
+  /** Optional job ID for progress reporting + cancellation checks. */
+  jobId?: string;
+  /** Custom prompt template — overrides the default structured-markdown prompt. */
+  promptTemplate?: 'default' | 'mermaid';
+}
+
+const MERMAID_PROMPT = `This page may contain a diagram, flowchart, or visual relationship.
+
+Reproduce it as Mermaid code so it can be rendered in markdown.
+
+Rules:
+- Use the most appropriate Mermaid diagram type: graph LR / graph TD (flowchart),
+  sequenceDiagram, classDiagram, stateDiagram, erDiagram
+- Preserve all node labels, edge labels, and directional relationships
+- If the page also contains text alongside the diagram, include that as a brief
+  summary AFTER the mermaid block
+- If you cannot reproduce it as Mermaid (e.g., the page has no diagram at all),
+  output a plain markdown description instead
+
+Output format:
+\`\`\`mermaid
+[mermaid code]
+\`\`\`
+
+Brief description: [1-2 sentences explaining what the diagram shows]`;
+
+function getPromptForTemplate(template?: 'default' | 'mermaid'): string | undefined {
+  if (template === 'mermaid') return MERMAID_PROMPT;
+  return undefined; // default — extractPageVision uses its built-in default
+}
 
 /**
  * Run vision-based extraction over a document buffer.
@@ -28,11 +69,13 @@ const logger = createModuleLogger('extraction:vision-extract');
  * @param buffer Raw file bytes
  * @param ext File extension (lowercase, no dot)
  * @param docType Original doc_type from the documents table
+ * @param options Optional jobId for progress + promptTemplate
  */
 export async function extractVision(
   buffer: Buffer,
   ext: string,
   docType: string,
+  options: VisionExtractOptions = {},
 ): Promise<ExtractionResult> {
   const env = getEnv();
   const normalized = ext.toLowerCase().replace(/^\./, '');
@@ -41,27 +84,33 @@ export async function extractVision(
 
   // Image: send directly as a single page
   if (normalized === 'image' || docType === 'image' || ['png', 'jpg', 'jpeg', 'webp'].includes(normalized)) {
-    return extractImageDirect(buffer, maxTokens);
+    return extractImageDirect(buffer, maxTokens, options);
   }
 
   // PDF: render pages and process each
   if (normalized === 'pdf') {
-    return extractPdfPages(buffer, dpi, maxTokens);
+    return extractPdfPages(buffer, dpi, maxTokens, options);
   }
 
   // DOCX/EPUB/ODT/RTF/HTML: convert to PDF first via pandoc, then render
   if (['docx', 'epub', 'odt', 'rtf', 'html'].includes(normalized)) {
     const pdfBuffer = await convertToPdfViaPandoc(buffer, normalized);
-    return extractPdfPages(pdfBuffer, dpi, maxTokens);
+    return extractPdfPages(pdfBuffer, dpi, maxTokens, options);
   }
 
   throw new Error(`Vision extraction does not support .${normalized} files`);
 }
 
 /** Render a PDF buffer and run vision extraction page by page. */
-async function extractPdfPages(buffer: Buffer, dpi: number, maxTokens: number): Promise<ExtractionResult> {
+async function extractPdfPages(
+  buffer: Buffer,
+  dpi: number,
+  maxTokens: number,
+  options: VisionExtractOptions,
+): Promise<ExtractionResult> {
   const env = getEnv();
   const concurrency = env.VISION_CONCURRENCY;
+  const customPrompt = getPromptForTemplate(options.promptTemplate);
 
   const rendered = await renderPdfPages(buffer, dpi);
   if (rendered.length === 0) {
@@ -69,9 +118,14 @@ async function extractPdfPages(buffer: Buffer, dpi: number, maxTokens: number): 
   }
 
   logger.info(
-    { pages: rendered.length, dpi, concurrency },
+    { pages: rendered.length, dpi, concurrency, prompt_template: options.promptTemplate ?? 'default' },
     'pdf rendered, dispatching to vision model',
   );
+
+  // Initial progress
+  if (options.jobId) {
+    await updateJobProgress(options.jobId, 0, `Extracting ${rendered.length} pages`);
+  }
 
   // Use a worker pool: up to `concurrency` pages extracted in parallel.
   // Local LM Studio handles one request at a time anyway; cloud APIs benefit from parallelism.
@@ -79,17 +133,27 @@ async function extractPdfPages(buffer: Buffer, dpi: number, maxTokens: number): 
   let succeeded = 0;
   let failed = 0;
   let truncated = 0;
+  let completed = 0;
   let cursor = 0;
+  let cancelled = false;
 
   async function worker(): Promise<void> {
-    while (true) {
+    while (!cancelled) {
       const idx = cursor++;
       if (idx >= rendered.length) return;
       const r = rendered[idx];
+
+      // Cancellation check before each page
+      if (options.jobId && (await isJobCancelled(options.jobId))) {
+        cancelled = true;
+        return;
+      }
+
       try {
         const result = await extractPageVision({
           imagePng: r.image,
           maxTokens,
+          prompt: customPrompt,
         });
         pages[idx] = {
           page_number: r.page_number,
@@ -109,12 +173,26 @@ async function extractPdfPages(buffer: Buffer, dpi: number, maxTokens: number): 
         };
         failed++;
       }
+
+      completed++;
+      if (options.jobId) {
+        const pct = (completed / rendered.length) * 100;
+        await updateJobProgress(
+          options.jobId,
+          pct,
+          `${completed}/${rendered.length} pages (${succeeded} ok, ${failed} failed)`,
+        );
+      }
     }
   }
 
   // Spawn `concurrency` workers
   const workers = Array.from({ length: Math.min(concurrency, rendered.length) }, () => worker());
   await Promise.all(workers);
+
+  if (cancelled) {
+    throw new JobCancelledError(`Cancelled after ${completed}/${rendered.length} pages`);
+  }
 
   logger.info(
     { total_pages: rendered.length, succeeded, failed, truncated },
@@ -129,11 +207,26 @@ async function extractPdfPages(buffer: Buffer, dpi: number, maxTokens: number): 
 }
 
 /** Send a raw image buffer directly to the vision model as a single page. */
-async function extractImageDirect(buffer: Buffer, maxTokens: number): Promise<ExtractionResult> {
+async function extractImageDirect(
+  buffer: Buffer,
+  maxTokens: number,
+  options: VisionExtractOptions,
+): Promise<ExtractionResult> {
+  const customPrompt = getPromptForTemplate(options.promptTemplate);
+
+  if (options.jobId) {
+    await updateJobProgress(options.jobId, 0, 'Extracting image');
+  }
+
   const result = await extractPageVision({
     imagePng: buffer,
     maxTokens,
+    prompt: customPrompt,
   });
+
+  if (options.jobId) {
+    await updateJobProgress(options.jobId, 100, '1/1 page complete');
+  }
 
   logger.info({ chars: result.markdown.length }, 'vision image extraction complete');
 

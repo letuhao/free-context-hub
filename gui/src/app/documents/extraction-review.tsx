@@ -5,8 +5,9 @@ import { useProject } from "@/contexts/project-context";
 import { useToast } from "@/components/ui/toast";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui";
-import { X, FileText, Table as TableIcon, Code, FileImage, Hash } from "lucide-react";
+import { X, FileText, Table as TableIcon, Code, FileImage, Hash, Edit2, Trash2, Save, Wand2 } from "lucide-react";
 import { MarkdownContent } from "../chat/markdown-content";
+import { MermaidChunk } from "./mermaid-chunk";
 import type { Doc, DocumentChunk, ChunkType } from "./types";
 
 interface ExtractionReviewProps {
@@ -15,6 +16,8 @@ interface ExtractionReviewProps {
   initialChunks?: DocumentChunk[];
   onClose: () => void;
   onReExtract?: () => void;
+  /** Optional: trigger re-extraction with a specific prompt template (F8). */
+  onReExtractAsMermaid?: () => void;
 }
 
 const TYPE_BADGE: Record<ChunkType, { label: string; cls: string; icon: any }> = {
@@ -25,13 +28,29 @@ const TYPE_BADGE: Record<ChunkType, { label: string; cls: string; icon: any }> =
   mermaid: { label: "mermaid", cls: "bg-cyan-500/15 text-cyan-400", icon: FileImage },
 };
 
-export function ExtractionReview({ open, doc, initialChunks, onClose, onReExtract }: ExtractionReviewProps) {
+/** Colour for confidence indicator (F10). */
+function confidenceColor(conf: number | null): { bg: string; text: string; label: string } {
+  if (conf === null) return { bg: "bg-zinc-800", text: "text-zinc-500", label: "n/a" };
+  if (conf >= 0.9) return { bg: "bg-emerald-500/15", text: "text-emerald-400", label: "high" };
+  if (conf >= 0.5) return { bg: "bg-amber-500/15", text: "text-amber-400", label: "partial" };
+  return { bg: "bg-red-500/15", text: "text-red-400", label: "failed" };
+}
+
+export function ExtractionReview({ open, doc, initialChunks, onClose, onReExtract, onReExtractAsMermaid }: ExtractionReviewProps) {
   const { projectId } = useProject();
   const { toast } = useToast();
 
   const [chunks, setChunks] = useState<DocumentChunk[]>(initialChunks ?? []);
   const [loading, setLoading] = useState(!initialChunks);
   const [activeChunkIdx, setActiveChunkIdx] = useState(0);
+
+  // F6: chunk editing state
+  const [editing, setEditing] = useState(false);
+  const [editBuffer, setEditBuffer] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // F7: delete-in-progress
+  const [deleting, setDeleting] = useState(false);
 
   const fetchChunks = useCallback(async () => {
     setLoading(true);
@@ -52,9 +71,6 @@ export function ExtractionReview({ open, doc, initialChunks, onClose, onReExtrac
     if (open && !initialChunks) fetchChunks();
   }, [open, initialChunks, fetchChunks]);
 
-  // Sync state when initialChunks prop changes (e.g. after re-extraction).
-  // Also reset the active chunk pointer to avoid out-of-bounds when chunk
-  // count shrinks.
   useEffect(() => {
     if (initialChunks) {
       setChunks(initialChunks);
@@ -62,20 +78,34 @@ export function ExtractionReview({ open, doc, initialChunks, onClose, onReExtrac
     }
   }, [initialChunks]);
 
-  // Clamp activeChunkIdx if chunks array shrinks for any reason
   useEffect(() => {
     if (activeChunkIdx >= chunks.length && chunks.length > 0) {
       setActiveChunkIdx(0);
     }
   }, [chunks.length, activeChunkIdx]);
 
-  // ESC closes
+  // Cancel edit mode whenever the active chunk changes
+  useEffect(() => {
+    setEditing(false);
+    setEditBuffer("");
+  }, [activeChunkIdx]);
+
+  // ESC closes (but first exits edit mode if active)
   useEffect(() => {
     if (!open) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (editing) {
+          setEditing(false);
+          setEditBuffer("");
+        } else {
+          onClose();
+        }
+      }
+    };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [open, onClose]);
+  }, [open, onClose, editing]);
 
   // Group chunks by page for the navigator
   const pages = useMemo(() => {
@@ -89,16 +119,76 @@ export function ExtractionReview({ open, doc, initialChunks, onClose, onReExtrac
       key,
       label: typeof key === "number" ? `p${key}` : "all",
       chunks: list.sort((a, b) => a.chunk_index - b.chunk_index),
+      // Worst confidence on the page (drives F10 page badge colour)
+      minConfidence: list.reduce<number | null>((acc, c) => {
+        if (c.confidence === null) return acc;
+        return acc === null ? c.confidence : Math.min(acc, c.confidence);
+      }, null),
     }));
   }, [chunks]);
 
   const activeChunk = chunks[activeChunkIdx];
 
+  // F6: save edited content
+  const handleSaveEdit = async () => {
+    if (!activeChunk || saving) return;
+    const trimmed = editBuffer.trim();
+    if (!trimmed) {
+      toast("error", "Chunk content cannot be empty — use Delete instead");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await api.updateDocumentChunk(doc.doc_id, activeChunk.chunk_id, {
+        project_id: projectId,
+        content: trimmed,
+        expected_updated_at: activeChunk.updated_at,
+      });
+      if (res.status === "ok" && res.chunk) {
+        setChunks((prev) =>
+          prev.map((c) => (c.chunk_id === activeChunk.chunk_id ? (res.chunk as DocumentChunk) : c)),
+        );
+        toast("success", "Chunk saved and re-embedded");
+        setEditing(false);
+        setEditBuffer("");
+      } else {
+        toast("error", "Failed to save chunk");
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Save failed";
+      if (msg.includes("409")) {
+        toast("error", "Chunk was modified elsewhere — reload and try again");
+      } else {
+        toast("error", msg);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // F7: delete (skip) chunk
+  const handleDelete = async () => {
+    if (!activeChunk || deleting) return;
+    if (!confirm(`Delete chunk #${activeChunk.chunk_index}? This cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      await api.deleteDocumentChunk(doc.doc_id, activeChunk.chunk_id, { project_id: projectId });
+      setChunks((prev) => prev.filter((c) => c.chunk_id !== activeChunk.chunk_id));
+      toast("success", "Chunk deleted");
+      // Adjust pointer
+      setActiveChunkIdx((idx) => Math.max(0, Math.min(idx, chunks.length - 2)));
+    } catch (err) {
+      toast("error", err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (!open) return null;
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60]" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60]" onClick={() => { if (!editing) onClose(); }} />
       <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
         <div role="dialog" aria-label="Extraction review" className="w-full h-[90vh] max-w-7xl bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl flex flex-col overflow-hidden">
           {/* Header */}
@@ -120,6 +210,11 @@ export function ExtractionReview({ open, doc, initialChunks, onClose, onReExtrac
               )}
             </div>
             <div className="flex items-center gap-2">
+              {onReExtractAsMermaid && chunks.length > 0 && (
+                <Button variant="outline" size="sm" onClick={onReExtractAsMermaid} title="Re-run vision extraction with a diagram-focused prompt">
+                  <Wand2 size={12} className="mr-1" /> Extract as Mermaid
+                </Button>
+              )}
               {onReExtract && chunks.length > 0 && (
                 <Button variant="outline" size="sm" onClick={onReExtract}>
                   Re-extract
@@ -161,6 +256,7 @@ export function ExtractionReview({ open, doc, initialChunks, onClose, onReExtrac
                     const isActive = i === activeChunkIdx;
                     const badge = TYPE_BADGE[c.chunk_type];
                     const Icon = badge.icon;
+                    const conf = confidenceColor(c.confidence);
                     return (
                       <button
                         key={c.chunk_id}
@@ -177,6 +273,11 @@ export function ExtractionReview({ open, doc, initialChunks, onClose, onReExtrac
                           {c.page_number !== null && (
                             <span className="text-[10px] text-zinc-600">p{c.page_number}</span>
                           )}
+                          {c.confidence !== null && c.confidence < 0.9 && (
+                            <span className={`text-[9px] px-1 py-0.5 rounded ${conf.bg} ${conf.text}`} title={`confidence ${(c.confidence * 100).toFixed(0)}%`}>
+                              {conf.label}
+                            </span>
+                          )}
                           <span className={`ml-auto text-[9px] px-1.5 py-0.5 rounded ${badge.cls}`}>
                             {badge.label}
                           </span>
@@ -190,25 +291,80 @@ export function ExtractionReview({ open, doc, initialChunks, onClose, onReExtrac
                 </div>
               </div>
 
-              {/* Right pane: active chunk preview */}
+              {/* Right pane: active chunk preview / editor */}
               <div className="flex-1 flex flex-col min-h-0">
                 {activeChunk && (
                   <>
-                    <div className="px-5 py-3 border-b border-zinc-800 shrink-0 flex items-center gap-3">
+                    <div className="px-5 py-3 border-b border-zinc-800 shrink-0 flex items-center gap-3 flex-wrap">
                       <span className="text-xs font-medium text-zinc-300">
                         Chunk #{activeChunk.chunk_index}
                       </span>
                       {activeChunk.heading && (
-                        <span className="text-xs text-zinc-500 truncate">
+                        <span className="text-xs text-zinc-500 truncate max-w-xs">
                           {activeChunk.heading}
+                        </span>
+                      )}
+                      {activeChunk.confidence !== null && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${confidenceColor(activeChunk.confidence).bg} ${confidenceColor(activeChunk.confidence).text}`}>
+                          conf {(activeChunk.confidence * 100).toFixed(0)}%
                         </span>
                       )}
                       <span className="ml-auto text-[10px] text-zinc-600">
                         {activeChunk.content.length} chars
                       </span>
+                      {!editing ? (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setEditing(true);
+                              setEditBuffer(activeChunk.content);
+                            }}
+                          >
+                            <Edit2 size={11} className="mr-1" /> Edit
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleDelete}
+                            disabled={deleting}
+                          >
+                            <Trash2 size={11} className="mr-1" /> {deleting ? "Deleting…" : "Skip"}
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => { setEditing(false); setEditBuffer(""); }}
+                            disabled={saving}
+                          >
+                            Cancel
+                          </Button>
+                          <button
+                            onClick={handleSaveEdit}
+                            disabled={saving}
+                            className="px-3 py-1 text-[11px] bg-blue-600 hover:bg-blue-500 rounded text-white font-medium disabled:opacity-50 flex items-center gap-1"
+                          >
+                            <Save size={11} /> {saving ? "Saving…" : "Save & re-embed"}
+                          </button>
+                        </>
+                      )}
                     </div>
                     <div className="flex-1 overflow-y-auto px-6 py-5">
-                      {activeChunk.chunk_type === "code" || activeChunk.chunk_type === "mermaid" ? (
+                      {editing ? (
+                        <textarea
+                          value={editBuffer}
+                          onChange={(e) => setEditBuffer(e.target.value)}
+                          className="w-full h-full min-h-[400px] bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-xs text-zinc-200 font-mono leading-relaxed resize-none focus:outline-none focus:border-blue-500"
+                          spellCheck={false}
+                          autoFocus
+                        />
+                      ) : activeChunk.chunk_type === "mermaid" ? (
+                        <MermaidChunk code={activeChunk.content} />
+                      ) : activeChunk.chunk_type === "code" ? (
                         <pre className="text-xs text-zinc-300 font-mono whitespace-pre-wrap leading-relaxed">
                           {activeChunk.content}
                         </pre>
@@ -222,30 +378,43 @@ export function ExtractionReview({ open, doc, initialChunks, onClose, onReExtrac
             </div>
           )}
 
-          {/* Page navigator footer */}
-          {pages.length > 1 && (
-            <div className="border-t border-zinc-800 px-4 py-2 shrink-0 flex items-center gap-3">
-              <span className="text-[10px] text-zinc-600">Pages:</span>
-              <div className="flex gap-1 overflow-x-auto">
-                {pages.map((p) => {
-                  const firstChunkIdx = chunks.findIndex((c) => c.chunk_index === p.chunks[0].chunk_index);
-                  const isOnPage =
-                    activeChunk?.page_number === (typeof p.key === "number" ? p.key : null);
-                  return (
-                    <button
-                      key={String(p.key)}
-                      onClick={() => setActiveChunkIdx(firstChunkIdx)}
-                      className={`px-2 py-1 rounded text-[10px] font-medium transition-colors ${
-                        isOnPage
-                          ? "bg-blue-500/15 text-blue-400 border border-blue-500/40"
-                          : "bg-zinc-800 text-zinc-500 hover:text-zinc-300 border border-transparent"
-                      }`}
-                    >
-                      {p.label}
-                      <span className="ml-1 text-[9px] opacity-60">({p.chunks.length})</span>
-                    </button>
-                  );
-                })}
+          {/* F10: Page navigator footer with confidence legend */}
+          {pages.length > 0 && (
+            <div className="border-t border-zinc-800 px-4 py-2 shrink-0 flex items-center gap-3 flex-wrap">
+              {pages.length > 1 && (
+                <>
+                  <span className="text-[10px] text-zinc-600">Pages:</span>
+                  <div className="flex gap-1 overflow-x-auto">
+                    {pages.map((p) => {
+                      const firstChunkIdx = chunks.findIndex((c) => c.chunk_index === p.chunks[0].chunk_index);
+                      const isOnPage =
+                        activeChunk?.page_number === (typeof p.key === "number" ? p.key : null);
+                      const conf = confidenceColor(p.minConfidence);
+                      return (
+                        <button
+                          key={String(p.key)}
+                          onClick={() => setActiveChunkIdx(firstChunkIdx)}
+                          className={`px-2 py-1 rounded text-[10px] font-medium transition-colors border ${
+                            isOnPage
+                              ? "bg-blue-500/15 text-blue-400 border-blue-500/40"
+                              : `${conf.bg} ${conf.text} border-transparent hover:border-zinc-700`
+                          }`}
+                          title={p.minConfidence !== null ? `min confidence: ${(p.minConfidence * 100).toFixed(0)}%` : undefined}
+                        >
+                          {p.label}
+                          <span className="ml-1 text-[9px] opacity-60">({p.chunks.length})</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+              {/* Confidence legend */}
+              <div className="ml-auto flex items-center gap-2 text-[9px] text-zinc-600">
+                <span>Confidence:</span>
+                <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400">high</span>
+                <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">partial</span>
+                <span className="px-1.5 py-0.5 rounded bg-red-500/15 text-red-400">failed</span>
               </div>
             </div>
           )}

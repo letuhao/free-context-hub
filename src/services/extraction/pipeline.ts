@@ -37,8 +37,12 @@ export async function runExtraction(params: {
   projectId: string;
   mode: ExtractionMode;
   template?: ChunkTemplate;
+  /** Optional job ID for progress reporting + cancellation (vision mode only). */
+  jobId?: string;
+  /** Optional prompt template (vision mode only). 'mermaid' uses the diagram-extraction prompt. */
+  promptTemplate?: 'default' | 'mermaid';
 }): Promise<{ chunks: DocumentChunk[]; pages: number }> {
-  const { docId, projectId, mode, template } = params;
+  const { docId, projectId, mode, template, jobId, promptTemplate } = params;
   const pool = getDbPool();
 
   // Vision mode is supported as of Sprint 10.3
@@ -72,7 +76,7 @@ export async function runExtraction(params: {
     // 4. Extract
     const extraction: ExtractionResult =
       mode === 'vision'
-        ? await extractVision(buffer, ext, doc.doc_type)
+        ? await extractVision(buffer, ext, doc.doc_type, { jobId, promptTemplate })
         : mode === 'quality'
           ? await extractQuality(buffer, ext)
           : await extractFast(buffer, ext);
@@ -294,11 +298,86 @@ export async function listDocumentChunks(params: {
   const pool = getDbPool();
   const result = await pool.query(
     `SELECT chunk_id, doc_id, project_id, chunk_index, content, page_number,
-            heading, chunk_type, extraction_mode, confidence, created_at
+            heading, chunk_type, extraction_mode, confidence, created_at,
+            updated_at
      FROM document_chunks
      WHERE doc_id = $1 AND project_id = $2
      ORDER BY chunk_index ASC`,
     [params.docId, params.projectId],
   );
   return { chunks: result.rows as DocumentChunk[], total: result.rows.length };
+}
+
+/**
+ * Update a single chunk's content. Re-embeds the chunk so semantic search
+ * reflects the edit. Optimistic locking via expected_updated_at — pass the
+ * value the client read; if it doesn't match the current row, returns
+ * { status: 'conflict' } without modifying anything.
+ */
+export async function updateChunk(params: {
+  docId: string;
+  chunkId: string;
+  projectId: string;
+  content: string;
+  expectedUpdatedAt?: string;
+}): Promise<{ status: 'ok'; chunk: DocumentChunk } | { status: 'conflict'; current: DocumentChunk } | { status: 'not_found' }> {
+  const pool = getDbPool();
+
+  // Fetch current row
+  const existingRes = await pool.query(
+    `SELECT chunk_id, doc_id, project_id, chunk_index, content, page_number,
+            heading, chunk_type, extraction_mode, confidence, created_at, updated_at
+     FROM document_chunks
+     WHERE chunk_id = $1 AND doc_id = $2 AND project_id = $3`,
+    [params.chunkId, params.docId, params.projectId],
+  );
+  if (existingRes.rows.length === 0) return { status: 'not_found' };
+  const existing = existingRes.rows[0] as DocumentChunk & { updated_at: Date | string };
+
+  // Optimistic lock check — node-postgres returns TIMESTAMPTZ as a JS Date,
+  // so normalize to ISO before string-comparing against the client's value.
+  if (params.expectedUpdatedAt) {
+    const currentIso =
+      existing.updated_at instanceof Date
+        ? existing.updated_at.toISOString()
+        : String(existing.updated_at);
+    if (currentIso !== params.expectedUpdatedAt) {
+      return { status: 'conflict', current: existing as any };
+    }
+  }
+
+  // Re-embed the new content (sync, single embedding call ~200ms)
+  const [embedding] = await embedTexts([params.content]);
+  const embeddingLiteral = `[${embedding.join(',')}]`;
+
+  const updateRes = await pool.query(
+    `UPDATE document_chunks
+     SET content = $1, embedding = $2::vector
+     WHERE chunk_id = $3 AND doc_id = $4 AND project_id = $5
+     RETURNING chunk_id, doc_id, project_id, chunk_index, content, page_number,
+               heading, chunk_type, extraction_mode, confidence, created_at, updated_at`,
+    [params.content, embeddingLiteral, params.chunkId, params.docId, params.projectId],
+  );
+
+  logger.info({ chunkId: params.chunkId, chars: params.content.length }, 'chunk updated and re-embedded');
+  return { status: 'ok', chunk: updateRes.rows[0] as DocumentChunk };
+}
+
+/** Delete a single chunk. Returns true if a row was removed. */
+export async function deleteChunk(params: {
+  docId: string;
+  chunkId: string;
+  projectId: string;
+}): Promise<boolean> {
+  const pool = getDbPool();
+  const res = await pool.query(
+    `DELETE FROM document_chunks
+     WHERE chunk_id = $1 AND doc_id = $2 AND project_id = $3`,
+    [params.chunkId, params.docId, params.projectId],
+  );
+  if ((res.rowCount ?? 0) > 0) {
+    logger.info({ chunkId: params.chunkId }, 'chunk deleted');
+    return true;
+  }
+  return false;
 }
