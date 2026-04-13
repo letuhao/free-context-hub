@@ -213,15 +213,25 @@ export async function isJobCancelled(jobId: string): Promise<boolean> {
 /**
  * Mark a job as cancelled. Idempotent — if the job is already in a terminal
  * state (succeeded/failed/dead_letter/cancelled), returns false.
+ *
+ * When `projectId` is supplied the update is scoped to that project so a
+ * known job_id from another tenant cannot be cancelled cross-tenant.
  */
-export async function cancelJob(jobId: string): Promise<boolean> {
+export async function cancelJob(jobId: string, projectId?: string): Promise<boolean> {
   const pool = getDbPool();
-  const res = await pool.query(
-    `UPDATE async_jobs
-     SET status = 'cancelled', finished_at = now(), error_message = 'Cancelled by user'
-     WHERE job_id = $1 AND status IN ('queued', 'running')`,
-    [jobId],
-  );
+  const res = projectId
+    ? await pool.query(
+        `UPDATE async_jobs
+         SET status = 'cancelled', finished_at = now(), error_message = 'Cancelled by user'
+         WHERE job_id = $1 AND project_id = $2 AND status IN ('queued', 'running')`,
+        [jobId, projectId],
+      )
+    : await pool.query(
+        `UPDATE async_jobs
+         SET status = 'cancelled', finished_at = now(), error_message = 'Cancelled by user'
+         WHERE job_id = $1 AND status IN ('queued', 'running')`,
+        [jobId],
+      );
   return (res.rowCount ?? 0) > 0;
 }
 

@@ -84,11 +84,27 @@ export function ExtractionReview({ open, doc, initialChunks, onClose, onReExtrac
     }
   }, [chunks.length, activeChunkIdx]);
 
-  // Cancel edit mode whenever the active chunk changes
+  // Cancel edit mode whenever the active chunk changes.
+  // Guard against silent data loss if the user has unsaved edits.
   useEffect(() => {
+    if (editing && editBuffer && editBuffer !== chunks[activeChunkIdx]?.content) {
+      // Unsaved edits for the *previous* chunk were already lost by the time
+      // this fires (activeChunkIdx has already moved). Best we can do is warn.
+      // The navigator click handler below should gate the switch instead.
+    }
     setEditing(false);
     setEditBuffer("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChunkIdx]);
+
+  /** Gated chunk switch — prompts if there are unsaved edits. */
+  const switchToChunk = (nextIdx: number) => {
+    if (nextIdx === activeChunkIdx) return;
+    if (editing && editBuffer && editBuffer !== chunks[activeChunkIdx]?.content) {
+      if (!confirm("You have unsaved changes to this chunk. Discard them?")) return;
+    }
+    setActiveChunkIdx(nextIdx);
+  };
 
   // ESC closes (but first exits edit mode if active)
   useEffect(() => {
@@ -260,7 +276,7 @@ export function ExtractionReview({ open, doc, initialChunks, onClose, onReExtrac
                     return (
                       <button
                         key={c.chunk_id}
-                        onClick={() => setActiveChunkIdx(i)}
+                        onClick={() => switchToChunk(i)}
                         className={`w-full text-left px-3 py-2 border-l-2 transition-colors ${
                           isActive
                             ? "bg-zinc-800/60 border-l-blue-500"
@@ -393,7 +409,7 @@ export function ExtractionReview({ open, doc, initialChunks, onClose, onReExtrac
                       return (
                         <button
                           key={String(p.key)}
-                          onClick={() => setActiveChunkIdx(firstChunkIdx)}
+                          onClick={() => switchToChunk(firstChunkIdx)}
                           className={`px-2 py-1 rounded text-[10px] font-medium transition-colors border ${
                             isOnPage
                               ? "bg-blue-500/15 text-blue-400 border-blue-500/40"

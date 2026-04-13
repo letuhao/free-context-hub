@@ -44,6 +44,25 @@ export function ExtractionProgress({
     return () => clearInterval(t);
   }, []);
 
+  // Stash callbacks in refs so the polling effect doesn't re-run — and
+  // reset — whenever the parent re-renders with new callback identities.
+  const onDoneRef = useRef(onDone);
+  const onCancelledRef = useRef(onCancelled);
+  const onFailedRef = useRef(onFailed);
+  useEffect(() => { onDoneRef.current = onDone; }, [onDone]);
+  useEffect(() => { onCancelledRef.current = onCancelled; }, [onCancelled]);
+  useEffect(() => { onFailedRef.current = onFailed; }, [onFailed]);
+
+  // Single-fire terminal helper — guards against double-invocation when a
+  // stale poll resolves after the ref already flipped.
+  const fireTerminal = (kind: "done" | "cancelled" | "failed", msg?: string) => {
+    if (terminatedRef.current) return;
+    terminatedRef.current = true;
+    if (kind === "done") onDoneRef.current();
+    else if (kind === "cancelled") onCancelledRef.current();
+    else onFailedRef.current(msg ?? "Extraction failed");
+  };
+
   // Poll job status
   useEffect(() => {
     let cancelled = false;
@@ -52,13 +71,11 @@ export function ExtractionProgress({
       if (cancelled || terminatedRef.current) return;
       try {
         const res = await api.getExtractionStatus(docId, { project_id: projectId });
-        if (cancelled) return;
+        if (cancelled || terminatedRef.current) return;
 
         const job = res.job;
         if (!job) {
-          // Job disappeared — treat as failure
-          terminatedRef.current = true;
-          onFailed("Job not found");
+          fireTerminal("failed", "Job not found");
           return;
         }
 
@@ -67,19 +84,16 @@ export function ExtractionProgress({
         setMessage(job.progress_message);
 
         if (job.status === "succeeded") {
-          terminatedRef.current = true;
-          onDone();
+          fireTerminal("done");
           return;
         }
         if (job.status === "cancelled") {
-          terminatedRef.current = true;
-          onCancelled();
+          fireTerminal("cancelled");
           return;
         }
         if (job.status === "failed" || job.status === "dead_letter") {
-          terminatedRef.current = true;
           setErrorMsg(job.error_message ?? "Extraction failed");
-          onFailed(job.error_message ?? "Extraction failed");
+          fireTerminal("failed", job.error_message ?? "Extraction failed");
           return;
         }
       } catch (err) {
@@ -95,7 +109,8 @@ export function ExtractionProgress({
       cancelled = true;
       clearInterval(id);
     };
-  }, [docId, projectId, jobId, onDone, onCancelled, onFailed]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docId, projectId, jobId]);
 
   const handleCancel = async () => {
     if (cancelling) return;

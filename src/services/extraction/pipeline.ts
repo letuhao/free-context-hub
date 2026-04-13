@@ -359,8 +359,18 @@ export async function updateChunk(params: {
     [params.content, embeddingLiteral, params.chunkId, params.docId, params.projectId],
   );
 
+  // Normalize timestamps (node-pg returns TIMESTAMPTZ as Date) so the client
+  // receives ISO strings. Without this, the next round-trip edit would fail
+  // the optimistic lock because the Date round-trips as a different shape.
+  const row = updateRes.rows[0];
+  const normalized: DocumentChunk = {
+    ...row,
+    created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+    updated_at: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
+  };
+
   logger.info({ chunkId: params.chunkId, chars: params.content.length }, 'chunk updated and re-embedded');
-  return { status: 'ok', chunk: updateRes.rows[0] as DocumentChunk };
+  return { status: 'ok', chunk: normalized };
 }
 
 /** Delete a single chunk. Returns true if a row was removed. */

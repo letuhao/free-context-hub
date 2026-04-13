@@ -278,6 +278,13 @@ router.post('/:id/extract', async (req, res, next) => {
       return;
     }
 
+    // Validate prompt_template server-side — don't trust the client's TypeScript
+    const promptTemplate = req.body.prompt_template ?? 'default';
+    if (!['default', 'mermaid'].includes(promptTemplate)) {
+      res.status(400).json({ status: 'error', error: `Invalid prompt_template: ${promptTemplate}` });
+      return;
+    }
+
     // Vision mode is async — enqueue a job and return job_id
     if (mode === 'vision') {
       // Verify the document exists and check its doc_type before enqueueing.
@@ -315,7 +322,7 @@ router.post('/:id/extract', async (req, res, next) => {
         payload: {
           doc_id: req.params.id,
           template: template ?? 'auto',
-          prompt_template: req.body.prompt_template ?? 'default',
+          prompt_template: promptTemplate,
         },
         max_attempts: 1, // vision is expensive — don't retry by default
       });
@@ -552,26 +559,32 @@ router.delete('/:id/chunks/:chunkId', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-/** POST /api/documents/:id/jobs/:jobId/cancel — Phase 10.4: cancel a running extraction job. */
+/** POST /api/documents/:id/jobs/:jobId/cancel — Phase 10.4: cancel a running extraction job.
+ *
+ * Scoped to project_id so a leaked job_id from another tenant cannot be
+ * cancelled across projects. The document status reset is additionally
+ * scoped to (doc_id, project_id) to prevent touching another tenant's row.
+ */
 router.post('/:id/jobs/:jobId/cancel', async (req, res, next) => {
   try {
-    resolveProjectIdOrThrow(req.body.project_id);
-    const cancelled = await cancelJob(req.params.jobId);
+    const projectId = resolveProjectIdOrThrow(req.body.project_id);
+    const cancelled = await cancelJob(req.params.jobId, projectId);
     if (!cancelled) {
       res.status(409).json({
         status: 'error',
-        error: 'Job is not in a cancellable state (already finished or never started)',
+        error: 'Job is not in a cancellable state (already finished, never started, or not owned by this project)',
       });
       return;
     }
-    // Also reset the document's extraction_status from 'processing' so the GUI can re-extract.
-    const { getDbPool } = await import('../../db/client.js');
+    // Reset the document's extraction_status from 'processing' so the GUI can re-extract.
+    // The WHERE clause on extraction_status='processing' guards against a race
+    // where the worker already marked it 'complete' between cancelJob and this UPDATE.
     const pool = getDbPool();
     await pool.query(
       `UPDATE documents
        SET extraction_status = 'failed'
-       WHERE doc_id = $1 AND extraction_status = 'processing'`,
-      [req.params.id],
+       WHERE doc_id = $1 AND project_id = $2 AND extraction_status = 'processing'`,
+      [req.params.id, projectId],
     );
     res.json({ status: 'ok' });
   } catch (e) { next(e); }

@@ -288,6 +288,5 @@ function detectChunkType(content: string): ChunkType {
   // Multi-line table heuristic: 2+ lines starting with |
   const tableLines = content.split('\n').filter((l) => l.trim().startsWith('|'));
   if (tableLines.length >= 2) return 'table';
-  if (content.includes('```mermaid')) return 'mermaid';
   return 'text';
 }
