@@ -10,6 +10,13 @@ phase: IN_PROGRESS
 ## Where We Are
 **Sprint 10.5 complete and live-tested (commit 41f9cf4).** Document chunks are now first-class in retrieval — hybrid pgvector+FTS search, Cmd+K palette, chat tool, MCP tool. Image upload UX closed: upload dialog accepts png/jpg/webp with live thumbnail, extraction selector preselects Vision for images, documents list shows inline thumbnails. 12 tasks (7 backend + 5 frontend). Both typechecks clean.
 
+### Sprint 10.5 code review — 5 issues found + fixed (commit 4dab5b8)
+- **CRITICAL** listDocuments returned full base64 content — a page of image docs was worst-case ~120MB. Fixed by enumerating columns (no content) and adding `GET /api/documents/:id/thumbnail` that streams image bytes with cache headers; frontend uses the URL instead of decoding client-side. List response dropped to 5.7KB.
+- **CRITICAL** searchChunks threw 500 when embedding service was down → wrapped in try/catch, falls back to FTS-only ranking with a clear explanation string. SQL rebuilt to handle missing vector (sem_score=0, requires FTS hit).
+- **HIGH** globalSearch used ILIKE on `document_chunks.content` (seq scan) → switched to `c.fts @@ plainto_tsquery('english', ...)` which uses the existing GIN index; results ordered by ts_rank.
+- **HIGH** Upload dialog `URL.createObjectURL` leaked on rapid file re-selection — effect cleanup fired after next setPreview. Now revokes synchronously inside functional setPreview callback.
+- **MED** Chunk search JOIN lacked defense-in-depth cross-tenant filter → added `d.project_id = c.project_id` to the join predicate.
+
 ### Live-test results (Sprint 10.5)
 - ✅ `POST /api/documents/chunks/search` hybrid retrieval: "retry strategy exponential backoff" → 3 results, top hit 0.83 score (correct chunk)
 - ✅ `chunk_types=[text]` filter narrows correctly
