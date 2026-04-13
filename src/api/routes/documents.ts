@@ -73,7 +73,10 @@ router.post('/upload', upload.single('file'), async (req, res, next) => {
     // Detect doc_type from extension
     const isPdf = ext === 'pdf' || file.mimetype === 'application/pdf';
     const isDocx = ext === 'docx';
-    const isImage = file.mimetype.startsWith('image/');
+    // Whitelist supported image mimetypes — vision models typically support
+    // png/jpeg/webp; SVG/HEIC/AVIF can break or produce garbage.
+    const SUPPORTED_IMAGE_MIMES = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp']);
+    const isImage = SUPPORTED_IMAGE_MIMES.has(file.mimetype);
     const docType = isPdf ? 'pdf'
       : isDocx ? 'docx'
       : isImage ? 'image'
@@ -277,14 +280,26 @@ router.post('/:id/extract', async (req, res, next) => {
 
     // Vision mode is async — enqueue a job and return job_id
     if (mode === 'vision') {
-      // Verify the document exists before enqueueing
+      // Verify the document exists and check its doc_type before enqueueing.
+      // Vision currently only supports pdf and image; for everything else,
+      // pandoc-to-PDF would fail in our alpine image (no PDF engine).
       const pool = getDbPool();
-      const exists = await pool.query(
-        `SELECT 1 FROM documents WHERE doc_id = $1 AND project_id = $2`,
+      const docRes = await pool.query(
+        `SELECT doc_type FROM documents WHERE doc_id = $1 AND project_id = $2`,
         [req.params.id, projectId],
       );
-      if (exists.rowCount === 0) {
+      if (docRes.rowCount === 0) {
         res.status(404).json({ status: 'error', error: 'Document not found' });
+        return;
+      }
+      const docType = docRes.rows[0].doc_type;
+      const VISION_SUPPORTED = ['pdf', 'image'];
+      if (!VISION_SUPPORTED.includes(docType)) {
+        res.status(422).json({
+          status: 'error',
+          error: `Vision mode currently supports only ${VISION_SUPPORTED.join(', ')}. ` +
+            `For ${docType}, use Quality Text mode instead.`,
+        });
         return;
       }
 

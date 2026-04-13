@@ -60,43 +60,64 @@ export async function extractVision(
 
 /** Render a PDF buffer and run vision extraction page by page. */
 async function extractPdfPages(buffer: Buffer, dpi: number, maxTokens: number): Promise<ExtractionResult> {
+  const env = getEnv();
+  const concurrency = env.VISION_CONCURRENCY;
+
   const rendered = await renderPdfPages(buffer, dpi);
   if (rendered.length === 0) {
     throw new Error('PDF rendered to zero pages');
   }
 
-  logger.info({ pages: rendered.length, dpi }, 'pdf rendered, dispatching to vision model');
+  logger.info(
+    { pages: rendered.length, dpi, concurrency },
+    'pdf rendered, dispatching to vision model',
+  );
 
-  const pages: ExtractedPage[] = [];
+  // Use a worker pool: up to `concurrency` pages extracted in parallel.
+  // Local LM Studio handles one request at a time anyway; cloud APIs benefit from parallelism.
+  const pages: ExtractedPage[] = new Array(rendered.length);
   let succeeded = 0;
   let failed = 0;
+  let truncated = 0;
+  let cursor = 0;
 
-  for (const r of rendered) {
-    try {
-      const result = await extractPageVision({
-        imagePng: r.image,
-        maxTokens,
-      });
-      pages.push({
-        page_number: r.page_number,
-        content: result.markdown,
-        confidence: 1.0, // success
-      });
-      succeeded++;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.warn({ page: r.page_number, err: msg }, 'vision extraction failed for page');
-      pages.push({
-        page_number: r.page_number,
-        content: `> [extraction failed: ${msg}]`,
-        confidence: 0,
-      });
-      failed++;
+  async function worker(): Promise<void> {
+    while (true) {
+      const idx = cursor++;
+      if (idx >= rendered.length) return;
+      const r = rendered[idx];
+      try {
+        const result = await extractPageVision({
+          imagePng: r.image,
+          maxTokens,
+        });
+        pages[idx] = {
+          page_number: r.page_number,
+          content: result.markdown,
+          // Lower confidence if response was truncated by token budget
+          confidence: result.finish_reason === 'length' ? 0.6 : 1.0,
+        };
+        if (result.finish_reason === 'length') truncated++;
+        succeeded++;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.warn({ page: r.page_number, err: msg }, 'vision extraction failed for page');
+        pages[idx] = {
+          page_number: r.page_number,
+          content: `> [extraction failed: ${msg}]`,
+          confidence: 0,
+        };
+        failed++;
+      }
     }
   }
 
+  // Spawn `concurrency` workers
+  const workers = Array.from({ length: Math.min(concurrency, rendered.length) }, () => worker());
+  await Promise.all(workers);
+
   logger.info(
-    { total_pages: rendered.length, succeeded, failed },
+    { total_pages: rendered.length, succeeded, failed, truncated },
     'vision pdf extraction complete',
   );
 

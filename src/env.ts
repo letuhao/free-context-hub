@@ -200,11 +200,18 @@ const EnvSchema = z.object({
   VISION_BASE_URL: z.string().min(1).optional(),
   VISION_API_KEY: z.string().optional(),
   VISION_MODEL: z.string().min(1).optional(),
+  /** Per-page request timeout. Thinking models on dense pages need >2 minutes. */
   VISION_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(300_000),
-  /** Per-page DPI for PDF rendering (vision mode). 150 = good quality, 300 = high quality + larger. */
-  VISION_PDF_DPI: z.coerce.number().int().positive().optional().default(150),
-  /** Max tokens per page response. Thinking models need more. */
-  VISION_MAX_TOKENS: z.coerce.number().int().positive().optional().default(8192),
+  /** Per-page DPI for PDF rendering (vision mode). 200 = good for dense text, 150 = faster. */
+  VISION_PDF_DPI: z.coerce.number().int().positive().optional().default(200),
+  /** Max tokens per page response. Thinking models burn 2-5k on reasoning, leave plenty of room for content. */
+  VISION_MAX_TOKENS: z.coerce.number().int().positive().optional().default(16_384),
+  /** Sampling temperature. 0 = most deterministic, 0.2 = mild variation. */
+  VISION_TEMPERATURE: z.coerce.number().min(0).max(2).optional().default(0.1),
+  /** Number of pages to extract in parallel. 1 = sequential (local LM Studio). */
+  VISION_CONCURRENCY: z.coerce.number().int().positive().optional().default(1),
+  /** Per-page retry attempts on transient failures (network, 5xx). */
+  VISION_PAGE_RETRIES: z.coerce.number().int().min(0).optional().default(2),
 
   // Phase 7: optional Redis cache for retrieval + rerank.
   REDIS_ENABLED: z
