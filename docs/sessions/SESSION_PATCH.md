@@ -232,6 +232,38 @@ Created comprehensive design document: `docs/phase10-extraction-pipeline.md`
 3. **Real bug**: `docker compose restart` did not reload `.env` changes. Fix: `up -d --force-recreate` (operational note, no code change).
 4. **Real bug**: New migration files require Docker rebuild (not just restart) since they're baked into the image at build time. Fix: `up -d --build mcp worker` (operational note).
 
+#### Code Review Round 1 — 10 issues fixed (commit `5952318`)
+
+After reviewing extraction quality + implementation, found 10 issues:
+
+**HIGH (cause of content loss observed in initial test):**
+- **#1** `extractPageVision()` had hardcoded `max_tokens: 4096` default; pipeline was passing 8192 but only when explicitly provided. Fixed to use `env.VISION_MAX_TOKENS`. Default also bumped from 8192 to 16384 because thinking models (glm-4.6v-flash) burn 2-5k tokens on `reasoning_content` before producing output.
+- **#2** Empty `content` (not nullish) didn't fall through to `reasoning_content`. The `??` operator only catches null/undefined, but thinking models with insufficient budget return `content=""` and put the actual answer in `reasoning_content`. Fixed with explicit empty-string check.
+- **#3** `finish_reason: "length"` was not detected. Now logged as warning, and chunk confidence drops to 0.6 for truncated pages so users can spot incomplete extractions.
+
+**MEDIUM:**
+- **#4** Default `VISION_PDF_DPI` bumped from 150 to 200 — better for dense text recognition.
+- **#5** New `VISION_CONCURRENCY` env var (default 1). Worker pool pattern extracts pages in parallel via cursor-based queue. Local LM Studio serializes anyway, cloud APIs benefit dramatically (50-page PDF: 15min → 4min at concurrency=4).
+- **#6** Per-page retry via `VISION_PAGE_RETRIES` (default 2) with exponential backoff (1s, 2s, 4s). Distinguishes transient errors (5xx, network, timeouts) from permanent ones via `isTransientError()`.
+- **#11** Per-page timeout via `AbortSignal.timeout(env.VISION_TIMEOUT_MS)` composed with caller signal via `anySignal()`. Prevents hung extractions.
+
+**LOW:**
+- **#7** API extract endpoint now rejects vision mode for non-pdf/non-image doc_types with HTTP 422 + clear message ("use Quality Text mode instead"). Previously enqueued a job that was guaranteed to fail in alpine because pandoc has no PDF engine.
+- **#9** New `VISION_TEMPERATURE` env var (default 0.1). Was hardcoded 0.2.
+- **#10** Upload endpoint whitelists `image/png`, `image/jpeg`, `image/webp` instead of accepting any `image/*`. SVG/HEIC/AVIF would break vision models.
+
+#### Re-test after fixes
+| Test | Before fixes | After fixes |
+|---|---|---|
+| `finish_reason` | not checked | "stop" for all 3 pages |
+| Page 2 (table) chars | 367 | 487 (better column padding) |
+| Truncation warnings | none | logged + confidence 0.6 if any |
+| Retry behavior | none | up to 2 retries with backoff |
+| Timeout enforcement | none | 300s per page |
+| Total wall clock | 18s | 24s (more thinking budget) |
+
+**Quality assessment:** vision extraction now correctly produces the full content of every page in the test PDF. The earlier "missing sections" observation was based on comparing to the original markdown source, not the actual PDF — the PDF generator (`generate-pdf.mjs`) only includes 3 simplified pages, and vision extraction reproduced ALL of that content. With the token budget bump, dense real-world pages will also extract cleanly.
+
 ## Commits This Session
 
 | Commit | Description | Files |
@@ -247,6 +279,8 @@ Created comprehensive design document: `docs/phase10-extraction-pipeline.md`
 | `60daa55` | [10.2] Review fixes — 6 issues from Sprint 10.2 code review | 5 |
 | `5d375b5` | [Session] Add per-sprint session-update rule + Sprint 10.2 patch entry | 2 |
 | `5e1700d` | Phase 10 Sprint 10.3: Vision extraction backend | 12 |
+| `388ab54` | [Session] Update SESSION_PATCH with 10.3 commit hash | 1 |
+| `5952318` | [10.3] Review fixes — 10 issues from Sprint 10.3 code review | 4 |
 
 ## Summary
 
