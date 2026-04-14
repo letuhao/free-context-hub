@@ -127,6 +127,15 @@ export function ExchangePanel({ projectId }: ExchangePanelProps) {
     if (f) handleFileChosen(f);
   };
 
+  /** Clear a stale result whenever the policy changes — otherwise a
+   *  user who previewed under "skip" then switched to "overwrite"
+   *  would still see the skip-policy preview while Apply would use
+   *  the new policy. The mismatch is misleading; force a re-preview. */
+  const handlePolicyChange = (next: ConflictPolicy) => {
+    setPolicy(next);
+    setResult(null);
+  };
+
   const runImport = async (dryRun: boolean) => {
     if (!file) {
       toast("error", "Pick a bundle file first");
@@ -194,7 +203,12 @@ export function ExchangePanel({ projectId }: ExchangePanelProps) {
             (GUI on :3002, API on :3001), so the actual download filename
             comes from the BE's Content-Disposition header. We keep the
             attribute for the same-origin case (production deployments
-            behind a single domain). */}
+            behind a single domain).
+            Footgun: if the export endpoint errors (e.g. project deleted
+            mid-session), the browser navigates to the API URL and
+            shows raw JSON. The NoProjectGuard wrapping this page makes
+            that race rare in practice; a real fix would intercept the
+            click, fetch via JS, then trigger a Blob download. */}
         <a
           href={exportHref}
           download
@@ -265,7 +279,7 @@ export function ExchangePanel({ projectId }: ExchangePanelProps) {
                   type="radio"
                   name="policy"
                   checked={policy === p}
-                  onChange={() => setPolicy(p)}
+                  onChange={() => handlePolicyChange(p)}
                   className="accent-blue-500"
                 />
                 <span className="capitalize">{p}</span>
