@@ -1,4 +1,91 @@
 ---
+id: CH-PHASE11-S113
+date: 2026-04-15
+module: Phase11-Sprint11.3
+phase: IN_PROGRESS
+---
+
+# Session Patch — 2026-04-15 (Phase 11 Sprint 11.3 — Full project import + conflict policy)
+
+## Where We Are
+**Sprint 11.3 complete and live-tested.** `POST /api/projects/:id/import` accepts a multipart bundle upload, decodes via `bundleFormat.openBundle()`, and applies it transactionally to a target project with three conflict policies (`skip`, `overwrite`, `fail`) and a dry-run preview mode. Bundles up to 500 MB. Auto-creates the target project. Round-trip end-to-end test (export → delete → import) restores byte-identical rows. The `document_lessons` link table is now part of the bundle format too — backwards-compatible v1 addition.
+
+### What shipped
+- **`src/services/exchange/importProject.ts`** (~520 lines) — the full apply algorithm:
+  - Decodes bundle, validates schema_version
+  - `BEGIN` (skipped in dry-run), auto-creates target project
+  - Walks entities in FK-safe order: `lesson_types → documents → chunks → lessons → guardrails → document_lessons`
+  - For each row: SELECT by PK → apply policy → INSERT or UPDATE (or skip)
+  - `project_id` rewritten on every row from bundle source to URL target
+  - UUIDs preserved (re-import with `skip` is a no-op)
+  - Document binaries base64-encoded uniformly with `data:base64;` prefix (no doc_type-dependent branching — symmetric encoding)
+  - Embeddings cast to pgvector via `$N::vector` literal
+  - Conflicts captured into a bounded list (`conflictsCap`, default 50, hard ceiling 1000) with `conflicts_truncated` flag
+  - `COMMIT` on success, `ROLLBACK` on any failure
+  - Custom `ImportError` codes: `malformed_bundle` / `schema_version_mismatch` / `conflict_fail` / `invalid_row` / `io_error`
+- **`POST /api/projects/:id/import`** in `src/api/routes/projects.ts`:
+  - `multer.diskStorage` with **500 MB cap** (vs. the 10 MB default used elsewhere) — bundles routinely exceed 10 MB
+  - Query params: `policy` / `dry_run` / `conflicts_cap`
+  - Maps `ImportError` codes to HTTP status: 400 for malformed/schema/invalid_row, 409 for conflict_fail, 500 for io_error
+  - `requireRole('writer')`
+  - Always cleans up the temp upload file in `finally` (multer disk storage doesn't auto-delete)
+- **bundleFormat extension** — `BundleData.document_lessons` + `BundleReader.document_lessons()` + `ENTRY_NAMES.document_lessons`. Backwards-compatible: older bundles without the entry yield empty (forward-compat already supported). `schema_version` stays at `1`.
+- **exportProject extension** — added a `cursorIterable` for `document_lessons` joined to `documents` to scope by project (the link table has no `project_id` column).
+- **Built-in lesson_type protection** — overwrite policy refuses to clobber `is_builtin=true` types, recording the refusal as a conflict instead.
+
+### Live test results (Sprint 11.3)
+```
+# Round-trip on a fresh project
+POST /api/projects               → create sprint113-test
+POST /api/lessons                → create 1 lesson
+GET  /export                     → 6,341 B bundle
+DELETE /api/projects             → delete project
+POST /import (policy=skip)       → applied: true, lessons: {created: 1, ...}
+GET  /api/lessons                → lesson_id, title, content, tags all byte-identical
+
+# Conflict policies
+POST /import (policy=skip)       → 1 lesson skipped, 7 conflicts (1 + 6 lesson_types)
+POST /import (policy=overwrite)  → 1 lesson updated
+POST /import (policy=fail)       → HTTP 409, code=conflict_fail
+
+# Bounded conflicts list
+POST /import?conflicts_cap=2     → 2 entries, conflicts_truncated: true
+
+# Bad input
+POST (no file)                   → HTTP 400, "file is required"
+POST ?policy=banana              → HTTP 400, "invalid policy"
+POST garbage.zip                 → HTTP 400, code=malformed_bundle
+
+# Dry-run on the real project
+POST /import (dry_run=true)      → applied: false, total counts:
+                                    581 lessons, 76 guardrails, 6 lesson_types,
+                                    14 documents, 11 chunks, 1 document_lesson
+                                    (all skipped because UUIDs are global PKs)
+```
+
+### Code review — 4 issues caught + fixed
+1. **HIGH** `materializeDocContent` had an export/import asymmetry: export used a `data:base64;` prefix detection on the column string, import branched on `doc_type` to choose utf-8 vs base64. The two heuristics could disagree on edge cases (e.g. a `markdown` doc accidentally stored as base64). Fixed by always re-encoding as `data:base64;` on import — base64 round-trips ANY byte sequence, the asymmetry is gone, and the read path already handles both formats transparently.
+2. **HIGH** `applyLessonType` overwrite path silently clobbered `is_builtin=true` rows — a malicious or buggy bundle could downgrade canonical types or rewrite their display names. Fixed by refusing the overwrite when the destination row is a built-in, recording the refusal as a `conflict` so the operator sees what happened.
+3. **MED** Documented the N+1 SELECT-then-INSERT pattern (~1200 round-trips for 581 lessons) — chosen over `INSERT ... ON CONFLICT` because the SELECT lets us count + report conflicts accurately. At ~1ms per query it's negligible vs base64 + transaction overhead.
+4. **MED** Documented the per-doc memory cost — `materializeDocContent` buffers entire binaries into RAM before encoding (a 100 MB PDF = 100 MB Buffer + 133 MB base64 string). Bounded by the 500 MB multer route limit. Streaming encoding deferred to 11.6 polish.
+
+### Why this matters for the rest of Phase 11
+- Sprint 11.4 (GUI) just calls these two endpoints — no new server-side work needed.
+- Sprint 11.5 (cross-instance pull) chains `exportProject` against a remote URL into `importProject` on the local instance. Because both sides use the same `BundleData` shape and UUIDs are preserved, repeat pulls under `policy=skip` are idempotent.
+- The `ImportConflict` reporting will inform the GUI's dry-run preview UI in 11.4 (show conflicts, let user pick policy, then re-submit without `dry_run`).
+
+### What's NOT in 11.3 (deferred)
+- `merge` policy — too complex for v1; `overwrite` covers the common "I want the import to win" case
+- ID remapping (rename UUIDs on collision) — would require rewriting all FK references
+- Partial entity selection on import (`?include_lessons=false`) — defer
+- Async background import for huge bundles — current path holds the HTTP connection
+- Switching to `INSERT ... ON CONFLICT` for the N+1 perf win
+- Streaming base64 encoding to bound per-doc memory
+- Unit tests — round-trip live test covers the happy paths; will add `importProject.test.ts` in 11.6 polish
+
+## Sprint 11.2 history (prev)
+
+---
 id: CH-PHASE11-S112
 date: 2026-04-14
 module: Phase11-Sprint11.2

@@ -150,6 +150,21 @@ export async function exportProject(
 
     if (includeDocuments) {
       data.documents = documentIterable(client, projectId, batchSize);
+      // document_lessons has no project_id column — scope via a join on
+      // documents so we only export links whose document is in this
+      // project. The lesson side is implicitly project-scoped because
+      // document_lessons.lesson_id can only reference lessons that the
+      // import is going to materialize anyway.
+      data.document_lessons = cursorIterable(
+        client,
+        `SELECT dl.doc_id, dl.lesson_id, dl.linked_at
+         FROM document_lessons dl
+         INNER JOIN documents d ON d.doc_id = dl.doc_id
+         WHERE d.project_id = $1
+         ORDER BY dl.linked_at`,
+        [projectId],
+        batchSize,
+      );
     }
 
     return await encodeBundle(data, output);

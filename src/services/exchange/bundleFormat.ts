@@ -43,7 +43,9 @@ export const GENERATOR = 'free-context-hub';
 
 /** Canonical entry paths inside the bundle. Keep in sync with both the
  *  encoder and decoder — typos here would silently produce unreadable
- *  bundles, since the decoder looks up entries by string match. */
+ *  bundles, since the decoder looks up entries by string match.
+ *  Adding a new optional entry is backwards-compatible — older readers
+ *  simply ignore unknown entries and yield empty for missing ones. */
 export const ENTRY_NAMES = {
   manifest: 'manifest.json',
   lessons: 'lessons.jsonl',
@@ -51,6 +53,7 @@ export const ENTRY_NAMES = {
   lesson_types: 'lesson_types.jsonl',
   chunks: 'chunks.jsonl',
   documents: 'documents.jsonl',
+  document_lessons: 'document_lessons.jsonl',
   documentsPrefix: 'documents/',
 } as const;
 
@@ -125,6 +128,9 @@ export interface BundleData {
   lesson_types?: AsyncIterable<unknown> | Iterable<unknown>;
   documents?: AsyncIterable<BundleDocument> | Iterable<BundleDocument>;
   chunks?: AsyncIterable<unknown> | Iterable<unknown>;
+  /** Phase 11.3: links between documents and lessons. Composite key
+   *  (doc_id, lesson_id). Imported AFTER both documents and lessons. */
+  document_lessons?: AsyncIterable<unknown> | Iterable<unknown>;
 }
 
 export interface EncodeResult {
@@ -153,6 +159,9 @@ export interface BundleReader {
   lesson_types(): AsyncGenerator<unknown>;
   documents(): AsyncGenerator<BundleDocumentRead>;
   chunks(): AsyncGenerator<unknown>;
+  /** Phase 11.3: links between documents and lessons. Empty iterator
+   *  for older bundles that predate this entry. */
+  document_lessons(): AsyncGenerator<unknown>;
   close(): Promise<void>;
 }
 
@@ -271,6 +280,7 @@ export async function encodeBundle(
   await appendJsonlEntry(archive, entries, ENTRY_NAMES.guardrails, data.guardrails);
   await appendJsonlEntry(archive, entries, ENTRY_NAMES.lesson_types, data.lesson_types);
   await appendJsonlEntry(archive, entries, ENTRY_NAMES.chunks, data.chunks);
+  await appendJsonlEntry(archive, entries, ENTRY_NAMES.document_lessons, data.document_lessons);
 
   // ---- documents: metadata jsonl + binaries ----
   if (data.documents) {
@@ -654,6 +664,7 @@ export async function openBundle(input: string | Buffer): Promise<BundleReader> 
     lesson_types: () => iterateJsonl<unknown>(ENTRY_NAMES.lesson_types),
     documents: () => iterateDocuments(),
     chunks: () => iterateJsonl<unknown>(ENTRY_NAMES.chunks),
+    document_lessons: () => iterateJsonl<unknown>(ENTRY_NAMES.document_lessons),
     async close() {
       zip.close();
     },

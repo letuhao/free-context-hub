@@ -11,9 +11,25 @@ import {
   updateProject,
   addProjectToGroup,
 } from '../../core/index.js';
+import multer from 'multer';
+import { promises as fsPromises } from 'node:fs';
 import { invalidateFeatureCache } from '../../services/featureToggles.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { exportProject, ExportNotFoundError } from '../../services/exchange/exportProject.js';
+import {
+  importProject,
+  ImportError,
+  type ConflictPolicy,
+} from '../../services/exchange/importProject.js';
+
+// Bundles routinely exceed the 10MB default used for document uploads —
+// 500 MB matches what we've observed in production-scale projects with
+// vision-extracted PDFs. Disk storage avoids loading the whole file
+// into memory; multer assigns a temp path that we delete in finally.
+const importUpload = multer({
+  storage: multer.diskStorage({}),
+  limits: { fileSize: 500 * 1024 * 1024 },
+});
 
 const router = Router();
 
@@ -152,6 +168,72 @@ router.get('/:id/export', async (req, res, next) => {
     next(e);
   }
 });
+
+/** POST /api/projects/:id/import — Phase 11.3: import a bundle into a project.
+ *
+ *  multipart/form-data with `file` (the .zip bundle).
+ *  Query params:
+ *    - policy=skip|overwrite|fail (default: skip)
+ *    - dry_run=true               (decode + count without writing)
+ *    - conflicts_cap=N            (max conflicts in the response, default 50, max 1000)
+ *
+ *  Auto-creates the target project if it doesn't exist.
+ */
+router.post(
+  '/:id/import',
+  requireRole('writer'),
+  importUpload.single('file'),
+  async (req, res, next) => {
+    if (!req.file) {
+      res.status(400).json({ error: 'multipart field "file" is required' });
+      return;
+    }
+    const tmpPath = req.file.path;
+    try {
+      const projectId = resolveProjectIdOrThrow(String(req.params.id));
+      const policy = (req.query.policy as ConflictPolicy) ?? 'skip';
+      if (!['skip', 'overwrite', 'fail'].includes(policy)) {
+        res.status(400).json({ error: `invalid policy "${policy}"` });
+        return;
+      }
+      const dryRun = req.query.dry_run === 'true';
+      const conflictsCap = req.query.conflicts_cap
+        ? parseInt(String(req.query.conflicts_cap), 10)
+        : undefined;
+      if (conflictsCap !== undefined && (Number.isNaN(conflictsCap) || conflictsCap < 1)) {
+        res.status(400).json({ error: 'conflicts_cap must be a positive integer' });
+        return;
+      }
+
+      const result = await importProject({
+        targetProjectId: projectId,
+        bundlePath: tmpPath,
+        policy,
+        dryRun,
+        conflictsCap,
+      });
+      res.json(result);
+    } catch (e) {
+      if (e instanceof ImportError) {
+        const status =
+          e.code === 'malformed_bundle' || e.code === 'schema_version_mismatch' || e.code === 'invalid_row'
+            ? 400
+            : e.code === 'conflict_fail'
+            ? 409
+            : 500;
+        res.status(status).json({ error: e.message, code: e.code });
+        return;
+      }
+      next(e);
+    } finally {
+      // Always remove the temp upload — best-effort, multer's diskStorage
+      // does not auto-clean and leaving stray bundles fills /tmp fast.
+      fsPromises.unlink(tmpPath).catch(() => {
+        /* ignore */
+      });
+    }
+  },
+);
 
 /** DELETE /api/projects/:id — delete workspace data */
 router.delete('/:id', requireRole('admin'), async (req, res, next) => {
