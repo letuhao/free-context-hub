@@ -61,6 +61,7 @@
     "@types/turndown": "^5.0.6",
     "ai": "^6.0.141",
     "amqplib": "^0.10.9",
+    "archiver": "^7.0.1",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
@@ -76,14 +77,17 @@
     "ts-morph": "^27.0.2",
     "turndown": "^7.2.4",
     "uuid": "^13.0.0",
+    "yauzl": "^3.3.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
+    "@types/archiver": "^7.0.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^25.5.0",
     "@types/pg": "^8.20.0",
+    "@types/yauzl": "^2.10.3",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"
   }

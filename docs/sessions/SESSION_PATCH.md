@@ -1,4 +1,79 @@
 ---
+id: CH-PHASE11-S111
+date: 2026-04-14
+module: Phase11-Sprint11.1
+phase: IN_PROGRESS
+---
+
+# Session Patch — 2026-04-14 (Phase 11 Sprint 11.1 — Bundle format v1)
+
+## Where We Are
+**Phase 11 started.** Sprint 11.1 ships the bundle format primitive — a streaming-friendly zip serializer/deserializer that later sprints will wire into export, import, conflict resolution, and cross-instance sync. **No HTTP routes, no DB, no GUI yet** — just the format and its validator. 10 unit tests, all green.
+
+### What shipped
+- **`src/services/exchange/bundleFormat.ts`** (~570 lines) — `encodeBundle()` + `openBundle()` reading/writing zip archives with this layout:
+  ```
+  bundle.zip
+  ├── manifest.json              schema_version, project meta, sha256+bytes per entry
+  ├── lessons.jsonl              one record per line — streamable
+  ├── guardrails.jsonl
+  ├── lesson_types.jsonl
+  ├── chunks.jsonl               text + embedding vectors
+  ├── documents.jsonl            metadata only
+  └── documents/<doc_id>.<ext>   raw binary, byte-identical
+  ```
+  Encoder accepts `AsyncIterable | Iterable` for every entity kind so the export route can stream from a DB cursor without loading the project into memory. Decoder yields async generators that validate per-entry SHA-256 at EOF.
+- **`src/services/exchange/bundleFormat.test.ts`** (~330 lines, `node:test`) — 10 tests:
+  1. happy path round-trip (lessons + guardrails + lesson_types + chunks + documents)
+  2. empty bundle (project only)
+  3. rejects bundle with no manifest
+  4. rejects schema_version mismatch
+  5. rejects jsonl checksum mismatch
+  6. rejects malformed jsonl line
+  7. **1MB document round-trip** (regression for the `pipeline()` drainage bug found in code review)
+  8. **doc id collision after sanitization** ("a/b" + "a_b" both → `a_b.pdf`)
+  9. disk round-trip (file path, not just buffer)
+  10. (combined into above)
+- **Dependencies added**: `archiver` ^7.0.1 (write), `yauzl` ^3.3.0 (read), plus `@types/*`. Both pure JS, no native bindings.
+
+### Live test results (Sprint 11.1)
+```
+node --test src/services/exchange/bundleFormat.test.ts
+✔ happy path round-trip — all entity kinds (21ms)
+✔ empty bundle — project only, no entities (1ms)
+✔ rejects bundle with no manifest.json (4ms)
+✔ rejects schema_version mismatch (3ms)
+✔ rejects jsonl checksum mismatch (6ms)
+✔ rejects malformed jsonl line (4ms)
+✔ large document round-trips correctly (above stream highWaterMark) (10ms)
+✔ rejects document id collision after sanitization (1ms)
+✔ round-trips a bundle to disk (16ms)
+
+10 pass / 0 fail (72ms total)
+```
+
+### Code review — 4 real bugs caught + fixed
+1. **HIGH** `measureStream.sha256` getter called `hash.digest('hex')` twice (once for the `documents/<id>.ext` entry, once for the metadata line referencing it). Node crypto throws `ERR_CRYPTO_HASH_FINALIZED` on the second call. Fixed by finalizing the digest in the Transform's `flush()` callback and caching the hex string.
+2. **HIGH** `openEntryStream()` initially tried to re-walk the zip's central directory by calling `zip.readEntry()` again, but yauzl can't restart a directory walk after it ends. Fixed by keeping the raw `yauzl.Entry` objects from the indexing pass and passing them directly to `openReadStream()`.
+3. **HIGH** `openContent()` used `stream/promises.pipeline()` to chain `raw → hashGate`. `pipeline()` fully drains the streams before resolving — small docs survived in the highWaterMark buffer (~16KB) but anything larger deadlocked on backpressure. Fixed by replacing `pipeline()` with a direct `.pipe()` chain that streams to the consumer at its pace; checksum is validated in the Transform's `flush()` callback. Caught by adding the 1MB regression test.
+4. **MED** No collision detection on `safeDocId` — two distinct ids that sanitized to the same path silently overwrote each other in the archive. Fixed with explicit `entries[entryPath]` check + dedicated test.
+
+### Why these matter for the rest of Phase 11
+- The format is the contract every other sprint depends on. Catching the streaming bug in 11.1 saved us from a phantom "import randomly truncates large PDFs" issue that would have surfaced only in Sprint 11.4 with real user data.
+- Per-entry SHA-256 in the manifest gives Sprint 11.5 (cross-instance pull) cheap end-to-end integrity verification — no separate signature scheme needed for v1.
+- Async-iterable encoder API means Sprint 11.2 can stream from `pg.cursor()` without buffering the whole project.
+
+### What's NOT in 11.1 (intentionally deferred)
+- HTTP routes (Sprint 11.2)
+- DB queries (Sprint 11.2)
+- ID remapping, conflict policies (Sprint 11.3)
+- GUI import/export pages (Sprint 11.4)
+- Cross-instance pull (Sprint 11.5)
+- Compression tuning, encryption, embedding binary packing — all polish for 11.6 if needed
+
+## Sprint 10.8 history (prev)
+
+---
 id: CH-PHASE10-S108
 date: 2026-04-14
 module: Phase10-Sprint10.8
