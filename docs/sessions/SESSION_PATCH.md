@@ -1,4 +1,68 @@
 ---
+id: CH-PHASE11-S112
+date: 2026-04-14
+module: Phase11-Sprint11.2
+phase: IN_PROGRESS
+---
+
+# Session Patch — 2026-04-14 (Phase 11 Sprint 11.2 — Full project export)
+
+## Where We Are
+**Sprint 11.2 complete and live-tested.** `GET /api/projects/:id/export` streams a full project bundle (lessons + guardrails + lesson_types + documents + chunks) as a zip download, built on `bundleFormat.encodeBundle()` from 11.1. Uses `pg-cursor` for cursor-based iteration so even multi-thousand-row tables stream without buffering. Live test against the docker stack: 3.0 MB zip with 581 lessons, 76 guardrails, 6 lesson_types, 11 chunks, 14 documents (PDF/DOCX/PNG/markdown), all decoded byte-correctly via `openBundle()`.
+
+### What shipped
+- **`src/services/exchange/exportProject.ts`** (~280 lines) — `exportProject(opts, output)` opens a single dedicated `PoolClient`, builds a `BundleData` whose entity arrays are async generators backed by `pg-cursor`, and pipes through `bundleFormat.encodeBundle()`. Cursors are consumed sequentially (one open at a time) and closed in the generator's finally before the next opens. Embeddings parsed from pgvector text format (`"[0.1,0.2,...]"` → `number[]`).
+- **`GET /api/projects/:id/export`** in `src/api/routes/projects.ts` — sets `Content-Type: application/zip` + `Content-Disposition` headers, streams archiver directly into `res`. Query params `include_documents=false` / `include_chunks=false` skip those entities (default both true — "bundle huge is normal"). 404 if project missing.
+- **bundleFormat extension** — `BundleDocument.content` now accepts `null` for URL-only docs that have no stored binary. The encoder writes the metadata row with `entry: null`; the decoder exposes `BundleDocumentRead.hasContent` and throws `BundleError("missing_entry")` if a consumer calls `openContent()` on a metadata-only doc. New unit test covers the full round-trip.
+- **Documents content extraction** — handles both Phase 10 binary uploads (`data:base64;<...>` prefix) and plain-text uploads (raw utf-8). Extension picked from filename, falling back to doc_type.
+- **`pg-cursor` ^2.19.0 + `@types/pg-cursor` ^2.7.2** added to package.json.
+
+### Live test results (Sprint 11.2)
+```
+GET /api/projects/free-context-hub/export                       → 200, 3,023,663 B
+GET /api/projects/free-context-hub/export?include_chunks=false  → 200, 2,970,887 B
+GET /api/projects/free-context-hub/export?include_documents=false → 200, 2,968,116 B
+GET /api/projects/does-not-exist-xyz/export                     → 404
+
+Decoded full bundle:
+  schema: 1
+  project: free-context-hub / free-context-hub
+  entries:
+    lessons.jsonl       7,623,284 B (581 records)
+    guardrails.jsonl       17,358 B (76 records)
+    lesson_types.jsonl      1,266 B (6 records)
+    chunks.jsonl          146,472 B (11 records)
+    documents/<11 markdown files> · 30-31 B each
+    documents/<doc>.docx · 12,214 B
+    documents/<doc>.pdf  ·  2,545 B
+    documents/<doc>.png  · 46,040 B
+    documents.jsonl         8,270 B (14 records)
+  decoded: 581 lessons, 76 guardrails, 6 lesson_types, 11 chunks,
+           14 documents (0 metadata-only, 61,131 binary bytes)
+```
+
+All bundles decode round-trip via `openBundle()`. Binary docs (PDF / DOCX / PNG) are byte-identical to their on-disk originals.
+
+### Code review — 3 issues caught + fixed
+1. **MED** `encodeBundle(data, output as never)` used a `as never` type cast to bridge `NodeJS.WritableStream` ↔ `Writable`. Replaced by typing the parameter as `Writable` directly — proper compile-time checking restored.
+2. **LOW** `lesson_types` is a global table with no `project_id` column → exporting "the project" actually exports every type known to the instance. Documented in the JSDoc so the import side (Sprint 11.3) knows to reconcile against existing types on the destination.
+3. **LOW** Headers-sent race in the route: if `encodeBundle` errors mid-stream, headers are already flushed and we can't return a clean error. Documented in the route's catch comment — the partial zip will fail to decode client-side and the manifest checksum mismatch will surface the cause.
+
+### Why this matters for the rest of Phase 11
+- 11.3 (full import + conflict policy) consumes the format we just produced. Round-trip already verified end-to-end against real DB rows means import can rely on the data shape.
+- The cursor-based design means Sprint 11.5 (cross-instance pull) can call `exportProject(remoteUrl)` against a 50k-lesson production project without OOM'ing the destination instance.
+- The `BundleDocument.content = null` extension means URL-only docs survive the round-trip as references — important for projects that link to external papers without copying them.
+
+### What's NOT in 11.2 (deferred)
+- API key/role gating on export — readers should be allowed to export, no admin gate
+- Feature toggle to disable export per-project
+- Async background export jobs for huge projects (current sync path holds an HTTP connection for the duration)
+- Encryption / signing of bundles
+- Embedding binary packing — vectors-as-JSON works fine for the 600-lesson test project (~7.6 MB lessons.jsonl, mostly embeddings)
+
+## Sprint 11.1 history (prev)
+
+---
 id: CH-PHASE11-S111
 date: 2026-04-14
 module: Phase11-Sprint11.1

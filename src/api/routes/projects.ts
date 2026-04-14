@@ -13,6 +13,7 @@ import {
 } from '../../core/index.js';
 import { invalidateFeatureCache } from '../../services/featureToggles.js';
 import { requireRole } from '../middleware/requireRole.js';
+import { exportProject, ExportNotFoundError } from '../../services/exchange/exportProject.js';
 
 const router = Router();
 
@@ -112,6 +113,44 @@ router.post('/:id/reflect', requireRole('writer'), async (req, res, next) => {
     });
     res.json({ project_id: projectId, ...result });
   } catch (e) { next(e); }
+});
+
+/** GET /api/projects/:id/export — Phase 11.2: stream a full project bundle as a zip.
+ *  Query params:
+ *    - include_documents=false  → skip documents.jsonl + binary entries
+ *    - include_chunks=false     → skip chunks.jsonl
+ *  Both default to true ("bundle huge is normal").
+ */
+router.get('/:id/export', async (req, res, next) => {
+  try {
+    const projectId = resolveProjectIdOrThrow(String(req.params.id));
+    const includeDocuments = req.query.include_documents !== 'false';
+    const includeChunks = req.query.include_chunks !== 'false';
+
+    const date = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="contexthub-${projectId}-${date}.zip"`,
+    );
+    // Disable any default JSON-ifying middleware buffering by streaming
+    // straight into the response. encodeBundle pipes archiver → res.
+    await exportProject({ projectId, includeDocuments, includeChunks }, res);
+    // archiver.finalize() ended the response; nothing more to send.
+  } catch (e) {
+    if (e instanceof ExportNotFoundError) {
+      if (!res.headersSent) {
+        res.status(404).json({ error: e.message });
+        return;
+      }
+    }
+    // If headers were already sent (mid-stream archiver/cursor error)
+    // we can't return a clean error response — the partial zip will
+    // fail to decode on the client and the manifest checksum
+    // mismatch will surface the cause. Express's default error
+    // handler logs but cannot send a response either.
+    next(e);
+  }
 });
 
 /** DELETE /api/projects/:id — delete workspace data */

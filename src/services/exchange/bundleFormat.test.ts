@@ -371,6 +371,49 @@ test('bundleFormat', async (t) => {
     }
   });
 
+  await t.test('metadata-only document (URL-only, content=null)', async () => {
+    // Phase 11.2: URL-only docs in the documents table have no stored
+    // binary. The bundle should record the metadata row but skip the
+    // binary entry — and the decoder should expose hasContent=false.
+    const buf = await encodeToBuffer({
+      project: sampleProject,
+      documents: [
+        {
+          doc_id: 'url1',
+          ext: 'url',
+          metadata: { name: 'Anthropic', url: 'https://example.com' },
+          content: null,
+        },
+      ],
+    });
+
+    const reader = await openBundle(buf);
+    try {
+      // No binary entry should exist
+      assert.equal(reader.manifest.entries['documents/url1.url'], undefined);
+      // documents.jsonl should still be present with one record
+      assert.ok(reader.manifest.entries['documents.jsonl']);
+      assert.equal(reader.manifest.entries['documents.jsonl'].count, 1);
+
+      const docs: { doc_id: string; hasContent: boolean }[] = [];
+      for await (const d of reader.documents()) {
+        docs.push({ doc_id: d.doc_id, hasContent: d.hasContent });
+      }
+      assert.equal(docs.length, 1);
+      assert.equal(docs[0]!.hasContent, false);
+
+      // openContent on a metadata-only doc must throw
+      const docIter = reader.documents();
+      const first = (await docIter.next()).value!;
+      await assert.rejects(
+        first.openContent(),
+        (err: unknown) => err instanceof BundleError && err.code === 'missing_entry',
+      );
+    } finally {
+      await reader.close();
+    }
+  });
+
   await t.test('rejects document id collision after sanitization', async () => {
     // "a/b" and "a_b" both safeDocId to "a_b" — encoder must refuse.
     await assert.rejects(

@@ -108,9 +108,12 @@ export interface BundleDocument {
   doc_id: string;
   /** JSON-serializable metadata — written into documents.jsonl */
   metadata: Record<string, unknown>;
-  /** Raw file bytes. Buffer for small files, Readable for streaming large ones. */
-  content: Buffer | Readable;
-  /** File extension without leading dot (e.g. "pdf", "png", "md"). */
+  /** Raw file bytes, or `null` for metadata-only docs (URL references with
+   *  no stored content). When null, the encoder writes the metadata row
+   *  with `entry: null` and no binary entry is appended. */
+  content: Buffer | Readable | null;
+  /** File extension without leading dot (e.g. "pdf", "png", "md"). Ignored
+   *  when content is null. */
   ext: string;
 }
 
@@ -136,7 +139,10 @@ export interface BundleDocumentRead {
   metadata: Record<string, unknown>;
   ext: string;
   bytes: number;
-  /** Returns a fresh Readable stream for the document's binary content. */
+  /** True for URL-only docs that were exported without binary content. */
+  hasContent: boolean;
+  /** Returns a fresh Readable stream for the document's binary content.
+   *  Throws if `hasContent` is false. */
   openContent(): Promise<Readable>;
 }
 
@@ -279,44 +285,49 @@ export async function encodeBundle(
     const metaHash = createHash('sha256');
 
     for await (const doc of toAsyncIterable(data.documents)) {
-      const id = safeDocId(doc.doc_id);
-      const ext = safeExt(doc.ext);
-      const entryPath = `${ENTRY_NAMES.documentsPrefix}${id}.${ext}`;
-      // safeDocId collapses path separators — two distinct ids could map
-      // to the same entry path. Detect and refuse, since silent overwrite
-      // would corrupt the bundle and the import would lose a document.
-      if (entries[entryPath]) {
-        throw new BundleError(
-          'io_error',
-          `document id collision after sanitization: "${doc.doc_id}" → "${entryPath}" (already used)`,
-        );
-      }
+      let entryPath: string | null = null;
+      let bytes = 0;
+      let sha256: string | null = null;
+      let ext = safeExt(doc.ext);
 
-      // Hash + size the binary content as we stream it into archiver
-      const measured = measureStream();
-      const source: Readable = Buffer.isBuffer(doc.content)
-        ? Readable.from([doc.content])
-        : doc.content;
-      // Tee into archiver via the measure transform
-      source.pipe(measured.transform);
-      archive.append(measured.transform, { name: entryPath });
-      // Wait for the measure transform to flush before queueing the next entry
-      // so byte counts are deterministic.
-      await measured.done;
-      entries[entryPath] = {
-        bytes: measured.bytes,
-        sha256: measured.sha256,
-      };
-      totalBytes += measured.bytes;
+      if (doc.content !== null) {
+        const id = safeDocId(doc.doc_id);
+        entryPath = `${ENTRY_NAMES.documentsPrefix}${id}.${ext}`;
+        // safeDocId collapses path separators — two distinct ids could map
+        // to the same entry path. Detect and refuse, since silent overwrite
+        // would corrupt the bundle and the import would lose a document.
+        if (entries[entryPath]) {
+          throw new BundleError(
+            'io_error',
+            `document id collision after sanitization: "${doc.doc_id}" → "${entryPath}" (already used)`,
+          );
+        }
+
+        // Hash + size the binary content as we stream it into archiver
+        const measured = measureStream();
+        const source: Readable = Buffer.isBuffer(doc.content)
+          ? Readable.from([doc.content])
+          : doc.content;
+        // Tee into archiver via the measure transform
+        source.pipe(measured.transform);
+        archive.append(measured.transform, { name: entryPath });
+        // Wait for the measure transform to flush before queueing the next entry
+        // so byte counts are deterministic.
+        await measured.done;
+        bytes = measured.bytes;
+        sha256 = measured.sha256;
+        entries[entryPath] = { bytes, sha256 };
+        totalBytes += bytes;
+      }
 
       // Build the metadata line; record entry pointer so import can find the binary
       const line =
         JSON.stringify({
           doc_id: doc.doc_id,
           ext,
-          entry: entryPath,
-          bytes: measured.bytes,
-          sha256: measured.sha256,
+          entry: entryPath, // null for URL-only docs with no stored content
+          bytes,
+          sha256, // null for URL-only docs
           metadata: doc.metadata,
         }) + '\n';
       metaLines.push(line);
@@ -539,11 +550,30 @@ export async function openBundle(input: string | Buffer): Promise<BundleReader> 
     for await (const row of iterateJsonl<{
       doc_id: string;
       ext: string;
-      entry: string;
+      entry: string | null;
       bytes: number;
-      sha256: string;
+      sha256: string | null;
       metadata: Record<string, unknown>;
     }>(ENTRY_NAMES.documents)) {
+      // Metadata-only doc (URL reference, no stored content)
+      if (row.entry === null) {
+        const _row = row;
+        yield {
+          doc_id: _row.doc_id,
+          metadata: _row.metadata,
+          ext: _row.ext,
+          bytes: 0,
+          hasContent: false,
+          async openContent(): Promise<Readable> {
+            throw new BundleError(
+              'missing_entry',
+              `document "${_row.doc_id}" has no stored content (URL-only)`,
+            );
+          },
+        };
+        continue;
+      }
+
       const binEntryMeta = manifest.entries[row.entry];
       if (!binEntryMeta) {
         throw new BundleError(
@@ -567,6 +597,7 @@ export async function openBundle(input: string | Buffer): Promise<BundleReader> 
         metadata: _row.metadata,
         ext: _row.ext,
         bytes: _binMeta.bytes,
+        hasContent: true,
         async openContent(): Promise<Readable> {
           // Re-open the entry stream and tee through a hash transform.
           // We MUST NOT use stream.pipeline here — it fully drains the
