@@ -1,4 +1,53 @@
 ---
+id: CH-PHASE11-S114
+date: 2026-04-15
+module: Phase11-Sprint11.4
+phase: IN_PROGRESS
+---
+
+# Session Patch — 2026-04-15 (Phase 11 Sprint 11.4 — GUI export + import)
+
+## Where We Are
+**Sprint 11.4 complete and live-tested.** Knowledge Exchange section added to the existing Project Settings page — no new top-level routes. Two subsections in one component: Export (toggles + download anchor) and Import (drag-drop + policy radio + dry-run preview + apply + result panel with per-entity counts table and conflicts list). End-to-end browser round-trip verified: created a fresh project with one lesson via API → exported → deleted the project → uploaded the bundle through the GUI dropzone → ran dry-run → clicked Apply → lesson restored byte-identical.
+
+### What shipped
+- **`gui/src/lib/api.ts`** — two new methods:
+  - `exportProjectUrl({ projectId, includeDocuments?, includeChunks? })` returns the URL string for an `<a href>`. No JS fetch — the browser handles the streaming download natively.
+  - `importProject(file, { projectId, policy?, dryRun?, conflictsCap? })` posts the multipart bundle to the import endpoint and returns the parsed `ImportResult`.
+- **`gui/src/app/projects/settings/exchange-panel.tsx`** (~330 lines) — single component holding both subsections:
+  - **Export**: two checkboxes for `include_documents` and `include_chunks`, reactive href on the download `<a>`, lucide `Download` icon.
+  - **Import**: drag-drop dropzone with click-to-browse fallback, file size cap (500 MB matching the BE multer limit), policy radio (`skip` / `overwrite` / `fail` — `skip` default), Preview (dry-run) and Apply buttons (both permissive — no required preview), Clear button to reset.
+  - **Result panel**: green ✓ for `Imported`, blue file icon for dry-run, amber for `Not applied`. Source/generated metadata, per-entity counts table (`total / created / updated / skipped` with em-dash for zeros and color-coded values), conflicts list capped server-side (we display `(N+)` if `conflicts_truncated`).
+- **`gui/src/app/projects/settings/page.tsx`** — wired `<ExchangePanel projectId={projectId} />` between the Features panel and the Danger Zone.
+
+### Live test results (Sprint 11.4)
+Driven via the MCP playwright tools against http://localhost:3002:
+1. Navigated to /projects/settings → Exchange panel renders
+2. Verified default export href: `http://localhost:3001/api/projects/free-context-hub/export`
+3. Unchecked "Include document binaries" → href reactively updated to `?include_documents=false`
+4. Created fresh `sp114-test` project + 1 lesson via API, exported a 6,372 B bundle to disk
+5. Switched the GUI to the new project via localStorage + reload → href tracks the new project_id
+6. Clicked the dropzone → file chooser → uploaded `sp114-bundle.zip` → dropzone label updated to filename + size
+7. Deleted the source project to make the import meaningful
+8. Clicked "Preview (dry-run)" → result panel rendered with `Lessons 1 1 — —` (total / created / updated / skipped), 6 lesson_types skipped (already exist globally), 6 conflicts listed
+9. Clicked "Apply" → header changed to ✓ Imported, lesson visible in `/api/lessons?project_id=sp114-test` with the original `lesson_id` `5baa274c-...`
+
+Full GUI Playwright suite: 50 passed, 1 unrelated flake in `phase10.spec.ts › extract button → mode selector → Fast → review opens` (passes in isolation in 2.8s, fails under full-suite load — same pattern as the earlier lesson distillation flake).
+
+### Code review — 2 issues caught + fixed
+1. **MED** State (`file`, `result`, `busy`) didn't reset when the user switched projects via the project selector. Result panel would show the previous project's import outcome under a different project's header, and a half-uploaded file could be applied to the wrong target. Fixed with a `useEffect([projectId])` that clears file/result/busy and resets the file input. Toggles intentionally NOT reset (user preference for export shape persists across projects).
+2. **LOW** Documented the cross-origin `<a download>` caveat — the HTML `download` attribute is ignored cross-origin, so the actual download filename comes from the BE's `Content-Disposition` header. Kept the attribute for the same-origin production case.
+
+### What's NOT in 11.4 (deferred)
+- Standalone import/export pages (using project-settings is fine — more discoverable, less code)
+- Cross-instance pull UI — that's Sprint 11.5
+- Scheduled / batch imports
+- Editable `conflicts_cap` from the GUI (BE supports it; FE always uses default 50)
+- Strict mode (require dry-run before apply) — went permissive instead
+
+## Sprint 11.3 history (prev)
+
+---
 id: CH-PHASE11-S113
 date: 2026-04-15
 module: Phase11-Sprint11.3

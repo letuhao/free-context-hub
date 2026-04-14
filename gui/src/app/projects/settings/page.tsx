@@ -10,6 +10,7 @@ import { PROJECT_COLORS, getColorClasses, getInitials, type ProjectColorKey } fr
 import { cn } from "@/lib/cn";
 import { NoProjectGuard } from "@/components/no-project-guard";
 import { Copy, Users, AlertTriangle, GitBranch, Sparkles, ClipboardCheck, Activity } from "lucide-react";
+import { ExchangePanel } from "./exchange-panel";
 
 export default function ProjectSettingsPage() {
   const { projectId, projects, refreshProjects } = useProject();
@@ -282,6 +283,9 @@ export default function ProjectSettingsPage() {
           })}
         </div>
       </div>
+
+      {/* Phase 11.4: Knowledge Exchange (export + import) */}
+      <ExchangePanel projectId={projectId} />
 
       {/* Danger Zone */}
       <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-6">

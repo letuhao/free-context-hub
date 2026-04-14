@@ -401,6 +401,54 @@ export const api = {
     return json;
   },
 
+  // ── Phase 11: Knowledge exchange ──
+
+  /** Build the URL for a project export download. Used as the href on
+   *  an <a> tag so the browser handles the streaming download natively
+   *  — no JS fetch required. */
+  exportProjectUrl: (opts: {
+    projectId: string;
+    includeDocuments?: boolean;
+    includeChunks?: boolean;
+  }): string => {
+    const API_URL = process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "http://localhost:3001";
+    const params = new URLSearchParams();
+    if (opts.includeDocuments === false) params.set("include_documents", "false");
+    if (opts.includeChunks === false) params.set("include_chunks", "false");
+    const qs = params.toString();
+    return `${API_URL}/api/projects/${encodeURIComponent(opts.projectId)}/export${qs ? `?${qs}` : ""}`;
+  },
+
+  /** POST a bundle file to the import endpoint. Returns the ImportResult
+   *  on success (HTTP 200) or throws with the server's error message
+   *  on 4xx/5xx. The result shape mirrors importProject's BE type. */
+  importProject: async (
+    file: File,
+    opts: {
+      projectId: string;
+      policy?: "skip" | "overwrite" | "fail";
+      dryRun?: boolean;
+      conflictsCap?: number;
+    },
+  ): Promise<any> => {
+    const API_URL = process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "http://localhost:3001";
+    const params = new URLSearchParams();
+    if (opts.policy) params.set("policy", opts.policy);
+    if (opts.dryRun) params.set("dry_run", "true");
+    if (opts.conflictsCap !== undefined) params.set("conflicts_cap", String(opts.conflictsCap));
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(
+      `${API_URL}/api/projects/${encodeURIComponent(opts.projectId)}/import?${params}`,
+      { method: "POST", body: form },
+    );
+    const json: any = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(json?.error ?? `Import failed: ${res.status}`);
+    }
+    return json;
+  },
+
   // ── Agents ──
   listAgents: (params: { project_id: string }) =>
     request<{ agents?: any[] }>("GET", `/api/agents?${qs(params)}`),
