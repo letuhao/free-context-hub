@@ -57,6 +57,11 @@ export class ExportNotFoundError extends Error {
  *  - If encodeBundle errors mid-stream (e.g. archiver fault), the
  *    generator's finally clause runs cursor.close() before the outer
  *    finally releases the client. No FD leaks.
+ *  - There is NO timeout enforced here. A 50k-lesson + vision-PDFs
+ *    project can hold the HTTP connection for several minutes. The
+ *    client may abort first; that closes res, archiver propagates
+ *    EPIPE, the generators tear down their cursors. For long exports
+ *    Phase 11.4 will add async background job support.
  */
 export async function exportProject(
   opts: ExportProjectOptions,
@@ -77,7 +82,9 @@ export async function exportProject(
     `SELECT project_id, name, description FROM projects WHERE project_id = $1`,
     [projectId],
   );
-  if (projectRow.rowCount === 0) {
+  // Check rows.length, not rowCount — pg types rowCount as number|null and
+  // a null would silently fall through and crash on rows[0]!.
+  if (projectRow.rows.length === 0) {
     throw new ExportNotFoundError(projectId);
   }
   const project = projectRow.rows[0]!;
@@ -209,35 +216,57 @@ function normalizeChunkRow(row: any): unknown {
 // ─── Documents iterable ────────────────────────────────────────────────
 
 /**
- * Yield BundleDocument records for every document in the project. The
- * `documents.content` column holds either a `data:base64;...` blob (for
- * binary docs uploaded via Phase 10) or raw utf-8 text (for markdown,
- * txt, etc.). URL-only docs have content=null and yield with content
- * null so the bundle records the metadata but no binary entry.
+ * Yield BundleDocument records for every document in the project.
+ *
+ * Memory strategy: the cursor SELECTs metadata only (no `content`) so a
+ * single batch is bounded to ~batchSize × small-row regardless of how
+ * large the actual document binaries are. For each row, we issue a
+ * separate SELECT to fetch just that one document's content, yield the
+ * BundleDocument, and let the caller (encodeBundle) consume the buffer
+ * before we move to the next iteration. Peak memory is therefore one
+ * document's content at a time, which is the minimum possible without
+ * pg's large-object API.
+ *
+ * Earlier draft selected `content` inline in the cursor batch — with
+ * a 10MB PDF base64-encoded to ~13MB and batchSize=100 that produced
+ * a 1.3 GB peak memory spike. The N+1 query cost (one extra SELECT
+ * per document) is sub-millisecond and dwarfed by base64 decoding +
+ * archiver compression downstream.
+ *
+ * The `documents.content` column holds either a `data:base64;...` blob
+ * (for binary docs uploaded via Phase 10) or raw utf-8 text (for
+ * markdown / html / txt). URL-only docs have content=null and yield
+ * with content null so the bundle records the metadata but no binary
+ * entry.
  */
 async function* documentIterable(
   client: PoolClient,
   projectId: string,
   batchSize: number,
 ): AsyncGenerator<BundleDocument> {
-  // Stream document metadata via cursor; for each row, materialize the
-  // content into a Buffer (or null) and yield. Note that content lives
-  // inline in the row — for very large docs this means each cursor batch
-  // is heavy, but pg-cursor still bounds peak memory to batchSize rows.
-  const sql = `SELECT doc_id, name, doc_type, url, storage_path,
-                      content, content_hash, file_size_bytes, description,
-                      tags, extraction_status, extraction_mode, extracted_at,
-                      created_at, updated_at
-               FROM documents
-               WHERE project_id = $1
-               ORDER BY created_at`;
-  const cursor = client.query(new Cursor(sql, [projectId]));
+  const metaSql = `SELECT doc_id, name, doc_type, url, storage_path,
+                          content_hash, file_size_bytes, description,
+                          tags, extraction_status, extraction_mode, extracted_at,
+                          created_at, updated_at
+                   FROM documents
+                   WHERE project_id = $1
+                   ORDER BY created_at`;
+  const cursor = client.query(new Cursor(metaSql, [projectId]));
   try {
     while (true) {
       const rows: any[] = await cursor.read(batchSize);
       if (rows.length === 0) break;
       for (const row of rows) {
-        yield documentRowToBundle(row);
+        // Fetch this single document's content separately so we never
+        // hold more than one binary in memory at a time. file_size_bytes
+        // is unreliable for base64-encoded blobs, so we always issue
+        // the query and let the row buffer release once yielded.
+        const contentRes = await client.query<{ content: string | null }>(
+          `SELECT content FROM documents WHERE doc_id = $1`,
+          [row.doc_id],
+        );
+        const rawContent = contentRes.rows[0]?.content ?? null;
+        yield documentRowToBundle(row, rawContent);
       }
     }
   } finally {
@@ -247,8 +276,8 @@ async function* documentIterable(
   }
 }
 
-/** Map a documents row to a BundleDocument. */
-function documentRowToBundle(row: any): BundleDocument {
+/** Map a documents row + its fetched content to a BundleDocument. */
+function documentRowToBundle(row: any, rawContent: string | null): BundleDocument {
   const docType = row.doc_type as string;
   const ext = extForDoc(row);
   const metadata = {
@@ -268,18 +297,17 @@ function documentRowToBundle(row: any): BundleDocument {
   };
 
   // URL-only docs: no content stored, emit metadata-only entry
-  if (row.content === null || row.content === undefined) {
+  if (rawContent === null) {
     return { doc_id: row.doc_id, ext, metadata, content: null };
   }
 
   // Binary docs from Phase 10 upload: prefixed with "data:base64;"
-  const raw: string = row.content;
   let buffer: Buffer;
-  if (raw.startsWith('data:base64;')) {
-    buffer = Buffer.from(raw.slice('data:base64;'.length), 'base64');
+  if (rawContent.startsWith('data:base64;')) {
+    buffer = Buffer.from(rawContent.slice('data:base64;'.length), 'base64');
   } else {
     // Plain text doc (markdown, html, txt, etc.) — utf-8 encode
-    buffer = Buffer.from(raw, 'utf-8');
+    buffer = Buffer.from(rawContent, 'utf-8');
   }
   return { doc_id: row.doc_id, ext, metadata, content: buffer };
 }
