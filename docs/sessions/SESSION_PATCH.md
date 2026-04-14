@@ -1,4 +1,51 @@
 ---
+id: CH-PHASE10-S108
+date: 2026-04-14
+module: Phase10-Sprint10.8
+phase: IN_PROGRESS
+---
+
+# Session Patch — 2026-04-14 (Sprint 10.8 — Phase 10 Playwright browser tests)
+
+## Where We Are
+**Sprint 10.8 complete.** Phase 10 GUI flows now regression-tested at the browser layer. 7 new Playwright tests covering the Documents page upload → extract → review → chunk-search loop. Full GUI suite: **50 passed, 1 pre-existing flake** (`lessons.spec.ts › detail panel opens and edit works` — unrelated to Phase 10).
+
+### What shipped
+- **`test/e2e/gui/phase10.spec.ts`** — 7 scenario tests:
+  1. Upload dialog (file picker) → row appears in table
+  2. URL ingest tab → backend fetches `http://localhost:3001/test-static/sample.md` via SSRF-relaxed loopback → row appears
+  3. Extract button → mode selector modal → Fast mode → review opens with chunk rail
+  4. "Chunks" row action opens review in read-mode on an already-extracted doc
+  5. Chunk search panel: query runs, results or empty-state render
+  6. Chunk search: type filter chip toggles, clear button resets
+  7. "Re-extract All" header button → confirm() → toast "Queued N vision extractions"
+- **Per-test unique fixtures** — `uniqueMarkdownBuffer(marker)` generates fresh content each run so content-hash dedup never collides (was the root cause of the first test-run failures where seeded docs silently returned existing_doc_id with the old name).
+- **`beforeAll` preflight** — skips the whole suite if `/test-static` isn't mounted (matches the API suite's pattern).
+
+### Live test results (Sprint 10.8)
+```
+7/7 passed, 0 failed (~8s)
+phase10-upload-dialog-file              1.2s   ✓
+phase10-url-ingest-tab                  1.2s   ✓
+phase10-extract-fast-review             1.0s   ✓
+phase10-chunks-row-action               1.0s   ✓
+phase10-chunk-search-query              1.1s   ✓
+phase10-chunk-search-filter-toggle      809ms  ✓
+phase10-reextract-all-button            910ms  ✓
+
+Full GUI suite: 50 passed, 1 pre-existing flake (lessons detail panel)
+```
+
+### Bugs caught during test authoring
+- **Content-hash dedup masked the seed helper.** Initial `seedDoc('sample.md', override)` returned the pre-existing doc's id (with its old name) whenever `sample.md` had been uploaded before, so `row:has-text(marker)` never matched. Fixed by generating unique content per marker instead of reusing on-disk fixtures. Lesson: any test that seeds via content-hash–gated ingestion endpoints must vary the payload, not just the metadata.
+- **`.or()` strict-mode violation.** Using `a.or(b)` where both locators happen to match triggers Playwright's strict-mode guard. Replaced with two sequential `expect().toBeVisible()` calls on distinct, unambiguous anchors.
+
+### Vision flow — intentionally skipped
+Async vision progress modal + cancel is exercised by the API suite (`test/e2e/api/phase10.test.ts` — 3 vision tests) which gates on `SKIP_VISION_TESTS`. Browser-level vision tests would add multi-minute wall-clock + LM Studio as a hard dep with no extra coverage, so they're out of scope for this sprint.
+
+## Sprint 10.7 history (prev)
+
+---
 id: CH-PHASE10-S107
 date: 2026-04-13
 module: Phase10-Sprint10.7
