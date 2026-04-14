@@ -22,6 +22,16 @@
  * Knows nothing about HTTP — just bundle → DB. The route in
  * src/api/routes/projects.ts wires this to multer's uploaded file.
  *
+ * Operational caveats:
+ *  - The whole import pins a single PoolClient for its duration. A
+ *    50k-lesson import takes minutes and could starve concurrent
+ *    requests if the pool is small. Consider sizing accordingly.
+ *  - `pool.connect()` has no timeout — if the pool is exhausted, the
+ *    request will hang until a client is available.
+ *  - FK violations on chunks (missing parent doc) or document_lessons
+ *    (missing parent doc/lesson) abort the whole transaction with an
+ *    opaque pg error. A polish sprint can pre-validate FK targets.
+ *
  * Performance note: each row does a SELECT for conflict detection +
  * an INSERT/UPDATE — N+1 round trips per entity. For a 581-lesson
  * project that's ~1200 round trips per import. We chose this over
@@ -367,11 +377,26 @@ async function applyDocument(
 ): Promise<void> {
   const docId: string = doc.doc_id;
   const meta = doc.metadata;
-  const exists = await client.query(
+  const exists = await client.query<{ project_id: string }>(
     `SELECT project_id FROM documents WHERE doc_id = $1`,
     [docId],
   );
   if (exists.rows.length > 0) {
+    // Cross-tenant guard (Sprint 11.3 review fix): without this, a
+    // user with writer access to project B could craft a bundle that
+    // overwrites rows owned by project A, silently transferring
+    // ownership of A's documents to B. Refuse to touch any existing
+    // row whose current project_id doesn't match the import target.
+    const ownerProjectId = exists.rows[0]!.project_id;
+    if (ownerProjectId !== targetProjectId) {
+      counts.skipped += 1;
+      recordConflict({
+        entity: 'documents',
+        id: docId,
+        reason: `doc_id owned by another project ("${ownerProjectId}"), refused`,
+      });
+      return;
+    }
     if (policy === 'skip') {
       counts.skipped += 1;
       recordConflict({ entity: 'documents', id: docId, reason: 'doc_id already exists, skipped' });
@@ -488,8 +513,22 @@ async function applyChunk(
   recordConflict: (c: ImportConflict) => void,
 ): Promise<void> {
   const chunkId: string = row.chunk_id;
-  const exists = await client.query(`SELECT 1 FROM document_chunks WHERE chunk_id = $1`, [chunkId]);
+  const exists = await client.query<{ project_id: string }>(
+    `SELECT project_id FROM document_chunks WHERE chunk_id = $1`,
+    [chunkId],
+  );
   if (exists.rows.length > 0) {
+    // Cross-tenant guard — see applyDocument for the rationale.
+    const ownerProjectId = exists.rows[0]!.project_id;
+    if (ownerProjectId !== targetProjectId) {
+      counts.skipped += 1;
+      recordConflict({
+        entity: 'chunks',
+        id: chunkId,
+        reason: `chunk_id owned by another project ("${ownerProjectId}"), refused`,
+      });
+      return;
+    }
     if (policy === 'skip') {
       counts.skipped += 1;
       recordConflict({ entity: 'chunks', id: chunkId, reason: 'chunk_id already exists, skipped' });
@@ -571,8 +610,22 @@ async function applyLesson(
     );
   }
 
-  const exists = await client.query(`SELECT 1 FROM lessons WHERE lesson_id = $1`, [lessonId]);
+  const exists = await client.query<{ project_id: string }>(
+    `SELECT project_id FROM lessons WHERE lesson_id = $1`,
+    [lessonId],
+  );
   if (exists.rows.length > 0) {
+    // Cross-tenant guard — see applyDocument for the rationale.
+    const ownerProjectId = exists.rows[0]!.project_id;
+    if (ownerProjectId !== targetProjectId) {
+      counts.skipped += 1;
+      recordConflict({
+        entity: 'lessons',
+        id: lessonId,
+        reason: `lesson_id owned by another project ("${ownerProjectId}"), refused`,
+      });
+      return;
+    }
     if (policy === 'skip') {
       counts.skipped += 1;
       recordConflict({ entity: 'lessons', id: lessonId, reason: 'lesson_id already exists, skipped' });
@@ -643,8 +696,22 @@ async function applyGuardrail(
   recordConflict: (c: ImportConflict) => void,
 ): Promise<void> {
   const ruleId: string = row.rule_id;
-  const exists = await client.query(`SELECT 1 FROM guardrails WHERE rule_id = $1`, [ruleId]);
+  const exists = await client.query<{ project_id: string }>(
+    `SELECT project_id FROM guardrails WHERE rule_id = $1`,
+    [ruleId],
+  );
   if (exists.rows.length > 0) {
+    // Cross-tenant guard — see applyDocument for the rationale.
+    const ownerProjectId = exists.rows[0]!.project_id;
+    if (ownerProjectId !== targetProjectId) {
+      counts.skipped += 1;
+      recordConflict({
+        entity: 'guardrails',
+        id: ruleId,
+        reason: `rule_id owned by another project ("${ownerProjectId}"), refused`,
+      });
+      return;
+    }
     if (policy === 'skip') {
       counts.skipped += 1;
       recordConflict({ entity: 'guardrails', id: ruleId, reason: 'rule_id already exists, skipped' });
@@ -702,8 +769,18 @@ async function applyDocumentLesson(
     if (policy === 'fail') {
       throw new ImportError('conflict_fail', `document_lesson link "${compositeId}" already exists`);
     }
-    // overwrite is a no-op here — the only mutable column is linked_at
-    // and there's no real semantic value in updating it. Treat as updated.
+    // overwrite — the PK exhausts the row content except for `linked_at`.
+    // Update it so the count is honest (we ARE writing something) and
+    // the destination reflects the bundle's record of when the link was
+    // formed, which is what an "overwrite" intent implies.
+    if (!dryRun) {
+      await client.query(
+        `UPDATE document_lessons
+            SET linked_at = COALESCE($3, linked_at)
+          WHERE doc_id = $1 AND lesson_id = $2`,
+        [docId, lessonId, row.linked_at],
+      );
+    }
     counts.updated += 1;
     return;
   }
