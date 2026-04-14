@@ -41,6 +41,23 @@ import yauzl from 'yauzl';
 export const SCHEMA_VERSION = 1 as const;
 export const GENERATOR = 'free-context-hub';
 
+/** Canonical entry paths inside the bundle. Keep in sync with both the
+ *  encoder and decoder — typos here would silently produce unreadable
+ *  bundles, since the decoder looks up entries by string match. */
+export const ENTRY_NAMES = {
+  manifest: 'manifest.json',
+  lessons: 'lessons.jsonl',
+  guardrails: 'guardrails.jsonl',
+  lesson_types: 'lesson_types.jsonl',
+  chunks: 'chunks.jsonl',
+  documents: 'documents.jsonl',
+  documentsPrefix: 'documents/',
+} as const;
+
+/** Cap on extension length after sanitization. Anything longer is almost
+ *  certainly a bug or attack and would produce absurd entry paths. */
+const MAX_EXT_LEN = 16;
+
 /** Resolved once at module load — see `getGeneratorVersion()`. */
 let _generatorVersion: string | null = null;
 
@@ -164,15 +181,27 @@ async function* toAsyncIterable<T>(
   }
 }
 
-/** Strip path separators + ".." from a doc_id to produce a safe entry name. */
+/** Strip path separators + ".." from a doc_id to produce a safe entry name.
+ *  Throws on empty input — an empty doc_id would produce `documents/.<ext>`
+ *  which is a malformed entry path. Callers must validate ids upstream. */
 function safeDocId(id: string): string {
-  return id.replace(/[/\\]/g, '_').replace(/\.\./g, '_');
+  if (!id || id.length === 0) {
+    throw new BundleError('io_error', 'doc_id must be a non-empty string');
+  }
+  const out = id.replace(/[/\\]/g, '_').replace(/\.\./g, '_');
+  if (out.length === 0) {
+    throw new BundleError('io_error', `doc_id sanitized to empty: "${id}"`);
+  }
+  return out;
 }
 
-/** Normalize an extension: lowercase, strip leading dot, fall back to "bin". */
+/** Normalize an extension: lowercase, strip leading dot, drop non-alnum,
+ *  cap at MAX_EXT_LEN, fall back to "bin". A 500-char ext would otherwise
+ *  produce an absurd entry path. */
 function safeExt(ext: string): string {
   const e = ext.replace(/^\./, '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  return e || 'bin';
+  if (!e) return 'bin';
+  return e.length > MAX_EXT_LEN ? e.slice(0, MAX_EXT_LEN) : e;
 }
 
 // ─── Encoder ───────────────────────────────────────────────────────────
@@ -183,11 +212,37 @@ function safeExt(ext: string): string {
  *
  * Empty / absent entity collections are skipped — the manifest only lists
  * entries that actually exist in the zip.
+ *
+ * IMPORTANT: this function resolves when archiver finishes pushing bytes,
+ * but the downstream `output` Writable may still be flushing to disk.
+ * Callers writing to `fs.createWriteStream` MUST also `await once(output,
+ * 'close')` before reading the file back.
+ *
+ * Caveats:
+ *  - The `JSON.stringify` of each record will throw on `bigint`,
+ *    circular references, or `undefined` values. Callers are responsible
+ *    for normalizing rows (e.g. `pg-types` returning bigint) upstream.
+ *  - Each entity iterable is consumed sequentially. Cross-iterable
+ *    parallelism is NOT supported.
  */
 export async function encodeBundle(
   data: BundleData,
   output: Writable,
 ): Promise<EncodeResult> {
+  // ---- input validation ----
+  if (!data || typeof data !== 'object') {
+    throw new BundleError('io_error', 'encodeBundle: data is required');
+  }
+  if (!data.project || typeof data.project !== 'object') {
+    throw new BundleError('io_error', 'encodeBundle: data.project is required');
+  }
+  if (typeof data.project.project_id !== 'string' || data.project.project_id.length === 0) {
+    throw new BundleError('io_error', 'encodeBundle: project.project_id must be a non-empty string');
+  }
+  if (typeof data.project.name !== 'string' || data.project.name.length === 0) {
+    throw new BundleError('io_error', 'encodeBundle: project.name must be a non-empty string');
+  }
+
   const archive = archiver('zip', { zlib: { level: 6 } });
   archive.pipe(output);
 
@@ -206,10 +261,10 @@ export async function encodeBundle(
   let totalBytes = 0;
 
   // ---- jsonl entries ----
-  await appendJsonlEntry(archive, entries, 'lessons.jsonl', data.lessons);
-  await appendJsonlEntry(archive, entries, 'guardrails.jsonl', data.guardrails);
-  await appendJsonlEntry(archive, entries, 'lesson_types.jsonl', data.lesson_types);
-  await appendJsonlEntry(archive, entries, 'chunks.jsonl', data.chunks);
+  await appendJsonlEntry(archive, entries, ENTRY_NAMES.lessons, data.lessons);
+  await appendJsonlEntry(archive, entries, ENTRY_NAMES.guardrails, data.guardrails);
+  await appendJsonlEntry(archive, entries, ENTRY_NAMES.lesson_types, data.lesson_types);
+  await appendJsonlEntry(archive, entries, ENTRY_NAMES.chunks, data.chunks);
 
   // ---- documents: metadata jsonl + binaries ----
   if (data.documents) {
@@ -226,7 +281,7 @@ export async function encodeBundle(
     for await (const doc of toAsyncIterable(data.documents)) {
       const id = safeDocId(doc.doc_id);
       const ext = safeExt(doc.ext);
-      const entryPath = `documents/${id}.${ext}`;
+      const entryPath = `${ENTRY_NAMES.documentsPrefix}${id}.${ext}`;
       // safeDocId collapses path separators — two distinct ids could map
       // to the same entry path. Detect and refuse, since silent overwrite
       // would corrupt the bundle and the import would lose a document.
@@ -272,8 +327,8 @@ export async function encodeBundle(
 
     if (metaCount > 0) {
       const metaBuf = Buffer.from(metaLines.join(''), 'utf-8');
-      archive.append(metaBuf, { name: 'documents.jsonl' });
-      entries['documents.jsonl'] = {
+      archive.append(metaBuf, { name: ENTRY_NAMES.documents });
+      entries[ENTRY_NAMES.documents] = {
         bytes: metaBytes,
         sha256: metaHash.digest('hex'),
         count: metaCount,
@@ -291,7 +346,7 @@ export async function encodeBundle(
     project: data.project,
     entries,
   };
-  archive.append(JSON.stringify(manifest, null, 2), { name: 'manifest.json' });
+  archive.append(JSON.stringify(manifest, null, 2), { name: ENTRY_NAMES.manifest });
 
   await archive.finalize();
   if (archiverError) {
@@ -388,12 +443,22 @@ interface ZipEntry {
  * Open a bundle from a path or Buffer. Reads + validates the manifest
  * eagerly; entry payloads stay on disk and stream out on demand via the
  * returned reader's iterators.
+ *
+ * Caveats:
+ *  - yauzl is single-reader. Iterators returned by this reader MUST be
+ *    consumed sequentially — running two `for await` loops in parallel
+ *    against the same reader will collide on the underlying read stream.
+ *  - Each `*.jsonl` entry is currently buffered into memory in full
+ *    before yielding records. For chunks.jsonl on a multi-thousand-chunk
+ *    project this can be hundreds of MB. True streaming JSONL parsing
+ *    is deferred to a polish sprint.
+ *  - Calling `reader.close()` invalidates all outstanding iterators.
  */
 export async function openBundle(input: string | Buffer): Promise<BundleReader> {
   const zip = await openZip(input);
   const entriesByName = await indexEntries(zip);
 
-  const manifestEntry = entriesByName.get('manifest.json');
+  const manifestEntry = entriesByName.get(ENTRY_NAMES.manifest);
   if (!manifestEntry) {
     zip.close();
     throw new BundleError('missing_manifest', 'bundle has no manifest.json');
@@ -469,7 +534,7 @@ export async function openBundle(input: string | Buffer): Promise<BundleReader> 
   }
 
   async function* iterateDocuments(): AsyncGenerator<BundleDocumentRead> {
-    const meta = manifest.entries['documents.jsonl'];
+    const meta = manifest.entries[ENTRY_NAMES.documents];
     if (!meta) return;
     for await (const row of iterateJsonl<{
       doc_id: string;
@@ -478,7 +543,7 @@ export async function openBundle(input: string | Buffer): Promise<BundleReader> 
       bytes: number;
       sha256: string;
       metadata: Record<string, unknown>;
-    }>('documents.jsonl')) {
+    }>(ENTRY_NAMES.documents)) {
       const binEntryMeta = manifest.entries[row.entry];
       if (!binEntryMeta) {
         throw new BundleError(
@@ -537,7 +602,13 @@ export async function openBundle(input: string | Buffer): Promise<BundleReader> 
               cb();
             },
           });
+          // Bidirectional cleanup: errors and consumer-side close MUST
+          // tear down the upstream yauzl read stream, otherwise dropping
+          // the iterator early leaks file descriptors.
           raw.on('error', (err) => verifier.destroy(err));
+          verifier.on('close', () => {
+            if (!raw.destroyed) raw.destroy();
+          });
           raw.pipe(verifier);
           return verifier;
         },
@@ -547,11 +618,11 @@ export async function openBundle(input: string | Buffer): Promise<BundleReader> 
 
   return {
     manifest,
-    lessons: () => iterateJsonl<unknown>('lessons.jsonl'),
-    guardrails: () => iterateJsonl<unknown>('guardrails.jsonl'),
-    lesson_types: () => iterateJsonl<unknown>('lesson_types.jsonl'),
+    lessons: () => iterateJsonl<unknown>(ENTRY_NAMES.lessons),
+    guardrails: () => iterateJsonl<unknown>(ENTRY_NAMES.guardrails),
+    lesson_types: () => iterateJsonl<unknown>(ENTRY_NAMES.lesson_types),
     documents: () => iterateDocuments(),
-    chunks: () => iterateJsonl<unknown>('chunks.jsonl'),
+    chunks: () => iterateJsonl<unknown>(ENTRY_NAMES.chunks),
     async close() {
       zip.close();
     },

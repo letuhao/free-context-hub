@@ -317,6 +317,60 @@ test('bundleFormat', async (t) => {
     }
   });
 
+  await t.test('rejects encodeBundle with invalid project metadata', async () => {
+    // missing project
+    await assert.rejects(
+      encodeToBuffer({ project: undefined as unknown as typeof sampleProject }),
+      (err: unknown) => err instanceof BundleError && err.code === 'io_error',
+    );
+    // empty project_id
+    await assert.rejects(
+      encodeToBuffer({ project: { project_id: '', name: 'x', description: null } }),
+      (err: unknown) => err instanceof BundleError && err.code === 'io_error',
+    );
+    // empty name
+    await assert.rejects(
+      encodeToBuffer({ project: { project_id: 'p1', name: '', description: null } }),
+      (err: unknown) => err instanceof BundleError && err.code === 'io_error',
+    );
+  });
+
+  await t.test('rejects empty doc_id', async () => {
+    await assert.rejects(
+      encodeToBuffer({
+        project: sampleProject,
+        documents: [{ doc_id: '', ext: 'pdf', metadata: {}, content: Buffer.from('x') }],
+      }),
+      (err: unknown) => err instanceof BundleError && err.code === 'io_error',
+    );
+  });
+
+  await t.test('safeExt caps absurdly long extensions', async () => {
+    // 100-char ext should be truncated to 16 chars in the entry path
+    const buf = await encodeToBuffer({
+      project: sampleProject,
+      documents: [
+        {
+          doc_id: 'd1',
+          ext: 'a'.repeat(100),
+          metadata: {},
+          content: Buffer.from('x'),
+        },
+      ],
+    });
+    const reader = await openBundle(buf);
+    try {
+      const paths = Object.keys(reader.manifest.entries);
+      const docPath = paths.find((p) => p.startsWith('documents/d1.'));
+      assert.ok(docPath, 'expected a documents/d1.* entry');
+      // documents/d1.<ext> — ext part should be at most 16 chars
+      const ext = docPath!.slice('documents/d1.'.length);
+      assert.ok(ext.length <= 16, `ext should be capped, got ${ext.length} chars`);
+    } finally {
+      await reader.close();
+    }
+  });
+
   await t.test('rejects document id collision after sanitization', async () => {
     // "a/b" and "a_b" both safeDocId to "a_b" — encoder must refuse.
     await assert.rejects(
