@@ -9,7 +9,13 @@ import { test, expect } from './fixtures.js';
 const API_BASE = process.env.API_BASE_URL ?? 'http://localhost:3001';
 const PROJECT_ID = 'free-context-hub';
 
-/** Helper: create a lesson via API for test data seeding. */
+/** Helper: create a lesson via API for test data seeding.
+ *
+ *  POST /api/lessons calls LLM distillation synchronously; if the model
+ *  errors out (rate limit, cold start, eviction under heavy suite load)
+ *  the lesson is written with status='draft' and the Active tab hides it.
+ *  We force-PATCH back to 'active' so the test can always find the row
+ *  on the default tab. Best-effort — ignore failures. */
 async function seedLesson(opts: { title: string; type?: string; tags?: string[] }): Promise<string> {
   const res = await fetch(`${API_BASE}/api/lessons`, {
     method: 'POST',
@@ -23,7 +29,13 @@ async function seedLesson(opts: { title: string; type?: string; tags?: string[] 
     }),
   });
   const body = await res.json();
-  return body.lesson_id;
+  const lessonId: string = body.lesson_id;
+  await fetch(`${API_BASE}/api/lessons/${lessonId}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project_id: PROJECT_ID, status: 'active' }),
+  }).catch(() => {});
+  return lessonId;
 }
 
 /** Helper: archive a lesson via API for cleanup. */
@@ -145,29 +157,33 @@ test.describe('Lessons Page', () => {
     await expect(page.locator('text=Lessons').first()).toBeVisible();
   });
 
+  // POST /api/lessons runs distillation synchronously against the LLM,
+  // which gets slow under the full-suite load. 60s covers the worst case.
   test('detail panel opens and edit works', async ({ page }) => {
+    test.setTimeout(60_000);
     const marker = `gui-edit-${Date.now()}`;
-    const id = await seedLesson({ title: `Editable ${marker}` });
+    const title = `Editable ${marker}`;
+    const id = await seedLesson({ title });
 
     try {
       await page.goto('/lessons', { waitUntil: 'networkidle' });
-      await page.waitForTimeout(1000);
 
-      // Click on the lesson row
-      const row = page.locator(`text=Editable ${marker}`);
+      // Click the row directly (not the text node) — DataTable wires
+      // onRowClick onto the <tr>, so clicking child text/checkboxes can
+      // land on a stopPropagation'd target instead of opening the panel.
+      const row = page.locator(`tr:has-text("${title}")`);
+      await expect(row).toBeVisible({ timeout: 10_000 });
       await row.first().click();
-      await page.waitForTimeout(500);
 
-      // Detail panel should open — look for edit button
-      const editBtn = page.locator('button:has-text("Edit")').or(page.locator('[aria-label*="Edit"]'));
-      if (await editBtn.count() > 0) {
-        await editBtn.first().click();
-        await page.waitForTimeout(500);
+      // Scope all further queries to the detail dialog so we don't pick
+      // up the "Edit" button from the AI editor toolbar or page header.
+      const dialog = page.locator('[role="dialog"][aria-label="Lesson detail"]');
+      await expect(dialog).toBeVisible({ timeout: 5_000 });
 
-        // Should see rich editor or textarea
-        const editor = page.locator('textarea').or(page.locator('[contenteditable="true"]'));
-        expect(await editor.count(), 'Expected editor to be visible').toBeGreaterThanOrEqual(1);
-      }
+      // Flip into edit mode and assert the RichEditor's textarea mounts.
+      // The edit control is an icon-only button with title="Edit" (no text).
+      await dialog.locator('button[title="Edit"]').click();
+      await expect(dialog.locator('textarea').first()).toBeVisible({ timeout: 5_000 });
     } finally {
       await archiveLesson(id);
     }
