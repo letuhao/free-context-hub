@@ -1,4 +1,76 @@
 ---
+id: HANDOFF-2026-04-15
+date: 2026-04-15
+phase: HANDOFF
+---
+
+# Handoff — end of 2026-04-15
+
+## TL;DR
+Phase 11 is **4/6 sprints done**. Bundle format, full export, full import, and the GUI Knowledge Exchange panel all shipped + reviewed + live-tested end-to-end. Two sprints remain: **11.5 cross-instance pull** and **11.6 polish + tests**.
+
+## Sprints completed this session
+- **11.1** Bundle format v1 — zip + manifest + JSONL with sha256 per entry. 14 unit tests via `node:test`. (commits `62ae0d9`, `6d49a76`)
+- **11.2** Full project export — `GET /api/projects/:id/export`, pg-cursor streaming, per-row content fetch to bound peak memory. Live test 3.0 MB bundle round-trip. (commits `f0988b3`, `561b3e2`)
+- **11.3** Full project import + conflict policy — `POST /api/projects/:id/import`, three policies, dry-run, transactional. **Cross-tenant hijack security fix in code review.** Live round-trip restored a lesson byte-identically. (commits `0d6b3b5`, `694878c`)
+- **11.4** GUI Knowledge Exchange panel — embedded in Project Settings, drag-drop import, dry-run preview, live browser round-trip via MCP playwright. (commits `ffe9ea8`, `6270ff8`)
+
+Plus the pre-Phase-11 housekeeping at session start: **Sprint 10.8** (Phase 10 Playwright browser tests, `5edfb5f`) and the **lessons.spec.ts flake fix** (`9c10c90`).
+
+## What's next — start with Sprint 11.5
+Detailed plan in [`docs/phase11-task-breakdown.md`](../phase11-task-breakdown.md).
+
+Sprint 11.5 — **Cross-instance pull**:
+- New endpoint `POST /api/projects/:id/pull-from`
+- Body: `{ remote_url, remote_project_id, api_key?, policy?, dry_run? }`
+- Builds the remote `/export` URL, fetches via `fetch()`, streams body into a temp file, calls `importProject(tempPath, ...)`
+- SSRF-hardened (same allowlist/denylist as `src/services/urlFetch.ts` from Sprint 10.7)
+- Returns the same `ImportResult` shape as the local import route
+- 502 on unreachable remote, 4xx on remote error response
+
+The pull endpoint is a thin orchestrator over existing code. Reuse `urlFetch.ts`'s SSRF guard. The import side already handles every correctness concern.
+
+## After 11.5 — Sprint 11.6 polish + tests
+Per the test plan we discussed: API integration tests for round-trip + cross-version, unit tests for serializer/deserializer + ID remapping + conflict policies, one Playwright scenario for the GUI flow. Plus deferred polish items (streaming JSONL parser on decoder side, streaming base64 on import, ON CONFLICT migration for the N+1 perf win).
+
+## How to get the stack running
+```bash
+cd d:/Works/source/free-context-hub
+docker compose up -d
+# Wait ~5 s, then:
+curl http://localhost:3001/api/projects        # verify API
+curl -I http://localhost:3002                  # verify GUI
+```
+
+The `ALLOW_PRIVATE_FETCH_FOR_TESTS=true` flag in `.env` enables the `/test-static/` route used by the URL ingestion tests from Sprint 10.7. Required for the Phase 10 Playwright spec we shipped this morning.
+
+## Open issues / known flakes
+- `phase10.spec.ts › extract button → mode selector → Fast → review opens` — flaky under full-suite load (passes in isolation in 2.8s). Same root cause as the lesson distillation flake: real DB extraction races a 15s test timeout when the suite is busy. Not blocking.
+- N+1 SELECT pattern in `importProject` is documented but not optimized. Polish for 11.6.
+- Bundle decoder buffers each jsonl entry into memory before yielding records. Documented; polish for 11.6.
+
+## File map (Phase 11)
+```
+src/services/exchange/
+├── bundleFormat.ts             570 lines  — encoder/decoder
+├── bundleFormat.test.ts        330 lines  — 14 unit tests
+├── exportProject.ts            300 lines  — DB → bundle
+└── importProject.ts            720 lines  — bundle → DB
+
+src/api/routes/projects.ts      both export + import routes added
+
+gui/src/lib/api.ts              exportProjectUrl + importProject
+gui/src/app/projects/settings/exchange-panel.tsx   400 lines  — full panel
+
+docs/phase11-task-breakdown.md  this session's authoritative plan
+docs/sessions/SESSION_PATCH.md  this file
+```
+
+---
+
+# Sprint history
+
+---
 id: CH-PHASE11-S114
 date: 2026-04-15
 module: Phase11-Sprint11.4
