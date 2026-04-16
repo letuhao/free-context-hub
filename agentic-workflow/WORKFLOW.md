@@ -6,29 +6,30 @@
 
 ---
 
-## Task Workflow (11 phases)
+## Task Workflow (12 phases)
 
 Every task follows this workflow. The agent plays all roles sequentially.
 
 **ENFORCEMENT: This workflow uses a state machine (`.workflow-state.json`). You MUST call the phase transition protocol before moving between phases. Hooks will block commits if verification evidence is missing.**
 
 ```
-Phase      | Role              | What Happens
------------|-------------------|----------------------------------------------
-1. CLARIFY | Architect + PO    | Brainstorm, ask questions, define scope
-2. DESIGN  | Lead              | API contract / component API / data flow
-3. REVIEW  | PO + Lead         | Review design spec before coding
-4. PLAN    | Lead + Developer  | Decompose into bite-sized tasks (2-5 min)
-5. BUILD   | Developer         | Write code (TDD: red -> green -> refactor)
-6. VERIFY  | Developer         | Evidence-based verification gate
-7. REVIEW  | Lead              | Code review (spec compliance + quality)
-8. QC      | QA / PO           | Test against acceptance criteria
-9. SESSION | Developer         | Update session notes + task status
-10. COMMIT | Developer         | Git commit (+ push if approved)
-11. RETRO  | All               | Record decision/workaround if learned
+Phase          | Role              | What Happens
+---------------|-------------------|----------------------------------------------
+1. CLARIFY     | Architect + PO    | Brainstorm, ask questions, define scope
+2. DESIGN      | Lead              | API contract / component API / data flow
+3. REVIEW      | PO + Lead         | Review design spec before coding
+4. PLAN        | Lead + Developer  | Decompose into bite-sized tasks (2-5 min)
+5. BUILD       | Developer         | Write code (TDD: red -> green -> refactor)
+6. VERIFY      | Developer         | Evidence-based verification gate
+7. REVIEW      | Lead              | Code review (spec compliance + quality)
+8. QC          | QA / PO           | Test against acceptance criteria
+9. POST-REVIEW | Human + Developer | Human-interactive review (context reset)
+10. SESSION    | Developer         | Update session notes + task status
+11. COMMIT     | Developer         | Git commit (+ push if approved)
+12. RETRO      | All               | Record decision/workaround if learned
 ```
 
-**Status tracking:** `[ ]` not started · `[C]` clarify · `[D]` design · `[P]` plan · `[B]` build · `[V]` verify · `[R]` review · `[Q]` QC · `[S]` session · `[x]` done
+**Status tracking:** `[ ]` not started · `[C]` clarify · `[D]` design · `[P]` plan · `[B]` build · `[V]` verify · `[R]` review · `[Q]` QC · `[PR]` post-review · `[S]` session · `[x]` done
 
 **Task types:** `[FE]` frontend · `[BE]` backend · `[FS]` full-stack
 
@@ -90,6 +91,7 @@ Skipping: CLARIFY, PLAN -> straight to BUILD
 | Skip PLAN, jump to BUILD | "It's a small change" | Small changes grow; no plan = no checkpoint |
 | Skip VERIFY after BUILD | "Tests passed earlier" | Stale results are not evidence |
 | Skip REVIEW after VERIFY | "I wrote it, I know it's correct" | Author blindness is real |
+| Skip POST-REVIEW | "I already reviewed in phase 7" | Phase 7 review has author blindness — you wrote this code moments ago. POST-REVIEW forces context reset via human interaction, then fresh re-read from disk. **NEVER skippable.** |
 | Skip SESSION before COMMIT | "I'll update later" | You won't. Context is lost |
 | Combine multiple phases | "CLARIFY+DESIGN+PLAN in one go" | Phases exist to create pause points |
 
@@ -220,7 +222,38 @@ Both stages must pass. If issues found: fix -> re-verify (Phase 6) -> re-review.
 - Edge cases, error states, regression checks
 - If QC fails: loop back to Phase 5 BUILD
 
-### Phase 9: SESSION
+### Phase 9: POST-REVIEW (Human-Interactive Context Reset)
+
+**Why this phase exists:** AI agents suffer from author blindness — they can't objectively review code they just wrote because the reasoning is still in context. A forced human interaction breaks the agent's thought chain, effectively resetting its perspective. When the agent resumes after the human responds, it re-reads code from scratch rather than relying on what it *thinks* it wrote.
+
+**This phase is NEVER skippable, regardless of task size.**
+
+**Step 1 — Present summary to human (MANDATORY STOP):**
+- List all files created/modified with one-line descriptions
+- Summarize what was built and key design decisions
+- Report verification evidence (build, tests, type-check)
+- **STOP and WAIT for human response.** Do NOT proceed until the human replies.
+
+**Step 2 — After human responds, adversarial review:**
+- **Re-read ALL changed files from disk** — do NOT rely on memory or prior context
+- Review with an adversarial mindset: actively try to break the code
+- Check these categories:
+
+| Category | What to look for |
+|----------|-----------------|
+| **Logic** | Off-by-one, null handling, missing edge cases, wrong operator |
+| **Data flow** | Can fields be null when code assumes non-null? Are transformations reversible when they should be? |
+| **API contract** | Request/response mismatch, missing validation, wrong HTTP status codes |
+| **State** | Cache staleness, race conditions, stale closures |
+| **Integration** | Does the new code break existing callers? Are mocks in tests updated? |
+| **Security** | Input validation at boundaries, injection, auth bypass |
+
+**Step 3 — Report findings:**
+- If issues found: list them with severity, then fix → loop back to Phase 6 VERIFY
+- If no issues found: state explicitly "Post-review: 0 issues found" with evidence of what was checked
+- Complete with: `./scripts/workflow-gate.sh complete post-review "<N issues found, M fixed>"`
+
+### Phase 10: SESSION
 
 <!-- [CUSTOMIZE] Change the path below to your project's session tracking file -->
 
@@ -233,13 +266,13 @@ What to include:
 - Live test results (real stack, not mocked)
 - What's next
 
-### Phase 10: COMMIT
+### Phase 11: COMMIT
 
 - Write clear commit message (what + why)
 - `git commit` — small and atomic preferred
 - Push only with user approval or pre-authorized rules
 
-### Phase 11: RETRO
+### Phase 12: RETRO
 
 - If a non-obvious decision was made -> record it (decision log, ADR, lesson, etc.)
 - If a workaround was needed -> record it with context so it can be revisited
@@ -317,12 +350,13 @@ Repeat 2-5 per sprint.
 ## Quick Reference Card
 
 ```
-CLARIFY -> DESIGN -> REVIEW -> PLAN -> BUILD -> VERIFY -> REVIEW -> QC -> SESSION -> COMMIT -> RETRO
-   C          D         R        P       B        V         R       Q       S         x         x
+CLARIFY -> DESIGN -> REVIEW -> PLAN -> BUILD -> VERIFY -> REVIEW -> QC -> POST-REVIEW -> SESSION -> COMMIT -> RETRO
+   C          D         R        P       B        V         R       Q        PR             S         x         x
 
 Size classification: count files + logic + side_effects BEFORE starting
 Skip CLARIFY+PLAN: only XS (1 file, 0-1 logic, 0 side effects)
 Skip PLAN only: XS or S (1-2 files, 0 side effects)
+POST-REVIEW: NEVER skippable — present to human, wait, re-read code fresh, adversarial review
 Skip TDD for: UI layout, config, docs, migrations
 Hard stop debugging after: 3 failed fix attempts
 Verify gate: run command -> read output -> then claim
@@ -337,4 +371,4 @@ Verify gate: run command -> read output -> then claim
 
 ---
 
-*Workflow v2 — last updated 2026-04-16*
+*Workflow v2.1 — last updated 2026-04-16*

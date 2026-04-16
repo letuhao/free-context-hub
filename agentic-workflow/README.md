@@ -1,7 +1,9 @@
-# Agentic Workflow v2
+# Agentic Workflow v2.1
 
 A drop-in structured workflow for AI coding agents (Claude Code, Cursor, Codex, etc.).  
 Prevents agents from skipping phases, undersizing tasks, and committing without verification.
+
+**v2.1 adds POST-REVIEW** — a mandatory human-interactive review phase that forces an AI context reset, eliminating author blindness by making the agent re-read all code from scratch after human interaction.
 
 ## What's inside
 
@@ -52,11 +54,13 @@ Layer 2 (State machine)   → Script blocks the phase transition, shows error
 Layer 3 (Hook)            → Hook intercepts git commit, blocks it hard
 ```
 
-### 11-Phase Workflow
+### 12-Phase Workflow
 
 ```
-CLARIFY → DESIGN → REVIEW → PLAN → BUILD → VERIFY → REVIEW → QC → SESSION → COMMIT → RETRO
+CLARIFY → DESIGN → REVIEW → PLAN → BUILD → VERIFY → REVIEW → QC → POST-REVIEW → SESSION → COMMIT → RETRO
 ```
+
+**POST-REVIEW** is the key innovation: human interaction forces the AI to stop its thought chain. When it resumes, it must re-read all changed code from disk — not from memory. This eliminates author blindness and catches bugs that self-review misses.
 
 ### Task Size Classification
 
@@ -71,6 +75,8 @@ Agents can't self-judge "small vs large." The protocol forces objective counting
 | XL   | 10+   | Any   | Yes          | None |
 
 The script validates counts vs claimed size — **agents cannot undersize**.
+
+**POST-REVIEW is never skippable** — it's the only phase that requires human interaction, which is exactly what makes it effective.
 
 ### Script Commands
 
