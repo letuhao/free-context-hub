@@ -48,36 +48,232 @@ Don't memorize tool schemas — `help()` is always current.
 
 ---
 
-## Task Workflow (9 phases per task)
+## Task Workflow v2 (11 phases per task)
+
+> v2 absorbs execution discipline from [Superpowers](https://github.com/obra/superpowers) (brainstorming protocol, plan decomposition, TDD, verification gate, debugging protocol, subagent dispatch) while keeping our strengths (session persistence, role perspectives, guardrails, MCP knowledge layer).
 
 Every task follows this workflow. The agent plays all roles sequentially.
 
+**ENFORCEMENT: This workflow uses a state machine (`.workflow-state.json`). You MUST call the phase transition protocol before moving between phases. Hooks will block commits if verification evidence is missing.**
+
 ```
-Phase     │ Role              │ What Happens
-──────────┼───────────────────┼──────────────────────────────────────
-1. PLAN   │ Architect + PO    │ Define scope, acceptance criteria, deps
-2. DESIGN │ Lead              │ API contract / component API / data flow
-3. REVIEW │ PO + Lead         │ Review design before coding
-4. BUILD  │ Developer         │ Write code (backend then frontend)
-5. TEST   │ Developer         │ Run locally, fix bugs, write unit tests
-6. REVIEW │ Lead              │ Code review (patterns, security, a11y)
-7. QC     │ QA / PO           │ Test against acceptance criteria
-8. SESSION│ Developer         │ Update SESSION_PATCH.md + task status
-9. COMMIT │ Developer         │ Git commit + push
+Phase      │ Role              │ What Happens
+───────────┼───────────────────┼──────────────────────────────────────
+1. CLARIFY │ Architect + PO    │ Brainstorm, ask questions, define scope
+2. DESIGN  │ Lead              │ API contract / component API / data flow
+3. REVIEW  │ PO + Lead         │ Review design spec before coding
+4. PLAN    │ Lead + Developer  │ Decompose into bite-sized tasks (2-5 min)
+5. BUILD   │ Developer         │ Write code (TDD: red → green → refactor)
+6. VERIFY  │ Developer         │ Evidence-based verification gate
+7. REVIEW  │ Lead              │ Code review (spec compliance + quality)
+8. QC      │ QA / PO           │ Test against acceptance criteria
+9. SESSION │ Developer         │ Update SESSION_PATCH.md + task status
+10. COMMIT │ Developer         │ Git commit + push
+11. RETRO  │ All               │ Add lesson if decision/workaround learned
 ```
 
-**Status tracking:** `[ ]` not started · `[P]` plan · `[D]` design · `[B]` build · `[R]` review · `[Q]` QC · `[S]` session · `[✓]` done
+**Status tracking:** `[ ]` not started · `[C]` clarify · `[D]` design · `[P]` plan · `[B]` build · `[V]` verify · `[R]` review · `[Q]` QC · `[S]` session · `[✓]` done
+
+### Anti-Skip Rules (MANDATORY)
+
+Agents are known to skip phases to "save time." This is explicitly forbidden.
+
+**Common skip patterns — ALL are violations:**
+
+| Skip pattern | Why agents do it | Why it's forbidden |
+|---|---|---|
+| Skip CLARIFY, jump to BUILD | "The task seems obvious" | Unexamined assumptions cause rework |
+| Skip PLAN, jump to BUILD | "It's a small change" | Small changes grow; no plan = no checkpoint |
+| Skip VERIFY after BUILD | "Tests passed earlier" | Stale results are not evidence |
+| Skip REVIEW after VERIFY | "I wrote it, I know it's correct" | Author blindness is real |
+| Skip SESSION before COMMIT | "I'll update later" | You won't. Context is lost |
+| Combine multiple phases | "CLARIFY+DESIGN+PLAN in one go" | Phases exist to create pause points for user input |
+
+**The only allowed skips** are for tasks classified as **XS** by the size protocol below. All other tasks must complete every phase. If a phase doesn't list skip conditions, it CANNOT be skipped.
+
+### Task Size Classification (MANDATORY — do this BEFORE any work)
+
+Agents are bad at judging task size. This protocol removes subjectivity.
+
+**Before starting any task, count these 3 things:**
+
+| Metric | How to count |
+|--------|-------------|
+| **Files touched** | How many files will be created or modified? |
+| **Logic changes** | How many functions/methods/handlers will change behavior? (not just formatting) |
+| **Side effects** | Does it change: API contract, DB schema, config, external behavior, types used by other files? |
+
+**Classification rules (objective, not negotiable):**
+
+| Size | Files | Logic changes | Side effects | Allowed skips |
+|------|-------|---------------|--------------|---------------|
+| **XS** | 1 | 0-1 | None | May skip CLARIFY + PLAN (go to BUILD). Still MUST do VERIFY. |
+| **S** | 1-2 | 2-3 | None | May skip PLAN only. Still MUST do CLARIFY (brief) + VERIFY. |
+| **M** | 3-5 | 4+ | Maybe | No skips allowed. Full 11 phases. |
+| **L** | 6+ | Any | Yes | No skips. Write plan file. Consider subagent dispatch. |
+| **XL** | 10+ | Any | Yes | No skips. Write spec + plan files. Subagent dispatch recommended. |
+
+**XS examples (the ONLY tasks that can skip):**
+- Fix a typo in a string literal (1 file, 0 logic, 0 side effects)
+- Update a version number in package.json (1 file, 0 logic, 0 side effects)
+- Fix an off-by-one in a single function with existing tests (1 file, 1 logic, 0 side effects)
+
+**NOT XS (agents commonly misjudge these):**
+- "Simple" CSS fix → often touches multiple components = S or M
+- "Quick" API param rename → changes contract, affects callers = M+
+- "Small" bug fix → if root cause unclear, debugging = M+
+- "Just" add a field → migration + API + UI + types = L
+- Any task where you haven't read the code yet → **you don't know the size yet, don't classify**
+
+**The classification must be stated explicitly before work begins:**
+```
+Task: Fix the off-by-one in pagination
+Size: XS (1 file: src/api/routes/lessons.ts, 1 logic change: offset calc, 0 side effects)
+Skipping: CLARIFY, PLAN → straight to BUILD
+```
+
+If during BUILD you discover the task is larger than classified — STOP, reclassify, and resume from the correct phase.
+
+**Phase transition protocol:**
+1. State task size classification before starting (XS/S/M/L/XL with counts)
+2. Before starting any phase, update `.workflow-state.json` with current phase
+3. Before leaving any phase, record the phase output/evidence
+4. If during work you discover the task is larger than classified — STOP, reclassify, announce to user
+5. User can authorize additional skips explicitly — but the agent must never self-authorize
 
 **Task types:** `[FE]` frontend only · `[BE]` backend only · `[FS]` full-stack (backend + frontend)
 
-**Role perspectives:**
+### Role perspectives
 - **Architect** — scoping, dependencies, system-level impact
 - **PO (Product Owner)** — acceptance criteria, design sign-off, final QC
-- **Lead** — technical design, code review (patterns, security, a11y)
-- **Developer** — implementation, testing, session tracking, commits
+- **Lead** — technical design, plan quality, code review (patterns, security, a11y)
+- **Developer** — implementation, TDD, verification, session tracking, commits
 - **QA** — test against acceptance criteria, edge cases, regression
 
 When playing each role, shift perspective accordingly. Architect thinks about system boundaries. PO thinks about user value and acceptance. Lead thinks about code quality and maintainability. Developer thinks about correctness and efficiency. QA thinks about what can break.
+
+---
+
+### Phase 1: CLARIFY (Brainstorming Protocol)
+
+Absorbed from Superpowers. Don't jump into code — clarify first.
+
+1. **Explore context** — read relevant files, docs, git history
+2. **Ask ONE question at a time** — multiple choice preferred, never overwhelm
+3. **Propose 2-3 approaches** with trade-offs after enough context
+4. **Present design in sections** — scale to complexity (few sentences to 300 words per section)
+5. **Write spec file** to `docs/specs/YYYY-MM-DD-<topic>.md` for non-trivial tasks
+6. **Self-review spec** — check for placeholders, contradictions, ambiguity, scope creep
+7. **User approval gate** — do NOT proceed to Phase 2 without user sign-off
+
+**Skip conditions:** Only for tasks classified **XS** (1 file, 0-1 logic changes, 0 side effects). If you haven't counted yet, you can't skip.
+
+---
+
+### Phase 4: PLAN (Task Decomposition)
+
+Absorbed from Superpowers. Break work into executable chunks before coding.
+
+- Decompose into **bite-sized tasks (2-5 minutes each)**
+- Each task specifies: **exact file paths, complete code intent, verification command**
+- **No placeholders allowed** — no "TBD", "TODO", "add error handling here"
+- For large tasks (>5 files), write plan to `docs/plans/YYYY-MM-DD-<feature>.md`
+- Self-review checklist: spec coverage, placeholder scan, type/signature consistency
+
+**Execution mode decision** (for large plans):
+- **Inline** (default): agent executes tasks sequentially with checkpoints
+- **Subagent dispatch** (multi-file, independent tasks): fresh agent per task with 2-stage review
+  - Stage 1: spec compliance review
+  - Stage 2: code quality review
+  - Never skip either stage; never proceed with unfixed issues
+
+**Skip conditions:** Only for tasks classified **XS** or **S**. If classified S, CLARIFY is still required.
+
+---
+
+### Phase 5: BUILD (TDD Discipline)
+
+Enhanced with Superpowers TDD protocol.
+
+For each task in the plan:
+1. **Write a failing test first** (RED) — test must fail for the right reason
+2. **Write minimal code to pass** (GREEN) — no more than needed
+3. **Refactor** — clean up while tests stay green
+4. **Commit the cycle** — small, atomic commits
+
+**When TDD doesn't apply:** UI layout, config changes, docs, migrations — just build and verify.
+
+---
+
+### Phase 6: VERIFY (Evidence Gate)
+
+New phase, absorbed from Superpowers. Evidence before claims, always.
+
+5-step gate before ANY completion claim:
+1. **Identify** the verification command (test, build, lint, curl, etc.)
+2. **Run** it fresh (not from memory/cache)
+3. **Read** complete output including exit codes
+4. **Confirm** output matches the claim
+5. **Only then** state the result with evidence
+
+**Red flags — stop immediately if you catch yourself:**
+- Using "should work", "probably passes", "seems fine"
+- Feeling satisfied before running verification
+- About to commit/push without fresh test run
+- Trusting prior output without re-running
+
+**This gate applies before:** success claims, commits, PRs, task handoffs, session patches.
+
+---
+
+### Phase 7: REVIEW (2-Stage)
+
+Enhanced with Superpowers dual review.
+
+- **Stage 1 — Spec compliance:** Does the code implement what was designed? Missing requirements? Scope creep?
+- **Stage 2 — Code quality:** Patterns, security, a11y, performance, maintainability
+
+Both stages must pass. If issues found → fix → re-verify (Phase 6) → re-review.
+
+---
+
+## Debugging Protocol
+
+Absorbed from Superpowers. Activated whenever a bug is encountered during any phase.
+
+**Rule: NO FIXES WITHOUT ROOT CAUSE INVESTIGATION FIRST.**
+
+```
+Phase      │ What Happens
+───────────┼──────────────────────────────────────
+1. INVEST  │ Read errors fully, reproduce, trace data flow backward
+2. PATTERN │ Find working examples, compare every difference
+3. HYPOTHE │ State hypothesis clearly, test one variable at a time
+4. FIX     │ Write failing test → implement single root-cause fix → verify
+```
+
+**Hard stop:** If 3+ fix attempts fail → stop debugging, question the architecture. Discuss with user before continuing.
+
+**Anti-patterns (never do these):**
+- Propose fix before tracing data flow
+- Attempt multiple fixes simultaneously
+- Skip test creation for the bug
+- Make assumptions without verification
+
+---
+
+## Git Workflow
+
+Enhanced with Superpowers worktree isolation.
+
+- **Small tasks:** work on current branch (default)
+- **Large features (>5 files, >1 hour):** prefer `git worktree` for isolation
+  - Create worktree with clean baseline
+  - Verify tests pass before starting
+  - On completion: merge/PR/discard decision with user
+- **Always:** `check_guardrails` before push
+
+---
 
 ### Session Patch Update Rule (always)
 
@@ -92,7 +288,7 @@ What to include per sprint:
 - What's next
 
 When to update:
-- After Phase 8 (SESSION) of the 9-phase task workflow
+- After Phase 9 (SESSION) of the 11-phase task workflow
 - After Phase 5 (REPORT) of the test workflow
 - Before moving to a new sprint (don't batch)
 
@@ -102,7 +298,7 @@ This rule applies to all sprints, all phases, all sessions — never skip it.
 
 ## Test Workflow (E2E / QC tasks)
 
-For writing tests (not features), use this lighter workflow instead of the 9-phase task workflow.
+For writing tests (not features), use this lighter workflow instead of the 11-phase task workflow.
 
 ```
 Phase     │ What Happens

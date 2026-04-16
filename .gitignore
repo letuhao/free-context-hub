@@ -185,3 +185,6 @@ test-results/.last-run.json
 docs/qc/*-e2e-api-scenario-report.md
 
 docs/qc/*-e2e-agent-report.md
+
+# Workflow state (per-session, not committed)
+.workflow-state.json
