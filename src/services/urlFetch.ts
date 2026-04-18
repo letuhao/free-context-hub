@@ -117,8 +117,12 @@ function isLiteralIp(host: string): boolean {
 
 /** Resolve hostname via DNS and ensure no returned address is in a private
  *  range. Rejects on the FIRST private hit — we don't want to dial a
- *  multi-homed host that also happens to be internal. */
-async function assertHostAllowed(host: string): Promise<void> {
+ *  multi-homed host that also happens to be internal.
+ *
+ *  Exported for reuse by other SSRF-sensitive fetchers (e.g. Phase 11.5
+ *  cross-instance bundle pull). Throws UrlFetchError with codes
+ *  'SSRF_BLOCKED', 'DNS_FAILED', or 'DNS_EMPTY'. */
+export async function assertHostAllowed(host: string): Promise<void> {
   const env = getEnv();
   const allowPrivate = process.env.ALLOW_PRIVATE_FETCH_FOR_TESTS === 'true';
 

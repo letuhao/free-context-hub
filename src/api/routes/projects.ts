@@ -21,6 +21,7 @@ import {
   ImportError,
   type ConflictPolicy,
 } from '../../services/exchange/importProject.js';
+import { pullFromRemote, PullError } from '../../services/exchange/pullFromRemote.js';
 
 // Bundles routinely exceed the 10MB default used for document uploads —
 // 500 MB matches what we've observed in production-scale projects with
@@ -234,6 +235,85 @@ router.post(
     }
   },
 );
+
+/** POST /api/projects/:id/pull-from — Phase 11.5: cross-instance pull.
+ *
+ *  Fetches a project bundle from a remote ContextHub and applies it
+ *  locally. Same ImportResult shape as /import, plus a `remote` field
+ *  with the fetched bytes count.
+ *
+ *  Body:
+ *    remote_url        required — origin of the remote (e.g. https://peer.example.com)
+ *    remote_project_id required — project id on the remote
+ *    api_key           optional — Bearer token for the remote's auth
+ *    policy            skip|overwrite|fail (default skip)
+ *    dry_run           boolean (default false)
+ *    conflicts_cap     positive int, max 1000 (default 50)
+ */
+router.post('/:id/pull-from', requireRole('writer'), async (req, res, next) => {
+  try {
+    const projectId = resolveProjectIdOrThrow(String(req.params.id));
+    const body = (req.body ?? {}) as Record<string, unknown>;
+
+    if (typeof body.remote_url !== 'string' || body.remote_url.length === 0) {
+      res.status(400).json({ error: 'remote_url is required and must be a string' });
+      return;
+    }
+    if (typeof body.remote_project_id !== 'string' || body.remote_project_id.length === 0) {
+      res.status(400).json({ error: 'remote_project_id is required and must be a string' });
+      return;
+    }
+
+    const policy = (body.policy as ConflictPolicy | undefined) ?? 'skip';
+    if (!['skip', 'overwrite', 'fail'].includes(policy)) {
+      res.status(400).json({ error: `invalid policy "${policy}"` });
+      return;
+    }
+
+    const dryRun = body.dry_run === true;
+    const apiKey = typeof body.api_key === 'string' && body.api_key.length > 0 ? body.api_key : undefined;
+
+    let conflictsCap: number | undefined;
+    if (body.conflicts_cap !== undefined) {
+      const raw = typeof body.conflicts_cap === 'number'
+        ? body.conflicts_cap
+        : parseInt(String(body.conflicts_cap), 10);
+      if (!Number.isFinite(raw) || raw < 1) {
+        res.status(400).json({ error: 'conflicts_cap must be a positive integer' });
+        return;
+      }
+      conflictsCap = raw;
+    }
+
+    const result = await pullFromRemote({
+      targetProjectId: projectId,
+      remoteUrl: body.remote_url,
+      remoteProjectId: body.remote_project_id,
+      apiKey,
+      policy,
+      dryRun,
+      conflictsCap,
+    });
+
+    res.json(result);
+  } catch (e) {
+    if (e instanceof PullError) {
+      res.status(e.httpStatus).json({ error: e.message, code: e.code });
+      return;
+    }
+    if (e instanceof ImportError) {
+      const status =
+        e.code === 'malformed_bundle' || e.code === 'schema_version_mismatch' || e.code === 'invalid_row'
+          ? 400
+          : e.code === 'conflict_fail'
+          ? 409
+          : 500;
+      res.status(status).json({ error: e.message, code: e.code });
+      return;
+    }
+    next(e);
+  }
+});
 
 /** DELETE /api/projects/:id — delete workspace data */
 router.delete('/:id', requireRole('admin'), async (req, res, next) => {

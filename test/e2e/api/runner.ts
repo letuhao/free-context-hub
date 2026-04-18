@@ -17,6 +17,7 @@ import { allDocumentTests } from './documents.test.js';
 import { allSearchTests } from './search.test.js';
 import { allSystemTests } from './system.test.js';
 import { allPhase10Tests } from './phase10.test.js';
+import { allPhase11PullTests } from './phase11-pull.test.js';
 
 async function main() {
   const startMs = Date.now();
@@ -37,6 +38,7 @@ async function main() {
     ...allSearchTests,
     ...allSystemTests,
     ...allPhase10Tests,
+    ...allPhase11PullTests,
   ];
 
   console.log(`  ${allTests.length} tests registered.\n`);

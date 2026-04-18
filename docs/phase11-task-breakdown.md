@@ -4,7 +4,7 @@
 > hub for moving a project's full state between ContextHub instances:
 > bundle format → export → import → GUI → cross-instance pull → polish.
 
-## Status: 4/6 sprints complete (◐ in progress)
+## Status: 5/6 sprints complete (◐ in progress)
 
 | Sprint | Focus | Status | Commit |
 |--------|-------|--------|--------|
@@ -12,7 +12,7 @@
 | 11.2 | Full project export (`GET /api/projects/:id/export`) | ✅ | `f0988b3` + review `561b3e2` |
 | 11.3 | Full project import + conflict policy (`POST /api/projects/:id/import`) | ✅ | `0d6b3b5` + review `694878c` |
 | 11.4 | GUI Knowledge Exchange panel (in Project Settings) | ✅ | `ffe9ea8` + review `6270ff8` |
-| 11.5 | Cross-instance pull (`POST /api/projects/:id/pull-from`) | ○ | — |
+| 11.5 | Cross-instance pull (`POST /api/projects/:id/pull-from`) | ✅ | (2026-04-18 — see SESSION_PATCH.md) |
 | 11.6 | Polish + test plan (unit + integration + Playwright) | ○ | — |
 
 ## Architecture
@@ -157,7 +157,7 @@ gui/src/app/projects/settings/exchange-panel.tsx
 - Code review fixes: state reset on project switch, stale-result clear on
   policy change, documented cross-origin `<a download>` footgun.
 
-## Sprint 11.5 — Cross-instance pull (planned)
+## Sprint 11.5 — Cross-instance pull ✅ (complete 2026-04-18)
 
 ### Scope
 New endpoint `POST /api/projects/:id/pull-from` that accepts a remote
@@ -165,21 +165,54 @@ ContextHub URL + optional API key, fetches the remote project's bundle,
 and applies it locally via `importProject`. Idempotent under repeat pulls
 because UUIDs are preserved and `skip` is the default policy.
 
-### Acceptance criteria
-1. `POST /api/projects/:id/pull-from` body: `{ remote_url, remote_project_id, api_key?, policy?, dry_run? }`
-2. Builds the remote export URL from `remote_url + /api/projects/<remote_project_id>/export`
-3. Fetches via `fetch()` with the API key header if provided
-4. Streams the response body into a temp file, then calls `importProject(tempPath, ...)`
-5. Returns the same `ImportResult` shape as the import route
-6. Cleans up the temp file in finally
-7. SSRF-hardened: same allowlist/denylist as `urlFetch.ts` from Sprint 10.7
-8. Returns 502 if the remote is unreachable, 4xx if the remote returns an error
-9. Test: pull from one local instance to another (could use docker compose with two stacks, or run two ports)
+### Acceptance criteria (all met)
+1. ✅ `POST /api/projects/:id/pull-from` body: `{ remote_url, remote_project_id, api_key?, policy?, dry_run?, conflicts_cap? }`
+2. ✅ Builds the remote export URL from `remote_url + /api/projects/<remote_project_id>/export`
+3. ✅ Fetches via `fetch()` with `Authorization: Bearer <api_key>` if provided
+4. ✅ Streams the response body into a temp file, then calls `importProject({ bundlePath })`
+5. ✅ Returns an `ImportResult` superset with a `remote: { url, project_id, bytes_fetched }` field
+6. ✅ Cleans up the temp file + dir in finally (best-effort)
+7. ✅ SSRF-hardened: reuses `assertHostAllowed` from `urlFetch.ts` (exported for this sprint)
+8. ✅ 502 for unreachable / remote non-2xx, 504 for connect timeout, 403 for SSRF, 413 for too-large, 400 for validation
+9. ✅ Self-pull integration test against loopback (`ALLOW_PRIVATE_FETCH_FOR_TESTS=true`)
 
-### Out of scope
-- GUI for cross-instance pull (defer)
-- Bundle caching (defer)
-- Webhook-driven pulls (defer)
+### Files shipped
+- `src/services/urlFetch.ts` — exported `assertHostAllowed` (one-line change)
+- `src/services/exchange/pullFromRemote.ts` — new orchestrator (~330 lines)
+- `src/api/routes/projects.ts` — `POST /:id/pull-from` route (+78 lines)
+- `test/e2e/api/phase11-pull.test.ts` — 9 integration tests (new)
+- `test/e2e/api/runner.ts` — registration
+
+### Review outcome — 10 issues caught + fixed across 3 review passes
+- **Phase-7 REVIEW (1 MED):** `AbortSignal.timeout` was capping body drain; replaced with `AbortController + clearTimeout` after headers so 500 MB pulls on slow links don't abort mid-stream.
+- **`/review-impl` pass 1 (3 MED + 2 LOW):** api_key echo in error response (pre-validated before fetch), Content-Type loose match (type/subtype parse), DNS rebinding TOCTOU (documented, matches urlFetch.ts precedent), temp dir leak window before try (moved inside try), no remoteProjectId length cap (256-char cap).
+- **`/review-impl` pass 2 (1 MED + 2 LOW):** docstring claimed `AbortSignal.timeout` contradicting actual `AbortController` (rewrote file header), stale step numbers in inline comments (stripped), `HEADER_INJECTION_RE` deny-list (swapped for allow-list `/^[\x20-\x7E\t]+$/`).
+
+### Live test results
+Full E2E suite: **56/56 passed, 0 failed, 113-134 s** across 3 run cycles. 9 phase11-pull tests green:
+- `phase11-pull-happy-path` (12s, self-pull round-trips a 6,388-byte bundle)
+- `phase11-pull-dry-run` (9s, applied=false, 0 rows written)
+- `phase11-pull-missing-remote-url` (400)
+- `phase11-pull-missing-remote-project-id` (400)
+- `phase11-pull-bad-scheme` (400, code=bad_scheme)
+- `phase11-pull-invalid-url` (400, code=invalid_url)
+- `phase11-pull-api-key-injection` (400, code=invalid_api_key, no credential echo in message)
+- `phase11-pull-long-project-id` (400, code=invalid_project_id)
+- `phase11-pull-nonexistent-remote` (502, code=upstream_error)
+
+### Out of scope / deferred to 11.6 polish
+- GUI for cross-instance pull (API-only this sprint)
+- Bundle caching
+- Webhook-driven pulls
+- Body-stall timeout (slow-loris defense — bounded by `MAX_BUNDLE_BYTES` for now)
+- DNS-rebinding pinning (needs custom agent with `lookup` override; matches urlFetch.ts precedent)
+
+### Self-pull caveat (documented in test header + pullFromRemote.ts)
+Because source and target share a database in self-pull, the Sprint 11.3
+cross-tenant UUID guard correctly refuses to re-own a lesson_id. Net
+result for self-pull: `counts.lessons.skipped=1 + conflict entry`, not
+`created=1`. True cross-instance pull targets a separate DB where UUIDs
+are fresh — the test asserts EITHER outcome.
 
 ## Sprint 11.6 — Polish + test plan (planned)
 
