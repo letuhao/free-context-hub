@@ -422,7 +422,7 @@ async function main() {
       });
       const merged12 = mergeAndDedupeMatches(matchesRaw1, matchesRaw2, 20);
       const matchesRaw = mergeAndDedupeMatches(merged12, lexicalSide, 20);
-      const target = q.target_files.map(normalizePath);
+      const target = (q.target_files ?? []).map(normalizePath);
       const must = q.must_keywords ?? [];
       const preSorted = qcLexicalPresortMatches({
         matches: matchesRaw,
@@ -446,7 +446,7 @@ async function main() {
         id: q.id,
         group: q.group,
         duration_ms: Date.now() - t0,
-        target_files: q.target_files,
+        target_files: q.target_files ?? [],
         found_ranks: ranks,
         recall_at_1: recallAtK(ranks, 1),
         recall_at_3: recallAtK(ranks, 3),

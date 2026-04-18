@@ -102,7 +102,7 @@ export async function runProductionGoldenEval(params: {
       snippet: String(m.snippet ?? ''),
     }));
     const rankedPaths = matches.map(m => m.path);
-    const target = q.target_files.map(normalizePath);
+    const target = (q.target_files ?? []).map(normalizePath);
     const ranks = target.map(tf => rankedPaths.findIndex(p => p === tf)).map(i => (i >= 0 ? i + 1 : 0));
     const must = q.must_keywords ?? [];
     const hasKeywordEvidence = must.length
@@ -113,7 +113,7 @@ export async function runProductionGoldenEval(params: {
       id: q.id,
       group: q.group,
       duration_ms: Date.now() - t0,
-      target_files: q.target_files,
+      target_files: q.target_files ?? [],
       found_ranks: ranks,
       recall_at_3: recallAtK(ranks, 3),
       mrr: mrr(ranks),

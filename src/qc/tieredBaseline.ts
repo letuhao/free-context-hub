@@ -52,7 +52,7 @@ async function main() {
     });
 
     const resultPaths = ((r as any)?.files || []).map((f: any) => normalizePath(f.path));
-    const targetPaths = q.target_files.map(normalizePath);
+    const targetPaths = (q.target_files ?? []).map(normalizePath);
 
     // Compute ranks: for each target, find its position in results.
     const foundRanks = targetPaths.map(t => {
