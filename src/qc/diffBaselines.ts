@@ -21,6 +21,9 @@ export type Metrics = {
   mrr: number;
   ndcg_at_5: number; ndcg_at_10: number;
   duplication_rate_at_10: number;
+  /** Sprint 12.0.1: near-semantic dup-rate (title+snippet[:100] key).
+   *  Catches pathologies the exact-id v0 metric misses. */
+  duplication_rate_nearsemantic_at_10: number;
   coverage_pct: number;
   latency_p50_ms: number | null;
   latency_p95_ms: number | null;
@@ -50,6 +53,7 @@ export const DIRECTION: Record<keyof Metrics, 1 | -1> = {
   ndcg_at_10: 1,
   coverage_pct: 1,
   duplication_rate_at_10: -1,
+  duplication_rate_nearsemantic_at_10: -1,
   latency_p50_ms: -1,
   latency_p95_ms: -1,
   latency_mean_ms: -1,

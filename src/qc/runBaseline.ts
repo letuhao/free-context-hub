@@ -30,6 +30,7 @@ import {
   duplicationRateAtK,
   latencySummary,
   coveragePct,
+  nearSemanticKey,
 } from './metrics.js';
 import type { GradedHit } from './metrics.js';
 import type { GoldenQuery, GoldenSet, Surface } from './goldenTypes.js';
@@ -128,6 +129,9 @@ type PerQuery = {
   query: string;
   top_k_keys: string[];
   top_k_titles: (string | undefined)[];
+  /** Sprint 12.0.1: snippet passthrough required for near-semantic
+   *  dup-rate v1. Truncated to 200 chars in archive to bound JSON size. */
+  top_k_snippets: (string | undefined)[];
   found_ranks: number[];            // 1-based ranks of target hits within top-k
   graded_hits_in_rank_order: GradedHit[];
   latency_ms_samples: number[];
@@ -213,6 +217,7 @@ async function evalQuery(
     query: q.query,
     top_k_keys: topK.map((x) => x.key),
     top_k_titles: topK.map((x) => x.title),
+    top_k_snippets: topK.map((x) => (x.snippet ? x.snippet.slice(0, 200) : undefined)),
     found_ranks,
     graded_hits_in_rank_order: graded,
     latency_ms_samples: latencies,
@@ -264,6 +269,10 @@ type SurfaceAggregate = {
     mrr: number;
     ndcg_at_5: number; ndcg_at_10: number;
     duplication_rate_at_10: number;
+    /** Sprint 12.0.1 v1 dup-rate: keys on normalized title+snippet[:100].
+     *  Catches same-title-different-UUID and timestamp-variant fixture
+     *  clusters that the v0 metric misses. */
+    duplication_rate_nearsemantic_at_10: number;
     coverage_pct: number;
     /** Null when the surface has zero latency samples (e.g. zero queries).
      *  Distinguishable from "0ms ultra-fast" in the scorecard and diff. */
@@ -294,10 +303,19 @@ function aggregate(perQuery: PerQuery[], projectId: string): SurfaceAggregate {
   // dup-rate averaged across *all* queries (including adversarial) because
   // duplicate-domination is a retrieval pathology independent of whether the
   // answer is present.
+  // v0: key = entity id (exact match only; UUIDs)
   const sumDup = perQuery.reduce(
     (a, q) => a + duplicationRateAtK(q.top_k_keys.map((k) => ({ key: k })), 10),
     0,
   );
+  // v1 (Sprint 12.0.1): key = normalized title+snippet[:100] — catches
+  // same-title-different-UUID and timestamp-variant fixture clusters.
+  const sumDupNearSem = perQuery.reduce((a, q) => {
+    const items = q.top_k_titles.map((title, i) => ({
+      key: nearSemanticKey(title, q.top_k_snippets[i]),
+    }));
+    return a + duplicationRateAtK(items, 10);
+  }, 0);
 
   // Coverage: "should-hit" queries that did hit. Adversarial-miss excluded so
   // the percentage isn't artificially inflated by intentional zero-target queries.
@@ -317,6 +335,7 @@ function aggregate(perQuery: PerQuery[], projectId: string): SurfaceAggregate {
       ndcg_at_5: round(sumNdcg5 / nWithTargets),
       ndcg_at_10: round(sumNdcg10 / nWithTargets),
       duplication_rate_at_10: round(sumDup / Math.max(n, 1)),
+      duplication_rate_nearsemantic_at_10: round(sumDupNearSem / Math.max(n, 1)),
       coverage_pct: round(coveragePct(coverageBools)),
       // C1: null when no latency samples; distinct from "0ms instant"
       latency_p50_ms: lat.n === 0 ? null : Math.round(lat.p50),
@@ -353,13 +372,13 @@ function renderMarkdown(archive: BaselineArchive): string {
   lines.push('');
   lines.push('## Summary (all surfaces)');
   lines.push('');
-  lines.push('| Surface | Project | Q | err | recall@5 | recall@10 | MRR | nDCG@5 | nDCG@10 | dup@10 | cov% | p50 ms | p95 ms |');
-  lines.push('|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|');
+  lines.push('| Surface | Project | Q | err | recall@5 | recall@10 | MRR | nDCG@5 | nDCG@10 | dup@10 | dup@10 nearsem | cov% | p50 ms | p95 ms |');
+  lines.push('|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|');
   for (const [s, a] of Object.entries(surfaces)) {
     if (!a) continue;
     const m = a.metrics;
     lines.push(
-      `| ${s} | ${a.project_id} | ${a.query_count} | ${a.errors} | ${m.recall_at_5} | ${m.recall_at_10} | ${m.mrr} | ${m.ndcg_at_5} | ${m.ndcg_at_10} | ${m.duplication_rate_at_10} | ${m.coverage_pct} | ${fmtMetric(m.latency_p50_ms)} | ${fmtMetric(m.latency_p95_ms)} |`,
+      `| ${s} | ${a.project_id} | ${a.query_count} | ${a.errors} | ${m.recall_at_5} | ${m.recall_at_10} | ${m.mrr} | ${m.ndcg_at_5} | ${m.ndcg_at_10} | ${m.duplication_rate_at_10} | ${m.duplication_rate_nearsemantic_at_10} | ${m.coverage_pct} | ${fmtMetric(m.latency_p50_ms)} | ${fmtMetric(m.latency_p95_ms)} |`,
     );
   }
   lines.push('');

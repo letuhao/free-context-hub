@@ -21,6 +21,8 @@ import {
   duplicationRateAtK,
   latencySummary,
   coveragePct,
+  normalizeForHash,
+  nearSemanticKey,
 } from './metrics.js';
 
 test('recallAtK (re-exported)', async (t) => {
@@ -160,5 +162,95 @@ test('coveragePct', async (t) => {
   });
   await t.test('3/5 → 0.6', () => {
     assert.equal(coveragePct([true, false, true, true, false]), 0.6);
+  });
+});
+
+test('normalizeForHash (Sprint 12.0.1)', async (t) => {
+  await t.test('null/undefined/empty → empty string', () => {
+    assert.equal(normalizeForHash(null), '');
+    assert.equal(normalizeForHash(undefined), '');
+    assert.equal(normalizeForHash(''), '');
+  });
+  await t.test('lowercases', () => {
+    assert.equal(normalizeForHash('Global Search TEST'), 'global search test');
+  });
+  await t.test('collapses digit runs to single N (timestamp-invariant)', () => {
+    assert.equal(normalizeForHash('impexp-1775368159562'), 'impexp-n');
+    assert.equal(normalizeForHash('impexp-1775368419347'), 'impexp-n');
+    // Two distinct numbers collapse to two separate Ns:
+    assert.equal(normalizeForHash('foo 123 bar 456'), 'foo n bar n');
+  });
+  await t.test('collapses whitespace runs', () => {
+    assert.equal(normalizeForHash('foo  \t\n  bar'), 'foo bar');
+  });
+  await t.test('trims leading/trailing whitespace', () => {
+    assert.equal(normalizeForHash('  hello  '), 'hello');
+  });
+  await t.test('combined: timestamp + case + whitespace', () => {
+    const a = 'Valid: impexp-1775368159562-extra';
+    const b = 'VALID:    impexp-1775368419347-EXTRA';
+    assert.equal(normalizeForHash(a), 'valid: impexp-n-extra');
+    assert.equal(normalizeForHash(a), normalizeForHash(b));
+  });
+});
+
+test('nearSemanticKey (Sprint 12.0.1)', async (t) => {
+  await t.test('null inputs → empty-field key', () => {
+    assert.equal(nearSemanticKey(null, null), '||');
+    assert.equal(nearSemanticKey(undefined, undefined), '||');
+    assert.equal(nearSemanticKey('', ''), '||');
+  });
+  await t.test('identical title + snippet → identical key', () => {
+    const k1 = nearSemanticKey('Global search test retry pattern', 'Use exponential backoff for retry');
+    const k2 = nearSemanticKey('Global search test retry pattern', 'Use exponential backoff for retry');
+    assert.equal(k1, k2);
+  });
+  await t.test('timestamp-variant titles collapse to same key (the Valid: impexp cluster)', () => {
+    const k1 = nearSemanticKey(
+      'Valid: impexp-1775368159562-extra',
+      'The provided text is a title and body for an issue or task.',
+    );
+    const k2 = nearSemanticKey(
+      'Valid: impexp-1775368419347-extra',
+      'The provided text is a title and body for an issue or task.',
+    );
+    assert.equal(k1, k2, 'timestamp-varying fixtures must collapse to one near-semantic key');
+  });
+  await t.test('different real content → different keys', () => {
+    const k1 = nearSemanticKey('pg UUID cast returns canonical lowercase', 'map keys built from pg RETURNING need .toLowerCase()');
+    const k2 = nearSemanticKey('undici userland version must match Node bundled', 'bumping to 7+ breaks the pinned Agent Dispatcher interface');
+    assert.notEqual(k1, k2);
+  });
+  await t.test('delimiter prevents title/snippet collision', () => {
+    // Without an unambiguous delimiter, hash("ab", "c") would equal hash("a", "bc").
+    const k1 = nearSemanticKey('ab', 'c');
+    const k2 = nearSemanticKey('a', 'bc');
+    assert.notEqual(k1, k2);
+  });
+  await t.test('snippet truncated at 100 chars (characters past the cap do not affect key)', () => {
+    const longA = 'x'.repeat(100) + 'tail-A';
+    const longB = 'x'.repeat(100) + 'tail-B';
+    assert.equal(nearSemanticKey('same title', longA), nearSemanticKey('same title', longB));
+  });
+  await t.test('snippet up-to-100-chars DOES affect key (cap is 100 not 0)', () => {
+    const a = 'a'.repeat(99) + 'X';
+    const b = 'a'.repeat(99) + 'Y';
+    assert.notEqual(nearSemanticKey('same title', a), nearSemanticKey('same title', b));
+  });
+  await t.test('duplicationRateAtK with nearSemanticKey catches the v0-blind pathology', () => {
+    // Simulated lesson-search top-5 where all titles are identical but UUIDs differ:
+    const items = [
+      { lesson_id: 'aaaa', title: 'Global search test retry pattern', snippet: 'Use exponential backoff for retry' },
+      { lesson_id: 'bbbb', title: 'Global search test retry pattern', snippet: 'Use exponential backoff for retry' },
+      { lesson_id: 'cccc', title: 'Global search test retry pattern', snippet: 'Use exponential backoff for retry' },
+      { lesson_id: 'dddd', title: 'Real distinct lesson', snippet: 'Something genuinely different' },
+      { lesson_id: 'eeee', title: 'Another real one', snippet: 'Also unique content here' },
+    ];
+    // v0 metric: keys are UUIDs, all distinct → 0
+    const v0 = duplicationRateAtK(items.map((x) => ({ key: x.lesson_id })), 10);
+    assert.equal(v0, 0, 'v0 should report 0 (UUIDs all distinct)');
+    // v1 metric: keys are nearSemanticKey(title, snippet) → 3 dup participants out of 5 = 0.6
+    const v1 = duplicationRateAtK(items.map((x) => ({ key: nearSemanticKey(x.title, x.snippet) })), 10);
+    assert.equal(v1, 0.6, 'v1 should surface the 3-member cluster as 0.6 dup participation');
   });
 });

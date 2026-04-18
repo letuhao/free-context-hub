@@ -31,6 +31,7 @@ const ZERO_METRICS: Metrics = {
   ndcg_at_5: 0,
   ndcg_at_10: 0,
   duplication_rate_at_10: 0,
+  duplication_rate_nearsemantic_at_10: 0,
   coverage_pct: 0,
   latency_p50_ms: 0,
   latency_p95_ms: 0,
@@ -81,7 +82,13 @@ test('DIRECTION map invariants', async (t) => {
     for (const k of up) assert.equal(DIRECTION[k], 1, `${k} should be +1 (higher is better)`);
   });
   await t.test('all latency + dup-rate metrics are improve-down (-1)', () => {
-    const down = ['duplication_rate_at_10', 'latency_p50_ms', 'latency_p95_ms', 'latency_mean_ms'] as const;
+    const down = [
+      'duplication_rate_at_10',
+      'duplication_rate_nearsemantic_at_10',
+      'latency_p50_ms',
+      'latency_p95_ms',
+      'latency_mean_ms',
+    ] as const;
     for (const k of down) assert.equal(DIRECTION[k], -1, `${k} should be -1 (lower is better)`);
   });
 });

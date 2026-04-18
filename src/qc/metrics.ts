@@ -94,3 +94,52 @@ export function coveragePct(hasRelevantHit: ReadonlyArray<boolean>): number {
   const hits = hasRelevantHit.filter(Boolean).length;
   return hits / hasRelevantHit.length;
 }
+
+/**
+ * Phase 12 Sprint 12.0.1 — near-semantic duplication helpers.
+ *
+ * Motivation: v0 duplicationRateAtK keyed on entity id (lesson_id etc.)
+ * misses same-title-different-UUID noise. The lesson catalog in
+ * free-context-hub contains 10+ rows titled "Global search test retry
+ * pattern" with distinct UUIDs, and 6+ rows titled "Valid: impexp-<ts>-
+ * extra" — the v0 metric reports dup@10=0 for both clusters.
+ *
+ * nearSemanticKey() + normalizeForHash() give the caller a content-based
+ * key so duplicationRateAtK (unchanged) surfaces the real pathology.
+ */
+
+/** Normalize a text field for near-duplicate hashing.
+ *  - lowercase
+ *  - replace any run of digits with a single 'N' (collapses timestamps:
+ *    "impexp-1775368159562" → "impexp-N")
+ *  - collapse any run of whitespace to a single space
+ *  - trim leading/trailing whitespace
+ *  Intentionally aggressive: the point is to equate fixture timestamps
+ *  and formatting differences that readers would call "the same thing."
+ */
+export function normalizeForHash(s: string | null | undefined): string {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .toLowerCase()
+    .replace(/\d+/g, 'n')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Combine title + the first 100 chars of snippet into one near-semantic
+ *  key. Both fields go through normalizeForHash. A two-char delimiter
+ *  `||` separates the fields so "a||b" and "a|" + "|b" don't collide.
+ *
+ *  Using snippet[:100] (pre-normalization length) keeps the key stable
+ *  when the retriever truncates snippets slightly differently across
+ *  runs while still capturing enough content for a meaningful match.
+ */
+export function nearSemanticKey(
+  title: string | null | undefined,
+  snippet: string | null | undefined,
+): string {
+  const t = normalizeForHash(title);
+  const snippetPrefix = (snippet ?? '').slice(0, 100);
+  const s = normalizeForHash(snippetPrefix);
+  return `${t}||${s}`;
+}
