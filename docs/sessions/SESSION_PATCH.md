@@ -1,37 +1,38 @@
 ---
-id: HANDOFF-2026-04-18-C
+id: HANDOFF-2026-04-18-D
 date: 2026-04-18
 phase: HANDOFF
 ---
 
-# Handoff — end of 2026-04-18 (session C — 11.5 + 11.6a + 11.6b)
+# Handoff — end of 2026-04-18 (session D — 11.5 + 11.6a + 11.6b + 11.6c-sec)
 
 ## TL;DR
-Phase 11 is **5.66/6 sprints done**. Three sprints shipped this session, all through the full v2.2 12-phase workflow with `/review-impl` passes:
-- **Sprint 11.5** cross-instance pull — 10 findings across 3 passes, all fixed, 56/56 E2E green
-- **Sprint 11.6a** test infrastructure — 5 findings caught, 61/61 API + 52/52 GUI green
-- **Sprint 11.6b** streaming polish — 3 findings (all doc-only) caught, hot-spot peak memory cut 99% on jsonl / 45% on document encode, 32/32 unit + 61/61 E2E green
+Phase 11 is **5.83/6 sprints done**. Four sprints shipped this session, all through the full v2.2 12-phase workflow with `/review-impl` passes:
+- **Sprint 11.5** cross-instance pull — 10 findings across 3 passes, 56/56 E2E green
+- **Sprint 11.6a** test infrastructure — 5 findings, 61/61 API + 52/52 GUI green
+- **Sprint 11.6b** streaming polish — 3 doc-only findings, peak memory cut 99% / 45%, 32/32 unit + 61/61 E2E green
+- **Sprint 11.6c-sec** DNS-rebinding pinning + body-stall timeout — 5 findings, closes the two security gaps documented since Sprint 11.5, 39/39 unit + 61/61 E2E green
 
-**11.6 remains split into a/b/c**. 11.6a + 11.6b done. Only 11.6c (perf + security polish) remains for Phase 11 completion.
+**11.6c was split further into sec + perf.** 11.6c-sec done; only **11.6c-perf** (N+1 import query reduction) remains before Phase 11 closes.
 
 ## This session — what shipped
 - **11.5** Cross-instance pull — `POST /api/projects/:id/pull-from` orchestrates SSRF-checked fetch → temp-file stream → `importProject`. Reuses `assertHostAllowed` from urlFetch.ts. 9 integration tests. 10 review findings all fixed. (commits `9fd4f87`, `cd73629`)
 - **11.6a** Test infrastructure — 5 import scenario tests via REST API (roundtrip checksum, ID remapping, policy overwrite/fail, cross-tenant guard under overwrite) + 1 Playwright scenario (export → upload → Apply). 5 review-impl findings caught + fixed. (commit `2ffa36d`)
-- **11.6b** Streaming polish — new `base64Stream.ts` helper with 3-byte-aligned streaming encoding (12 unit tests incl. 1 MB random round-trip); `iterateJsonl` refactored to readline + hashTap Transform with EOF checksum validation; `materializeDocContent` now streams. 3 findings (all doc-only: V8 string ceiling, doc-test coverage gap, Buffer precondition) caught + documented. 32/32 unit + 61/61 e2e green.
+- **11.6b** Streaming polish — new `base64Stream.ts` helper with 3-byte-aligned streaming encoding (12 unit tests incl. 1 MB random round-trip); `iterateJsonl` refactored to readline + hashTap Transform with EOF checksum validation; `materializeDocContent` now streams. 3 doc-only findings caught + documented. 32/32 unit + 61/61 e2e green. (commit `210ffd8`)
+- **11.6c-sec** Security polish — new `pinnedHttpAgent.ts` (undici Agent with connect.lookup override); `assertHostAllowed` now returns `PinnedAddress` for the caller to pin; `urlFetch.ts` refactored into a per-hop pinned-agent `runHop` helper; `pullFromRemote.ts` gets a `StallTransform` (60s idle timer) in the body-streaming pipeline. 5 findings caught across 2 passes (MED: no StallTransform test; LOW: unbounded close() cleanup — switched to destroy()). DNS-rebinding TOCTOU + slow-loris body stall both closed.
 
 ## Agentic Workflow v2.2 adopted and exercised
 Before Sprint 11.5, the repo absorbed the `agentic-workflow/` bundle (v2.2 — 12-phase workflow with POST-REVIEW as human checkpoint + `/review-impl` slash command for on-demand adversarial review). Fixed a pyenv-win python3.bat shim bug that corrupted multi-line `-c` args (scripts/workflow-gate.sh now prefers `python` over `python3`).
 
-Across 11.5 + 11.6a + 11.6b, `/review-impl` ran **four times total** and caught **17 additional findings** the initial Phase-7 REVIEW passes missed (10 in 11.5 across 2 passes, 4 in 11.6a, 3 in 11.6b). The second `/review-impl` pass on 11.5 even caught drift introduced by the FIRST fix batch (a stale docstring claiming `AbortSignal.timeout` after we'd switched to `AbortController`). On 11.6b — a pure memory refactor — the `/review-impl` findings were all doc-only but surfaced a pre-existing V8 string ceiling we now document explicitly. The coverage-gap mental mode keeps paying off.
+Across 11.5 + 11.6a + 11.6b + 11.6c-sec, `/review-impl` ran **five times total** and caught **19 additional findings** the initial Phase-7 REVIEW passes missed (10 in 11.5 across 2 passes, 4 in 11.6a, 3 in 11.6b, 2 in 11.6c-sec). On 11.6b — a pure memory refactor — findings were all doc-only but surfaced a pre-existing V8 string ceiling we now document. On 11.6c-sec — security-sensitive — /review-impl caught both a coverage gap (StallTransform untested) and an unbounded cleanup path (close() could hang). Five sprints in a row where /review-impl earns its keep.
 
-## What's next — Sprint 11.6c
+## What's next — Sprint 11.6c-perf (closes Phase 11)
 Detailed plan in [`docs/phase11-task-breakdown.md`](../phase11-task-breakdown.md).
 
-Sprint 11.6c — **Perf + security polish** (closes Phase 11):
-- `INSERT ... ON CONFLICT` migration on import for the N+1 perf win
-- Body-stall (slow-loris) timeout for pull-from
-- DNS-rebinding pinning (custom undici agent for both urlFetch.ts and pullFromRemote.ts)
-- All three items are security-sensitive; `/review-impl` expected to run by default per our standing decision lesson.
+Sprint 11.6c-perf:
+- N+1 SELECT pattern in importProject's 6 apply\* functions — replace with either batched-SELECT-then-per-row-upsert (simpler, 2× perf win, preserves all semantics) or INSERT ... ON CONFLICT with xmax trick (larger win, subtle handling of cross-tenant refusal)
+- MUST preserve: cross-tenant UUID guard, fail-fast semantics, per-conflict reason strings (UI relies on these)
+- Split rationale: different reviewer mental-mode (SQL correctness, perf) vs the network-boundary security focus of 11.6c-sec
 
 ## How to get the stack running
 ```bash
@@ -46,12 +47,13 @@ The `ALLOW_PRIVATE_FETCH_FOR_TESTS=true` flag in `.env` is required for the pull
 
 ## Open issues / known flakes
 - `phase10.spec.ts › extract button → mode selector → Fast → review opens` — flaky under full-suite load (passes in isolation in 2.8s). Not blocking.
-- N+1 SELECT pattern in `importProject` documented but not optimized. Polish for **11.6c**.
+- N+1 SELECT pattern in `importProject` documented but not optimized. Polish for **11.6c-perf**.
 - ~~Bundle decoder buffers each jsonl entry into memory.~~ **Fixed in 11.6b** — streams line-by-line via readline + hashTap.
-- No body-stall timeout in pull-from. Bounded by `MAX_BUNDLE_BYTES=500MB`. Polish for **11.6c**.
-- DNS rebinding TOCTOU between `assertHostAllowed` and undici connect lookup. Same gap as urlFetch.ts; polish for **11.6c**.
+- ~~No body-stall timeout in pull-from.~~ **Fixed in 11.6c-sec** — `StallTransform` 60s idle timer.
+- ~~DNS rebinding TOCTOU between `assertHostAllowed` and undici connect lookup.~~ **Fixed in 11.6c-sec** — per-request pinned undici Agent via `connect.lookup` override.
 - V8 string heap max (~512 MB on 64-bit) caps `documents.content` base64 at ~384 MB raw per document. Pre-existing; documented in `base64Stream.ts`. Real fix is migrating `documents.content` → BYTEA (Phase-10-level work), deferred beyond Phase 11.
 - Lesson creation via POST /api/lessons occasionally 500s under full-suite load (embeddings service under pressure). Same root cause as the Phase 10 flake. Workaround applied in `phase11-exchange.spec.ts` — test no longer seeds a lesson, uses empty projects.
+- **undici version pin** — `^6.21.2` (matches Node 23's bundled version). Bumping to 7+ breaks the pinned Agent's Dispatcher interface; re-verify if a future Node upgrade ships with a newer undici.
 
 ## File map (Phase 11 — updated)
 ```
@@ -59,14 +61,21 @@ src/services/exchange/
 ├── bundleFormat.ts             580 lines  — encoder/decoder (iterateJsonl
 │                                            streams line-by-line, 11.6b)
 ├── bundleFormat.test.ts        550 lines  — 16 unit tests (+2 in 11.6b)
-├── base64Stream.ts             NEW, ~65 lines — streaming base64 helper (11.6b)
-├── base64Stream.test.ts        NEW, ~140 lines — 12 unit tests (11.6b)
+├── base64Stream.ts             ~65 lines — streaming base64 helper (11.6b)
+├── base64Stream.test.ts        ~140 lines — 12 unit tests (11.6b)
 ├── exportProject.ts            300 lines  — DB → bundle
 ├── importProject.ts            720 lines  — bundle → DB (materializeDocContent
 │                                            streams via base64Stream, 11.6b)
-└── pullFromRemote.ts           330 lines  — cross-instance pull (11.5)
+├── pullFromRemote.ts           ~370 lines — cross-instance pull (11.5);
+│                                            + StallTransform + pinned agent (11.6c-sec)
+└── pullFromRemote.test.ts      NEW, ~95 lines — 3 StallTransform tests (11.6c-sec)
 
-src/services/urlFetch.ts        assertHostAllowed exported for pull-from
+src/services/urlFetch.ts        assertHostAllowed returns PinnedAddress (11.6c-sec);
+                                runHop helper with per-hop pinned agent
+src/services/pinnedHttpAgent.ts NEW, ~60 lines — undici Agent w/ connect.lookup
+                                override (11.6c-sec)
+src/services/pinnedHttpAgent.test.ts NEW, ~85 lines — 2 unit tests (11.6c-sec)
+
 src/api/routes/projects.ts      export + import + pull-from routes
 
 gui/src/lib/api.ts              exportProjectUrl + importProject
@@ -76,16 +85,101 @@ test/e2e/api/phase11-pull.test.ts    260 lines — 9 tests (11.5)
 test/e2e/api/phase11-import.test.ts  360 lines — 5 tests (11.6a)
 test/e2e/gui/phase11-exchange.spec.ts 140 lines — 1 scenario (11.6a)
 
-docs/phase11-task-breakdown.md  authoritative plan (11.6 split into a/b/c)
+docs/phase11-task-breakdown.md  authoritative plan (11.6 split into a/b/c-sec/c-perf)
 docs/sessions/SESSION_PATCH.md  this file
 
 .claude/commands/review-impl.md  on-demand adversarial review (v2.2 workflow)
 scripts/workflow-gate.sh         12-phase state machine
+
+Dependencies added: undici@^6.21.2 (matches Node 23.11.1's bundled version)
 ```
 
 ---
 
 # Sprint history
+
+---
+id: CH-PHASE11-S116CSEC
+date: 2026-04-18
+module: Phase11-Sprint11.6c-sec
+phase: IN_PROGRESS
+---
+
+# Session Patch — 2026-04-18 (Phase 11 Sprint 11.6c-sec — Security polish)
+
+## Where We Are
+**Sprint 11.6c-sec complete and live-tested.** Both security gaps flagged in the Sprint 11.5 handoff are now closed: DNS-rebinding TOCTOU (closed via per-request pinned undici Agent on both urlFetch and pullFromRemote) + slow-loris body-stall (closed via 60s idle-timer Transform in the pullFromRemote pipeline). 39/39 unit + 61/61 e2e green, zero regressions. Added undici@^6.21.2 as an explicit dep (matches Node 23's bundled version — tried 8.x first, API drift broke the Dispatcher interface).
+
+## Why split 11.6c into sec + perf
+Original 11.6c scope bundled `ON CONFLICT` migration + body-stall + DNS pinning. Three different reviewer mental modes (SQL correctness, request lifecycle, network boundary) — mixing them into one commit would've forced /review-impl to context-switch mid-pass. Split 11.6c-sec (security items, same mental mode) from 11.6c-perf (SQL refactor, different risk profile).
+
+## What shipped
+### New: src/services/pinnedHttpAgent.ts (~60 lines)
+- `pinnedAgentForAddress(PinnedAddress): Agent` — returns an undici Agent whose `connect.lookup` always returns the pre-validated IP, ignoring the hostname. Closes the TOCTOU race between `assertHostAllowed`'s DNS lookup and undici's own connect-time lookup.
+- Handles BOTH `opts.all=true` (undici's actual usage pattern — expects `[{address,family}]` array) and `opts.all=false` (defensive, 3-arg `cb(null, address, family)`).
+- Doesn't weaken HTTPS — SNI + Host header still use URL hostname, only DNS path is overridden.
+
+### New: src/services/pinnedHttpAgent.test.ts (2 scenarios)
+- **fetch to non-resolvable hostname lands on pinned IP** — uses a local HTTP server on 127.0.0.1:<random> and fetches `http://fake-host.example.invalid:<port>/ping`. Without pinning, fetch would error with ENOTFOUND. With pinning, the request lands on 127.0.0.1 and responds with the Host header (proves pinning only touches DNS, not HTTP semantics).
+- **second agent with different port works independently** — guards against singleton/cached state in the impl.
+
+### src/services/urlFetch.ts refactor
+- `assertHostAllowed(host): Promise<PinnedAddress>` — signature change; returns the first validated DNS record (all records were already validated against private-range denylist; returning any safe one is fine). Two call sites both updated in this sprint.
+- Redirect loop refactored: `fetchUrlAsDocument` now has an outer loop that creates a fresh pinned agent per hop, and a `runHop` inner helper that wraps the single-hop fetch + body-streaming in a try/finally that `agent.destroy()`s on every exit path. Per-hop agent is critical correctness: re-using one agent across hops would send all hops to the first hop's IP, defeating the redirect-SSRF check.
+- `HopResult` discriminated union: `{kind:'redirect', next}` or `{kind:'done', value}`. Clean pattern match in the outer loop.
+
+### src/services/exchange/pullFromRemote.ts changes
+- `BODY_STALL_MS = 60_000` constant.
+- `StallTransform` class (exported for unit testing): armed in constructor, resets timer in `_transform` (fires `this.destroy(new PullError('timeout', ..., 504))` if ms elapse without a chunk), clears timer in `_flush` + `_destroy`.
+- Pipeline updated: `Readable.fromWeb(resp.body) → stall → counter → writeStream`. Stall sits before ByteCounter so its timer ticks on every chunk received from remote.
+- Pinned agent created after `assertHostAllowed`, passed as `dispatcher`, `agent.destroy()` in finally. destroy() over close() so cleanup is bounded-time — close() waits for graceful socket drain and could hang on a dropped-network partner.
+
+### New: src/services/exchange/pullFromRemote.test.ts (3 tests)
+- **rejects pipeline when no chunks arrive within ms** — creates a Readable that never pushes, pipes through StallTransform(80ms), expects PullError('timeout', 504) within 50-1000ms window. The slow-loris defense in action.
+- **does NOT fire when chunks arrive faster than the timeout** — trickles chunks at 30ms < 80ms stall window; pipeline must succeed, not reject. Regression guard against armTimer forgetting clearTimeout.
+- **_destroy clears the pending timer** — destroys the stream manually, waits longer than ms; the implicit assertion is that nothing fires against a destroyed stream.
+
+### package.json
+- `undici@^6.21.2` dep added (first tried 8.1.0 but hit "invalid onRequestStart method" — undici 8's Dispatcher interface is incompatible with Node 23's internal undici 6.21.2).
+- Three new test files added to `npm test`: pinnedHttpAgent.test.ts, pullFromRemote.test.ts, the 11.6b files from before.
+
+## Review passes — 5 findings across two passes
+### Phase-7 REVIEW (0 MED, 3 LOW accepted)
+- LOW redundant close() semantics (later changed to destroy() in /review-impl)
+- LOW undici version pin documented via package.json ^6.21.2
+- LOW StallTransform constructor-arm race (cosmetic — pipe wiring is synchronous)
+
+### /review-impl (1 MED + 1 LOW fixed, 1 LOW + 1 COSMETIC accepted)
+- **MED**: StallTransform had no targeted test. The defense was visible only via code inspection — a regression in `_destroy` or `armTimer` wouldn't be caught by any existing test. Fixed: new `pullFromRemote.test.ts` with 3 cases proving timer-fires / trickle-succeeds / _destroy-cleans-up.
+- **LOW**: `agent.close()` could hang on stuck sockets — Dispatcher.close() waits for graceful drain. Fixed: switched to `agent.destroy()` in both urlFetch (runHop finally) and pullFromRemote (outer finally). Per-request agent is throwaway so there's no reason to wait for graceful drain.
+- LOW: no dedicated "DNS rebinding simulation" test (mock dns.lookup returning different IPs on successive calls). Accepted: the pinning unit test makes the STRONGER claim that no DNS lookup happens at connect time, which subsumes the attack simulation.
+- COSMETIC: logger could include remoteHostname for debug. Not security-relevant. Skipped.
+
+## Live test results (Sprint 11.6c-sec final)
+```
+tsc --noEmit              → 0 errors
+npm test                  → 39/39 passed (+4 new: 3 StallTransform,
+                            1 pinnedAgent outer suite)
+npm run test:e2e:api      → 61/61 passed, 0 failed (88s) after mcp rebuild
+                            phase10-ingest-url-* exercises urlFetch's
+                            new pinned + runHop path
+                            phase11-pull-* exercises pullFromRemote's
+                            new pinned + stall paths
+```
+
+## undici dep caveat (important for future Node upgrades)
+We pin `undici@^6.21.2` because Node 23.11.1 bundles undici 6.21.2 internally (used by global fetch). When we pass our userland `dispatcher: agent` to fetch, the internal dispatcher code checks for specific methods like `onRequestStart` — undici 8.x removed or renamed those, causing `Error [InvalidArgumentError]: invalid onRequestStart method`. If a future Node release bumps its bundled undici, this package's undici must be updated to match. The caret `^6.21.2` keeps us on 6.x.y — safe to run `npm update` without breaking.
+
+## Security gains
+Two attack vectors documented since Sprint 11.5 are now fully closed:
+1. **DNS rebinding** — attacker controls a DNS record that resolves safely on first lookup (passes `assertHostAllowed`) and unsafely on second (undici's internal connect). Previously exploitable — undici did its own lookup and our validation didn't pin the IP. Now: `pinnedAgentForAddress` ensures the validated IP is the exact one undici connects to. No second lookup happens.
+2. **Slow-loris on body stream** — attacker connects, sends headers, then trickles body bytes under MAX_BUNDLE_BYTES/sec so the stream stays open for hours without triggering the byte cap. Previously bounded only by the 500MB byte cap. Now: 60s idle timer kills the stream if no data arrives for the window.
+
+## What's NOT in 11.6c-sec (deferred to 11.6c-perf)
+- N+1 SELECT pattern in importProject — kept intact; different risk profile, deserves its own CLARIFY + /review-impl focused on SQL correctness rather than network boundary.
+
+## Workflow artifacts this sprint produced
+Fourth consecutive sprint through the full 12-phase v2.2 workflow. Even on this security-sensitive refactor, /review-impl caught 2 issues Phase-7 REVIEW missed (the StallTransform coverage gap + the close-could-hang gap). Five straight sprints validating the pattern.
 
 ---
 id: CH-PHASE11-S116B

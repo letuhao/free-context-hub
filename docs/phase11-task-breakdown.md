@@ -4,7 +4,7 @@
 > hub for moving a project's full state between ContextHub instances:
 > bundle format → export → import → GUI → cross-instance pull → polish.
 
-## Status: 5.66/6 sprints complete (◐ in progress — 11.6 split into a/b/c)
+## Status: 5.83/6 sprints complete (◐ in progress — 11.6c split into sec + perf)
 
 | Sprint | Focus | Status | Commit |
 |--------|-------|--------|--------|
@@ -14,8 +14,9 @@
 | 11.4 | GUI Knowledge Exchange panel (in Project Settings) | ✅ | `ffe9ea8` + review `6270ff8` |
 | 11.5 | Cross-instance pull (`POST /api/projects/:id/pull-from`) | ✅ | 2026-04-18 — `cd73629` |
 | 11.6a | Test infrastructure (import scenarios + Playwright) | ✅ | 2026-04-18 — `2ffa36d` |
-| 11.6b | Streaming polish (JSONL decoder + base64 import) | ✅ | 2026-04-18 — see SESSION_PATCH.md |
-| 11.6c | Perf + security polish (ON CONFLICT, body-stall timeout, DNS pinning) | ○ | — |
+| 11.6b | Streaming polish (JSONL decoder + base64 import) | ✅ | 2026-04-18 — `210ffd8` |
+| 11.6c-sec | Security polish (body-stall timeout + DNS-rebinding pinning) | ✅ | 2026-04-18 — see SESSION_PATCH.md |
+| 11.6c-perf | Perf polish (ON CONFLICT / batched SELECT on import) | ○ | — |
 
 ## Architecture
 
@@ -349,31 +350,107 @@ npm run test:e2e:api                 → 61/61 passed, 0 failed (85s)
 - DNS-rebinding pinning (custom undici agent)
 - Switching documents.content to BYTEA (Phase-10-level change)
 
-## Sprint 11.6c — Perf + security polish (planned)
+## Sprint 11.6c-sec — Security polish ✅ (complete 2026-04-18)
 
 ### Scope
-1. **INSERT ... ON CONFLICT** migration on importProject — replaces the
-   N+1 SELECT-then-INSERT pattern documented in Sprint 11.3 review.
-   Challenge: currently the SELECT lets us emit per-conflict reports;
-   ON CONFLICT needs a different path for conflict reporting (e.g.
-   RETURNING + derive from xmin/xmax, or a staging table).
-2. **Body-stall (slow-loris) timeout** on pullFromRemote — the 60 s
-   connect timeout currently clears once headers arrive; a remote that
-   trickles bytes can keep the stream open indefinitely (bounded only
-   by MAX_BUNDLE_BYTES).
-3. **DNS-rebinding pinning** — both `urlFetch.ts` and `pullFromRemote.ts`
-   have a TOCTOU race between `assertHostAllowed` and undici's connect
-   lookup. Fix with a custom undici agent that pins the lookup to the
-   IP validated upstream.
+Two security gaps from Sprint 11.5's handoff, closed together in a
+security-focused sub-sprint. Perf item split into 11.6c-perf because
+risk profile + reviewer mental-mode differ (SQL correctness vs network
+boundary).
+
+1. **Body-stall (slow-loris) timeout** on pullFromRemote — the 60 s
+   connect timeout clears once headers arrive; previously, a remote
+   that trickled bytes could keep the stream open for hours (bounded
+   only by MAX_BUNDLE_BYTES).
+2. **DNS-rebinding pinning** — both urlFetch.ts (Phase 10.7) and
+   pullFromRemote.ts (Sprint 11.5) had a TOCTOU race between
+   assertHostAllowed's DNS lookup and undici's own connect-time
+   lookup. An attacker controlling DNS could return a safe IP on the
+   first lookup (passes validation) and a private IP on the second
+   (connects inside the network).
+
+### Shipped
+- **src/services/pinnedHttpAgent.ts** (NEW) — undici Agent with
+  connect.lookup override returning a pre-validated PinnedAddress.
+  Handles both opts.all=true and false callback shapes. SNI / cert
+  validation unchanged (uses URL hostname as before).
+- **src/services/pinnedHttpAgent.test.ts** (NEW, 2 scenarios + outer
+  suite) — proves fetch to \*.example.invalid (non-resolvable per RFC
+  6761) lands on the pinned 127.0.0.1 server.
+- **src/services/urlFetch.ts** — assertHostAllowed returns
+  PinnedAddress (first validated record) instead of void. Redirect
+  loop refactored into a runHop helper that creates + destroys a
+  pinned agent per hop — critical correctness: re-using one agent
+  across hops would send all hops to the first hop's IP.
+- **src/services/exchange/pullFromRemote.ts** — adds BODY_STALL_MS
+  (60s) + StallTransform (armed in constructor, resets per chunk,
+  clears in \_flush + \_destroy). Pipeline: resp.body → stall →
+  counter → writeStream. Pinned agent passed as dispatcher, destroyed
+  in finally.
+- **src/services/exchange/pullFromRemote.test.ts** (NEW, 3 tests) —
+  StallTransform: timer-fires / trickle-succeeds / \_destroy-cleans-up.
+- **package.json** — undici@^6.21.2 (pinned to match Node 23's
+  bundled undici; 8.x breaks the Dispatcher interface).
+
+### Cleanup semantics — destroy() vs close()
+Both urlFetch.runHop and pullFromRemote.pullFromRemote use
+agent.destroy() (not close()) in finally. close() waits for graceful
+socket drain — could hang indefinitely on a dropped-network partner.
+destroy() is bounded-time forceful termination. Per-request agent is
+throwaway so no reason to wait.
+
+### Review outcome — 5 findings
+Phase-7 REVIEW (0 MED, 3 LOW accepted); /review-impl (1 MED + 1 LOW
+fixed, 1 LOW + 1 COSMETIC accepted):
+- **MED**: StallTransform had no targeted test. Fixed via new
+  pullFromRemote.test.ts with 3 cases.
+- **LOW**: agent.close() could hang. Fixed: switched to destroy().
+- LOW: no dedicated DNS-rebinding attack simulation. Accepted — the
+  pinning unit test makes the stronger claim that no DNS lookup
+  happens at connect time.
+- COSMETIC: logger verbosity. Skipped.
+
+### Live test results
+```
+tsc                       → 0 errors
+npm test                  → 39/39 passed (+4 new)
+npm run test:e2e:api      → 61/61 passed, 0 failed (88s) after rebuild
+                            phase10 URL ingest + phase11-pull both
+                            exercise pinned + stall paths
+```
+
+### undici caveat
+Installed undici@^6.21.2 to match Node 23.11.1's bundled version. An
+earlier attempt with 8.1.0 failed with "invalid onRequestStart method"
+— the Dispatcher interface changed between 6→8. Do NOT bump to 7+
+without re-verifying the pinned-agent API.
+
+## Sprint 11.6c-perf — Perf polish (planned)
+
+### Scope
+N+1 SELECT pattern in importProject documented since Sprint 11.3. Each
+of 6 apply\* functions does SELECT-to-check + conditional
+INSERT/UPDATE = ~2 queries per row. For a 581-lesson project: ~1200
+round trips per import.
+
+### Implementation options (decide in CLARIFY)
+- **Batched SELECT + per-row INSERT/UPDATE** — one SELECT for ALL ids
+  in the entity, hash-map lookup, then INSERT/UPDATE individually.
+  2× query reduction, preserves all existing semantics. Simple.
+- **INSERT ... ON CONFLICT DO UPDATE with xmax=0 RETURNING + WHERE
+  cross-tenant-match** — single query per row; derives created /
+  updated from xmax. Requires subtle handling of cross-tenant
+  refusal. Larger perf win, higher risk.
 
 ### Acceptance
-- Import N+1 SELECT pattern replaced; 61/61 phase11 tests still green
-- Pull body-stall aborts after configurable idle timeout
-- DNS-rebinding attack (resolver flips IPs between calls) blocked at
-  connect time
+- 61/61 phase11 tests still green (cross-tenant guard MUST hold,
+  fail-fast MUST throw on first conflict, per-conflict reasons MUST
+  still populate the UI)
+- Measured query count drops meaningfully
 
 ### Non-goals
 - Merge conflict policy
 - Async background import/export jobs
 - Webhook-driven pulls
 - Encryption / signing
+- Migrating documents.content to BYTEA (Phase-10-level work)

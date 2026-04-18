@@ -36,17 +36,18 @@
  * Idempotent under repeat pulls because UUIDs are preserved in the
  * bundle and policy=skip is the default on the import side.
  *
- * Known limitations (deferred to Sprint 11.6 polish):
- *   - No body-stall timeout. A remote that trickles bytes indefinitely
- *     can keep the stream open for hours. Bounded in practice by
- *     MAX_BUNDLE_BYTES (500 MB aborts the stream).
- *   - DNS rebinding TOCTOU between assertHostAllowed and undici's connect
- *     lookup. Same gap as urlFetch.ts; pinning requires a custom agent
- *     with a lookup override not available on global fetch.
+ * Known limitations (remaining after Sprint 11.6c-sec):
  *   - No bundle caching. Repeat pulls of the same remote bundle re-fetch
  *     every time.
  *   - No GUI — pull is API-only for now (Sprint 11.4 shipped export /
  *     import in the Knowledge Exchange panel).
+ *
+ * Fixed in Sprint 11.6c-sec:
+ *   - Body-stall timeout (StallTransform with BODY_STALL_MS idle timer)
+ *     now defends against slow-loris drip-feeding.
+ *   - DNS rebinding TOCTOU closed via pinnedHttpAgent — the address
+ *     validated by assertHostAllowed is the exact IP undici connects
+ *     to; no second DNS lookup can happen.
  */
 
 import { promises as fs, createWriteStream } from 'node:fs';
@@ -58,6 +59,7 @@ import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
 
 import { assertHostAllowed, UrlFetchError } from '../urlFetch.js';
+import { pinnedAgentForAddress } from '../pinnedHttpAgent.js';
 import {
   importProject,
   type ImportResult,
@@ -77,6 +79,13 @@ export const MAX_BUNDLE_BYTES = 500 * 1024 * 1024;
  *  Otherwise a 500 MB bundle over a 5 Mbps link (~13 min) would abort
  *  mid-stream. Same pattern urlFetch.ts uses. */
 export const FETCH_TIMEOUT_MS = 60_000;
+
+/** Per-chunk idle timeout for the streamed response body. Resets on
+ *  every chunk received from the remote. Fires if NO data arrives for
+ *  this long — the slow-loris defense. Sized to match
+ *  FETCH_TIMEOUT_MS so the "connect takes N seconds" budget and
+ *  "no-progress takes N seconds" budget are consistent. */
+export const BODY_STALL_MS = 60_000;
 
 export type PullErrorCode =
   | 'invalid_url'
@@ -158,6 +167,53 @@ class ByteCounter extends Transform {
   }
 }
 
+/** Slow-loris defense: a body-stall timer that resets on every chunk
+ *  passing through and fires if NO chunk arrives for `ms` milliseconds.
+ *  Without this, a malicious remote can keep a connection open
+ *  indefinitely by drip-feeding the body under our byte cap, tying up
+ *  the import worker. Armed in the constructor so it also catches the
+ *  case where the first chunk never arrives after the headers returned.
+ *
+ *  Exported for unit testing — the 60s production timeout is too long
+ *  to exercise in a CI test run, so tests construct with a small ms. */
+export class StallTransform extends Transform {
+  private timer: NodeJS.Timeout | undefined;
+  constructor(private readonly ms: number) {
+    super();
+    this.armTimer();
+  }
+  private armTimer() {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = setTimeout(() => {
+      this.destroy(
+        new PullError('timeout', `body stalled for ${this.ms}ms without data`, 504),
+      );
+    }, this.ms);
+  }
+  _transform(
+    chunk: Buffer,
+    _enc: BufferEncoding,
+    cb: (err?: Error | null, data?: Buffer) => void,
+  ) {
+    this.armTimer();
+    cb(null, chunk);
+  }
+  _flush(cb: (err?: Error | null) => void) {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = undefined;
+    cb();
+  }
+  // _destroy runs when the stream is destroyed (upstream error, abort,
+  // etc.). Without clearing the timer here it'd fire later against an
+  // already-destroyed stream — harmless in practice but leaks a pending
+  // setTimeout until the ms elapse.
+  _destroy(err: Error | null, cb: (err: Error | null) => void) {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = undefined;
+    cb(err);
+  }
+}
+
 export async function pullFromRemote(
   opts: PullFromRemoteOptions,
 ): Promise<PullFromRemoteResult> {
@@ -193,12 +249,13 @@ export async function pullFromRemote(
     );
   }
 
-  // SSRF guard. See "DNS rebinding TOCTOU" in the file header — the
-  // hostname is resolved again by undici at connect time, so a dns-rebind
-  // attacker can return a different IP between these two lookups. Same
-  // limitation as urlFetch.ts; deferred to 11.6 polish.
+  // SSRF guard + DNS-rebinding pinning (Sprint 11.6c-sec). The resolved
+  // address is passed to pinnedAgentForAddress so undici uses that exact
+  // IP for connect — the second DNS lookup that used to enable the
+  // rebinding attack never happens.
+  let pinned;
   try {
-    await assertHostAllowed(parsed.hostname);
+    pinned = await assertHostAllowed(parsed.hostname);
   } catch (e) {
     if (e instanceof UrlFetchError) {
       // Map urlFetch codes to pull codes. DNS failures are treated as
@@ -237,12 +294,14 @@ export async function pullFromRemote(
   // mkdtemp and fetch can't leak the directory.
   let tmpDir: string | undefined;
   let tmpPath: string | undefined;
+  const agent = pinnedAgentForAddress(pinned);
   try {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ch-pull-'));
     tmpPath = path.join(tmpDir, `${randomBytes(8).toString('hex')}.zip`);
     // Fetch with connect-only timeout. Once headers arrive, clear the
     // timer so body drain isn't capped by a wall clock — body is
-    // bounded by MAX_BUNDLE_BYTES via ByteCounter instead.
+    // bounded by MAX_BUNDLE_BYTES via ByteCounter AND BODY_STALL_MS
+    // idle timeout via StallTransform instead.
     const controller = new AbortController();
     const connectTimer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     let resp: Response;
@@ -251,12 +310,13 @@ export async function pullFromRemote(
         method: 'GET',
         redirect: 'manual',
         signal: controller.signal,
+        dispatcher: agent,
         headers: {
           'User-Agent': 'ContextHub/1.0 (+pull-from)',
           Accept: 'application/zip',
           ...(opts.apiKey ? { Authorization: `Bearer ${opts.apiKey}` } : {}),
         },
-      });
+      } as RequestInit & { dispatcher: unknown });
     } catch (err) {
       clearTimeout(connectTimer);
       const msg = err instanceof Error ? err.message : String(err);
@@ -317,11 +377,17 @@ export async function pullFromRemote(
       throw new PullError('upstream_error', 'remote returned empty body', 502);
     }
 
-    // Stream to disk with byte-count guard
+    // Stream to disk with byte-count guard + body-stall defense.
+    // StallTransform sits before ByteCounter so its idle timer ticks
+    // on every chunk received from the remote — a stalled connection
+    // aborts within BODY_STALL_MS regardless of how much has been
+    // received so far.
+    const stall = new StallTransform(BODY_STALL_MS);
     const counter = new ByteCounter(MAX_BUNDLE_BYTES);
     // Readable.fromWeb bridges WHATWG ReadableStream to Node Readable.
     await pipeline(
       Readable.fromWeb(resp.body as unknown as Parameters<typeof Readable.fromWeb>[0]),
+      stall,
       counter,
       createWriteStream(tmpPath),
     );
@@ -370,5 +436,14 @@ export async function pullFromRemote(
         /* ignore */
       });
     }
+    // Destroy the pinned agent. Using destroy() rather than close()
+    // because the agent is per-request throwaway: cleanup must be
+    // bounded-time (force-close any stuck sockets) rather than waiting
+    // for graceful drain, which could hang indefinitely on a
+    // dropped-network partner. Safe to call AFTER the pipeline above
+    // resolves — body is already fully drained in the success path, or
+    // the stream errored (and undici already tore down its sockets) in
+    // the failure path.
+    await agent.destroy().catch(() => { /* ignore */ });
   }
 }

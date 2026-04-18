@@ -29,6 +29,7 @@ import { isIPv4, isIPv6 } from 'node:net';
 import { URL } from 'node:url';
 import { getEnv } from '../env.js';
 import { createModuleLogger } from '../utils/logger.js';
+import { pinnedAgentForAddress, type PinnedAddress } from './pinnedHttpAgent.js';
 
 const logger = createModuleLogger('url-fetch');
 
@@ -119,10 +120,16 @@ function isLiteralIp(host: string): boolean {
  *  range. Rejects on the FIRST private hit — we don't want to dial a
  *  multi-homed host that also happens to be internal.
  *
+ *  Returns a `PinnedAddress` that callers should pass to
+ *  `pinnedAgentForAddress(...)` and use as the fetch `dispatcher`. This
+ *  closes the DNS-rebinding TOCTOU race: the attacker cannot flip the
+ *  record between this lookup and the actual connect, because undici
+ *  will skip its own lookup and use the address we already validated.
+ *
  *  Exported for reuse by other SSRF-sensitive fetchers (e.g. Phase 11.5
  *  cross-instance bundle pull). Throws UrlFetchError with codes
  *  'SSRF_BLOCKED', 'DNS_FAILED', or 'DNS_EMPTY'. */
-export async function assertHostAllowed(host: string): Promise<void> {
+export async function assertHostAllowed(host: string): Promise<PinnedAddress> {
   const env = getEnv();
   const allowPrivate = process.env.ALLOW_PRIVATE_FETCH_FOR_TESTS === 'true';
 
@@ -133,11 +140,12 @@ export async function assertHostAllowed(host: string): Promise<void> {
   };
 
   if (isLiteralIp(host)) {
-    if (allowPrivate) return;
+    const family: 4 | 6 = isIPv4(host) ? 4 : 6;
+    if (allowPrivate) return { address: host, family };
     if (isBad(host)) {
       throw new UrlFetchError('SSRF_BLOCKED', `refusing to fetch from private address: ${host}`, 403);
     }
-    return;
+    return { address: host, family };
   }
 
   // DNS resolve — use `all: true` to inspect every address the host advertises
@@ -152,7 +160,10 @@ export async function assertHostAllowed(host: string): Promise<void> {
     throw new UrlFetchError('DNS_EMPTY', `no DNS records for ${host}`, 400);
   }
 
-  if (allowPrivate) return;
+  if (allowPrivate) {
+    const first = records[0]!;
+    return { address: first.address, family: first.family === 6 ? 6 : 4 };
+  }
 
   for (const r of records) {
     if (isBad(r.address)) {
@@ -160,8 +171,11 @@ export async function assertHostAllowed(host: string): Promise<void> {
     }
   }
 
+  // All addresses validated — pin to the first one.
+  const first = records[0]!;
   // env passthrough so linter doesn't complain about unused env import
   void env;
+  return { address: first.address, family: first.family === 6 ? 6 : 4 };
 }
 
 /** Map mime type → internal doc_type string used by the extraction pipeline. */
@@ -219,41 +233,64 @@ export async function fetchUrlAsDocument(rawUrl: string): Promise<FetchResult> {
   const startedAt = Date.now();
 
   while (true) {
-    await assertHostAllowed(currentUrl.hostname);
+    const pinned = await assertHostAllowed(currentUrl.hostname);
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    // Per-hop agent: when the redirect target's hostname changes we need
+    // a fresh pinning because the validated IP is different. Reusing one
+    // agent across hops would send all redirect targets to the first hop's
+    // IP — a critical correctness bug.
+    const agent = pinnedAgentForAddress(pinned);
+    const hopResult = await runHop(currentUrl, agent, startedAt);
 
+    if (hopResult.kind === 'redirect') {
+      if (--redirectsLeft < 0) {
+        throw new UrlFetchError('TOO_MANY_REDIRECTS', `exceeded ${MAX_REDIRECTS} redirects`, 502);
+      }
+      currentUrl = hopResult.next;
+      continue;
+    }
+    return hopResult.value;
+  }
+}
+
+type HopResult =
+  | { kind: 'redirect'; next: URL }
+  | { kind: 'done'; value: FetchResult };
+
+/** Run a single hop: fetch with the given pinned agent, handle status,
+ *  stream the body, return either the full result or a redirect target.
+ *  The agent is closed in the finally so every exit path cleans up. */
+async function runHop(currentUrl: URL, agent: ReturnType<typeof pinnedAgentForAddress>, startedAt: number): Promise<HopResult> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
     let resp: Response;
     try {
       resp = await fetch(currentUrl, {
         method: 'GET',
         redirect: 'manual', // critical — we validate each hop ourselves
         signal: controller.signal,
+        dispatcher: agent,
         headers: {
           // Some servers 403 on empty UA
           'User-Agent': 'ContextHub/1.0 (+https://github.com/letuhao1994/free-context-hub)',
           Accept: ALLOWED_MIME_PREFIXES.join(','),
         },
-      });
+      } as RequestInit & { dispatcher: unknown });
     } catch (err) {
-      clearTimeout(timer);
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('aborted')) {
         throw new UrlFetchError('TIMEOUT', `fetch timed out after ${FETCH_TIMEOUT_MS}ms`, 504);
       }
       throw new UrlFetchError('FETCH_FAILED', msg, 502);
     }
-    clearTimeout(timer);
 
-    // Redirect handling (manual — re-validate host on each hop)
+    // Redirect handling (manual — the outer loop re-validates the host
+    // of each hop, so we just parse and sanity-check here).
     if (resp.status >= 300 && resp.status < 400) {
       const location = resp.headers.get('location');
       if (!location) {
         throw new UrlFetchError('BAD_REDIRECT', `${resp.status} with no Location header`, 502);
-      }
-      if (--redirectsLeft < 0) {
-        throw new UrlFetchError('TOO_MANY_REDIRECTS', `exceeded ${MAX_REDIRECTS} redirects`, 502);
       }
       let next: URL;
       try {
@@ -265,8 +302,7 @@ export async function fetchUrlAsDocument(rawUrl: string): Promise<FetchResult> {
         throw new UrlFetchError('BAD_SCHEME', `redirect to unsupported scheme ${next.protocol}`, 400);
       }
       logger.info({ from: currentUrl.href, to: next.href, status: resp.status }, 'url-fetch redirect');
-      currentUrl = next;
-      continue; // next iteration re-runs assertHostAllowed
+      return { kind: 'redirect', next };
     }
 
     if (resp.status >= 400) {
@@ -299,11 +335,14 @@ export async function fetchUrlAsDocument(rawUrl: string): Promise<FetchResult> {
       }
       const buffer = Buffer.from(ab);
       return {
-        buffer,
-        mimeType: ct,
-        docType: docTypeFromMime(ct, currentUrl.pathname),
-        filename: deriveFilename(currentUrl, resp.headers.get('content-disposition')),
-        finalUrl: currentUrl.href,
+        kind: 'done',
+        value: {
+          buffer,
+          mimeType: ct,
+          docType: docTypeFromMime(ct, currentUrl.pathname),
+          filename: deriveFilename(currentUrl, resp.headers.get('content-disposition')),
+          finalUrl: currentUrl.href,
+        },
       };
     }
 
@@ -334,11 +373,23 @@ export async function fetchUrlAsDocument(rawUrl: string): Promise<FetchResult> {
     );
 
     return {
-      buffer,
-      mimeType: ct,
-      docType: docTypeFromMime(ct, currentUrl.pathname),
-      filename: deriveFilename(currentUrl, resp.headers.get('content-disposition')),
-      finalUrl: currentUrl.href,
+      kind: 'done',
+      value: {
+        buffer,
+        mimeType: ct,
+        docType: docTypeFromMime(ct, currentUrl.pathname),
+        filename: deriveFilename(currentUrl, resp.headers.get('content-disposition')),
+        finalUrl: currentUrl.href,
+      },
     };
+  } finally {
+    clearTimeout(timer);
+    // Destroy the per-hop pinned agent. Using destroy() rather than
+    // close() because the agent is per-request throwaway: we want
+    // cleanup to be bounded-time (forcefully terminates any stuck
+    // sockets) rather than waiting for graceful socket drain, which
+    // could hang indefinitely on a dropped-network partner. Best-
+    // effort — never let cleanup mask the original failure path.
+    await agent.destroy().catch(() => { /* ignore */ });
   }
 }

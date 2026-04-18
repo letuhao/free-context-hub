@@ -13,7 +13,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "migrate": "tsx src/db/migrate.ts",
-    "test": "tsx --test src/services/gitCommitFileParse.test.ts src/services/gitLessonProposalUpsert.test.ts src/services/exchange/base64Stream.test.ts src/services/exchange/bundleFormat.test.ts",
+    "test": "tsx --test src/services/gitCommitFileParse.test.ts src/services/gitLessonProposalUpsert.test.ts src/services/exchange/base64Stream.test.ts src/services/exchange/bundleFormat.test.ts src/services/pinnedHttpAgent.test.ts src/services/exchange/pullFromRemote.test.ts",
     "test:integration": "tsx src/qc/integrationTestRunner.ts",
     "smoke-test": "tsx src/smoke/smokeTest.ts",
     "test:e2e:smoke": "tsx test/e2e/smoke/runner.ts",
@@ -77,6 +77,7 @@
     "redis": "^5.11.0",
     "ts-morph": "^27.0.2",
     "turndown": "^7.2.4",
+    "undici": "^6.21.2",
     "uuid": "^13.0.0",
     "yauzl": "^3.3.0",
     "zod": "^4.3.6"
