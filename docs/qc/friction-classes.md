@@ -241,9 +241,24 @@ Phase-12 sprint:
 4. Then diff control vs new-state. A delta larger than the control-vs-
    control floor is signal; anything smaller is jitter.
 
-**Future fix path.** Sprint 12.0.2 or later: have `runBaseline` take a
-`--control` flag that runs the same golden set twice and emits an
-embedded noise-floor measurement alongside the primary archive.
+**Fix landed (Sprint 12.0.2).** `runBaseline --control` runs the golden
+set twice back-to-back, computes `|run2 − run1|` per metric per surface,
+embeds the result in `archive.noise_floor`. `diffBaselines.ts` reads
+this field (Sprint 12.0.2 /review-impl MED-1) and badges within-floor
+deltas as ⚪ `(within floor)` rather than 🔴/🟢, and skips regression
+flagging when a breach is within the floor. The per-run timings are
+also preserved (`archive.control_elapsed_ms` / `new_elapsed_ms`) so a
+reader can distinguish time-of-one-run from time-of-two-stitched.
+
+**Known caveat (Sprint 12.0.2 /review-impl LOW-1).** `--control` runs
+back-to-back on a stack that's already warm from the control run —
+caches, connection pools, JIT-ed embedding code are all hot by the time
+the new-state run begins. The measured noise floor therefore reflects
+**warm-cache jitter**, which is the common condition for sprint-author
+measurement. Cold-start variance (first-of-the-day run against a just-
+restarted stack) is NOT captured. If you need that data, run two cold
+baselines with a full stack restart between them — or extend
+`--control` to take a `--control-warmup-runs N` option in future.
 
 ---
 
@@ -278,6 +293,31 @@ leaving ~959 `src/` + 432 `docs/` + the rest of the legitimate corpus.
 **Future fix path.** Configure project-level ignore patterns via
 `prepare_repo` or a `.contexthubignore` convention. Until then, operators
 must purge post-indexing — idempotent but manual.
+
+---
+
+### e2e-cleanup-accumulates-archived-rows
+
+**Definition.** E2E test cleanup (`test/e2e/shared/cleanup.ts`) archives
+test lessons rather than deleting them. Archived rows don't pollute
+retrieval (the default status filter excludes them), but they accumulate
+in the DB over many test runs. Not a correctness issue — a bloat /
+hygiene one.
+
+**Why it happens.** The `/api/lessons/:id` endpoint has no DELETE verb
+as of 2026-04-18 (archive-via-status is the only affordance). Test code
+has to fall back to the same mechanism real users do.
+
+**Diagnostic signal.** `SELECT status, COUNT(*) FROM lessons WHERE
+project_id = 'e2e-test-project' GROUP BY status` shows a growing
+`archived` count over test-run history.
+
+**Example (Sprint 12.0.2).** The new `dedup-wiring-collapses-near-
+duplicate-cluster` e2e test seeds 5 lessons per run. After 100 runs,
+~500 archived rows live under `e2e-test-project`. Harmless but
+untidy. Noted as a future-work item for either (a) a hard-delete
+endpoint, or (b) a test-setup convention where each test uses a fresh
+throwaway project_id that can be DELETE'd whole.
 
 ---
 

@@ -17,6 +17,7 @@ import {
   breachedRegression,
   diffSurface,
   renderDiff,
+  effectiveNoiseFloor,
   DIRECTION,
   REGRESSION_RULES,
   type Metrics,
@@ -252,4 +253,69 @@ test('REGRESSION_RULES: direction coherence', () => {
   for (const k of Object.keys(REGRESSION_RULES)) {
     assert.ok(k in DIRECTION, `regression rule ${k} missing from DIRECTION map`);
   }
+});
+
+test('effectiveNoiseFloor (Sprint 12.0.2 MED-1)', async (t) => {
+  await t.test('both undefined → null', () => {
+    assert.equal(effectiveNoiseFloor('recall_at_10', undefined, undefined), null);
+  });
+  await t.test('one side undefined → returns the other', () => {
+    assert.equal(effectiveNoiseFloor('recall_at_10', { recall_at_10: 0.01 }, undefined), 0.01);
+    assert.equal(effectiveNoiseFloor('recall_at_10', undefined, { recall_at_10: 0.02 }), 0.02);
+  });
+  await t.test('both present → max (wider threshold wins)', () => {
+    assert.equal(
+      effectiveNoiseFloor('recall_at_10', { recall_at_10: 0.01 }, { recall_at_10: 0.02 }),
+      0.02,
+    );
+  });
+  await t.test('null values → null result', () => {
+    assert.equal(
+      effectiveNoiseFloor('recall_at_10', { recall_at_10: null }, { recall_at_10: null }),
+      null,
+    );
+  });
+});
+
+test('diffSurface: within-noise-floor deltas are badged ⚪ (within floor), not 🔴/🟢', () => {
+  const from = fixtureAggregate({ recall_at_10: 0.94, latency_p95_ms: 5000 });
+  const to = fixtureAggregate({ recall_at_10: 0.93, latency_p95_ms: 5500 });
+  // Noise floor says recall_at_10 can drift up to 0.05 between back-to-back
+  // runs — the observed 0.01 drop is below that.
+  const fromNF = { recall_at_10: 0.05, latency_p95_ms: 600 };
+  const toNF = { recall_at_10: 0.05, latency_p95_ms: 600 };
+  const { md, regressions } = diffSurface('lessons', from, to, fromNF, toNF);
+  assert.match(md, /recall_at_10.*\(within floor\)/);
+  assert.match(md, /latency_p95_ms.*\(within floor\)/);
+  // Regressions should NOT include recall_at_10 despite exceeding -0.05 threshold,
+  // because the drop is within the noise floor.
+  assert.ok(
+    !regressions.some((r) => r.includes('recall_at_10')),
+    'within-floor drop should not be flagged as regression',
+  );
+});
+
+test('diffSurface: beyond-noise-floor deltas still emit signal emoji and flag regressions', () => {
+  const from = fixtureAggregate({ recall_at_10: 0.94, latency_p95_ms: 5000 });
+  const to = fixtureAggregate({ recall_at_10: 0.80, latency_p95_ms: 5500 });
+  const fromNF = { recall_at_10: 0.05, latency_p95_ms: 600 };
+  const toNF = { recall_at_10: 0.05, latency_p95_ms: 600 };
+  const { md, regressions } = diffSurface('lessons', from, to, fromNF, toNF);
+  // 0.14 drop is well beyond 0.05 noise floor → real signal → 🔴
+  assert.match(md, /recall_at_10.*🔴/);
+  assert.doesNotMatch(md, /recall_at_10.*\(within floor\)/);
+  // Still flagged as a regression:
+  assert.ok(
+    regressions.some((r) => r.includes('recall_at_10')),
+    'beyond-floor drop must still flag a regression',
+  );
+});
+
+test('diffSurface: when no noise_floor data, behaves as before (table has no NF column)', () => {
+  const from = fixtureAggregate({ recall_at_10: 0.94 });
+  const to = fixtureAggregate({ recall_at_10: 0.93 });
+  const { md } = diffSurface('lessons', from, to);
+  // Header row does NOT include "noise floor" column
+  assert.doesNotMatch(md, /noise floor \|/);
+  assert.doesNotMatch(md, /within floor/);
 });

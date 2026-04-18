@@ -42,6 +42,11 @@ import {
   callGlobal,
   type SurfaceResult,
 } from './surfaces.js';
+import {
+  computeNoiseFloor,
+  fmtNoiseFloorValue,
+  type NoiseFloorPerSurface,
+} from './noiseFloor.js';
 
 dotenv.config();
 
@@ -435,7 +440,7 @@ function renderMarkdown(archive: BaselineArchive): string {
 
   // Sprint 12.0.2: when --control was used, render the noise-floor table
   // so readers know how much each metric moves across back-to-back runs on
-  // the same code. Future diffs can compare |delta| vs this table.
+  // the same code. Future diffs compare |delta| vs this table (MED-1).
   if (noise_floor) {
     lines.push('## Noise floor (|control − new| per metric, same code, back-to-back runs)');
     lines.push('');
@@ -443,16 +448,15 @@ function renderMarkdown(archive: BaselineArchive): string {
       '| Surface | recall@5 | recall@10 | MRR | nDCG@5 | nDCG@10 | dup@10 | dup@10 nearsem | cov% | p50 | p95 | mean |',
     );
     lines.push('|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|');
-    const f = (v: number | null | undefined) => (v === null || v === undefined ? '—' : v.toFixed(4));
     for (const [s, nf] of Object.entries(noise_floor)) {
       if (!nf) continue;
       lines.push(
-        `| ${s} | ${f(nf.recall_at_5)} | ${f(nf.recall_at_10)} | ${f(nf.mrr)} | ${f(nf.ndcg_at_5)} | ${f(nf.ndcg_at_10)} | ${f(nf.duplication_rate_at_10)} | ${f(nf.duplication_rate_nearsemantic_at_10)} | ${f(nf.coverage_pct)} | ${f(nf.latency_p50_ms)} | ${f(nf.latency_p95_ms)} | ${f(nf.latency_mean_ms)} |`,
+        `| ${s} | ${fmtNoiseFloorValue(nf.recall_at_5)} | ${fmtNoiseFloorValue(nf.recall_at_10)} | ${fmtNoiseFloorValue(nf.mrr)} | ${fmtNoiseFloorValue(nf.ndcg_at_5)} | ${fmtNoiseFloorValue(nf.ndcg_at_10)} | ${fmtNoiseFloorValue(nf.duplication_rate_at_10)} | ${fmtNoiseFloorValue(nf.duplication_rate_nearsemantic_at_10)} | ${fmtNoiseFloorValue(nf.coverage_pct)} | ${fmtNoiseFloorValue(nf.latency_p50_ms)} | ${fmtNoiseFloorValue(nf.latency_p95_ms)} | ${fmtNoiseFloorValue(nf.latency_mean_ms)} |`,
       );
     }
     lines.push('');
     lines.push(
-      '_Interpretation: any |delta| in a later diff that falls within these bounds is jitter, not signal._',
+      '_Interpretation: any |delta| in a later diff that falls within these bounds is measurement-jitter, not signal. `diffBaselines.ts` now reads this field (MED-1) and badges within-floor deltas as ⚪._',
     );
     lines.push('');
   }
@@ -475,31 +479,23 @@ function renderMarkdown(archive: BaselineArchive): string {
 
 // -------------------------------- Archive JSON -----------------------------
 
-/** Sprint 12.0.2: noise-floor per surface per metric. null when either
- *  run had a null value (e.g. no samples → null latency). Values are
- *  |run2 - run1| absolute deltas. A downstream diff reader should treat
- *  any |new - old| that's within the max(fromNoiseFloor[k], toNoiseFloor[k])
- *  band as measurement-jitter rather than signal. */
-type NoiseFloorPerSurface = {
-  recall_at_5: number | null;
-  recall_at_10: number | null;
-  mrr: number | null;
-  ndcg_at_5: number | null;
-  ndcg_at_10: number | null;
-  duplication_rate_at_10: number | null;
-  duplication_rate_nearsemantic_at_10: number | null;
-  coverage_pct: number | null;
-  latency_p50_ms: number | null;
-  latency_p95_ms: number | null;
-  latency_mean_ms: number | null;
-};
+// Sprint 12.0.2 /review-impl LOW-4: noise-floor helpers extracted to
+// src/qc/noiseFloor.ts so they can be unit-tested without importing
+// this module (which fires main() at load time).
 
 type BaselineArchive = {
   schema_version: string;
   tag: string;
   run_started_at: string;
   run_ended_at: string;
+  /** Wall-clock across the entire invocation. Under --control this covers
+   *  BOTH runs stitched together; see control_elapsed_ms / new_elapsed_ms
+   *  for per-run timings. */
   elapsed_ms: number;
+  /** Sprint 12.0.2 /review-impl LOW-3: per-run elapsed under --control.
+   *  Absent when --control not used. */
+  control_elapsed_ms?: number;
+  new_elapsed_ms?: number;
   git_commit: string;
   git_branch: string;
   project_id: string;
@@ -512,37 +508,6 @@ type BaselineArchive = {
   /** |control - new| per-surface per-metric. Present only under --control. */
   noise_floor?: Partial<Record<Surface, NoiseFloorPerSurface>>;
 };
-
-/** Pure: compute |second - first| per metric per surface. Both sides must
- *  be populated. null in either → null out. */
-function computeNoiseFloor(
-  runControl: Partial<Record<Surface, SurfaceAggregate>>,
-  runNew: Partial<Record<Surface, SurfaceAggregate>>,
-): Partial<Record<Surface, NoiseFloorPerSurface>> {
-  const out: Partial<Record<Surface, NoiseFloorPerSurface>> = {};
-  const surfaces = new Set([
-    ...Object.keys(runControl),
-    ...Object.keys(runNew),
-  ]) as Set<Surface>;
-  for (const s of surfaces) {
-    const a = runControl[s];
-    const b = runNew[s];
-    if (!a || !b) continue;
-    const metricKeys = Object.keys(a.metrics) as (keyof typeof a.metrics)[];
-    const perSurface = {} as NoiseFloorPerSurface;
-    for (const key of metricKeys) {
-      const v1 = a.metrics[key];
-      const v2 = b.metrics[key];
-      if (v1 === null || v2 === null) {
-        (perSurface as any)[key] = null;
-      } else {
-        (perSurface as any)[key] = Math.abs(v2 - v1);
-      }
-    }
-    out[s] = perSurface;
-  }
-  return out;
-}
 
 function gitInfo(): { commit: string; branch: string } {
   try {
@@ -569,23 +534,27 @@ async function runAllSurfaces(
 ): Promise<{ surfaces: Partial<Record<Surface, SurfaceAggregate>>; primaryProjectId: string }> {
   const surfaces: Partial<Record<Surface, SurfaceAggregate>> = {};
   let primaryProjectId = 'free-context-hub';
+  // Sprint 12.0.2 /review-impl COSMETIC-1: label may be '' for non-control
+  // runs; elide the `/label` suffix so the log line reads `[baseline]`.
+  const prefix = opts.label ? `[baseline/${opts.label}]` : '[baseline]';
+  const perQueryPrefix = opts.label ? `[${opts.label}] ` : '';
 
   for (const surface of opts.surfacesFilter) {
     const file = GOLDEN_FILES[surface];
     const setRaw = await fs.readFile(file, 'utf8').catch(() => null);
     if (!setRaw) {
-      console.log(`[baseline/${opts.label}] ${surface}: MISSING golden set at ${file}, skipping`);
+      console.log(`${prefix} ${surface}: MISSING golden set at ${file}, skipping`);
       continue;
     }
     const set = JSON.parse(setRaw) as GoldenSet;
     const pid = set.project_id_suggested ?? primaryProjectId;
     if (surface === 'lessons') primaryProjectId = pid;
-    console.log(`[baseline/${opts.label}] ${surface}: ${set.queries.length} queries against project=${pid}`);
+    console.log(`${prefix} ${surface}: ${set.queries.length} queries against project=${pid}`);
 
     const dispatch = makeDispatcher(surface, client, pid);
     const perQuery: PerQuery[] = [];
     for (const q of set.queries) {
-      process.stdout.write(`  [${opts.label}] ${surface}/${q.id} ... `);
+      process.stdout.write(`  ${perQueryPrefix}${surface}/${q.id} ... `);
       const res = await evalQuery(surface, dispatch, q, opts.k, opts.samples);
       const frictionNote = res.friction_classes.length ? ', ' + res.friction_classes.join(';') : '';
       process.stdout.write(
@@ -615,21 +584,31 @@ async function main() {
   let primaryProjectId: string;
   let controlSurfaces: Partial<Record<Surface, SurfaceAggregate>> | undefined;
   let noiseFloor: Partial<Record<Surface, NoiseFloorPerSurface>> | undefined;
+  let controlElapsedMs: number | undefined;
+  let newElapsedMs: number | undefined;
 
   try {
     if (control) {
       // Run twice back-to-back at the same server load. The first run is
       // treated as a CONTROL; the second is the canonical archive. Noise
       // floor = |run2 - run1| per metric.
+      // Sprint 12.0.2 /review-impl LOW-3: track per-run elapsed so the
+      // archive's top-level `elapsed_ms` isn't the only available timing.
       console.log('[baseline] --control mode: running goldenset twice to establish noise floor');
+      const c0 = Date.now();
       const run1 = await runAllSurfaces(client, { k, samples, surfacesFilter, label: 'control' });
+      controlElapsedMs = Date.now() - c0;
+      const n0 = Date.now();
       const run2 = await runAllSurfaces(client, { k, samples, surfacesFilter, label: 'new' });
+      newElapsedMs = Date.now() - n0;
       surfaces = run2.surfaces;
       primaryProjectId = run2.primaryProjectId;
       controlSurfaces = run1.surfaces;
       noiseFloor = computeNoiseFloor(run1.surfaces, run2.surfaces);
     } else {
-      const res = await runAllSurfaces(client, { k, samples, surfacesFilter, label: 'single' });
+      // Sprint 12.0.2 /review-impl COSMETIC-1: restore the pre-12.0.2
+      // `[baseline]` log prefix for non-control runs (empty label).
+      const res = await runAllSurfaces(client, { k, samples, surfacesFilter, label: '' });
       surfaces = res.surfaces;
       primaryProjectId = res.primaryProjectId;
     }
@@ -670,6 +649,8 @@ async function main() {
     surfaces,
     ...(controlSurfaces ? { control_run_surfaces: controlSurfaces } : {}),
     ...(noiseFloor ? { noise_floor: noiseFloor } : {}),
+    ...(controlElapsedMs !== undefined ? { control_elapsed_ms: controlElapsedMs } : {}),
+    ...(newElapsedMs !== undefined ? { new_elapsed_ms: newElapsedMs } : {}),
   };
 
   await fs.mkdir(outDir, { recursive: true });

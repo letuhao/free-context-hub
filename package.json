@@ -13,7 +13,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "migrate": "tsx src/db/migrate.ts",
-    "test": "tsx --test src/services/gitCommitFileParse.test.ts src/services/gitLessonProposalUpsert.test.ts src/services/exchange/base64Stream.test.ts src/services/exchange/bundleFormat.test.ts src/services/pinnedHttpAgent.test.ts src/services/exchange/pullFromRemote.test.ts src/services/lessons.test.ts src/qc/metrics.test.ts src/qc/diffBaselines.test.ts",
+    "test": "tsx --test src/services/gitCommitFileParse.test.ts src/services/gitLessonProposalUpsert.test.ts src/services/exchange/base64Stream.test.ts src/services/exchange/bundleFormat.test.ts src/services/pinnedHttpAgent.test.ts src/services/exchange/pullFromRemote.test.ts src/services/lessons.test.ts src/qc/metrics.test.ts src/qc/diffBaselines.test.ts src/qc/noiseFloor.test.ts",
     "test:integration": "tsx src/qc/integrationTestRunner.ts",
     "smoke-test": "tsx src/smoke/smokeTest.ts",
     "test:e2e:smoke": "tsx test/e2e/smoke/runner.ts",

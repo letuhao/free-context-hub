@@ -37,11 +37,20 @@ export type SurfaceAggregate = {
   metrics: Metrics;
 };
 
-export type Archive = {
+export /** Sprint 12.0.2 /review-impl MED-1: when both archives carry a
+ *  noise_floor (both were produced by `runBaseline --control`), the diff
+ *  generator uses max(fromNF[k], toNF[k]) as the per-metric signal/noise
+ *  threshold. Deltas within the threshold render with a ⚪ emoji and a
+ *  "(within noise floor)" annotation rather than 🔴/🟢. */
+type NoiseFloorValue = number | null | undefined;
+type SurfaceNoiseFloor = Partial<Record<keyof Metrics, NoiseFloorValue>>;
+
+type Archive = {
   schema_version: string;
   tag: string;
   git_commit: string;
   surfaces: Record<string, SurfaceAggregate>;
+  noise_floor?: Partial<Record<string, SurfaceNoiseFloor>>;
 };
 
 /** Metric direction: +1 = higher is better, -1 = lower is better. */
@@ -152,10 +161,31 @@ export function breachedRegression(
   return pct / 100 >= rule.absDropOrRise;
 }
 
+/** Sprint 12.0.2 MED-1 helper: the effective noise threshold for a
+ *  metric is max of both archives' floors for that metric (if present).
+ *  Returns null when there's no floor data or either side is null. */
+export function effectiveNoiseFloor(
+  key: keyof Metrics,
+  fromNF: SurfaceNoiseFloor | undefined,
+  toNF: SurfaceNoiseFloor | undefined,
+): number | null {
+  const fv = asNullable(fromNF?.[key]);
+  const tv = asNullable(toNF?.[key]);
+  if (fv === null && tv === null) return null;
+  if (fv === null) return tv;
+  if (tv === null) return fv;
+  return Math.max(fv, tv);
+}
+
 export function diffSurface(
   name: string,
   fromA: SurfaceAggregate | undefined,
   toA: SurfaceAggregate | undefined,
+  /** Sprint 12.0.2 MED-1: when both archives carry noise_floor, pass
+   *  the corresponding surface slice so within-floor deltas can be
+   *  badged ⚪ instead of 🔴/🟢. */
+  fromNF?: SurfaceNoiseFloor,
+  toNF?: SurfaceNoiseFloor,
 ): { md: string; regressions: string[] } {
   const lines: string[] = [];
   const regressions: string[] = [];
@@ -174,8 +204,15 @@ export function diffSurface(
     return { md: lines.join('\n'), regressions };
   }
 
-  lines.push('| Metric | Before | After | Δ | % | |');
-  lines.push('|---|---:|---:|---:|---:|---|');
+  const hasNoiseFloor = Boolean(fromNF || toNF);
+  lines.push(
+    hasNoiseFloor
+      ? '| Metric | Before | After | Δ | % | noise floor | |'
+      : '| Metric | Before | After | Δ | % | |',
+  );
+  lines.push(
+    hasNoiseFloor ? '|---|---:|---:|---:|---:|---:|---|' : '|---|---:|---:|---:|---:|---|',
+  );
 
   const metricKeys = Object.keys(DIRECTION) as (keyof Metrics)[];
   for (const key of metricKeys) {
@@ -195,10 +232,29 @@ export function diffSurface(
     // change), we still have sign information from delta itself — treat
     // it as a big change for emoji purposes rather than silently ⚪.
     const pctForEmoji = pct === null ? 100 : Math.abs(pct);
-    const e = delta === null ? '⚪' : emoji(delta, dir, pctForEmoji);
-    lines.push(`| ${key} | ${fmt(before)} | ${fmt(after)} | ${deltaFmt} | ${pctFmt} | ${e} |`);
 
-    if (breachedRegression(key, before, after)) {
+    // Sprint 12.0.2 MED-1: within-noise-floor deltas → ⚪, annotated.
+    const nf = effectiveNoiseFloor(key, fromNF, toNF);
+    const withinFloor = delta !== null && nf !== null && Math.abs(delta) <= nf;
+    const e = delta === null
+      ? '⚪'
+      : withinFloor
+        ? '⚪'
+        : emoji(delta, dir, pctForEmoji);
+
+    if (hasNoiseFloor) {
+      const nfFmt = nf === null ? '—' : fmt(nf);
+      const annotation = withinFloor ? ' (within floor)' : '';
+      lines.push(
+        `| ${key} | ${fmt(before)} | ${fmt(after)} | ${deltaFmt} | ${pctFmt} | ${nfFmt} | ${e}${annotation} |`,
+      );
+    } else {
+      lines.push(`| ${key} | ${fmt(before)} | ${fmt(after)} | ${deltaFmt} | ${pctFmt} | ${e} |`);
+    }
+
+    // MED-1: don't flag a regression if the breach is smaller than the
+    // noise floor — that's measurement-jitter, not signal.
+    if (breachedRegression(key, before, after) && !withinFloor) {
       const rule = REGRESSION_RULES[key]!;
       regressions.push(`**${name}/${key}**: ${rule.description} (before=${fmt(before)}, after=${fmt(after)})`);
     }
@@ -236,7 +292,12 @@ export function renderDiff(fromA: Archive, toA: Archive): string {
 
   const allRegressions: string[] = [];
   for (const name of surfaceNames) {
-    const { md, regressions } = diffSurface(name, fromA.surfaces?.[name], toA.surfaces?.[name]);
+    // Sprint 12.0.2 MED-1: pass per-surface noise_floor slices when either
+    // archive carries them. Type assertion: SurfaceNoiseFloor is a subset
+    // of the archive's noise_floor keyed by surface name.
+    const fromNF = fromA.noise_floor?.[name] as SurfaceNoiseFloor | undefined;
+    const toNF = toA.noise_floor?.[name] as SurfaceNoiseFloor | undefined;
+    const { md, regressions } = diffSurface(name, fromA.surfaces?.[name], toA.surfaces?.[name], fromNF, toNF);
     lines.push(md);
     allRegressions.push(...regressions);
   }
