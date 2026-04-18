@@ -39,7 +39,7 @@ function mockPool(canned: { rows: any[] } | Error) {
 
 // ---------------------------- blendHybridScore -------------------------------
 
-test('blendHybridScore', async (t) => {
+test('blendHybridScore (Sprint 12.1c)', async (t) => {
   await t.test('salience=0 or undefined → unchanged', () => {
     assert.equal(blendHybridScore(0.5, 0, 0.10), 0.5);
     assert.equal(blendHybridScore(0.5, undefined, 0.10), 0.5);
@@ -62,6 +62,57 @@ test('blendHybridScore', async (t) => {
     // Shouldn't happen — computeSalience always produces non-negative — but
     // the function should be robust to caller bugs.
     assert.equal(blendHybridScore(0.5, -0.2, 0.10), 0.5);
+  });
+});
+
+test('blendHybridScore query-conditional (Sprint 12.1d)', async (t) => {
+  await t.test('undefined semSimilarity → full boost (backward-compat with 12.1c)', () => {
+    // Omitting the new param must reproduce old behavior for any caller
+    // that hasn't been updated to pass sem_score yet.
+    assert.equal(blendHybridScore(0.5, 1.0, 0.10, undefined), 0.55);
+  });
+  await t.test('semSimilarity=1.0 → full boost (identical to undefined)', () => {
+    assert.equal(blendHybridScore(0.5, 1.0, 0.10, 1.0), 0.55);
+  });
+  await t.test('semSimilarity=0 → no boost even with max salience', () => {
+    // The point of Sprint 12.1d: popular-but-unrelated lessons get
+    // zero boost regardless of accumulated salience.
+    assert.equal(blendHybridScore(0.5, 1.0, 0.10, 0), 0.5);
+  });
+  await t.test('semSimilarity=0.5 → half-boost', () => {
+    // 0.5 × (1 + 0.10 × 1.0 × 0.5) = 0.5 × 1.05 = 0.525
+    assert.equal(blendHybridScore(0.5, 1.0, 0.10, 0.5), 0.525);
+  });
+  await t.test('popularity-feedback-loop matrix — popular-unrelated suppressed', () => {
+    // Narrow target: sem=0.80, salience=0.50 → 0.5 × (1 + 0.10 × 0.5 × 0.8) = 0.52
+    const narrow = blendHybridScore(0.5, 0.5, 0.10, 0.8);
+    assert.ok(narrow > 0.519 && narrow < 0.521, `narrow: expected ≈ 0.520, got ${narrow}`);
+    // Popular-unrelated: sem=0.20, salience=0.95 → 0.5 × (1 + 0.10 × 0.95 × 0.2) = 0.5095
+    const popularUnrelated = blendHybridScore(0.5, 0.95, 0.10, 0.2);
+    assert.ok(popularUnrelated > 0.509 && popularUnrelated < 0.510);
+    // Popular-AND-related: sem=0.70, salience=0.95 → 0.5 × (1 + 0.10 × 0.95 × 0.7) = 0.53325
+    const popularRelated = blendHybridScore(0.5, 0.95, 0.10, 0.7);
+    assert.ok(popularRelated > 0.533 && popularRelated < 0.534);
+    // Ordering check: popular-related > narrow > popular-unrelated
+    assert.ok(popularRelated > narrow);
+    assert.ok(narrow > popularUnrelated);
+  });
+  await t.test('semSimilarity clamped to [0, 1] defensively', () => {
+    // Real sem_score is in [0, 1] (cosine similarity normalized) but the
+    // function should be robust to out-of-range callers.
+    assert.equal(blendHybridScore(0.5, 1.0, 0.10, -0.5), 0.5);  // clamps to 0 → no boost
+    assert.equal(blendHybridScore(0.5, 1.0, 0.10, 2.0), 0.55);  // clamps to 1 → full boost
+  });
+  await t.test('comparison vs 12.1c (unconditional) — popular-unrelated drops from 0.55 to 0.509', () => {
+    // The concrete Sprint 12.1d promise: same popular-unrelated case that
+    // was at 0.55 under 12.1c (unconditional) is now at 0.509 (barely
+    // boosted). That's the popularity-feedback-loop suppression.
+    const oldBehavior = blendHybridScore(0.5, 0.95, 0.10);  // no semSim → full boost
+    const newBehavior = blendHybridScore(0.5, 0.95, 0.10, 0.2);
+    assert.ok(oldBehavior > newBehavior, 'sprint-12.1d must suppress popular-unrelated boost');
+    const suppressionRatio = (oldBehavior - 0.5) / (newBehavior - 0.5);
+    assert.ok(suppressionRatio >= 4 && suppressionRatio <= 6,
+      `suppression should be ~5× (1/semSim=0.2), got ${suppressionRatio}`);
   });
 });
 

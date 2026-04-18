@@ -856,11 +856,17 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
   }
 
   // Build initial matches from DB results.
+  // Sprint 12.1d: also retain sem_score in a parallel Map so the salience
+  // blend can condition its boost on query-lesson semantic similarity
+  // (fix for 12.1c popularity-feedback-loop).
+  const semScoreByLessonId = new Map<string, number>();
   let matches: SearchLessonsResult['matches'] = (res.rows ?? []).map((r: any) => {
     const sum = r.summary != null ? String(r.summary).trim() : '';
     const snippetSource = sum.length ? sum : String(r.content);
+    const lessonId = String(r.lesson_id);
+    semScoreByLessonId.set(lessonId, Number(r.sem_score));
     return {
-      lesson_id: String(r.lesson_id),
+      lesson_id: lessonId,
       project_id: String(r.project_id),
       lesson_type: String(r.lesson_type) as LessonType,
       title: String(r.title),
@@ -871,11 +877,11 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
     };
   });
 
-  // Sprint 12.1c — salience blend (read path).
+  // Sprint 12.1c / 12.1d — salience blend (read path), query-conditional.
   // Runs BEFORE rerank so rerank can refine on the salience-adjusted order.
-  // Multiplies each match's hybrid score by `(1 + α × salience)` where
-  // salience ∈ [0,1] is computed from lesson_access_log entries with
-  // exponential time-decay. Guarded by the umbrella kill-switch.
+  // Multiplies each match's hybrid score by `(1 + α × salience × semSim)` —
+  // the semSim factor addresses the 12.1c popularity feedback loop by
+  // scaling boost with how semantically close the lesson is to THIS query.
   if (!isSalienceDisabled() && matches.length > 0) {
     try {
       const salienceConfig = getSalienceConfig();
@@ -888,11 +894,13 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
       );
       if (salienceMap.size > 0 && salienceConfig.alpha > 0) {
         for (const m of matches) {
-          m.score = blendHybridScore(m.score, salienceMap.get(m.lesson_id), salienceConfig.alpha);
+          const sal = salienceMap.get(m.lesson_id);
+          const semSim = semScoreByLessonId.get(m.lesson_id);
+          m.score = blendHybridScore(m.score, sal, salienceConfig.alpha, semSim);
         }
         matches.sort((a, b) => b.score - a.score);
         explanations.push(
-          `salience: enabled (α=${salienceConfig.alpha}, halfLife=${salienceConfig.halfLifeDays}d); ${salienceMap.size}/${matches.length} lessons had access history`,
+          `salience: enabled query-conditional (α=${salienceConfig.alpha}, halfLife=${salienceConfig.halfLifeDays}d); ${salienceMap.size}/${matches.length} lessons had access history`,
         );
       } else {
         explanations.push(
@@ -1098,11 +1106,15 @@ export async function searchLessonsMulti(params: SearchLessonsMultiParams): Prom
     explanations.push(`hybrid: sem + 0.40*fts, fts_hits=${ftsHits}/${(res.rows ?? []).length}`);
   }
 
+  // Sprint 12.1d: retain sem_score for query-conditional salience blend.
+  const semScoreByLessonId = new Map<string, number>();
   let matches: SearchLessonsResult['matches'] = (res.rows ?? []).map((r: any) => {
     const sum = r.summary != null ? String(r.summary).trim() : '';
     const snippetSource = sum.length ? sum : String(r.content);
+    const lessonId = String(r.lesson_id);
+    semScoreByLessonId.set(lessonId, Number(r.sem_score));
     return {
-      lesson_id: String(r.lesson_id),
+      lesson_id: lessonId,
       project_id: String(r.project_id),
       lesson_type: String(r.lesson_type) as LessonType,
       title: String(r.title),
@@ -1113,10 +1125,10 @@ export async function searchLessonsMulti(params: SearchLessonsMultiParams): Prom
     };
   });
 
-  // Sprint 12.1c — salience blend (multi-project).
-  // Sprint 12.1c /review-impl MED-1: batched via computeSalienceMultiProject
-  // (ONE SQL query for all projectIds) rather than the prior per-project
-  // loop that caused N+1 roundtrips for N-project group searches.
+  // Sprint 12.1c + 12.1d — salience blend (multi-project, query-conditional).
+  // - MED-1 (12.1c review): batched via computeSalienceMultiProject (single
+  //   SQL query for all projectIds).
+  // - 12.1d: sem_score factor prevents popularity feedback loop.
   if (!isSalienceDisabled() && matches.length > 0) {
     try {
       const salienceConfig = getSalienceConfig();
@@ -1129,11 +1141,13 @@ export async function searchLessonsMulti(params: SearchLessonsMultiParams): Prom
       );
       if (salienceMap.size > 0 && salienceConfig.alpha > 0) {
         for (const m of matches) {
-          m.score = blendHybridScore(m.score, salienceMap.get(m.lesson_id), salienceConfig.alpha);
+          const sal = salienceMap.get(m.lesson_id);
+          const semSim = semScoreByLessonId.get(m.lesson_id);
+          m.score = blendHybridScore(m.score, sal, salienceConfig.alpha, semSim);
         }
         matches.sort((a, b) => b.score - a.score);
         explanations.push(
-          `salience: enabled multi-project (α=${salienceConfig.alpha}, halfLife=${salienceConfig.halfLifeDays}d); ${salienceMap.size}/${matches.length} lessons had access history`,
+          `salience: enabled multi-project query-conditional (α=${salienceConfig.alpha}, halfLife=${salienceConfig.halfLifeDays}d); ${salienceMap.size}/${matches.length} lessons had access history`,
         );
       } else {
         explanations.push(

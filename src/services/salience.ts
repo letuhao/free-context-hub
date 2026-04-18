@@ -159,6 +159,24 @@ export async function computeSalienceMultiProject(
 /** Blend salience into a hybrid score. Multiplicative boost so zero salience
  *  preserves the input score exactly. Clamped at 1.0.
  *
+ *  Sprint 12.1d — QUERY-CONDITIONAL SALIENCE:
+ *  The optional `semSimilarity` parameter (∈ [0, 1]) scales the salience
+ *  boost by how semantically close the lesson is to the current query.
+ *  This addresses the `popularity-feedback-loop` friction class from
+ *  Sprint 12.1c /review-impl MED-3:
+ *    - Popular-but-unrelated lessons (high salience, low sem_score) get
+ *      MOST of their boost cancelled.
+ *    - Narrow-topic matches (moderate salience, high sem_score) keep
+ *      proportional boost.
+ *    - Popular-AND-relevant lessons (high salience, high sem_score) get
+ *      the full boost they deserve.
+ *  Biologically: memory activation requires both the retrieval cue
+ *  matching the memory AND recency/frequency signals.
+ *
+ *  When `semSimilarity` is undefined, defaults to 1.0 — preserves the
+ *  original Sprint 12.1c behavior for backward-compat with any direct
+ *  caller that hasn't been updated.
+ *
  *  Sprint 12.1c /review-impl LOW-1: the clamp means a lesson whose hybrid
  *  score is already near 1.0 loses ordering information — two near-ceiling
  *  hybrid scores can both clamp to 1.0 regardless of salience. This is
@@ -169,10 +187,16 @@ export function blendHybridScore(
   hybridScore: number,
   salience: number | undefined,
   alpha: number,
+  semSimilarity?: number,
 ): number {
   if (!salience || salience <= 0) return hybridScore;
   if (alpha <= 0) return hybridScore;
-  const boosted = hybridScore * (1 + alpha * salience);
+  // Sprint 12.1d: clamp to [0, 1]. Default 1.0 reproduces 12.1c behavior.
+  const condition = semSimilarity === undefined
+    ? 1.0
+    : Math.max(0, Math.min(1, semSimilarity));
+  if (condition <= 0) return hybridScore;
+  const boosted = hybridScore * (1 + alpha * salience * condition);
   return Math.min(1.0, boosted);
 }
 
