@@ -1,4 +1,100 @@
 ---
+id: HANDOFF-2026-04-18-F
+date: 2026-04-18
+phase: HANDOFF
+session_status: closed
+pushed_to_origin: true
+---
+
+# Handoff — end of 2026-04-18 (session F — PHASE 12 A→B(partial)→C(partial), closed on 12.1d)
+
+## TL;DR
+**Phase 12's A→B→C macro-arc is alive and shipping.** A-track done (baseline scorecard + dup-rate v1 + noise-floor-aware diff). B-track done through dedup (lessons + chunks). C-track done through salience with query-conditional fix. Session closed on Sprint 12.1d after full 12-phase workflow including one `/review-impl` adversarial pass that caught 5 findings (all fixed). Popularity-feedback-loop regression from 12.1c fully suppressed (+0.0373 delta-from-control recovery). Eight Phase-12 sprints shipped this session; 25+ commits pushed to `origin/phase-12-rag-quality`.
+
+### Sprints shipped this session (chronological)
+1. **Sprint 12.0** — baseline scorecard + 4 golden sets + unified runBaseline + noise-floor-aware diff + friction-class catalog
+2. **Sprint 12.0.1** — dup-rate v1 metric + code indexing polish
+3. **Sprint 12.1a** — lessons near-semantic dedup (dup@10 nearsem 0.44 → 0)
+4. **Sprint 12.0.2** — measurement infra: `--control` flag + noise-floor-aware diff baselines
+5. **Sprint 12.1b** — chunks near-semantic dedup (dup@10 nearsem 0.29 → 0)
+6. **Sprint 12.1c** — access-frequency salience (write paths + read blend) — revealed popularity feedback loop
+7. **Sprint 12.1d** — query-conditional salience (composite relevance signal suppresses feedback loop) + /review-impl fixes
+
+### Final commit arc (Sprint 12.1d)
+- `25c6c18` core query-conditional blend (7 unit tests)
+- `3c00826` A/B archives (control OFF vs new ON)
+- `d3d4ecb` /review-impl fixes (MED-1 NaN guard · MED-2 max(sem,fts) composite relevance · LOW-2 extracted pure helper · LOW-3 silent-cap doc · COSMETIC-1 effective-boost count) + 12 more tests
+- `c7ae0ef` A/B verification post-fix (all 4 surfaces, lessons MRR parity)
+- `0b53781` SESSION_PATCH entry with LOW-1 narrative correction
+
+## Operational state at session close
+- Branch `phase-12-rag-quality` at `0b53781`, pushed to `origin`.
+- `.workflow-state.json` at `retro` (clean, all 12 phases complete for 12.1d).
+- Unit tests: **226/226 pass** (up from 214 at 12.1c close, +12 from /review-impl coverage).
+- Type check: `npx tsc --noEmit` clean.
+- A/B verification archive at `docs/qc/baselines/2026-04-18-sprint-12.1d-fix.{json,md}`.
+- No uncommitted changes, no pending todos, no carryover work queue.
+- `phase-12-rag-quality` branch NOT yet merged to `main` — deliberate; Phase 12 is in-progress and the user decides when to bundle for merge.
+
+## Phase 12 arc so far — what's proven
+
+**A-track (measurement).** The scorecard holds. Every sprint this session cited before/after numbers from the same pipeline. Noise-floor-aware diff classifies latency jitter correctly while flagging real quality shifts. `--control --samples` pattern works. Friction-class catalog has 14+ entries and counting (each sprint added 1-2 as their post-mortem).
+
+**B-track (consolidation).** Dedup ships for both lessons and chunks. Near-semantic key collapses timestamp-variants + digit-suffix clusters via `normalizeForHash`. Dup@10 nearsem dropped from 0.44 (lessons) / 0.29 (chunks) to 0 each. The motivating friction ("10 near-duplicate 'Global search test retry pattern' rows in top 15") is gone.
+
+**C-track (tiering, partial).** Salience shipped with access-frequency (5 consumption-write-paths + 1 audit-bootstrap-seed + 180d exponential decay). Initial 12.1c version had a popularity-feedback-loop (−0.0373 MRR delta-from-control); 12.1d's query-conditional blend fully neutralizes it. The `finalScore = hybrid × (1 + α × salience × relevance)` formula ships with `relevance = max(sem_score, fts_score)` composite to preserve FTS-only-relevant boosts.
+
+**Workflow v2.2 validated again.** `/review-impl` invoked once this sprint (per user menu option 2 at POST-REVIEW), caught 5 findings none of which the Phase-7 REVIEW-CODE pass had surfaced. Pattern continues from Phase 11: author-blindness is real, adversarial-mode-after-commit earns its keep.
+
+## What's NOT done (deferred / candidate)
+
+**Sprint 12.1e candidates** (prioritized by impact):
+- Half-life tuning — current 7d may be too short for audit-bootstrap; A/B sweep over {3, 7, 14, 30}d could nudge nDCG@10 further positive
+- Broader goldenset — 20-query lessons + 67 code + 10 chunks + 10 global is small; regressions inside noise floor are plausibly real. Expand each surface 2-3× when next painful.
+
+**Sprint 12.2 (C-track continuation)**:
+- Sleep consolidation (periodic access-pattern re-clustering, merge lessons that co-occur in access log)
+- Reinforcement weighting (explicit "this was useful" signal from reflect/apply success)
+- Hierarchical pointer retrieval (tier-1 frequent-access index, tier-2 full-corpus fallback)
+
+**Sprint 12.B (broader B-track)**:
+- Prune-on-decay (archive lessons never retrieved in 180d)
+- Merge near-identical lessons (automated cluster-collapse based on nearSemanticKey)
+
+**Deferred from 12.1c /review-impl**:
+- pg pool sizing — recommend `max >= 20` for salience-enabled deployments; no code change today
+- Write-behind batching for access log (every ~1s) if fire-and-forget volume becomes a pool-contention issue
+
+**Latent / documented**:
+- Conditioning-signal-gap (tension between pure sem_score vs composite) — addressed preemptively by 12.1d MED-2; revisit if future goldenset reveals over-boosting on marginal FTS hits
+- 180-day access-log window may silently exclude oldest audit-bootstrap rows; monitored
+
+## Next session — suggested entry points
+
+**Pick based on energy**:
+1. **Dogfood-driven** (like Phase-11 closeout) — use the system, capture friction as lessons, let Phase-12 priorities emerge from real use
+2. **12.1e tuning** — run the half-life sweep, pick the best-measuring half-life, ship a one-commit sprint. Low-cost, may unlock remaining quality headroom.
+3. **12.2 C-track continuation** — pick the next biological feature (sleep consolidation is the natural next one — it closes the storage↔retrieval loop and reuses the access-log infra from 12.1c)
+4. **Broader goldenset** — expand qc/lessons-queries.json to 50+ queries before making more ranking changes; prevents "signal lost inside noise floor" problems
+
+## How to resume the stack
+
+```bash
+cd d:/Works/source/free-context-hub
+docker compose up -d
+# Wait ~5s for services
+npm test                          # 226/226 unit
+npm run qc:baseline -- --tag smoke --samples 1   # quick baseline smoke
+curl http://localhost:3001/api/lessons?project_id=free-context-hub&limit=5
+```
+
+Durable lessons are in the MCP. Search `search_lessons(query: "salience")` or `search_lessons(query: "A/B baseline")` to rehydrate context.
+
+---
+
+---
+
+---
 id: CH-PHASE12-S121D
 date: 2026-04-18
 module: Phase12-Sprint12.1d
