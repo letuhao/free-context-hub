@@ -1,4 +1,117 @@
 ---
+id: CH-PHASE12-S1201
+date: 2026-04-18
+module: Phase12-Sprint12.0.1
+phase: PHASE_12
+---
+
+# Session Patch — 2026-04-18 (Phase 12 Sprint 12.0.1 — dup-rate v1 + code indexing prereqs)
+
+## Where We Are
+**Sprint 12.0.1 closed.** Two load-bearing prereqs for Sprint 12.1 (consolidation) shipped as a bundled M-size sub-sprint: (a) near-semantic dup-rate v1 metric extension and (b) code indexing of `free-context-hub` against the live stack. **Eight commits on `phase-12-rag-quality`** now, 4 from 12.0 + 4 from 12.0.1. `/review-impl` pattern continues — caught 7 findings on a sprint that looked clean at POST-REVIEW, including 1 HIGH where the v1 metric was reporting spurious 1.0 dup-rate on code (missing title/snippet passthrough). All fixed and re-verified.
+
+## Commits shipped this sprint
+- `85aa93e` — T1–T5: `normalizeForHash` + `nearSemanticKey` helpers, snippet passthrough, v1 aggregation in runBaseline, diff DIRECTION map extension
+- `8007308` — T6–T7: `register_workspace_root` + `index_project` against `/workspace` (3925 chunks initially), first sprint-0.1 baseline + diff
+- `04fc925` — `/review-impl` fixes: HIGH-1 code callCode content fix + MED 1–4 + LOW 1–2 + COSMETIC test
+- `17ab44e` — regenerated sprint-0.1 archive at clean commit SHA (04fc925) after fixes
+
+## The nail — `dup@10 nearsem = 0.42` on lessons (real pathology quantified)
+
+The original Phase-12 motivation — "10+ near-duplicate lessons dominate top-k" — is now a concrete number. Sprint 12.1 consolidation has a target to drive down.
+
+| Surface | Q | recall@10 | MRR | nDCG@10 | dup@10 | dup@10 nearsem | cov% | p95 ms |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| lessons | 20 | 0.9412 | 0.7716 | 0.8120 | 0 | **0.4200** | 0.9412 | 6275 |
+| code | 67 | 0.7910 | 0.4746 | 0.5388 | 0 | 0.0000 | 0.7910 | 1866 |
+| chunks | 10 | 1.0000 | 0.9167 | 0.9455 | 0 | 0.2900 | 1.0000 | 45 |
+| global | 10 | 0.8889 | 0.6481 | 0.7093 | 0 | 0.1400 | 0.8889 | 9 |
+
+Independent verification of the 0.42: inspected top-10 for `lesson-pg-uuid-casing`. Ranks 2–8 are Import A/B fixture rows with identical normalized snippets ("the document titled 'import a/b: impexp-n' contains content labeled as..."). These are real duplicates, not metric artifacts.
+
+## What /review-impl caught that POST-REVIEW didn't (largest haul yet: 7 findings)
+
+### HIGH-1 — code `dup@10 nearsem = 1.0` was spurious
+`callCode` left `title` undefined and set `snippet` = `f.snippet` (which doesn't exist — `search_code_tiered` returns `sample_lines` array). Every code SurfaceItem had `nearSemanticKey(undefined, undefined) = "||"`, collapsing the whole top-k into one cluster. The metric reported catastrophic 100% duplication when the truth is zero (files are distinct paths). **Fix**: populate `title: path` (unique per file) + `snippet: sample_lines.join(' ')`. Verified: code dup@10 nearsem now reports 0. Lesson: content-based hash metrics are mined by empty-content adapters — always include a distinguishing fallback (e.g., path) when retriever doesn't return content fields.
+
+### MED-1 — junk chunks in code index (4426 of 3925 were useless)
+`index_project` default excludes cover `.git` and `node_modules` but not `dist/`, `gui/.next/`, `.claude/worktrees/`, `agentic-workflow/`. Initial indexing ingested build outputs + agent workspace files. Purged via direct SQL DELETE; post-purge 2069 clean chunks. Permanent fix (expand DEFAULT_IGNORE or project-level `.contexthubignore`) deferred to Sprint 12.0.2. Documented as `index-hygiene` friction class.
+
+### MED-2 — `normalizeForHash` digit-collapse false-positive latent risk
+`"Phase 10"` and `"Phase 11"` both → `"phase n"`. `"v1.2.3"` / `"v2.0.0"` → `"vn.n.n"`. `"step1.ts"` / `"step2.ts"` → `"step-n.ts"`. Empirically clean for the current lesson dataset (all observed clusters have near-identical snippets too, confirmed via archive inspection). Load-bearing on specific data shape. Documented as `digit-collapse-false-positive` friction class.
+
+### MED-3 — `qc/queries.json` notes misleading for legacy runners
+`ragQcRunner.ts` and `tieredBaseline.ts` read `QC_PROJECT_ID` env (default `qc-free-context-hub`), NOT the goldenset's `project_id_suggested`. Updated notes to explicitly state which runner consumes which field.
+
+### MED-4 — cross-run measurement jitter
+Sprint-0 back-to-back runs byte-identical on quality. Sprint-0 → 0.1 (~2h apart) showed lessons recall@10 drift 1.0→0.94 with no lesson-ranking changes in between. Root cause: embeddings service jitter under varying load. Added `measurement-jitter` friction class. Operator protocol for real before/after measurement: run a same-tag back-to-back control baseline first to establish noise floor. Future runner enhancement: `--control` flag (Sprint 12.0.2+).
+
+### LOW-1 — archive snippet cap 200→300 chars (diagnostic ergonomics)
+
+### LOW-2 — indexer-excludes inconsistency documented (covered by MED-1)
+
+### COSMETIC — regression test added
+`all-null title+snippet collapse` test locks in the HIGH-1 behavior; `Phase 10 / Phase 11` + `step1.ts / step2.ts` tests lock in MED-2 trade-offs.
+
+## Friction-class catalog expansion (10 classes total)
+Added in 12.0.1:
+- `measurement-jitter` — cross-run noise on embeddings-backed metrics
+- `index-hygiene` — build-output pollution of the chunks table
+- `digit-collapse-false-positive` — normalizer trade-off for timestamp-variant titles
+
+## Files delivered
+```
+src/qc/
+├── metrics.ts                      + normalizeForHash, nearSemanticKey exports
+├── metrics.test.ts                 + 16 tests (normalize, nearSem, all-null trap, digit trap)
+├── surfaces.ts                       callCode now populates title=path + snippet=sample_lines
+├── runBaseline.ts                    snippet passthrough (top_k_snippets@300 chars), v1 aggregation,
+│                                     new metric col in scorecard
+├── diffBaselines.ts                  Metrics+DIRECTION extended; asNullable forward-compat;
+│                                     emoji ∞ fix
+└── diffBaselines.test.ts           + 6 tests (undefined forward-compat, ∞ emoji direction)
+
+qc/
+└── queries.json                      project_id_suggested=free-context-hub + clarified notes
+
+docs/
+├── specs/2026-04-18-phase-12-sprint-0.1-spec.md   combined spec+design+plan
+└── qc/
+    ├── friction-classes.md         + 3 classes (measurement-jitter, index-hygiene, digit-collapse)
+    └── baselines/
+        ├── 2026-04-18-phase-12-sprint-0.1.{json,md}   sprint-0.1 archive
+        └── 2026-04-18-sprint-0-to-0.1.diff.md         the nail diff
+```
+
+## DB side effect
+- 3925 chunks written to `chunks` table for project_id=`free-context-hub` (via `index_project`).
+- 4426 junk chunks deleted via direct DELETE (dist/, gui/.next/, .claude/*, agentic-workflow/, test-results/, coverage/, *.log).
+- Net: 2069 clean chunks remain. Workspace root `e8603167-259a-431c-9c59-4e560c27b2eb` registered for `free-context-hub` at `/workspace`.
+- These side effects are not reversible via git alone — need `DELETE FROM chunks WHERE project_id='free-context-hub'` + `DELETE FROM project_workspaces WHERE workspace_id='e8603167-...'` to fully roll back.
+
+## Test count: 138/138 unit tests (was 116 at 12.0; +22 new)
+- 16 from metrics v1 additions
+- 6 from diffBaselines null/undefined + emoji tests
+- All green at each of the 4 commits.
+
+## What's next — Sprint 12.0.2 candidate (deferred items)
+
+Small-scope sub-sprint to finish 12.0 prereqs before 12.1:
+1. **Indexer ignore-pattern expansion** — expand `DEFAULT_IGNORE` in `src/services/indexer.ts` to cover `dist/**`, `.next/**`, `.claude/**`, build outputs. Re-run index_project to prove the ignore lands.
+2. **Runner `--control` flag** — run goldenset twice back-to-back in one invocation, emit per-run-noise-floor metric in archive. Fixes MED-4 measurement-jitter as a feature, not a caveat.
+3. **Legacy runner honors `project_id_suggested`** (optional, MED-3 elevation): change `ragQcRunner.ts` and `tieredBaseline.ts` to fall back to goldenset's field when `QC_PROJECT_ID` is unset.
+
+Then Sprint 12.1a: lesson exact-title dedup targeting the 0.42 nearsem dup-rate.
+
+## Operational state
+- 8 commits on `phase-12-rag-quality`, all on `origin` after this session's push.
+- `.workflow-state.json` at retro (clean).
+- Docker compose stack healthy; 138/138 unit tests pass.
+- No pending todos.
+
+---
+
+---
 id: CH-PHASE12-S120
 date: 2026-04-18
 module: Phase12-Sprint12.0
