@@ -63,6 +63,8 @@ import {
 import { formatToolResponse, OutputFormatSchema } from './formatters.js';
 import { isFeatureEnabled } from '../services/featureToggles.js';
 import { searchChunks } from '../services/documentChunks.js';
+import { logLessonAccess, isSalienceDisabled, type AccessLogEntry } from '../services/salience.js';
+import { getDbPool } from '../db/client.js';
 
 // ── MCP error boundary: convert ContextHubError → McpError at protocol edge ──
 const CONTEXT_HUB_TO_MCP_CODE: Record<string, number> = {
@@ -1695,6 +1697,24 @@ function createMcpToolsServer() {
         filters: { include_all_statuses: false },
       });
       const bullets = retrieved.matches.map(m => `- ${m.title}: ${m.content_snippet}`);
+
+      // Sprint 12.1c — write path #2: consumption-reflect. These lessons
+      // are about to be piped into LLM synthesis, which is THE canonical
+      // "this memory was used" signal. Full weight 1.0, fire-and-forget.
+      // The kill-switch is enforced by logLessonAccess's env check path —
+      // but we also guard here to skip the pool import + array build cost
+      // when disabled.
+      if (!isSalienceDisabled() && retrieved.matches.length > 0) {
+        const entries: AccessLogEntry[] = retrieved.matches.map((m) => ({
+          lesson_id: m.lesson_id,
+          project_id: m.project_id ?? pid,
+          context: 'consumption-reflect',
+          weight: 1.0,
+          metadata: { topic },
+        }));
+        void logLessonAccess(getDbPool(), entries);
+      }
+
       const synth = await reflectOnTopic({ topic, bullets });
       const result = {
         project_id: pid,

@@ -8,6 +8,7 @@ import { distillLesson } from './distiller.js';
 import { rebuildProjectSnapshot } from './snapshot.js';
 import { expandForFtsIndex, buildFtsQuery } from '../utils/ftsTokenizer.js';
 import { nearSemanticKey } from '../utils/nearSemanticKey.js';
+import { logLessonAccess, isSalienceDisabled, type AccessLogEntry } from './salience.js';
 import * as z from 'zod/v4';
 import { createModuleLogger } from '../utils/logger.js';
 
@@ -910,6 +911,22 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
   // Trim to the originally requested limit after reranking + dedup.
   matches = matches.slice(0, limit);
 
+  // Sprint 12.1c — write path #1: consideration-search. Every returned
+  // match contributes to salience, weighted inversely by rank so the
+  // top-1 counts fully and rank-10 contributes just 0.1. Fire-and-forget:
+  // a write failure must never break retrieval. Guarded by the salience
+  // kill-switch so --control A/B measurement works cleanly.
+  if (!isSalienceDisabled() && matches.length > 0) {
+    const entries: AccessLogEntry[] = matches.map((m, i) => ({
+      lesson_id: m.lesson_id,
+      project_id: m.project_id ?? params.projectId,
+      context: 'consideration-search',
+      weight: 1.0 / (i + 1),
+      metadata: { query: params.query, rank: i + 1 },
+    }));
+    void logLessonAccess(pool, entries);
+  }
+
   return { matches, explanations };
 }
 
@@ -1079,6 +1096,19 @@ export async function searchLessonsMulti(params: SearchLessonsMultiParams): Prom
   }
 
   matches = matches.slice(0, limit);
+
+  // Sprint 12.1c — consideration-search logging for multi-project path too.
+  if (!isSalienceDisabled() && matches.length > 0) {
+    const entries: AccessLogEntry[] = matches.map((m, i) => ({
+      lesson_id: m.lesson_id,
+      project_id: m.project_id ?? projectIds[0] ?? 'unknown',
+      context: 'consideration-search',
+      weight: 1.0 / (i + 1),
+      metadata: { query: params.query, rank: i + 1, multi_project: true },
+    }));
+    void logLessonAccess(pool, entries);
+  }
+
   return { matches, explanations };
 }
 

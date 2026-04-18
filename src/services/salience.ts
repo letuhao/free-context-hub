@@ -126,7 +126,26 @@ export function blendHybridScore(
 export type AccessLogEntry = {
   lesson_id: string;
   project_id: string;
-  context: 'consumption-reflect' | 'consumption-read' | 'consideration-search' | 'audit-bootstrap';
+  /** Context classes, in order of biological strength:
+   *  - `audit-bootstrap`       — one-time seed from guardrail_audit_logs (strong, 1.0)
+   *  - `consumption-*`         — this memory was actually USED (strong, 1.0)
+   *  - `consideration-search`  — this memory was surfaced (weak, rank-weighted < 1.0)
+   *
+   *  Consumption kinds reflect the concrete endpoints in this codebase where
+   *  a lesson_id gets dereferenced and processed:
+   *  - `consumption-reflect`   — reflect MCP tool pipes into LLM synthesis
+   *  - `consumption-improve`   — POST /:id/improve invokes LLM on content
+   *  - `consumption-tags`      — POST /:id/suggest-tags scans content
+   *  - `consumption-versions`  — GET /:id/versions view history (GUI/operator)
+   *  - `consumption-read`      — reserved for future GET /api/lessons/:id endpoint */
+  context:
+    | 'audit-bootstrap'
+    | 'consumption-reflect'
+    | 'consumption-improve'
+    | 'consumption-tags'
+    | 'consumption-versions'
+    | 'consumption-read'
+    | 'consideration-search';
   /** Default 1.0 — rank-weighted search entries pass `1/rank`. */
   weight?: number;
   metadata?: Record<string, unknown>;
