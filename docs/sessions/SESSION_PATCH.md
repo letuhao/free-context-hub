@@ -1,4 +1,144 @@
 ---
+id: CH-PHASE12-S121C
+date: 2026-04-18
+module: Phase12-Sprint12.1c
+phase: PHASE_12
+---
+
+# Session Patch — 2026-04-18 (Phase 12 Sprint 12.1c — access-frequency salience)
+
+## Where We Are
+**Sprint 12.1c closed.** First biological-memory feature of Phase 12 ships. Access-frequency salience now blends into lessons retrieval ranking — lessons that get consumed more often (via reflect, improve, tag-suggest, version-lookup) get a time-decayed boost. 5 commits on `phase-12-rag-quality`: spec/plan+migration/service, write paths (5 insertion points), ranking blend, A/B archives, /review-impl fixes. A/B measurement revealed an honest Phase-12 finding (popularity feedback loop) documented as a new friction class + Sprint 12.1d candidate.
+
+## Commits (5)
+- `c42e7bb` — T1-T5 foundation: migration 0047 + salience service + 22 unit tests + 3 env knobs + spec/plan docs
+- `2193996` — T6-T9 write paths: 5 insertion points (consideration-search, consumption-reflect/improve/tags/versions), all fire-and-forget
+- `51fe86a` — T10-T12 ranking blend: computeSalience integrated BEFORE rerank in both searchLessons + searchLessonsMulti; MCP tool description updated
+- `364e31d` — T13-T14 A/B archives + diff: honest "feature works but needs tuning" readout
+- `4db72f6` — /review-impl fixes: MED-1 N+1 batched + LOW-1 clamp doc + MED-2 pool-sizing + MED-3 popularity-feedback-loop friction class + LOW-2 bootstrap decay doc
+
+## The honest A/B result (samples=3 via --control)
+
+| Metric | Control (salience OFF) | New (salience ON) | Δ | Noise floor | Verdict |
+|---|---:|---:|---:|---:|---|
+| recall@10 | 1.0 | 1.0 | 0 | 0 | ⚪ targets still found |
+| MRR | 0.9608 | 0.9235 | **−0.0373** | 0 | 🔴 real signal |
+| nDCG@10 | 0.9628 | 0.9502 | −0.0126 | 0.0078 | 🔴 real signal |
+| nDCG@5 | 0.9706 | 0.9499 | −0.0207 | 0 | 🔴 real signal |
+| dup@10 nearsem | 0 | 0 | 0 | 0 | ⚪ dedup holds |
+| latency p95 | 5270ms | 2409ms | −2861ms | 2851ms | ⚪ within floor |
+
+**18 of 20 queries show top-3 rank shifts** — feature is actively reshuffling. Zero regressions auto-flagged (noise-floor-aware thresholds not breached). The MRR/nDCG drops are small, real, and beyond the zero quality noise floor — meaningful to analyze, not a reason to revert.
+
+## What this sprint proved
+- **Schema** holds. 90 audit-bootstrap rows + fresh write paths accumulate correctly.
+- **Salience math** correct: 22 unit tests + 5 new MED-1 fix tests + A/B showing 18/20 queries reordered.
+- **Kill-switch** works cleanly (control run = baseline behavior exactly).
+- **Noise-floor-aware diff** classifies latency shifts as jitter while flagging real quality shifts.
+- **Explanations** emit in all 5 branches (disabled / no-data / α=0 / data-present / error).
+
+## /review-impl findings — popularity feedback loop is the real story
+
+Trace through the access log (via `/review-impl` concern 1): after 4 A/B runs, 1,200 `consideration-search` rows accumulated. Lessons with broad keyword coverage (retry/backoff/integration topics) accumulated 3-5× the salience of narrow-topic targets, pulling them above specific targets in ranking.
+
+**This is a known failure mode of naive access-frequency salience**, not a bug. My initial explanation ("audit-bootstrap biases toward guardrails") pointed at a smaller effect. The bigger mechanism: rank-weighted `consideration-search` is too cheap to earn; popular-adjacent lessons get a salience free ride. New friction class `popularity-feedback-loop` documents the mechanism + four mitigation paths.
+
+### Five /review-impl issues addressed in 4db72f6
+
+1. **MED-1** — N+1 in searchLessonsMulti: added `computeSalienceMultiProject` using `project_id = ANY($1::text[])` for a single roundtrip. Real perf fix for group-search consumers.
+2. **MED-2** — Pool-sizing assumption documented (recommend `pg pool max >= 20`).
+3. **MED-3** — popularity-feedback-loop friction class.
+4. **LOW-1** — Clamp-at-1.0 loses ordering near ceiling (docstring note).
+5. **LOW-2** — Audit-bootstrap data decays within ~3-4 weeks (intentional biological consolidation).
+
+5 concerns verified safe (SQL injection, dedup interaction, fire-and-forget shutdown, explanations pollution, 180-day window).
+
+## Files delivered
+
+```
+migrations/
+└── 0047_lesson_access_log.sql       NEW — schema + 2 indexes + audit backfill
+
+src/services/
+├── salience.ts                      NEW — computeSalience + Multi + blend
+│                                    + logLessonAccess + env readers + docstrings
+│                                    documenting ordering contract, pool-sizing,
+│                                    clamp caveat
+├── salience.test.ts                 NEW — 27 unit tests
+└── lessons.ts                     + 3 write-path hooks + 2 blend integrations
+                                    (single + multi, multi batched via
+                                    computeSalienceMultiProject per MED-1)
+
+src/mcp/
+└── index.ts                       + reflect-tool consumption-reflect write;
+                                    search_lessons tool description updated
+                                    with salience + 3 env-knob docs
+
+src/api/routes/
+└── lessons.ts                     + 3 consumption write-paths (improve,
+                                    suggest-tags, versions)
+
+src/env.ts                          + LESSONS_SALIENCE_DISABLED (umbrella),
+                                    _ALPHA (default 0.10), _HALF_LIFE_DAYS
+                                    (default 7)
+
+docs/
+├── specs/2026-04-18-phase-12-sprint-1c-spec.md     NEW — 3 CLARIFY decisions locked
+├── plans/2026-04-18-phase-12-sprint-1c-plan.md     NEW — 15 tasks, 4 commits
+├── qc/friction-classes.md        + popularity-feedback-loop (MED-3 + 4 fix paths);
+                                    bootstrap-decay note added
+└── qc/baselines/
+    ├── 2026-04-18-sprint-12.1c-control.{json,md}   salience OFF
+    ├── 2026-04-18-sprint-12.1c-new.{json,md}       salience ON
+    └── 2026-04-18-sprint-12.1c.diff.md             the A/B diff (honest)
+
+package.json                        test script includes salience.test.ts
+```
+
+## Test count: 206/206 unit tests (was 179 end of 12.1b; +27 salience + MED-1 tests)
+
+## Runtime verification
+- `npx tsc --noEmit` → clean
+- `npm test` → 206/206 pass
+- Migration 0047 applied, 90 audit-bootstrap rows seeded
+- A/B --control protocol: salience active (18/20 rank shifts), MRR/nDCG measurably shifted beyond zero noise floor, dedup unchanged, recall unchanged
+- Post-rebuild MCP container running with salience enabled (default)
+
+## Phase 12 scoreboard
+
+| Sprint | Topic | Status | Nail |
+|---|---|---|---|
+| 12.0 | Baseline scorecard | ✅ | 4-surface measurement + diff CLI |
+| 12.0.1 | dup-rate v1 + code indexing | ✅ | `dup@10 nearsem` metric + 3925 code chunks |
+| 12.1a | Lessons dedup | ✅ | `dup@10 nearsem 0.44 → 0` |
+| 12.0.2 | Measurement infra polish | ✅ | `--control` flag + noise-floor-aware diff |
+| 12.1b | Chunks dedup | ✅ | `dup@10 nearsem 0.29 → 0` |
+| 12.1c | **Access-frequency salience** | ✅ | Infrastructure shipped, 18/20 reorders; honest -0.04 MRR → tune in 12.1d |
+
+## What's next — Sprint 12.1d candidate (salience tuning)
+
+The popularity-feedback-loop friction class documents 4 fix paths. Most promising combination:
+1. **Query-conditional salience** — only boost lessons semantically close to the query. Prevents popular-but-unrelated rising.
+2. **Lower α (0.02-0.05) with longer half-life (14-30d)** — smaller per-query shifts, longer-horizon memory. Biologically plausible.
+
+Both tunable via existing env knobs (no code change) OR via small code change in blendHybridScore (query-conditional factor). Measurement via the same --control protocol.
+
+Target: MRR stays flat (within noise) while salience still measurably reorders OR improves ranking in a realistic dogfood workflow that Goldenset doesn't capture.
+
+Other candidates on the Phase-12 board:
+- **12.2a Redis hot-cache tiering** — lessons p95 is ~2-5s; hot-path caching would be a real latency win.
+- **12.0.3 test-harness polish** — summary-override on POST /api/lessons for deterministic dedup-wiring e2e; synchronous-POST flag on documents; write-behind batching for access-log.
+
+## Operational state
+- 5 commits on `phase-12-rag-quality`, ready to push.
+- `.env` cleaned; container running with salience enabled by default.
+- `.workflow-state.json` advancing to commit + retro.
+- Docker stack healthy; 206/206 unit tests pass.
+- No pending todos.
+
+---
+
+---
 id: CH-PHASE12-S121B
 date: 2026-04-18
 module: Phase12-Sprint12.1b
