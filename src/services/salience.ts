@@ -177,12 +177,38 @@ export async function computeSalienceMultiProject(
  *  original Sprint 12.1c behavior for backward-compat with any direct
  *  caller that hasn't been updated.
  *
+ *  Sprint 12.1d /review-impl MED-2 — RELEVANCE SIGNAL, NOT PURE SEMANTIC:
+ *  Callers should pass a COMBINED retrieval-cue-match signal, not pure
+ *  sem_score. FTS-only relevant matches (specific identifiers, short
+ *  technical tokens the embedder doesn't separate well) have low sem_score
+ *  despite being highly relevant; feeding pure sem_score would cancel
+ *  their legitimate salience boost. Current callers in lessons.ts pass
+ *  `max(sem_score, fts_score)` for this reason. The parameter name is kept
+ *  as `semSimilarity` for backward-compat but treat it as "relevance
+ *  signal ∈ [0, 1]."
+ *
+ *  Sprint 12.1d /review-impl MED-1 — NaN GUARD:
+ *  pgvector cosine distance can return NaN for zero-magnitude vectors
+ *  (degenerate queries, corrupted embeddings). `Number(NaN) = NaN` then
+ *  `Math.min(1, NaN) = NaN` then `NaN <= 0 = false` — so without an
+ *  isFinite check, NaN propagates into the final score and `sort()` on
+ *  NaN elements has undefined order. Explicit isFinite returns unchanged
+ *  hybridScore for any non-finite input (treated as "no signal available").
+ *
  *  Sprint 12.1c /review-impl LOW-1: the clamp means a lesson whose hybrid
  *  score is already near 1.0 loses ordering information — two near-ceiling
  *  hybrid scores can both clamp to 1.0 regardless of salience. This is
  *  deliberate (scores shouldn't exceed 1.0) and rare on a semantic+FTS
  *  distribution where max scores cluster around 0.7-0.9. Revisit if the
- *  indexer/reranker ever produces genuine 1.0 hybrids routinely. */
+ *  indexer/reranker ever produces genuine 1.0 hybrids routinely.
+ *
+ *  Sprint 12.1d /review-impl LOW-3: the upper `Math.min(1, …)` silently
+ *  caps out-of-range inputs. pgvector's SQL wraps sem_score in
+ *  `GREATEST(0, …)` but has NO upper cap — if pgvector ever produces
+ *  distance < 0 due to numerical error, sem_score would exceed 1 and the
+ *  clamp would hide the anomaly. Not worth explicit telemetry today, but
+ *  documented here so a maintainer chasing "why is this row always at max
+ *  boost" has a lead. */
 export function blendHybridScore(
   hybridScore: number,
   salience: number | undefined,
@@ -191,13 +217,51 @@ export function blendHybridScore(
 ): number {
   if (!salience || salience <= 0) return hybridScore;
   if (alpha <= 0) return hybridScore;
-  // Sprint 12.1d: clamp to [0, 1]. Default 1.0 reproduces 12.1c behavior.
-  const condition = semSimilarity === undefined
-    ? 1.0
-    : Math.max(0, Math.min(1, semSimilarity));
+  // Sprint 12.1d /review-impl MED-1: NaN guard before clamp.
+  // Non-finite semSim (NaN/Inf from pgvector edge cases) → treat as no
+  // signal → skip the boost. Conservative: popular-unrelated stays
+  // suppressed rather than accidentally boosted.
+  const raw = semSimilarity === undefined ? 1.0 : semSimilarity;
+  if (!Number.isFinite(raw)) return hybridScore;
+  const condition = Math.max(0, Math.min(1, raw));
   if (condition <= 0) return hybridScore;
   const boosted = hybridScore * (1 + alpha * salience * condition);
   return Math.min(1.0, boosted);
+}
+
+/** Apply query-conditional salience blend to a list of matches in-place,
+ *  then sort by score descending. Returns the count of matches whose score
+ *  actually changed (useful for the explanation string).
+ *
+ *  Sprint 12.1d /review-impl LOW-2: extracted from the inline loops in
+ *  `searchLessons` and `searchLessonsMulti` so the Map-plumbing can be
+ *  unit-tested without mocking the DB pool. The two callers previously
+ *  had 9-line near-duplicate loops that couldn't be exercised except
+ *  through full-stack tests.
+ *
+ *  The `relevanceSignalByLessonId` map should contain the blended
+ *  `max(sem_score, fts_score)` for each match's lesson_id. Missing keys
+ *  are treated as undefined (passes through as "no signal" → no boost per
+ *  MED-1 NaN-guard semantics, which is also what happens for NaN/missing).
+ *  Missing salienceMap keys → undefined → blend returns hybridScore
+ *  unchanged (zero-salience short-circuit). */
+export function applyQueryConditionalSalienceBlend<T extends { lesson_id: string; score: number }>(
+  matches: T[],
+  salienceMap: Map<string, number>,
+  relevanceSignalByLessonId: Map<string, number>,
+  alpha: number,
+): { effectiveBoosts: number } {
+  let effectiveBoosts = 0;
+  for (const m of matches) {
+    const sal = salienceMap.get(m.lesson_id);
+    const rel = relevanceSignalByLessonId.get(m.lesson_id);
+    const before = m.score;
+    m.score = blendHybridScore(m.score, sal, alpha, rel);
+    // Floating-point-safe change check — any observable score change counts.
+    if (Math.abs(m.score - before) > 1e-12) effectiveBoosts += 1;
+  }
+  matches.sort((a, b) => b.score - a.score);
+  return { effectiveBoosts };
 }
 
 // --------------------------------- Write path --------------------------------

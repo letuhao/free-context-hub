@@ -14,6 +14,7 @@ import test from 'node:test';
 
 import {
   blendHybridScore,
+  applyQueryConditionalSalienceBlend,
   computeSalience,
   computeSalienceMultiProject,
   isSalienceDisabled,
@@ -113,6 +114,144 @@ test('blendHybridScore query-conditional (Sprint 12.1d)', async (t) => {
     const suppressionRatio = (oldBehavior - 0.5) / (newBehavior - 0.5);
     assert.ok(suppressionRatio >= 4 && suppressionRatio <= 6,
       `suppression should be ~5× (1/semSim=0.2), got ${suppressionRatio}`);
+  });
+});
+
+test('blendHybridScore non-finite guard (12.1d /review-impl MED-1)', async (t) => {
+  await t.test('NaN semSimilarity → unchanged score (treated as no signal)', () => {
+    // pgvector cosine distance can return NaN for zero-magnitude vectors.
+    // Without a guard, NaN propagates: Math.min(1, NaN)=NaN → NaN<=0 is
+    // false → hybrid*(1+α*sal*NaN)=NaN → match has undefined sort order.
+    assert.equal(blendHybridScore(0.5, 0.95, 0.10, NaN), 0.5);
+  });
+  await t.test('Infinity semSimilarity → unchanged score', () => {
+    assert.equal(blendHybridScore(0.5, 0.95, 0.10, Infinity), 0.5);
+    assert.equal(blendHybridScore(0.5, 0.95, 0.10, -Infinity), 0.5);
+  });
+  await t.test('NaN guard is conservative — prefers no-boost over wrong-boost', () => {
+    // Without the guard, NaN would either crash or silently produce NaN.
+    // The chosen semantics: NaN = "no signal available" = no boost. This
+    // is safer against popularity feedback (the friction class 12.1d is
+    // designed to prevent) than defaulting to full boost.
+    const withNaN = blendHybridScore(0.8, 1.0, 0.5, NaN);
+    const withZero = blendHybridScore(0.8, 1.0, 0.5, 0);
+    assert.equal(withNaN, withZero, 'NaN should match zero-signal behavior');
+  });
+});
+
+// ---------- applyQueryConditionalSalienceBlend (12.1d /review-impl LOW-2) ----
+
+test('applyQueryConditionalSalienceBlend', async (t) => {
+  // Build a small match list with known salience + relevance signals and
+  // verify the helper's in-place mutation, sort, and effective-boost count.
+  type M = { lesson_id: string; score: number };
+  const makeMatches = (): M[] => [
+    { lesson_id: 'a', score: 0.5 },  // narrow target: rel=0.8, sal=0.5
+    { lesson_id: 'b', score: 0.5 },  // popular-unrelated: rel=0.2, sal=0.95
+    { lesson_id: 'c', score: 0.5 },  // popular-AND-related: rel=0.7, sal=0.95
+    { lesson_id: 'd', score: 0.5 },  // no access history (missing from salienceMap)
+  ];
+  const salience = new Map([
+    ['a', 0.5],
+    ['b', 0.95],
+    ['c', 0.95],
+    // 'd' absent intentionally
+  ]);
+  const relevance = new Map([
+    ['a', 0.8],
+    ['b', 0.2],
+    ['c', 0.7],
+    ['d', 0.5],  // has relevance but no salience — should still not boost
+  ]);
+
+  await t.test('sorts descending by post-blend score', () => {
+    const matches = makeMatches();
+    applyQueryConditionalSalienceBlend(matches, salience, relevance, 0.10);
+    // Expected order (approx scores):
+    //   c: 0.5 * (1 + 0.10 * 0.95 * 0.7) = 0.53325
+    //   a: 0.5 * (1 + 0.10 * 0.5 * 0.8)  = 0.520
+    //   b: 0.5 * (1 + 0.10 * 0.95 * 0.2) = 0.5095
+    //   d: unchanged (no salience entry) = 0.5
+    assert.equal(matches[0]!.lesson_id, 'c', 'popular-related should be first');
+    assert.equal(matches[1]!.lesson_id, 'a', 'narrow-target should be second');
+    assert.equal(matches[2]!.lesson_id, 'b', 'popular-unrelated should be third');
+    assert.equal(matches[3]!.lesson_id, 'd', 'no-access-history should be last');
+  });
+
+  await t.test('effectiveBoosts counts matches whose score actually changed', () => {
+    const matches = makeMatches();
+    const { effectiveBoosts } = applyQueryConditionalSalienceBlend(matches, salience, relevance, 0.10);
+    // a, b, c all have salience+relevance > 0 → boosted. d missing salience → unchanged.
+    assert.equal(effectiveBoosts, 3);
+  });
+
+  await t.test('missing relevance signal → blend treats as undefined → full boost (backward-compat)', () => {
+    // The helper passes `relevanceMap.get(id)` which returns undefined for
+    // missing keys. blendHybridScore treats undefined as 1.0 (full boost).
+    // This is the backward-compat branch; LESSONS-side callers always
+    // populate the map, so this is documented behavior, not a hole.
+    const matches: M[] = [{ lesson_id: 'z', score: 0.5 }];
+    const sal = new Map([['z', 0.5]]);
+    const rel = new Map<string, number>();  // empty
+    const { effectiveBoosts } = applyQueryConditionalSalienceBlend(matches, sal, rel, 0.10);
+    assert.equal(effectiveBoosts, 1);
+    // 0.5 × (1 + 0.10 × 0.5 × 1.0) = 0.525
+    assert.ok(Math.abs(matches[0]!.score - 0.525) < 1e-9);
+  });
+
+  await t.test('NaN relevance value → no boost, no NaN pollution (MED-1 regression)', () => {
+    // Verifies the helper+blend chain doesn't propagate NaN into scores
+    // when the relevance map contains NaN (e.g., from pgvector edge case).
+    const matches: M[] = [
+      { lesson_id: 'n', score: 0.5 },
+      { lesson_id: 'ok', score: 0.5 },
+    ];
+    const sal = new Map([['n', 0.95], ['ok', 0.5]]);
+    const rel = new Map([['n', NaN], ['ok', 0.8]]);
+    const { effectiveBoosts } = applyQueryConditionalSalienceBlend(matches, sal, rel, 0.10);
+    assert.equal(effectiveBoosts, 1, 'only ok should boost; n is NaN-guarded');
+    for (const m of matches) {
+      assert.ok(Number.isFinite(m.score), `score must be finite, got ${m.score}`);
+    }
+  });
+
+  await t.test('FTS-only match with high relevance but low sem keeps boost (MED-2 regression)', () => {
+    // The key Sprint 12.1d /review-impl MED-2 assertion: a lesson with
+    // low semantic similarity but strong FTS match (composite relevance
+    // = max(sem, fts) = 0.7 from fts) should still receive the salience
+    // boost it deserves. Without MED-2, relevance would be sem=0.1 and
+    // most of the boost would be cancelled.
+    const matches: M[] = [
+      { lesson_id: 'fts-only', score: 0.4 },  // sem=0.1, fts=0.7 → composite=0.7
+    ];
+    const sal = new Map([['fts-only', 0.8]]);
+    const rel = new Map([['fts-only', 0.7]]);  // the max(sem, fts) composite
+    const { effectiveBoosts } = applyQueryConditionalSalienceBlend(matches, sal, rel, 0.10);
+    assert.equal(effectiveBoosts, 1);
+    // 0.4 × (1 + 0.10 × 0.8 × 0.7) = 0.4 × 1.056 = 0.4224
+    assert.ok(Math.abs(matches[0]!.score - 0.4224) < 1e-9,
+      `expected ~0.4224, got ${matches[0]!.score}`);
+    // For contrast: if relevance were pure sem=0.1, boost would be:
+    //   0.4 × (1 + 0.10 × 0.8 × 0.1) = 0.4 × 1.008 = 0.4032
+    // MED-2 raises this from 0.4032 → 0.4224 (7× more boost retained).
+  });
+
+  await t.test('empty matches → no error, 0 effective boosts', () => {
+    const matches: M[] = [];
+    const { effectiveBoosts } = applyQueryConditionalSalienceBlend(
+      matches, new Map(), new Map(), 0.10,
+    );
+    assert.equal(effectiveBoosts, 0);
+    assert.equal(matches.length, 0);
+  });
+
+  await t.test('alpha=0 → no boosts even with full salience+relevance', () => {
+    const matches: M[] = [{ lesson_id: 'a', score: 0.5 }];
+    const sal = new Map([['a', 1.0]]);
+    const rel = new Map([['a', 1.0]]);
+    const { effectiveBoosts } = applyQueryConditionalSalienceBlend(matches, sal, rel, 0);
+    assert.equal(effectiveBoosts, 0);
+    assert.equal(matches[0]!.score, 0.5);
   });
 });
 

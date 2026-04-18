@@ -13,7 +13,7 @@ import {
   isSalienceDisabled,
   computeSalience,
   computeSalienceMultiProject,
-  blendHybridScore,
+  applyQueryConditionalSalienceBlend,
   getSalienceConfig,
   type AccessLogEntry,
 } from './salience.js';
@@ -856,15 +856,31 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
   }
 
   // Build initial matches from DB results.
-  // Sprint 12.1d: also retain sem_score in a parallel Map so the salience
-  // blend can condition its boost on query-lesson semantic similarity
-  // (fix for 12.1c popularity-feedback-loop).
-  const semScoreByLessonId = new Map<string, number>();
+  // Sprint 12.1d: retain a RELEVANCE SIGNAL per lesson so the salience blend
+  // can condition its boost on how well the lesson matches the current
+  // query. Sprint 12.1d /review-impl MED-2 — use `max(sem_score, fts_score)`
+  // rather than pure sem_score so FTS-only relevant matches (specific
+  // identifiers, short technical tokens) keep their legitimate boost instead
+  // of being cancelled by low semantic similarity.
+  //
+  // MED-1 NaN guard: Number(NaN) = NaN; the downstream blendHybridScore
+  // returns hybridScore unchanged when relevance is non-finite. Storing NaN
+  // here is safe — the blend function handles it. Prefer not to replace NaN
+  // with 0 at write-time so the signal path is debuggable.
+  const relevanceSignalByLessonId = new Map<string, number>();
   let matches: SearchLessonsResult['matches'] = (res.rows ?? []).map((r: any) => {
     const sum = r.summary != null ? String(r.summary).trim() : '';
     const snippetSource = sum.length ? sum : String(r.content);
     const lessonId = String(r.lesson_id);
-    semScoreByLessonId.set(lessonId, Number(r.sem_score));
+    const semScore = Number(r.sem_score);
+    const ftsScore = Number(r.fts_score);
+    // Composite: whichever signal is stronger. Both are in ~[0, 1];
+    // ts_rank can rarely exceed 1 but the clamp in blendHybridScore caps it.
+    const relevance = Math.max(
+      Number.isFinite(semScore) ? semScore : 0,
+      Number.isFinite(ftsScore) ? ftsScore : 0,
+    );
+    relevanceSignalByLessonId.set(lessonId, relevance);
     return {
       lesson_id: lessonId,
       project_id: String(r.project_id),
@@ -879,9 +895,10 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
 
   // Sprint 12.1c / 12.1d — salience blend (read path), query-conditional.
   // Runs BEFORE rerank so rerank can refine on the salience-adjusted order.
-  // Multiplies each match's hybrid score by `(1 + α × salience × semSim)` —
-  // the semSim factor addresses the 12.1c popularity feedback loop by
-  // scaling boost with how semantically close the lesson is to THIS query.
+  // Multiplies each match's hybrid score by `(1 + α × salience × relevance)`.
+  // The relevance factor addresses the 12.1c popularity feedback loop by
+  // scaling boost with how well the lesson matches THIS query (semantic OR
+  // keyword), not just historical access frequency.
   if (!isSalienceDisabled() && matches.length > 0) {
     try {
       const salienceConfig = getSalienceConfig();
@@ -893,14 +910,14 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
         salienceConfig,
       );
       if (salienceMap.size > 0 && salienceConfig.alpha > 0) {
-        for (const m of matches) {
-          const sal = salienceMap.get(m.lesson_id);
-          const semSim = semScoreByLessonId.get(m.lesson_id);
-          m.score = blendHybridScore(m.score, sal, salienceConfig.alpha, semSim);
-        }
-        matches.sort((a, b) => b.score - a.score);
+        const { effectiveBoosts } = applyQueryConditionalSalienceBlend(
+          matches,
+          salienceMap,
+          relevanceSignalByLessonId,
+          salienceConfig.alpha,
+        );
         explanations.push(
-          `salience: enabled query-conditional (α=${salienceConfig.alpha}, halfLife=${salienceConfig.halfLifeDays}d); ${salienceMap.size}/${matches.length} lessons had access history`,
+          `salience: enabled query-conditional (α=${salienceConfig.alpha}, halfLife=${salienceConfig.halfLifeDays}d); ${salienceMap.size}/${matches.length} with access history, ${effectiveBoosts} effective after relevance-gating`,
         );
       } else {
         explanations.push(
@@ -1106,13 +1123,20 @@ export async function searchLessonsMulti(params: SearchLessonsMultiParams): Prom
     explanations.push(`hybrid: sem + 0.40*fts, fts_hits=${ftsHits}/${(res.rows ?? []).length}`);
   }
 
-  // Sprint 12.1d: retain sem_score for query-conditional salience blend.
-  const semScoreByLessonId = new Map<string, number>();
+  // Sprint 12.1d: retain relevance signal (max sem/fts) for query-conditional
+  // salience blend. See searchLessons for the MED-2 rationale.
+  const relevanceSignalByLessonId = new Map<string, number>();
   let matches: SearchLessonsResult['matches'] = (res.rows ?? []).map((r: any) => {
     const sum = r.summary != null ? String(r.summary).trim() : '';
     const snippetSource = sum.length ? sum : String(r.content);
     const lessonId = String(r.lesson_id);
-    semScoreByLessonId.set(lessonId, Number(r.sem_score));
+    const semScore = Number(r.sem_score);
+    const ftsScore = Number(r.fts_score);
+    const relevance = Math.max(
+      Number.isFinite(semScore) ? semScore : 0,
+      Number.isFinite(ftsScore) ? ftsScore : 0,
+    );
+    relevanceSignalByLessonId.set(lessonId, relevance);
     return {
       lesson_id: lessonId,
       project_id: String(r.project_id),
@@ -1128,7 +1152,8 @@ export async function searchLessonsMulti(params: SearchLessonsMultiParams): Prom
   // Sprint 12.1c + 12.1d — salience blend (multi-project, query-conditional).
   // - MED-1 (12.1c review): batched via computeSalienceMultiProject (single
   //   SQL query for all projectIds).
-  // - 12.1d: sem_score factor prevents popularity feedback loop.
+  // - 12.1d: max(sem_score, fts_score) factor prevents popularity feedback
+  //   loop without cancelling legitimate FTS-only matches.
   if (!isSalienceDisabled() && matches.length > 0) {
     try {
       const salienceConfig = getSalienceConfig();
@@ -1140,14 +1165,14 @@ export async function searchLessonsMulti(params: SearchLessonsMultiParams): Prom
         salienceConfig,
       );
       if (salienceMap.size > 0 && salienceConfig.alpha > 0) {
-        for (const m of matches) {
-          const sal = salienceMap.get(m.lesson_id);
-          const semSim = semScoreByLessonId.get(m.lesson_id);
-          m.score = blendHybridScore(m.score, sal, salienceConfig.alpha, semSim);
-        }
-        matches.sort((a, b) => b.score - a.score);
+        const { effectiveBoosts } = applyQueryConditionalSalienceBlend(
+          matches,
+          salienceMap,
+          relevanceSignalByLessonId,
+          salienceConfig.alpha,
+        );
         explanations.push(
-          `salience: enabled multi-project query-conditional (α=${salienceConfig.alpha}, halfLife=${salienceConfig.halfLifeDays}d); ${salienceMap.size}/${matches.length} lessons had access history`,
+          `salience: enabled multi-project query-conditional (α=${salienceConfig.alpha}, halfLife=${salienceConfig.halfLifeDays}d); ${salienceMap.size}/${matches.length} with access history, ${effectiveBoosts} effective after relevance-gating`,
         );
       } else {
         explanations.push(
