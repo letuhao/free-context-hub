@@ -170,6 +170,48 @@ metric matches on normalized ID only. A v1 metric with `key = hash(title) |
 hash(snippet[:100])` may be added when near-duplicate detection is
 implemented in consolidation.
 
+**Why this matters now.** The 2026-04-18 first baseline run reports `dup@10
+= 0` across every surface despite ≥5 "Max retry attempts must be 3"
+guardrails and ≥6 "Global search test retry pattern" decisions existing in
+the `free-context-hub` project. The v0 dup-rate metric is **silent on the
+exact pathology the sprint was launched to observe.** Sprint 12.1 must fix
+this before claiming any "consolidation" improvement.
+
+---
+
+### golden-set-ceiling-bias
+
+**Definition.** The golden set's queries are paraphrases of content that
+lives in the retrieval index, and its target ids were cherry-picked from
+the most-recently-active records. The baseline's `recall@10 = 1.0` reflects
+"the queries are easy" rather than "the retriever is strong." A future
+sprint could legitimately worsen ranking on unseen queries while the
+golden-set numbers stay at ceiling.
+
+**Why it happens.** When a benchmark is authored by someone who has just
+eyeballed the index, query authorship is biased toward content that clearly
+exists. Adversarial queries (synonyms, typos, indirect references, multi-hop
+intent) are harder to hand-craft but are the ones a real user types.
+
+**Diagnostic signal.** Two archives with meaningfully different retrievers
+produce the same recall@10 on the same golden set. When this happens, the
+golden set — not the retriever — has hit its ceiling.
+
+**Example.** Sprint 12.0 baseline: `recall@10 = 1.0` on the 15-confident-hit
+lesson queries, and `nDCG@10 = 0.82` (not 1.0 only because must_keywords
+downgrade some hits from grade 2 to grade 1). The retriever gets "perfect"
+coverage for queries I wrote. This tells us nothing about how it would
+handle a user asking "how do I stop the backoff loop from firing on 4xx"
+versus the target "Max retry attempts must be 3".
+
+**Mitigation path (Sprint 12.0.1 or 12.1 prep).**
+1. Add ≥10 adversarial lesson queries: synonyms, abbreviations, typos,
+   indirect intent. Target ids stay the same; only phrasing changes.
+2. Add a "hard-miss" group: queries that describe content we know *is not*
+   in the index. Assert `recall@10 = 0` — any hit is a false positive.
+3. Record in the scorecard: "recall@10 on confident-hit vs adversarial"
+   split so the gap is visible.
+
 ---
 
 ## Adding a new class

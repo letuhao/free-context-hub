@@ -13,14 +13,30 @@ export type GoldenQuery = {
   id: string;
   group: string;
   query: string;
+  /** Legacy from Phase-6 queries.json; consumed by ragQcRunner/tieredBaseline,
+   *  not by the Phase-12 runBaseline.ts. Kept for back-compat. */
   path_glob?: string;
+  /** Consumed by Phase-12 runner: when a hit matches a target, the graded
+   *  relevance is 2 only if ALL must_keywords appear (case-insensitive) in
+   *  the returned snippet; otherwise graded=1 (weak hit). Also consumed by
+   *  the legacy ragQcRunner. */
   must_keywords?: string[];
 
   target_files?: string[];
   target_lesson_ids?: string[];
   target_chunk_ids?: string[];
-  target_any?: Array<{ type: 'file' | 'lesson' | 'chunk'; id: string }>;
+  /** Heterogeneous targets for global surface. The `type` union matches the
+   *  retriever's emitted types (globalSearch returns lessons/documents/chunks/
+   *  guardrails/commits), not the upstream storage taxonomy. `file` is not
+   *  emitted by global search — use `document` for document rows. */
+  target_any?: Array<{
+    type: 'lesson' | 'document' | 'chunk' | 'guardrail' | 'commit';
+    id: string;
+  }>;
 
+  /** Reserved for future per-item graded relevance (0/1/2 per target id).
+   *  Phase-12 runner currently computes grades from hit + must_keywords;
+   *  a future runner may consume this directly for ground-truth nDCG. */
   graded?: Array<{ id: string; grade: GradedHit }>;
 };
 

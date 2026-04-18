@@ -105,13 +105,16 @@ function targetKeysFor(surface: Surface, q: GoldenQuery): Set<string> {
   return out;
 }
 
-/** Loose-match fallback for code surface: many existing golden queries list
- *  targets as partial paths ("src/index.ts"). Accept equality OR substring. */
+/** Path-suffix match for code surface. Safer than `.includes()` which would
+ *  false-positive (e.g. target `src/index.ts` matching item `src/routes/index.ts`).
+ *  Requires either exact match or a `/`-bounded suffix match in either
+ *  direction. Other surfaces use exact key equality only. */
 function matchKey(surface: Surface, itemKey: string, targets: Set<string>): boolean {
   if (targets.has(itemKey)) return true;
   if (surface === 'code') {
     for (const t of targets) {
-      if (itemKey.includes(t) || t.includes(itemKey)) return true;
+      if (itemKey.endsWith('/' + t)) return true;
+      if (t.endsWith('/' + itemKey)) return true;
     }
   }
   return false;
@@ -130,10 +133,19 @@ type PerQuery = {
   latency_ms_samples: number[];
   latency_ms_median: number;
   has_relevant_hit_in_top_k: boolean;
-  friction_class: string | null;
+  /** All friction classes that apply to this query. Empty array ⇒ either
+   *  `clean` (non-adversarial, hit found) or `—` (adversarial intentional miss).
+   *  A query can belong to multiple classes (e.g. duplicate-domination AND
+   *  rank-order-inversion). */
+  friction_classes: string[];
   error?: string;
 };
 
+/** Run the adapter N times to measure latency under repeated calls. We use
+ *  the *last* run's items for ranking — determinism is verified in Phase 9
+ *  VERIFY, so all runs return identical ordering in practice. If retrieval
+ *  becomes non-deterministic (e.g. embeddings jitter under load), upgrade
+ *  to mode-of-N consensus. Today's choice is "arbitrary but consistent." */
 async function runSamples<T extends SurfaceResult>(
   fn: () => Promise<T>,
   samples: number,
@@ -158,13 +170,27 @@ async function evalQuery(
   const { last, latencies } = await runSamples(() => dispatch(q.query, k), samples);
   const topK = last.items.slice(0, k);
   const targets = targetKeysFor(surface, q);
+  const mustKw = (q.must_keywords ?? []).map((s) => s.toLowerCase());
 
   const found_ranks: number[] = [];
   const graded: GradedHit[] = [];
   for (let i = 0; i < topK.length; i++) {
-    const hit = matchKey(surface, topK[i]!.key, targets);
-    graded.push(hit ? 2 : 0);
-    if (hit) found_ranks.push(i + 1);
+    const item = topK[i]!;
+    const hit = matchKey(surface, item.key, targets);
+    if (hit) {
+      found_ranks.push(i + 1);
+      // Grade 2 = strong hit (all must_keywords present in title or snippet).
+      // Grade 1 = weak hit (target matched but keywords missing — may be
+      // a wrong-snippet-chunk or a stale index).
+      if (mustKw.length === 0) {
+        graded.push(2);
+      } else {
+        const text = `${item.title ?? ''} ${item.snippet ?? ''}`.toLowerCase();
+        graded.push(mustKw.every((kw) => text.includes(kw)) ? 2 : 1);
+      }
+    } else {
+      graded.push(0);
+    }
   }
 
   const sortedLat = [...latencies].sort((a, b) => a - b);
@@ -173,7 +199,7 @@ async function evalQuery(
     : 0;
 
   const has_relevant_hit_in_top_k = found_ranks.length > 0;
-  const friction_class = classifyFriction({
+  const friction_classes = classifyFriction({
     targetCount: targets.size,
     topKLen: topK.length,
     foundRanks: found_ranks,
@@ -192,28 +218,36 @@ async function evalQuery(
     latency_ms_samples: latencies,
     latency_ms_median: median,
     has_relevant_hit_in_top_k,
-    friction_class,
+    friction_classes,
     error: last.error,
   };
 }
 
 // ---------------------------- Friction classifier --------------------------
 
+/** Classify all friction classes that apply to a single query's outcome.
+ *  Returns an empty array when no friction is observed. A query can belong
+ *  to multiple classes simultaneously (duplicate-domination + rank-order-inversion). */
 function classifyFriction(p: {
   targetCount: number;
   topKLen: number;
   foundRanks: number[];
   dupRate: number;
   error?: string;
-}): string | null {
-  if (p.error) return 'retrieval-error';
-  if (p.topKLen === 0) return 'empty-result-set';
-  if (p.targetCount === 0) return null; // adversarial-miss queries intentionally have no target; not a friction
-  if (p.foundRanks.length === 0) return 'no-relevant-hit';
-  if (p.dupRate >= 0.3) return 'duplicate-domination';
-  const best = Math.min(...p.foundRanks);
-  if (best > 3 && p.dupRate < 0.3) return 'rank-order-inversion';
-  return null;
+}): string[] {
+  const classes: string[] = [];
+  if (p.error) classes.push('retrieval-error');
+  if (p.topKLen === 0) classes.push('empty-result-set');
+  // Adversarial-miss queries (no target) are intentional negatives; nothing
+  // below this point makes sense for them.
+  if (p.targetCount === 0) return classes;
+  if (p.foundRanks.length === 0) classes.push('no-relevant-hit');
+  if (p.dupRate >= 0.3) classes.push('duplicate-domination');
+  if (p.foundRanks.length > 0) {
+    const best = Math.min(...p.foundRanks);
+    if (best > 3 && p.dupRate < 0.3) classes.push('rank-order-inversion');
+  }
+  return classes;
 }
 
 // ----------------------- Per-surface aggregation ---------------------------
@@ -221,18 +255,26 @@ function classifyFriction(p: {
 type SurfaceAggregate = {
   query_count: number;
   errors: number;
+  /** Project id the golden set was evaluated against. Per-surface to
+   *  preserve provenance when surfaces target different projects
+   *  (e.g. lessons→free-context-hub vs code→qc-free-context-hub). */
+  project_id: string;
   metrics: {
     recall_at_5: number; recall_at_10: number;
     mrr: number;
     ndcg_at_5: number; ndcg_at_10: number;
     duplication_rate_at_10: number;
     coverage_pct: number;
-    latency_p50_ms: number; latency_p95_ms: number; latency_mean_ms: number;
+    /** Null when the surface has zero latency samples (e.g. zero queries).
+     *  Distinguishable from "0ms ultra-fast" in the scorecard and diff. */
+    latency_p50_ms: number | null;
+    latency_p95_ms: number | null;
+    latency_mean_ms: number | null;
   };
   per_query: PerQuery[];
 };
 
-function aggregate(perQuery: PerQuery[]): SurfaceAggregate {
+function aggregate(perQuery: PerQuery[], projectId: string): SurfaceAggregate {
   const n = perQuery.length;
   const errors = perQuery.filter((q) => !!q.error).length;
 
@@ -267,6 +309,7 @@ function aggregate(perQuery: PerQuery[]): SurfaceAggregate {
   return {
     query_count: n,
     errors,
+    project_id: projectId,
     metrics: {
       recall_at_5: round(sumRecall5 / nWithTargets),
       recall_at_10: round(sumRecall10 / nWithTargets),
@@ -275,9 +318,10 @@ function aggregate(perQuery: PerQuery[]): SurfaceAggregate {
       ndcg_at_10: round(sumNdcg10 / nWithTargets),
       duplication_rate_at_10: round(sumDup / Math.max(n, 1)),
       coverage_pct: round(coveragePct(coverageBools)),
-      latency_p50_ms: Math.round(lat.p50),
-      latency_p95_ms: Math.round(lat.p95),
-      latency_mean_ms: Math.round(lat.mean),
+      // C1: null when no latency samples; distinct from "0ms instant"
+      latency_p50_ms: lat.n === 0 ? null : Math.round(lat.p50),
+      latency_p95_ms: lat.n === 0 ? null : Math.round(lat.p95),
+      latency_mean_ms: lat.n === 0 ? null : Math.round(lat.mean),
     },
     per_query: perQuery,
   };
@@ -289,6 +333,10 @@ function round(x: number): number {
 
 // ------------------------------ Markdown render ----------------------------
 
+function fmtMetric(v: number | null): string {
+  return v === null ? '—' : String(v);
+}
+
 function renderMarkdown(archive: BaselineArchive): string {
   const { tag, git_commit, git_branch, run_started_at, elapsed_ms, project_id, surfaces } = archive;
   const lines: string[] = [];
@@ -298,20 +346,20 @@ function renderMarkdown(archive: BaselineArchive): string {
   lines.push(`branch: ${git_branch}`);
   lines.push(`run_at: ${run_started_at}`);
   lines.push(`elapsed_ms: ${elapsed_ms}`);
-  lines.push(`project_id: ${project_id}`);
+  lines.push(`project_id_primary: ${project_id}`);
   lines.push('---');
   lines.push('');
   lines.push(`# RAG Baseline — ${tag}`);
   lines.push('');
   lines.push('## Summary (all surfaces)');
   lines.push('');
-  lines.push('| Surface | Q | err | recall@5 | recall@10 | MRR | nDCG@5 | nDCG@10 | dup@10 | cov% | p50 ms | p95 ms |');
-  lines.push('|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|');
+  lines.push('| Surface | Project | Q | err | recall@5 | recall@10 | MRR | nDCG@5 | nDCG@10 | dup@10 | cov% | p50 ms | p95 ms |');
+  lines.push('|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|');
   for (const [s, a] of Object.entries(surfaces)) {
     if (!a) continue;
     const m = a.metrics;
     lines.push(
-      `| ${s} | ${a.query_count} | ${a.errors} | ${m.recall_at_5} | ${m.recall_at_10} | ${m.mrr} | ${m.ndcg_at_5} | ${m.ndcg_at_10} | ${m.duplication_rate_at_10} | ${m.coverage_pct} | ${m.latency_p50_ms} | ${m.latency_p95_ms} |`,
+      `| ${s} | ${a.project_id} | ${a.query_count} | ${a.errors} | ${m.recall_at_5} | ${m.recall_at_10} | ${m.mrr} | ${m.ndcg_at_5} | ${m.ndcg_at_10} | ${m.duplication_rate_at_10} | ${m.coverage_pct} | ${fmtMetric(m.latency_p50_ms)} | ${fmtMetric(m.latency_p95_ms)} |`,
     );
   }
   lines.push('');
@@ -324,7 +372,11 @@ function renderMarkdown(archive: BaselineArchive): string {
     lines.push('|---|---|---|---|---:|');
     for (const q of a.per_query) {
       const found = q.found_ranks.length ? q.found_ranks.join(',') : '—';
-      const friction = q.friction_class ?? (q.has_relevant_hit_in_top_k ? 'clean' : '—');
+      const friction = q.friction_classes.length
+        ? q.friction_classes.join(';')
+        : q.has_relevant_hit_in_top_k
+        ? 'clean'
+        : '—';
       lines.push(`| ${q.id} | ${q.group} | ${found} | ${friction} | ${q.latency_ms_median} |`);
     }
     lines.push('');
@@ -333,18 +385,24 @@ function renderMarkdown(archive: BaselineArchive): string {
   lines.push('## Friction observed (top examples)');
   lines.push('');
   const frictionExamples: string[] = [];
+  let totalFlagged = 0;
   for (const [s, a] of Object.entries(surfaces)) {
     if (!a) continue;
-    const flagged = a.per_query.filter((q) => q.friction_class);
+    const flagged = a.per_query.filter((q) => q.friction_classes.length > 0);
+    totalFlagged += flagged.length;
     for (const q of flagged.slice(0, 3)) {
       frictionExamples.push(
-        `- **${s}/${q.id}** — ${q.friction_class}: query \`${q.query.slice(0, 80)}\`; top-3 keys=[${q.top_k_keys.slice(0, 3).join(', ')}]`,
+        `- **${s}/${q.id}** — ${q.friction_classes.join('; ')}: query \`${q.query.slice(0, 80)}\`; top-3 keys=[${q.top_k_keys.slice(0, 3).join(', ')}]`,
       );
     }
   }
   if (frictionExamples.length === 0) {
     lines.push('_(none flagged by heuristic classifier)_');
   } else {
+    lines.push(
+      `_(showing up to 3 per surface; ${totalFlagged} total queries have flagged friction across all surfaces)_`,
+    );
+    lines.push('');
     lines.push(...frictionExamples);
   }
   lines.push('');
@@ -352,8 +410,14 @@ function renderMarkdown(archive: BaselineArchive): string {
   lines.push('## Known limitations');
   lines.push('');
   lines.push('- Latency varies ±10–20% across runs; quality metrics are deterministic.');
-  lines.push(`- Global surface uses REST /api/search/global (ILIKE, not semantic); recall floor comes from raw substring matching.`);
+  lines.push('- Global surface uses REST /api/search/global (ILIKE, not semantic); recall floor comes from raw substring matching.');
   lines.push('- Code surface requires an indexed `chunks` population; empty index → 0 coverage regardless of query quality.');
+  lines.push(
+    '- `duplication_rate_at_10` v0 keys on exact entity id. Same-title-different-UUID noise (the original Phase-12 motivation: multiple lesson rows titled "Global search test retry pattern") is invisible to v0 — a reader seeing `dup@10 = 0` should NOT conclude "no duplication"; see `snippet-redundancy` in `docs/qc/friction-classes.md`.',
+  );
+  lines.push(
+    '- Golden-set ceiling bias: lesson queries are paraphrases of lesson content, and target ids were cherry-picked from recently-active lessons. Reported `recall@10 = 1.0` may reflect "queries are easy" rather than "retriever is strong." Sprint 12.1 should add adversarial queries (synonyms, typos, indirect references) to distinguish real improvement from noise.',
+  );
   lines.push('');
 
   return lines.join('\n');
@@ -420,21 +484,40 @@ async function main() {
       for (const q of set.queries) {
         process.stdout.write(`  ${surface}/${q.id} ... `);
         const res = await evalQuery(surface, dispatch, q, k, samples);
+        const frictionNote = res.friction_classes.length ? ', ' + res.friction_classes.join(';') : '';
         process.stdout.write(
-          `${res.found_ranks.length ? 'HIT@' + res.found_ranks.join(',') : 'MISS'} (${res.latency_ms_median}ms${res.friction_class ? ', ' + res.friction_class : ''})\n`,
+          `${res.found_ranks.length ? 'HIT@' + res.found_ranks.join(',') : 'MISS'} (${res.latency_ms_median}ms${frictionNote})\n`,
         );
         perQuery.push(res);
       }
-      surfaces[surface] = aggregate(perQuery);
+      surfaces[surface] = aggregate(perQuery, pid);
     }
   } finally {
     await client.close();
   }
 
+  // LOW-3: If majority of queries errored (stack likely dying), suffix the
+  // archive `-partial` so future diffs don't treat this as a real baseline.
+  let totalQueries = 0;
+  let totalErrors = 0;
+  for (const a of Object.values(surfaces)) {
+    if (!a) continue;
+    totalQueries += a.query_count;
+    totalErrors += a.errors;
+  }
+  const errorFraction = totalQueries === 0 ? 0 : totalErrors / totalQueries;
+  let finalTag = tag;
+  if (errorFraction > 0.5) {
+    finalTag = `${tag}-partial`;
+    console.warn(
+      `[baseline] WARNING: ${totalErrors}/${totalQueries} queries errored (${Math.round(errorFraction * 100)}%). Archiving under tag '${finalTag}' — do not treat as baseline.`,
+    );
+  }
+
   const runEnd = new Date();
   const archive: BaselineArchive = {
     schema_version: SCHEMA_VERSION,
-    tag,
+    tag: finalTag,
     run_started_at: runStart.toISOString(),
     run_ended_at: runEnd.toISOString(),
     elapsed_ms: runEnd.getTime() - runStart.getTime(),
@@ -447,8 +530,8 @@ async function main() {
   };
 
   await fs.mkdir(outDir, { recursive: true });
-  const jsonPath = path.join(outDir, `${today}-${tag}.json`);
-  const mdPath = path.join(outDir, `${today}-${tag}.md`);
+  const jsonPath = path.join(outDir, `${today}-${finalTag}.json`);
+  const mdPath = path.join(outDir, `${today}-${finalTag}.md`);
   await fs.writeFile(jsonPath, JSON.stringify(archive, null, 2), 'utf8');
   await fs.writeFile(mdPath, renderMarkdown(archive), 'utf8');
 
