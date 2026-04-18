@@ -1,4 +1,129 @@
 ---
+id: CH-PHASE12-S1202
+date: 2026-04-18
+module: Phase12-Sprint12.0.2
+phase: PHASE_12
+---
+
+# Session Patch — 2026-04-18 (Phase 12 Sprint 12.0.2 — measurement-infra polish)
+
+## Where We Are
+**Sprint 12.0.2 closed.** Measurement infrastructure polish — three items deferred from Sprints 12.0.1 + 12.1a. Two commits on `phase-12-rag-quality`: initial 3-item implementation, then /review-impl's 10-finding fix batch (0 HIGH, 3 MED, 5 LOW, 2 COSMETIC). Not a behavior-change sprint; all changes affect benchmarking/harness and indexer defaults. Sprint-author measurement protocol is now automated via `runBaseline --control` which emits a noise-floor that `diffBaselines.ts` uses to badge within-floor deltas as ⚪ rather than false-positive regressions.
+
+## Commits (2)
+- `832ad9e` — initial 3-item implementation: DEFAULT_IGNORE expansion + --control flag + 2 e2e dedup-wiring tests
+- `3e91d76` — /review-impl fixes: MED-1 (diff now consumes noise_floor), MED-2 (widened-scope documented), MED-3 (root-only patterns), LOW-1/2/3/4/5 + COSMETIC-1/2
+
+## What shipped
+
+### Item 1: indexer-hygiene permanent fix
+`src/utils/ignore.ts` gains `DEFAULT_BUILD_OUTPUT_IGNORE_PATTERNS` with ~25 patterns covering build outputs (`dist/`, `.next/`, `.turbo/`, `target/`), Python caches (`__pycache__/`), agent metadata (`.claude/`, `.cursor/`), test output (`test-results/`, `coverage/`), log/minified/map files, and OS clutter (`.DS_Store`). Applied to the THREE consumers of `loadIgnorePatternsFromRoot`: indexer, builderMemoryLarge, gitIntelligence. `out/` and `build/` are root-only (no `**/` prefix) per MED-3 to avoid false exclusion of nested user content. Future `index_project` runs no longer re-introduce the 4426 junk chunks manually purged in 12.0.1.
+
+### Item 2: `runBaseline --control` flag
+Runs the goldenset twice back-to-back against the same stack load. First run is the control; second is canonical. Computes `|run2 - run1|` per metric per surface, embeds in `archive.noise_floor`. Per-run elapsed preserved (`control_elapsed_ms`, `new_elapsed_ms`). Scorecard Markdown gets a "Noise floor" table section when present.
+
+**`diffBaselines.ts` now consumes `noise_floor`** (MED-1). When both archives carry it, the diff table renders a "noise floor" column and badges `|delta| ≤ max(fromNF, toNF)` as `⚪ (within floor)`. Regression flagging skips breaches that fall within the floor. This is the "below-noise-floor" behavior promised in the 12.0.2 spec but initially missing.
+
+### Item 3: dedup-wiring integration tests
+`test/e2e/api/lessons.test.ts` gains two e2e tests:
+- `dedup-wiring-collapses-near-duplicate-cluster` — seeds 4 identical lessons via REST, asserts the search output contains exactly 1 representative + the distinct control lesson.
+- `dedup-explanation-always-emitted` — asserts the `dedup:` explanation entry is present even on zero-collapse runs (closes 12.1a LOW-3).
+
+Both PASS against the rebuilt stack.
+
+## Numeric evidence
+
+End-to-end verification of the --control path:
+  `npm run qc:baseline -- --tag smoke --surfaces chunks --control`
+  archive.control_elapsed_ms = 627
+  archive.new_elapsed_ms = 403
+  archive.elapsed_ms = 1226 (total wall-clock, both runs + overhead)
+  archive.noise_floor.chunks.latency_p95_ms = 76 (integer ms, not 76.0000)
+  archive.noise_floor.chunks.recall_at_10 = 0 (deterministic)
+
+Self-diff of the smoke archive renders 11 chunk metrics all as `⚪ (within floor)`, confirming the MED-1 integration works end-to-end.
+
+## /review-impl fixes inventory (10 findings)
+
+| # | Severity | Subject | Fix |
+|---|---|---|---|
+| MED-1 | critical for the sprint goal | diff generator unaware of `noise_floor` | diffSurface+renderDiff now take per-surface NF slices; badge ⚪ (within floor); regression-skip within-floor breaches |
+| MED-2 | scope-doc | DEFAULT_IGNORE affects 3 services not 1 | ignore.ts header comment enumerates all three consumers |
+| MED-3 | over-exclusion | `**/out/**` + `**/build/**` too broad | root-only patterns + kept `**/dist/**` for monorepos |
+| LOW-1 | doc | --control measures warm-cache jitter only | friction-class caveat added |
+| LOW-2 | doc | noise_floor def is N=2 only | function-level comment |
+| LOW-3 | data | elapsed_ms hides per-run time | added control_elapsed_ms + new_elapsed_ms |
+| LOW-4 | tests | no unit tests for computeNoiseFloor | extracted to noiseFloor.ts + 10 unit tests |
+| LOW-5 | doc | e2e cleanup archives don't delete | friction-class doc for accumulation |
+| COSMETIC-1 | ergonomics | `[baseline/single]` inconsistent log | `[baseline]` for non-control runs |
+| COSMETIC-2 | render | `52.0000` for integer latencies | fmtNoiseFloorValue helper (integers plain) |
+
+## Friction-class catalog now 13 classes total
+Added in 12.0.2:
+- `e2e-cleanup-accumulates-archived-rows` — LOW-5 doc
+
+Existing `measurement-jitter` updated with:
+- Fix-landed callout (`--control` automates the protocol)
+- Known caveat (warm-cache only, cold-start variance not captured)
+
+## Files delivered
+```
+src/utils/
+└── ignore.ts                      DEFAULT_BUILD_OUTPUT_IGNORE_PATTERNS expanded;
+                                    out/build root-only; 3-consumer doc
+
+src/qc/
+├── noiseFloor.ts                  NEW — computeNoiseFloor + fmtNoiseFloorValue
+├── noiseFloor.test.ts             NEW — 10 unit tests
+├── runBaseline.ts                 + --control flag, runAllSurfaces extracted;
+                                    imports from noiseFloor; per-run elapsed;
+                                    log labels consistent
+├── diffBaselines.ts               effectiveNoiseFloor + noise-floor aware diff
+└── diffBaselines.test.ts         + 4 tests for within-floor badging
+
+test/e2e/api/
+└── lessons.test.ts                + dedup-wiring-collapses-near-duplicate-cluster
+                                   + dedup-explanation-always-emitted
+
+docs/qc/
+└── friction-classes.md          + e2e-cleanup-accumulates-archived-rows;
+                                   measurement-jitter fix-landed + caveat
+
+package.json                       test script + src/qc/noiseFloor.test.ts
+```
+
+## Test count: 168/168 (was 150 at end of 12.1a; +18)
+- 10 noiseFloor tests (new file)
+- 4 diffBaselines noise-floor tests
+- 2 e2e dedup-wiring tests (test:e2e:api runner)
+
+## Runtime verification
+- `npx tsc --noEmit` → clean
+- `npm test` → 168/168 pass
+- `npm run test:e2e:api` → dedup-wiring + dedup-explanation PASS (rebuilt stack)
+- `npm run qc:baseline -- --control` smoke → per-run elapsed split, noise_floor embedded, integer ms rendered plainly
+- Self-diff of --control archive → 11/11 metrics `⚪ (within floor)` — MED-1 end-to-end
+
+## What's next — Phase 12 roadmap
+
+With measurement infrastructure now rock-solid:
+1. **Sprint 12.1b — chunks-surface dedup**: port `dedupLessonMatches` → `dedupChunkMatches`. Current baseline: chunks dup@10 nearsem = 0.29. Should be a fast formulaic sprint.
+2. **Sprint 12.1c — salience-weighted rerank** (biological-memory feature #1): git-incident boost + access-frequency boost + salience decay. Design-heavy; aligns with the original ChatGPT-transcript Phase-12 thesis.
+3. **Sprint 12.2a — Redis hot-cache tiering**: lessons p95 is currently 7s; hot-path caching would be a real latency win.
+
+Future scorer-side improvement (candidate):
+- Expand `--control` to `--control-runs N` with max-min or stddev semantics (LOW-2 follow-up).
+- Hard-delete endpoint for lessons (LOW-5 follow-up).
+
+## Operational state
+- 2 commits on `phase-12-rag-quality`, ready to push.
+- `.workflow-state.json` at commit phase (advancing to retro after push).
+- Docker stack healthy; 168/168 unit + dedup e2e pass.
+- No pending todos.
+
+---
+
+---
 id: CH-PHASE12-S121A
 date: 2026-04-18
 module: Phase12-Sprint12.1a
