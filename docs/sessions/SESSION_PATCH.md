@@ -1,4 +1,85 @@
 ---
+id: CH-PHASE12-S121D
+date: 2026-04-18
+module: Phase12-Sprint12.1d
+phase: PHASE_12
+---
+
+# Session Patch — 2026-04-18 (Phase 12 Sprint 12.1d — query-conditional salience + review-impl fixes)
+
+## Where We Are
+**Sprint 12.1d closed.** Query-conditional salience blend suppresses the popularity-feedback-loop that Sprint 12.1c uncovered. `finalScore = hybrid × (1 + α × salience × relevance)` where `relevance = max(sem_score, fts_score)` — biologically, memory activation needs both a retrieval cue AND a recency/frequency signal. In-sprint A/B shows zero regression (MRR flat within noise floor). Delta-from-control recovers from 12.1c's −0.0373 MRR hit to 0 — popularity-feedback-loop fully neutralized on this goldenset. Five /review-impl findings addressed (MED-1 NaN guard, MED-2 FTS-inclusive relevance signal, LOW-2 extracted pure helper, LOW-3 silent-cap doc, COSMETIC-1 effective-boost explanation).
+
+## Commits (4)
+- `25c6c18` — T1-T4: core query-conditional blend (salience.ts `semSimilarity` param + sem-score preservation in both search paths + 7 unit tests)
+- `3c00826` — T5: A/B baseline archives (control salience-OFF vs new salience-ON, samples=3, 20-query goldenset)
+- `d3d4ecb` — /review-impl fixes: MED-1 NaN guard + MED-2 `max(sem,fts)` relevance + LOW-2 extracted `applyQueryConditionalSalienceBlend` + LOW-3 doc + COSMETIC-1 explanation count + 12 new unit tests
+- `c7ae0ef` — A/B verification archive after fixes (lessons surface MRR/nDCG identical pre/post, all 4 surfaces measured)
+
+## A/B result (honest)
+
+### In-sprint (salience OFF vs ON, same codebase, same goldenset)
+
+| Metric | Control (OFF) | New (ON, query-conditional) | Δ | Noise floor | Verdict |
+|---|---:|---:|---:|---:|---|
+| recall@10 | 0.9412 | 0.9412 | 0 | 0.0588 | ⚪ flat |
+| MRR | 0.9412 | 0.9412 | 0 | 0.0588 | ⚪ flat |
+| nDCG@5 | 0.9412 | 0.9412 | 0 | 0.0588 | ⚪ flat |
+| nDCG@10 | 0.9334 | 0.9407 | +0.0073 | 0.0589 | ⚪ within floor (+0.8%) |
+| dup@10 nearsem | 0 | 0 | 0 | 0 | ⚪ unchanged |
+
+Zero regressions flagged. Query-conditional blend is ranking-neutral on this goldenset — it prevents the popularity harm from 12.1c without adding its own.
+
+### Delta-from-control across sprints (the rigorous comparison)
+
+The correct way to compare 12.1c vs 12.1d is *delta-from-control*, not raw MRR (controls drifted between sprints due to data/access-log changes):
+
+| Sprint | Control MRR | New MRR | Delta-from-control | Reading |
+|---|---:|---:|---:|---|
+| 12.1b (pre-salience) | — | 0.9412 | — | baseline |
+| 12.1c (salience ON, unconditional) | 0.9608 | 0.9235 | **−0.0373** | 🔴 popularity-feedback-loop active |
+| 12.1d (salience ON, query-conditional) | 0.9412 | 0.9412 | **0.0000** | ⚪ neutralized |
+
+Popularity-feedback-loop fully suppressed. The +0.0373 recovery is a delta-from-control metric. Earlier commit narrative (3c00826, 25c6c18) cited "+0.0177 recovery" via raw cross-sprint MRR diff — imprecise because it mixes code effect with control drift. **The rigorous claim is +0.0373 delta-from-control recovery.** (Correction per /review-impl LOW-1.)
+
+## What this sprint proved
+- **Query-conditional math** correct: 19 unit tests (7 original 12.1d + 12 post-fix) cover the full suppression matrix, NaN guards, FTS-only preservation, α=0 short-circuit.
+- **Biological model holds**: the "both cue-match AND recency" invariant maps cleanly onto `(1 + α × salience × relevance)`.
+- **Defensive fixes preserve rankings**: post-fix A/B (c7ae0ef archive) shows lessons MRR/nDCG@10 identical to pre-fix 12.1d (MED-1/MED-2 don't trigger on current goldenset — they guard latent edge cases).
+- **Helper refactor is pure and testable**: `applyQueryConditionalSalienceBlend` is now unit-tested independently of the DB pool, closing /review-impl LOW-2.
+
+## /review-impl findings (5, all addressed)
+
+1. **MED-1** — NaN `sem_score` propagated through clamp chain → NaN final score → undefined sort order for that row.
+   - Fix: `Number.isFinite` guard before clamp; NaN treated as "no signal" (no boost).
+2. **MED-2** — Pure `sem_score` as conditioner cancels salience for FTS-only relevant matches (short identifiers, tokens the embedder doesn't separate well).
+   - Fix: callers pass `max(sem_score, fts_score)` composite. Biologically coherent: either signal counts as cue-match.
+3. **LOW-2** — No integration test covered the Map-plumbing from SQL rows to blend; pure-math tests alone couldn't catch refactor drift.
+   - Fix: extracted `applyQueryConditionalSalienceBlend` pure helper; 7 new plumbing tests.
+4. **LOW-3** — Silent cap of `sem_score > 1` could hide anomalies from a pgvector numerical-error edge case.
+   - Fix: block-comment documents the cap so a maintainer has a lead.
+5. **COSMETIC-1** — Explanation string reported "X/Y with access history" but didn't show how many boosts survived relevance-gating.
+   - Fix: now reports "X/Y ... Z effective after relevance-gating".
+
+New friction class documented in 12.1c still holds; 12.1d is the reference implementation of mitigation #1.
+
+## What's next — Sprint 12.1e or switch to C-track
+
+Options:
+- **12.1e** — Half-life tuning: current 7d half-life might be too short for audit-bootstrap signal; an A/B sweep over {3, 7, 14, 30} days could nudge nDCG@10 further positive.
+- **12.2 (C-track continuation)** — Move on to the next biological-memory feature. Candidates from the original Phase-12 plan: sleep consolidation (periodic re-clustering of access patterns), or reinforcement weighting (explicit "this was useful" signals from reflect results).
+- **Defer** — 12.1d's ranking-neutral result is already a success; the 12.1c MRR regression is cleared. Declaring the salience feature shipped and rotating attention to other RAG quality work is defensible.
+
+## Related / deferred
+- Friction class `conditioning-signal-gap` (tension between pure sem_score vs composite signal) is implicitly addressed by MED-2's `max(sem, fts)`. If a future goldenset surfaces a query where max-composite over-boosts a marginal FTS hit, revisit with a stricter weighted signal.
+- Pool-sizing assumption (12.1c MED-2): still recommend `pg pool max >= 20` for salience-enabled deployments. No code change needed today.
+- Delta-from-control as canonical cross-sprint metric: consider adding to the diff tool in a future sprint.
+
+---
+
+---
+
+---
 id: CH-PHASE12-S121C
 date: 2026-04-18
 module: Phase12-Sprint12.1c
