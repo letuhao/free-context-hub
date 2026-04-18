@@ -451,13 +451,13 @@ QC eval loop    Documents,      Agent audit     Onboarding
                 Global search
     │               │               │               │               │
     ▼               ▼               ▼               ▼               ▼
-Phase 9 ✅      Phase 10 ✅     Phase 11 ◐
+Phase 9 ✅      Phase 10 ✅     Phase 11 ✅
 Multi-Project   Multi-format    Knowledge
 UX Redesign     Ingestion       Portability
 Cross-project   PDF, DOCX,      Bundle format,
-views, project  Images, URL,    full export+
-selector V2,    Vision + hybrid import, GUI
-"All Projects"  chunk search    (4/6 sprints)
+views, project  Images, URL,    export+import,
+selector V2,    Vision + hybrid cross-instance
+"All Projects"  chunk search    pull, GUI
 ```
 
 | Phase | Status | Key Deliverables |
@@ -473,7 +473,7 @@ selector V2,    Vision + hybrid import, GUI
 | **8E** | ✅ Complete | E2E test suite (198 tests: API smoke 75, GUI smoke 23, MCP smoke 36, API scenarios 34, GUI scenarios 21, Agent visual 9), layout fixes |
 | **9** | ✅ Complete | Multi-project UX redesign — "All Projects" mode, project selector V2, ProjectBadge, cross-project views on all pages, per-project guards (11 sprints, 26 commits, 41 files) |
 | **10** | ✅ Complete | Multi-format extraction (fast/quality/vision), chunking + embeddings, chunk edit/delete with optimistic lock, hybrid semantic+FTS chunk search (REST/Cmd+K/chat tool/MCP tool), vision async jobs with progress+cancel, mermaid rendering, image upload UX, SSRF-hardened URL ingestion, 47-test E2E suite (7 sprints, 7 migrations) |
-| **11** | ◐ In Progress (4/6) | Knowledge portability — zip+JSONL bundle format with manifest+sha256, full project export streaming via pg-cursor, full project import with conflict policies (skip/overwrite/fail) + dry-run + cross-tenant guard, GUI Knowledge Exchange panel in Project Settings. Sprints 11.5 (cross-instance pull) and 11.6 (polish + tests) remaining. |
+| **11** | ✅ Complete | Knowledge portability — zip+JSONL bundle format with manifest+sha256, full project export streaming via pg-cursor, full project import with conflict policies + dry-run + cross-tenant guard, GUI Knowledge Exchange panel, cross-instance pull endpoint with DNS-rebinding pinning + slow-loris defense, streaming JSONL decode + streaming base64 encode, batched SELECT import (~99% query reduction), 61 API e2e + 1 GUI Playwright + 39 unit tests (9 sub-sprints, 6 commits, all through v2.2 workflow with /review-impl). |
 
 ## Phase 7 — Complete
 

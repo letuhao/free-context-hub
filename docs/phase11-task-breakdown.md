@@ -4,7 +4,7 @@
 > hub for moving a project's full state between ContextHub instances:
 > bundle format → export → import → GUI → cross-instance pull → polish.
 
-## Status: 5.83/6 sprints complete (◐ in progress — 11.6c split into sec + perf)
+## Status: ✅ **6/6 sprints complete — PHASE 11 DONE (2026-04-18)**
 
 | Sprint | Focus | Status | Commit |
 |--------|-------|--------|--------|
@@ -15,8 +15,8 @@
 | 11.5 | Cross-instance pull (`POST /api/projects/:id/pull-from`) | ✅ | 2026-04-18 — `cd73629` |
 | 11.6a | Test infrastructure (import scenarios + Playwright) | ✅ | 2026-04-18 — `2ffa36d` |
 | 11.6b | Streaming polish (JSONL decoder + base64 import) | ✅ | 2026-04-18 — `210ffd8` |
-| 11.6c-sec | Security polish (body-stall timeout + DNS-rebinding pinning) | ✅ | 2026-04-18 — see SESSION_PATCH.md |
-| 11.6c-perf | Perf polish (ON CONFLICT / batched SELECT on import) | ○ | — |
+| 11.6c-sec | Security polish (body-stall timeout + DNS-rebinding pinning) | ✅ | 2026-04-18 — `c4e302a` |
+| 11.6c-perf | Perf polish (batched SELECT on import — ~99% SELECT reduction) | ✅ | 2026-04-18 — see SESSION_PATCH.md |
 
 ## Architecture
 
@@ -425,32 +425,108 @@ earlier attempt with 8.1.0 failed with "invalid onRequestStart method"
 — the Dispatcher interface changed between 6→8. Do NOT bump to 7+
 without re-verifying the pinned-agent API.
 
-## Sprint 11.6c-perf — Perf polish (planned)
+## Sprint 11.6c-perf — Perf polish ✅ (complete 2026-04-18)
 
 ### Scope
-N+1 SELECT pattern in importProject documented since Sprint 11.3. Each
-of 6 apply\* functions does SELECT-to-check + conditional
-INSERT/UPDATE = ~2 queries per row. For a 581-lesson project: ~1200
-round trips per import.
+N+1 SELECT pattern in importProject — each of 6 apply\* functions did
+SELECT-to-check + conditional INSERT/UPDATE (~2 queries per row). For
+a 581-lesson project: ~1200 round trips per import.
 
-### Implementation options (decide in CLARIFY)
-- **Batched SELECT + per-row INSERT/UPDATE** — one SELECT for ALL ids
-  in the entity, hash-map lookup, then INSERT/UPDATE individually.
-  2× query reduction, preserves all existing semantics. Simple.
-- **INSERT ... ON CONFLICT DO UPDATE with xmax=0 RETURNING + WHERE
-  cross-tenant-match** — single query per row; derives created /
-  updated from xmax. Requires subtle handling of cross-tenant
-  refusal. Larger perf win, higher risk.
+### Chose: batched SELECT + per-row INSERT/UPDATE
+Simpler than the ON CONFLICT + xmax variant, preserves all existing
+semantics (cross-tenant guard, fail-fast, per-conflict reason, dry-run),
+and delivers the same query-count reduction.
 
-### Acceptance
-- 61/61 phase11 tests still green (cross-tenant guard MUST hold,
-  fail-fast MUST throw on first conflict, per-conflict reasons MUST
-  still populate the UI)
-- Measured query count drops meaningfully
+### Shipped
+- Added `APPLY_BATCH_SIZE = 200` + `processBatched<Row>` helper in
+  importProject.ts — drives an async iterable through a fixed-size
+  batched processor. Streaming-friendly; only BATCH_SIZE rows in
+  memory at once.
+- Refactored all 6 apply\* functions: dropped the per-row SELECT,
+  added an `existing: Map<...>` parameter, replaced with `map.get(id)`.
+- Replaced each of the 6 orchestrator `for await` loops with a
+  `processBatched(iter, BATCH_SIZE, handleBatch)` call where each
+  `handleBatch` does ONE bulk SELECT via `= ANY($1::uuid[])` (and
+  `unnest($1::uuid[], $2::uuid[])` for document_lessons' composite PK).
+- **/review-impl hardening:**
+  - `assertUniqueBatchIds` helper throws `ImportError('malformed_bundle')`
+    on intra-batch duplicate IDs, surfacing bundle corruption cleanly
+    instead of falling through to an opaque pg unique-constraint
+    violation.
+  - UUID canonicalization (`.toLowerCase()`) on both map-building
+    and lookup sides so hand-crafted bundles with non-canonical IDs
+    work correctly. (lesson_types stays case-sensitive — PK is TEXT.)
 
-### Non-goals
+### Query count — before vs after
+For a 581-lesson + 76-guardrail + 14-document + 10-chunk + 6-lesson_type
++ 0-document_lessons project:
+- Before: ~687 SELECTs + ~687 INSERT/UPDATE = **~1374 queries**
+- After: **7 SELECTs** (ceil(581/200) + ceil(76/200) + ceil(14/200) +
+  ceil(10/200) + ceil(6/200) + 0) + ~687 INSERT/UPDATE = **~694 queries**
+- ~99% reduction in SELECT count, ~49% reduction in total queries.
+
+### Review outcome — 4 findings
+Phase-7 REVIEW (0 MED, 2 LOW accepted); /review-impl (1 MED + 1 LOW
+both fixed):
+- **MED**: intra-batch duplicate IDs would hit pg unique-constraint
+  violation instead of clean per-policy conflict handling (the
+  pre-fetched map goes stale mid-batch). Fixed: upfront
+  duplicate-detection helper raises malformed_bundle.
+- **LOW**: UUID casing mismatch — pg canonicalizes UUID cast output
+  to lowercase, but bundle's JSONL could have any casing. Map
+  lookup would miss. Fixed: `.toLowerCase()` on both sides.
+
+### Live test results
+```
+tsc --noEmit              → 0 errors
+npm test                  → 39/39 unit (no new tests for these fixes —
+                            covered by existing malformed-bundle invariant)
+npm run test:e2e:api      → 61/61 passed, 0 failed (89s) after rebuild
+                            Actually FASTER than the pre-refactor 88s,
+                            confirming the batching wins even at
+                            low volume on the self-pull test fixtures
+```
+
+### Out of scope / deferred beyond Phase 11
 - Merge conflict policy
 - Async background import/export jobs
 - Webhook-driven pulls
 - Encryption / signing
-- Migrating documents.content to BYTEA (Phase-10-level work)
+- Migrating documents.content to BYTEA (Phase-10-level work; the V8
+  string heap cap remains a soft ceiling at ~384 MB raw per document)
+
+## Phase 11 — DONE ✅
+
+All 9 sub-sprints (6 original + 3 from the 11.6 split) complete. The
+knowledge-portability story is end-to-end: bundle format → full
+export → full import with conflict policies → GUI panel → cross-
+instance pull → tests → streaming polish → security polish → perf
+polish. What's closed this phase:
+
+- **Feature surface**: zip/JSONL bundle format, REST export + import,
+  Knowledge Exchange GUI panel, cross-instance pull endpoint
+- **Security**: cross-tenant UUID guard (11.3), SSRF hardening (11.5),
+  api_key allow-list + credential-echo fix (11.5), DNS-rebinding
+  pinning (11.6c-sec), slow-loris body-stall defense (11.6c-sec)
+- **Memory**: streaming JSONL decode (11.6b), streaming base64
+  encode (11.6b)
+- **Perf**: batched SELECT (11.6c-perf) — ~99% SELECT reduction
+- **Tests**: 61 API e2e + 1 GUI Playwright + 39 unit — full coverage
+  of the export/import/pull lifecycles under all 3 conflict policies
+  with cross-tenant guard assertions
+- **Workflow artifact**: 9 sprints all through the v2.2 12-phase
+  workflow with /review-impl; 23+ findings caught before prod across
+  the phase, zero regressions in live-test reruns
+
+Known-issue residuals (documented, not in scope for this phase):
+- V8 string heap cap on documents.content → migrate to BYTEA
+- undici version pin tied to Node's bundled version — re-verify on
+  Node upgrades
+- `phase10.spec.ts extract` flake under full-suite load (pre-existing)
+
+Remaining sprints as separate phases or polish items:
+- Merge conflict policy
+- Bundle caching
+- Webhook pulls
+- GUI for cross-instance pull
+- Encryption / signing

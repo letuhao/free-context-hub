@@ -129,6 +129,55 @@ const MAX_CONFLICTS_CAP = 1000;
 
 const EMPTY_COUNTS = (): EntityCounts => ({ total: 0, created: 0, updated: 0, skipped: 0 });
 
+/** Batch size for the Sprint 11.6c-perf N+1 reduction. Each entity's
+ *  bulk SELECT queries up to this many IDs at once via `= ANY($1)`,
+ *  shrinking round-trip count from ~2N to ~(N/BATCH + N). 200 balances
+ *  per-batch latency against total query count — a pg `= ANY(uuid[])`
+ *  of 200 ids is well within the query planner's sweet spot. */
+const APPLY_BATCH_SIZE = 200;
+
+/** Drive an async iterable through a fixed-size batched processor.
+ *  The handler sees each batch as a complete array; it should do one
+ *  bulk existence query against the DB and then apply rows one-by-one
+ *  using the pre-fetched lookup. Streaming-friendly: only BATCH_SIZE
+ *  rows are held in memory at once. */
+async function processBatched<Row>(
+  iter: AsyncIterable<Row>,
+  batchSize: number,
+  handleBatch: (rows: Row[]) => Promise<void>,
+): Promise<void> {
+  let batch: Row[] = [];
+  for await (const row of iter) {
+    batch.push(row);
+    if (batch.length >= batchSize) {
+      await handleBatch(batch);
+      batch = [];
+    }
+  }
+  if (batch.length > 0) {
+    await handleBatch(batch);
+  }
+}
+
+/** Guard against intra-batch duplicate IDs. A malformed bundle with
+ *  duplicate PKs in a single entity would cause our pre-fetched
+ *  existence map to go stale mid-batch (first INSERT succeeds, map
+ *  still says "doesn't exist", second INSERT hits pg's unique
+ *  constraint and rolls back with an opaque 500). Catch it up-front
+ *  with a clean malformed_bundle error instead. */
+function assertUniqueBatchIds(ids: string[], entity: string): void {
+  const seen = new Set<string>();
+  for (const id of ids) {
+    if (seen.has(id)) {
+      throw new ImportError(
+        'malformed_bundle',
+        `duplicate ${entity} id "${id}" within a single batch`,
+      );
+    }
+    seen.add(id);
+  }
+}
+
 export async function importProject(opts: ImportProjectOptions): Promise<ImportResult> {
   const policy = opts.policy ?? 'skip';
   const dryRun = opts.dryRun ?? false;
@@ -196,80 +245,142 @@ export async function importProject(opts: ImportProjectOptions): Promise<ImportR
       );
     }
 
+    // Sprint 11.6c-perf: each entity is consumed in batches of
+    // APPLY_BATCH_SIZE rows. For every batch we do ONE bulk-existence
+    // SELECT (rather than N per-row SELECTs) and apply rows individually
+    // against the pre-fetched lookup map. FK-safe order preserved:
+    // lesson_types -> documents -> chunks -> lessons -> guardrails ->
+    // document_lessons.
+
     // ---- 1. lesson_types ----
-    for await (const row of reader.lesson_types() as AsyncIterable<any>) {
-      result.counts.lesson_types.total += 1;
-      await applyLessonType(client, row, policy, dryRun, result.counts.lesson_types, recordConflict);
-    }
+    // lesson_types.type_key is TEXT — case-sensitive. Don't lowercase.
+    await processBatched(reader.lesson_types() as AsyncIterable<any>, APPLY_BATCH_SIZE, async (rows) => {
+      const keys = rows.map((r) => r.type_key as string);
+      assertUniqueBatchIds(keys, 'lesson_types');
+      const existingR = await client.query<{ type_key: string; is_builtin: boolean }>(
+        `SELECT type_key, is_builtin FROM lesson_types WHERE type_key = ANY($1::text[])`,
+        [keys],
+      );
+      const existing = new Map<string, boolean>(
+        existingR.rows.map((r) => [r.type_key, r.is_builtin === true]),
+      );
+      for (const row of rows) {
+        result.counts.lesson_types.total += 1;
+        await applyLessonType(client, row, policy, dryRun, result.counts.lesson_types, recordConflict, existing);
+      }
+    });
 
     // ---- 2. documents ----
-    for await (const doc of reader.documents()) {
-      result.counts.documents.total += 1;
-      await applyDocument(
-        client,
-        targetProjectId,
-        doc,
-        policy,
-        dryRun,
-        result.counts.documents,
-        recordConflict,
+    // UUID entities canonicalize to lowercase on both sides of the map
+    // to tolerate non-canonical IDs in hand-crafted bundles (pg's UUID
+    // cast always returns lowercase, so the map key from RETURNING is
+    // already lowercase; canonicalize the lookup-side input for symmetry).
+    await processBatched(reader.documents(), APPLY_BATCH_SIZE, async (docs) => {
+      const ids = docs.map((d) => d.doc_id.toLowerCase());
+      assertUniqueBatchIds(ids, 'documents');
+      const existingR = await client.query<{ doc_id: string; project_id: string }>(
+        `SELECT doc_id, project_id FROM documents WHERE doc_id = ANY($1::uuid[])`,
+        [ids],
       );
-    }
+      const existing = new Map<string, string>(
+        existingR.rows.map((r) => [r.doc_id.toLowerCase(), r.project_id]),
+      );
+      for (const doc of docs) {
+        result.counts.documents.total += 1;
+        await applyDocument(
+          client, targetProjectId, doc, policy, dryRun,
+          result.counts.documents, recordConflict, existing,
+        );
+      }
+    });
 
     // ---- 3. chunks ----
-    for await (const row of reader.chunks() as AsyncIterable<any>) {
-      result.counts.chunks.total += 1;
-      await applyChunk(
-        client,
-        targetProjectId,
-        row,
-        policy,
-        dryRun,
-        result.counts.chunks,
-        recordConflict,
+    await processBatched(reader.chunks() as AsyncIterable<any>, APPLY_BATCH_SIZE, async (rows) => {
+      const ids = rows.map((r) => (r.chunk_id as string).toLowerCase());
+      assertUniqueBatchIds(ids, 'chunks');
+      const existingR = await client.query<{ chunk_id: string; project_id: string }>(
+        `SELECT chunk_id, project_id FROM document_chunks WHERE chunk_id = ANY($1::uuid[])`,
+        [ids],
       );
-    }
+      const existing = new Map<string, string>(
+        existingR.rows.map((r) => [r.chunk_id.toLowerCase(), r.project_id]),
+      );
+      for (const row of rows) {
+        result.counts.chunks.total += 1;
+        await applyChunk(
+          client, targetProjectId, row, policy, dryRun,
+          result.counts.chunks, recordConflict, existing,
+        );
+      }
+    });
 
     // ---- 4. lessons ----
-    for await (const row of reader.lessons() as AsyncIterable<any>) {
-      result.counts.lessons.total += 1;
-      await applyLesson(
-        client,
-        targetProjectId,
-        row,
-        policy,
-        dryRun,
-        result.counts.lessons,
-        recordConflict,
+    await processBatched(reader.lessons() as AsyncIterable<any>, APPLY_BATCH_SIZE, async (rows) => {
+      const ids = rows.map((r) => (r.lesson_id as string).toLowerCase());
+      assertUniqueBatchIds(ids, 'lessons');
+      const existingR = await client.query<{ lesson_id: string; project_id: string }>(
+        `SELECT lesson_id, project_id FROM lessons WHERE lesson_id = ANY($1::uuid[])`,
+        [ids],
       );
-    }
+      const existing = new Map<string, string>(
+        existingR.rows.map((r) => [r.lesson_id.toLowerCase(), r.project_id]),
+      );
+      for (const row of rows) {
+        result.counts.lessons.total += 1;
+        await applyLesson(
+          client, targetProjectId, row, policy, dryRun,
+          result.counts.lessons, recordConflict, existing,
+        );
+      }
+    });
 
     // ---- 5. guardrails ----
-    for await (const row of reader.guardrails() as AsyncIterable<any>) {
-      result.counts.guardrails.total += 1;
-      await applyGuardrail(
-        client,
-        targetProjectId,
-        row,
-        policy,
-        dryRun,
-        result.counts.guardrails,
-        recordConflict,
+    await processBatched(reader.guardrails() as AsyncIterable<any>, APPLY_BATCH_SIZE, async (rows) => {
+      const ids = rows.map((r) => (r.rule_id as string).toLowerCase());
+      assertUniqueBatchIds(ids, 'guardrails');
+      const existingR = await client.query<{ rule_id: string; project_id: string }>(
+        `SELECT rule_id, project_id FROM guardrails WHERE rule_id = ANY($1::uuid[])`,
+        [ids],
       );
-    }
+      const existing = new Map<string, string>(
+        existingR.rows.map((r) => [r.rule_id.toLowerCase(), r.project_id]),
+      );
+      for (const row of rows) {
+        result.counts.guardrails.total += 1;
+        await applyGuardrail(
+          client, targetProjectId, row, policy, dryRun,
+          result.counts.guardrails, recordConflict, existing,
+        );
+      }
+    });
 
     // ---- 6. document_lessons (must come AFTER both docs and lessons) ----
-    for await (const row of reader.document_lessons() as AsyncIterable<any>) {
-      result.counts.document_lessons.total += 1;
-      await applyDocumentLesson(
-        client,
-        row,
-        policy,
-        dryRun,
-        result.counts.document_lessons,
-        recordConflict,
+    // Composite PK (doc_id, lesson_id) requires a parallel-array
+    // unnest join so pg can zip the two arrays positionally and use
+    // the composite PK index. Composite key string built from lowercased
+    // components so the map matches across casing variations.
+    await processBatched(reader.document_lessons() as AsyncIterable<any>, APPLY_BATCH_SIZE, async (rows) => {
+      const docIds = rows.map((r) => (r.doc_id as string).toLowerCase());
+      const lessonIds = rows.map((r) => (r.lesson_id as string).toLowerCase());
+      const compositeIds = docIds.map((d, i) => `${d}::${lessonIds[i]}`);
+      assertUniqueBatchIds(compositeIds, 'document_lessons');
+      const existingR = await client.query<{ doc_id: string; lesson_id: string }>(
+        `SELECT dl.doc_id, dl.lesson_id FROM document_lessons dl
+         JOIN unnest($1::uuid[], $2::uuid[]) AS t(doc_id, lesson_id)
+           ON dl.doc_id = t.doc_id AND dl.lesson_id = t.lesson_id`,
+        [docIds, lessonIds],
       );
-    }
+      const existing = new Map<string, true>(
+        existingR.rows.map((r) => [`${r.doc_id.toLowerCase()}::${r.lesson_id.toLowerCase()}`, true as const]),
+      );
+      for (const row of rows) {
+        result.counts.document_lessons.total += 1;
+        await applyDocumentLesson(
+          client, row, policy, dryRun,
+          result.counts.document_lessons, recordConflict, existing,
+        );
+      }
+    });
 
     if (!dryRun) {
       await client.query('COMMIT');
@@ -307,14 +418,13 @@ async function applyLessonType(
   dryRun: boolean,
   counts: EntityCounts,
   recordConflict: (c: ImportConflict) => void,
+  /** type_key -> is_builtin, pre-populated by the batch handler via ONE
+   *  SELECT per batch. Replaces the per-row N+1 SELECT (Sprint 11.6c-perf). */
+  existing: Map<string, boolean>,
 ): Promise<void> {
   const typeKey: string = row.type_key;
-  const exists = await client.query<{ is_builtin: boolean }>(
-    `SELECT is_builtin FROM lesson_types WHERE type_key = $1`,
-    [typeKey],
-  );
-  if (exists.rows.length > 0) {
-    const destBuiltin = exists.rows[0]!.is_builtin === true;
+  const destBuiltin = existing.get(typeKey);
+  if (destBuiltin !== undefined) {
     if (policy === 'skip') {
       counts.skipped += 1;
       recordConflict({ entity: 'lesson_types', id: typeKey, reason: 'type_key already exists, skipped' });
@@ -375,20 +485,21 @@ async function applyDocument(
   dryRun: boolean,
   counts: EntityCounts,
   recordConflict: (c: ImportConflict) => void,
+  /** doc_id -> owner project_id, pre-populated by the batch handler
+   *  via ONE SELECT per batch (Sprint 11.6c-perf). */
+  existing: Map<string, string>,
 ): Promise<void> {
   const docId: string = doc.doc_id;
   const meta = doc.metadata;
-  const exists = await client.query<{ project_id: string }>(
-    `SELECT project_id FROM documents WHERE doc_id = $1`,
-    [docId],
-  );
-  if (exists.rows.length > 0) {
+  // Canonicalize for map lookup — pg's UUID cast lowercases on the
+  // map-building side, so the lookup key must lowercase too.
+  const ownerProjectId = existing.get(docId.toLowerCase());
+  if (ownerProjectId !== undefined) {
     // Cross-tenant guard (Sprint 11.3 review fix): without this, a
     // user with writer access to project B could craft a bundle that
     // overwrites rows owned by project A, silently transferring
     // ownership of A's documents to B. Refuse to touch any existing
     // row whose current project_id doesn't match the import target.
-    const ownerProjectId = exists.rows[0]!.project_id;
     if (ownerProjectId !== targetProjectId) {
       counts.skipped += 1;
       recordConflict({
@@ -529,15 +640,14 @@ async function applyChunk(
   dryRun: boolean,
   counts: EntityCounts,
   recordConflict: (c: ImportConflict) => void,
+  /** chunk_id -> owner project_id, pre-populated by the batch handler
+   *  via ONE SELECT per batch (Sprint 11.6c-perf). */
+  existing: Map<string, string>,
 ): Promise<void> {
   const chunkId: string = row.chunk_id;
-  const exists = await client.query<{ project_id: string }>(
-    `SELECT project_id FROM document_chunks WHERE chunk_id = $1`,
-    [chunkId],
-  );
-  if (exists.rows.length > 0) {
+  const ownerProjectId = existing.get(chunkId.toLowerCase());
+  if (ownerProjectId !== undefined) {
     // Cross-tenant guard — see applyDocument for the rationale.
-    const ownerProjectId = exists.rows[0]!.project_id;
     if (ownerProjectId !== targetProjectId) {
       counts.skipped += 1;
       recordConflict({
@@ -615,6 +725,9 @@ async function applyLesson(
   dryRun: boolean,
   counts: EntityCounts,
   recordConflict: (c: ImportConflict) => void,
+  /** lesson_id -> owner project_id, pre-populated by the batch handler
+   *  via ONE SELECT per batch (Sprint 11.6c-perf). */
+  existing: Map<string, string>,
 ): Promise<void> {
   const lessonId: string = row.lesson_id;
   const embedding = vectorLiteral(row.embedding);
@@ -628,13 +741,9 @@ async function applyLesson(
     );
   }
 
-  const exists = await client.query<{ project_id: string }>(
-    `SELECT project_id FROM lessons WHERE lesson_id = $1`,
-    [lessonId],
-  );
-  if (exists.rows.length > 0) {
+  const ownerProjectId = existing.get(lessonId.toLowerCase());
+  if (ownerProjectId !== undefined) {
     // Cross-tenant guard — see applyDocument for the rationale.
-    const ownerProjectId = exists.rows[0]!.project_id;
     if (ownerProjectId !== targetProjectId) {
       counts.skipped += 1;
       recordConflict({
@@ -712,15 +821,14 @@ async function applyGuardrail(
   dryRun: boolean,
   counts: EntityCounts,
   recordConflict: (c: ImportConflict) => void,
+  /** rule_id -> owner project_id, pre-populated by the batch handler
+   *  via ONE SELECT per batch (Sprint 11.6c-perf). */
+  existing: Map<string, string>,
 ): Promise<void> {
   const ruleId: string = row.rule_id;
-  const exists = await client.query<{ project_id: string }>(
-    `SELECT project_id FROM guardrails WHERE rule_id = $1`,
-    [ruleId],
-  );
-  if (exists.rows.length > 0) {
+  const ownerProjectId = existing.get(ruleId.toLowerCase());
+  if (ownerProjectId !== undefined) {
     // Cross-tenant guard — see applyDocument for the rationale.
-    const ownerProjectId = exists.rows[0]!.project_id;
     if (ownerProjectId !== targetProjectId) {
       counts.skipped += 1;
       recordConflict({
@@ -766,15 +874,18 @@ async function applyDocumentLesson(
   dryRun: boolean,
   counts: EntityCounts,
   recordConflict: (c: ImportConflict) => void,
+  /** composite key "${doc_id}::${lesson_id}" -> true, pre-populated by
+   *  the batch handler via ONE unnest-zip SELECT per batch (Sprint
+   *  11.6c-perf). The link table has no project_id column, so membership
+   *  is boolean — we only need to know if the link exists. */
+  existing: Map<string, true>,
 ): Promise<void> {
   const docId: string = row.doc_id;
   const lessonId: string = row.lesson_id;
   const compositeId = `${docId}::${lessonId}`;
-  const exists = await client.query(
-    `SELECT 1 FROM document_lessons WHERE doc_id = $1 AND lesson_id = $2`,
-    [docId, lessonId],
-  );
-  if (exists.rows.length > 0) {
+  // Map keys are lowercased; use the same form for lookup.
+  const lookupKey = `${docId.toLowerCase()}::${lessonId.toLowerCase()}`;
+  if (existing.has(lookupKey)) {
     if (policy === 'skip') {
       counts.skipped += 1;
       recordConflict({
