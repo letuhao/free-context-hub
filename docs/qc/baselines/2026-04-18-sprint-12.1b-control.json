@@ -1,0 +1,1311 @@
+{
+  "schema_version": "1.0",
+  "tag": "sprint-12.1b-control",
+  "run_started_at": "2026-04-18T11:53:34.460Z",
+  "run_ended_at": "2026-04-18T11:53:35.749Z",
+  "elapsed_ms": 1289,
+  "git_commit": "eb280a1+dirty",
+  "git_branch": "phase-12-rag-quality",
+  "project_id": "free-context-hub",
+  "samples_per_query": 1,
+  "k": 10,
+  "surfaces": {
+    "chunks": {
+      "query_count": 10,
+      "errors": 0,
+      "project_id": "free-context-hub",
+      "metrics": {
+        "recall_at_5": 1,
+        "recall_at_10": 1,
+        "mrr": 0.9167,
+        "ndcg_at_5": 0.943,
+        "ndcg_at_10": 0.9455,
+        "duplication_rate_at_10": 0,
+        "duplication_rate_nearsemantic_at_10": 0.29,
+        "coverage_pct": 1,
+        "latency_p50_ms": 46,
+        "latency_p95_ms": 51,
+        "latency_mean_ms": 46
+      },
+      "per_query": [
+        {
+          "id": "chunk-retry-strategy-overview",
+          "group": "confident-hit",
+          "query": "what is the retry strategy for external API calls?",
+          "top_k_keys": [
+            "f379c8f6-1c30-4ca7-971d-76c8c573d9d5",
+            "79e04437-5277-48af-9f9a-e45a7c078771",
+            "49d773e1-b2b1-4ccc-a31b-aaafb848b32b",
+            "e0b2c3e7-6e09-4a0e-9f69-c1f10855003e",
+            "80f588e6-5b9a-4252-bb2d-9f06cdcf79c5",
+            "74f74526-95e4-4a6c-93ec-f6c5383bc96b",
+            "144b9ed5-d546-4d25-be6b-12b0071dcfb5",
+            "1a5e864b-fb94-4b7c-890a-c57c40c4e8d3",
+            "0a02f1bd-8108-4efa-8a9e-f2fcd75ad4e3",
+            "0eba6916-0ab4-4289-96b5-554c7d96bc0b"
+          ],
+          "top_k_titles": [
+            "sample.docx / 1. Retry Strategy",
+            "sample.png / Architecture Decision Records",
+            "sample.docx / 1.2 Implementation",
+            "sample.docx / 1.1 Configuration",
+            "sample.docx / 2. Authentication",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.docx / 3. Data Storage",
+            "sample.docx / 2.1 Roles"
+          ],
+          "top_k_snippets": [
+            "## 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second with a multiplier of 2.",
+            "# Architecture Decision Records This document captures key architectural decisions for the project. 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second…",
+            "### 1.2 Implementation The retry middleware wraps fetch and intercepts failed requests. async function retryFetch(url: string, options: RequestInit) { for (let attempt = 0; attempt < 3; attempt++) { try { const res = await fetch(url, optio…",
+            "### 1.1 Configuration The retry configuration applies to all HTTP clients in the codebase. | Parameter | Default | Description | |------------|---------|----------------------------------------------| | maxRetries | 3 | Maximum number of a…",
+            "## 2. Authentication All endpoints require an API key in the Authorization header. The API key format is `Bearer <key>` where the key is a SHA-256 hash. Keys are scoped to a single project unless granted admin role.",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "## 3. Data Storage Lessons are stored in PostgreSQL with pgvector for embeddings. Each lesson has a 768-dimensional vector embedding generated from its content. The vector dimension is fixed by the embedding model. Switching models require…",
+            "### 2.1 Roles We have three roles: - **admin**: full read/write access to all projects - **writer**: read/write access to assigned projects only - **reader**: read-only access"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            46
+          ],
+          "latency_ms_median": 46,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "chunk-retry-config-table",
+          "group": "confident-hit",
+          "query": "retry configuration parameters base delay and multiplier",
+          "top_k_keys": [
+            "e0b2c3e7-6e09-4a0e-9f69-c1f10855003e",
+            "f379c8f6-1c30-4ca7-971d-76c8c573d9d5",
+            "79e04437-5277-48af-9f9a-e45a7c078771",
+            "49d773e1-b2b1-4ccc-a31b-aaafb848b32b",
+            "74f74526-95e4-4a6c-93ec-f6c5383bc96b",
+            "144b9ed5-d546-4d25-be6b-12b0071dcfb5",
+            "1a5e864b-fb94-4b7c-890a-c57c40c4e8d3",
+            "80f588e6-5b9a-4252-bb2d-9f06cdcf79c5",
+            "0eba6916-0ab4-4289-96b5-554c7d96bc0b",
+            "0a02f1bd-8108-4efa-8a9e-f2fcd75ad4e3"
+          ],
+          "top_k_titles": [
+            "sample.docx / 1.1 Configuration",
+            "sample.docx / 1. Retry Strategy",
+            "sample.png / Architecture Decision Records",
+            "sample.docx / 1.2 Implementation",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.docx / 2. Authentication",
+            "sample.docx / 2.1 Roles",
+            "sample.docx / 3. Data Storage"
+          ],
+          "top_k_snippets": [
+            "### 1.1 Configuration The retry configuration applies to all HTTP clients in the codebase. | Parameter | Default | Description | |------------|---------|----------------------------------------------| | maxRetries | 3 | Maximum number of a…",
+            "## 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second with a multiplier of 2.",
+            "# Architecture Decision Records This document captures key architectural decisions for the project. 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second…",
+            "### 1.2 Implementation The retry middleware wraps fetch and intercepts failed requests. async function retryFetch(url: string, options: RequestInit) { for (let attempt = 0; attempt < 3; attempt++) { try { const res = await fetch(url, optio…",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "## 2. Authentication All endpoints require an API key in the Authorization header. The API key format is `Bearer <key>` where the key is a SHA-256 hash. Keys are scoped to a single project unless granted admin role.",
+            "### 2.1 Roles We have three roles: - **admin**: full read/write access to all projects - **writer**: read/write access to assigned projects only - **reader**: read-only access",
+            "## 3. Data Storage Lessons are stored in PostgreSQL with pgvector for embeddings. Each lesson has a 768-dimensional vector embedding generated from its content. The vector dimension is fixed by the embedding model. Switching models require…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            47
+          ],
+          "latency_ms_median": 47,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "chunk-retry-implementation-code",
+          "group": "confident-hit",
+          "query": "how to implement a retry middleware wrapping fetch",
+          "top_k_keys": [
+            "49d773e1-b2b1-4ccc-a31b-aaafb848b32b",
+            "f379c8f6-1c30-4ca7-971d-76c8c573d9d5",
+            "e0b2c3e7-6e09-4a0e-9f69-c1f10855003e",
+            "79e04437-5277-48af-9f9a-e45a7c078771",
+            "80f588e6-5b9a-4252-bb2d-9f06cdcf79c5",
+            "74f74526-95e4-4a6c-93ec-f6c5383bc96b",
+            "144b9ed5-d546-4d25-be6b-12b0071dcfb5",
+            "1a5e864b-fb94-4b7c-890a-c57c40c4e8d3",
+            "0eba6916-0ab4-4289-96b5-554c7d96bc0b",
+            "0a02f1bd-8108-4efa-8a9e-f2fcd75ad4e3"
+          ],
+          "top_k_titles": [
+            "sample.docx / 1.2 Implementation",
+            "sample.docx / 1. Retry Strategy",
+            "sample.docx / 1.1 Configuration",
+            "sample.png / Architecture Decision Records",
+            "sample.docx / 2. Authentication",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.docx / 2.1 Roles",
+            "sample.docx / 3. Data Storage"
+          ],
+          "top_k_snippets": [
+            "### 1.2 Implementation The retry middleware wraps fetch and intercepts failed requests. async function retryFetch(url: string, options: RequestInit) { for (let attempt = 0; attempt < 3; attempt++) { try { const res = await fetch(url, optio…",
+            "## 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second with a multiplier of 2.",
+            "### 1.1 Configuration The retry configuration applies to all HTTP clients in the codebase. | Parameter | Default | Description | |------------|---------|----------------------------------------------| | maxRetries | 3 | Maximum number of a…",
+            "# Architecture Decision Records This document captures key architectural decisions for the project. 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second…",
+            "## 2. Authentication All endpoints require an API key in the Authorization header. The API key format is `Bearer <key>` where the key is a SHA-256 hash. Keys are scoped to a single project unless granted admin role.",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "### 2.1 Roles We have three roles: - **admin**: full read/write access to all projects - **writer**: read/write access to assigned projects only - **reader**: read-only access",
+            "## 3. Data Storage Lessons are stored in PostgreSQL with pgvector for embeddings. Each lesson has a 768-dimensional vector embedding generated from its content. The vector dimension is fixed by the embedding model. Switching models require…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            47
+          ],
+          "latency_ms_median": 47,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "chunk-authentication-overview",
+          "group": "confident-hit",
+          "query": "API authentication using API key in Authorization header",
+          "top_k_keys": [
+            "80f588e6-5b9a-4252-bb2d-9f06cdcf79c5",
+            "f379c8f6-1c30-4ca7-971d-76c8c573d9d5",
+            "e0b2c3e7-6e09-4a0e-9f69-c1f10855003e",
+            "49d773e1-b2b1-4ccc-a31b-aaafb848b32b",
+            "79e04437-5277-48af-9f9a-e45a7c078771",
+            "144b9ed5-d546-4d25-be6b-12b0071dcfb5",
+            "1a5e864b-fb94-4b7c-890a-c57c40c4e8d3",
+            "74f74526-95e4-4a6c-93ec-f6c5383bc96b",
+            "0eba6916-0ab4-4289-96b5-554c7d96bc0b",
+            "512d7a46-e7f5-45aa-b3e5-6902e3ca6cd8"
+          ],
+          "top_k_titles": [
+            "sample.docx / 2. Authentication",
+            "sample.docx / 1. Retry Strategy",
+            "sample.docx / 1.1 Configuration",
+            "sample.docx / 1.2 Implementation",
+            "sample.png / Architecture Decision Records",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.docx / 2.1 Roles",
+            "sample.docx / Architecture Decision Records"
+          ],
+          "top_k_snippets": [
+            "## 2. Authentication All endpoints require an API key in the Authorization header. The API key format is `Bearer <key>` where the key is a SHA-256 hash. Keys are scoped to a single project unless granted admin role.",
+            "## 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second with a multiplier of 2.",
+            "### 1.1 Configuration The retry configuration applies to all HTTP clients in the codebase. | Parameter | Default | Description | |------------|---------|----------------------------------------------| | maxRetries | 3 | Maximum number of a…",
+            "### 1.2 Implementation The retry middleware wraps fetch and intercepts failed requests. async function retryFetch(url: string, options: RequestInit) { for (let attempt = 0; attempt < 3; attempt++) { try { const res = await fetch(url, optio…",
+            "# Architecture Decision Records This document captures key architectural decisions for the project. 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second…",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "### 2.1 Roles We have three roles: - **admin**: full read/write access to all projects - **writer**: read/write access to assigned projects only - **reader**: read-only access",
+            "# Architecture Decision Records This document captures key architectural decisions for the project."
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            47
+          ],
+          "latency_ms_median": 47,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "chunk-role-definitions",
+          "group": "confident-hit",
+          "query": "what are the user roles admin editor viewer in the system",
+          "top_k_keys": [
+            "0eba6916-0ab4-4289-96b5-554c7d96bc0b",
+            "80f588e6-5b9a-4252-bb2d-9f06cdcf79c5",
+            "512d7a46-e7f5-45aa-b3e5-6902e3ca6cd8",
+            "0a02f1bd-8108-4efa-8a9e-f2fcd75ad4e3",
+            "74f74526-95e4-4a6c-93ec-f6c5383bc96b",
+            "144b9ed5-d546-4d25-be6b-12b0071dcfb5",
+            "1a5e864b-fb94-4b7c-890a-c57c40c4e8d3",
+            "79e04437-5277-48af-9f9a-e45a7c078771",
+            "e0b2c3e7-6e09-4a0e-9f69-c1f10855003e",
+            "49d773e1-b2b1-4ccc-a31b-aaafb848b32b"
+          ],
+          "top_k_titles": [
+            "sample.docx / 2.1 Roles",
+            "sample.docx / 2. Authentication",
+            "sample.docx / Architecture Decision Records",
+            "sample.docx / 3. Data Storage",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.png / Architecture Decision Records",
+            "sample.docx / 1.1 Configuration",
+            "sample.docx / 1.2 Implementation"
+          ],
+          "top_k_snippets": [
+            "### 2.1 Roles We have three roles: - **admin**: full read/write access to all projects - **writer**: read/write access to assigned projects only - **reader**: read-only access",
+            "## 2. Authentication All endpoints require an API key in the Authorization header. The API key format is `Bearer <key>` where the key is a SHA-256 hash. Keys are scoped to a single project unless granted admin role.",
+            "# Architecture Decision Records This document captures key architectural decisions for the project.",
+            "## 3. Data Storage Lessons are stored in PostgreSQL with pgvector for embeddings. Each lesson has a 768-dimensional vector embedding generated from its content. The vector dimension is fixed by the embedding model. Switching models require…",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "# Architecture Decision Records This document captures key architectural decisions for the project. 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second…",
+            "### 1.1 Configuration The retry configuration applies to all HTTP clients in the codebase. | Parameter | Default | Description | |------------|---------|----------------------------------------------| | maxRetries | 3 | Maximum number of a…",
+            "### 1.2 Implementation The retry middleware wraps fetch and intercepts failed requests. async function retryFetch(url: string, options: RequestInit) { for (let attempt = 0; attempt < 3; attempt++) { try { const res = await fetch(url, optio…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            45
+          ],
+          "latency_ms_median": 45,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "chunk-data-storage-pgvector",
+          "group": "confident-hit",
+          "query": "how are lessons stored pgvector postgres",
+          "top_k_keys": [
+            "0a02f1bd-8108-4efa-8a9e-f2fcd75ad4e3",
+            "74f74526-95e4-4a6c-93ec-f6c5383bc96b",
+            "1a5e864b-fb94-4b7c-890a-c57c40c4e8d3",
+            "144b9ed5-d546-4d25-be6b-12b0071dcfb5",
+            "0eba6916-0ab4-4289-96b5-554c7d96bc0b",
+            "512d7a46-e7f5-45aa-b3e5-6902e3ca6cd8",
+            "79e04437-5277-48af-9f9a-e45a7c078771",
+            "80f588e6-5b9a-4252-bb2d-9f06cdcf79c5",
+            "49d773e1-b2b1-4ccc-a31b-aaafb848b32b",
+            "e0b2c3e7-6e09-4a0e-9f69-c1f10855003e"
+          ],
+          "top_k_titles": [
+            "sample.docx / 3. Data Storage",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.docx / 2.1 Roles",
+            "sample.docx / Architecture Decision Records",
+            "sample.png / Architecture Decision Records",
+            "sample.docx / 2. Authentication",
+            "sample.docx / 1.2 Implementation",
+            "sample.docx / 1.1 Configuration"
+          ],
+          "top_k_snippets": [
+            "## 3. Data Storage Lessons are stored in PostgreSQL with pgvector for embeddings. Each lesson has a 768-dimensional vector embedding generated from its content. The vector dimension is fixed by the embedding model. Switching models require…",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "### 2.1 Roles We have three roles: - **admin**: full read/write access to all projects - **writer**: read/write access to assigned projects only - **reader**: read-only access",
+            "# Architecture Decision Records This document captures key architectural decisions for the project.",
+            "# Architecture Decision Records This document captures key architectural decisions for the project. 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second…",
+            "## 2. Authentication All endpoints require an API key in the Authorization header. The API key format is `Bearer <key>` where the key is a SHA-256 hash. Keys are scoped to a single project unless granted admin role.",
+            "### 1.2 Implementation The retry middleware wraps fetch and intercepts failed requests. async function retryFetch(url: string, options: RequestInit) { for (let attempt = 0; attempt < 3; attempt++) { try { const res = await fetch(url, optio…",
+            "### 1.1 Configuration The retry configuration applies to all HTTP clients in the codebase. | Parameter | Default | Description | |------------|---------|----------------------------------------------| | maxRetries | 3 | Maximum number of a…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            51
+          ],
+          "latency_ms_median": 51,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "chunk-adr-intro-dup",
+          "group": "duplicate-trap",
+          "query": "architecture decision records introduction",
+          "top_k_keys": [
+            "512d7a46-e7f5-45aa-b3e5-6902e3ca6cd8",
+            "79e04437-5277-48af-9f9a-e45a7c078771",
+            "0eba6916-0ab4-4289-96b5-554c7d96bc0b",
+            "0a02f1bd-8108-4efa-8a9e-f2fcd75ad4e3",
+            "80f588e6-5b9a-4252-bb2d-9f06cdcf79c5",
+            "74f74526-95e4-4a6c-93ec-f6c5383bc96b",
+            "144b9ed5-d546-4d25-be6b-12b0071dcfb5",
+            "1a5e864b-fb94-4b7c-890a-c57c40c4e8d3",
+            "e0b2c3e7-6e09-4a0e-9f69-c1f10855003e",
+            "f379c8f6-1c30-4ca7-971d-76c8c573d9d5"
+          ],
+          "top_k_titles": [
+            "sample.docx / Architecture Decision Records",
+            "sample.png / Architecture Decision Records",
+            "sample.docx / 2.1 Roles",
+            "sample.docx / 3. Data Storage",
+            "sample.docx / 2. Authentication",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.docx / 1.1 Configuration",
+            "sample.docx / 1. Retry Strategy"
+          ],
+          "top_k_snippets": [
+            "# Architecture Decision Records This document captures key architectural decisions for the project.",
+            "# Architecture Decision Records This document captures key architectural decisions for the project. 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second…",
+            "### 2.1 Roles We have three roles: - **admin**: full read/write access to all projects - **writer**: read/write access to assigned projects only - **reader**: read-only access",
+            "## 3. Data Storage Lessons are stored in PostgreSQL with pgvector for embeddings. Each lesson has a 768-dimensional vector embedding generated from its content. The vector dimension is fixed by the embedding model. Switching models require…",
+            "## 2. Authentication All endpoints require an API key in the Authorization header. The API key format is `Bearer <key>` where the key is a SHA-256 hash. Keys are scoped to a single project unless granted admin role.",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "### 1.1 Configuration The retry configuration applies to all HTTP clients in the codebase. | Parameter | Default | Description | |------------|---------|----------------------------------------------| | maxRetries | 3 | Maximum number of a…",
+            "## 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second with a multiplier of 2."
+          ],
+          "found_ranks": [
+            1,
+            2
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            46
+          ],
+          "latency_ms_median": 46,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "chunk-cross-retry-auth-storage",
+          "group": "cross-topic",
+          "query": "summary of retry authentication and data storage decisions",
+          "top_k_keys": [
+            "e0b2c3e7-6e09-4a0e-9f69-c1f10855003e",
+            "79e04437-5277-48af-9f9a-e45a7c078771",
+            "f379c8f6-1c30-4ca7-971d-76c8c573d9d5",
+            "49d773e1-b2b1-4ccc-a31b-aaafb848b32b",
+            "80f588e6-5b9a-4252-bb2d-9f06cdcf79c5",
+            "512d7a46-e7f5-45aa-b3e5-6902e3ca6cd8",
+            "0eba6916-0ab4-4289-96b5-554c7d96bc0b",
+            "0a02f1bd-8108-4efa-8a9e-f2fcd75ad4e3",
+            "74f74526-95e4-4a6c-93ec-f6c5383bc96b",
+            "144b9ed5-d546-4d25-be6b-12b0071dcfb5"
+          ],
+          "top_k_titles": [
+            "sample.docx / 1.1 Configuration",
+            "sample.png / Architecture Decision Records",
+            "sample.docx / 1. Retry Strategy",
+            "sample.docx / 1.2 Implementation",
+            "sample.docx / 2. Authentication",
+            "sample.docx / Architecture Decision Records",
+            "sample.docx / 2.1 Roles",
+            "sample.docx / 3. Data Storage",
+            "sample.pdf",
+            "sample.pdf"
+          ],
+          "top_k_snippets": [
+            "### 1.1 Configuration The retry configuration applies to all HTTP clients in the codebase. | Parameter | Default | Description | |------------|---------|----------------------------------------------| | maxRetries | 3 | Maximum number of a…",
+            "# Architecture Decision Records This document captures key architectural decisions for the project. 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second…",
+            "## 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second with a multiplier of 2.",
+            "### 1.2 Implementation The retry middleware wraps fetch and intercepts failed requests. async function retryFetch(url: string, options: RequestInit) { for (let attempt = 0; attempt < 3; attempt++) { try { const res = await fetch(url, optio…",
+            "## 2. Authentication All endpoints require an API key in the Authorization header. The API key format is `Bearer <key>` where the key is a SHA-256 hash. Keys are scoped to a single project unless granted admin role.",
+            "# Architecture Decision Records This document captures key architectural decisions for the project.",
+            "### 2.1 Roles We have three roles: - **admin**: full read/write access to all projects - **writer**: read/write access to assigned projects only - **reader**: read-only access",
+            "## 3. Data Storage Lessons are stored in PostgreSQL with pgvector for embeddings. Each lesson has a 768-dimensional vector embedding generated from its content. The vector dimension is fixed by the embedding model. Switching models require…",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]"
+          ],
+          "found_ranks": [
+            3,
+            5,
+            8
+          ],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            2,
+            0,
+            2,
+            0,
+            0,
+            2,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            45
+          ],
+          "latency_ms_median": 45,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "chunk-miss-quantum",
+          "group": "adversarial-miss",
+          "query": "quantum flux capacitor documentation chapter 7",
+          "top_k_keys": [
+            "0eba6916-0ab4-4289-96b5-554c7d96bc0b",
+            "512d7a46-e7f5-45aa-b3e5-6902e3ca6cd8",
+            "74f74526-95e4-4a6c-93ec-f6c5383bc96b",
+            "1a5e864b-fb94-4b7c-890a-c57c40c4e8d3",
+            "144b9ed5-d546-4d25-be6b-12b0071dcfb5",
+            "80f588e6-5b9a-4252-bb2d-9f06cdcf79c5",
+            "79e04437-5277-48af-9f9a-e45a7c078771",
+            "49d773e1-b2b1-4ccc-a31b-aaafb848b32b",
+            "e0b2c3e7-6e09-4a0e-9f69-c1f10855003e",
+            "0a02f1bd-8108-4efa-8a9e-f2fcd75ad4e3"
+          ],
+          "top_k_titles": [
+            "sample.docx / 2.1 Roles",
+            "sample.docx / Architecture Decision Records",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.docx / 2. Authentication",
+            "sample.png / Architecture Decision Records",
+            "sample.docx / 1.2 Implementation",
+            "sample.docx / 1.1 Configuration",
+            "sample.docx / 3. Data Storage"
+          ],
+          "top_k_snippets": [
+            "### 2.1 Roles We have three roles: - **admin**: full read/write access to all projects - **writer**: read/write access to assigned projects only - **reader**: read-only access",
+            "# Architecture Decision Records This document captures key architectural decisions for the project.",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "## 2. Authentication All endpoints require an API key in the Authorization header. The API key format is `Bearer <key>` where the key is a SHA-256 hash. Keys are scoped to a single project unless granted admin role.",
+            "# Architecture Decision Records This document captures key architectural decisions for the project. 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second…",
+            "### 1.2 Implementation The retry middleware wraps fetch and intercepts failed requests. async function retryFetch(url: string, options: RequestInit) { for (let attempt = 0; attempt < 3; attempt++) { try { const res = await fetch(url, optio…",
+            "### 1.1 Configuration The retry configuration applies to all HTTP clients in the codebase. | Parameter | Default | Description | |------------|---------|----------------------------------------------| | maxRetries | 3 | Maximum number of a…",
+            "## 3. Data Storage Lessons are stored in PostgreSQL with pgvector for embeddings. Each lesson has a 768-dimensional vector embedding generated from its content. The vector dimension is fixed by the embedding model. Switching models require…"
+          ],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            42
+          ],
+          "latency_ms_median": 42,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": []
+        },
+        {
+          "id": "chunk-miss-jazz",
+          "group": "adversarial-miss",
+          "query": "history of bebop jazz improvisation notation",
+          "top_k_keys": [
+            "512d7a46-e7f5-45aa-b3e5-6902e3ca6cd8",
+            "0a02f1bd-8108-4efa-8a9e-f2fcd75ad4e3",
+            "79e04437-5277-48af-9f9a-e45a7c078771",
+            "0eba6916-0ab4-4289-96b5-554c7d96bc0b",
+            "e0b2c3e7-6e09-4a0e-9f69-c1f10855003e",
+            "80f588e6-5b9a-4252-bb2d-9f06cdcf79c5",
+            "f379c8f6-1c30-4ca7-971d-76c8c573d9d5",
+            "74f74526-95e4-4a6c-93ec-f6c5383bc96b",
+            "144b9ed5-d546-4d25-be6b-12b0071dcfb5",
+            "1a5e864b-fb94-4b7c-890a-c57c40c4e8d3"
+          ],
+          "top_k_titles": [
+            "sample.docx / Architecture Decision Records",
+            "sample.docx / 3. Data Storage",
+            "sample.png / Architecture Decision Records",
+            "sample.docx / 2.1 Roles",
+            "sample.docx / 1.1 Configuration",
+            "sample.docx / 2. Authentication",
+            "sample.docx / 1. Retry Strategy",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.pdf"
+          ],
+          "top_k_snippets": [
+            "# Architecture Decision Records This document captures key architectural decisions for the project.",
+            "## 3. Data Storage Lessons are stored in PostgreSQL with pgvector for embeddings. Each lesson has a 768-dimensional vector embedding generated from its content. The vector dimension is fixed by the embedding model. Switching models require…",
+            "# Architecture Decision Records This document captures key architectural decisions for the project. 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second…",
+            "### 2.1 Roles We have three roles: - **admin**: full read/write access to all projects - **writer**: read/write access to assigned projects only - **reader**: read-only access",
+            "### 1.1 Configuration The retry configuration applies to all HTTP clients in the codebase. | Parameter | Default | Description | |------------|---------|----------------------------------------------| | maxRetries | 3 | Maximum number of a…",
+            "## 2. Authentication All endpoints require an API key in the Authorization header. The API key format is `Bearer <key>` where the key is a SHA-256 hash. Keys are scoped to a single project unless granted admin role.",
+            "## 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second with a multiplier of 2.",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]"
+          ],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            46
+          ],
+          "latency_ms_median": 46,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": []
+        }
+      ]
+    }
+  },
+  "control_run_surfaces": {
+    "chunks": {
+      "query_count": 10,
+      "errors": 0,
+      "project_id": "free-context-hub",
+      "metrics": {
+        "recall_at_5": 1,
+        "recall_at_10": 1,
+        "mrr": 0.9167,
+        "ndcg_at_5": 0.943,
+        "ndcg_at_10": 0.9455,
+        "duplication_rate_at_10": 0,
+        "duplication_rate_nearsemantic_at_10": 0.29,
+        "coverage_pct": 1,
+        "latency_p50_ms": 47,
+        "latency_p95_ms": 149,
+        "latency_mean_ms": 63
+      },
+      "per_query": [
+        {
+          "id": "chunk-retry-strategy-overview",
+          "group": "confident-hit",
+          "query": "what is the retry strategy for external API calls?",
+          "top_k_keys": [
+            "f379c8f6-1c30-4ca7-971d-76c8c573d9d5",
+            "79e04437-5277-48af-9f9a-e45a7c078771",
+            "49d773e1-b2b1-4ccc-a31b-aaafb848b32b",
+            "e0b2c3e7-6e09-4a0e-9f69-c1f10855003e",
+            "80f588e6-5b9a-4252-bb2d-9f06cdcf79c5",
+            "74f74526-95e4-4a6c-93ec-f6c5383bc96b",
+            "144b9ed5-d546-4d25-be6b-12b0071dcfb5",
+            "1a5e864b-fb94-4b7c-890a-c57c40c4e8d3",
+            "0a02f1bd-8108-4efa-8a9e-f2fcd75ad4e3",
+            "0eba6916-0ab4-4289-96b5-554c7d96bc0b"
+          ],
+          "top_k_titles": [
+            "sample.docx / 1. Retry Strategy",
+            "sample.png / Architecture Decision Records",
+            "sample.docx / 1.2 Implementation",
+            "sample.docx / 1.1 Configuration",
+            "sample.docx / 2. Authentication",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.docx / 3. Data Storage",
+            "sample.docx / 2.1 Roles"
+          ],
+          "top_k_snippets": [
+            "## 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second with a multiplier of 2.",
+            "# Architecture Decision Records This document captures key architectural decisions for the project. 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second…",
+            "### 1.2 Implementation The retry middleware wraps fetch and intercepts failed requests. async function retryFetch(url: string, options: RequestInit) { for (let attempt = 0; attempt < 3; attempt++) { try { const res = await fetch(url, optio…",
+            "### 1.1 Configuration The retry configuration applies to all HTTP clients in the codebase. | Parameter | Default | Description | |------------|---------|----------------------------------------------| | maxRetries | 3 | Maximum number of a…",
+            "## 2. Authentication All endpoints require an API key in the Authorization header. The API key format is `Bearer <key>` where the key is a SHA-256 hash. Keys are scoped to a single project unless granted admin role.",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "## 3. Data Storage Lessons are stored in PostgreSQL with pgvector for embeddings. Each lesson has a 768-dimensional vector embedding generated from its content. The vector dimension is fixed by the embedding model. Switching models require…",
+            "### 2.1 Roles We have three roles: - **admin**: full read/write access to all projects - **writer**: read/write access to assigned projects only - **reader**: read-only access"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            149
+          ],
+          "latency_ms_median": 149,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "chunk-retry-config-table",
+          "group": "confident-hit",
+          "query": "retry configuration parameters base delay and multiplier",
+          "top_k_keys": [
+            "e0b2c3e7-6e09-4a0e-9f69-c1f10855003e",
+            "f379c8f6-1c30-4ca7-971d-76c8c573d9d5",
+            "79e04437-5277-48af-9f9a-e45a7c078771",
+            "49d773e1-b2b1-4ccc-a31b-aaafb848b32b",
+            "74f74526-95e4-4a6c-93ec-f6c5383bc96b",
+            "144b9ed5-d546-4d25-be6b-12b0071dcfb5",
+            "1a5e864b-fb94-4b7c-890a-c57c40c4e8d3",
+            "80f588e6-5b9a-4252-bb2d-9f06cdcf79c5",
+            "0eba6916-0ab4-4289-96b5-554c7d96bc0b",
+            "0a02f1bd-8108-4efa-8a9e-f2fcd75ad4e3"
+          ],
+          "top_k_titles": [
+            "sample.docx / 1.1 Configuration",
+            "sample.docx / 1. Retry Strategy",
+            "sample.png / Architecture Decision Records",
+            "sample.docx / 1.2 Implementation",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.docx / 2. Authentication",
+            "sample.docx / 2.1 Roles",
+            "sample.docx / 3. Data Storage"
+          ],
+          "top_k_snippets": [
+            "### 1.1 Configuration The retry configuration applies to all HTTP clients in the codebase. | Parameter | Default | Description | |------------|---------|----------------------------------------------| | maxRetries | 3 | Maximum number of a…",
+            "## 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second with a multiplier of 2.",
+            "# Architecture Decision Records This document captures key architectural decisions for the project. 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second…",
+            "### 1.2 Implementation The retry middleware wraps fetch and intercepts failed requests. async function retryFetch(url: string, options: RequestInit) { for (let attempt = 0; attempt < 3; attempt++) { try { const res = await fetch(url, optio…",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "## 2. Authentication All endpoints require an API key in the Authorization header. The API key format is `Bearer <key>` where the key is a SHA-256 hash. Keys are scoped to a single project unless granted admin role.",
+            "### 2.1 Roles We have three roles: - **admin**: full read/write access to all projects - **writer**: read/write access to assigned projects only - **reader**: read-only access",
+            "## 3. Data Storage Lessons are stored in PostgreSQL with pgvector for embeddings. Each lesson has a 768-dimensional vector embedding generated from its content. The vector dimension is fixed by the embedding model. Switching models require…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            78
+          ],
+          "latency_ms_median": 78,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "chunk-retry-implementation-code",
+          "group": "confident-hit",
+          "query": "how to implement a retry middleware wrapping fetch",
+          "top_k_keys": [
+            "49d773e1-b2b1-4ccc-a31b-aaafb848b32b",
+            "f379c8f6-1c30-4ca7-971d-76c8c573d9d5",
+            "e0b2c3e7-6e09-4a0e-9f69-c1f10855003e",
+            "79e04437-5277-48af-9f9a-e45a7c078771",
+            "80f588e6-5b9a-4252-bb2d-9f06cdcf79c5",
+            "74f74526-95e4-4a6c-93ec-f6c5383bc96b",
+            "144b9ed5-d546-4d25-be6b-12b0071dcfb5",
+            "1a5e864b-fb94-4b7c-890a-c57c40c4e8d3",
+            "0eba6916-0ab4-4289-96b5-554c7d96bc0b",
+            "0a02f1bd-8108-4efa-8a9e-f2fcd75ad4e3"
+          ],
+          "top_k_titles": [
+            "sample.docx / 1.2 Implementation",
+            "sample.docx / 1. Retry Strategy",
+            "sample.docx / 1.1 Configuration",
+            "sample.png / Architecture Decision Records",
+            "sample.docx / 2. Authentication",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.docx / 2.1 Roles",
+            "sample.docx / 3. Data Storage"
+          ],
+          "top_k_snippets": [
+            "### 1.2 Implementation The retry middleware wraps fetch and intercepts failed requests. async function retryFetch(url: string, options: RequestInit) { for (let attempt = 0; attempt < 3; attempt++) { try { const res = await fetch(url, optio…",
+            "## 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second with a multiplier of 2.",
+            "### 1.1 Configuration The retry configuration applies to all HTTP clients in the codebase. | Parameter | Default | Description | |------------|---------|----------------------------------------------| | maxRetries | 3 | Maximum number of a…",
+            "# Architecture Decision Records This document captures key architectural decisions for the project. 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second…",
+            "## 2. Authentication All endpoints require an API key in the Authorization header. The API key format is `Bearer <key>` where the key is a SHA-256 hash. Keys are scoped to a single project unless granted admin role.",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "### 2.1 Roles We have three roles: - **admin**: full read/write access to all projects - **writer**: read/write access to assigned projects only - **reader**: read-only access",
+            "## 3. Data Storage Lessons are stored in PostgreSQL with pgvector for embeddings. Each lesson has a 768-dimensional vector embedding generated from its content. The vector dimension is fixed by the embedding model. Switching models require…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            85
+          ],
+          "latency_ms_median": 85,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "chunk-authentication-overview",
+          "group": "confident-hit",
+          "query": "API authentication using API key in Authorization header",
+          "top_k_keys": [
+            "80f588e6-5b9a-4252-bb2d-9f06cdcf79c5",
+            "f379c8f6-1c30-4ca7-971d-76c8c573d9d5",
+            "e0b2c3e7-6e09-4a0e-9f69-c1f10855003e",
+            "49d773e1-b2b1-4ccc-a31b-aaafb848b32b",
+            "79e04437-5277-48af-9f9a-e45a7c078771",
+            "144b9ed5-d546-4d25-be6b-12b0071dcfb5",
+            "1a5e864b-fb94-4b7c-890a-c57c40c4e8d3",
+            "74f74526-95e4-4a6c-93ec-f6c5383bc96b",
+            "0eba6916-0ab4-4289-96b5-554c7d96bc0b",
+            "512d7a46-e7f5-45aa-b3e5-6902e3ca6cd8"
+          ],
+          "top_k_titles": [
+            "sample.docx / 2. Authentication",
+            "sample.docx / 1. Retry Strategy",
+            "sample.docx / 1.1 Configuration",
+            "sample.docx / 1.2 Implementation",
+            "sample.png / Architecture Decision Records",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.docx / 2.1 Roles",
+            "sample.docx / Architecture Decision Records"
+          ],
+          "top_k_snippets": [
+            "## 2. Authentication All endpoints require an API key in the Authorization header. The API key format is `Bearer <key>` where the key is a SHA-256 hash. Keys are scoped to a single project unless granted admin role.",
+            "## 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second with a multiplier of 2.",
+            "### 1.1 Configuration The retry configuration applies to all HTTP clients in the codebase. | Parameter | Default | Description | |------------|---------|----------------------------------------------| | maxRetries | 3 | Maximum number of a…",
+            "### 1.2 Implementation The retry middleware wraps fetch and intercepts failed requests. async function retryFetch(url: string, options: RequestInit) { for (let attempt = 0; attempt < 3; attempt++) { try { const res = await fetch(url, optio…",
+            "# Architecture Decision Records This document captures key architectural decisions for the project. 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second…",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "### 2.1 Roles We have three roles: - **admin**: full read/write access to all projects - **writer**: read/write access to assigned projects only - **reader**: read-only access",
+            "# Architecture Decision Records This document captures key architectural decisions for the project."
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            49
+          ],
+          "latency_ms_median": 49,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "chunk-role-definitions",
+          "group": "confident-hit",
+          "query": "what are the user roles admin editor viewer in the system",
+          "top_k_keys": [
+            "0eba6916-0ab4-4289-96b5-554c7d96bc0b",
+            "80f588e6-5b9a-4252-bb2d-9f06cdcf79c5",
+            "512d7a46-e7f5-45aa-b3e5-6902e3ca6cd8",
+            "0a02f1bd-8108-4efa-8a9e-f2fcd75ad4e3",
+            "74f74526-95e4-4a6c-93ec-f6c5383bc96b",
+            "144b9ed5-d546-4d25-be6b-12b0071dcfb5",
+            "1a5e864b-fb94-4b7c-890a-c57c40c4e8d3",
+            "79e04437-5277-48af-9f9a-e45a7c078771",
+            "e0b2c3e7-6e09-4a0e-9f69-c1f10855003e",
+            "49d773e1-b2b1-4ccc-a31b-aaafb848b32b"
+          ],
+          "top_k_titles": [
+            "sample.docx / 2.1 Roles",
+            "sample.docx / 2. Authentication",
+            "sample.docx / Architecture Decision Records",
+            "sample.docx / 3. Data Storage",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.png / Architecture Decision Records",
+            "sample.docx / 1.1 Configuration",
+            "sample.docx / 1.2 Implementation"
+          ],
+          "top_k_snippets": [
+            "### 2.1 Roles We have three roles: - **admin**: full read/write access to all projects - **writer**: read/write access to assigned projects only - **reader**: read-only access",
+            "## 2. Authentication All endpoints require an API key in the Authorization header. The API key format is `Bearer <key>` where the key is a SHA-256 hash. Keys are scoped to a single project unless granted admin role.",
+            "# Architecture Decision Records This document captures key architectural decisions for the project.",
+            "## 3. Data Storage Lessons are stored in PostgreSQL with pgvector for embeddings. Each lesson has a 768-dimensional vector embedding generated from its content. The vector dimension is fixed by the embedding model. Switching models require…",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "# Architecture Decision Records This document captures key architectural decisions for the project. 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second…",
+            "### 1.1 Configuration The retry configuration applies to all HTTP clients in the codebase. | Parameter | Default | Description | |------------|---------|----------------------------------------------| | maxRetries | 3 | Maximum number of a…",
+            "### 1.2 Implementation The retry middleware wraps fetch and intercepts failed requests. async function retryFetch(url: string, options: RequestInit) { for (let attempt = 0; attempt < 3; attempt++) { try { const res = await fetch(url, optio…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            49
+          ],
+          "latency_ms_median": 49,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "chunk-data-storage-pgvector",
+          "group": "confident-hit",
+          "query": "how are lessons stored pgvector postgres",
+          "top_k_keys": [
+            "0a02f1bd-8108-4efa-8a9e-f2fcd75ad4e3",
+            "74f74526-95e4-4a6c-93ec-f6c5383bc96b",
+            "1a5e864b-fb94-4b7c-890a-c57c40c4e8d3",
+            "144b9ed5-d546-4d25-be6b-12b0071dcfb5",
+            "0eba6916-0ab4-4289-96b5-554c7d96bc0b",
+            "512d7a46-e7f5-45aa-b3e5-6902e3ca6cd8",
+            "79e04437-5277-48af-9f9a-e45a7c078771",
+            "80f588e6-5b9a-4252-bb2d-9f06cdcf79c5",
+            "49d773e1-b2b1-4ccc-a31b-aaafb848b32b",
+            "e0b2c3e7-6e09-4a0e-9f69-c1f10855003e"
+          ],
+          "top_k_titles": [
+            "sample.docx / 3. Data Storage",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.docx / 2.1 Roles",
+            "sample.docx / Architecture Decision Records",
+            "sample.png / Architecture Decision Records",
+            "sample.docx / 2. Authentication",
+            "sample.docx / 1.2 Implementation",
+            "sample.docx / 1.1 Configuration"
+          ],
+          "top_k_snippets": [
+            "## 3. Data Storage Lessons are stored in PostgreSQL with pgvector for embeddings. Each lesson has a 768-dimensional vector embedding generated from its content. The vector dimension is fixed by the embedding model. Switching models require…",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "### 2.1 Roles We have three roles: - **admin**: full read/write access to all projects - **writer**: read/write access to assigned projects only - **reader**: read-only access",
+            "# Architecture Decision Records This document captures key architectural decisions for the project.",
+            "# Architecture Decision Records This document captures key architectural decisions for the project. 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second…",
+            "## 2. Authentication All endpoints require an API key in the Authorization header. The API key format is `Bearer <key>` where the key is a SHA-256 hash. Keys are scoped to a single project unless granted admin role.",
+            "### 1.2 Implementation The retry middleware wraps fetch and intercepts failed requests. async function retryFetch(url: string, options: RequestInit) { for (let attempt = 0; attempt < 3; attempt++) { try { const res = await fetch(url, optio…",
+            "### 1.1 Configuration The retry configuration applies to all HTTP clients in the codebase. | Parameter | Default | Description | |------------|---------|----------------------------------------------| | maxRetries | 3 | Maximum number of a…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            43
+          ],
+          "latency_ms_median": 43,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "chunk-adr-intro-dup",
+          "group": "duplicate-trap",
+          "query": "architecture decision records introduction",
+          "top_k_keys": [
+            "512d7a46-e7f5-45aa-b3e5-6902e3ca6cd8",
+            "79e04437-5277-48af-9f9a-e45a7c078771",
+            "0eba6916-0ab4-4289-96b5-554c7d96bc0b",
+            "0a02f1bd-8108-4efa-8a9e-f2fcd75ad4e3",
+            "80f588e6-5b9a-4252-bb2d-9f06cdcf79c5",
+            "74f74526-95e4-4a6c-93ec-f6c5383bc96b",
+            "144b9ed5-d546-4d25-be6b-12b0071dcfb5",
+            "1a5e864b-fb94-4b7c-890a-c57c40c4e8d3",
+            "e0b2c3e7-6e09-4a0e-9f69-c1f10855003e",
+            "f379c8f6-1c30-4ca7-971d-76c8c573d9d5"
+          ],
+          "top_k_titles": [
+            "sample.docx / Architecture Decision Records",
+            "sample.png / Architecture Decision Records",
+            "sample.docx / 2.1 Roles",
+            "sample.docx / 3. Data Storage",
+            "sample.docx / 2. Authentication",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.docx / 1.1 Configuration",
+            "sample.docx / 1. Retry Strategy"
+          ],
+          "top_k_snippets": [
+            "# Architecture Decision Records This document captures key architectural decisions for the project.",
+            "# Architecture Decision Records This document captures key architectural decisions for the project. 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second…",
+            "### 2.1 Roles We have three roles: - **admin**: full read/write access to all projects - **writer**: read/write access to assigned projects only - **reader**: read-only access",
+            "## 3. Data Storage Lessons are stored in PostgreSQL with pgvector for embeddings. Each lesson has a 768-dimensional vector embedding generated from its content. The vector dimension is fixed by the embedding model. Switching models require…",
+            "## 2. Authentication All endpoints require an API key in the Authorization header. The API key format is `Bearer <key>` where the key is a SHA-256 hash. Keys are scoped to a single project unless granted admin role.",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "### 1.1 Configuration The retry configuration applies to all HTTP clients in the codebase. | Parameter | Default | Description | |------------|---------|----------------------------------------------| | maxRetries | 3 | Maximum number of a…",
+            "## 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second with a multiplier of 2."
+          ],
+          "found_ranks": [
+            1,
+            2
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            42
+          ],
+          "latency_ms_median": 42,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "chunk-cross-retry-auth-storage",
+          "group": "cross-topic",
+          "query": "summary of retry authentication and data storage decisions",
+          "top_k_keys": [
+            "e0b2c3e7-6e09-4a0e-9f69-c1f10855003e",
+            "79e04437-5277-48af-9f9a-e45a7c078771",
+            "f379c8f6-1c30-4ca7-971d-76c8c573d9d5",
+            "49d773e1-b2b1-4ccc-a31b-aaafb848b32b",
+            "80f588e6-5b9a-4252-bb2d-9f06cdcf79c5",
+            "512d7a46-e7f5-45aa-b3e5-6902e3ca6cd8",
+            "0eba6916-0ab4-4289-96b5-554c7d96bc0b",
+            "0a02f1bd-8108-4efa-8a9e-f2fcd75ad4e3",
+            "74f74526-95e4-4a6c-93ec-f6c5383bc96b",
+            "144b9ed5-d546-4d25-be6b-12b0071dcfb5"
+          ],
+          "top_k_titles": [
+            "sample.docx / 1.1 Configuration",
+            "sample.png / Architecture Decision Records",
+            "sample.docx / 1. Retry Strategy",
+            "sample.docx / 1.2 Implementation",
+            "sample.docx / 2. Authentication",
+            "sample.docx / Architecture Decision Records",
+            "sample.docx / 2.1 Roles",
+            "sample.docx / 3. Data Storage",
+            "sample.pdf",
+            "sample.pdf"
+          ],
+          "top_k_snippets": [
+            "### 1.1 Configuration The retry configuration applies to all HTTP clients in the codebase. | Parameter | Default | Description | |------------|---------|----------------------------------------------| | maxRetries | 3 | Maximum number of a…",
+            "# Architecture Decision Records This document captures key architectural decisions for the project. 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second…",
+            "## 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second with a multiplier of 2.",
+            "### 1.2 Implementation The retry middleware wraps fetch and intercepts failed requests. async function retryFetch(url: string, options: RequestInit) { for (let attempt = 0; attempt < 3; attempt++) { try { const res = await fetch(url, optio…",
+            "## 2. Authentication All endpoints require an API key in the Authorization header. The API key format is `Bearer <key>` where the key is a SHA-256 hash. Keys are scoped to a single project unless granted admin role.",
+            "# Architecture Decision Records This document captures key architectural decisions for the project.",
+            "### 2.1 Roles We have three roles: - **admin**: full read/write access to all projects - **writer**: read/write access to assigned projects only - **reader**: read-only access",
+            "## 3. Data Storage Lessons are stored in PostgreSQL with pgvector for embeddings. Each lesson has a 768-dimensional vector embedding generated from its content. The vector dimension is fixed by the embedding model. Switching models require…",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]"
+          ],
+          "found_ranks": [
+            3,
+            5,
+            8
+          ],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            2,
+            0,
+            2,
+            0,
+            0,
+            2,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            47
+          ],
+          "latency_ms_median": 47,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "chunk-miss-quantum",
+          "group": "adversarial-miss",
+          "query": "quantum flux capacitor documentation chapter 7",
+          "top_k_keys": [
+            "0eba6916-0ab4-4289-96b5-554c7d96bc0b",
+            "512d7a46-e7f5-45aa-b3e5-6902e3ca6cd8",
+            "74f74526-95e4-4a6c-93ec-f6c5383bc96b",
+            "1a5e864b-fb94-4b7c-890a-c57c40c4e8d3",
+            "144b9ed5-d546-4d25-be6b-12b0071dcfb5",
+            "80f588e6-5b9a-4252-bb2d-9f06cdcf79c5",
+            "79e04437-5277-48af-9f9a-e45a7c078771",
+            "49d773e1-b2b1-4ccc-a31b-aaafb848b32b",
+            "e0b2c3e7-6e09-4a0e-9f69-c1f10855003e",
+            "0a02f1bd-8108-4efa-8a9e-f2fcd75ad4e3"
+          ],
+          "top_k_titles": [
+            "sample.docx / 2.1 Roles",
+            "sample.docx / Architecture Decision Records",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.docx / 2. Authentication",
+            "sample.png / Architecture Decision Records",
+            "sample.docx / 1.2 Implementation",
+            "sample.docx / 1.1 Configuration",
+            "sample.docx / 3. Data Storage"
+          ],
+          "top_k_snippets": [
+            "### 2.1 Roles We have three roles: - **admin**: full read/write access to all projects - **writer**: read/write access to assigned projects only - **reader**: read-only access",
+            "# Architecture Decision Records This document captures key architectural decisions for the project.",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "## 2. Authentication All endpoints require an API key in the Authorization header. The API key format is `Bearer <key>` where the key is a SHA-256 hash. Keys are scoped to a single project unless granted admin role.",
+            "# Architecture Decision Records This document captures key architectural decisions for the project. 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second…",
+            "### 1.2 Implementation The retry middleware wraps fetch and intercepts failed requests. async function retryFetch(url: string, options: RequestInit) { for (let attempt = 0; attempt < 3; attempt++) { try { const res = await fetch(url, optio…",
+            "### 1.1 Configuration The retry configuration applies to all HTTP clients in the codebase. | Parameter | Default | Description | |------------|---------|----------------------------------------------| | maxRetries | 3 | Maximum number of a…",
+            "## 3. Data Storage Lessons are stored in PostgreSQL with pgvector for embeddings. Each lesson has a 768-dimensional vector embedding generated from its content. The vector dimension is fixed by the embedding model. Switching models require…"
+          ],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            44
+          ],
+          "latency_ms_median": 44,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": []
+        },
+        {
+          "id": "chunk-miss-jazz",
+          "group": "adversarial-miss",
+          "query": "history of bebop jazz improvisation notation",
+          "top_k_keys": [
+            "512d7a46-e7f5-45aa-b3e5-6902e3ca6cd8",
+            "0a02f1bd-8108-4efa-8a9e-f2fcd75ad4e3",
+            "79e04437-5277-48af-9f9a-e45a7c078771",
+            "0eba6916-0ab4-4289-96b5-554c7d96bc0b",
+            "e0b2c3e7-6e09-4a0e-9f69-c1f10855003e",
+            "80f588e6-5b9a-4252-bb2d-9f06cdcf79c5",
+            "f379c8f6-1c30-4ca7-971d-76c8c573d9d5",
+            "74f74526-95e4-4a6c-93ec-f6c5383bc96b",
+            "144b9ed5-d546-4d25-be6b-12b0071dcfb5",
+            "1a5e864b-fb94-4b7c-890a-c57c40c4e8d3"
+          ],
+          "top_k_titles": [
+            "sample.docx / Architecture Decision Records",
+            "sample.docx / 3. Data Storage",
+            "sample.png / Architecture Decision Records",
+            "sample.docx / 2.1 Roles",
+            "sample.docx / 1.1 Configuration",
+            "sample.docx / 2. Authentication",
+            "sample.docx / 1. Retry Strategy",
+            "sample.pdf",
+            "sample.pdf",
+            "sample.pdf"
+          ],
+          "top_k_snippets": [
+            "# Architecture Decision Records This document captures key architectural decisions for the project.",
+            "## 3. Data Storage Lessons are stored in PostgreSQL with pgvector for embeddings. Each lesson has a 768-dimensional vector embedding generated from its content. The vector dimension is fixed by the embedding model. Switching models require…",
+            "# Architecture Decision Records This document captures key architectural decisions for the project. 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second…",
+            "### 2.1 Roles We have three roles: - **admin**: full read/write access to all projects - **writer**: read/write access to assigned projects only - **reader**: read-only access",
+            "### 1.1 Configuration The retry configuration applies to all HTTP clients in the codebase. | Parameter | Default | Description | |------------|---------|----------------------------------------------| | maxRetries | 3 | Maximum number of a…",
+            "## 2. Authentication All endpoints require an API key in the Authorization header. The API key format is `Bearer <key>` where the key is a SHA-256 hash. Keys are scoped to a single project unless granted admin role.",
+            "## 1. Retry Strategy All external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second with a multiplier of 2.",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]",
+            "> [extraction failed: Vision model returned HTTP 400: { \"error\": { \"message\": \"Failed to load model \\\"zai-org/glm-4.6v-flash\\\". Error: Operation canceled.\", \"type\": \"invalid_request_error\", \"param\": \"model\", \"code\": null } }]"
+          ],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            46
+          ],
+          "latency_ms_median": 46,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": []
+        }
+      ]
+    }
+  },
+  "noise_floor": {
+    "chunks": {
+      "recall_at_5": 0,
+      "recall_at_10": 0,
+      "mrr": 0,
+      "ndcg_at_5": 0,
+      "ndcg_at_10": 0,
+      "duplication_rate_at_10": 0,
+      "duplication_rate_nearsemantic_at_10": 0,
+      "coverage_pct": 0,
+      "latency_p50_ms": 1,
+      "latency_p95_ms": 98,
+      "latency_mean_ms": 17
+    }
+  },
+  "control_elapsed_ms": 634,
+  "new_elapsed_ms": 463
+}

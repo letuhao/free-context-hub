@@ -1100,7 +1100,12 @@ function createMcpToolsServer() {
         'Hybrid semantic + FTS search over extracted document chunks (PDFs, DOCX, images). ' +
         'Returns chunks with parent document name, page number, heading, and chunk type ' +
         'so agents can cite the exact source. Use this for questions about content in ' +
-        'uploaded documents rather than lessons or code.',
+        'uploaded documents rather than lessons or code. ' +
+        'Results are deduplicated by (project_id, chunk_type, near-semantic content key) ' +
+        'so near-duplicate chunks (e.g. multiple extraction attempts of the same page, or ' +
+        'reimported documents) collapse to one representative — this MAY return fewer than ' +
+        '`limit` items when the retrieval pool has many duplicates. Set env ' +
+        'CHUNKS_DEDUP_DISABLED=true on the server to restore legacy behavior.',
       inputSchema: z.object({
         workspace_token: z.string().optional().describe('Workspace token (required only if MCP_AUTH_ENABLED=true).'),
         project_id: z.string().min(1).optional().describe('Project identifier. Optional if DEFAULT_PROJECT_ID is set.'),
