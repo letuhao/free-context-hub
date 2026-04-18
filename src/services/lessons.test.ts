@@ -17,10 +17,26 @@ import test from 'node:test';
 
 import { dedupLessonMatches } from './lessons.js';
 
-type LessonMatch = { lesson_id: string; title: string; content_snippet?: string; score?: number };
+type LessonMatch = {
+  lesson_id: string;
+  project_id?: string;
+  lesson_type: string;
+  title: string;
+  content_snippet: string | undefined;
+  score?: number;
+};
 
-function m(lesson_id: string, title: string, content_snippet = ''): LessonMatch {
-  return { lesson_id, title, content_snippet, score: 1 };
+/** Fixture helper. Defaults to `project_id='p'` and `lesson_type='decision'`
+ *  so existing tests need no churn; new tests override when exercising
+ *  project/type dimensions. */
+function m(
+  lesson_id: string,
+  title: string,
+  content_snippet: string | undefined = '',
+  project_id = 'p',
+  lesson_type = 'decision',
+): LessonMatch {
+  return { lesson_id, project_id, lesson_type, title, content_snippet, score: 1 };
 }
 
 test('dedupLessonMatches', async (t) => {
@@ -92,15 +108,51 @@ test('dedupLessonMatches', async (t) => {
     assert.equal(out.length, 2, 'distinct snippets prevent collapse under same title');
   });
 
-  await t.test('missing content_snippet field still hashes (treated as empty string)', () => {
-    // Defensive: older code paths may omit content_snippet. dedup should
-    // still work, though it effectively reduces to title-only matching.
-    const inp = [
-      { lesson_id: 'a', title: 'Same title' },
-      { lesson_id: 'b', title: 'Same title' },
-    ] as Array<{ lesson_id: string; title: string; content_snippet?: string }>;
+  await t.test('undefined content_snippet is treated as empty string (defensive)', () => {
+    const inp: LessonMatch[] = [
+      m('a', 'Same title', undefined),
+      m('b', 'Same title', undefined),
+    ];
     const out = dedupLessonMatches(inp);
     assert.equal(out.length, 1);
+  });
+
+  await t.test('Sprint 12.1a MED-1: cross-project SAME-content items are preserved', () => {
+    // Two projects may legitimately share a guardrail (e.g. via include_groups).
+    // Dedup must NOT collapse them — each project keeps its representative.
+    const inp = [
+      m('a', 'Retry budget', 'Use exponential backoff, max 3 attempts', 'project-A', 'guardrail'),
+      m('b', 'Retry budget', 'Use exponential backoff, max 3 attempts', 'project-B', 'guardrail'),
+    ];
+    const out = dedupLessonMatches(inp);
+    assert.equal(out.length, 2, 'different project_id → different keys → both preserved');
+    assert.deepEqual(out.map((x) => x.project_id), ['project-A', 'project-B']);
+  });
+
+  await t.test('Sprint 12.1a MED-2: same content but different lesson_type stays distinct', () => {
+    // A guardrail "Retry strategy" (rule to enforce) and a decision "Retry
+    // strategy" (architectural rationale) carry different downstream semantics
+    // even if the text overlaps. Dedup must keep both.
+    const inp = [
+      m('gr', 'Retry strategy', 'Exponential backoff with jitter', 'p', 'guardrail'),
+      m('dc', 'Retry strategy', 'Exponential backoff with jitter', 'p', 'decision'),
+    ];
+    const out = dedupLessonMatches(inp);
+    assert.equal(out.length, 2, 'different lesson_type → different keys → both preserved');
+    assert.deepEqual(out.map((x) => x.lesson_type), ['guardrail', 'decision']);
+  });
+
+  await t.test('within-project-within-type near-semantic cluster still collapses (the motivating pathology)', () => {
+    // Full-stack check: same project, same type, cluster collapses as before.
+    const inp = [
+      m('a', 'Max retry attempts must be 3', 'Use retry with backoff', 'p', 'guardrail'),
+      m('b', 'Max retry attempts must be 3', 'Use retry with backoff', 'p', 'guardrail'),
+      m('c', 'Max retry attempts must be 3', 'Use retry with backoff', 'p', 'guardrail'),
+      m('d', 'Distinct guardrail', 'Different content', 'p', 'guardrail'),
+    ];
+    const out = dedupLessonMatches(inp);
+    assert.equal(out.length, 2);
+    assert.deepEqual(out.map((x) => x.lesson_id), ['a', 'd']);
   });
 
   await t.test('input with 10 items, one 6-member cluster → 5 items out', () => {

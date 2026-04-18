@@ -464,7 +464,11 @@ function gitInfo(): { commit: string; branch: string } {
   try {
     const commit = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
     const branch = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf8' }).trim();
-    return { commit, branch };
+    // Sprint 12.1a /review-impl LOW-2: append `+dirty` when the working tree
+    // has uncommitted changes. Prevents future readers from assuming two
+    // archives with the same SHA were produced by the same code.
+    const dirty = execSync('git status --porcelain', { encoding: 'utf8' }).trim();
+    return { commit: dirty.length > 0 ? `${commit}+dirty` : commit, branch };
   } catch {
     return { commit: 'unknown', branch: 'unknown' };
   }

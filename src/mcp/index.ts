@@ -1002,7 +1002,11 @@ function createMcpToolsServer() {
   server.registerTool(
     'search_lessons',
     {
-      description: 'Semantic search over lesson embeddings. Supports single project, multi-project, group-based, or include-all-groups search.',
+      description:
+        'Semantic search over lesson embeddings. Supports single project, multi-project, group-based, or include-all-groups search. ' +
+        'Results are deduplicated by (project_id, lesson_type, near-semantic content key) so near-duplicate fixtures or reimported ' +
+        'rows collapse to one representative — this MAY return fewer than `limit` items when the retrieval pool has many duplicates. ' +
+        'Set env LESSONS_DEDUP_DISABLED=true on the server to restore legacy behavior (returns every raw match including duplicates).',
       inputSchema: z.object({
         workspace_token: z.string().optional().describe('Workspace token (required only if MCP_AUTH_ENABLED=true).'),
         project_id: z

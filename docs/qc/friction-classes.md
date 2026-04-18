@@ -281,6 +281,77 @@ must purge post-indexing — idempotent but manual.
 
 ---
 
+### downstream-behavior-coupling
+
+**Definition.** A retrieval-layer change (e.g. dedup) silently alters the
+output of downstream consumers that pipe retrieval results into further
+processing (e.g. LLM synthesis, summarization). The retrieval change is
+the intended sprint scope; the downstream shift is a side-effect the
+sprint did not explicitly scope.
+
+**Why it happens.** Retrieval results flow through many consumers:
+REST API, MCP tool, GUI search, chat tool, `reflect` LLM-synthesis tool,
+etc. When a retrieval primitive changes, every consumer's observed
+behavior changes. Consumers that weight retrieval output by repetition
+(LLM synthesis that sees the same bullet 5× will emphasize it) are
+particularly affected.
+
+**Diagnostic signal.** A downstream tool's output changes after a
+retrieval-layer sprint, even though nothing in the tool's code changed.
+
+**Example (Sprint 12.1a dedup).** The `reflect` MCP tool calls
+`searchLessons({ limit: 12 })`, maps matches to bullets, feeds them to
+`reflectOnTopic` (LLM synthesis). Previously, a query about retry
+strategy retrieved 5 near-identical "Max retry attempts must be 3"
+bullets — LLM synthesis weighted that point heavily because of
+repetition. Post-Sprint-12.1a dedup, reflect sees one representative
+per cluster; LLM synthesis gets cleaner variety. The effect is
+(arguably) *better* synthesis — less bias from accidental fixture
+duplication — but it IS a behavior change. Operators running the same
+reflect query before vs after 2026-04-18 will get different answers.
+
+**Future fix path.** When changing a retrieval primitive:
+1. Enumerate downstream consumers (grep for the function name).
+2. Spot-check each consumer's output on a representative query pre- vs
+   post-change.
+3. Document the behavior delta in the session patch even when the
+   delta is benign — prevents future mysteries ("why did reflect's
+   answer shape change between these dates?").
+
+---
+
+### benchmark-wiring-gap
+
+**Definition.** A unit test exists for a pure function but no
+integration test proves the function is invoked correctly by the full
+pipeline. A refactor could move or remove the invocation and all unit
+tests still pass.
+
+**Why it happens.** Pure-function tests are cheap; integration tests
+require mocking the DB pool, embedding service, rerank client, etc.
+When time pressure meets "the unit tests are green," integration tests
+slide.
+
+**Diagnostic signal.** The function is imported but never called
+(detectable via grep). Or the function is called but not at the
+semantically-correct point in the pipeline.
+
+**Example (Sprint 12.1a dedup wiring).** `dedupLessonMatches` has
+9-12 unit tests exercising every input pattern. But no integration
+test proves:
+- `searchLessons` actually calls dedup (vs accidentally short-circuiting).
+- Dedup runs AFTER rerank (invariant: dedup respects reranker order).
+- `searchLessonsMulti`'s cross-project merge runs BEFORE dedup (so
+  cross-project dups would collapse — which MED-1 fix now prevents via
+  project_id in the key, but the wiring order still matters).
+
+**Future fix path.** Add integration tests with `tsx --test` that mock
+`getDbPool()` and the rerank entry points, call `searchLessons`, and
+assert the final matches list has dedup-applied characteristics.
+Deferred to Sprint 12.1b or a 12.0.3 cleanup pass.
+
+---
+
 ### golden-set-ceiling-bias
 
 **Definition.** The golden set's queries are paraphrases of content that

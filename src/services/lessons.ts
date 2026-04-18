@@ -683,30 +683,51 @@ async function rerankLessons(params: {
 /**
  * Sprint 12.1a — near-semantic dedup for lesson search results.
  *
- * Collapses matches that share a `nearSemanticKey(title, content_snippet)`
- * into a single representative: the first-seen (highest-ranked) item from
- * each cluster. Preserves input ordering; drops subsequent cluster
+ * Collapses matches that share a `(project_id, lesson_type, nearSemanticKey(title, content_snippet))`
+ * tuple into a single representative: the first-seen (highest-ranked) item
+ * from each cluster. Preserves input ordering; drops subsequent cluster
  * members. Pure function — no I/O.
  *
  * Motivation: the free-context-hub lesson catalog contains multiple
  * same-title-different-UUID clusters ("Global search test retry pattern"
  * x6+, "Max retry attempts must be 3" x5+, "Valid: impexp-<ts>-extra"
  * x4+). Sprint 12.0.1 baseline measured `dup@10 nearsem = 0.42` on
- * lessons via exactly this key. By deduplicating with the same key, we
- * collapse each cluster to one representative and the metric drops to 0
- * on the next baseline — a clean before/after story.
+ * lessons via the content-level key. By deduplicating with the same
+ * content component, we collapse each cluster to one representative;
+ * the metric drops to 0 on the next baseline.
+ *
+ * Key tuple (Sprint 12.1a /review-impl MED-1 + MED-2):
+ *   - `project_id` included → cross-project "same content" variants
+ *     (e.g. shared guardrails in group-scoped projects) are NOT
+ *     collapsed; each project keeps its own representative.
+ *   - `lesson_type` included → a guardrail and a decision with
+ *     identical title+snippet stay distinct because they carry
+ *     different downstream roles.
+ *   - `nearSemanticKey(title, content_snippet)` → catches timestamp-
+ *     variant fixtures via normalizeForHash digit-collapse.
+ *
+ * Generic constraint uses `string | undefined` (not optional `?`) on
+ * content_snippet so TypeScript catches silent narrowing if the field
+ * is removed from the match type.
  *
  * Opt-out: `LESSONS_DEDUP_DISABLED=true` in the environment restores
  * legacy behavior (no dedup). Intended for A/B measurement and emergency
  * rollback, not as a permanent toggle.
  */
-export function dedupLessonMatches<T extends { title: string; content_snippet?: string }>(
-  matches: ReadonlyArray<T>,
-): T[] {
+export function dedupLessonMatches<T extends {
+  project_id?: string;
+  lesson_type: string;
+  title: string;
+  content_snippet: string | undefined;
+}>(matches: ReadonlyArray<T>): T[] {
   const seen = new Set<string>();
   const out: T[] = [];
   for (const m of matches) {
-    const key = nearSemanticKey(m.title, m.content_snippet);
+    // `project_id` is optional on SearchLessonsResult.matches for historical
+    // reasons; always-populated-by-the-producer in practice but fall back to
+    // '' for type safety. Items missing project_id collapse together within
+    // same type+content — acceptable for the degenerate case (no known producer).
+    const key = `${m.project_id ?? ''}|${m.lesson_type}|${nearSemanticKey(m.title, m.content_snippet)}`;
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(m);
@@ -866,17 +887,24 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
     }
   }
 
-  // Sprint 12.1a — near-semantic dedup. Collapses same-title-different-UUID
-  // clusters before trimming so unique items that were pushed below cluster
-  // duplicates get surfaced. Opt-out via LESSONS_DEDUP_DISABLED=true for
-  // A/B measurement and emergency rollback.
-  if (!isDedupDisabled()) {
+  // Sprint 12.1a — near-semantic dedup. Collapses same-(project,type,title,
+  // snippet) clusters before trimming so unique items that were pushed below
+  // cluster duplicates get surfaced. Opt-out via LESSONS_DEDUP_DISABLED=true
+  // for A/B measurement and emergency rollback.
+  //
+  // Sprint 12.1a /review-impl LOW-3: always emit an explanation so operators
+  // can distinguish "dedup ON and no dupes found" from "dedup OFF entirely."
+  if (isDedupDisabled()) {
+    explanations.push('dedup: disabled via LESSONS_DEDUP_DISABLED');
+  } else {
     const before = matches.length;
     matches = dedupLessonMatches(matches);
     const dropped = before - matches.length;
-    if (dropped > 0) {
-      explanations.push(`dedup: collapsed ${dropped} near-semantic duplicate${dropped === 1 ? '' : 's'} (${before}→${matches.length})`);
-    }
+    explanations.push(
+      dropped > 0
+        ? `dedup: enabled, collapsed ${dropped} near-semantic duplicate${dropped === 1 ? '' : 's'} (${before}→${matches.length})`
+        : `dedup: enabled, 0 collapsed (all ${before} items already distinct)`,
+    );
   }
 
   // Trim to the originally requested limit after reranking + dedup.
