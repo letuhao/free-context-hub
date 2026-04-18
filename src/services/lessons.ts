@@ -7,6 +7,7 @@ import { embedTexts } from './embedder.js';
 import { distillLesson } from './distiller.js';
 import { rebuildProjectSnapshot } from './snapshot.js';
 import { expandForFtsIndex, buildFtsQuery } from '../utils/ftsTokenizer.js';
+import { nearSemanticKey } from '../utils/nearSemanticKey.js';
 import * as z from 'zod/v4';
 import { createModuleLogger } from '../utils/logger.js';
 
@@ -679,6 +680,45 @@ async function rerankLessons(params: {
   return rerankGenerative(params.query, params.candidates);
 }
 
+/**
+ * Sprint 12.1a — near-semantic dedup for lesson search results.
+ *
+ * Collapses matches that share a `nearSemanticKey(title, content_snippet)`
+ * into a single representative: the first-seen (highest-ranked) item from
+ * each cluster. Preserves input ordering; drops subsequent cluster
+ * members. Pure function — no I/O.
+ *
+ * Motivation: the free-context-hub lesson catalog contains multiple
+ * same-title-different-UUID clusters ("Global search test retry pattern"
+ * x6+, "Max retry attempts must be 3" x5+, "Valid: impexp-<ts>-extra"
+ * x4+). Sprint 12.0.1 baseline measured `dup@10 nearsem = 0.42` on
+ * lessons via exactly this key. By deduplicating with the same key, we
+ * collapse each cluster to one representative and the metric drops to 0
+ * on the next baseline — a clean before/after story.
+ *
+ * Opt-out: `LESSONS_DEDUP_DISABLED=true` in the environment restores
+ * legacy behavior (no dedup). Intended for A/B measurement and emergency
+ * rollback, not as a permanent toggle.
+ */
+export function dedupLessonMatches<T extends { title: string; content_snippet?: string }>(
+  matches: ReadonlyArray<T>,
+): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const m of matches) {
+    const key = nearSemanticKey(m.title, m.content_snippet);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(m);
+  }
+  return out;
+}
+
+/** Env-driven opt-out for dedup. Read lazily so tests can toggle it. */
+function isDedupDisabled(): boolean {
+  return process.env.LESSONS_DEDUP_DISABLED === 'true';
+}
+
 export async function searchLessons(params: SearchLessonsParams): Promise<SearchLessonsResult> {
   const pool = getDbPool();
   const limit = Math.min(Math.max(params.limit ?? 10, 1), 50);
@@ -826,7 +866,20 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
     }
   }
 
-  // Trim to the originally requested limit after reranking.
+  // Sprint 12.1a — near-semantic dedup. Collapses same-title-different-UUID
+  // clusters before trimming so unique items that were pushed below cluster
+  // duplicates get surfaced. Opt-out via LESSONS_DEDUP_DISABLED=true for
+  // A/B measurement and emergency rollback.
+  if (!isDedupDisabled()) {
+    const before = matches.length;
+    matches = dedupLessonMatches(matches);
+    const dropped = before - matches.length;
+    if (dropped > 0) {
+      explanations.push(`dedup: collapsed ${dropped} near-semantic duplicate${dropped === 1 ? '' : 's'} (${before}→${matches.length})`);
+    }
+  }
+
+  // Trim to the originally requested limit after reranking + dedup.
   matches = matches.slice(0, limit);
 
   return { matches, explanations };
@@ -984,6 +1037,16 @@ export async function searchLessonsMulti(params: SearchLessonsMultiParams): Prom
       explanations.push(`reranked: top ${rerankCandidates.length}/${matches.length} candidates (budget=${rerankBudget}, total_lessons=${totalLessons})`);
     } catch (err) {
       explanations.push(`rerank skipped: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  // Sprint 12.1a — near-semantic dedup (same treatment as single-project).
+  if (!isDedupDisabled()) {
+    const before = matches.length;
+    matches = dedupLessonMatches(matches);
+    const dropped = before - matches.length;
+    if (dropped > 0) {
+      explanations.push(`dedup: collapsed ${dropped} near-semantic duplicate${dropped === 1 ? '' : 's'} (${before}→${matches.length})`);
     }
   }
 

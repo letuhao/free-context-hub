@@ -6,7 +6,7 @@
     "Phase 12 Sprint 12.0 — lesson-search golden set.",
     "Seeded by hand from real lessons in the free-context-hub project (Phase 11 closeout state).",
     "20 queries across 4 groups: confident-hit, duplicate-trap, adversarial-miss, cross-topic.",
-    "Duplicate-trap queries intentionally point at one id from a known-duplicate cluster; the dup-rate metric surfaces the cluster itself."
+    "Sprint 12.1a: duplicate-trap queries now list ALL known cluster members as targets — a hit is any cluster member, since dedup collapses clusters to one representative whose UUID varies. Without this, post-dedup recall would drop artificially when the representative differs from a fixed-UUID target."
   ],
   "queries": [
     {
@@ -84,21 +84,53 @@
       "id": "lesson-dup-max-retry-guardrail",
       "group": "duplicate-trap",
       "query": "max retry attempts must be 3 external API call guardrail",
-      "target_lesson_ids": ["4abf93d6-cbca-4006-aee6-a143bd3e8979"],
+      "target_lesson_ids": [
+        "0e08eead-db62-4668-8d7b-20281747c7ac",
+        "4abf93d6-cbca-4006-aee6-a143bd3e8979",
+        "544aae14-08aa-436c-b54b-c8ecda4587fe",
+        "5a9982a8-83e4-40a1-a8f8-280fc519f19a",
+        "689aee2c-3043-459c-8c1b-5aec8135cba6",
+        "9a34ef12-bb6d-42d3-bee3-7ff53c4d86b0",
+        "a442e5e6-dd34-4495-b1d1-c4a8c0fabd46",
+        "be30985a-e45b-47ce-82d2-f6a75dc282b8",
+        "d66e5221-5e7b-42d8-b8fc-d91c8d2ee76a"
+      ],
       "must_keywords": ["retry", "3"]
     },
     {
       "id": "lesson-dup-global-search-retry-pattern",
       "group": "duplicate-trap",
       "query": "global search test retry pattern exponential backoff",
-      "target_lesson_ids": ["2b07085d-f625-4791-9606-3f2bdb6491cf"],
+      "target_lesson_ids": [
+        "08f31899-df67-4be1-926f-c5c3814e511d",
+        "0f6f2651-f475-42cc-b344-360f29dd9d8d",
+        "2b07085d-f625-4791-9606-3f2bdb6491cf",
+        "48eb3621-686c-4577-9a90-dee5d445e565",
+        "9f7e114a-763a-4f96-a8c9-50195267538b",
+        "a9c36f77-6bbd-4761-af28-f06a02fec8ea",
+        "bd5b5471-267e-4404-b282-2190c751a2fb",
+        "c3920936-dc58-4a39-a17e-31949774828d",
+        "c765738c-9a44-41e2-9902-38631426ea58",
+        "d3f80630-98c9-4494-ae03-2549a728c37d",
+        "ed815b58-45a0-4083-be40-4d3cb7770f42"
+      ],
       "must_keywords": ["retry", "backoff"]
     },
     {
       "id": "lesson-dup-valid-impexp-fixture",
       "group": "duplicate-trap",
       "query": "valid impexp extra entry fixture",
-      "target_lesson_ids": ["fbb870fb-3182-4b88-980e-54bb1485887a"],
+      "target_lesson_ids": [
+        "18d8cc93-46b9-4c97-b216-9cca4bb067bf",
+        "56bc9983-5092-4ce0-aba4-3deafb79f925",
+        "7577e79f-9dfb-4c80-8592-9995223beae9",
+        "8d8c1509-8667-4a83-b9c6-b3e7ea2f8418",
+        "903840d3-eb60-406b-afcc-67c675480871",
+        "dcf28a28-5514-4aa4-9aeb-046682551f37",
+        "e8c8f59f-f39e-429b-92e5-dcba267abad3",
+        "ef0e5e43-c6f8-4aa6-9942-fd625e562a79",
+        "fbb870fb-3182-4b88-980e-54bb1485887a"
+      ],
       "must_keywords": []
     },
 
@@ -125,7 +157,23 @@
       "id": "lesson-cross-integration-test-backoff",
       "group": "cross-topic",
       "query": "integration test exponential backoff retry strategy",
-      "target_lesson_ids": ["4abf93d6-cbca-4006-aee6-a143bd3e8979", "2b07085d-f625-4791-9606-3f2bdb6491cf"],
+      "target_lesson_ids": [
+        "0e08eead-db62-4668-8d7b-20281747c7ac",
+        "4abf93d6-cbca-4006-aee6-a143bd3e8979",
+        "544aae14-08aa-436c-b54b-c8ecda4587fe",
+        "5a9982a8-83e4-40a1-a8f8-280fc519f19a",
+        "689aee2c-3043-459c-8c1b-5aec8135cba6",
+        "9a34ef12-bb6d-42d3-bee3-7ff53c4d86b0",
+        "a442e5e6-dd34-4495-b1d1-c4a8c0fabd46",
+        "be30985a-e45b-47ce-82d2-f6a75dc282b8",
+        "d66e5221-5e7b-42d8-b8fc-d91c8d2ee76a",
+        "08f31899-df67-4be1-926f-c5c3814e511d",
+        "2b07085d-f625-4791-9606-3f2bdb6491cf",
+        "a9c36f77-6bbd-4761-af28-f06a02fec8ea",
+        "bd5b5471-267e-4404-b282-2190c751a2fb",
+        "c3920936-dc58-4a39-a17e-31949774828d",
+        "c765738c-9a44-41e2-9902-38631426ea58"
+      ],
       "must_keywords": ["retry"]
     },
     {
