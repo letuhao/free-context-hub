@@ -126,6 +126,26 @@ test('dedupChunkMatches', async (t) => {
     assert.equal(out[0]!.chunk_id, 'first', 'highest-ranked cluster member is kept');
   });
 
+  await t.test('Sprint 12.1b /review-impl LOW-3: ordering contract — reverse input gives reverse representative', () => {
+    // Negative-control for the ordering contract documented in the
+    // function-level docstring. The caller is responsible for sort order;
+    // dedup keeps first-seen. If a caller passes matches reverse-sorted,
+    // dedup keeps the LOWEST-scoring representative. This test pins the
+    // contract so a future "smart" refactor that auto-sorts by score
+    // inside dedup would break it loudly.
+    const inp = [
+      c('lowest-score', 'doc.md', 'Section', 'identical', 'p'),
+      c('highest-score', 'doc.md', 'Section', 'identical', 'p'),
+    ];
+    const out = dedupChunkMatches(inp);
+    assert.equal(out.length, 1);
+    assert.equal(
+      out[0]!.chunk_id,
+      'lowest-score',
+      'dedup respects caller\'s input order; caller must sort by desired retention priority BEFORE calling',
+    );
+  });
+
   await t.test('mixed: 10 items with a 3-member cluster and 7 distinct → 8 out', () => {
     // Non-numeric distinguishers because digit-collapse in normalizeForHash
     // would equate "Section 1" / "Section 2" (both → "section n"). Same

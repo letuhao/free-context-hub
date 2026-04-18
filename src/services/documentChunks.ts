@@ -91,6 +91,29 @@ function snippet(content: string, maxChars = 240): string {
  * restores legacy behavior. Intended for A/B measurement and emergency
  * rollback, not a permanent toggle.
  */
+/**
+ * ORDERING CONTRACT (Sprint 12.1b /review-impl LOW-3):
+ * Caller is responsible for sorting matches by desired retention priority
+ * BEFORE invocation. Dedup preserves first-seen order; it does NOT re-score
+ * or re-sort. `searchChunks`/`searchChunksMulti` both pass DB rows in
+ * `ORDER BY score DESC` order, so the first-seen representative is the
+ * highest-score cluster member. A future caller that passes matches in a
+ * different order will get a correspondingly-different representative.
+ *
+ * KEY CONSTRUCTION NOTES (LOW-1 + LOW-2):
+ *  - The `doc_name + ' / ' + heading` title is NOT injective: if either
+ *    field literally contains ' / ', two different (doc_name, heading)
+ *    pairs could produce the same title. Filesystem-unlikely (POSIX
+ *    disallows `/` in filenames) but possible via the editable
+ *    `documents.name` field. Acceptable risk for current data.
+ *  - `nearSemanticKey` takes `content_snippet.slice(0, 100)` internally,
+ *    and `searchChunks` already truncates content to 240 chars via
+ *    `snippet()`. So the effective dedup window is the first ~100 chars
+ *    of chunk content. Two chunks sharing a 100-char boilerplate prefix
+ *    but differing meaningfully in chars 101–240 will collapse. Not an
+ *    active issue for the current dataset; revisit if a real collision
+ *    surfaces.
+ */
 export function dedupChunkMatches<T extends {
   project_id: string;
   chunk_type: string;

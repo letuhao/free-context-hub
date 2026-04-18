@@ -260,6 +260,17 @@ restarted stack) is NOT captured. If you need that data, run two cold
 baselines with a full stack restart between them — or extend
 `--control` to take a `--control-warmup-runs N` option in future.
 
+**Small-goldenset tail sensitivity (Sprint 12.1b /review-impl LOW-5).**
+With N queries × `--samples 1`, the latency p95 aggregate is computed
+over N samples. For small goldensets (chunks has 10 queries), p95 is
+the 10th-rank value — essentially the MAX of 10 samples. A single tail
+outlier in either of the two --control runs swings p95 by a lot.
+Observed in Sprint 12.1b A/B on chunks: p95 noise floor = 98ms while
+absolute p95 ≈ 50ms (~2× ratio). Mitigation: use `--samples 3` or
+higher for surfaces with fewer than ~20 queries; the aggregate then
+uses 3N samples, p95 at a more robust rank. For the lessons surface
+(20 queries, samples 1), the ratio was ~5% — much tighter.
+
 ---
 
 ### index-hygiene
@@ -350,6 +361,16 @@ per cluster; LLM synthesis gets cleaner variety. The effect is
 duplication — but it IS a behavior change. Operators running the same
 reflect query before vs after 2026-04-18 will get different answers.
 
+**Example (Sprint 12.1b chunks dedup).** The `search_documents` chat
+tool (`src/api/routes/chat.ts:86`) calls `searchChunks({ limit: 5 })`
+and pipes matches into chat-LLM synthesis for doc-Q&A. Same dynamic as
+the reflect tool above: pre-12.1b, 3 sample.pdf "extraction failed"
+chunks could dominate 3 of 5 bullets, skewing the LLM's answer toward
+the extraction-failure boilerplate. Post-12.1b, the cluster collapses
+to 1; the LLM sees 4 other distinct chunks. Operators running the same
+ask-AI / chat-search query before vs after 2026-04-18 get a cleaner
+synthesis.
+
 **Future fix path.** When changing a retrieval primitive:
 1. Enumerate downstream consumers (grep for the function name).
 2. Spot-check each consumer's output on a representative query pre- vs
@@ -388,7 +409,40 @@ test proves:
 **Future fix path.** Add integration tests with `tsx --test` that mock
 `getDbPool()` and the rerank entry points, call `searchLessons`, and
 assert the final matches list has dedup-applied characteristics.
-Deferred to Sprint 12.1b or a 12.0.3 cleanup pass.
+Deferred to a future 12.0.3 cleanup pass.
+
+**Sprint 12.1b /review-impl update — REST-level e2e tests fight infrastructure.**
+The 12.0.2 lessons e2e test (`dedup-wiring-collapses-near-duplicate-cluster`)
+and the 12.1b attempt to add an equivalent chunks e2e test BOTH hit
+infrastructure reality walls that defeat the test's intent:
+
+  1. **Distillation non-determinism (lessons).** When
+     `DISTILLATION_ENABLED=true`, `addLesson` distills a summary via
+     LLM at write time. Identical content may produce slightly-
+     different summaries across 4 writes (LLM jitter, model drift).
+     `content_snippet = summary ?? content` in the search response →
+     different summaries → different `nearSemanticKey` → dedup misses
+     cluster members. Test skipped when DISTILLATION_ENABLED=true.
+
+  2. **Async chunk extraction (chunks).** `POST /api/documents`
+     returns 201 before chunking completes (chunker is queued, not
+     inline). Searching immediately after POST returns 0 chunks even
+     though the docs exist. No simple wait/poll mechanism exposed
+     via the REST surface. Chunks wiring test skipped entirely.
+
+Both skipped tests preserve the INTENT in code and log a clear SKIP
+reason pointing at the infrastructure cause. **The actual wiring proof
+lives in the A/B baseline archives** (docs/qc/baselines/2026-04-18-
+sprint-12.1a-*.json and sprint-12.1b-*.json): if dedup silently
+unwires, the next `qc:baseline -- --control` run immediately regresses
+`dup@10 nearsem` back to 0.43 / 0.29. Baseline is the integration test.
+
+**Resolution paths for a future sprint that wants cleaner proof:**
+  - Add `summary` override to POST /api/lessons (skip distiller when
+    caller provides it) — enables deterministic lessons dedup tests.
+  - Expose an extraction-complete signal or make POST /api/documents
+    synchronous under a test-only flag — enables chunks dedup tests.
+  - Or invest in mocked-pool unit tests at the service layer.
 
 ---
 
