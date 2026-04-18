@@ -1,12 +1,13 @@
 {
-  "version": "2026-03-27",
+  "version": "2026-04-18",
   "surface": "code",
-  "project_id_suggested": "qc-free-context-hub",
+  "project_id_suggested": "free-context-hub",
   "notes": [
     "Golden query set for RAG quality evaluation (file-level ground truth).",
     "Each query specifies expected target_files and optional must_keywords for quick sanity checks.",
     "Run via src/qc/ragQcRunner.ts (MCP-driven).",
-    "Phase 12 Sprint 12.0: added `surface: code` for unified-runner dispatch."
+    "Phase 12 Sprint 12.0: added `surface: code` for unified-runner dispatch.",
+    "Phase 12 Sprint 12.0.1: retargeted from qc-free-context-hub to free-context-hub (indexed 2026-04-18 with 3925 chunks, unified project)."
   ],
   "queries": [
     {

@@ -95,6 +95,7 @@ test('DIRECTION map invariants', async (t) => {
 
 test('fmt: nulls and integers', async (t) => {
   await t.test('null → em-dash', () => assert.equal(fmt(null), '—'));
+  await t.test('undefined → em-dash (old archive missing new field)', () => assert.equal(fmt(undefined), '—'));
   await t.test('integer → no decimal', () => assert.equal(fmt(42), '42'));
   await t.test('zero → "0"', () => assert.equal(fmt(0), '0'));
   await t.test('fraction → 4 decimals', () => assert.equal(fmt(0.1234567), '0.1235'));
@@ -105,6 +106,11 @@ test('pctChange: edge cases', async (t) => {
     assert.equal(pctChange(null, 1), null);
     assert.equal(pctChange(1, null), null);
     assert.equal(pctChange(null, null), null);
+  });
+  await t.test('undefined input → null (forward-compat with older archives)', () => {
+    assert.equal(pctChange(undefined, 1), null);
+    assert.equal(pctChange(1, undefined), null);
+    assert.equal(pctChange(undefined, undefined), null);
   });
   await t.test('from=0, to=0 → 0 (no change)', () => {
     assert.equal(pctChange(0, 0), 0);
@@ -200,7 +206,16 @@ test('diffSurface: ∞ rendering when from=0, to≠0', () => {
   const from = fixtureAggregate({ recall_at_10: 0 });
   const to = fixtureAggregate({ recall_at_10: 0.5 });
   const { md } = diffSurface('code', from, to);
-  assert.match(md, /\| recall_at_10 \| 0 \| 0\.5000 \| \+0\.5000 \| ∞ \|/);
+  // ∞ in the pct column, 🟢 for improvement (delta sign + direction) even
+  // though pct itself is undefined.
+  assert.match(md, /\| recall_at_10 \| 0 \| 0\.5000 \| \+0\.5000 \| ∞ \| 🟢 \|/);
+});
+
+test('diffSurface: ∞ rendering with regression direction (dup-rate 0→0.5 is 🔴)', () => {
+  const from = fixtureAggregate({ duplication_rate_at_10: 0 });
+  const to = fixtureAggregate({ duplication_rate_at_10: 0.5 });
+  const { md } = diffSurface('lessons', from, to);
+  assert.match(md, /\| duplication_rate_at_10 \| 0 \| 0\.5000 \| \+0\.5000 \| ∞ \| 🔴 \|/);
 });
 
 test('diffSurface: null latency (no samples) renders as em-dash', () => {

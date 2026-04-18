@@ -100,38 +100,54 @@ export function emoji(deltaSigned: number, direction: 1 | -1, pctAbs: number): s
   return improved ? '🟢' : '🔴';
 }
 
-/** Format a metric value; nulls render as `—`, integers render without decimals. */
-export function fmt(value: number | null): string {
-  if (value === null) return '—';
-  return Number.isInteger(value) ? String(value) : value.toFixed(4);
+/** Normalize a possibly-missing metric read to null. Older archives may be
+ *  missing fields added by later sprints; treat those as "no data" rather
+ *  than NaN'ing through the renderer. */
+export function asNullable(v: number | null | undefined): number | null {
+  return v === undefined ? null : v;
+}
+
+/** Format a metric value; null / undefined render as `—`, integers render
+ *  without decimals. */
+export function fmt(value: number | null | undefined): string {
+  const v = asNullable(value);
+  if (v === null) return '—';
+  return Number.isInteger(v) ? String(v) : v.toFixed(4);
 }
 
 /** Percent change from `from` → `to`. Returns null when `from = 0` and
  *  `to ≠ 0` (undefined / ∞) so the renderer can show that honestly.
- *  Also returns null if either side is null. */
-export function pctChange(from: number | null, to: number | null): number | null {
-  if (from === null || to === null) return null;
-  if (from === 0) return to === 0 ? 0 : null;
-  return ((to - from) / Math.abs(from)) * 100;
+ *  Also returns null if either side is null or undefined. */
+export function pctChange(
+  from: number | null | undefined,
+  to: number | null | undefined,
+): number | null {
+  const f = asNullable(from);
+  const t = asNullable(to);
+  if (f === null || t === null) return null;
+  if (f === 0) return t === 0 ? 0 : null;
+  return ((t - f) / Math.abs(f)) * 100;
 }
 
 /** Decide whether a metric's (delta, pctChange) breaches its regression rule.
  *  Pure — returns true/false, no side effects. */
 export function breachedRegression(
   key: keyof Metrics,
-  before: number | null,
-  after: number | null,
+  before: number | null | undefined,
+  after: number | null | undefined,
 ): boolean {
   const rule = REGRESSION_RULES[key];
   if (!rule) return false;
-  if (before === null || after === null) return false;
-  const delta = after - before;
+  const b = asNullable(before);
+  const a = asNullable(after);
+  if (b === null || a === null) return false;
+  const delta = a - b;
   if (rule.absDropOrRise < 0) {
     // Absolute-drop rule (e.g. nDCG@10 dropped ≥0.05 → rule.absDropOrRise = -0.05).
     return delta <= rule.absDropOrRise;
   }
   // Positive rule: relative rise (e.g. +20% p95).
-  const pct = pctChange(before, after);
+  const pct = pctChange(b, a);
   if (pct === null) return false;
   return pct / 100 >= rule.absDropOrRise;
 }
@@ -163,8 +179,8 @@ export function diffSurface(
 
   const metricKeys = Object.keys(DIRECTION) as (keyof Metrics)[];
   for (const key of metricKeys) {
-    const before = fromA.metrics[key];
-    const after = toA.metrics[key];
+    const before = asNullable(fromA.metrics[key]);
+    const after = asNullable(toA.metrics[key]);
     const delta = before === null || after === null ? null : after - before;
     const pct = pctChange(before, after);
     const dir = DIRECTION[key];
@@ -175,8 +191,11 @@ export function diffSurface(
           ? '∞'
           : 'n/a'
         : `${pct > 0 ? '+' : ''}${pct.toFixed(1)}%`;
-    const e =
-      delta === null || pct === null ? '⚪' : emoji(delta, dir, Math.abs(pct));
+    // When pct is null because `from = 0` and `to ≠ 0` (infinite relative
+    // change), we still have sign information from delta itself — treat
+    // it as a big change for emoji purposes rather than silently ⚪.
+    const pctForEmoji = pct === null ? 100 : Math.abs(pct);
+    const e = delta === null ? '⚪' : emoji(delta, dir, pctForEmoji);
     lines.push(`| ${key} | ${fmt(before)} | ${fmt(after)} | ${deltaFmt} | ${pctFmt} | ${e} |`);
 
     if (breachedRegression(key, before, after)) {
