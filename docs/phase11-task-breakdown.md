@@ -4,7 +4,7 @@
 > hub for moving a project's full state between ContextHub instances:
 > bundle format → export → import → GUI → cross-instance pull → polish.
 
-## Status: 5/6 sprints complete (◐ in progress)
+## Status: 5.33/6 sprints complete (◐ in progress — 11.6 split into a/b/c)
 
 | Sprint | Focus | Status | Commit |
 |--------|-------|--------|--------|
@@ -12,8 +12,10 @@
 | 11.2 | Full project export (`GET /api/projects/:id/export`) | ✅ | `f0988b3` + review `561b3e2` |
 | 11.3 | Full project import + conflict policy (`POST /api/projects/:id/import`) | ✅ | `0d6b3b5` + review `694878c` |
 | 11.4 | GUI Knowledge Exchange panel (in Project Settings) | ✅ | `ffe9ea8` + review `6270ff8` |
-| 11.5 | Cross-instance pull (`POST /api/projects/:id/pull-from`) | ✅ | (2026-04-18 — see SESSION_PATCH.md) |
-| 11.6 | Polish + test plan (unit + integration + Playwright) | ○ | — |
+| 11.5 | Cross-instance pull (`POST /api/projects/:id/pull-from`) | ✅ | 2026-04-18 — `cd73629` |
+| 11.6a | Test infrastructure (import scenarios + Playwright) | ✅ | 2026-04-18 — see SESSION_PATCH.md |
+| 11.6b | Streaming polish (JSONL decoder + base64 import) | ○ | — |
+| 11.6c | Perf + security polish (ON CONFLICT, body-stall timeout, DNS pinning) | ○ | — |
 
 ## Architecture
 
@@ -214,27 +216,130 @@ result for self-pull: `counts.lessons.skipped=1 + conflict entry`, not
 `created=1`. True cross-instance pull targets a separate DB where UUIDs
 are fresh — the test asserts EITHER outcome.
 
-## Sprint 11.6 — Polish + test plan (planned)
+## Sprint 11.6 — split into three sub-sprints
+
+Original 11.6 scope was too large for one workflow run (10-15 files,
+~3-5 hrs, risk profiles differ across the items). Split so each slice
+is independently shippable + reviewable.
+
+## Sprint 11.6a — Test infrastructure ✅ (complete 2026-04-18)
 
 ### Scope
-Per the test plan we discussed before starting Phase 11:
+Coverage gaps from Sprints 11.1-11.5 that weren't automated:
+1. API integration — round-trip checksums + conflict scenarios
+2. Direct tests for importProject's ID remapping + conflict resolution
+3. One Playwright scenario for the Knowledge Exchange panel
 
-1. **API integration tests** — round-trip with checksums, cross-version
-   migration (import a fixture bundle from an older schema once we have
-   one), conflict scenarios.
-2. **Unit tests** for serializer/deserializer ID remapping, FK rewriting,
-   conflict resolution policies.
-3. **One Playwright scenario** — click Export, download, click Import,
-   see a success toast.
-4. **Polish** items deferred from earlier sprints:
-   - Streaming JSONL parser on the decoder side (currently buffers each
-     entry into memory)
-   - Streaming base64 encoding on import (currently buffers full binary)
-   - Switching to `INSERT ... ON CONFLICT` for the N+1 perf win on import
-   - Cross-instance sync polish
+### Shipped
+- `test/e2e/api/phase11-import.test.ts` — 5 scenario tests hitting the
+  live Docker Postgres via REST. Strengthened after `/review-impl` pass:
+  each test now verifies a real invariant rather than a counter or tautology.
+- `test/e2e/api/runner.ts` — registered `allPhase11ImportTests`
+- `test/e2e/gui/phase11-exchange.spec.ts` — 1 Playwright scenario:
+  seed two projects → switch to src → click Export (download handler)
+  → switch to dst → dropzone upload → Preview → Apply → "Imported" header
 
-### Out of scope
+### Tests
+- `phase11-import-roundtrip-checksum` — per-entry sha256 stable across
+  re-exports; import result carries correct `source_project_id`,
+  `schema_version`, `counts.lessons.total` from manifest
+- `phase11-import-id-remapping` — delete src, import bundle into dst,
+  verify lesson lands on dst with `project_id=dst` via list endpoint's
+  `items` field
+- `phase11-import-policy-overwrite` — re-import with overwrite →
+  `counts.lessons.updated=1` AND title actually reverts in the list
+- `phase11-import-policy-fail` — re-import with fail → 409 + code,
+  AND `items.length` unchanged (transaction rolled back)
+- `phase11-import-cross-tenant-guard-under-overwrite` — guard refuses
+  overwrite of a UUID owned by another project; `updated=0, skipped=1`;
+  lesson does NOT leak onto dst
+- Playwright — export download → localStorage project switch → dropzone
+  `setInputFiles` → Preview → Apply → header asserts
+
+### Review outcome — 5 findings caught + fixed
+- Initial REVIEW (0 MED): clean first pass
+- `/review-impl` (2 MED + 2 LOW + 1 COSMETIC):
+  - **MED 1** roundtrip-checksum's main assertion (lesson_types sha256
+    match through import) was tautological — lesson_types are globally
+    scoped, hashes match between any two exports on the same instance
+  - **MED 2** id-remapping was a renamed cross-tenant guard test —
+    actual project_id rewriting never exercised because src still
+    existed. Fixed by deleting src before import.
+  - **LOW 3** policy-overwrite trusted `counts.updated=1` without
+    verifying the data actually reverted
+  - **LOW 4** policy-fail asserted 409 but not that the DB state rolled
+    back
+  - **COSMETIC** JSDoc on `readEntryAsBuffer` clarified "small entries only"
+
+### Incidental catch
+The list endpoint returns rows under `items`, not `lessons`/`results`.
+An earlier test used the wrong shape and silently got `undefined`,
+triggering a confusing "edit not visible" error. Fixed in all tests.
+
+### Live test results
+```
+API suite:   61/61 passed, 0 failed (79s — down from 194s after
+             /review-impl simplified the tautological round-trip cycle)
+GUI suite:   52/52 passed, 0 failed (47s — 1 new phase11-exchange scenario)
+```
+
+### Out of scope / deferred to 11.6b or 11.6c
+- Cross-version schema migration tests (deferred until v2 schema exists)
+- FK integrity on chunks/documents (no chunk/doc fixtures in these tests)
+- Streaming polish (11.6b)
+- Perf + security polish (11.6c)
+
+## Sprint 11.6b — Streaming polish (planned)
+
+### Scope
+Memory-bounded refactors to existing bundle services. Isolated to
+`bundleFormat.ts` and `importProject.ts`; no API changes.
+
+1. **Streaming JSONL parser on the decoder side** — `BundleReader`
+   currently buffers each jsonl entry into memory before yielding
+   records. Refactor to yield records as they stream off disk,
+   bounded by the entry's chunk size.
+2. **Streaming base64 encoding on import** — `materializeDocContent`
+   buffers entire binaries into RAM before re-encoding. A 100 MB PDF
+   holds ~233 MB in memory during import. Refactor to pipe raw → base64
+   chunks.
+
+### Acceptance
+- bundleFormat unit tests still pass
+- importProject live round-trip test still passes
+- Peak memory during a 500 MB bundle import drops measurably (manual
+  verification with `process.memoryUsage()`)
+
+### Non-goals
+- Encryption / signing
+- Switching from jsonl to a binary format
+- Cross-version migration (11.6 framing deferred)
+
+## Sprint 11.6c — Perf + security polish (planned)
+
+### Scope
+1. **INSERT ... ON CONFLICT** migration on importProject — replaces the
+   N+1 SELECT-then-INSERT pattern documented in Sprint 11.3 review.
+   Challenge: currently the SELECT lets us emit per-conflict reports;
+   ON CONFLICT needs a different path for conflict reporting (e.g.
+   RETURNING + derive from xmin/xmax, or a staging table).
+2. **Body-stall (slow-loris) timeout** on pullFromRemote — the 60 s
+   connect timeout currently clears once headers arrive; a remote that
+   trickles bytes can keep the stream open indefinitely (bounded only
+   by MAX_BUNDLE_BYTES).
+3. **DNS-rebinding pinning** — both `urlFetch.ts` and `pullFromRemote.ts`
+   have a TOCTOU race between `assertHostAllowed` and undici's connect
+   lookup. Fix with a custom undici agent that pins the lookup to the
+   IP validated upstream.
+
+### Acceptance
+- Import N+1 SELECT pattern replaced; 61/61 phase11 tests still green
+- Pull body-stall aborts after configurable idle timeout
+- DNS-rebinding attack (resolver flips IPs between calls) blocked at
+  connect time
+
+### Non-goals
 - Merge conflict policy
-- ID remapping
-- Async background export/import jobs
+- Async background import/export jobs
+- Webhook-driven pulls
 - Encryption / signing
