@@ -15,6 +15,7 @@ import test from 'node:test';
 import {
   blendHybridScore,
   computeSalience,
+  computeSalienceMultiProject,
   isSalienceDisabled,
   getSalienceConfig,
   logLessonAccess,
@@ -150,6 +151,57 @@ test('computeSalience', async (t) => {
     const result = await computeSalience(pool, 'p', ['hot'], cfg);
     const sal = result.get('hot')!;
     assert.ok(sal > 0.99, `high weighted_score should saturate salience, got ${sal}`);
+  });
+});
+
+// ------------------------ computeSalienceMultiProject ------------------------
+
+test('computeSalienceMultiProject (Sprint 12.1c /review-impl MED-1 fix)', async (t) => {
+  const cfg: SalienceConfig = { alpha: 0.10, halfLifeDays: 7 };
+
+  await t.test('empty lessonIds → empty map without SQL', async () => {
+    const { pool, calls } = mockPool({ rows: [] });
+    const result = await computeSalienceMultiProject(pool, ['p1', 'p2'], [], cfg);
+    assert.equal(result.size, 0);
+    assert.equal(calls.length, 0);
+  });
+
+  await t.test('empty projectIds → empty map without SQL', async () => {
+    const { pool, calls } = mockPool({ rows: [] });
+    const result = await computeSalienceMultiProject(pool, [], ['aaa'], cfg);
+    assert.equal(result.size, 0);
+    assert.equal(calls.length, 0);
+  });
+
+  await t.test('SQL is a SINGLE query with project_id = ANY and lesson_id = ANY', async () => {
+    const { pool, calls } = mockPool({ rows: [] });
+    await computeSalienceMultiProject(pool, ['p1', 'p2', 'p3'], ['aaa', 'bbb'], cfg);
+    assert.equal(calls.length, 1, 'MED-1 contract: exactly ONE roundtrip regardless of project count');
+    assert.match(calls[0]!.sql, /project_id = ANY\(\$1::text\[\]\)/);
+    assert.match(calls[0]!.sql, /lesson_id = ANY\(\$2::uuid\[\]\)/);
+    assert.deepEqual(calls[0]!.params, [['p1', 'p2', 'p3'], ['aaa', 'bbb'], 7]);
+  });
+
+  await t.test('aggregates correctly from one SQL result regardless of N projects', async () => {
+    const { pool, calls } = mockPool({
+      rows: [
+        { lesson_id: 'aaa', weighted_score: 0.693 },  // ≈ salience 0.5
+        { lesson_id: 'bbb', weighted_score: 10 },     // saturated ≈ 1.0
+      ],
+    });
+    const result = await computeSalienceMultiProject(
+      pool,
+      ['p1', 'p2', 'p3', 'p4', 'p5'],
+      ['aaa', 'bbb', 'ccc'],
+      cfg,
+    );
+    assert.equal(calls.length, 1, 'must be one call even with 5 projects');
+    assert.equal(result.size, 2);
+    const sA = result.get('aaa')!;
+    assert.ok(sA > 0.49 && sA < 0.51);
+    const sB = result.get('bbb')!;
+    assert.ok(sB > 0.99);
+    assert.ok(!result.has('ccc'), 'lessons with no rows absent from map');
   });
 });
 

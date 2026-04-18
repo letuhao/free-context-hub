@@ -332,6 +332,85 @@ throwaway project_id that can be DELETE'd whole.
 
 ---
 
+### popularity-feedback-loop
+
+**Definition.** An access-frequency salience signal (weight applied to
+retrieval ranking based on how often a lesson has been surfaced) creates
+a self-amplifying bias: lessons that appear in many queries' top-k
+accumulate salience that boosts them in future searches, even when the
+new query's actual target is a specific narrow-topic lesson. The "rich
+get richer" — popular lessons become more popular; narrow targets get
+pushed down.
+
+**Why it happens.** Rank-weighted `consideration-search` signals are too
+easy to earn. A lesson with broad keyword overlap appears at rank 2-8 for
+many queries, each contributing `weight = 1/rank`. Over even a single
+day of benchmark runs, it accumulates enough weighted-score to outrank
+narrow query-specific targets that only appear in one query at rank 1.
+
+**Diagnostic signal.** MRR and nDCG drop on a goldenset where each query
+targets a distinct lesson, while popular adjacent lessons stay in top-k.
+`recall@10` unchanged (targets still found) but positions shift.
+Distinguishable from noise because the drop is consistent across
+back-to-back --control runs (same-code noise floor is near-zero).
+
+**Example (Sprint 12.1c — first biological-memory feature).** Default
+α=0.10 + 7-day half-life + audit-bootstrap (90 rows) + rank-weighted
+consideration-search. A/B on lessons surface showed:
+
+  - recall@10: 1.0 → 1.0 (unchanged — targets still retrieved)
+  - MRR:       0.9608 → 0.9235 (−0.037, beyond zero noise floor)
+  - nDCG@5:    0.9706 → 0.9499 (−0.021)
+  - nDCG@10:   0.9628 → 0.9502 (−0.013)
+
+Not a bug — a known failure mode of naive access-frequency signals.
+Traced the access log: after 4 benchmark runs, 1,200 consideration-search
+rows accumulated. Lessons appearing in multiple queries (retry/backoff/
+integration-test topic clusters) accumulated ~3-5× the salience of
+single-query targets, causing them to outrank those targets when α=0.10.
+
+**Mitigation paths for future sprints (12.1d+).**
+
+1. **Query-conditional salience** — only boost lessons that also have
+   semantic proximity to the current query. Compute salience × semantic
+   similarity, not salience alone. Prevents popular-but-unrelated from
+   rising.
+
+2. **Drop `consideration-search` as a signal class** — rely only on
+   strong consumption signals (`consumption-reflect`, `consumption-
+   improve`, `consumption-tags`, `consumption-versions`) which require
+   the consumer to actually dereference the lesson, not just see it
+   surfaced. Rank-weighted consideration creates the feedback loop
+   because the signal is too cheap to earn.
+
+3. **Per-lesson-per-day cap on consideration-search weight** — one
+   weight contribution per lesson per 24h window. Prevents rapid-fire
+   benchmark runs from amplifying popularity.
+
+4. **Lower α (0.02-0.05) with longer half-life (14-30d)** — smaller
+   per-query shifts, longer-horizon memory. Biologically plausible
+   (short-term working memory is fast + tight; long-term consolidation
+   is slow + loose).
+
+5. **Backfill from more sources** — `git_lesson_proposals`,
+   `activity_log`, explicit lesson-pin mechanism. Diversifies the
+   salience signal so it's not dominated by historical-guardrail bias.
+
+Sprint 12.1d would experiment with (1) + (4) as the most promising
+combination. 12.1c ships the infrastructure; calibration is deferred
+explicit follow-up work.
+
+**Related: bootstrap decay.** The audit-bootstrap seed (context=
+'audit-bootstrap') ages. At 7-day half-life, 14-day-old audit rows
+contribute ~0.25 weight; at 28 days they contribute 0.06. Within a few
+weeks, fresh `consideration-search` rows dominate. This is intentional
+biological consolidation (fresh signals override stale), but worth
+noting: the "flashbulb memory" seed is a short-lived prior, not a
+permanent one. If Sprint 12.1d reduces `consideration-search` weight
+aggressively, the bootstrap gets proportionally more durable.
+
+---
+
 ### downstream-behavior-coupling
 
 **Definition.** A retrieval-layer change (e.g. dedup) silently alters the

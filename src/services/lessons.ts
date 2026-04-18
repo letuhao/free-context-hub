@@ -12,6 +12,7 @@ import {
   logLessonAccess,
   isSalienceDisabled,
   computeSalience,
+  computeSalienceMultiProject,
   blendHybridScore,
   getSalienceConfig,
   type AccessLogEntry,
@@ -1112,35 +1113,27 @@ export async function searchLessonsMulti(params: SearchLessonsMultiParams): Prom
     };
   });
 
-  // Sprint 12.1c — salience blend. Multi-project variant: salience is
-  // scoped to each match's own project_id automatically because the
-  // computeSalience query uses `project_id = $1` — so we fan out by
-  // project. Simplified here to pass the FIRST project and rely on the
-  // per-lesson filter; if cross-project variants need distinct salience,
-  // future refactor can bucket by project_id. For the current dataset
-  // (most search is single-project) this is correct.
+  // Sprint 12.1c — salience blend (multi-project).
+  // Sprint 12.1c /review-impl MED-1: batched via computeSalienceMultiProject
+  // (ONE SQL query for all projectIds) rather than the prior per-project
+  // loop that caused N+1 roundtrips for N-project group searches.
   if (!isSalienceDisabled() && matches.length > 0) {
     try {
       const salienceConfig = getSalienceConfig();
-      // Bucket lesson_ids by project_id and compute salience per project.
-      const byProject = new Map<string, string[]>();
-      for (const m of matches) {
-        const pid = m.project_id ?? projectIds[0] ?? 'unknown';
-        if (!byProject.has(pid)) byProject.set(pid, []);
-        byProject.get(pid)!.push(m.lesson_id);
-      }
-      const combinedSalience = new Map<string, number>();
-      for (const [pid, ids] of byProject) {
-        const partial = await computeSalience(pool, pid, ids, salienceConfig);
-        for (const [k, v] of partial) combinedSalience.set(k, v);
-      }
-      if (combinedSalience.size > 0 && salienceConfig.alpha > 0) {
+      const candidateIds = matches.map((m) => m.lesson_id);
+      const salienceMap = await computeSalienceMultiProject(
+        pool,
+        projectIds,
+        candidateIds,
+        salienceConfig,
+      );
+      if (salienceMap.size > 0 && salienceConfig.alpha > 0) {
         for (const m of matches) {
-          m.score = blendHybridScore(m.score, combinedSalience.get(m.lesson_id), salienceConfig.alpha);
+          m.score = blendHybridScore(m.score, salienceMap.get(m.lesson_id), salienceConfig.alpha);
         }
         matches.sort((a, b) => b.score - a.score);
         explanations.push(
-          `salience: enabled multi-project (α=${salienceConfig.alpha}, halfLife=${salienceConfig.halfLifeDays}d); ${combinedSalience.size}/${matches.length} lessons had access history`,
+          `salience: enabled multi-project (α=${salienceConfig.alpha}, halfLife=${salienceConfig.halfLifeDays}d); ${salienceMap.size}/${matches.length} lessons had access history`,
         );
       } else {
         explanations.push(

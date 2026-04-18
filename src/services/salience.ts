@@ -68,7 +68,10 @@ export function isSalienceDisabled(): boolean {
  *  - salience = 1 - exp(-weighted_score)   (sigmoid-like, caps at 1)
  *
  *  Returns a Map keyed by lesson_id. Lessons with no access history are
- *  absent from the map (caller treats missing as salience=0). */
+ *  absent from the map (caller treats missing as salience=0).
+ *
+ *  For multi-project searches, prefer `computeSalienceMultiProject` to
+ *  avoid N+1 roundtrips (Sprint 12.1c /review-impl MED-1). */
 export async function computeSalience(
   pool: Pool,
   projectId: string,
@@ -106,10 +109,62 @@ export async function computeSalience(
   return out;
 }
 
+/** Multi-project variant — ONE SQL query for all projects. Replaces the
+ *  per-project loop pattern that caused N+1 roundtrips in
+ *  `searchLessonsMulti` (Sprint 12.1c /review-impl MED-1).
+ *
+ *  The output Map key is `lesson_id` alone (lesson_ids are UUIDs, globally
+ *  unique across projects). If a lesson appears under multiple project_ids
+ *  — which shouldn't happen with the current ON DELETE CASCADE schema but
+ *  is defensively handled — the salience sums across both. */
+export async function computeSalienceMultiProject(
+  pool: Pool,
+  projectIds: string[],
+  lessonIds: string[],
+  config: SalienceConfig,
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (lessonIds.length === 0 || projectIds.length === 0) return out;
+
+  const res = await pool.query(
+    `SELECT lesson_id::text AS lesson_id,
+            SUM(
+              weight *
+              EXP(
+                -EXTRACT(EPOCH FROM (NOW() - accessed_at))
+                / 86400.0
+                / $3::float
+                * LN(2)
+              )
+            ) AS weighted_score
+       FROM lesson_access_log
+      WHERE project_id = ANY($1::text[])
+        AND lesson_id = ANY($2::uuid[])
+        AND accessed_at > NOW() - INTERVAL '180 days'
+      GROUP BY lesson_id`,
+    [projectIds, lessonIds, config.halfLifeDays],
+  );
+
+  for (const row of res.rows) {
+    const weighted = Number(row.weighted_score);
+    if (!Number.isFinite(weighted) || weighted <= 0) continue;
+    const salience = 1 - Math.exp(-weighted);
+    out.set(String(row.lesson_id), salience);
+  }
+  return out;
+}
+
 // --------------------------------- Blend -------------------------------------
 
 /** Blend salience into a hybrid score. Multiplicative boost so zero salience
- *  preserves the input score exactly. Clamped at 1.0. */
+ *  preserves the input score exactly. Clamped at 1.0.
+ *
+ *  Sprint 12.1c /review-impl LOW-1: the clamp means a lesson whose hybrid
+ *  score is already near 1.0 loses ordering information — two near-ceiling
+ *  hybrid scores can both clamp to 1.0 regardless of salience. This is
+ *  deliberate (scores shouldn't exceed 1.0) and rare on a semantic+FTS
+ *  distribution where max scores cluster around 0.7-0.9. Revisit if the
+ *  indexer/reranker ever produces genuine 1.0 hybrids routinely. */
 export function blendHybridScore(
   hybridScore: number,
   salience: number | undefined,
@@ -155,6 +210,15 @@ export type AccessLogEntry = {
  *  Callers should NOT await this in the request's critical path; use
  *  `.catch(...)` to swallow and log. A write failure must never break
  *  the retrieval it's piggybacking on.
+ *
+ *  Sprint 12.1c /review-impl MED-2 — POOL-SIZING ASSUMPTION:
+ *  Every `searchLessons` call emits one unawaited INSERT holding a pool
+ *  connection for ~5-50ms. Under concurrent load (~20 parallel searches),
+ *  fire-and-forget INSERTs can saturate a default 10-connection pool and
+ *  queue critical GET responses behind them. For salience-enabled
+ *  deployments, configure the pg pool with `max >= 20` to maintain
+ *  headroom. Follow-up work (future sprint): write-behind batching every
+ *  ~1s, or a lightweight semaphore capping concurrent access-log writes.
  *
  *  Returns a Promise that resolves on success; callers that want to
  *  confirm persistence in tests may await it. */
