@@ -130,7 +130,9 @@ type PerQuery = {
   top_k_keys: string[];
   top_k_titles: (string | undefined)[];
   /** Sprint 12.0.1: snippet passthrough required for near-semantic
-   *  dup-rate v1. Truncated to 200 chars in archive to bound JSON size. */
+   *  dup-rate v1. Truncated to 300 chars in archive to bound JSON size
+   *  while still preserving enough context for diagnosis of friction
+   *  cases (200 was cutting mid-sentence on long docs). */
   top_k_snippets: (string | undefined)[];
   found_ranks: number[];            // 1-based ranks of target hits within top-k
   graded_hits_in_rank_order: GradedHit[];
@@ -217,7 +219,7 @@ async function evalQuery(
     query: q.query,
     top_k_keys: topK.map((x) => x.key),
     top_k_titles: topK.map((x) => x.title),
-    top_k_snippets: topK.map((x) => (x.snippet ? x.snippet.slice(0, 200) : undefined)),
+    top_k_snippets: topK.map((x) => (x.snippet ? x.snippet.slice(0, 300) : undefined)),
     found_ranks,
     graded_hits_in_rank_order: graded,
     latency_ms_samples: latencies,

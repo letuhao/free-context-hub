@@ -159,6 +159,38 @@ the scorecard.
 
 ---
 
+### digit-collapse-false-positive
+
+**Definition.** The `normalizeForHash` function in
+`src/qc/metrics.ts` replaces every digit run with a single `'n'`
+character before hashing. This is deliberate — it lets timestamp-variant
+fixture clusters like `"Valid: impexp-1775368159562-extra"` and
+`"Valid: impexp-1775368419347-extra"` collapse to one key. But it also
+collapses genuinely distinct content: `"Phase 10"` and `"Phase 11"` both
+normalize to `"phase n"`, as do `"v1.2.3"` and `"v2.0.0"`
+(`"vn.n.n"`).
+
+**Why we accept it (for now).** The v1 key is
+`normalize(title) || normalize(snippet[:100])` — the `||` delimiter
+requires BOTH components to match. So a "Phase 10" / "Phase 11" pair
+only collapses under v1 if their snippets also normalize-equal. For the
+free-context-hub dataset at 2026-04-18, verified empirically: all
+observed v1-collapsed clusters have near-identical snippets (they are
+true duplicates). The false-positive risk is latent, not active.
+
+**Diagnostic signal.** Two top-k items whose titles differ by a version
+number or a count, paired with nearly-identical snippets, may collapse
+into one v1 dup-cluster even when a reader would call them distinct.
+Surfaces as unexpectedly-high `duplication_rate_nearsemantic_at_10`
+on a dataset where the eyeballed top-k looks mostly distinct.
+
+**Future fix path.** If false-positives bite, iterate to a less-aggressive
+normalizer — e.g. preserve single-digit version strings, only collapse
+4+ digit runs (which reliably correspond to timestamps). Costs more code
+but reduces the risk.
+
+---
+
 ### snippet-redundancy *(deferred)*
 
 **Definition.** Distinct DB rows with different IDs but identical content
@@ -176,6 +208,76 @@ guardrails and ≥6 "Global search test retry pattern" decisions existing in
 the `free-context-hub` project. The v0 dup-rate metric is **silent on the
 exact pathology the sprint was launched to observe.** Sprint 12.1 must fix
 this before claiming any "consolidation" improvement.
+
+---
+
+### measurement-jitter
+
+**Definition.** Quality metrics drift non-trivially between baseline runs
+separated by more than a few minutes, despite no changes in retrieval code
+or data. The `diffBaselines.ts` regression checker then flags noise as
+regression.
+
+**Why it happens.** Embedding services (and the MCP server's pooled
+resources) jitter under load. Back-to-back baseline runs (seconds apart)
+return byte-identical quality metrics — verified in Sprint 12.0's
+determinism check. Runs separated by hours can diverge on a small number
+of queries: Sprint 12.0 → Sprint 12.0.1 (≈2h apart) showed lessons
+`recall@10` drift from 1.0 → 0.94 even though no lesson-ranking code
+changed in between.
+
+**Diagnostic signal.** A reported regression (`nDCG@10 drop ≥0.05`, etc.)
+on a metric whose backing code paths have not changed between the two
+archives. Cross-check by looking at `git log` for the two archives' commit
+hashes — if nothing relevant changed, the "regression" is likely jitter.
+
+**Mitigation (operator protocol).** To prove a real improvement in a
+Phase-12 sprint:
+1. Run the new-state baseline.
+2. **Also run a back-to-back control baseline** at the same time under
+   the same stack load (same `--samples` count).
+3. Diff control vs control first to establish the per-run noise floor
+   (should be ≈ 0 across quality metrics).
+4. Then diff control vs new-state. A delta larger than the control-vs-
+   control floor is signal; anything smaller is jitter.
+
+**Future fix path.** Sprint 12.0.2 or later: have `runBaseline` take a
+`--control` flag that runs the same golden set twice and emits an
+embedded noise-floor measurement alongside the primary archive.
+
+---
+
+### index-hygiene
+
+**Definition.** The `chunks` table contains files that shouldn't be
+treated as retrieval targets: build outputs, framework cache, agent
+workspace metadata, compiled `.js` duplicates of source `.ts`.
+
+**Why it happens.** `index_project` defaults exclude `.git` and
+`node_modules` (see `src/services/indexer.ts:55`) but don't exclude
+`dist/`, `.next/`, `.claude/worktrees/`, or similar project-level build
+outputs. An unconfigured run ingests them all.
+
+**Diagnostic signal.**
+```sql
+SELECT file_path, COUNT(*)
+FROM chunks
+WHERE project_id = $1
+GROUP BY file_path
+ORDER BY COUNT(*) DESC
+LIMIT 20;
+```
+Look for entries under `dist/`, `gui/.next/`, `.claude/`, or compiled
+output equivalents.
+
+**Example (Sprint 12.0.1 initial indexing of free-context-hub).** Of 3925
+chunks, ~2800 were junk: 1105 `dist/*`, 1699 `gui/.next/*`, 2027
+`.claude/*` (worktrees + session files). Purged via direct SQL DELETE,
+leaving ~959 `src/` + 432 `docs/` + the rest of the legitimate corpus.
+
+**Future fix path.** Configure project-level ignore patterns via
+`prepare_repo` or a `.contexthubignore` convention. Until then, operators
+must purge post-indexing — idempotent but manual.
 
 ---
 

@@ -5,9 +5,9 @@
   "notes": [
     "Golden query set for RAG quality evaluation (file-level ground truth).",
     "Each query specifies expected target_files and optional must_keywords for quick sanity checks.",
-    "Run via src/qc/ragQcRunner.ts (MCP-driven).",
     "Phase 12 Sprint 12.0: added `surface: code` for unified-runner dispatch.",
-    "Phase 12 Sprint 12.0.1: retargeted from qc-free-context-hub to free-context-hub (indexed 2026-04-18 with 3925 chunks, unified project)."
+    "Phase 12 Sprint 12.0.1: `project_id_suggested` is consumed by the Phase-12 `npm run qc:baseline` runner (src/qc/runBaseline.ts) which reads this field.",
+    "Legacy runners `npm run qc:rag` (src/qc/ragQcRunner.ts) and src/qc/tieredBaseline.ts IGNORE this field — they take project_id from the `QC_PROJECT_ID` env var (default: `qc-free-context-hub`). If you need those runners to hit free-context-hub, set QC_PROJECT_ID=free-context-hub in your shell before invoking them."
   ],
   "queries": [
     {

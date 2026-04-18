@@ -253,4 +253,57 @@ test('nearSemanticKey (Sprint 12.0.1)', async (t) => {
     const v1 = duplicationRateAtK(items.map((x) => ({ key: nearSemanticKey(x.title, x.snippet) })), 10);
     assert.equal(v1, 0.6, 'v1 should surface the 3-member cluster as 0.6 dup participation');
   });
+  await t.test('Sprint 12.0.1 HIGH-1 regression: all-null title+snippet collapse to identical key (the trap that made code dup@10=1.0)', () => {
+    // The bug: callCode didn't populate title or snippet, so every SurfaceItem
+    // had (undefined, undefined). nearSemanticKey returned "||" for every
+    // item, and the whole top-k collapsed under that single key.
+    // This test pins the BEHAVIOR (collapse happens with all-null inputs)
+    // AND documents it as a trap: callers of duplicationRateAtK+nearSemanticKey
+    // MUST populate at least one of title/snippet from a distinguishing source
+    // (e.g. filesystem path) when the retriever response doesn't carry content
+    // fields. Otherwise dup-rate reports spurious 1.0 on an empty-content surface.
+    const items = Array.from({ length: 10 }, (_, i) => ({
+      key: nearSemanticKey(null, null),
+      id: `item-${i}`,
+    }));
+    assert.equal(duplicationRateAtK(items, 10), 1, 'all-null-content collapses to single key — dup=1.0');
+    // Contrast: giving each item a distinguishing (non-numeric) title fixes it.
+    // Non-numeric names because numeric-suffix paths like file-1.ts, file-2.ts
+    // would themselves collapse under digit-rule ("file-n.ts") — see the
+    // digit-collapse-false-positive test below.
+    const names = ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta', 'iota', 'kappa'];
+    const itemsWithPath = names.map((n) => ({
+      key: nearSemanticKey(`src/${n}.ts`, null),
+    }));
+    assert.equal(duplicationRateAtK(itemsWithPath, 10), 0, 'distinct titles → keys distinct → dup=0');
+  });
+  await t.test('digit-collapse false-positive risk — "Phase 10" and "Phase 11" collapse (documented trade-off)', () => {
+    // MED-2 risk from /review-impl: normalizeForHash is aggressive and WILL
+    // equate content a careful reader would call distinct. For the current
+    // lesson dataset we verified that collapsed clusters are empirically
+    // true duplicates (Import A/B/Valid: impexp fixtures), but the behavior
+    // is load-bearing on the specific data shape.
+    const a = nearSemanticKey('Phase 10 retrospective', 'notes from the retro');
+    const b = nearSemanticKey('Phase 11 retrospective', 'notes from the retro');
+    assert.equal(a, b, 'digit-collapse intentionally equates "Phase 10" and "Phase 11"');
+    // Mitigation: if snippets DIFFER meaningfully, v1 does NOT collapse:
+    const c = nearSemanticKey('Phase 10 retrospective', 'Notes on dup-rate v0 blind spot');
+    const d = nearSemanticKey('Phase 11 retrospective', 'Notes on Redis hot-cache tiering');
+    assert.notEqual(c, d, 'distinct snippets prevent the title-digit collapse from false-positive-ing');
+  });
+  await t.test('numeric-suffix file paths also collapse — additional digit-collapse trap', () => {
+    // Real-world code often uses numeric suffixes (step1.ts, user2.ts). Under
+    // digit-collapse these all share one normalized key. If the snippet
+    // component is also uniform (e.g. retriever returned no sample lines and
+    // we defaulted to undefined), dup-rate would false-positive. This is
+    // why HIGH-1's callCode fix populates snippet from sample_lines — so the
+    // snippet field distinguishes files with similar naming.
+    const a = nearSemanticKey('src/step1.ts', null);
+    const b = nearSemanticKey('src/step2.ts', null);
+    assert.equal(a, b, 'src/step1.ts and src/step2.ts collapse under digit-rule');
+    // With distinguishing snippets, no collapse:
+    const c = nearSemanticKey('src/step1.ts', 'export function firstStage() {');
+    const d = nearSemanticKey('src/step2.ts', 'export function secondStage() {');
+    assert.notEqual(c, d);
+  });
 });

@@ -105,7 +105,15 @@ export async function callCode(
     const files = Array.isArray(r?.files) ? r.files : [];
     const items: SurfaceItem[] = files.slice(0, k).map((f: any) => {
       const p = normalizePath(String(f.path ?? ''));
-      return { key: p, id: p, snippet: f.snippet };
+      // Sprint 12.0.1 HIGH-1 fix: search_code_tiered returns `sample_lines`
+      // (an array of code snippets from the matched file), NOT a single
+      // `snippet` field. Populate title=path and snippet=joined sample
+      // lines so nearSemanticKey has real content to key on. Without
+      // this, every code item has (title=undefined, snippet=undefined),
+      // nearSemanticKey → "||" for every item, and dup@10 nearsem
+      // reports a spurious 1.0 across all code queries.
+      const sampleLines = Array.isArray(f.sample_lines) ? f.sample_lines.join(' ') : '';
+      return { key: p, id: p, title: p, snippet: sampleLines || undefined };
     });
     return { items, latencyMs: Date.now() - t0 };
   } catch (e: any) {
