@@ -1,26 +1,46 @@
 #!/usr/bin/env bash
-# workflow-gate.sh — Enforce workflow state transitions
-# Used by Claude Code hooks to block actions when workflow phases are skipped.
+# workflow-gate.sh — Enforce workflow state transitions for AI coding agents
+# Part of the Agentic Workflow v2 bundle.
 #
 # Usage:
 #   ./scripts/workflow-gate.sh phase <phase_name>    # Transition to phase
+#   ./scripts/workflow-gate.sh complete <name> <evidence> # Mark phase done
 #   ./scripts/workflow-gate.sh check <phase_name>    # Check if phase was completed
-#   ./scripts/workflow-gate.sh status                 # Show current state
-#   ./scripts/workflow-gate.sh pre-commit             # Pre-commit gate check
-#   ./scripts/workflow-gate.sh reset                  # Reset state (new task)
-#   ./scripts/workflow-gate.sh skip <phase> <reason>  # Record authorized skip
-#   ./scripts/workflow-gate.sh size <XS|S|M|L|XL> <files> <logic> <side_effects> # Classify task size
+#   ./scripts/workflow-gate.sh status                # Show current state
+#   ./scripts/workflow-gate.sh pre-commit            # Pre-commit gate check
+#   ./scripts/workflow-gate.sh reset                 # Reset state (new task)
+#   ./scripts/workflow-gate.sh skip <phase> <reason> # Record authorized skip
+#   ./scripts/workflow-gate.sh size <XS|S|M|L|XL> <files> <logic> <side_effects>
+#
+# Requirements: bash, python 3.x
+# State file: .workflow-state.json (add to .gitignore)
 
 STATE_FILE=".workflow-state.json"
 
 # Phase order (index = sequence number)
-PHASES=("clarify" "design" "review-design" "plan" "build" "verify" "review-code" "qc" "session" "commit" "retro")
+# [CUSTOMIZE] Add/remove phases to match your workflow
+PHASES=("clarify" "design" "review-design" "plan" "build" "verify" "review-code" "qc" "post-review" "session" "commit" "retro")
 
 # Phases skippable per size classification:
 # XS: clarify + plan   S: plan only   M/L/XL: nothing
 SKIPPABLE_XS=("clarify" "plan")
 SKIPPABLE_S=("plan")
 SKIPPABLE=()  # default: nothing skippable until size is set
+
+# --- Detect python command ---
+# Prefer `python` over `python3` because some Windows shims (e.g. pyenv-win's
+# python3.bat) corrupt multi-line `-c` args, producing spurious "|| goto :error"
+# IndentationErrors. Plain `python` routes through a different shim that
+# preserves newlines correctly.
+PYTHON_CMD=""
+if command -v python &>/dev/null; then
+  PYTHON_CMD="python"
+elif command -v python3 &>/dev/null; then
+  PYTHON_CMD="python3"
+else
+  echo "ERROR: python or python3 not found. Install Python 3.x."
+  exit 1
+fi
 
 get_phase_index() {
   local phase="$1"
@@ -66,11 +86,11 @@ cmd_phase() {
   init_state
 
   local current_idx
-  current_idx=$(python -c "import json; print(json.load(open('$STATE_FILE'))['current_phase_index'])" 2>/dev/null || echo "-1")
+  current_idx=$($PYTHON_CMD -c "import json; print(json.load(open('$STATE_FILE'))['current_phase_index'])" 2>/dev/null || echo "-1")
 
   # Load size-based skippable list
   local task_size
-  task_size=$(python -c "import json; print(json.load(open('$STATE_FILE')).get('size') or 'none')" 2>/dev/null || echo "none")
+  task_size=$($PYTHON_CMD -c "import json; print(json.load(open('$STATE_FILE')).get('size') or 'none')" 2>/dev/null || echo "none")
 
   local skippable_for_size=()
   case "$task_size" in
@@ -80,14 +100,13 @@ cmd_phase() {
   esac
 
   # Check for phase skipping — all intermediate phases must be completed or skipped
-  # If no current phase yet (-1/null), treat as if we're at position -1 (before clarify)
   if [[ "$current_idx" == "null" ]]; then current_idx=-1; fi
   {
     local expected_next=$((current_idx + 1))
     if [[ "$idx" -gt "$expected_next" ]]; then
       # Get list of already completed/skipped phases
       local completed_phases
-      completed_phases=$(python -c "
+      completed_phases=$($PYTHON_CMD -c "
 import json
 state = json.load(open('$STATE_FILE'))
 print(' '.join([p['phase'] for p in state.get('phases_completed', [])]))
@@ -129,13 +148,11 @@ print(' '.join([p['phase'] for p in state.get('phases_completed', [])]))
   }
 
   # Update state
-  python -c "
+  $PYTHON_CMD -c "
 import json, datetime
 state = json.load(open('$STATE_FILE'))
 state['current_phase'] = '$phase'
 state['current_phase_index'] = $idx
-if '$phase' not in [p['phase'] for p in state.get('phases_completed', [])]:
-    pass  # not completed yet, just entering
 state['last_transition'] = datetime.datetime.now().isoformat()
 if not state.get('started_at'):
     state['started_at'] = datetime.datetime.now().isoformat()
@@ -186,7 +203,7 @@ cmd_size() {
 
   init_state
 
-  python -c "
+  $PYTHON_CMD -c "
 import json, datetime
 state = json.load(open('$STATE_FILE'))
 state['size'] = '$size'
@@ -207,7 +224,7 @@ cmd_check() {
   init_state
 
   local completed
-  completed=$(python -c "
+  completed=$($PYTHON_CMD -c "
 import json
 state = json.load(open('$STATE_FILE'))
 phases = [p['phase'] for p in state.get('phases_completed', [])]
@@ -228,7 +245,7 @@ cmd_complete() {
   local evidence="$2"
   init_state
 
-  python -c "
+  $PYTHON_CMD -c "
 import json, datetime
 state = json.load(open('$STATE_FILE'))
 if 'phases_completed' not in state:
@@ -259,7 +276,7 @@ cmd_skip() {
 
   init_state
 
-  python -c "
+  $PYTHON_CMD -c "
 import json, datetime
 state = json.load(open('$STATE_FILE'))
 if 'phases_skipped' not in state:
@@ -294,7 +311,7 @@ cmd_pre_commit() {
 
   # Check that verify phase was completed
   local verify_done
-  verify_done=$(python -c "
+  verify_done=$($PYTHON_CMD -c "
 import json
 state = json.load(open('$STATE_FILE'))
 phases = [p['phase'] for p in state.get('phases_completed', [])]
@@ -317,9 +334,33 @@ print('yes' if 'verify' in phases else 'no')
     exit 1
   fi
 
-  # Check that session phase was completed (SESSION_PATCH.md updated)
+  # Check that post-review phase was completed
+  local postreview_done
+  postreview_done=$($PYTHON_CMD -c "
+import json
+state = json.load(open('$STATE_FILE'))
+phases = [p['phase'] for p in state.get('phases_completed', [])]
+print('yes' if 'post-review' in phases else 'no')
+" 2>/dev/null || echo "no")
+
+  if [[ "$postreview_done" == "no" ]]; then
+    echo ""
+    echo "============================================"
+    echo "  COMMIT BLOCKED: Phase 9 POST-REVIEW not done"
+    echo "============================================"
+    echo ""
+    echo "You must complete the human-interactive post-review before committing."
+    echo "Present your changes to the user, wait for their response, then re-read"
+    echo "all changed files and do an adversarial review."
+    echo "  ./scripts/workflow-gate.sh complete post-review \"<review findings>\""
+    echo ""
+    exit 1
+  fi
+
+  # [CUSTOMIZE] Remove this block if your project doesn't use session tracking
+  # Check that session phase was completed
   local session_done
-  session_done=$(python -c "
+  session_done=$($PYTHON_CMD -c "
 import json
 state = json.load(open('$STATE_FILE'))
 phases = [p['phase'] for p in state.get('phases_completed', [])]
@@ -332,13 +373,13 @@ print('yes' if 'session' in phases else 'no')
     echo "  COMMIT BLOCKED: Phase 9 SESSION not done"
     echo "============================================"
     echo ""
-    echo "Update SESSION_PATCH.md before committing, then:"
-    echo "  ./scripts/workflow-gate.sh complete session \"updated SESSION_PATCH.md\""
+    echo "Update session notes before committing, then:"
+    echo "  ./scripts/workflow-gate.sh complete session \"updated session notes\""
     echo ""
     exit 1
   fi
 
-  echo "OK: Pre-commit checks passed (verify + session completed)"
+  echo "OK: Pre-commit checks passed (verify + post-review + session completed)"
   exit 0
 }
 
@@ -350,19 +391,19 @@ cmd_status() {
     exit 0
   fi
 
-  python -c "
+  $PYTHON_CMD -c "
 import json
 state = json.load(open('$STATE_FILE'))
 completed = [p['phase'] for p in state.get('phases_completed', [])]
 skipped = [p['phase'] for p in state.get('phases_skipped', [])]
 current = state.get('current_phase', 'none')
-phases = ['clarify','design','review-design','plan','build','verify','review-code','qc','session','commit','retro']
+phases = ['clarify','design','review-design','plan','build','verify','review-code','qc','post-review','session','commit','retro']
 
 size = state.get('size', 'NOT SET')
 counts = state.get('size_counts', {})
-print(f\"Task: {state.get('task', '(unnamed)')}\")
-print(f\"Size: {size} (files={counts.get('files',0)}, logic={counts.get('logic',0)}, side_effects={counts.get('side_effects',0)})\")
-print(f\"Current phase: {current}\")
+print(f'Task: {state.get(\"task\", \"(unnamed)\")}')
+print(f'Size: {size} (files={counts.get(\"files\",0)}, logic={counts.get(\"logic\",0)}, side_effects={counts.get(\"side_effects\",0)})')
+print(f'Current phase: {current}')
 print()
 for p in phases:
     if p in completed and p in skipped:

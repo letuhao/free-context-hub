@@ -48,31 +48,34 @@ Don't memorize tool schemas — `help()` is always current.
 
 ---
 
-## Task Workflow v2 (11 phases per task)
+## Task Workflow v2.2 (12 phases per task)
 
 > v2 absorbs execution discipline from [Superpowers](https://github.com/obra/superpowers) (brainstorming protocol, plan decomposition, TDD, verification gate, debugging protocol, subagent dispatch) while keeping our strengths (session persistence, role perspectives, guardrails, MCP knowledge layer).
+>
+> **v2.2 update:** POST-REVIEW is now a **human-interactive checkpoint** (present summary → wait for human), NOT a self-adversarial re-read. Deep adversarial review moved to the on-demand `/review-impl` command (`.claude/commands/review-impl.md`). Self-review-right-after-writing rubber-stamps in practice; explicit separate mental mode works better.
 
 Every task follows this workflow. The agent plays all roles sequentially.
 
-**ENFORCEMENT: This workflow uses a state machine (`.workflow-state.json`). You MUST call the phase transition protocol before moving between phases. Hooks will block commits if verification evidence is missing.**
+**ENFORCEMENT: This workflow uses a state machine (`.workflow-state.json`). You MUST call the phase transition protocol before moving between phases. Hooks will block commits if VERIFY, POST-REVIEW, or SESSION evidence is missing.**
 
 ```
-Phase      │ Role              │ What Happens
-───────────┼───────────────────┼──────────────────────────────────────
-1. CLARIFY │ Architect + PO    │ Brainstorm, ask questions, define scope
-2. DESIGN  │ Lead              │ API contract / component API / data flow
-3. REVIEW  │ PO + Lead         │ Review design spec before coding
-4. PLAN    │ Lead + Developer  │ Decompose into bite-sized tasks (2-5 min)
-5. BUILD   │ Developer         │ Write code (TDD: red → green → refactor)
-6. VERIFY  │ Developer         │ Evidence-based verification gate
-7. REVIEW  │ Lead              │ Code review (spec compliance + quality)
-8. QC      │ QA / PO           │ Test against acceptance criteria
-9. SESSION │ Developer         │ Update SESSION_PATCH.md + task status
-10. COMMIT │ Developer         │ Git commit + push
-11. RETRO  │ All               │ Add lesson if decision/workaround learned
+Phase          │ Role              │ What Happens
+───────────────┼───────────────────┼──────────────────────────────────────
+1. CLARIFY     │ Architect + PO    │ Brainstorm, ask questions, define scope
+2. DESIGN      │ Lead              │ API contract / component API / data flow
+3. REVIEW      │ PO + Lead         │ Review design spec before coding
+4. PLAN        │ Lead + Developer  │ Decompose into bite-sized tasks (2-5 min)
+5. BUILD       │ Developer         │ Write code (TDD: red → green → refactor)
+6. VERIFY      │ Developer         │ Evidence-based verification gate
+7. REVIEW      │ Lead              │ Code review (spec compliance + quality)
+8. QC          │ QA / PO           │ Test against acceptance criteria
+9. POST-REVIEW │ Human + Developer │ Human-interactive CHECKPOINT (not deep review — see /review-impl)
+10. SESSION    │ Developer         │ Update SESSION_PATCH.md + task status
+11. COMMIT     │ Developer         │ Git commit + push
+12. RETRO      │ All               │ Add lesson if decision/workaround learned
 ```
 
-**Status tracking:** `[ ]` not started · `[C]` clarify · `[D]` design · `[P]` plan · `[B]` build · `[V]` verify · `[R]` review · `[Q]` QC · `[S]` session · `[✓]` done
+**Status tracking:** `[ ]` not started · `[C]` clarify · `[D]` design · `[P]` plan · `[B]` build · `[V]` verify · `[R]` review · `[Q]` QC · `[PR]` post-review · `[S]` session · `[✓]` done
 
 ### Anti-Skip Rules (MANDATORY)
 
@@ -86,6 +89,7 @@ Agents are known to skip phases to "save time." This is explicitly forbidden.
 | Skip PLAN, jump to BUILD | "It's a small change" | Small changes grow; no plan = no checkpoint |
 | Skip VERIFY after BUILD | "Tests passed earlier" | Stale results are not evidence |
 | Skip REVIEW after VERIFY | "I wrote it, I know it's correct" | Author blindness is real |
+| Skip POST-REVIEW | "I already reviewed in phase 7" | Phase 7 has author blindness. POST-REVIEW is a **human-interactive pause** so the user can veto, redirect, or request `/review-impl` before SESSION/COMMIT burns the diff in. **NEVER skippable**, but lightweight (see Phase 9). |
 | Skip SESSION before COMMIT | "I'll update later" | You won't. Context is lost |
 | Combine multiple phases | "CLARIFY+DESIGN+PLAN in one go" | Phases exist to create pause points for user input |
 
@@ -109,7 +113,7 @@ Agents are bad at judging task size. This protocol removes subjectivity.
 |------|-------|---------------|--------------|---------------|
 | **XS** | 1 | 0-1 | None | May skip CLARIFY + PLAN (go to BUILD). Still MUST do VERIFY. |
 | **S** | 1-2 | 2-3 | None | May skip PLAN only. Still MUST do CLARIFY (brief) + VERIFY. |
-| **M** | 3-5 | 4+ | Maybe | No skips allowed. Full 11 phases. |
+| **M** | 3-5 | 4+ | Maybe | No skips allowed. Full 12 phases. |
 | **L** | 6+ | Any | Yes | No skips. Write plan file. Consider subagent dispatch. |
 | **XL** | 10+ | Any | Yes | No skips. Write spec + plan files. Subagent dispatch recommended. |
 
@@ -234,6 +238,40 @@ Enhanced with Superpowers dual review.
 - **Stage 2 — Code quality:** Patterns, security, a11y, performance, maintainability
 
 Both stages must pass. If issues found → fix → re-verify (Phase 6) → re-review.
+
+---
+
+### Phase 9: POST-REVIEW (Human-Interactive Checkpoint) — NEVER skippable
+
+**Why this phase exists:** Forcing-function human pause before SESSION and COMMIT burn the diff in. The user can veto, redirect, or request deeper scrutiny.
+
+**Why it is NOT a self-adversarial re-read:** Self-review-right-after-writing-code rubber-stamps reliably. Agents pattern-match to their own reasoning and emit "0 issues found" as a ritual close-out, even when real coverage gaps exist. Deep review is moved to an explicit separate mental mode — the `/review-impl` command.
+
+**What this phase IS:**
+
+1. **Present a concise summary** — files touched, key decisions, verify evidence (tests/build/lint).
+2. **STOP and WAIT for human response.** Do NOT proceed until the human replies.
+3. If the human asks for a deeper look — or the code is safety-sensitive (auth, tenant isolation, destructive ops, injection defense, new integration boundary) — invoke `/review-impl` before continuing.
+4. If the human approves, proceed to SESSION.
+
+**What this phase is NOT:** A ritual self-re-read that ends in "Post-review: 0 issues found." If you catch yourself about to output that line without a specific concern, you are rubber-stamping — just present the summary and stop.
+
+**Completion evidence format:**
+```
+./scripts/workflow-gate.sh complete post-review "summary presented, human approved: <one-liner>"
+```
+
+**When to proactively suggest `/review-impl` in your summary (without being asked):**
+- Auth, credential, or token handling
+- Tenant-isolation boundaries (project_id scoping)
+- Destructive operations (delete, truncate, force-push)
+- Injection / sanitization defenses (SQL params, HTML escape, SSRF guards)
+- Non-trivial integration points (new service boundary, external API)
+- Anything the user previously flagged as load-bearing
+
+### /review-impl (on-demand adversarial review)
+
+Separate from POST-REVIEW. Invoke when: human asks, safety-sensitive code, or something feels off. Scoped to ask **what the test coverage misses**, not **whether the tests as written pass**. See `.claude/commands/review-impl.md`.
 
 ---
 

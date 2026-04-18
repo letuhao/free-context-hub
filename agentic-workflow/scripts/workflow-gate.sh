@@ -28,13 +28,17 @@ SKIPPABLE_S=("plan")
 SKIPPABLE=()  # default: nothing skippable until size is set
 
 # --- Detect python command ---
+# Prefer `python` over `python3` because some Windows shims (e.g. pyenv-win's
+# python3.bat) corrupt multi-line `-c` args, producing spurious "|| goto :error"
+# IndentationErrors. Plain `python` routes through a different shim that
+# preserves newlines correctly.
 PYTHON_CMD=""
-if command -v python3 &>/dev/null; then
-  PYTHON_CMD="python3"
-elif command -v python &>/dev/null; then
+if command -v python &>/dev/null; then
   PYTHON_CMD="python"
+elif command -v python3 &>/dev/null; then
+  PYTHON_CMD="python3"
 else
-  echo "ERROR: python3 or python not found. Install Python 3.x."
+  echo "ERROR: python or python3 not found. Install Python 3.x."
   exit 1
 fi
 
