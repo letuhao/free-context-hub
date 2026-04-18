@@ -66,6 +66,22 @@ const EnvSchema = z.object({
   // If a tool allows missing project_id and this env is missing, the tool returns Bad Request.
   DEFAULT_PROJECT_ID: z.string().min(1).optional(),
 
+  // Phase 12 Sprint 12.1c — access-frequency salience for lessons retrieval.
+  // Umbrella disable: turns off both write (access-log inserts) and read
+  // (salience blend into ranking) for lessons. Intended for A/B measurement
+  // and emergency rollback; individual tuning knobs below stay untouched.
+  LESSONS_SALIENCE_DISABLED: z
+    .preprocess(v => parseBooleanEnv(v), z.boolean().optional())
+    .default(false),
+  // Tuning: maximum salience boost magnitude. final = hybrid × (1 + α × salience).
+  // α=0 disables boost silently (salience still logged). α=1 → up to 2× score.
+  // Clamped to [0, 1].
+  LESSONS_SALIENCE_ALPHA: z.coerce.number().min(0).max(1).optional().default(0.10),
+  // Tuning: time-decay half-life in days. A single access event contributes
+  // weight × exp(-age_days × ln2 / halfLife). At halfLife=7, an event from
+  // 7 days ago contributes half its original weight.
+  LESSONS_SALIENCE_HALF_LIFE_DAYS: z.coerce.number().int().min(1).max(365).optional().default(7),
+
   MCP_PORT: z.coerce.number().int().positive().optional().default(3000),
   API_PORT: z.coerce.number().int().positive().optional().default(3001),
 
