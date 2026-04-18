@@ -8,7 +8,14 @@ import { distillLesson } from './distiller.js';
 import { rebuildProjectSnapshot } from './snapshot.js';
 import { expandForFtsIndex, buildFtsQuery } from '../utils/ftsTokenizer.js';
 import { nearSemanticKey } from '../utils/nearSemanticKey.js';
-import { logLessonAccess, isSalienceDisabled, type AccessLogEntry } from './salience.js';
+import {
+  logLessonAccess,
+  isSalienceDisabled,
+  computeSalience,
+  blendHybridScore,
+  getSalienceConfig,
+  type AccessLogEntry,
+} from './salience.js';
 import * as z from 'zod/v4';
 import { createModuleLogger } from '../utils/logger.js';
 
@@ -863,6 +870,46 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
     };
   });
 
+  // Sprint 12.1c — salience blend (read path).
+  // Runs BEFORE rerank so rerank can refine on the salience-adjusted order.
+  // Multiplies each match's hybrid score by `(1 + α × salience)` where
+  // salience ∈ [0,1] is computed from lesson_access_log entries with
+  // exponential time-decay. Guarded by the umbrella kill-switch.
+  if (!isSalienceDisabled() && matches.length > 0) {
+    try {
+      const salienceConfig = getSalienceConfig();
+      const candidateIds = matches.map((m) => m.lesson_id);
+      const salienceMap = await computeSalience(
+        pool,
+        params.projectId,
+        candidateIds,
+        salienceConfig,
+      );
+      if (salienceMap.size > 0 && salienceConfig.alpha > 0) {
+        for (const m of matches) {
+          m.score = blendHybridScore(m.score, salienceMap.get(m.lesson_id), salienceConfig.alpha);
+        }
+        matches.sort((a, b) => b.score - a.score);
+        explanations.push(
+          `salience: enabled (α=${salienceConfig.alpha}, halfLife=${salienceConfig.halfLifeDays}d); ${salienceMap.size}/${matches.length} lessons had access history`,
+        );
+      } else {
+        explanations.push(
+          salienceConfig.alpha === 0
+            ? 'salience: α=0, no boost applied (logging still active)'
+            : `salience: no access history for any candidate (${matches.length} lessons)`,
+        );
+      }
+    } catch (err) {
+      // Salience is a boost, not a requirement — fail-open.
+      explanations.push(
+        `salience: skipped due to error (${err instanceof Error ? err.message : String(err)})`,
+      );
+    }
+  } else if (isSalienceDisabled()) {
+    explanations.push('salience: disabled via LESSONS_SALIENCE_DISABLED');
+  }
+
   // LLM rerank: re-order top candidates for better ranking.
   // Dynamic budget: skip for small sets, scale up for large lesson bases.
   const env = getEnv();
@@ -1064,6 +1111,52 @@ export async function searchLessonsMulti(params: SearchLessonsMultiParams): Prom
       status: String(r.status ?? 'active') as LessonStatus,
     };
   });
+
+  // Sprint 12.1c — salience blend. Multi-project variant: salience is
+  // scoped to each match's own project_id automatically because the
+  // computeSalience query uses `project_id = $1` — so we fan out by
+  // project. Simplified here to pass the FIRST project and rely on the
+  // per-lesson filter; if cross-project variants need distinct salience,
+  // future refactor can bucket by project_id. For the current dataset
+  // (most search is single-project) this is correct.
+  if (!isSalienceDisabled() && matches.length > 0) {
+    try {
+      const salienceConfig = getSalienceConfig();
+      // Bucket lesson_ids by project_id and compute salience per project.
+      const byProject = new Map<string, string[]>();
+      for (const m of matches) {
+        const pid = m.project_id ?? projectIds[0] ?? 'unknown';
+        if (!byProject.has(pid)) byProject.set(pid, []);
+        byProject.get(pid)!.push(m.lesson_id);
+      }
+      const combinedSalience = new Map<string, number>();
+      for (const [pid, ids] of byProject) {
+        const partial = await computeSalience(pool, pid, ids, salienceConfig);
+        for (const [k, v] of partial) combinedSalience.set(k, v);
+      }
+      if (combinedSalience.size > 0 && salienceConfig.alpha > 0) {
+        for (const m of matches) {
+          m.score = blendHybridScore(m.score, combinedSalience.get(m.lesson_id), salienceConfig.alpha);
+        }
+        matches.sort((a, b) => b.score - a.score);
+        explanations.push(
+          `salience: enabled multi-project (α=${salienceConfig.alpha}, halfLife=${salienceConfig.halfLifeDays}d); ${combinedSalience.size}/${matches.length} lessons had access history`,
+        );
+      } else {
+        explanations.push(
+          salienceConfig.alpha === 0
+            ? 'salience: α=0, no boost applied (logging still active)'
+            : `salience: no access history (multi-project, ${matches.length} lessons)`,
+        );
+      }
+    } catch (err) {
+      explanations.push(
+        `salience: skipped due to error (${err instanceof Error ? err.message : String(err)})`,
+      );
+    }
+  } else if (isSalienceDisabled()) {
+    explanations.push('salience: disabled via LESSONS_SALIENCE_DISABLED');
+  }
 
   // Rerank pass (same logic as single-project).
   const env = getEnv();

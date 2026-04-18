@@ -1008,7 +1008,11 @@ function createMcpToolsServer() {
         'Semantic search over lesson embeddings. Supports single project, multi-project, group-based, or include-all-groups search. ' +
         'Results are deduplicated by (project_id, lesson_type, near-semantic content key) so near-duplicate fixtures or reimported ' +
         'rows collapse to one representative — this MAY return fewer than `limit` items when the retrieval pool has many duplicates. ' +
-        'Set env LESSONS_DEDUP_DISABLED=true on the server to restore legacy behavior (returns every raw match including duplicates).',
+        'Set env LESSONS_DEDUP_DISABLED=true on the server to restore legacy behavior (returns every raw match including duplicates). ' +
+        'Results are ALSO salience-weighted: lessons that have been consumed more often (by reflect, improve, suggest-tags, ' +
+        'version-lookup) or historically fired as guardrails get a small ranking boost via time-decayed access counts. ' +
+        'Boost is multiplicative and capped at ~10% by default. Env knobs: LESSONS_SALIENCE_DISABLED=true for umbrella off, ' +
+        'LESSONS_SALIENCE_ALPHA=<0..1> for boost magnitude, LESSONS_SALIENCE_HALF_LIFE_DAYS=<int> for decay speed.',
       inputSchema: z.object({
         workspace_token: z.string().optional().describe('Workspace token (required only if MCP_AUTH_ENABLED=true).'),
         project_id: z
