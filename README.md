@@ -293,9 +293,15 @@ We tested 8 embedding models and 8 reranker models ([full benchmark](docs/benchm
   - Mermaid diagram rendering everywhere MarkdownContent is used
   - SSRF-hardened URL ingestion (private-range DNS check, redirect re-validation, streaming size cap)
   - 7 sprints, 7 migrations, 47-test E2E suite incl real vision runs
-
-**Planned:**
-- [ ] **Phase 11**: Knowledge Portability — cross-instance sync, exchange hub
+- [x] **Phase 11**: Knowledge Portability
+  - Zip+JSONL bundle format with sha256 per entry — streaming encoder/decoder
+  - Full project export (`GET /api/projects/:id/export`) via pg-cursor
+  - Full project import (`POST /api/projects/:id/import`) with 3 conflict policies (skip/overwrite/fail) + dry-run + cross-tenant UUID guard
+  - GUI Knowledge Exchange panel embedded in Project Settings (drag-drop + Preview + Apply)
+  - Cross-instance pull (`POST /api/projects/:id/pull-from`) with DNS-rebinding pinning + slow-loris body-stall defense
+  - Streaming JSONL decode (~99% jsonl peak memory reduction) + streaming base64 encode on import (~45% PDF peak reduction)
+  - Batched SELECT on import (~99% SELECT-count reduction)
+  - 9 sub-sprints, 61 API e2e + 1 GUI Playwright + 39 unit tests, all through v2.2 12-phase workflow with `/review-impl`
 
 **Intentionally Dropped:**
 - ~~Multi-Agent Passive Collection~~ — Parsing agent conversations costs tokens and captures noise. `add_lesson` captures verified conclusions explicitly.
@@ -309,11 +315,11 @@ We tested 8 embedding models and 8 reranker models ([full benchmark](docs/benchm
 | Metric | Count |
 |:-------|:------|
 | MCP Tools | 45 |
-| REST Endpoints | 105 |
+| REST Endpoints | 105+ (adds `/export`, `/import`, `/pull-from` in Phase 11) |
 | GUI Pages | 23 |
 | Database Migrations | 41 |
-| E2E Tests | 198 (all passing) |
-| Development Phases | 9/11 complete |
+| E2E Tests | 198+ (adds 15 Phase-11 tests; all passing) |
+| Development Phases | **11/11 complete** |
 
 ---
 

@@ -326,7 +326,7 @@ What to include per sprint:
 - What's next
 
 When to update:
-- After Phase 9 (SESSION) of the 11-phase task workflow
+- After Phase 10 (SESSION) of the 12-phase task workflow (v2.2)
 - After Phase 5 (REPORT) of the test workflow
 - Before moving to a new sprint (don't batch)
 

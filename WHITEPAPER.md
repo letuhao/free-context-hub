@@ -1,7 +1,7 @@
 # ContextHub (Self-Hosted) White Paper
 
 ## Status
-Draft v0.3
+Draft v0.4 (Phase 11 complete — 2026-04-18)
 
 ## Abstract
 ContextHub is a self-hosted, team-friendly system that gives MCP-enabled AI coding agents **persistent memory and guardrails across sessions**. It is designed for small teams that want the essential productivity benefits of [ContextStream](https://contextstream.io/)-like workflows, without requiring a hosted SaaS dependency.
@@ -390,22 +390,39 @@ Phase 7 represents a major shift: ContextHub evolves from an **agent-only backen
 
 **Relationship to later phases:** Phase 7 absorbs significant portions of what was originally planned for Phase 8 (human-in-the-loop) and Phase 9-10 (document ingestion, import/export). The GUI enhancement drafts serve as the design specification for implementation.
 
-### Phase 8: Advanced Human-in-the-Loop (Planned)
-Features not absorbed by Phase 7:
-- Access control (owner/editor/viewer roles per project)
-- Custom lesson types and templates (beyond the 5 built-in types)
-- Rich content (embedded images, diagrams, tables in lessons)
-- Comparison/diff view for lesson versions side-by-side
-- Agent profiles and detailed audit trails
+### Phase 8: Advanced Human-in-the-Loop — ✅ Complete
+Delivered across 8 + 8D + 8E sprints. Shipped: access control (API keys with reader/writer/admin roles), custom lesson types (table-backed, GUI-editable), rich content editor (markdown toolbar), agent audit trail (unified timeline from guardrail logs + lessons), feature toggles (per-project). E2E test suite: 198 tests (API smoke 75 / GUI smoke 23 / MCP smoke 36 / API scenarios 34 / GUI scenarios 21 / Agent visual 9).
 
-### Phase 9: Multi-format Ingestion (Planned)
-- Support for PDF, DOCX, Excel, and Image files
-- Document management foundation laid in Phase 7; this phase adds parsing/extraction pipelines
+### Phase 9: Multi-Project UX Redesign — ✅ Complete
+Originally framed as "Multi-format Ingestion" — that scope was split. The ingestion work shipped as Phase 10 (below). Phase 9 became the multi-project UX redesign: "All Projects" first-class mode, project selector V2 (multi-select checkboxes), ProjectBadge on all 23 pages, cross-project data on 8 pages, per-project guards on 4 pages. 11 sprints, 26 commits, 41 files.
 
-### Phase 10: Knowledge Portability (Planned)
-- **Exchange Hub**: Import/Export knowledge to/from other team-hosted ContextHubs or infrastructure
-- Standardized knowledge interchange format
-- Basic import/export (JSON/CSV) included in Phase 7; this phase adds cross-instance sync
+### Phase 10: Multi-Format Extraction Pipeline — ✅ Complete
+The "Multi-format Ingestion" feature set, renumbered and shipped in full. PDF / DOCX / EPUB / ODT / RTF / HTML / markdown + image (PNG/JPEG/WebP) support. Three extraction tiers:
+- **Fast**: pdf-parse + mammoth — sync, no external deps
+- **Quality**: pdftotext + pandoc — sync, tool-dependent
+- **Vision**: LLM via OpenAI-compatible API — async, per-page, progress + cancel
+
+Plus: chunking + pgvector embeddings (hierarchical/naive strategies, table/code/mermaid detection), hybrid semantic+FTS chunk search (REST/Cmd+K/chat tool/MCP tool), chunk edit/delete with optimistic locking, bulk re-extract, SSRF-hardened URL ingestion, mermaid rendering. 7 sprints, 7 migrations, 47-test E2E suite.
+
+### Phase 11: Knowledge Portability — ✅ Complete
+The "Exchange Hub" vision, shipped as 9 sub-sprints:
+- **Bundle format**: zip + manifest.json + per-entity JSONL with sha256 per entry — streaming encoder/decoder
+- **Full export**: `GET /api/projects/:id/export` streaming via pg-cursor
+- **Full import**: `POST /api/projects/:id/import` with 3 conflict policies (skip / overwrite / fail) + dry-run + **cross-tenant UUID guard** (refuses to overwrite rows owned by another project)
+- **GUI panel**: drag-drop Knowledge Exchange in Project Settings (Preview → Apply)
+- **Cross-instance pull**: `POST /api/projects/:id/pull-from` with **DNS-rebinding pinning** (via custom undici Agent) + **slow-loris body-stall defense** (60s idle timer)
+- **Streaming polish**: ~99% peak memory reduction on JSONL decode, ~45% on document base64 encode
+- **Perf polish**: ~99% SELECT-count reduction on import via batched `= ANY($1::uuid[])`
+
+61 API e2e + 1 GUI Playwright + 39 unit tests. All 9 sub-sprints shipped through the v2.2 12-phase workflow with `/review-impl` — 23+ findings caught across the phase, zero regressions in live reruns.
+
+### What's deferred beyond Phase 11
+- Merge conflict policy (beyond skip/overwrite/fail)
+- Bundle caching for repeat cross-instance pulls
+- Webhook / scheduled pulls
+- GUI for cross-instance pull (currently API-only)
+- Encryption / signing on bundles
+- Migrate `documents.content` TEXT → BYTEA (lifts V8 ~512 MB string heap ceiling; Phase-10-level change)
 
 ### Dropped: Multi-Agent Passive Collection
 
