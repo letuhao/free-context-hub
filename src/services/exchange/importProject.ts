@@ -52,6 +52,7 @@ import {
   type BundleReader,
   type BundleDocumentRead,
 } from './bundleFormat.js';
+import { encodeStreamToBase64 } from './base64Stream.js';
 
 export type ConflictPolicy = 'skip' | 'overwrite' | 'fail';
 
@@ -489,18 +490,35 @@ async function applyDocument(
  *      column values, so storing everything as base64 is transparent
  *      to readers.
  *
- * Memory cost: this buffers the entire binary into RAM before encoding.
- * For a 100MB PDF that's a 100MB Buffer (then 133MB base64 string).
- * Phase 11.6 polish can stream the encoding if it bites; for v1 it's
- * bounded by the 500MB multer route limit.
+ * Memory cost: Sprint 11.6b switched this path to encodeStreamToBase64,
+ * which encodes in 3-byte-aligned chunks with a 0-2 byte tail carry
+ * between iterations. Raw chunks are GC-eligible immediately after
+ * encoding, so for a 100 MB PDF the raw-buffer peak drops from
+ * ~100 MB to ~1 MB. The base64 string itself still materializes to
+ * ~133 MB because pg-node needs the full text value at query time —
+ * a true end-to-end streaming import would require migrating the
+ * documents.content column to BYTEA.
+ *
+ * Hard ceiling: the base64 string is subject to V8's string heap max
+ * (~512 MB on 64-bit). A document above ~384 MB raw produces a base64
+ * string that exceeds that limit and throws RangeError when pg-node
+ * serializes the query. The multer /import cap is 500 MB for the
+ * bundle total, so a single-document bundle up to 384 MB works; a
+ * bundle whose SINGLE largest document exceeds 384 MB fails. The
+ * Phase-10-level fix (bytea column + streaming INSERT) is out of
+ * scope; see base64Stream.ts for the detailed limit note.
+ *
+ * Test coverage note: the exchange e2e tests (phase11-import /
+ * phase11-pull) do not seed document fixtures, so this function is
+ * exercised only by the base64Stream unit tests + Phase 10 upload
+ * tests in isolation. A doc-focused round-trip test would tighten
+ * coverage; flagged for a future sprint.
  */
 async function materializeDocContent(doc: BundleDocumentRead): Promise<string | null> {
   if (!doc.hasContent) return null;
   const stream = await doc.openContent();
-  const chunks: Buffer[] = [];
-  for await (const c of stream) chunks.push(c as Buffer);
-  const buffer = Buffer.concat(chunks);
-  return `data:base64;${buffer.toString('base64')}`;
+  const base64 = await encodeStreamToBase64(stream);
+  return `data:base64;${base64}`;
 }
 
 async function applyChunk(

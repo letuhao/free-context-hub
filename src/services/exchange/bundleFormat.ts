@@ -29,6 +29,7 @@
 
 import { createHash } from 'node:crypto';
 import { Readable, Writable, Transform } from 'node:stream';
+import readline from 'node:readline';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -509,6 +510,19 @@ export async function openBundle(input: string | Buffer): Promise<BundleReader> 
 
   // Helper: create an async generator that yields parsed JSONL records
   // from a manifest entry, validating sha256 + line count on EOF.
+  //
+  // Streaming discipline (Sprint 11.6b): the entry's bytes flow through
+  // a hash-tap Transform and into readline. Records are yielded line
+  // by line so peak memory is bounded by the largest single record
+  // rather than the entire jsonl file. For a 10k-lesson project this
+  // drops from ~100 MB peak (buf + text copies) to <1 MB (one line at
+  // a time).
+  //
+  // Semantic shift: checksum validation now fires AT EOF rather than
+  // before the first yield. `importProject` wraps the iteration in a
+  // pg transaction, so a checksum error surfacing at end-of-stream
+  // still triggers a clean rollback. Existing tests drain the whole
+  // iterator before asserting, so they continue to pass.
   async function* iterateJsonl<T>(name: string): AsyncGenerator<T> {
     const meta = manifest.entries[name];
     if (!meta) return; // entry absent → empty iterator
@@ -519,32 +533,56 @@ export async function openBundle(input: string | Buffer): Promise<BundleReader> 
         `manifest references "${name}" but the zip entry is missing`,
       );
     }
-    const buf = await readEntireEntry(zip, zipEntry);
-    // Validate checksum
-    const actual = createHash('sha256').update(buf).digest('hex');
+    const rawStream = await openEntryStream(zip, zipEntry);
+    const hash = createHash('sha256');
+    const hashTap = new Transform({
+      transform(chunk, _enc, cb) {
+        hash.update(chunk);
+        cb(null, chunk);
+      },
+    });
+    // Manually wire — pipeline() here would wait for the whole stream
+    // before our generator saw any data, defeating the streaming win.
+    rawStream.pipe(hashTap);
+    rawStream.on('error', (err) => hashTap.destroy(err));
+
+    const rl = readline.createInterface({
+      input: hashTap,
+      crlfDelay: Infinity, // accept LF and CRLF line endings alike
+    });
+
+    let lineNo = 0;
+    let count = 0;
+    try {
+      for await (const line of rl) {
+        lineNo += 1;
+        if (line.length === 0) continue; // tolerate blank lines (e.g. trailing newline)
+        try {
+          yield JSON.parse(line) as T;
+          count += 1;
+        } catch (err) {
+          throw new BundleError(
+            'malformed_jsonl',
+            `${name}:${lineNo} — ${(err as Error).message}`,
+          );
+        }
+      }
+    } finally {
+      // If the consumer breaks out early (thrown record handler, etc.)
+      // make sure the underlying streams are torn down so yauzl doesn't
+      // hold on to file descriptors.
+      rl.close();
+      if (!rawStream.destroyed) rawStream.destroy();
+    }
+
+    // Validate checksum at EOF — the hash tap saw every byte that
+    // made it to readline, including blank lines.
+    const actual = hash.digest('hex');
     if (actual !== meta.sha256) {
       throw new BundleError(
         'checksum_mismatch',
         `${name} sha256 mismatch (expected ${meta.sha256}, got ${actual})`,
       );
-    }
-    // Parse line by line. Trailing blank line is tolerated.
-    const text = buf.toString('utf-8');
-    const lines = text.split('\n');
-    let lineNo = 0;
-    let count = 0;
-    for (const line of lines) {
-      lineNo += 1;
-      if (line.length === 0) continue;
-      try {
-        yield JSON.parse(line) as T;
-        count += 1;
-      } catch (err) {
-        throw new BundleError(
-          'malformed_jsonl',
-          `${name}:${lineNo} — ${(err as Error).message}`,
-        );
-      }
     }
     if (typeof meta.count === 'number' && count !== meta.count) {
       throw new BundleError(

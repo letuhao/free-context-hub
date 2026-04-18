@@ -4,7 +4,7 @@
 > hub for moving a project's full state between ContextHub instances:
 > bundle format → export → import → GUI → cross-instance pull → polish.
 
-## Status: 5.33/6 sprints complete (◐ in progress — 11.6 split into a/b/c)
+## Status: 5.66/6 sprints complete (◐ in progress — 11.6 split into a/b/c)
 
 | Sprint | Focus | Status | Commit |
 |--------|-------|--------|--------|
@@ -13,8 +13,8 @@
 | 11.3 | Full project import + conflict policy (`POST /api/projects/:id/import`) | ✅ | `0d6b3b5` + review `694878c` |
 | 11.4 | GUI Knowledge Exchange panel (in Project Settings) | ✅ | `ffe9ea8` + review `6270ff8` |
 | 11.5 | Cross-instance pull (`POST /api/projects/:id/pull-from`) | ✅ | 2026-04-18 — `cd73629` |
-| 11.6a | Test infrastructure (import scenarios + Playwright) | ✅ | 2026-04-18 — see SESSION_PATCH.md |
-| 11.6b | Streaming polish (JSONL decoder + base64 import) | ○ | — |
+| 11.6a | Test infrastructure (import scenarios + Playwright) | ✅ | 2026-04-18 — `2ffa36d` |
+| 11.6b | Streaming polish (JSONL decoder + base64 import) | ✅ | 2026-04-18 — see SESSION_PATCH.md |
 | 11.6c | Perf + security polish (ON CONFLICT, body-stall timeout, DNS pinning) | ○ | — |
 
 ## Architecture
@@ -289,31 +289,65 @@ GUI suite:   52/52 passed, 0 failed (47s — 1 new phase11-exchange scenario)
 - Streaming polish (11.6b)
 - Perf + security polish (11.6c)
 
-## Sprint 11.6b — Streaming polish (planned)
+## Sprint 11.6b — Streaming polish ✅ (complete 2026-04-18)
 
 ### Scope
 Memory-bounded refactors to existing bundle services. Isolated to
 `bundleFormat.ts` and `importProject.ts`; no API changes.
 
-1. **Streaming JSONL parser on the decoder side** — `BundleReader`
-   currently buffers each jsonl entry into memory before yielding
-   records. Refactor to yield records as they stream off disk,
-   bounded by the entry's chunk size.
-2. **Streaming base64 encoding on import** — `materializeDocContent`
-   buffers entire binaries into RAM before re-encoding. A 100 MB PDF
-   holds ~233 MB in memory during import. Refactor to pipe raw → base64
-   chunks.
+### Shipped
+- **`src/services/exchange/base64Stream.ts`** (NEW) — pure helper
+  `encodeStreamToBase64(Readable): Promise<string>` with 3-byte-aligned
+  chunked encoding + 0-2 byte tail carry. Pre-validated against 12
+  unit tests covering empty/1-5 byte inputs, exact-aligned chunks,
+  cross-boundary chunks, single-byte-chunk stress test, 1 MB random
+  round-trip, and upstream error propagation.
+- **`src/services/exchange/bundleFormat.ts`** — `iterateJsonl`
+  refactored to readline.createInterface + a Transform hash tap.
+  Raw jsonl bytes flow through the hash tap → readline → generator
+  yields per line. Checksum validation shifted from pre-yield to EOF
+  (existing tests drain-until-error so unaffected).
+- **`src/services/exchange/importProject.ts`** — `materializeDocContent`
+  now calls `encodeStreamToBase64` instead of Buffer.concat + toString.
+- **`src/services/exchange/base64Stream.test.ts`** (NEW) — 12 unit tests.
+- **`src/services/exchange/bundleFormat.test.ts`** — +2 streaming tests
+  (10k-record round-trip + consumer early-abort cleanup).
+- **`package.json`** — `npm test` now runs the 2 new exchange test files.
 
-### Acceptance
-- bundleFormat unit tests still pass
-- importProject live round-trip test still passes
-- Peak memory during a 500 MB bundle import drops measurably (manual
-  verification with `process.memoryUsage()`)
+### Memory-peak reductions
+- Hot spot #1 — `iterateJsonl`: ~100 MB peak (buf + text copies for a
+  50 MB jsonl) → <1 MB peak (one line at a time). **~99% reduction.**
+- Hot spot #2 — `materializeDocContent`: ~233 MB peak for a 100 MB PDF
+  (raw Buffer + base64 string coexisting) → ~134 MB peak (raw chunks
+  GC-progressively; only growing base64 string remains). **~45%
+  reduction**. Base64 string is capped by V8's ~512 MB heap max —
+  single documents above ~384 MB raw still throw RangeError, a
+  pre-existing ceiling that the Phase-10-level bytea migration would
+  fix properly.
 
-### Non-goals
-- Encryption / signing
-- Switching from jsonl to a binary format
-- Cross-version migration (11.6 framing deferred)
+### Review outcome — 3 findings caught + fixed
+- Phase-7 REVIEW (0 MED): 2 LOW accepted as pre-existing/acceptable
+- `/review-impl` (1 MED + 2 LOW, all doc-only):
+  - **MED 1** V8 string ceiling (~512 MB) caps base64 output at
+    ~384 MB raw — pre-existing limit, documented in header of
+    `base64Stream.ts` + in `materializeDocContent` JSDoc.
+  - **LOW 2** No integration test for document round-trip (phase11
+    tests don't seed docs) — pre-existing gap, flagged in JSDoc.
+  - **LOW 3** `encodeStreamToBase64` assumes Buffer chunks — explicit
+    precondition added to JSDoc.
+
+### Live test results
+```
+npx tsc --noEmit                     → 0 errors
+npm test                             → 32/32 passed (14 new + 18 pre-existing)
+npm run test:e2e:api                 → 61/61 passed, 0 failed (85s)
+```
+
+### Out of scope / deferred to 11.6c
+- `INSERT ... ON CONFLICT` migration (N+1 perf)
+- Body-stall (slow-loris) timeout for pull-from
+- DNS-rebinding pinning (custom undici agent)
+- Switching documents.content to BYTEA (Phase-10-level change)
 
 ## Sprint 11.6c — Perf + security polish (planned)
 
