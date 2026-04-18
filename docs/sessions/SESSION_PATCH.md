@@ -2,12 +2,24 @@
 id: HANDOFF-2026-04-18-E
 date: 2026-04-18
 phase: HANDOFF
+session_status: closed
+pushed_to_origin: true
 ---
 
-# Handoff — end of 2026-04-18 (session E — PHASE 11 COMPLETE)
+# Handoff — end of 2026-04-18 (session E — PHASE 11 COMPLETE, session closed, pushed)
 
 ## TL;DR
-**Phase 11 is DONE.** Five sprints shipped this session, all through the full v2.2 12-phase workflow with `/review-impl` passes. The knowledge-portability story is end-to-end: bundle format → export → import w/ conflict policies → GUI panel → cross-instance pull → test infrastructure → streaming polish → security polish → perf polish.
+**Phase 11 is DONE, pushed to origin, session closed.** Eight commits landed publicly this session: workflow v2.2 adoption + Sprints 11.5 / 11.6a / 11.6b / 11.6c-sec / 11.6c-perf + Phase-11 closeout reconciliation + Sprint 11.Z closeout hygiene. The knowledge-portability story is end-to-end: bundle format → export → import w/ conflict policies → GUI panel → cross-instance pull → test infrastructure → streaming polish → security polish → perf polish → hygiene pass. User decision: **start using the system for real work instead of additional QC cycles**. Next session will likely be dogfooding-driven rather than feature-driven.
+
+### Commits shipped this session (all on origin/main now)
+- `9fd4f87` Agentic Workflow v2.2 adoption
+- `cd73629` Sprint 11.5 — cross-instance pull
+- `2ffa36d` Sprint 11.6a — test infrastructure
+- `210ffd8` Sprint 11.6b — streaming polish
+- `c4e302a` Sprint 11.6c-sec — DNS pinning + body-stall
+- `0b4e2f6` Sprint 11.6c-perf — batched-SELECT (closed Phase 11)
+- `2e5b130` Docs: Phase 11 closeout reconciliation
+- `d9d1c75` Sprint 11.Z — closeout hygiene
 
 Session-E sprints:
 - **Sprint 11.5** cross-instance pull — 10 findings across 3 passes, 56/56 E2E green
@@ -32,21 +44,30 @@ Across 11.5 + 11.6a + 11.6b + 11.6c-sec, `/review-impl` ran **five times total**
 
 ## What's next
 
-**Phase 11 is DONE.** No work planned in this phase.
+**Phase 11 is DONE and shipped.** Session closed by user decision: rather than more QC cycles, the next natural move is to **actually use the system** and let real-world friction surface what to patch.
 
-Across the full 11.5 → 11.6c-perf arc, `/review-impl` ran **six times total** and caught **21 additional findings** the initial Phase-7 REVIEW passes missed (10 in 11.5 across 2 passes, 4 in 11.6a, 3 in 11.6b, 2 in 11.6c-sec, 2 in 11.6c-perf). Pattern validated across six consecutive sprints with zero false positives and zero regressions in live-test reruns.
+Across the full 11.5 → 11.Z arc, `/review-impl` ran **six times total** and caught **21 additional findings** the initial Phase-7 REVIEW passes missed. Pattern validated across six consecutive security/perf/memory sprints with zero false positives and zero regressions in live-test reruns.
 
-Candidate next steps (no commitments):
-- A new phase — no scope defined yet
-- Polish pass on documented known-issues:
-  - Migrate `documents.content` TEXT → BYTEA (lifts V8 string cap; Phase-10-level change)
-  - Fix the `phase10.spec.ts extract` flake (pre-existing)
-- Deferred Phase 11 items if they become load-bearing:
-  - Merge conflict policy on import
-  - Bundle caching for repeat pulls
-  - Webhook pulls / scheduled sync
-  - GUI for cross-instance pull (API-only currently)
-  - Encryption / signing on bundles
+### Next session: dogfood-driven, not feature-driven
+
+When a friction surfaces during real use, capture it as a lesson via `add_lesson` (decision / workaround / general_note). The accumulating lessons become the Phase-12 scope naturally, prioritized by "this actually bit me" rather than "this would be nice in theory."
+
+### Candidate items if dogfooding doesn't redirect priority
+
+Prioritized by "load-bearing-ness" rather than strict order:
+
+- **`phase10.spec.ts extract` flake** — the one pre-existing flake that occasionally reddens CI under full-suite load. Fix if it blocks merge velocity in practice.
+- **`documents.content` TEXT → BYTEA migration** — only bites if someone actually uploads a >300 MB document. Phase-10-level change, non-trivial migration + read-path updates. Don't pre-empt.
+- **GUI for cross-instance pull** — API-only today; nice-to-have if sharing projects between ContextHub instances becomes a routine operator flow.
+- **undici version sync guard** — small tooling sprint: add a runtime check or CI assertion that `undici@${process.versions.undici}` matches our declared `^6.21.2`. Prevents silent breakage on Node upgrades.
+- **Deferred Phase 11 items**: merge conflict policy, bundle caching, webhook pulls, encryption/signing. None load-bearing today.
+
+### Operational state at session close
+- All 8 commits of this session are on `origin/main`.
+- `.workflow-state.json` at retro (clean).
+- Docker compose stack runs healthily; 61/61 API e2e + 52/52 GUI + 39/39 unit pass.
+- No uncommitted changes, no pending todos.
+- Next session starts fresh — no carryover work queue.
 
 ## How to get the stack running
 ```bash
