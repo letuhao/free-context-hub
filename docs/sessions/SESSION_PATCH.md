@@ -1,4 +1,109 @@
 ---
+id: CH-PHASE12-S120
+date: 2026-04-18
+module: Phase12-Sprint12.0
+phase: OPENS_PHASE_12
+---
+
+# Session Patch — 2026-04-18 (Phase 12 Sprint 12.0 — RAG baseline scorecard)
+
+## Where We Are
+**Phase 12 opened.** Sprint 12.0 ships the unified RAG baseline scorecard — the "nail" every downstream Phase-12 sprint will cite in its before/after diff. Six commits on branch `phase-12-rag-quality`, not yet merged to main. 12-phase workflow v2.2 fully exercised: /review-impl caught 15 findings (6 MED + 6 LOW + 3 COSMETIC) that the initial Phase-7 REVIEW and Phase-9 POST-REVIEW missed; all 15 fixed in `29c7956`. The baseline pattern now validated across seven consecutive sprints (11.5, 11.6a/b/c-sec/c-perf, 11.Z, 12.0).
+
+## What shipped (6 commits)
+- `08d793d` — planning: Phase-12 spec + Sprint-12.0 design + execution plan (3 files, ~570 LOC)
+- `ea1b255` — T1–T4 foundation: extended goldenTypes, 33-test metrics module (TDD), tagged queries.json (7 files)
+- `cc69e92` — T5–T8: 4 surface adapters + 3 seeded golden sets (20 lessons + 10 chunks + 10 global queries, all IDs DB-verified) (4 files)
+- `8204f10` — T9, T10, T13: unified runBaseline.ts + diffBaselines.ts + npm scripts (3 files)
+- `aaa4cda` — T11, T14-T16: 7-class friction catalog + first archived baseline (3 files)
+- `29c7956` — review-impl fixes: 15 findings from adversarial review addressed (8 files, 44 new diff tests)
+
+## Baseline numbers (2026-04-18, against live docker-compose stack)
+| Surface | Project | Q | recall@10 | MRR | nDCG@10 | dup@10 | cov% | p50 ms | p95 ms |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| lessons | free-context-hub | 20 | 1.0000 | 0.7642 | 0.8188 | 0 | 1.00 | 2122 | 5957 |
+| code | qc-free-context-hub | 67 | 0.0000 | 0.0000 | 0.0000 | 0 | 0.00 | 32 | 39 |
+| chunks | free-context-hub | 10 | 1.0000 | 0.9167 | 0.9455 | 0 | 1.00 | 29 | 34 |
+| global | free-context-hub | 10 | 0.8889 | 0.7593 | 0.7972 | 0 | 0.89 | 8 | 10 |
+
+## Three durable findings for Phase-12 scope (not just numbers)
+
+### 1. v0 dup-rate gives false confidence
+Baseline reports `dup@10 = 0` across all surfaces. Yet `free-context-hub` has ≥5 "Max retry attempts must be 3" guardrails and ≥6 "Global search test retry pattern" decisions — the original Phase-12 dogfood motivation. The v0 metric keys on exact entity id; same-title-different-UUID noise is mathematically invisible. Scorecard's `## Known limitations` now calls this out explicitly so readers don't misinfer "no duplication." Sprint 12.1 MUST extend dup-rate to `key = title_hash` or `snippet_hash` variant before claiming consolidation improvement.
+
+### 2. Code surface empty — indexing prereq
+`chunks` table (code chunks for search_code_tiered) is empty for every project. All 67 existing code queries return empty result sets. Not a retrieval bug — an infrastructure gap. Must `index_project` against `free-context-hub` before code metrics become meaningful. Sprint 12.0.1 or a pre-12.1 task.
+
+### 3. Golden-set ceiling bias
+Lesson queries are paraphrases of lesson content + targets cherry-picked from recently-active records. Reported `recall@10 = 1.0` may reflect "queries are easy" rather than "retriever is strong." Documented as `golden-set-ceiling-bias` friction class with mitigation path (adversarial queries, hard-miss group, split scoring).
+
+## /review-impl pattern continues to earn its keep
+Seven sprints in a row where the adversarial-review command catches findings that POST-REVIEW self-check missed. Today: 15 findings caught (largest haul yet), zero false positives. Categories: coverage gaps in the metric design (dup-rate silent on the motivating pathology), latent landmines (substring matching in code surface), wire-up failures (must_keywords parsed but ignored), and missing tests (diff generator had 0 tests on pure logic). POST-REVIEW as a human-interactive checkpoint remains the right design — I initially self-signaled "not safety-sensitive, skip /review-impl" and the user over-rode that call correctly.
+
+## Files delivered
+```
+src/qc/
+├── goldenTypes.ts                   extended (+Surface, +GradedHit, +5 target fields, +doc strings)
+├── metrics.ts                       NEW, 96 lines   (6 pure functions, deterministic)
+├── metrics.test.ts                  NEW, 164 lines  (33 unit tests)
+├── surfaces.ts                      NEW, 219 lines  (4 adapters, uniform SurfaceResult contract)
+├── runBaseline.ts                   NEW, 540 lines  (orchestrator + scorecard renderer)
+├── diffBaselines.ts                 NEW, 235 lines  (diff CLI + exported pure helpers)
+└── diffBaselines.test.ts            NEW, 245 lines  (44 unit tests)
+
+qc/
+├── queries.json                     tagged: surface=code (existing 67q)
+├── lessons-queries.json             NEW, 20 queries
+├── chunks-queries.json              NEW, 10 queries
+└── global-queries.json              NEW, 10 queries
+
+docs/
+├── specs/2026-04-18-phase-12-rag-quality.md        spec (+ CLARIFY decisions)
+├── specs/2026-04-18-phase-12-sprint-0-design.md    design
+├── plans/2026-04-18-phase-12-sprint-0-plan.md      16-task plan
+└── qc/
+    ├── friction-classes.md          NEW, 8 classes (7 seeded + 1 deferred)
+    └── baselines/
+        └── 2026-04-18-phase-12-sprint-0.{json,md}  first archived run
+```
+
+## How to reproduce / extend
+```bash
+docker compose up -d
+npm run qc:baseline -- --tag my-tag        # runs all 4 surfaces, ~2-3 min
+npx tsx src/qc/diffBaselines.ts a.json b.json --out diff.md
+
+# Test scoped:
+npm run test:metrics                        # 33 metrics tests
+npx tsx --test src/qc/diffBaselines.test.ts # 44 diff tests
+npm test                                    # 116 tests total
+```
+
+## What's next (Phase 12 sprint board — tentative)
+
+Sprint 12.0 locked in. Sprints below are candidates — dogfooding + baseline friction drives prioritization.
+
+| Sprint | Topic | Status | Depends on |
+|---|---|---|---|
+| 12.0 | Baseline scorecard | ✅ done | — |
+| 12.0.1 | Fix dup-rate v1 (title/snippet hash keys) + run index_project | candidate | none |
+| 12.1a | Lesson dedup — exact-title collapse | planned | 12.0.1 dup-rate v1 |
+| 12.1b | Near-duplicate merge — cosine-threshold clustering | planned | 12.1a |
+| 12.1c | Prune-on-decay — access-count + age-based archive | planned | 12.1a |
+| 12.2a | Access-frequency counter in Redis | planned | 12.1 |
+| 12.2b | Salience weight (git-incident / error-site boost) | planned | 12.2a |
+| 12.2c | Hierarchical pointer retrieval | planned | 12.2a |
+| 12.2d | Sleep-mode consolidation worker | planned | 12.2a–c |
+
+## Operational state
+- 6 commits on branch `phase-12-rag-quality`, 0 on `origin`.
+- `.workflow-state.json` at phase=session (advancing to commit/retro).
+- Docker compose stack healthy; 116/116 unit tests green.
+- No pending todos beyond push + retro.
+
+---
+
+---
 id: HANDOFF-2026-04-18-E
 date: 2026-04-18
 phase: HANDOFF
