@@ -1,4 +1,123 @@
 ---
+id: CH-PHASE12-S121A
+date: 2026-04-18
+module: Phase12-Sprint12.1a
+phase: PHASE_12
+---
+
+# Session Patch — 2026-04-18 (Phase 12 Sprint 12.1a — lessons near-semantic dedup)
+
+## Where We Are
+**Sprint 12.1a closed.** First production-behavior-change sprint of Phase 12 — previous sprints were measurement infrastructure only. Dedup now ships by default for all `searchLessons` / `searchLessonsMulti` consumers (MCP `search_lessons` tool, REST `/api/lessons/search`, chat tool, reflect tool). Opt-out is `LESSONS_DEDUP_DISABLED=true`. Four commits on `phase-12-rag-quality`; /review-impl caught 9 findings (0 HIGH, 4 MED, 3 LOW, 3 COSMETIC), all addressed.
+
+## Commits (4)
+- `5b86db6` — T1-T5 core dedup code: extracted `src/utils/nearSemanticKey.ts`, added `dedupLessonMatches` + env flag + wired into both search paths, 9 initial unit tests, expanded dup-trap golden-set targets to full cluster membership
+- `f435ddc` — first A/B archives + diff demonstrating 0.4350 → 0 on `dup@10 nearsem` with quality preserved
+- `88bd383` — /review-impl fixes: MED-1 + MED-2 (dedup key extended to `(project_id, lesson_type, nearSemanticKey)`), MED-3 (MCP tool schema note), LOW-1 (tightened generic), LOW-2 (`+dirty` SHA suffix), LOW-3 (always-emit explanation), COSMETIC-3 (5 missing cluster IDs)
+- `fdff294` — fresh A/B archives at post-fix commit so provenance is clean
+
+## The nail — A/B numeric signal (lessons surface)
+Back-to-back runs at commit `88bd383`, same load, only `LESSONS_DEDUP_DISABLED` env flag toggled between them.
+
+| Metric | Control (dedup OFF) | New (dedup ON) | Δ | Verdict |
+|---|---:|---:|---|---|
+| **duplication_rate_nearsemantic_at_10** | **0.4350** | **0.0000** | **−100%** | 🟢 pathology eliminated |
+| recall_at_10 | 0.9412 | 0.9412 | Δ=0 | ⚪ unchanged |
+| MRR | 0.8971 | 0.8908 | −0.7% | ⚪ within jitter |
+| nDCG@10 | 0.9077 | 0.9020 | −0.6% | ⚪ within jitter |
+| coverage_pct | 0.9412 | 0.9412 | Δ=0 | ⚪ unchanged |
+| recall_at_5 | 0.9412 | 0.8824 | −6.2% | 🔴 single-query jitter (1 of 17) |
+| latency p50/p95/mean | +11% / +4% / +10% | — | measurement-jitter |
+
+The recall@5 flag is a single-query rerank shift (1 target flipped from rank-5 to rank-6) — recall@10 is unchanged so no target fell out of top-k, only re-ranked within it. Classic measurement-jitter per 12.0.1 friction class.
+
+## /review-impl findings and their resolutions
+
+### MED-1 + MED-2 (combined fix): dedup key now includes project_id + lesson_type
+Before: key = `nearSemanticKey(title, snippet)` → collapsed cross-project AND cross-type same-content items.
+After: key = `${project_id}|${lesson_type}|${nearSemanticKey(title, snippet)}` → preserves:
+- cross-project variants (e.g. a guardrail shared via `include_groups` across two projects)
+- cross-type distinctness (a guardrail and a decision with the same title+snippet carry different roles — guardrail enforces, decision explains why)
+
+Current free-context-hub dataset has all clusters within single-project + single-type, so pre/post-fix numeric results are identical. Fix is load-bearing for future group-scoped knowledge sharing and mixed-type retrieval.
+
+### MED-3: MCP tool description now advertises "MAY return fewer than limit"
+Agents reading the tool schema know dedup can reduce the returned count. LESSONS_DEDUP_DISABLED documented as the revert path.
+
+### MED-4 (doc-only): `reflect` tool output shape shifted 2026-04-18
+The `reflect` MCP tool pipes `searchLessons` matches into LLM synthesis. Before dedup, cluster duplicates biased synthesis (seeing "Max retry = 3" five times made the LLM weight it heavily). After dedup, cleaner input → less-biased synthesis. This is strictly better behavior but IS a behavior change; operators running the same reflect query before vs after 2026-04-18 get different answers. Documented as `downstream-behavior-coupling` friction class.
+
+### LOW-1 / LOW-2 / LOW-3
+- Generic constraint tightened to catch silent field narrowing
+- Archive git_commit field now shows `<sha>+dirty` when the working tree had uncommitted changes at run time — prevents future readers from assuming same-SHA = same-code
+- Dedup explanation always emitted: `enabled, N collapsed`, `enabled, 0 collapsed`, or `disabled via LESSONS_DEDUP_DISABLED`
+
+### COSMETIC-1 + COSMETIC-2 (doc-only): benchmark-wiring-gap friction class
+9 unit tests cover `dedupLessonMatches` as a pure function, but no integration test proves the function is invoked in the right pipeline position. If a future refactor reorders rerank vs dedup, unit tests stay green but production breaks. Integration testing requires mocking DB pool + rerank client — deferred to Sprint 12.1b or 12.0.3. Documented as `benchmark-wiring-gap` friction class.
+
+### COSMETIC-3: cross-topic target list filled to full cluster membership
+Added 5 missing "Global search test retry pattern" IDs — now exhaustive.
+
+## Friction-class catalog now 12 classes total
+New this sprint:
+- `downstream-behavior-coupling` — retrieval changes silently shift downstream consumers (reflect)
+- `benchmark-wiring-gap` — pure-fn unit tests don't prove pipeline wiring
+
+## Files delivered
+```
+src/utils/
+└── nearSemanticKey.ts               NEW — extracted shared utility (services + qc both consume)
+
+src/qc/
+├── metrics.ts                       thin re-export wrapper around the utils module
+└── runBaseline.ts                   gitInfo() appends +dirty when uncommitted changes present
+
+src/services/
+├── lessons.ts                     + dedupLessonMatches (pure fn, tuple key) + isDedupDisabled
+│                                    env check + wired into searchLessons AND searchLessonsMulti
+└── lessons.test.ts                  NEW — 12 unit tests (was 9; +3 for MED-1/2 cross-project
+                                    + cross-type + full-stack regression)
+
+src/mcp/
+└── index.ts                         search_lessons tool description updated (MAY return <limit)
+
+qc/
+└── lessons-queries.json             dup-trap + cross-topic targets = full cluster lists
+
+docs/
+├── qc/
+│   ├── friction-classes.md        + 2 classes (downstream-behavior-coupling, benchmark-wiring-gap)
+│   └── baselines/
+│       ├── 2026-04-18-sprint-12.1a-control.{json,md}   dedup OFF
+│       ├── 2026-04-18-sprint-12.1a-new.{json,md}       dedup ON
+│       └── 2026-04-18-sprint-12.1a.diff.md             the nail
+└── sessions/SESSION_PATCH.md        this entry
+```
+
+## Test count: 150/150 (was 138 at end of 12.0.1; +12 dedup + /review-impl fix tests)
+
+## Runtime verification (post-fix)
+  Docker rebuild: `docker compose up -d --build mcp worker`
+  Control A/B at commit 88bd383: dup@10 nearsem = 0.4350, recall@10 = 0.9412
+  New A/B at commit 88bd383: dup@10 nearsem = 0, recall@10 = 0.9412
+  Delta: dup drops 100%, recall unchanged, zero regressions flagged.
+
+## What's next — Sprint 12.0.2 / 12.1b candidates
+1. **Indexer DEFAULT_IGNORE expansion** (from 12.0.1, still deferred) — expand `src/services/indexer.ts:55` to cover `dist/**`, `.next/**`, `.claude/**`. Prevents future re-indexing from re-introducing the 4426 junk rows we purged.
+2. **`runBaseline --control` flag** (from 12.0.1) — embed noise-floor measurement in each archive to distinguish real signal from measurement-jitter.
+3. **Integration tests for dedup wiring** (from 12.1a) — prove the function is called at the right pipeline position.
+4. **Sprint 12.1b: chunks-surface dedup** — apply the same pattern to document_chunks (currently dup@10 nearsem = 0.29 there). Probably a narrow port of `dedupLessonMatches` specialized for chunks.
+5. **Sprint 12.1c: salience-weighted rerank** — incorporate git-incident / access-frequency signals into the reranker. Richer scope; likely split.
+
+## Operational state
+- 4 commits on `phase-12-rag-quality`, push pending.
+- `.env` cleaned — no residual A/B flag.
+- `.workflow-state.json` to be advanced post-commit + push.
+- Docker stack healthy with dedup live by default.
+
+---
+
+---
 id: CH-PHASE12-S1201
 date: 2026-04-18
 module: Phase12-Sprint12.0.1
