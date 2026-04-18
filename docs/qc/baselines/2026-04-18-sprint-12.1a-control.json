@@ -1,10 +1,10 @@
 {
   "schema_version": "1.0",
   "tag": "sprint-12.1a-control",
-  "run_started_at": "2026-04-18T10:49:11.293Z",
-  "run_ended_at": "2026-04-18T10:50:55.421Z",
-  "elapsed_ms": 104128,
-  "git_commit": "1537871",
+  "run_started_at": "2026-04-18T11:08:44.029Z",
+  "run_ended_at": "2026-04-18T11:10:33.316Z",
+  "elapsed_ms": 109287,
+  "git_commit": "88bd383",
   "git_branch": "phase-12-rag-quality",
   "project_id": "free-context-hub",
   "samples_per_query": 1,
@@ -18,14 +18,14 @@
         "recall_at_5": 0.9412,
         "recall_at_10": 0.9412,
         "mrr": 0.8971,
-        "ndcg_at_5": 0.9051,
-        "ndcg_at_10": 0.9041,
+        "ndcg_at_5": 0.9077,
+        "ndcg_at_10": 0.9077,
         "duplication_rate_at_10": 0,
         "duplication_rate_nearsemantic_at_10": 0.435,
         "coverage_pct": 0.9412,
-        "latency_p50_ms": 5427,
-        "latency_p95_ms": 6275,
-        "latency_mean_ms": 5197
+        "latency_p50_ms": 5606,
+        "latency_p95_ms": 6766,
+        "latency_mean_ms": 5453
       },
       "per_query": [
         {
@@ -84,9 +84,9 @@
             0
           ],
           "latency_ms_samples": [
-            2406
+            6503
           ],
-          "latency_ms_median": 2406,
+          "latency_ms_median": 6503,
           "has_relevant_hit_in_top_k": true,
           "friction_classes": []
         },
@@ -146,9 +146,9 @@
             0
           ],
           "latency_ms_samples": [
-            6007
+            6788
           ],
-          "latency_ms_median": 6007,
+          "latency_ms_median": 6788,
           "has_relevant_hit_in_top_k": true,
           "friction_classes": []
         },
@@ -208,9 +208,9 @@
             0
           ],
           "latency_ms_samples": [
-            6275
+            5305
           ],
-          "latency_ms_median": 6275,
+          "latency_ms_median": 5305,
           "has_relevant_hit_in_top_k": true,
           "friction_classes": []
         },
@@ -270,9 +270,9 @@
             0
           ],
           "latency_ms_samples": [
-            5119
+            5266
           ],
-          "latency_ms_median": 5119,
+          "latency_ms_median": 5266,
           "has_relevant_hit_in_top_k": true,
           "friction_classes": []
         },
@@ -332,9 +332,9 @@
             0
           ],
           "latency_ms_samples": [
-            6997
+            6766
           ],
-          "latency_ms_median": 6997,
+          "latency_ms_median": 6766,
           "has_relevant_hit_in_top_k": true,
           "friction_classes": []
         },
@@ -394,9 +394,9 @@
             0
           ],
           "latency_ms_samples": [
-            3805
+            4237
           ],
-          "latency_ms_median": 3805,
+          "latency_ms_median": 4237,
           "has_relevant_hit_in_top_k": true,
           "friction_classes": []
         },
@@ -406,39 +406,39 @@
           "query": "NoProjectGuard hydration-safe approach for Next.js data pages",
           "top_k_keys": [
             "abe242ea-31ef-4d14-9245-92cfa16b8975",
-            "c3920936-dc58-4a39-a17e-31949774828d",
             "cd0db880-5c36-477f-9f15-6f85dca64596",
-            "f333214e-8e83-4049-a826-a7a5f4cf885a",
-            "75d97ca9-3936-4fb5-90a2-0d95e428f641",
+            "68b2f2cb-2271-454e-bf7e-7831fafb9e3c",
+            "c3920936-dc58-4a39-a17e-31949774828d",
+            "08f31899-df67-4be1-926f-c5c3814e511d",
+            "ed815b58-45a0-4083-be40-4d3cb7770f42",
+            "d3f80630-98c9-4494-ae03-2549a728c37d",
+            "2b07085d-f625-4791-9606-3f2bdb6491cf",
             "1bdb9c01-b800-4861-a819-a4b61898eaa1",
-            "8edfeb1b-b28e-42f4-967b-78bf9f440134",
-            "5b0f23a4-aa1a-4d7b-9b35-dc0b41b63d1d",
-            "18f7f763-25d1-4ca1-952d-91f9ccadb93e",
-            "2b07085d-f625-4791-9606-3f2bdb6491cf"
+            "75d97ca9-3936-4fb5-90a2-0d95e428f641"
           ],
           "top_k_titles": [
             "NoProjectGuard: hydration-safe guard for data pages",
-            "Global search test retry pattern",
             "Dup-rate metric keyed on exact entity id is blind to same-title-different-UUID noise",
-            "gui-create-1776188570090",
-            "gui-create-1776490733660",
+            "pg UUID cast RETURNING is always canonical lowercase — map keys must match",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
             "Import A: impexp-1775368159562",
-            "Filter workaround gui-filter-1775838554751",
-            "Import A: impexp-1775300437866",
-            "Import A: impexp-1775320598400",
-            "Global search test retry pattern"
+            "gui-create-1776490733660"
           ],
           "top_k_snippets": [
             "NoProjectGuard is a hydration-safe guard for 12 data pages, ensuring they only activate after projects load from the API. It has two variants: 'no project selected' and 'project not found'. Feature toggles are deferred to Phase 8, and non-functional UI was removed to avoid confu…",
-            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach involves increasing the wait time between retries exponentially, which helps in reducing the load on the system and improving the chances of successf…",
             "The current duplication rate metric in src/qc/metrics.ts is flawed as it only considers exact entity IDs, ignoring same-title-different-UUID noise. This results in a dup-rate of 0 even when there are multiple near-duplicate lessons with distinct UUIDs. The first archived baselin…",
-            "GUI test lesson content gui-create-1776188570090",
-            "GUI test lesson content gui-create-1776490733660",
+            "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach involves increasing the wait time between retries exponentially, which helps in reducing the load on the system and improving the chances of successf…",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will increase the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will progressively increase the wait time between retries, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
             "The document titled 'Import A: impexp-1775368159562' contains content labeled as 'Content A'. No further details or context are provided in the given text.",
-            "Seeded by GUI test: Filter workaround gui-filter-1775838554751",
-            "The document titled 'Import A: impexp-1775300437866' contains content labeled as 'Content A'. No specific actions are mentioned in the body.",
-            "The document titled 'Import A' with the ID 'impexp-1775320598400' contains content labeled as 'Content A'. No specific actions are mentioned in the body.",
-            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution."
+            "GUI test lesson content gui-create-1776490733660"
           ],
           "found_ranks": [
             1
@@ -456,9 +456,9 @@
             0
           ],
           "latency_ms_samples": [
-            5922
+            5842
           ],
-          "latency_ms_median": 5922,
+          "latency_ms_median": 5842,
           "has_relevant_hit_in_top_k": true,
           "friction_classes": []
         },
@@ -518,9 +518,9 @@
             0
           ],
           "latency_ms_samples": [
-            5340
+            6074
           ],
-          "latency_ms_median": 5340,
+          "latency_ms_median": 6074,
           "has_relevant_hit_in_top_k": true,
           "friction_classes": []
         },
@@ -580,9 +580,9 @@
             0
           ],
           "latency_ms_samples": [
-            5946
+            5934
           ],
-          "latency_ms_median": 5946,
+          "latency_ms_median": 5934,
           "has_relevant_hit_in_top_k": true,
           "friction_classes": []
         },
@@ -642,9 +642,9 @@
             0
           ],
           "latency_ms_samples": [
-            5794
+            6260
           ],
-          "latency_ms_median": 5794,
+          "latency_ms_median": 6260,
           "has_relevant_hit_in_top_k": true,
           "friction_classes": []
         },
@@ -712,9 +712,9 @@
             0
           ],
           "latency_ms_samples": [
-            3750
+            4005
           ],
-          "latency_ms_median": 3750,
+          "latency_ms_median": 4005,
           "has_relevant_hit_in_top_k": true,
           "friction_classes": []
         },
@@ -783,9 +783,9 @@
             2
           ],
           "latency_ms_samples": [
-            5427
+            5382
           ],
-          "latency_ms_median": 5427,
+          "latency_ms_median": 5382,
           "has_relevant_hit_in_top_k": true,
           "friction_classes": []
         },
@@ -853,9 +853,9 @@
             0
           ],
           "latency_ms_samples": [
-            6215
+            6635
           ],
-          "latency_ms_median": 6215,
+          "latency_ms_median": 6635,
           "has_relevant_hit_in_top_k": true,
           "friction_classes": []
         },
@@ -913,9 +913,9 @@
             0
           ],
           "latency_ms_samples": [
-            4154
+            3803
           ],
-          "latency_ms_median": 4154,
+          "latency_ms_median": 3803,
           "has_relevant_hit_in_top_k": false,
           "friction_classes": []
         },
@@ -973,9 +973,9 @@
             0
           ],
           "latency_ms_samples": [
-            4386
+            3415
           ],
-          "latency_ms_median": 4386,
+          "latency_ms_median": 3415,
           "has_relevant_hit_in_top_k": false,
           "friction_classes": []
         },
@@ -1033,9 +1033,9 @@
             0
           ],
           "latency_ms_samples": [
-            3806
+            4185
           ],
-          "latency_ms_median": 3806,
+          "latency_ms_median": 4185,
           "has_relevant_hit_in_top_k": false,
           "friction_classes": []
         },
@@ -1082,27 +1082,31 @@
           "found_ranks": [
             1,
             2,
+            3,
             4,
             5,
             6,
-            9
+            7,
+            8,
+            9,
+            10
           ],
           "graded_hits_in_rank_order": [
             2,
             2,
-            0,
             2,
             2,
             2,
-            0,
-            0,
             2,
-            0
+            2,
+            2,
+            2,
+            2
           ],
           "latency_ms_samples": [
-            5580
+            5275
           ],
-          "latency_ms_median": 5580,
+          "latency_ms_median": 5275,
           "has_relevant_hit_in_top_k": true,
           "friction_classes": []
         },
@@ -1120,7 +1124,7 @@
             "d66e5221-5e7b-42d8-b8fc-d91c8d2ee76a",
             "0e08eead-db62-4668-8d7b-20281747c7ac",
             "9a34ef12-bb6d-42d3-bee3-7ff53c4d86b0",
-            "a442e5e6-dd34-4495-b1d1-c4a8c0fabd46"
+            "abe242ea-31ef-4d14-9245-92cfa16b8975"
           ],
           "top_k_titles": [
             "normalizeForHash collapses digit-runs to 'n' — deliberate trade-off, load-bearing on dataset shape",
@@ -1132,7 +1136,7 @@
             "Max retry attempts must be 3",
             "Max retry attempts must be 3",
             "Max retry attempts must be 3",
-            "Max retry attempts must be 3"
+            "NoProjectGuard: hydration-safe guard for data pages"
           ],
           "top_k_snippets": [
             "The normalizeForHash function collapses digit-runs to 'n' in the v1 near-semantic key. This aggressive approach is designed to catch timestamp-variant fixture duplication but may equate semantically-distinct content when digits carry meaning. The load-bearing assumption is that …",
@@ -1144,7 +1148,7 @@
             "The system should enforce a maximum of three retry attempts to prevent infinite loops and ensure efficient resource utilization. This change will help maintain system stability and performance by limiting the number of times a failed operation is retried.",
             "The system should enforce a maximum of three retry attempts for any operation to prevent infinite loops and resource exhaustion.",
             "The policy requires setting the maximum number of retry attempts to 3 for all operations. This ensures that systems do not indefinitely attempt failed tasks, which can lead to resource exhaustion and system instability.",
-            "The system should enforce a maximum of three retry attempts for any operation to prevent infinite loops and resource exhaustion."
+            "NoProjectGuard is a hydration-safe guard for 12 data pages, ensuring they only activate after projects load from the API. It has two variants: 'no project selected' and 'project not found'. Feature toggles are deferred to Phase 8, and non-functional UI was removed to avoid confu…"
           ],
           "found_ranks": [],
           "graded_hits_in_rank_order": [
@@ -1160,9 +1164,9 @@
             0
           ],
           "latency_ms_samples": [
-            5393
+            5792
           ],
-          "latency_ms_median": 5393,
+          "latency_ms_median": 5792,
           "has_relevant_hit_in_top_k": false,
           "friction_classes": [
             "no-relevant-hit"
@@ -1224,9 +1228,9 @@
             0
           ],
           "latency_ms_samples": [
-            5954
+            5995
           ],
-          "latency_ms_median": 5954,
+          "latency_ms_median": 5995,
           "has_relevant_hit_in_top_k": true,
           "friction_classes": [
             "rank-order-inversion"
@@ -1289,9 +1293,9 @@
             0
           ],
           "latency_ms_samples": [
-            5670
+            5606
           ],
-          "latency_ms_median": 5670,
+          "latency_ms_median": 5606,
           "has_relevant_hit_in_top_k": true,
           "friction_classes": []
         }
