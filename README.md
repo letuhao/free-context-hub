@@ -349,4 +349,4 @@ Please open an issue first for large changes so we can discuss the approach.
 
 MIT — see [LICENSE](LICENSE) for details.
 
-[Whitepaper](WHITEPAPER.md) | [Agent Protocol](AGENT_PROTOCOL.md) | [Quickstart Guide](docs/QUICKSTART.md)
+[Whitepaper](WHITEPAPER.md) | [Quickstart Guide](docs/QUICKSTART.md) | [Knowledge Exchange Reference](docs/references/knowledge-exchange.md)

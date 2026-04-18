@@ -288,6 +288,73 @@ Example arguments (shape):
 - `workspace_token` (optional; required only if `MCP_AUTH_ENABLED=true`)
 - `project_id`
 
+## Knowledge Exchange (Phase 11)
+
+Once a project has accumulated useful lessons + documents, you can export it as a self-contained zip bundle and move it to another ContextHub instance — or pull a bundle from a remote peer directly.
+
+### Export a project
+
+```bash
+# Stream the bundle to disk
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:3001/api/projects/<project_id>/export" \
+  -o bundle.zip
+
+# Or narrow what's exported
+curl "http://localhost:3001/api/projects/<project_id>/export?include_documents=false&include_chunks=false" \
+  -o lessons-only.zip
+```
+
+Bundle contents (all optional per query flags):
+
+```
+bundle.zip
+├── manifest.json              schema v1 + sha256 per entry
+├── lessons.jsonl              (streamed)
+├── guardrails.jsonl
+├── lesson_types.jsonl
+├── chunks.jsonl
+├── documents.jsonl            metadata only
+└── documents/<doc_id>.<ext>   raw binary
+```
+
+### Import a project
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  -F "file=@bundle.zip" \
+  "http://localhost:3001/api/projects/<target_project_id>/import?policy=skip"
+```
+
+Conflict policies: `skip` (default), `overwrite`, `fail`. Add `?dry_run=true` to preview counts without writing. The response is an `ImportResult` with per-entity created/updated/skipped counts + a conflicts list.
+
+The target project is auto-created if missing. Cross-tenant UUID guard refuses to overwrite rows already owned by a different project — a security invariant you can't bypass even under `overwrite`.
+
+### Cross-instance pull
+
+If your local ContextHub should pull a bundle directly from a remote peer:
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "remote_url": "https://peer.example.com",
+    "remote_project_id": "their-project-id",
+    "api_key": "optional-bearer-token-for-remote",
+    "policy": "skip",
+    "dry_run": false
+  }' \
+  "http://localhost:3001/api/projects/<local_project_id>/pull-from"
+```
+
+The pull endpoint is SSRF-hardened (private-range DNS check with pinning to defeat rebinding attacks), bounded at 500 MB per bundle, with a 60 s connect timeout + 60 s idle-stream timeout (slow-loris defense).
+
+### GUI
+
+All of the above is available through the **Knowledge Exchange** panel under Project Settings — drag-drop upload, Preview (dry-run) → Apply. Cross-instance pull is API-only for now.
+
+See [`docs/references/knowledge-exchange.md`](references/knowledge-exchange.md) for a deeper walkthrough.
+
 ## Troubleshooting
 
 ### `Unauthorized: invalid workspace_token`

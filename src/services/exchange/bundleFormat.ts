@@ -470,10 +470,12 @@ interface ZipEntry {
  *  - yauzl is single-reader. Iterators returned by this reader MUST be
  *    consumed sequentially — running two `for await` loops in parallel
  *    against the same reader will collide on the underlying read stream.
- *  - Each `*.jsonl` entry is currently buffered into memory in full
- *    before yielding records. For chunks.jsonl on a multi-thousand-chunk
- *    project this can be hundreds of MB. True streaming JSONL parsing
- *    is deferred to a polish sprint.
+ *  - Sprint 11.6b refactored JSONL decoding to true line-by-line streaming
+ *    via readline + a hash-tap Transform; peak memory per entry is bounded
+ *    by the largest single line (<1 MB typical), not the whole file.
+ *    Checksum validation fires at EOF rather than pre-yield — consumers
+ *    that need "reject bad bundle before doing any work" must drain the
+ *    whole iterator first.
  *  - Calling `reader.close()` invalidates all outstanding iterators.
  */
 export async function openBundle(input: string | Buffer): Promise<BundleReader> {

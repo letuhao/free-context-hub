@@ -9,7 +9,7 @@ Use the **ContextHub** MCP server (HTTP `http://localhost:3000/mcp` or your conf
 
 ## Defaults (do not re-ask the user every time)
 
-- **`project_id`**: Omit when the server has `DEFAULT_PROJECT_ID` in its `.env` / Docker `env_file`. If you must pass it explicitly, use the project convention (this repo: `free-context-hub`; confirm in `AGENT_PROTOCOL.md` if unsure).
+- **`project_id`**: Omit when the server has `DEFAULT_PROJECT_ID` in its `.env` / Docker `env_file`. If you must pass it explicitly, use the project convention (this repo: `free-context-hub`; confirm in `CLAUDE.md` if unsure).
 - **`workspace_token`**: Omit when `MCP_AUTH_ENABLED=false`. Pass only when the server enforces auth.
 
 ## Session start — run in order

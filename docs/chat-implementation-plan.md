@@ -1,5 +1,11 @@
 # Chat Implementation Plan
 
+> **Status (as of 2026-04-18):** This document is a **historical design artifact**. The chat feature shipped in **Phase 7** (Sprint 7.3 — see [`phase7-task-breakdown.md`](phase7-task-breakdown.md)). C1 (basic streaming chat), C2 (tool-calling), and C3 (thread persistence) are live. C4 (shared threads, attachments) was descoped — if any of its features resurface as load-bearing, they'd reopen as a fresh design rather than inherit this document's framing.
+>
+> The design reasoning below remains a useful reference for how chat was shaped, but do not treat it as a commitment register.
+
+---
+
 ## Overview
 
 Multi-phase implementation of the AI Chat feature — from basic streaming to full

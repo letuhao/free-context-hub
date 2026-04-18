@@ -119,7 +119,7 @@ Yêu cầu: `MCP_SERVER_URL` (mặc định harness dùng `http://localhost:3000
 
 ## Bước 3 — “Coder agent” (định tính)
 
-Chi tiết: [phase6-coder-agent-checklist.md](phase6-coder-agent-checklist.md).
+_(The separate coder-agent checklist was archived in Sprint 11.Z; Phase 6 is complete and the checklist's content lives in git history if needed.)_
 
 ## Log — đảm bảo flow đã chạy
 
