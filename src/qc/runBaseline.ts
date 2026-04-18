@@ -85,7 +85,12 @@ function parseArgs(argv: string[]) {
   const surfacesFilter = (args.get('surfaces') ?? 'lessons,code,chunks,global')
     .split(',')
     .map((s) => s.trim() as Surface);
-  return { tag, k, samples, outDir, surfacesFilter };
+  // Sprint 12.0.2: --control flag runs the goldenset TWICE back-to-back and
+  // embeds a per-metric noise-floor in the archive. Lets downstream diffs
+  // distinguish real signal from measurement-jitter without requiring
+  // operators to run and track a separate control archive by hand.
+  const control = args.get('control') === 'true' || args.get('control') === '1';
+  return { tag, k, samples, outDir, surfacesFilter, control };
 }
 
 // ----------------------- Target-matching per surface -----------------------
@@ -359,7 +364,7 @@ function fmtMetric(v: number | null): string {
 }
 
 function renderMarkdown(archive: BaselineArchive): string {
-  const { tag, git_commit, git_branch, run_started_at, elapsed_ms, project_id, surfaces } = archive;
+  const { tag, git_commit, git_branch, run_started_at, elapsed_ms, project_id, surfaces, noise_floor } = archive;
   const lines: string[] = [];
   lines.push('---');
   lines.push(`tag: ${tag}`);
@@ -428,6 +433,30 @@ function renderMarkdown(archive: BaselineArchive): string {
   }
   lines.push('');
 
+  // Sprint 12.0.2: when --control was used, render the noise-floor table
+  // so readers know how much each metric moves across back-to-back runs on
+  // the same code. Future diffs can compare |delta| vs this table.
+  if (noise_floor) {
+    lines.push('## Noise floor (|control − new| per metric, same code, back-to-back runs)');
+    lines.push('');
+    lines.push(
+      '| Surface | recall@5 | recall@10 | MRR | nDCG@5 | nDCG@10 | dup@10 | dup@10 nearsem | cov% | p50 | p95 | mean |',
+    );
+    lines.push('|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|');
+    const f = (v: number | null | undefined) => (v === null || v === undefined ? '—' : v.toFixed(4));
+    for (const [s, nf] of Object.entries(noise_floor)) {
+      if (!nf) continue;
+      lines.push(
+        `| ${s} | ${f(nf.recall_at_5)} | ${f(nf.recall_at_10)} | ${f(nf.mrr)} | ${f(nf.ndcg_at_5)} | ${f(nf.ndcg_at_10)} | ${f(nf.duplication_rate_at_10)} | ${f(nf.duplication_rate_nearsemantic_at_10)} | ${f(nf.coverage_pct)} | ${f(nf.latency_p50_ms)} | ${f(nf.latency_p95_ms)} | ${f(nf.latency_mean_ms)} |`,
+      );
+    }
+    lines.push('');
+    lines.push(
+      '_Interpretation: any |delta| in a later diff that falls within these bounds is jitter, not signal._',
+    );
+    lines.push('');
+  }
+
   lines.push('## Known limitations');
   lines.push('');
   lines.push('- Latency varies ±10–20% across runs; quality metrics are deterministic.');
@@ -446,6 +475,25 @@ function renderMarkdown(archive: BaselineArchive): string {
 
 // -------------------------------- Archive JSON -----------------------------
 
+/** Sprint 12.0.2: noise-floor per surface per metric. null when either
+ *  run had a null value (e.g. no samples → null latency). Values are
+ *  |run2 - run1| absolute deltas. A downstream diff reader should treat
+ *  any |new - old| that's within the max(fromNoiseFloor[k], toNoiseFloor[k])
+ *  band as measurement-jitter rather than signal. */
+type NoiseFloorPerSurface = {
+  recall_at_5: number | null;
+  recall_at_10: number | null;
+  mrr: number | null;
+  ndcg_at_5: number | null;
+  ndcg_at_10: number | null;
+  duplication_rate_at_10: number | null;
+  duplication_rate_nearsemantic_at_10: number | null;
+  coverage_pct: number | null;
+  latency_p50_ms: number | null;
+  latency_p95_ms: number | null;
+  latency_mean_ms: number | null;
+};
+
 type BaselineArchive = {
   schema_version: string;
   tag: string;
@@ -458,7 +506,43 @@ type BaselineArchive = {
   samples_per_query: number;
   k: number;
   surfaces: Partial<Record<Surface, SurfaceAggregate>>;
+  /** When --control is passed, embed the first run's per-surface metrics so
+   *  a later reader can compute the noise floor from first principles. */
+  control_run_surfaces?: Partial<Record<Surface, SurfaceAggregate>>;
+  /** |control - new| per-surface per-metric. Present only under --control. */
+  noise_floor?: Partial<Record<Surface, NoiseFloorPerSurface>>;
 };
+
+/** Pure: compute |second - first| per metric per surface. Both sides must
+ *  be populated. null in either → null out. */
+function computeNoiseFloor(
+  runControl: Partial<Record<Surface, SurfaceAggregate>>,
+  runNew: Partial<Record<Surface, SurfaceAggregate>>,
+): Partial<Record<Surface, NoiseFloorPerSurface>> {
+  const out: Partial<Record<Surface, NoiseFloorPerSurface>> = {};
+  const surfaces = new Set([
+    ...Object.keys(runControl),
+    ...Object.keys(runNew),
+  ]) as Set<Surface>;
+  for (const s of surfaces) {
+    const a = runControl[s];
+    const b = runNew[s];
+    if (!a || !b) continue;
+    const metricKeys = Object.keys(a.metrics) as (keyof typeof a.metrics)[];
+    const perSurface = {} as NoiseFloorPerSurface;
+    for (const key of metricKeys) {
+      const v1 = a.metrics[key];
+      const v2 = b.metrics[key];
+      if (v1 === null || v2 === null) {
+        (perSurface as any)[key] = null;
+      } else {
+        (perSurface as any)[key] = Math.abs(v2 - v1);
+      }
+    }
+    out[s] = perSurface;
+  }
+  return out;
+}
 
 function gitInfo(): { commit: string; branch: string } {
   try {
@@ -476,46 +560,78 @@ function gitInfo(): { commit: string; branch: string } {
 
 // --------------------------------- Main -----------------------------------
 
+/** Run every surface in `surfacesFilter` against its golden set, returning
+ *  the per-surface aggregated metrics. Extracted so `--control` mode can
+ *  call this twice without duplicating the loop. */
+async function runAllSurfaces(
+  client: McpClient,
+  opts: { k: number; samples: number; surfacesFilter: Surface[]; label: string },
+): Promise<{ surfaces: Partial<Record<Surface, SurfaceAggregate>>; primaryProjectId: string }> {
+  const surfaces: Partial<Record<Surface, SurfaceAggregate>> = {};
+  let primaryProjectId = 'free-context-hub';
+
+  for (const surface of opts.surfacesFilter) {
+    const file = GOLDEN_FILES[surface];
+    const setRaw = await fs.readFile(file, 'utf8').catch(() => null);
+    if (!setRaw) {
+      console.log(`[baseline/${opts.label}] ${surface}: MISSING golden set at ${file}, skipping`);
+      continue;
+    }
+    const set = JSON.parse(setRaw) as GoldenSet;
+    const pid = set.project_id_suggested ?? primaryProjectId;
+    if (surface === 'lessons') primaryProjectId = pid;
+    console.log(`[baseline/${opts.label}] ${surface}: ${set.queries.length} queries against project=${pid}`);
+
+    const dispatch = makeDispatcher(surface, client, pid);
+    const perQuery: PerQuery[] = [];
+    for (const q of set.queries) {
+      process.stdout.write(`  [${opts.label}] ${surface}/${q.id} ... `);
+      const res = await evalQuery(surface, dispatch, q, opts.k, opts.samples);
+      const frictionNote = res.friction_classes.length ? ', ' + res.friction_classes.join(';') : '';
+      process.stdout.write(
+        `${res.found_ranks.length ? 'HIT@' + res.found_ranks.join(',') : 'MISS'} (${res.latency_ms_median}ms${frictionNote})\n`,
+      );
+      perQuery.push(res);
+    }
+    surfaces[surface] = aggregate(perQuery, pid);
+  }
+
+  return { surfaces, primaryProjectId };
+}
+
 async function main() {
-  const { tag, k, samples, outDir, surfacesFilter } = parseArgs(process.argv.slice(2));
+  const { tag, k, samples, outDir, surfacesFilter, control } = parseArgs(process.argv.slice(2));
   const today = new Date().toISOString().slice(0, 10);
   const runStart = new Date();
   const { commit, branch } = gitInfo();
 
-  console.log(`[baseline] tag=${tag} k=${k} samples=${samples} surfaces=${surfacesFilter.join(',')}`);
+  console.log(`[baseline] tag=${tag} k=${k} samples=${samples} control=${control} surfaces=${surfacesFilter.join(',')}`);
   console.log(`[baseline] MCP=${MCP_URL}  API=${API_URL}`);
 
   const client = new McpClient({ name: 'rag-baseline-runner', version: '1.0.0' }, { capabilities: {} });
   await client.connect(new StreamableHTTPClientTransport(new URL(MCP_URL), {}));
 
-  const surfaces: Partial<Record<Surface, SurfaceAggregate>> = {};
-  let primaryProjectId = 'free-context-hub';
+  let surfaces: Partial<Record<Surface, SurfaceAggregate>>;
+  let primaryProjectId: string;
+  let controlSurfaces: Partial<Record<Surface, SurfaceAggregate>> | undefined;
+  let noiseFloor: Partial<Record<Surface, NoiseFloorPerSurface>> | undefined;
 
   try {
-    for (const surface of surfacesFilter) {
-      const file = GOLDEN_FILES[surface];
-      const setRaw = await fs.readFile(file, 'utf8').catch(() => null);
-      if (!setRaw) {
-        console.log(`[baseline] ${surface}: MISSING golden set at ${file}, skipping`);
-        continue;
-      }
-      const set = JSON.parse(setRaw) as GoldenSet;
-      const pid = set.project_id_suggested ?? primaryProjectId;
-      if (surface === 'lessons') primaryProjectId = pid;
-      console.log(`[baseline] ${surface}: ${set.queries.length} queries against project=${pid}`);
-
-      const dispatch = makeDispatcher(surface, client, pid);
-      const perQuery: PerQuery[] = [];
-      for (const q of set.queries) {
-        process.stdout.write(`  ${surface}/${q.id} ... `);
-        const res = await evalQuery(surface, dispatch, q, k, samples);
-        const frictionNote = res.friction_classes.length ? ', ' + res.friction_classes.join(';') : '';
-        process.stdout.write(
-          `${res.found_ranks.length ? 'HIT@' + res.found_ranks.join(',') : 'MISS'} (${res.latency_ms_median}ms${frictionNote})\n`,
-        );
-        perQuery.push(res);
-      }
-      surfaces[surface] = aggregate(perQuery, pid);
+    if (control) {
+      // Run twice back-to-back at the same server load. The first run is
+      // treated as a CONTROL; the second is the canonical archive. Noise
+      // floor = |run2 - run1| per metric.
+      console.log('[baseline] --control mode: running goldenset twice to establish noise floor');
+      const run1 = await runAllSurfaces(client, { k, samples, surfacesFilter, label: 'control' });
+      const run2 = await runAllSurfaces(client, { k, samples, surfacesFilter, label: 'new' });
+      surfaces = run2.surfaces;
+      primaryProjectId = run2.primaryProjectId;
+      controlSurfaces = run1.surfaces;
+      noiseFloor = computeNoiseFloor(run1.surfaces, run2.surfaces);
+    } else {
+      const res = await runAllSurfaces(client, { k, samples, surfacesFilter, label: 'single' });
+      surfaces = res.surfaces;
+      primaryProjectId = res.primaryProjectId;
     }
   } finally {
     await client.close();
@@ -552,6 +668,8 @@ async function main() {
     samples_per_query: samples,
     k,
     surfaces,
+    ...(controlSurfaces ? { control_run_surfaces: controlSurfaces } : {}),
+    ...(noiseFloor ? { noise_floor: noiseFloor } : {}),
   };
 
   await fs.mkdir(outDir, { recursive: true });

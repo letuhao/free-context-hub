@@ -20,6 +20,52 @@ const DEFAULT_SECRET_IGNORE_PATTERNS: string[] = [
   '**/Gemfile.lock',
 ];
 
+/**
+ * Sprint 12.0.2 — build-output + agent-metadata + misc noise patterns.
+ *
+ * Added after the 12.0.1 index-hygiene finding: first-time indexing of
+ * `free-context-hub` ingested 4426 junk chunks (dist/, gui/.next/,
+ * .claude/worktrees/, test-results/, coverage/). None carried secrets,
+ * but they diluted retrieval relevance and inflated latency.
+ *
+ * Patterns are intentionally broad enough to cover common JS/TS/Python/
+ * Rust/Java build outputs without hardcoding project-specific directories.
+ * Projects can still add more via their .contexthub/ignore file.
+ */
+const DEFAULT_BUILD_OUTPUT_IGNORE_PATTERNS: string[] = [
+  // Compiled/transpiled output
+  '**/dist/**',
+  '**/build/**',
+  '**/out/**',
+  // Next.js / SvelteKit / Turbo / Nuxt
+  '**/.next/**',
+  '**/.svelte-kit/**',
+  '**/.turbo/**',
+  '**/.nuxt/**',
+  // Rust / Java / Kotlin
+  '**/target/**',
+  // Python
+  '**/__pycache__/**',
+  '**/*.pyc',
+  // Agent/IDE workspace metadata
+  '**/.claude/**',
+  '**/.cursor/**',
+  '**/.idea/**',
+  // Test / coverage output
+  '**/test-results/**',
+  '**/playwright-report/**',
+  '**/coverage/**',
+  '**/.nyc_output/**',
+  // Log / minified / map files
+  '**/*.log',
+  '**/*.map',
+  '**/*.min.js',
+  '**/*.min.css',
+  // OS
+  '**/.DS_Store',
+  '**/Thumbs.db',
+];
+
 export async function loadIgnorePatternsFromRoot(root: string): Promise<string[]> {
   const ignoreFile = path.join(root, '.contexthub', 'ignore');
   let userPatterns: string[] = [];
@@ -35,6 +81,10 @@ export async function loadIgnorePatternsFromRoot(root: string): Promise<string[]
     // If ignore file doesn't exist, we just use defaults.
   }
 
-  return [...DEFAULT_SECRET_IGNORE_PATTERNS, ...userPatterns].map(normalizePattern);
+  return [
+    ...DEFAULT_SECRET_IGNORE_PATTERNS,
+    ...DEFAULT_BUILD_OUTPUT_IGNORE_PATTERNS,
+    ...userPatterns,
+  ].map(normalizePattern);
 }
 
