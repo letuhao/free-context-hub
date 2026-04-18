@@ -1,0 +1,153 @@
+{
+  "version": "2026-04-18",
+  "surface": "lessons",
+  "project_id_suggested": "free-context-hub",
+  "notes": [
+    "Phase 12 Sprint 12.0 — lesson-search golden set.",
+    "Seeded by hand from real lessons in the free-context-hub project (Phase 11 closeout state).",
+    "20 queries across 4 groups: confident-hit, duplicate-trap, adversarial-miss, cross-topic.",
+    "Duplicate-trap queries intentionally point at one id from a known-duplicate cluster; the dup-rate metric surfaces the cluster itself."
+  ],
+  "queries": [
+    {
+      "id": "lesson-pg-uuid-casing",
+      "group": "confident-hit",
+      "query": "how to handle pg UUID casing when building map lookups after RETURNING",
+      "target_lesson_ids": ["68b2f2cb-2271-454e-bf7e-7831fafb9e3c"],
+      "must_keywords": ["uuid", "canonical"]
+    },
+    {
+      "id": "lesson-undici-version-pinning",
+      "group": "confident-hit",
+      "query": "why must undici userland version match the Node bundled version",
+      "target_lesson_ids": ["82e14086-dc76-40f5-81f5-e7ef0c4c97ef"],
+      "must_keywords": ["undici", "dispatcher"]
+    },
+    {
+      "id": "lesson-pyenv-python3-shim",
+      "group": "confident-hit",
+      "query": "pyenv-win python3.bat shim fails with multi-line -c bash arguments",
+      "target_lesson_ids": ["8788dd3e-2f89-4bb5-b899-d9d3c362da11"],
+      "must_keywords": ["pyenv", "python3"]
+    },
+    {
+      "id": "lesson-npm-test-silent-skip",
+      "group": "confident-hit",
+      "query": "npm test script lists test files explicitly so new ones silently skip",
+      "target_lesson_ids": ["0f4be646-18a0-4301-b329-301b12c0945e"],
+      "must_keywords": ["npm", "test"]
+    },
+    {
+      "id": "lesson-api-lessons-items-shape",
+      "group": "confident-hit",
+      "query": "GET /api/lessons response shape uses items not lessons",
+      "target_lesson_ids": ["2af9bb39-e127-4527-8453-4813a66ae28b"],
+      "must_keywords": ["items", "/api/lessons"]
+    },
+    {
+      "id": "lesson-review-impl-default",
+      "group": "confident-hit",
+      "query": "should I invoke review-impl in post-review by default in the v2.2 workflow",
+      "target_lesson_ids": ["a0792c20-305b-4640-b6c7-befffcf5c3e1"],
+      "must_keywords": ["review-impl", "post-review"]
+    },
+    {
+      "id": "lesson-noproject-guard-hydration",
+      "group": "confident-hit",
+      "query": "NoProjectGuard hydration-safe approach for Next.js data pages",
+      "target_lesson_ids": ["abe242ea-31ef-4d14-9245-92cfa16b8975"],
+      "must_keywords": ["NoProjectGuard", "hydration"]
+    },
+    {
+      "id": "lesson-project-crud-validation",
+      "group": "confident-hit",
+      "query": "project CRUD POST PUT endpoints with validation rules",
+      "target_lesson_ids": ["6247caba-5aa7-4ce9-b4ac-3fcc9377246d"],
+      "must_keywords": ["crud", "validation"]
+    },
+    {
+      "id": "lesson-multi-project-color",
+      "group": "confident-hit",
+      "query": "multi-project color and description schema additions",
+      "target_lesson_ids": ["1f112bf8-7da1-4b1a-a181-13855d60f628"],
+      "must_keywords": ["multi-project", "color"]
+    },
+    {
+      "id": "lesson-code-review-workflow-pref",
+      "group": "confident-hit",
+      "query": "code review preference: review each file group separately after bulk implementation",
+      "target_lesson_ids": ["4e28d4bc-5d6e-47c7-bda5-7b2dfb761736"],
+      "must_keywords": ["code review"]
+    },
+
+    {
+      "id": "lesson-dup-max-retry-guardrail",
+      "group": "duplicate-trap",
+      "query": "max retry attempts must be 3 external API call guardrail",
+      "target_lesson_ids": ["4abf93d6-cbca-4006-aee6-a143bd3e8979"],
+      "must_keywords": ["retry", "3"]
+    },
+    {
+      "id": "lesson-dup-global-search-retry-pattern",
+      "group": "duplicate-trap",
+      "query": "global search test retry pattern exponential backoff",
+      "target_lesson_ids": ["2b07085d-f625-4791-9606-3f2bdb6491cf"],
+      "must_keywords": ["retry", "backoff"]
+    },
+    {
+      "id": "lesson-dup-valid-impexp-fixture",
+      "group": "duplicate-trap",
+      "query": "valid impexp extra entry fixture",
+      "target_lesson_ids": ["fbb870fb-3182-4b88-980e-54bb1485887a"],
+      "must_keywords": []
+    },
+
+    {
+      "id": "lesson-miss-unicorn",
+      "group": "adversarial-miss",
+      "query": "how to render a rainbow unicorn in WebGL with subsurface scattering",
+      "target_lesson_ids": []
+    },
+    {
+      "id": "lesson-miss-astrophysics",
+      "group": "adversarial-miss",
+      "query": "thermonuclear astrophysics of quark-gluon plasma at LHC",
+      "target_lesson_ids": []
+    },
+    {
+      "id": "lesson-miss-falconry",
+      "group": "adversarial-miss",
+      "query": "medieval falconry training manual hood design",
+      "target_lesson_ids": []
+    },
+
+    {
+      "id": "lesson-cross-integration-test-backoff",
+      "group": "cross-topic",
+      "query": "integration test exponential backoff retry strategy",
+      "target_lesson_ids": ["4abf93d6-cbca-4006-aee6-a143bd3e8979", "2b07085d-f625-4791-9606-3f2bdb6491cf"],
+      "must_keywords": ["retry"]
+    },
+    {
+      "id": "lesson-cross-sprint-11-closeout",
+      "group": "cross-topic",
+      "query": "sprint 11.6c-sec DNS pinning body-stall timeout security polish",
+      "target_lesson_ids": ["82e14086-dc76-40f5-81f5-e7ef0c4c97ef"],
+      "must_keywords": ["dns", "dispatcher"]
+    },
+    {
+      "id": "lesson-cross-workflow-gate",
+      "group": "cross-topic",
+      "query": "workflow gate state machine 12-phase workflow v2.2",
+      "target_lesson_ids": ["a0792c20-305b-4640-b6c7-befffcf5c3e1"],
+      "must_keywords": ["workflow"]
+    },
+    {
+      "id": "lesson-cross-agent-bootstrap-e2e",
+      "group": "cross-topic",
+      "query": "agent context bootstrap end-to-end testing",
+      "target_lesson_ids": ["6e17baa4-75a7-4b6b-960d-b543d90896fe", "2f8b0b23-b858-4fae-9a70-31c104e7fe79"],
+      "must_keywords": ["bootstrap"]
+    }
+  ]
+}

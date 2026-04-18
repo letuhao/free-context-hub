@@ -1,0 +1,84 @@
+{
+  "version": "2026-04-18",
+  "surface": "chunks",
+  "project_id_suggested": "free-context-hub",
+  "notes": [
+    "Phase 12 Sprint 12.0 — document-chunk-search golden set.",
+    "Corpus is 11 document_chunks across sample.docx / sample.pdf / sample.png in free-context-hub.",
+    "sample.pdf has 3 extraction-failed chunks (Vision HTTP 400) — queries targeting those are omitted; their existence is a known friction class (noise-from-failed-extraction).",
+    "Small-corpus note: coverage@10 ceiling is limited by corpus size; dup-rate picks up sample.docx vs sample.png duplication of ADR content."
+  ],
+  "queries": [
+    {
+      "id": "chunk-retry-strategy-overview",
+      "group": "confident-hit",
+      "query": "what is the retry strategy for external API calls?",
+      "target_chunk_ids": ["f379c8f6-1c30-4ca7-971d-76c8c573d9d5"],
+      "must_keywords": ["retry"]
+    },
+    {
+      "id": "chunk-retry-config-table",
+      "group": "confident-hit",
+      "query": "retry configuration parameters base delay and multiplier",
+      "target_chunk_ids": ["e0b2c3e7-6e09-4a0e-9f69-c1f10855003e"],
+      "must_keywords": ["configuration"]
+    },
+    {
+      "id": "chunk-retry-implementation-code",
+      "group": "confident-hit",
+      "query": "how to implement a retry middleware wrapping fetch",
+      "target_chunk_ids": ["49d773e1-b2b1-4ccc-a31b-aaafb848b32b"],
+      "must_keywords": ["middleware"]
+    },
+    {
+      "id": "chunk-authentication-overview",
+      "group": "confident-hit",
+      "query": "API authentication using API key in Authorization header",
+      "target_chunk_ids": ["80f588e6-5b9a-4252-bb2d-9f06cdcf79c5"],
+      "must_keywords": ["authentication"]
+    },
+    {
+      "id": "chunk-role-definitions",
+      "group": "confident-hit",
+      "query": "what are the user roles admin editor viewer in the system",
+      "target_chunk_ids": ["0eba6916-0ab4-4289-96b5-554c7d96bc0b"],
+      "must_keywords": ["admin"]
+    },
+    {
+      "id": "chunk-data-storage-pgvector",
+      "group": "confident-hit",
+      "query": "how are lessons stored pgvector postgres",
+      "target_chunk_ids": ["0a02f1bd-8108-4efa-8a9e-f2fcd75ad4e3"],
+      "must_keywords": ["pgvector"]
+    },
+    {
+      "id": "chunk-adr-intro-dup",
+      "group": "duplicate-trap",
+      "query": "architecture decision records introduction",
+      "target_chunk_ids": ["512d7a46-e7f5-45aa-b3e5-6902e3ca6cd8", "79e04437-5277-48af-9f9a-e45a7c078771"],
+      "must_keywords": ["decision"]
+    },
+    {
+      "id": "chunk-cross-retry-auth-storage",
+      "group": "cross-topic",
+      "query": "summary of retry authentication and data storage decisions",
+      "target_chunk_ids": [
+        "f379c8f6-1c30-4ca7-971d-76c8c573d9d5",
+        "80f588e6-5b9a-4252-bb2d-9f06cdcf79c5",
+        "0a02f1bd-8108-4efa-8a9e-f2fcd75ad4e3"
+      ]
+    },
+    {
+      "id": "chunk-miss-quantum",
+      "group": "adversarial-miss",
+      "query": "quantum flux capacitor documentation chapter 7",
+      "target_chunk_ids": []
+    },
+    {
+      "id": "chunk-miss-jazz",
+      "group": "adversarial-miss",
+      "query": "history of bebop jazz improvisation notation",
+      "target_chunk_ids": []
+    }
+  ]
+}
