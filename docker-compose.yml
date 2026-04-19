@@ -55,7 +55,10 @@ services:
       - neo4j
       - rabbitmq
       - redis
-      - tei-rerank
+      # Note: tei-rerank is gated behind `profiles: ["measurement"]` per
+      # 12.1h /review-impl MED-2. Not a hard dependency — production runs
+      # RERANK_TYPE=generative which doesn't need TEI. Start tei-rerank
+      # separately when measuring: `docker compose --profile measurement up -d tei-rerank`.
     env_file:
       - .env
     environment:
@@ -230,26 +233,37 @@ services:
       - contexthub_mcpdata:/data
       - ./:/workspace:ro
 
-  # Phase 12 Sprint 12.1g — HuggingFace text-embeddings-inference (TEI) for
-  # true cross-encoder rerank. Supports /rerank endpoint with (query, texts)
-  # pair scoring — unblocks bge-reranker, jina-reranker, and other cross-
-  # encoders that return garbage via LM Studio's /v1/embeddings. CPU-only
-  # to avoid VRAM contention with LM Studio. First `docker compose up`
-  # downloads ~560MB model (cached in named volume `tei_model_cache`);
-  # subsequent starts are <30s.
+  # Phase 12 Sprint 12.1g / 12.1h — HuggingFace text-embeddings-inference (TEI)
+  # for true cross-encoder rerank. Supports /rerank endpoint with
+  # (query, texts) pair scoring — unblocks bge-reranker, ms-marco-MiniLM,
+  # and other cross-encoders that return garbage via LM Studio's
+  # /v1/embeddings. CPU-only to avoid VRAM contention with LM Studio.
+  #
+  # PROFILE: 'measurement'. Opt-in service, not started by default. Used
+  # when running QC baselines with RERANK_TYPE=api. To start:
+  #     docker compose --profile measurement up -d tei-rerank
+  # Production defaults (RERANK_TYPE=generative) do not need this service.
+  #
+  # Model: currently ms-marco-MiniLM-L-6-v2 (80MB, classic cross-encoder,
+  # fastest option found in Sprint 12.1h). Swap via --model-id arg to test
+  # another model; must be TEI-compatible (needs `model_type` in config.json
+  # — 12.1h found jina-reranker-v2 incompatible for this reason).
+  #
+  # Disk cost: bge (560MB) + minilm (80MB) + partial jina (~200MB)
+  # remain in the named volume from prior sprints — total ~840MB in
+  # `tei_model_cache`. Prune with `docker volume rm free-context-hub_tei_model_cache`
+  # if reclaiming space.
   tei-rerank:
+    profiles: ["measurement"]
     image: ghcr.io/huggingface/text-embeddings-inference:cpu-latest
-    # Sprint 12.1h: swapped from BAAI/bge-reranker-v2-m3 (underperformed
-    # on English technical goldenset). jina-reranker-v2 has a custom arch
-    # (no `model_type` field) that TEI can't parse. Using classic cross-
-    # encoder (ms-marco-MiniLM trained) which is TEI-safe.
     command: ["--model-id", "cross-encoder/ms-marco-MiniLM-L-6-v2"]
     volumes:
       - tei_model_cache:/data
     ports:
       - "8080:80"  # dev/debug expose; mcp reaches via docker network at http://tei-rerank:80
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --spider --tries=1 http://localhost:80/health || exit 1"]
+      # TEI image has `curl` but NOT `wget` (12.1h /review-impl finding).
+      test: ["CMD-SHELL", "curl --fail --silent --max-time 3 http://localhost:80/health || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 20

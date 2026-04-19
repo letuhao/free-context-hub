@@ -709,13 +709,15 @@ export async function rerankExternalApi(query: string, candidates: RerankCandida
     });
 
     if (!res.ok) {
-      logger.warn({ status: res.status }, 'external-api rerank: HTTP error');
+      logger.warn({ status: res.status, url: `${baseUrl}/rerank` },
+        'external-api rerank: HTTP error — falling back to no-rerank. Ensure tei-rerank service is running: `docker compose --profile measurement up -d tei-rerank`');
       return candidates.map(c => c.index);
     }
 
     const json = (await res.json()) as Array<{ index: number; score: number }>;
     if (!Array.isArray(json) || json.length === 0) {
-      logger.warn({ shape: typeof json }, 'external-api rerank: empty or malformed response');
+      logger.warn({ shape: typeof json, url: `${baseUrl}/rerank` },
+        'external-api rerank: empty or malformed response — falling back to no-rerank');
       return candidates.map(c => c.index);
     }
 
@@ -735,7 +737,8 @@ export async function rerankExternalApi(query: string, candidates: RerankCandida
 
     return order;
   } catch (err) {
-    logger.warn({ error: err instanceof Error ? err.message : String(err) }, 'external-api rerank: failed');
+    logger.warn({ error: err instanceof Error ? err.message : String(err), url: `${baseUrl}/rerank` },
+      'external-api rerank: network error — falling back to no-rerank. Ensure tei-rerank service is running: `docker compose --profile measurement up -d tei-rerank`');
     return candidates.map(c => c.index);
   } finally { clearTimeout(t); }
 }
