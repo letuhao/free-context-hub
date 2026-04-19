@@ -239,7 +239,11 @@ services:
   # subsequent starts are <30s.
   tei-rerank:
     image: ghcr.io/huggingface/text-embeddings-inference:cpu-latest
-    command: ["--model-id", "BAAI/bge-reranker-v2-m3"]
+    # Sprint 12.1h: swapped from BAAI/bge-reranker-v2-m3 (underperformed
+    # on English technical goldenset). jina-reranker-v2 has a custom arch
+    # (no `model_type` field) that TEI can't parse. Using classic cross-
+    # encoder (ms-marco-MiniLM trained) which is TEI-safe.
+    command: ["--model-id", "cross-encoder/ms-marco-MiniLM-L-6-v2"]
     volumes:
       - tei_model_cache:/data
     ports:
