@@ -90,6 +90,12 @@ services:
       # local dev / E2E. In production leave unset so ingest-url refuses
       # to fetch from private addresses.
       ALLOW_PRIVATE_FETCH_FOR_TESTS: ${ALLOW_PRIVATE_FETCH_FOR_TESTS:-false}
+      # Phase 12 Sprint 12.1e2: expose salience env knobs for sweep-time
+      # overrides. Defaults preserve Sprint 12.1c behavior (7d half-life,
+      # alpha 0.10, feature enabled).
+      LESSONS_SALIENCE_HALF_LIFE_DAYS: ${LESSONS_SALIENCE_HALF_LIFE_DAYS:-7}
+      LESSONS_SALIENCE_ALPHA: ${LESSONS_SALIENCE_ALPHA:-0.10}
+      LESSONS_SALIENCE_DISABLED: ${LESSONS_SALIENCE_DISABLED:-false}
     ports:
       - "3000:3000"
       - "3001:3001"
