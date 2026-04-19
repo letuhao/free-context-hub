@@ -1,4 +1,124 @@
 ---
+id: CH-PHASE12-S121E3
+date: 2026-04-19
+module: Phase12-Sprint12.1e3
+phase: PHASE_12
+---
+
+# Session Patch — 2026-04-19 (Phase 12 Sprint 12.1e3 — LESSONS_SALIENCE_NO_WRITE gate + goldenset-pollution friction class)
+
+## Where We Are
+**Sprint 12.1e3 closed.** Measurement-infrastructure hygiene sprint. Added `LESSONS_SALIENCE_NO_WRITE` env gate at `logLessonAccess` function entry — suppresses access-log writes during salience-sensitive baseline runs while leaving reads intact. Also documented `goldenset-pollution` as a friction class, fixed a latent 12.1e2 docker-compose oversight (HL fallback `:-7` → `:-30`), and landed a validation baseline proving the gate works.
+
+## Commits (3, pushed pending)
+- `b47b69a` — spec + design + plan (docs-only)
+- `ac5c556` — code change: env.ts + salience.ts + salience.test.ts + docker-compose.yml + friction-classes.md
+- (this one) — validation archive + SESSION_PATCH
+
+## What changed
+
+### src/env.ts
+- `parseBooleanEnv` now exported (was private). Enables services to read `process.env` booleans without going through `getEnv()` cache.
+- New `LESSONS_SALIENCE_NO_WRITE: boolean = false` with inline rationale comment.
+
+### src/services/salience.ts
+- New `isSalienceWriteDisabled()` exported helper — reads `process.env.LESSONS_SALIENCE_NO_WRITE` directly (NOT via `getEnv()` cache) so operators/tests can toggle without container restart.
+- `logLessonAccess` function top: `if (isSalienceWriteDisabled()) return` — early-return before any SQL construction. All 6 existing call sites respect the gate without needing per-site changes.
+
+### src/services/salience.test.ts
+- +5 new subtests covering flag=false, flag=true, flag=true with non-empty batch + metadata, explicit flag='false'. All use save/restore pattern to avoid cross-test env leakage. 226 → 231 unit tests.
+
+### docker-compose.yml
+- Added `LESSONS_SALIENCE_NO_WRITE: ${...:-false}` as 4th salience env knob.
+- **Fixed latent 12.1e2 oversight:** `LESSONS_SALIENCE_HALF_LIFE_DAYS: ${...:-7}` → `${...:-30}`. 12.1e2 updated `src/env.ts` default but not the docker-compose fallback — meant unset shell env still injected 7 via compose, overriding env.ts's 30.
+
+### docs/qc/friction-classes.md
+- New `goldenset-pollution` entry (definition, mechanism, signal, 12.1e2 example, 3 mitigation paths with NO_WRITE flag as #1).
+
+## Validation (the proof it works)
+
+**Procedure:**
+1. Pre-run: `lesson_access_log` COUNT = **90** (audit-bootstrap only, clean state from 12.1e2 close).
+2. `LESSONS_SALIENCE_NO_WRITE=true docker compose up -d --force-recreate mcp`. Verified `process.env.LESSONS_SALIENCE_NO_WRITE === 'true'` inside container.
+3. Ran `qc:baseline --samples 1 --surfaces lessons` against 40q goldenset.
+4. Post-run: `lesson_access_log` COUNT = **90**. **Zero writes during baseline.** ✅
+
+**Metrics (sanity):** recall@10=1.0, MRR=0.9581, nDCG@10=0.9469, per_query.length=40, errors=0.
+
+## Wrinkle in validation — first attempt failed, exposed a stale-image gotcha
+
+**The first T6 validation run PRODUCED 400 writes (90→490) despite `NO_WRITE=true` being set.** Root cause: the `mcp` container runs the baked `/app/dist/index.js` from its image, not the live `src/` tree. My code changes were local-only until `docker compose build mcp` rebaked the image.
+
+**Fix:** `docker compose build mcp` to incorporate the new code, then recreate with env override. Second run: N_BEFORE=90, N_AFTER=90. Gate confirmed working.
+
+**Worth remembering:** any salience code change needs `docker compose build mcp` before validation. `docker compose up -d --force-recreate mcp` alone is insufficient — it only picks up env + image changes, not local source changes.
+
+## Metrics divergence vs 12.1e2 HL=30 CLEAN (worth noting)
+
+| Run | recall@10 | MRR | nDCG@10 | notes |
+|---|---:|---:|---:|---|
+| 12.1e2 HL=30 CLEAN (samples=1) | 1.0 | 0.9865 | 0.9649 | had within-run write accumulation |
+| 12.1e3 validate (samples=1, NO_WRITE=true) | 1.0 | 0.9581 | 0.9469 | truly isolated; no within-run drift |
+
+The 0.018 nDCG@10 gap is explained mechanically: 12.1e2's HL=30 CLEAN let each query write ~10 rows mid-run, so query 40's salience computation used `90 + 40×10 = 490` rows. With NO_WRITE, every query sees the same 90 rows throughout.
+
+**Implication for 12.1e2's "+0.0154 nDCG@10 delta HL=7→HL=30" claim:** the delta was between two runs that BOTH had within-run accumulation at similar rates, so the RELATIVE comparison holds. But the ABSOLUTE nDCG@10 numbers reported in 12.1e2 were slightly inflated by the within-run drift. **12.1e3-validate.json is the cleaner reference point going forward** — future A/Bs should use NO_WRITE=true to isolate the half-life / alpha signal from within-run accumulation artifacts.
+
+## Sprint-internal observations
+
+**`getEnv()` caches — why `isSalienceWriteDisabled()` bypasses it.** `src/env.ts:433-444` memoizes parsed env on first call. For tests toggling `process.env` at runtime, cached values persist and the toggle doesn't land. The direct `process.env` read path in `isSalienceWriteDisabled()` avoids this. Doesn't apply to the other 3 salience getters because they go through `getEnv()` — but those aren't designed for runtime toggling.
+
+**Existing salience.test.ts acknowledges the cache issue** with a loose assertion (`cfg.alpha === 0.10 || typeof cfg.alpha === 'number'`) at line 284. If we need to tighten that test, we'd need a cache-reset helper export from env.ts. Out of scope for 12.1e3.
+
+## Operational state
+
+- 3 commits on `phase-12-rag-quality`, NOT yet pushed.
+- Access log: 90 rows (audit-bootstrap only; same clean state as 12.1e2 close).
+- mcp container: default state (HL=30, NO_WRITE=false).
+- 231/231 unit tests pass; `npx tsc --noEmit` clean; `npm run qc:goldenset:validate` OK; `docker compose config | grep salience` shows 4 lines with correct values.
+- `lesson_access_log_backup_20260419` table still exists from 12.1e2 (6939 rows) — can be dropped in a future housekeeping pass.
+
+## What's next — unblocked by 12.1e3
+
+The goldenset-pollution friction is gone. Any future salience-sensitive sprint can:
+1. `docker compose build mcp` (if code changed)
+2. `LESSONS_SALIENCE_NO_WRITE=true docker compose up -d --force-recreate mcp`
+3. Run baseline — measure without polluting
+
+**Candidate next sprints** (from 12.1e2 handoff + current observations):
+1. **α sweep** (my top recommendation) — now that we have clean measurement, test α ∈ {0.05, 0.10, 0.20, 0.30} at HL=30. Small scope, reuses 12.1e2 sweep infra + 12.1e3's NO_WRITE flag.
+2. **Broaden chunks/code/global goldensets** — same 12.1e1 approach on other surfaces.
+3. **12.2 sleep consolidation** — next biological-memory feature on the C-track.
+4. **Housekeeping** — merge `phase-12-rag-quality` → main (40+ commits deep), drop `lesson_access_log_backup_20260419`, pool-sizing bump from 12.1c MED-2.
+5. **Tightening existing salience tests** — add cache-reset helper to env.ts so the loose `cfg.alpha === 0.10 || ...` assertion can be strict.
+
+## Files delivered
+
+```
+src/env.ts                                             + parseBooleanEnv exported, + LESSONS_SALIENCE_NO_WRITE
+src/services/salience.ts                               + isSalienceWriteDisabled() + gate in logLessonAccess
+src/services/salience.test.ts                          + 5 new subtests (226→231)
+docker-compose.yml                                     + LESSONS_SALIENCE_NO_WRITE, fixed :-7 → :-30
+docs/qc/friction-classes.md                            + goldenset-pollution entry
+docs/specs/2026-04-19-phase-12-sprint-12.1e3-spec.md   NEW — 6 decisions, 10 acceptance criteria
+docs/specs/2026-04-19-phase-12-sprint-12.1e3-design.md NEW — helper name, composition semantics, cache bypass rationale
+docs/plans/2026-04-19-phase-12-sprint-12.1e3-plan.md   NEW — 7 tasks, 3 commits, ~80min estimate
+docs/qc/baselines/2026-04-19-sprint-12.1e3-validate.{json,md}  NEW — gate-works-proof run
+docs/sessions/SESSION_PATCH.md                         + this entry
+```
+
+## Phase 12 scoreboard update
+
+| Sprint | Topic | Status | Nail |
+|---|---|---|---|
+| 12.0-12.1e2 | (prior) | ✅ | see earlier entries |
+| **12.1e3** | **NO_WRITE gate + goldenset-pollution friction class** | ✅ | **validated: 90 rows → 90 rows after 40-query baseline; gate short-circuits all 6 write sites** |
+
+---
+
+---
+
+---
 id: CH-PHASE12-S121E2
 date: 2026-04-19
 module: Phase12-Sprint12.1e2
