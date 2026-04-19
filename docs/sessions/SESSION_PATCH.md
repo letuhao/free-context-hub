@@ -1,4 +1,114 @@
 ---
+id: CH-PHASE12-S121H
+date: 2026-04-19
+module: Phase12-Sprint12.1h
+phase: PHASE_12
+---
+
+# Session Patch — 2026-04-19 (Phase 12 Sprint 12.1h — Alternative reranker attempts; rerank loop plateaus)
+
+## Where We Are
+
+**Sprint 12.1h closed.** Tried 2 more rerankers via the 12.1g TEI infrastructure — both lost on quality vs generative/gte. `/review-impl` surfaced 2 MED + 3 LOW + 2 COSMETIC findings, all addressed. Production stays `RERANK_TYPE=generative`; measurement best is `gte-reranker-modernbert-base` via LM Studio. TEI + minilm is available as a fast deterministic alternative (13s baseline vs gte's 22s). **Rerank optimization arc (12.1e4 → 12.1h) plateaus here** — self-hostable cross-encoders can't match generative LLM rerank quality on this goldenset.
+
+## Commits (2)
+
+- `e3f4cc4` — 2 model attempts: jina-reranker-v2 (architecturally incompatible with TEI — missing `model_type`) + ms-marco-MiniLM-L-6-v2 (loaded; MRR=0.9266, 13s, 0/40 diffs determinism). spec + baselines + summary.
+- `b0c87bc` — /review-impl fixes: profile gate for tei-rerank (MED-2), strict determinism with tei-rerank restart (MED-1), per-query breakdown in summary (LOW-1), improved warning messages (LOW-2), bonus healthcheck fix (wget→curl). 2 MED + 3 LOW + 2 COSMETIC resolved.
+
+## The 6-way comparison (with 12.1h additions)
+
+| Run | recall@10 | MRR | nDCG@10 | elapsed | deterministic | mode |
+|---|---:|---:|---:|---:|---|---|
+| generative (prod default) | 1.0000 | **1.0000** | **0.9724** | 312s | ❌ | LM Studio LLM via /v1/chat/completions |
+| gte | 1.0000 | 0.9538 | 0.9237 | 22s | ✅ | LM Studio bi-encoder via /v1/embeddings |
+| TEI+bge (12.1g) | 0.9459 | 0.9279 | 0.9071 | 239s | ✅ | TEI /rerank |
+| **TEI+minilm (this sprint)** | **1.0000** | **0.9266** | **0.9080** | **13s** | **✅ (strict)** | TEI /rerank |
+| no-rerank | 0.9730 | 0.9198 | 0.9100 | 3s | ✅ | skip rerank |
+| jina-reranker-v2 | — | — | — | — | — | **incompatible with TEI** |
+
+minilm is the fastest non-trivial option — 18× faster than bge at the same quality. Strict determinism proven: 0/40 query diffs across BOTH tei-rerank AND mcp container restarts (`sprint-12.1h-minilm-strict-repeat.json`).
+
+## /review-impl findings (2 MED + 3 LOW + 2 COSMETIC — all addressed)
+
+### MED-1 — determinism claim tightened + proven
+12.1h's initial "0/40 diffs" test only recreated mcp (TEI state fixed). Re-ran with TEI also restarted → still 0/40. Archive: `2026-04-19-sprint-12.1h-minilm-strict-repeat.{json,md}`.
+
+### MED-2 — tei-rerank gated behind `profiles: ["measurement"]`
+Production `docker compose up` no longer starts tei-rerank (~500MB RAM + 840MB disk saved). Measurement sprints start it explicitly: `docker compose --profile measurement up -d tei-rerank`. Also removed `mcp depends_on: tei-rerank` (required for profile gate to work).
+
+### LOW-1 — per-query found_ranks breakdown added
+Aggregate + per-group hid interesting patterns. New table in summary shows 17 queries where minilm/bge/gte diverge. Notable: minilm rescues `sprint-11-closeout` (rank-4, bge MISSes) and is minilm's only paraphrase win on undici-node-mismatch.
+
+### LOW-2 — rerankExternalApi warnings now operator-friendly
+Added URL + fallback note + action: "Ensure tei-rerank service is running: `docker compose --profile measurement up -d tei-rerank`".
+
+### LOW-3 — already covered (existing unit test for fetch-throws handles TEI-unreachable path).
+
+### COSMETIC-1 — "loop closes" → "plateaus with self-hostable rerankers"
+Commercial APIs (Cohere Rerank 3) and LLM-scale rerankers remain untested.
+
+### COSMETIC-2 — disk cost disclosed in docker-compose.yml comment
+
+### Bonus — broken healthcheck fixed
+12.1g's healthcheck used `wget` which isn't in the TEI image. Container stayed "health: starting" indefinitely. Now uses `curl` (which IS in the image — verified).
+
+## The full 4-sprint rerank arc (12.1e4 → 12.1h)
+
+| Sprint | Question | Finding |
+|---|---|---|
+| 12.1e4 | Are LLM rerankers deterministic across container recreates? | NO — ~0.027 MRR drift/session |
+| 12.1f | Can we replace generative with LM Studio cross-encoder? | Partial — gte works, bge/jina fail via /v1/embeddings |
+| 12.1g | Does TEI + true cross-encoders (bge) match generative? | NO — bge underperforms on cross-topic/paraphrase |
+| 12.1h | Do other cross-encoders (jina, minilm) beat bge? | jina incompatible; minilm ties bge at 18× speed |
+
+**Settled:** generative LLM wins quality (~0.05-0.07 MRR over cross-encoders) at cost of non-determinism. Cross-encoders are fine for fast deterministic measurement but can't match LLM rerank. Further gains likely require commercial APIs or fine-tuned LLM rerank, both out of current infrastructure scope.
+
+## Operational state
+
+- 2 commits on `phase-12-rag-quality`, NOT YET pushed.
+- `src/env.ts` unchanged (RERANK_TYPE default stays `generative`).
+- `src/services/lessons.ts` — improved warning messages in rerankExternalApi only (no behavioral change).
+- `docker-compose.yml` — `tei-rerank` profile-gated, healthcheck fixed, model set to minilm for future use.
+- mcp image REBUILT (LOW-2 log message).
+- mcp container: production defaults.
+- tei-rerank container: STOPPED + REMOVED (profile-gated; not default).
+- `lesson_access_log` count: 90.
+- 235/235 unit tests pass; tsc clean; full test suite honored.
+
+## Phase 12 scoreboard update
+
+| Sprint | Topic | Status | Nail |
+|---|---|---|---|
+| 12.0-12.1g | (prior) | ✅ | see earlier entries |
+| **12.1h** | **Alternative rerankers via TEI (final)** | ✅ | **4-sprint rerank arc plateaus; generative stays prod default, minilm adds fast deterministic option for QC, tei-rerank profile-gated** |
+
+## What's next
+
+Phase 12's A→B→C arc has now shipped extensively on the RAG quality axis:
+- A-track (measurement): baseline scorecard, dup-rate v1, noise-floor-aware diff, 2 new friction classes this session
+- B-track (consolidation): lessons dedup, chunks dedup
+- C-track (biological salience): access-frequency salience, query-conditional, half-life tuning (reverted on clean-measurement finding), α sweep (null), NO_WRITE gate, cross-encoder rerank evaluation
+
+**Candidate next moves (pick one):**
+
+1. **Housekeeping + merge to main.** `phase-12-rag-quality` is now ~70 commits deep across 14 sprints. Even deferred, the branch is getting long. User indicated hold until real-world use validates — but a merge is cheap and makes the work reachable to other branches.
+
+2. **12.2 sleep consolidation.** Next biological-memory feature on the C-track. Measurement infra is now solid (gte or minilm for deterministic baselines; NO_WRITE for isolation).
+
+3. **Dogfood-driven work.** Close the IDE, use the system in real work, capture friction as lessons.
+
+4. **Broaden other goldensets** (chunks/code/global) using the same 12.1e1 pattern.
+
+5. **Accept rerank + measurement work is done** and pivot to something new entirely.
+
+My honest recommendation: **option 3 (dogfood)** — we've spent 14 sprints on measurement infrastructure + rerank optimization. The next insight about what matters will come from using the system for real work, not more sprint iteration. If that surfaces a problem worth fixing, we fix it. If it doesn't, we pick a different axis (12.2 or housekeeping).
+
+---
+
+---
+
+---
 id: CH-PHASE12-S121G
 date: 2026-04-19
 module: Phase12-Sprint12.1g
