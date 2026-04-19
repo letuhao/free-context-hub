@@ -89,17 +89,26 @@ const EnvSchema = z.object({
   // Clamped to [0, 1].
   LESSONS_SALIENCE_ALPHA: z.coerce.number().min(0).max(1).optional().default(0.10),
   // Tuning: time-decay half-life in days. A single access event contributes
-  // weight × exp(-age_days × ln2 / halfLife). At halfLife=30, an event from
-  // 30 days ago contributes half its original weight.
+  // weight × exp(-age_days × ln2 / halfLife). At halfLife=7, an event from
+  // 7 days ago contributes half its original weight.
   //
-  // Default raised from 7 to 30 in Sprint 12.1e2 after a clean-state A/B
-  // sweep showed HL=30 delivers +0.0284 MRR and +0.0154 nDCG@10 (both above
-  // noise floor) on the 40-query lessons goldenset. Mechanism: at HL=7,
-  // audit-bootstrap rows (90 days old, seeded from guardrail_audit_logs)
-  // decay to ~2×10⁻⁴ weight — effectively a no-op. At HL=30, they retain
-  // ~0.12 weight, enough to boost guardrail-adjacent lessons on cross-topic
-  // queries (+0.15 nDCG@10). See docs/qc/baselines/2026-04-19-sprint-12.1e2-summary.md.
-  LESSONS_SALIENCE_HALF_LIFE_DAYS: z.coerce.number().int().min(1).max(365).optional().default(30),
+  // Default is 7 — "hot working memory" window per the original Sprint 12.1c
+  // design intent (recent accesses dominate, older signals fade quickly).
+  //
+  // Historical note: Sprint 12.1e2 raised this to 30 based on an A/B sweep
+  // that appeared to show +0.0284 MRR / +0.0154 nDCG@10 gains. Sprint 12.1e3's
+  // POST-REVIEW investigation built out the full 2×2 (HL ∈ {7, 30} × drift
+  // ∈ {with, without}) and found the apparent gain was entirely caused by
+  // within-run write accumulation during baseline runs (each query's
+  // consideration-search writes landed in the access log before the next
+  // query sampled it, asymmetrically boosting later queries' salience). With
+  // LESSONS_SALIENCE_NO_WRITE=true isolating writes cleanly, HL=7 and HL=30
+  // produce identical aggregate MRR (0.9581) and nDCG@10 deltas within the
+  // 0.0134 noise floor — functionally indistinguishable on the 40q goldenset.
+  // The default reverted to 7 in Sprint 12.1e3 to align with what the clean
+  // data actually shows. See docs/qc/baselines/2026-04-19-sprint-12.1e3-*.json
+  // for the 2×2 and docs/qc/friction-classes.md#measurement-write-drift.
+  LESSONS_SALIENCE_HALF_LIFE_DAYS: z.coerce.number().int().min(1).max(365).optional().default(7),
 
   MCP_PORT: z.coerce.number().int().positive().optional().default(3000),
   API_PORT: z.coerce.number().int().positive().optional().default(3001),

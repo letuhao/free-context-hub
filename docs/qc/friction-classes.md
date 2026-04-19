@@ -688,6 +688,85 @@ NO_WRITE flag as the non-destructive mitigation.
 
 ---
 
+### measurement-write-drift
+
+**Definition.** A measurement that modifies its own input during the
+measurement can produce artifacts that look like signal. For
+free-context-hub salience sweeps: each baseline query's fire-and-forget
+`consideration-search` write lands in `lesson_access_log` BEFORE the
+next query samples its salience score. Later queries therefore see more
+rows than earlier queries, asymmetrically inflating salience for
+whichever lessons those earlier queries matched.
+
+**Why this is different from goldenset-pollution.** Goldenset-pollution
+is the ACROSS-sprint version — 20+ baseline runs leave permanent bloat.
+Measurement-write-drift is the WITHIN-sprint (and within-single-run!)
+version — even a single fresh run has asymmetric state across its own
+queries.
+
+**Why it happens.** `searchLessons` and `searchLessonsMulti` call
+`logLessonAccess` fire-and-forget for every top-K match, ~10 rows per
+query sample. For a 40-query baseline at samples=1, query 40 sees
+`N_start + 390` rows; query 1 sees `N_start`. The gap is entirely
+fresh rows (age < runtime, ~15min). Fresh rows decay by ~exp(-0/HL) ≈
+1.0 at any half-life ≥ 1d, so they contribute equally regardless of HL.
+But their presence inflates the absolute magnitude of all lessons'
+salience scores, which can shift rank-order interactions with hybrid
+scores even when salience alone wouldn't.
+
+**The trap for A/B sweeps across half-life.** Drift amount is
+approximately HL-independent, but drift EFFECT on ranking is HL-
+dependent — it competes differently with other salience contributions
+that ARE HL-sensitive (audit-bootstrap). At HL=30, bootstrap has ~0.12
+weight per row; drift-contributed fresh rows have ~1.0 weight; the two
+interact. At HL=7, bootstrap has ~10⁻⁴ weight; drift dominates. This
+causes a SYSTEMATIC difference between HL=7 and HL=30 runs under drift
+that DISAPPEARS under NO_WRITE. Mistaking this artifact for "HL=30 is
+better" is exactly what Sprint 12.1e2 did.
+
+**Diagnostic signal — the 2×2 test.** If you suspect a measurement is
+contaminated by write-drift, run the 2×2:
+
+| | HL=X | HL=Y |
+|---|---|---|
+| drift (no NO_WRITE) | A | B |
+| NOWRITE | C | D |
+
+If `A → B` delta ≠ `C → D` delta, drift was a confounding factor.
+If `C → D ≈ 0`, the half-life change has no real effect on THIS
+goldenset in THIS state; the `A → B` signal was entirely drift.
+
+**Example — Sprint 12.1e3's 2×2 on the 40q goldenset:**
+
+| | HL=7 | HL=30 |
+|---|---:|---:|
+| drift (samples=1, no NO_WRITE) | nDCG@10 = 0.9495 | 0.9649 (+0.0154) |
+| NOWRITE (samples=1) | 0.9521 | 0.9469 (−0.0052, within noise 0.013) |
+
+The drift delta (+0.0154) is HL=30's apparent win; the clean delta
+(−0.0052) shows HL=30 is actually within-noise and marginally worse.
+Sprint 12.1e2 measured the drifted version only and changed env.ts
+default 7→30 on polluted data. Sprint 12.1e3 reverted the default
+after the 2×2 revealed the artifact.
+
+**Mitigation.**
+1. **Always use `LESSONS_SALIENCE_NO_WRITE=true`** for salience-sensitive
+   A/B sweeps (Sprint 12.1e3's NO_WRITE flag). This eliminates
+   within-run write drift entirely.
+2. For pre-12.1e3 sweeps, the drift-amount is approximately equal
+   across both sides of an A/B, so comparing deltas is not fully
+   invalid — but the absolute magnitudes are inflated, and effects
+   that compete with drift (like HL-sensitive bootstrap salience) can
+   produce artifact deltas.
+
+**Cross-ref.** Sprint 12.1e3's 2×2 analysis surfaced this pattern
+(baselines: `2026-04-19-sprint-12.1e2-hl{7,30}-clean.json` drifted vs
+`2026-04-19-sprint-12.1e3-{validate,hl7-nowrite}.json` NOWRITE). The
+finding motivated reverting `LESSONS_SALIENCE_HALF_LIFE_DAYS` default
+from 30 back to 7 in the same sprint.
+
+---
+
 ## Adding a new class
 
 When a Phase-12 sprint discovers a pathology not covered here:
