@@ -1,4 +1,137 @@
 ---
+id: CH-PHASE12-S121E4
+date: 2026-04-19
+module: Phase12-Sprint12.1e4
+phase: PHASE_12
+---
+
+# Session Patch — 2026-04-19 (Phase 12 Sprint 12.1e4 — α × HL grid + LLM rerank drift discovery)
+
+## Where We Are
+
+**Sprint 12.1e4 closed.** Started as a simple α sweep at HL=7 NO_WRITE; ended as a major methodology discovery. The α × HL grid's apparent "outlier" findings turned out to be entirely LLM rerank drift across container recreates, not α effect. Validation via rerank-off runs proves α has literally zero effect on this goldenset (salience blend short-circuits when no candidates have access-log history). 2 new friction classes documented. Methodology recommendation: future QC baselines default `DISTILLATION_ENABLED=false`. No src/env.ts default changes.
+
+## Commits (3)
+
+- `5c78328` — spec + design + plan
+- `123af3f` — initial 8-run α × HL grid + summary v1 (later superseded)
+- `4d160c7` — POST-REVIEW investigation: rerank-off validation runs + summary v2 correction + 2 friction classes + docker-compose DISTILLATION_ENABLED exposure
+
+## The headline
+
+**α has ZERO effect** on this goldenset. Not "within noise" — literally short-circuited by `blendHybridScore`'s guard `if (!salience || salience <= 0) return hybridScore`. When `lesson_access_log` has no entries for the candidate lessons (the post-12.1e3-truncate clean state), salience blend is pass-through.
+
+**LLM rerank drift is real and large.** Same config (HL=7, α=0.05, NOWRITE=true), 2 runs 90 minutes apart: 7/40 queries shifted found_ranks, MRR dropped 0.9784 → 0.9514. Rerank-off repeat: 0/40 differ.
+
+**Rerank dominates runtime 100×.** Rerank-on: ~5 min per baseline. Rerank-off: ~3 seconds. When rerank-off is the clean-measurement choice, sprint cadence could speed up dramatically.
+
+## The journey
+
+**What was planned:** 8-run α × HL grid at NO_WRITE=true, ~40 min, analytical prediction of null at HL=7 and signal at HL=30.
+
+**What happened during BUILD:** ran 8 runs, saw 2 outliers — (HL=7, α=0.10) and (HL=30, α=0.20) both showed MRR drop of ~0.04 driven by one cross-topic query (sprint-11-closeout) missing top-10. Initial write-up: "α=0.10 has specific bad spot on this goldenset."
+
+**POST-REVIEW option 3 (investigation):**
+1. Looked at per-query top-10 at (HL=7, α=0.10) vs (HL=7, α=0.05). Radically different lessons, not a rank-order shuffle.
+2. Traced `blendHybridScore` in `src/services/salience.ts:242`: when salience is undefined/zero, function returns hybrid score unchanged. α has no mathematical effect.
+3. Verified via REST: direct `/api/lessons/search` call at α=0.05 and at α=0.10 produced IDENTICAL top-10s (deterministic within-container).
+4. But baseline archives for those configs DIFFER. So what changed?
+5. **Ran same-config baseline again (HL=7 α=0.05 rerun, 90min after original):** 7/40 queries differ. MRR drops 0.027. Same-config runs DRIFT over time.
+6. **Disabled rerank (`DISTILLATION_ENABLED=false`):** ran 3 validation baselines. α=0.10 = α=0.05 = α=0.10-repeat, all IDENTICAL. Rerank is the drift source.
+
+**What was actually proven:** the LLM reranker (LM Studio generative at temp=0) drifts across container recreates. Not because temperature isn't zero (it is), but because local LLM backends have state-dependent non-determinism (cache warmth, batch context, etc.) that manifests as rank-10-borderline flips on borderline queries.
+
+## Rerank-off validation (option 3 artifacts)
+
+| Run | Config | Result |
+|---|---|---|
+| A | HL=7 α=0.10 rerank-OFF | MRR=0.9198, nDCG@10=0.9100 |
+| B | HL=7 α=0.05 rerank-OFF | **IDENTICAL to A** (0/40 queries differ) |
+| C | HL=7 α=0.10 rerank-OFF repeat | **IDENTICAL to A** (0/40 queries differ across container recreate) |
+| (contrast) | HL=7 α=0.05 rerank-ON, 90min after original | **7/40 queries differ from original**, MRR drops 0.9784→0.9514 |
+
+Runtime: rerank-on ~5min; rerank-off ~3sec (100× speedup).
+
+## 2 new friction classes
+
+1. **`llm-rerank-cross-session-drift`** — LLM reranker (`rerankGenerative`) at temp=0 drifts across container recreates despite deterministic-looking temp setting. Likely LM Studio internal state. Same-session in-container: deterministic. 90min-apart: 7/40 queries drift on ~40q goldenset. Mitigation: `DISTILLATION_ENABLED=false` for baselines, OR switch to `RERANK_TYPE=cross-encoder`.
+
+2. **`salience-blend-noop-when-no-access-history`** — When no candidate lessons have `lesson_access_log` entries, `blendHybridScore` short-circuits to `hybridScore` unchanged. α has ZERO effect regardless of value. Detectable via explanation string "salience: no access history for any candidate (N lessons)". Common on bootstrap-only clean state (post-12.1e3 truncate). Expected in low-traffic deployments.
+
+## docker-compose.yml change
+
+Added: `DISTILLATION_ENABLED: ${DISTILLATION_ENABLED:-true}` in mcp service env block. Default true preserves production; shell env override enables rerank-off for baseline sprints.
+
+## Implications for prior Phase 12 sprints
+
+**12.1e2's "HL=30 wins +0.0154 nDCG@10":** mostly within-run write drift (12.1e3 corrected) + partially LLM rerank drift (THIS sprint found). Combined, near-zero actual HL effect on clean state.
+
+**12.1e3's "HL=7 wins after clean-state A/B":** the 2×2 was rerank-ON. Subject to drift. The revert decision STANDS (no positive evidence for HL=30; restoring original 12.1c intent was correct) but confidence is weaker than documented.
+
+**12.1c/12.1d salience sprints:** conclusions about query-conditional salience winning were measured under rerank-ON. The absolute metric values may be drift-contaminated but the A/B deltas (within same session, back-to-back) were likely less affected because drift happens across sessions, not within.
+
+**None of these require rollback** — the conclusions are defensible for their narrow claims (salience math works, blend-function behavior, dedup effects). But future measurements should use rerank-off as the default for salience-sensitive work.
+
+## Recommendation
+
+- **No src/env.ts default changes.** α=0.10, HL=7 stay. α has zero effect on clean-state goldenset; HL decision stands from 12.1e3.
+- **Methodology shift:** future QC baseline sprints default `DISTILLATION_ENABLED=false`. Document rerank's quality contribution separately (1-shot test, not A/B).
+- **Production rerank stays ON.** Non-determinism is a measurement problem, not a quality problem. Users get ~0.06 MRR better results on average.
+
+## Operational state
+
+- 3 commits on `phase-12-rag-quality`, NOT YET pushed.
+- `src/env.ts` unchanged (α=0.10, HL=7 defaults).
+- `docker-compose.yml` gains 1 env line (`DISTILLATION_ENABLED` override).
+- `lesson_access_log` count: 90 (clean, unchanged throughout sprint thanks to NO_WRITE=true).
+- mcp container: default state (HL=7, α=0.10, DISTILLATION_ENABLED=true, NO_WRITE=false).
+- 231/231 unit tests pass; `npx tsc --noEmit` clean.
+
+## Files delivered
+
+```
+docker-compose.yml                                      + DISTILLATION_ENABLED override
+docs/specs/2026-04-19-phase-12-sprint-12.1e4-spec.md    NEW — 6 decisions, 6 acceptance criteria
+docs/specs/2026-04-19-phase-12-sprint-12.1e4-design.md  NEW — 2×4 matrix format, inline per-run loop
+docs/plans/2026-04-19-phase-12-sprint-12.1e4-plan.md    NEW — 12 tasks
+
+docs/qc/baselines/
+├── 2026-04-19-sprint-12.1e4-hl7-a{005,010,020,050}.{json,md}      original 4 HL=7 runs
+├── 2026-04-19-sprint-12.1e4-hl30-a{005,010,020,050}.{json,md}     original 4 HL=30 runs
+├── 2026-04-19-sprint-12.1e4-hl7-a010-s3.{json,md}                 s3 rerun of the α=0.10 "outlier"
+├── 2026-04-19-sprint-12.1e4-hl30-a020-s3.{json,md}                s3 rerun of the α=0.20 "outlier"
+├── 2026-04-19-sprint-12.1e4-hl7-a005-rerun.{json,md}              same-config repeat (showed 7/40 drift)
+├── 2026-04-19-sprint-12.1e4-hl7-a010-norerank.{json,md}           Run A (rerank-off α=0.10)
+├── 2026-04-19-sprint-12.1e4-hl7-a005-norerank.{json,md}           Run B (rerank-off α=0.05)
+├── 2026-04-19-sprint-12.1e4-hl7-a010-norerank-rerun.{json,md}     Run C (rerank-off α=0.10 repeat)
+└── 2026-04-19-sprint-12.1e4-summary.md                            correction + full 2×4 + rerank-off section
+
+docs/qc/friction-classes.md                             + 2 classes (llm-rerank-cross-session-drift + salience-blend-noop-when-no-access-history)
+docs/sessions/SESSION_PATCH.md                          + this entry
+```
+
+## Phase 12 scoreboard update
+
+| Sprint | Topic | Status | Nail |
+|---|---|---|---|
+| 12.0-12.1e3 | (prior) | ✅ | see earlier entries |
+| **12.1e4** | **α × HL grid → LLM rerank drift discovery** | ✅ | **α is zero-effect (proved); rerank is ~0.027 MRR cross-session drift source; DISTILLATION_ENABLED=false recommended for future QC baselines** |
+
+## What's next
+
+Candidate follow-ups (now better-informed after 12.1e4's meta-finding):
+
+1. **Housekeeping + merge to main** — `phase-12-rag-quality` is 50+ commits deep; Phase 12 has shipped real value. Drop backup table. Pool-sizing bump.
+2. **Cross-encoder rerank evaluation** — test `RERANK_TYPE=cross-encoder` to see if deterministic rerank delivers comparable quality. Would unblock reproducible measurement.
+3. **Broaden other goldensets** — chunks/code/global, now with rerank-off defaults for measurement hygiene.
+4. **12.2 sleep consolidation** — next biological feature on C-track. But measurement question is still open.
+5. **Seed realistic access-log traffic** — bootstrap-only state makes salience a no-op. If we want to measure salience's production-like behavior, we need simulated traffic distribution. Future sprint.
+
+---
+
+---
+
+---
 id: CH-PHASE12-S121E3
 date: 2026-04-19
 module: Phase12-Sprint12.1e3
