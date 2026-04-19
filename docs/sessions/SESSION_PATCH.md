@@ -1,4 +1,118 @@
 ---
+id: CH-PHASE12-S121F
+date: 2026-04-19
+module: Phase12-Sprint12.1f
+phase: PHASE_12
+---
+
+# Session Patch — 2026-04-19 (Phase 12 Sprint 12.1f — cross-encoder rerank evaluation)
+
+## Where We Are
+
+**Sprint 12.1f closed.** Evaluated 3 cross-encoder rerankers + fresh generative reference + winner determinism check on the 40q lessons goldenset. Winner: `gte-reranker-modernbert-base` — the only one of 3 cross-encoders that works via our `/v1/embeddings` code path. gte is deterministic (0/40 diffs across container recreates), 15× faster than generative, and barely edges no-rerank on aggregate quality. bge and jina rerankers are broken via this code path (true cross-encoders need `/v1/rerank` endpoint, not `/v1/embeddings`). Production stays at `RERANK_TYPE=generative`; gte is the recommended measurement-time alternative.
+
+## Commits (2)
+
+- `13ef0ee` — spec + design + plan + docker-compose `RERANK_TYPE` + `RERANK_MODEL` exposure
+- `7c4d4f3` — 5 baseline archives + summary + new friction class + src/env.ts empty-string preprocess fix
+
+## The 5-run matrix
+
+| Run | MRR | nDCG@10 | Elapsed |
+|---|---:|---:|---:|
+| generative (prod default) | **1.0000** | **0.9724** | 312s |
+| bge-reranker-v2-m3 | 0.1418 | 0.2400 | 115s ❌ broken |
+| **gte-reranker-modernbert-base** | **0.9538** | **0.9237** | **22s ✅ winner** |
+| jina-reranker-v3 | 0.3375 | 0.4157 | 99s ❌ broken |
+| gte-repeat (determinism) | 0.9538 | 0.9237 | 22s (**0/40 diffs**) |
+| no-rerank ref (from 12.1e4) | 0.9198 | 0.9100 | 3s |
+
+All runs: `LESSONS_SALIENCE_NO_WRITE=true`, α=0.10, HL=7, 40q goldenset, access_log stable at 90.
+
+## Per-group (gte vs alternatives)
+
+| Group | generative | gte | no-rerank |
+|---|---:|---:|---:|
+| confident-hit | 1.0000 | 1.0000 | 0.9500 |
+| duplicate-trap | 1.0000 | 1.0000 | 1.0000 |
+| **cross-topic** | 0.9751 | 0.8289 | 0.5945 (gte wins by 0.23) |
+| adversarial-miss | 0 | 0 | 0 |
+| ambig | 0.9386 | 0.9004 | 0.9196 (gte LOSES by 0.02) |
+| **paraphrase** | 1.0000 | 0.8712 | 1.0000 (gte LOSES by 0.13) |
+
+Mixed picture — gte rescues cross-topic but hurts paraphrase/ambig. Generative wins everywhere.
+
+## Why bge and jina failed
+
+Both are **true cross-encoders** (score `(query, doc)` PAIRS with one forward pass). Our `rerankCrossEncoder` code uses `/v1/embeddings` to get INDEPENDENT embeddings for query + each candidate, then cosine-sim. This pattern only works for bi-encoder-compatible rerankers. gte happens to be compatible; bge and jina aren't.
+
+## src/env.ts change
+
+Preprocess `RERANK_BASE_URL` and `RERANK_MODEL` to treat empty string as undefined:
+```typescript
+RERANK_MODEL: z.preprocess(v => (v === '' ? undefined : v), z.string().min(1).optional()),
+```
+Needed because docker-compose `${VAR:-}` emits empty string when shell env unset — which was failing zod validation and crashing mcp on startup the first time we tried the new overrides. Semantically equivalent (empty = unset); no behavior change for production.
+
+## docker-compose.yml additions (2 lines)
+
+```yaml
+RERANK_TYPE: ${RERANK_TYPE:-generative}
+RERANK_MODEL: ${RERANK_MODEL:-}
+```
+
+Enables sweep-time `RERANK_TYPE=cross-encoder RERANK_MODEL=<model>` overrides without .env edits.
+
+## Friction class added
+
+**`cross-encoder-via-embeddings-api-mismatch`** — `rerankCrossEncoder` uses `/v1/embeddings` which fails for true cross-encoders that need `/v1/rerank` or similar. Documented with detection, 3-model example, and mitigation paths. Future work: implement `/v1/rerank` endpoint support (Sprint 12.1g candidate).
+
+## Decision applied
+
+Per design §3 matrix, gte lands in the **"partial win"** zone:
+- Beats no-rerank by +0.014 nDCG@10 (just above 0.013 noise floor)
+- Loses to generative by −0.049 nDCG@10 (above noise floor)
+- Deterministic: ✅
+
+**Recommendation (shipped):**
+- **Production:** `RERANK_TYPE=generative` stays default. Users get better quality; non-determinism is a measurement problem, not user problem.
+- **QC measurement:** `RERANK_TYPE=cross-encoder` + `RERANK_MODEL=gte-reranker-modernbert-base`. Deterministic + 15× faster + strictly above no-rerank in aggregate.
+- **Alternative measurement:** `DISTILLATION_ENABLED=false` (no-rerank) — 100× faster, also deterministic, but slightly lower aggregate quality than gte.
+
+## Operational state
+
+- 2 commits on `phase-12-rag-quality`, NOT yet pushed.
+- src/env.ts: +2 preprocess lines (empty-string handling for RERANK_MODEL / RERANK_BASE_URL). No default changes.
+- docker-compose.yml: +2 env lines (RERANK_TYPE, RERANK_MODEL defaults).
+- mcp container: production defaults (RERANK_TYPE=generative, RERANK_MODEL empty, NO_WRITE=false, DISTILLATION_ENABLED=true).
+- mcp image REBUILT (needed for the src/env.ts preprocess change).
+- `lesson_access_log` count 90 (clean, unchanged).
+- 231/231 tests pass; tsc clean.
+
+## Phase 12 scoreboard update
+
+| Sprint | Topic | Status | Nail |
+|---|---|---|---|
+| 12.0-12.1e4 | (prior) | ✅ | see earlier entries |
+| **12.1f** | **Cross-encoder rerank eval** | ✅ | **gte winner for measurement; generative stays for prod; bge/jina broken via /v1/embeddings; new friction class + /v1/rerank endpoint impl is next candidate** |
+
+## What's next — candidate follow-ups
+
+1. **Sprint 12.1g — implement `/v1/rerank` endpoint support** — small focused code change. Unlocks bge + jina + other true cross-encoders. If any of those beat generative on quality WITH determinism, becomes new production default. High leverage per line of code.
+
+2. **Housekeeping + merge to main** — `phase-12-rag-quality` now ~55 commits. The user indicated we hold merge until we use the system in realistic work. Still deferred.
+
+3. **12.2 sleep consolidation** — next biological-memory feature. Measurement infra is now better (can use gte or no-rerank for deterministic baselines).
+
+4. **Broaden chunks/code/global goldensets** — now with deterministic measurement available.
+
+5. **Dogfood-driven** — actually use the system, surface real friction.
+
+---
+
+---
+
+---
 id: CH-PHASE12-S121E4
 date: 2026-04-19
 module: Phase12-Sprint12.1e4
