@@ -1,4 +1,108 @@
 ---
+id: CH-PHASE12-S121G
+date: 2026-04-19
+module: Phase12-Sprint12.1g
+phase: PHASE_12
+---
+
+# Session Patch — 2026-04-19 (Phase 12 Sprint 12.1g — TEI external rerank integration)
+
+## Where We Are
+
+**Sprint 12.1g closed.** Added HuggingFace TEI as external rerank server (`tei-rerank` Docker service) + new `RERANK_TYPE=api` code path (`rerankExternalApi`). Infrastructure works deterministically — **but** `bge-reranker-v2-m3` specifically underperforms every alternative on the 40q goldenset: MRR 0.9279 (below gte 0.9538), nDCG@10 0.9071 (below no-rerank 0.9100). Architecture shipped regardless; infrastructure is future-proof for Sprint 12.1h candidate (try jina-reranker-v3 or qwen3-reranker-8b via same TEI plumbing with one `--model-id` flag change).
+
+## Commits (3)
+
+- `91eb5c7` — spec + design + plan + `tei-rerank` docker service + `tei_model_cache` named volume + mcp `depends_on`
+- `2e15eba` — `rerankExternalApi()` + `RERANK_TYPE='api'` enum + dispatch update + 4 unit tests
+- `509d314` — 2 baseline archives (TEI+bge + repeat determinism check) + summary doc
+
+## The 5-way matrix (lessons goldenset, NO_WRITE=true, α=0.10, HL=7)
+
+| Run | recall@10 | MRR | nDCG@10 | elapsed | deterministic |
+|---|---:|---:|---:|---:|---|
+| generative (current prod) | 1.0000 | **1.0000** | **0.9724** | 312s | ❌ (~7/40 cross-session drift per 12.1e4) |
+| gte-reranker-modernbert-base (12.1f) | 1.0000 | 0.9538 | 0.9237 | 22s | ✅ |
+| **TEI+bge-reranker-v2-m3 (this sprint)** | **0.9459** | **0.9279** | **0.9071** | **239s** | **✅ 0/40 diffs** |
+| no-rerank (12.1e4) | 0.9730 | 0.9198 | 0.9100 | 3s | ✅ |
+
+### Per-group (TEI+bge highlights)
+
+| Group | TEI+bge | generative | gte | no-rerank |
+|---|---:|---:|---:|---:|
+| cross-topic | **0.6095** ← bge weak here | 0.9751 | 0.8289 | 0.5945 |
+| ambig | **0.9417** ← bge's only win | 0.9386 | 0.9004 | 0.9196 |
+| paraphrase | **0.8000** ← bge weak | 1.0000 | 0.8712 | 1.0000 |
+
+## Why bge underperformed
+
+Likely causes (not investigated beyond inference):
+1. **Training domain mismatch** — bge-v2-m3 is multilingual/general; our corpus is English-only, dense-technical.
+2. **Short input representation** — we send `"${title}. ${snippet}"` (~300 chars); bge may expect longer docs.
+3. **Semantic-reasoning queries** — cross-topic and paraphrase queries benefit from LLM reasoning, which bge lacks vs generative.
+
+## Decision (per design §9 matrix)
+
+MRR 0.9279 < 0.95 threshold → **no `src/env.ts` default change**. Keep `RERANK_TYPE=generative`. bge is usable but not better than alternatives.
+
+## Architecture shipped regardless
+
+- **`tei-rerank` Docker service** — HF TEI CPU image, bge-reranker-v2-m3, healthchecked (`/health` endpoint), named volume `tei_model_cache` for model persistence. First startup ~4min for model download; subsequent starts <30s.
+- **`RERANK_TYPE=api` code path** — `rerankExternalApi()` in `src/services/lessons.ts`. POSTs `{query, texts}` to `${RERANK_BASE_URL ?? 'http://tei-rerank:80'}/rerank`. Parses Cohere/TEI `[{index, score}]` response. Fails open on HTTP/network/malformed errors.
+- **Unit tests** (+4): happy path with mapped indices, HTTP 500 fallback, network error fallback, empty response fallback. Mock via `global.fetch` save/restore pattern.
+- **docker-compose plumbing:** mcp `depends_on: tei-rerank`; `tei_model_cache` in top-level volumes.
+
+## How to swap the TEI model in a future sprint
+
+```bash
+# Edit docker-compose.yml tei-rerank service command arg:
+command: ["--model-id", "jinaai/jina-reranker-v3"]   # or qwen/Qwen3-Reranker-8B
+
+# Restart TEI (first start downloads new model, cached afterward):
+docker compose stop tei-rerank
+docker compose rm -f tei-rerank
+docker compose up -d tei-rerank
+# wait for health: starting → healthy
+
+# Run baseline:
+RERANK_TYPE=api LESSONS_SALIENCE_NO_WRITE=true docker compose up -d --force-recreate mcp
+npm run qc:baseline -- --tag sprint-12.1h-<modelname>
+```
+
+## Phase 12 scoreboard update
+
+| Sprint | Topic | Status | Nail |
+|---|---|---|---|
+| 12.0-12.1f | (prior) | ✅ | see earlier entries |
+| **12.1g** | **TEI external rerank + bge evaluation** | ✅ | **Infra shipped + deterministic; bge lost on quality; no default change** |
+
+## Operational state
+
+- 3 commits on `phase-12-rag-quality`, NOT YET pushed.
+- `src/env.ts`: RERANK_TYPE enum extends to 'api' (default unchanged: `generative`).
+- `src/services/lessons.ts`: +1 exported function, +dispatch branch.
+- `docker-compose.yml`: +`tei-rerank` service, +`tei_model_cache` volume, +mcp depends_on.
+- mcp image: REBUILT (needed for the new code).
+- mcp container: production defaults (RERANK_TYPE=generative, NO_WRITE=false).
+- tei-rerank container: healthy, serving bge-reranker-v2-m3 on port 8080 (host) + tei-rerank:80 (docker network).
+- `lesson_access_log` count: 90.
+- 235/235 unit tests pass; tsc clean.
+
+## What's next — candidate follow-ups
+
+1. **Sprint 12.1h — try jina-reranker-v3 or qwen3-reranker-8b via TEI.** One model swap + restart + 2 baseline runs. ~30min. Might find a reranker that beats generative (bge didn't).
+2. **Housekeeping + merge to main.** Branch is ~60 commits deep. Deferred per user until real-world validation.
+3. **12.2 sleep consolidation.** Measurement infra is now solid; can use gte or api for deterministic baselines.
+4. **Broaden other goldensets.**
+5. **Accept rerank optimization has plateaued for this goldenset** and move on.
+
+My recommendation: **12.1h is cheap (~30min) and might actually find a winner.** If another reranker beats generative quality with determinism, we'd have a real production default change. If it also underperforms, we close the loop definitively and move on.
+
+---
+
+---
+
+---
 id: CH-PHASE12-S121F
 date: 2026-04-19
 module: Phase12-Sprint12.1f
