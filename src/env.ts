@@ -78,9 +78,17 @@ const EnvSchema = z.object({
   // Clamped to [0, 1].
   LESSONS_SALIENCE_ALPHA: z.coerce.number().min(0).max(1).optional().default(0.10),
   // Tuning: time-decay half-life in days. A single access event contributes
-  // weight × exp(-age_days × ln2 / halfLife). At halfLife=7, an event from
-  // 7 days ago contributes half its original weight.
-  LESSONS_SALIENCE_HALF_LIFE_DAYS: z.coerce.number().int().min(1).max(365).optional().default(7),
+  // weight × exp(-age_days × ln2 / halfLife). At halfLife=30, an event from
+  // 30 days ago contributes half its original weight.
+  //
+  // Default raised from 7 to 30 in Sprint 12.1e2 after a clean-state A/B
+  // sweep showed HL=30 delivers +0.0284 MRR and +0.0154 nDCG@10 (both above
+  // noise floor) on the 40-query lessons goldenset. Mechanism: at HL=7,
+  // audit-bootstrap rows (90 days old, seeded from guardrail_audit_logs)
+  // decay to ~2×10⁻⁴ weight — effectively a no-op. At HL=30, they retain
+  // ~0.12 weight, enough to boost guardrail-adjacent lessons on cross-topic
+  // queries (+0.15 nDCG@10). See docs/qc/baselines/2026-04-19-sprint-12.1e2-summary.md.
+  LESSONS_SALIENCE_HALF_LIFE_DAYS: z.coerce.number().int().min(1).max(365).optional().default(30),
 
   MCP_PORT: z.coerce.number().int().positive().optional().default(3000),
   API_PORT: z.coerce.number().int().positive().optional().default(3001),
