@@ -878,6 +878,65 @@ detection trace.
 
 ---
 
+### cross-encoder-via-embeddings-api-mismatch
+
+**Definition.** The `rerankCrossEncoder` code path in
+`src/services/lessons.ts:605` uses the `/v1/embeddings` endpoint to
+get independent embeddings for query and each candidate, then scores
+by cosine similarity. This works for SOME rerank-tagged models (e.g.,
+`gte-reranker-modernbert-base`) but fails catastrophically for others
+(`text-embedding-bge-reranker-v2-m3`, `text-embedding-jina-reranker-v3`).
+Classic "cross-encoder" models score `(query, doc)` PAIRS together
+and don't produce independent embeddings suitable for cosine-sim
+ranking — yet will happily respond to `/v1/embeddings` with SOMETHING,
+just not something useful.
+
+**Why it happens.** Reranker models have two output conventions:
+1. **Bi-encoder / two-tower:** produce independent embeddings per
+   input. Cosine sim between query-embedding and doc-embedding gives
+   relevance. `gte-reranker-modernbert-base` apparently behaves this
+   way via `/v1/embeddings`.
+2. **True cross-encoder:** concatenate `(query, doc)` and score the
+   pair with a single forward pass. Use `/v1/rerank` endpoint in
+   LM Studio (if supported) or equivalent. `bge-reranker-v2-m3` and
+   `jina-reranker-v3` are this kind.
+
+Our code path assumes #1 for everything. When #2-kind models are used,
+they return valid-shaped embeddings but with outputs that don't
+correlate with relevance when cosine-compared.
+
+**Diagnostic signal.** MRR on the 40q lessons goldenset drops below
+the no-rerank floor (~0.92). Typically MRR < 0.5 when this happens
+(near-random ranking). Also visible in explanation string showing
+the rerank succeeded but top-K contains irrelevant lessons.
+
+**Example — Sprint 12.1f.** Three cross-encoder models tested via
+current code path:
+- gte-reranker-modernbert-base: MRR=0.9538 (works)
+- bge-reranker-v2-m3: MRR=0.1418 (broken)
+- jina-reranker-v3: MRR=0.3375 (broken)
+
+gte happens to have a bi-encoder-compatible output; bge and jina
+don't.
+
+**Mitigation.**
+1. **Empirical model selection:** test candidate rerankers on the
+   goldenset before trusting them. If MRR < no-rerank floor, the
+   model+endpoint combination is broken.
+2. **Implement `/v1/rerank` endpoint support** in the code — a proper
+   cross-encoder code path where query+doc pairs score together.
+   Small change (single new function alongside `rerankCrossEncoder`
+   and `rerankGenerative`); would unlock bge/jina and other true
+   cross-encoders. Candidate for Sprint 12.1g.
+3. **Use `gte-reranker-modernbert-base` for deterministic QC
+   measurement** (validated in 12.1f).
+
+**Cross-ref.** Sprint 12.1f summary
+(`docs/qc/baselines/2026-04-19-sprint-12.1f-summary.md`) for the
+3-model test + root-cause analysis.
+
+---
+
 ## Adding a new class
 
 When a Phase-12 sprint discovers a pathology not covered here:

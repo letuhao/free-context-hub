@@ -204,9 +204,12 @@ const EnvSchema = z.object({
   REFLECT_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(5000),
 
   // Optional dedicated rerank model endpoint (fallbacks to DISTILLATION_* then EMBEDDINGS_*).
-  RERANK_BASE_URL: z.string().min(1).optional(),
+  // Sprint 12.1f: preprocess empty strings to undefined so docker-compose
+  // fallback `${VAR:-}` (empty default when shell env unset) doesn't fail
+  // the min(1) validation. Treats empty string as "unset" — same semantic.
+  RERANK_BASE_URL: z.preprocess(v => (v === '' ? undefined : v), z.string().min(1).optional()),
   RERANK_API_KEY: z.string().optional(),
-  RERANK_MODEL: z.string().min(1).optional(),
+  RERANK_MODEL: z.preprocess(v => (v === '' ? undefined : v), z.string().min(1).optional()),
   /** 'generative' = chat API with JSON output (qwen3-reranker, zerank).
    *  'cross-encoder' = embedding API with cosine similarity re-scoring (bge-reranker, gte-reranker, jina-reranker). */
   RERANK_TYPE: z.enum(['generative', 'cross-encoder']).optional().default('generative'),
