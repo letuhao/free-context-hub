@@ -29,7 +29,7 @@
  */
 
 import type { Pool } from 'pg';
-import { getEnv } from '../env.js';
+import { getEnv, parseBooleanEnv } from '../env.js';
 import { createModuleLogger } from '../utils/logger.js';
 
 const logger = createModuleLogger('salience');
@@ -56,6 +56,30 @@ export function getSalienceConfig(): SalienceConfig {
  *  skip both the write-path INSERTs and the read-path salience computation. */
 export function isSalienceDisabled(): boolean {
   return getEnv().LESSONS_SALIENCE_DISABLED;
+}
+
+/** Sprint 12.1e3 — measurement-isolation gate. True when writes to
+ *  lesson_access_log are suppressed. Reads still work.
+ *
+ *  Intended use case: operators running QC baselines want salience-aware
+ *  ranking (reads) but NO accumulation of consideration-search rows that
+ *  would pollute subsequent measurements (see goldenset-pollution friction
+ *  class).
+ *
+ *  Composition with LESSONS_SALIENCE_DISABLED:
+ *    - DISABLED=true  implies no writes anyway (search paths guard on it
+ *      before calling logLessonAccess); NO_WRITE is redundant-but-harmless.
+ *    - DISABLED=false, NO_WRITE=true: reads compute salience from existing
+ *      log state; no new writes accumulate. This is the measurement mode.
+ *    - DISABLED=false, NO_WRITE=false (default): production behavior.
+ *
+ *  Why direct process.env read instead of getEnv(): the getEnv() cache
+ *  means a test (or operator toggling between baseline runs without a
+ *  container restart) wouldn't see env changes. Reading process.env fresh
+ *  makes the flag toggle-friendly. Production path recreates the container
+ *  on env changes anyway — cache-vs-direct is equivalent at deployment. */
+export function isSalienceWriteDisabled(): boolean {
+  return parseBooleanEnv(process.env.LESSONS_SALIENCE_NO_WRITE) === true;
 }
 
 // --------------------------------- Read path ---------------------------------
@@ -311,6 +335,11 @@ export type AccessLogEntry = {
  *  Returns a Promise that resolves on success; callers that want to
  *  confirm persistence in tests may await it. */
 export async function logLessonAccess(pool: Pool, entries: AccessLogEntry[]): Promise<void> {
+  // Sprint 12.1e3 — measurement-isolation gate (see isSalienceWriteDisabled
+  // docstring for rationale). When NO_WRITE=true, suppress the INSERT
+  // regardless of batch contents. Callers still get a resolved Promise,
+  // preserving fire-and-forget semantics.
+  if (isSalienceWriteDisabled()) return;
   if (entries.length === 0) return;
 
   // Build a single multi-row INSERT: VALUES ($1,$2,$3,$4,$5), ($6,$7,$8,$9,$10), ...

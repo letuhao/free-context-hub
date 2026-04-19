@@ -5,7 +5,7 @@ import * as z from 'zod/v4';
 // dotenv.config() is idempotent — safe to call from multiple entrypoints.
 dotenv.config();
 
-function parseBooleanEnv(v: unknown): boolean | undefined {
+export function parseBooleanEnv(v: unknown): boolean | undefined {
   if (v === undefined || v === null) return undefined;
   if (typeof v === 'boolean') return v;
   if (typeof v === 'number') return v !== 0;
@@ -71,6 +71,17 @@ const EnvSchema = z.object({
   // (salience blend into ranking) for lessons. Intended for A/B measurement
   // and emergency rollback; individual tuning knobs below stay untouched.
   LESSONS_SALIENCE_DISABLED: z
+    .preprocess(v => parseBooleanEnv(v), z.boolean().optional())
+    .default(false),
+  // Sprint 12.1e3 — measurement-isolation knob. When true, logLessonAccess
+  // becomes a no-op (salience READS still work normally; WRITES are
+  // suppressed). Intended for QC baseline runs that would otherwise pollute
+  // lesson_access_log with consideration-search rows — see the
+  // goldenset-pollution friction class. Note: isSalienceWriteDisabled()
+  // reads process.env directly rather than via getEnv() cache, so operators
+  // can toggle this between baseline runs without a full container restart
+  // (though --force-recreate is still the canonical way to pick it up).
+  LESSONS_SALIENCE_NO_WRITE: z
     .preprocess(v => parseBooleanEnv(v), z.boolean().optional())
     .default(false),
   // Tuning: maximum salience boost magnitude. final = hybrid × (1 + α × salience).

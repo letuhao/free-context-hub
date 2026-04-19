@@ -640,6 +640,54 @@ as /review-impl MED-2.
 
 ---
 
+### goldenset-pollution
+
+**Definition.** Measurement infrastructure that writes to the same state
+it reads from can distort subsequent measurements. For free-context-hub,
+every `qc:baseline` run accumulates `consideration-search` rows in
+`lesson_access_log`; accumulated over many runs, these inflate the
+salience of goldenset-target lessons and shift subsequent ranking
+measurements.
+
+**Why it happens.** `searchLessons` and `searchLessonsMulti` call
+`logLessonAccess` fire-and-forget for every top-K match (per Sprint
+12.1c write paths). Baseline runs exercise these paths. A 40-query
+goldenset × K=10 × samples=3 writes ~1200 rows per run. Duplicate-trap
+queries with 9-20 UUID targets each write 9-20 rows per query sample,
+disproportionately inflating fixture-lesson salience.
+
+**Diagnostic signal.** A baseline run shows top-K results dominated by
+lessons whose titles look like test fixtures (`impexp-*`,
+`agent-bootstrap-e2e-*`, `gui-filter-*`) or duplicate-group cluster
+members, especially for abstract or semantically-distant queries.
+Numerically: the change shows up at longer half-lives (≥ 14d) where
+old access-log rows have enough weight to compete with hybrid-score.
+
+**Example — Sprint 12.1e2.** Polluted-sweep HL=30: the undici paraphrase
+query `why does swapping http agents between the default and an
+installed one break streaming bodies` dropped rank-1 → rank-7 because
+6 fixture lessons outranked the true target via accumulated salience.
+On cleaned state (90 audit-bootstrap rows only), the same query hits
+rank-2. The "regression" was entirely a measurement artifact.
+
+**Mitigation paths.**
+1. **Use `LESSONS_SALIENCE_NO_WRITE=true`** (Sprint 12.1e3) before
+   salience-sensitive baseline runs. Reads still compute salience;
+   writes are suppressed. One env flag, no state mutation. This is
+   the recommended mitigation — cheap, non-destructive, toggle-friendly.
+2. **Truncate before/after** (manual, error-prone, DESTRUCTIVE):
+   `DELETE FROM lesson_access_log WHERE context='consideration-search'`
+   after backing up. Used by Sprint 12.1e2 before NO_WRITE existed.
+3. **Isolated measurement database** (long-term): a separate
+   `lesson_access_log_baseline` table. Higher complexity; unnecessary
+   given NO_WRITE.
+
+**Cross-ref.** Sprint 12.1e2 POST-REVIEW investigation (commit 301d3e0)
+discovered the pattern; Sprint 12.1e3 (pending commit) lands the
+NO_WRITE flag as the non-destructive mitigation.
+
+---
+
 ## Adding a new class
 
 When a Phase-12 sprint discovers a pathology not covered here:

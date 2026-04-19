@@ -18,6 +18,7 @@ import {
   computeSalience,
   computeSalienceMultiProject,
   isSalienceDisabled,
+  isSalienceWriteDisabled,
   getSalienceConfig,
   logLessonAccess,
   type AccessLogEntry,
@@ -456,6 +457,72 @@ test('logLessonAccess', async (t) => {
       { lesson_id: 'aaa', project_id: 'p', context: 'consumption-read' },
     ]);
     // Reaching here means no throw. Pass.
+  });
+});
+
+// ---- Sprint 12.1e3 — LESSONS_SALIENCE_NO_WRITE gate ----
+test('logLessonAccess respects LESSONS_SALIENCE_NO_WRITE', async (t) => {
+  // Save original so the test harness stays clean for unrelated tests.
+  const original = process.env.LESSONS_SALIENCE_NO_WRITE;
+  function restore() {
+    if (original === undefined) delete process.env.LESSONS_SALIENCE_NO_WRITE;
+    else process.env.LESSONS_SALIENCE_NO_WRITE = original;
+  }
+
+  await t.test('flag unset (default) → INSERT happens', async () => {
+    delete process.env.LESSONS_SALIENCE_NO_WRITE;
+    try {
+      assert.equal(isSalienceWriteDisabled(), false, 'gate reads false when unset');
+      const { pool, calls } = mockPool({ rows: [] });
+      await logLessonAccess(pool, [
+        { lesson_id: 'aaa', project_id: 'p', context: 'consumption-reflect' },
+      ]);
+      assert.equal(calls.length, 1, 'expected 1 INSERT when NO_WRITE is unset');
+    } finally {
+      restore();
+    }
+  });
+
+  await t.test('flag=true → no SQL call', async () => {
+    process.env.LESSONS_SALIENCE_NO_WRITE = 'true';
+    try {
+      assert.equal(isSalienceWriteDisabled(), true, 'gate reads true');
+      const { pool, calls } = mockPool({ rows: [] });
+      await logLessonAccess(pool, [
+        { lesson_id: 'aaa', project_id: 'p', context: 'consumption-reflect' },
+      ]);
+      assert.equal(calls.length, 0, 'expected 0 INSERTs when NO_WRITE=true');
+    } finally {
+      restore();
+    }
+  });
+
+  await t.test('flag=true + non-empty batch + non-empty metadata → still no SQL call', async () => {
+    process.env.LESSONS_SALIENCE_NO_WRITE = '1';
+    try {
+      const { pool, calls } = mockPool({ rows: [] });
+      await logLessonAccess(pool, [
+        { lesson_id: 'a', project_id: 'p', context: 'consideration-search', weight: 1.0, metadata: { query: 'x' } },
+        { lesson_id: 'b', project_id: 'p', context: 'consideration-search', weight: 0.5 },
+      ]);
+      assert.equal(calls.length, 0, 'gate short-circuits before SQL construction');
+    } finally {
+      restore();
+    }
+  });
+
+  await t.test('flag=false (explicit string "false") → INSERT happens', async () => {
+    process.env.LESSONS_SALIENCE_NO_WRITE = 'false';
+    try {
+      assert.equal(isSalienceWriteDisabled(), false);
+      const { pool, calls } = mockPool({ rows: [] });
+      await logLessonAccess(pool, [
+        { lesson_id: 'aaa', project_id: 'p', context: 'consumption-reflect' },
+      ]);
+      assert.equal(calls.length, 1);
+    } finally {
+      restore();
+    }
   });
 });
 
