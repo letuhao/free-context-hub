@@ -212,7 +212,15 @@ const EnvSchema = z.object({
   RERANK_MODEL: z.preprocess(v => (v === '' ? undefined : v), z.string().min(1).optional()),
   /** 'generative' = chat API with JSON output (qwen3-reranker, zerank).
    *  'cross-encoder' = embedding API with cosine similarity re-scoring (bge-reranker, gte-reranker, jina-reranker). */
-  RERANK_TYPE: z.enum(['generative', 'cross-encoder']).optional().default('generative'),
+  // generative: LLM chat completions via DISTILLATION_MODEL (e.g. qwen2.5-coder-14b in LM Studio).
+  //   Quality: high. Determinism: non-deterministic across sessions (12.1e4 finding).
+  // cross-encoder: bi-encoder cosine-sim via /v1/embeddings. Only works for bi-encoder-
+  //   compatible models like gte-reranker-modernbert-base (12.1f finding).
+  //   Deterministic. Quality: partial win over no-rerank on 40q goldenset.
+  // api: external /rerank endpoint (TEI, Infinity, Cohere). Unblocks true cross-encoders
+  //   like bge-reranker-v2-m3, jina-reranker-v3. Deterministic. Quality: TBD in 12.1g.
+  //   Requires RERANK_BASE_URL set (default in docker-compose: http://tei-rerank:80).
+  RERANK_TYPE: z.enum(['generative', 'cross-encoder', 'api']).optional().default('generative'),
   RERANK_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(1800),
   RERANK_CACHE_TTL_SECONDS: z.coerce.number().int().positive().optional().default(3600),
 

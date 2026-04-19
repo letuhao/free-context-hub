@@ -502,7 +502,7 @@ const RerankOrderSchema = z.object({
   order: z.array(z.number().int().nonnegative()),
 });
 
-type RerankCandidate = { index: number; title: string; snippet: string };
+export type RerankCandidate = { index: number; title: string; snippet: string };
 
 function rerankBaseUrl(): string {
   const env = getEnv();
@@ -670,12 +670,91 @@ function cosineSimilarity(a: number[], b: number[]): number {
   return denom > 0 ? dot / denom : 0;
 }
 
+/**
+ * Sprint 12.1g — External-API reranker.
+ *
+ * POSTs query + candidate texts to a Cohere/TEI-compatible /rerank endpoint
+ * and returns the new index order sorted by server-side score. Unblocks
+ * true cross-encoder rerank models (bge-reranker-v2-m3, jina-reranker-v3,
+ * etc.) that can't be used via LM Studio's /v1/embeddings bi-encoder path
+ * (Sprint 12.1f finding).
+ *
+ * Works with: HuggingFace text-embeddings-inference (TEI), Infinity, Cohere.
+ *
+ * Request body:  {query, texts: [string, ...]}
+ * Response body: [{index: number, score: number}, ...]  (sorted score DESC)
+ *
+ * Default server URL: http://tei-rerank:80 (docker-compose tei-rerank
+ * service). Override via RERANK_BASE_URL.
+ *
+ * Failure modes (network error, 5xx, malformed response) fall back to
+ * `candidates.map(c => c.index)` — effectively no-op. Same pattern as the
+ * sibling reranker functions.
+ */
+export async function rerankExternalApi(query: string, candidates: RerankCandidate[]): Promise<number[]> {
+  const env = getEnv();
+  const baseUrl = env.RERANK_BASE_URL ?? 'http://tei-rerank:80';
+
+  const ac = new AbortController();
+  const timeoutMs = (env.RERANK_TIMEOUT_MS ?? 10000) + 5000;
+  const t = setTimeout(() => ac.abort(), timeoutMs);
+
+  try {
+    const texts = candidates.map(c => `${c.title}. ${c.snippet}`);
+    const res = await fetch(`${baseUrl}/rerank`, {
+      method: 'POST',
+      headers: rerankHeaders(),
+      signal: ac.signal,
+      body: JSON.stringify({ query, texts }),
+    });
+
+    if (!res.ok) {
+      logger.warn({ status: res.status }, 'external-api rerank: HTTP error');
+      return candidates.map(c => c.index);
+    }
+
+    const json = (await res.json()) as Array<{ index: number; score: number }>;
+    if (!Array.isArray(json) || json.length === 0) {
+      logger.warn({ shape: typeof json }, 'external-api rerank: empty or malformed response');
+      return candidates.map(c => c.index);
+    }
+
+    // json is sorted by score DESC; map server-side indices (into `texts`)
+    // back to caller-supplied index fields.
+    const order = json
+      .map(r => candidates[r.index]?.index)
+      .filter((v): v is number => v !== undefined);
+
+    logger.info({
+      query: query.slice(0, 60),
+      candidates: candidates.length,
+      top3: order.slice(0, 3),
+      top3_scores: json.slice(0, 3).map(r => r.score.toFixed(5)),
+      mode: 'external-api',
+    }, 'lesson rerank: done');
+
+    return order;
+  } catch (err) {
+    logger.warn({ error: err instanceof Error ? err.message : String(err) }, 'external-api rerank: failed');
+    return candidates.map(c => c.index);
+  } finally { clearTimeout(t); }
+}
+
 /** Dispatch to the correct reranker based on RERANK_TYPE. */
 async function rerankLessons(params: {
   query: string;
   candidates: RerankCandidate[];
 }): Promise<number[]> {
   const env = getEnv();
+
+  // Sprint 12.1g — 'api' mode uses an external /rerank server (TEI, Infinity,
+  // Cohere). No LM Studio model required; RERANK_BASE_URL alone determines
+  // destination. Checked FIRST so the DISTILLATION_MODEL fallback below
+  // doesn't suppress api mode when DISTILLATION_ENABLED=false.
+  if (env.RERANK_TYPE === 'api') {
+    return rerankExternalApi(params.query, params.candidates);
+  }
+
   const model = env.RERANK_MODEL ?? env.DISTILLATION_MODEL;
   if (!model) return params.candidates.map(c => c.index);
 

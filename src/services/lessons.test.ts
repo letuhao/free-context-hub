@@ -172,3 +172,91 @@ test('dedupLessonMatches', async (t) => {
     assert.deepEqual(out.map((x) => x.lesson_id), ['c0', 'd1', 'd2', 'd3', 'd4']);
   });
 });
+
+// ---- Sprint 12.1g — rerankExternalApi tests ----
+
+import { rerankExternalApi, type RerankCandidate } from './lessons.js';
+
+function candidates(n: number): RerankCandidate[] {
+  return Array.from({ length: n }, (_, i) => ({
+    index: i * 10,  // distinctive indices: 0, 10, 20, ... so we can verify mapping
+    title: `title ${i}`,
+    snippet: `snippet ${i}`,
+  }));
+}
+
+function mockFetch(response: { status: number; body: any } | Error) {
+  const calls: Array<{ url: string; body: any }> = [];
+  const fetchMock = async (url: string, init: any) => {
+    calls.push({ url, body: init?.body ? JSON.parse(init.body) : undefined });
+    if (response instanceof Error) throw response;
+    return {
+      ok: response.status >= 200 && response.status < 300,
+      status: response.status,
+      json: async () => response.body,
+    };
+  };
+  return { fetchMock, calls };
+}
+
+test('rerankExternalApi — happy path sorts by server score', async () => {
+  const originalFetch = global.fetch;
+  const { fetchMock, calls } = mockFetch({
+    status: 200,
+    body: [
+      { index: 2, score: 0.9 },
+      { index: 0, score: 0.5 },
+      { index: 1, score: 0.1 },
+    ],
+  });
+  global.fetch = fetchMock as any;
+  try {
+    const result = await rerankExternalApi('my query', candidates(3));
+    // candidates have distinctive .index fields: 0, 10, 20
+    // Server returned score order: texts[2], texts[0], texts[1]
+    // That maps to caller indices: 20, 0, 10
+    assert.deepEqual(result, [20, 0, 10]);
+    assert.equal(calls.length, 1);
+    assert.match(calls[0]!.url, /\/rerank$/);
+    assert.equal(calls[0]!.body.query, 'my query');
+    assert.deepEqual(calls[0]!.body.texts, ['title 0. snippet 0', 'title 1. snippet 1', 'title 2. snippet 2']);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('rerankExternalApi — HTTP 500 returns original index order', async () => {
+  const originalFetch = global.fetch;
+  const { fetchMock } = mockFetch({ status: 500, body: { error: 'oops' } });
+  global.fetch = fetchMock as any;
+  try {
+    const result = await rerankExternalApi('q', candidates(3));
+    assert.deepEqual(result, [0, 10, 20]);  // unchanged
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('rerankExternalApi — fetch throws returns original order', async () => {
+  const originalFetch = global.fetch;
+  const { fetchMock } = mockFetch(new Error('network unreachable'));
+  global.fetch = fetchMock as any;
+  try {
+    const result = await rerankExternalApi('q', candidates(3));
+    assert.deepEqual(result, [0, 10, 20]);  // unchanged
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('rerankExternalApi — empty response array returns original order', async () => {
+  const originalFetch = global.fetch;
+  const { fetchMock } = mockFetch({ status: 200, body: [] });
+  global.fetch = fetchMock as any;
+  try {
+    const result = await rerankExternalApi('q', candidates(3));
+    assert.deepEqual(result, [0, 10, 20]);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
