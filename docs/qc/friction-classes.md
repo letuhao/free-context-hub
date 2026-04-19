@@ -767,6 +767,117 @@ from 30 back to 7 in the same sprint.
 
 ---
 
+### llm-rerank-cross-session-drift
+
+**Definition.** The LLM-based reranker (`rerankGenerative`, configured
+via `DISTILLATION_MODEL` + `DISTILLATION_ENABLED=true`) at temperature=0
+produces **non-deterministic output across container recreates** even
+when called with identical input. Single-container same-session calls
+ARE deterministic (2 consecutive REST calls against same mcp container
+return byte-identical results). But 90min-separated baseline runs at
+the same config drift significantly — likely due to LM Studio internal
+state changes (model cache warm/cold, batch context, etc.).
+
+**Why it happens.** Local LLM backends (LM Studio, llama.cpp, etc.)
+can exhibit subtle non-determinism even at temp=0 due to: floating-
+point non-associativity in batched matrix operations, memory layout
+differences between cold/warm starts, tokenizer state, or CUDA kernel
+selection. Temperature=0 forces greedy sampling but doesn't guarantee
+identical logits across invocation contexts.
+
+**Diagnostic signal.** Same config (env vars, state, query) runs at
+different times produce different `top_k_keys` for one or more
+queries, particularly at rank-10-borderline positions where small
+logit differences flip HIT/MISS. Sprint 12.1e4 observed **7/40 queries
+drifting** between two HL=7 α=0.05 runs ~90min apart (MRR dropped
+0.9784 → 0.9514 from drift alone).
+
+**Scale of impact.** Drift magnitude ~0.027 MRR / ~0.031 nDCG@10 —
+**exceeds most parameter signals we try to measure.** Any A/B sweep of
+small-effect parameters (α, half-life tweaks) without controlling for
+this drift produces spurious signal.
+
+**Example — Sprint 12.1e4 initial 8-run grid.** Apparent "outliers"
+at (HL=7, α=0.10) and (HL=30, α=0.20) — rank drop for
+lesson-cross-sprint-11-closeout from rank-1 to MISS. Initially
+interpreted as α-specific bad spot. Validation via rerank-off runs
+showed A=B (α=0.05 vs α=0.10) are IDENTICAL under rerank-off, proving
+the "α effect" was 100% rerank drift.
+
+**Mitigation paths.**
+1. **Disable rerank for baselines:** `DISTILLATION_ENABLED=false
+   docker compose up -d --force-recreate mcp`. Eliminates the drift
+   entirely. Also ~100× faster (rerank was the entire elapsed time).
+   Trade-off: rerank adds ~0.06 MRR quality improvement when it "works"
+   — but non-deterministically. For measurement, skip it.
+2. **Same-session back-to-back A/B:** run the full A/B matrix inside a
+   single session with minimal time gap. Reduces drift window but
+   doesn't eliminate it.
+3. **Switch to cross-encoder rerank:** `RERANK_TYPE=cross-encoder` uses
+   a deterministic embedding-based rerank (provided the embedding
+   backend is deterministic, which it is for LM Studio embeddings).
+   Product decision: does the deterministic cross-encoder give equal or
+   better quality than the generative reranker? Deferred.
+
+**Cross-ref.** Sprint 12.1e4 POST-REVIEW investigation surfaced this
+pattern. Validation runs `2026-04-19-sprint-12.1e4-hl{7-a010,7-a005}-norerank.json`
++ `-hl7-a010-norerank-rerun.json` prove determinism of no-rerank path.
+
+---
+
+### salience-blend-noop-when-no-access-history
+
+**Definition.** The `blendHybridScore(hybrid, salience, α, relevance)`
+function short-circuits to `hybridScore` unchanged when `salience` is
+undefined or ≤ 0. For queries whose candidate lessons have NO entries
+in `lesson_access_log`, the entire salience blend is a no-op — α and
+HL have literally zero effect.
+
+**Why it happens.** `src/services/salience.ts:242`:
+```
+if (!salience || salience <= 0) return hybridScore;
+```
+If a candidate lesson has no access log rows in the 180-day window,
+`computeSalience` returns no entry for that lesson_id. `salienceMap.get(id)`
+returns `undefined`. `blendHybridScore` short-circuits.
+
+**Diagnostic signal.** Search response includes explanation string
+`"salience: no access history for any candidate (N lessons)"` (when
+ZERO candidates have history) or nonzero-but-small `"salience: enabled
+query-conditional (α=X, halfLife=Yd); N/M with access history, Z
+effective after relevance-gating"` where Z ≪ M. If Z = 0, no boost is
+applied regardless of α or HL.
+
+**Example.** Sprint 12.1e4: for the sprint-11-closeout query, 60 hybrid
+candidates had 0 access-log entries → salience-blend no-op → α had
+zero mathematical effect on ranking. All observed α variance came from
+rerank drift.
+
+**When to expect this.**
+- Fresh corpus with no baseline-run traffic (consideration-search rows
+  truncated per Sprint 12.1e3 pollution mitigation).
+- Queries that surface lessons outside the guardrail audit-bootstrap
+  set (most workaround/decision/preference lessons).
+- Immediately after `TRUNCATE lesson_access_log` or similar cleanup.
+
+**When salience IS active.**
+- Guardrail lessons where `guardrail_audit_logs` rows backed them at
+  migration 0047 time.
+- Lessons that have been repeatedly retrieved / consumed (consumption-*
+  writes accumulate).
+
+**Mitigation.** Not a bug — correct behavior. The blend should no-op
+when there's no signal. But for MEASUREMENT purposes, this means α
+sweeps on bootstrap-only goldensets produce null results that don't
+reflect production behavior (where traffic accumulates). Future
+salience measurement should seed simulated real-traffic distribution.
+
+**Cross-ref.** Sprint 12.1e4 summary
+(`docs/qc/baselines/2026-04-19-sprint-12.1e4-summary.md`) for the
+detection trace.
+
+---
+
 ## Adding a new class
 
 When a Phase-12 sprint discovers a pathology not covered here:

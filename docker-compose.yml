@@ -99,6 +99,10 @@ services:
       LESSONS_SALIENCE_ALPHA: ${LESSONS_SALIENCE_ALPHA:-0.10}
       LESSONS_SALIENCE_DISABLED: ${LESSONS_SALIENCE_DISABLED:-false}
       LESSONS_SALIENCE_NO_WRITE: ${LESSONS_SALIENCE_NO_WRITE:-false}
+      # Sprint 12.1e4 /review-impl: expose DISTILLATION_ENABLED for baseline
+      # runs that want to skip LLM rerank (measured drift source across
+      # container recreates). Default true preserves production behavior.
+      DISTILLATION_ENABLED: ${DISTILLATION_ENABLED:-true}
     ports:
       - "3000:3000"
       - "3001:3001"
