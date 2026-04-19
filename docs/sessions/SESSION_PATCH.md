@@ -1,4 +1,140 @@
 ---
+id: HANDOFF-2026-04-19-G
+date: 2026-04-19
+phase: HANDOFF
+session_status: closed
+pushed_to_origin: true
+---
+
+# Handoff — end of 2026-04-19 (session G — Phase 12 measurement-infra consolidation + rerank arc close)
+
+## TL;DR
+
+**7 sprints shipped this session (12.1e1 → 12.1h). 28 commits on `phase-12-rag-quality`. All pushed to origin.** This session deliberately went deep on measurement infrastructure. The arc started with "broaden the goldenset and sweep half-life" (12.1e1/e2) and ended with "we've exhausted self-hostable rerank optimization on this goldenset" (12.1h).
+
+The most valuable outputs are:
+- **4 new friction classes** documenting measurement pathologies we hit + mitigated (goldenset-pollution, measurement-write-drift, llm-rerank-cross-session-drift, salience-blend-noop-when-no-access-history, cross-encoder-via-embeddings-api-mismatch, goldenset-grading-asymmetry, goldenset-target-drift — actually 7 new across this session).
+- **3 new env knobs** for measurement hygiene (`LESSONS_SALIENCE_NO_WRITE`, `RERANK_TYPE=api`, `DISTILLATION_ENABLED` overridable via compose).
+- **TEI external-rerank infrastructure** (profile-gated, opt-in) — new Docker service + `rerankExternalApi()` code path with 4 unit tests.
+- **Broader 40q lessons goldenset** (was 20q).
+- **Honest corrections to 12.1e2's claims** — half-life default reverted 30→7 after 2×2 analysis showed the "win" was measurement drift artifact.
+
+**No production behavior changes** — `RERANK_TYPE=generative` stays default; `LESSONS_SALIENCE_HALF_LIFE_DAYS=7` after 12.1e3 revert; α=0.10 unchanged. All measurement work is opt-in.
+
+### Sprints shipped this session (chronological)
+
+1. **12.1e1** — Broaden lessons goldenset 20 → 40q (15 ambiguous + 5 paraphrase; real-dogfood group abandoned due to zero-yield mining). 5 commits. Baseline archive + honest "premise falsified" diff. 2 new friction classes from /review-impl (goldenset-grading-asymmetry, goldenset-target-drift).
+
+2. **12.1e2** — Half-life sweep {3, 7, 14, 30}d + extensive POST-REVIEW investigation. Initial conclusion shipped HL=30 default. **Subsequently reverted in 12.1e3** after discovering the HL=30 "win" was within-run write drift artifact. Lesson: R5-H snapshot+reset was helpful within-sprint but needed stricter isolation. 5 commits.
+
+3. **12.1e3** — `LESSONS_SALIENCE_NO_WRITE` gate shipped + 2×2 analysis (HL × drift) → reverted 12.1e2's HL default change. Added `measurement-write-drift` friction class. 5 commits.
+
+4. **12.1e4** — α × HL grid (8 runs). Discovered **LLM reranker non-determinism across container recreates** (~0.027 MRR drift). Rerank-off validation confirmed α has ZERO effect on current goldenset state (blend short-circuits when no access-log). New friction class: `llm-rerank-cross-session-drift`. 4 commits.
+
+5. **12.1f** — Cross-encoder rerank evaluation (bge, gte, jina via LM Studio `/v1/embeddings`). gte is the only bi-encoder-compatible model that works through this path. bge and jina produce near-random output. gte is deterministic + 15× faster than generative. New friction class: `cross-encoder-via-embeddings-api-mismatch`. 3 commits.
+
+6. **12.1g** — HuggingFace TEI external rerank infrastructure. New Docker service (`tei-rerank`), `RERANK_TYPE=api` code path, `rerankExternalApi()` function, 4 unit tests. Tested with bge-reranker-v2-m3 — works + deterministic, but quality trails gte and loses to no-rerank on nDCG@10. Architecture ships anyway. 4 commits.
+
+7. **12.1h** — Tried 2 more TEI models: jina-reranker-v2 (architecturally incompatible with TEI — missing `model_type`) + ms-marco-MiniLM-L-6-v2 (loaded, **18× faster than bge**, strict determinism proven, but quality ~ties bge). /review-impl surfaced 2 MED + 3 LOW + 2 COSMETIC — all addressed including `profiles: ["measurement"]` gate (tei-rerank no longer always-on) + broken healthcheck fix (wget→curl). 3 commits.
+
+### Final commit arc (Sprint 12.1h close)
+
+- `e3f4cc4` — 12.1h spec + baselines (jina failed, minilm LOST)
+- `b0c87bc` — /review-impl fixes: profile gate + strict determinism + LOW/COSMETIC
+- `9c845b1` — 12.1h SESSION_PATCH
+
+## Operational state at session close
+
+- Branch `phase-12-rag-quality` at `9c845b1`, pushed to origin.
+- `.workflow-state.json` at `retro` (12.1h clean, all 12 phases complete).
+- **Unit tests: 235/235 pass** (was 226 at session start — +9 new across 12.1e3/12.1g/12.1h).
+- Type check: `npx tsc --noEmit` clean.
+- `lesson_access_log` count: 90 rows (audit-bootstrap only — cleaned during 12.1e3; has stayed at 90 thanks to NO_WRITE during all subsequent sprints).
+- **Corpus state:** 106 active lessons (up from 97 at session start — retro lessons from 12.1c-12.1h added). 624 total (incl. archived).
+- **Access-log backup:** `lesson_access_log_backup_20260419` DB table still exists (6939 rows from 12.1e2 pollution snapshot). Can drop as housekeeping.
+- **No uncommitted changes, no pending todos, no carryover work queue.**
+- `phase-12-rag-quality` branch NOT yet merged to `main` — deliberate, per user instruction ("we won't merge to main until we use it in realistic work and confirm its quality").
+
+## Phase 12 arc — what's proven after this session
+
+**A-track (measurement infrastructure — extensively hardened this session).**
+- Baseline scorecard, dup-rate v1, noise-floor-aware diff (from earlier sessions).
+- **NEW:** `LESSONS_SALIENCE_NO_WRITE` gate for measurement isolation (12.1e3).
+- **NEW:** `DISTILLATION_ENABLED=false` as baseline-default-suggested for reproducibility (12.1e4 finding).
+- **NEW:** `RERANK_TYPE=api` via TEI for deterministic cross-encoder measurement (12.1g/12.1h).
+- **7 new friction classes** documented this session (goldenset-grading-asymmetry, goldenset-target-drift, goldenset-pollution, measurement-write-drift, llm-rerank-cross-session-drift, salience-blend-noop-when-no-access-history, cross-encoder-via-embeddings-api-mismatch).
+
+**B-track (consolidation).** Dedup ships; unchanged this session.
+
+**C-track (biological salience).** Shipped 12.1c/12.1d salience feature. This session's C-track work:
+- 12.1e1 broadened measurement for future C-track work.
+- 12.1e2 tried HL tuning (reverted — drift artifact).
+- 12.1e3 confirmed HL=7 is correct after clean-state 2×2.
+- 12.1e4 α sweep showed α has ZERO effect on current bootstrap-only state (salience blend short-circuits).
+- 12.1f/g/h tried to replace the LLM reranker with cross-encoders — **no cross-encoder tested beats generative quality**. Measurement alternatives now available (gte for quality, minilm for speed).
+
+**Workflow v2.2 validated repeatedly.** `/review-impl` invoked 4 times this session (12.1e1, 12.1e3, 12.1e4, 12.1h). Each time caught findings that Phase-7 REVIEW missed. Pattern: author-blindness is real; adversarial-mode-after-commit keeps earning its keep.
+
+## What's NOT done (deferred / candidate)
+
+**Next-session entry points (honestly ranked by my opinion):**
+
+1. **Dogfood-driven work.** After 7 sprints of measurement infrastructure, the most useful next signal is using the system in real work. Agent sessions, lessons, retrievals, retro — organically surface what needs fixing. If a lesson is missing, add it. If a search query fails, investigate. Low ceremony; high signal-to-effort.
+
+2. **12.2 sleep consolidation** (the next biological-memory feature on the C-track). Measurement infra is now solid. Concept: periodic access-pattern re-clustering — mine the access log, merge near-duplicate lessons that co-occur in access, produce consolidated summaries. Design phase hasn't been started.
+
+3. **Housekeeping / merge to main.** Branch is now 70+ commits ahead of main across 14+ sprints. Deferred per user direction; can bundle with small items when ready:
+   - Drop `lesson_access_log_backup_20260419` DB table.
+   - Pool-sizing bump in docker-compose mcp service (deferred since 12.1c MED-2 — recommend `pg pool max >= 20`).
+   - Prune `tei_model_cache` named volume if the ~840MB cost matters.
+
+4. **Broaden chunks/code/global goldensets** using the 12.1e1 pattern. Useful if we're about to tune those surfaces' ranking. Probably not right now.
+
+5. **Commercial-grade rerank experiments** — Cohere Rerank 3 API, GPT-4 rerank. Out of self-hostable scope; require API keys + external services. Only worthwhile if generative-on-LM-Studio quality is insufficient for real use — and dogfood would tell us that.
+
+**Latent items noted but not actioned this session:**
+- Pool-sizing bump (12.1c MED-2) — still recommended `pg pool max >= 20` for salience-enabled deployments.
+- `qc:goldenset:validate` script exists (shipped in 12.1e1 /review-impl LOW-3). Can be bolted into pre-commit hook if goldenset edits become frequent.
+- 12.1c access-log 180-day window may silently exclude oldest audit-bootstrap rows — monitored but not re-investigated this session.
+
+## Next session — suggested entry points
+
+**Pick based on energy + intent:**
+
+1. **Dogfood** — just use the system for other real work for a while. Capture friction as lessons. Let Phase 12 priorities emerge from actual use instead of more sprint iteration.
+
+2. **12.2 sleep consolidation** — design + implement the next C-track feature. Biological-memory motivation: periodic access-pattern re-clustering, merge lessons with high co-access, produce consolidated summaries. Measurement approach: use gte-on-LM-Studio for deterministic baselining.
+
+3. **Housekeeping + merge to main** — drop backup table, prune TEI cache, bump pool size, merge. Clean consolidation before shipping more features.
+
+4. **Broader measurement** — add a 2nd project to the mix; run dogfood queries from real sessions; extend goldenset to 100+ queries. Longer-term measurement maturity.
+
+5. **Commercial rerank experiment** — if we want to see what ceiling looks like. Cohere Rerank 3 = $1/1000 calls; fits a one-sprint experiment budget.
+
+## How to resume the stack
+
+```bash
+cd d:/Works/source/free-context-hub
+docker compose up -d                     # 8 services, NOT tei-rerank (profile-gated)
+# Wait ~5s for services
+npm test                                 # 235/235 unit
+curl http://localhost:3001/api/lessons?project_id=free-context-hub&limit=5
+npm run qc:goldenset:validate            # OK 40 queries, 6 groups
+
+# For measurement sprint (TEI):
+docker compose --profile measurement up -d tei-rerank
+# wait for Ready log line; first run downloads minilm (~80MB, ~15s)
+RERANK_TYPE=api LESSONS_SALIENCE_NO_WRITE=true docker compose up -d --force-recreate mcp
+npm run qc:baseline -- --tag <sprint>-<variant> --samples 1 --surfaces lessons
+```
+
+Durable lessons are in the MCP. Search `search_lessons(query: "goldenset pollution")` or `search_lessons(query: "LLM rerank drift")` or `search_lessons(query: "cross-encoder embeddings API mismatch")` to rehydrate context.
+
+---
+
+---
+
+---
 id: CH-PHASE12-S121H
 date: 2026-04-19
 module: Phase12-Sprint12.1h
