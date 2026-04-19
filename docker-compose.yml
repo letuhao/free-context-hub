@@ -103,6 +103,13 @@ services:
       # runs that want to skip LLM rerank (measured drift source across
       # container recreates). Default true preserves production behavior.
       DISTILLATION_ENABLED: ${DISTILLATION_ENABLED:-true}
+      # Sprint 12.1f: expose RERANK_TYPE + RERANK_MODEL for cross-encoder
+      # rerank evaluation. Default RERANK_TYPE=generative preserves
+      # production (uses DISTILLATION_MODEL). Set RERANK_TYPE=cross-encoder
+      # and RERANK_MODEL=<cross-encoder-model> to use embedding-based
+      # deterministic rerank instead.
+      RERANK_TYPE: ${RERANK_TYPE:-generative}
+      RERANK_MODEL: ${RERANK_MODEL:-}
     ports:
       - "3000:3000"
       - "3001:3001"
