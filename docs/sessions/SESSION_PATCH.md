@@ -1,4 +1,166 @@
 ---
+id: CH-PHASE12-S121E1
+date: 2026-04-19
+module: Phase12-Sprint12.1e1
+phase: PHASE_12
+---
+
+# Session Patch — 2026-04-19 (Phase 12 Sprint 12.1e1 — broaden lessons goldenset + re-baseline)
+
+## Where We Are
+**Sprint 12.1e1 closed.** First half of the split 12.1e "half-life tuning" arc — broadened the lessons goldenset from 20 → 40 queries and established a new reference baseline. Zero code changes; data + docs only. Four commits on `phase-12-rag-quality`. The pre-sprint premise (broadening would dilute MRR) was falsified in a useful way; honest reframing + `/review-impl` disclosures land the sprint with clear handoff to 12.1e2.
+
+## Commits (4)
+- `0cc8c76` — spec + design + plan docs
+- `dbdccfb` — goldenset 20 → 40 (15 ambiguous-multi-target + 5 semantic-paraphrase; zero-yield mining fallback dropped `real-dogfood` group)
+- `6c45bf3` — baseline archives + cross-goldenset diff with honest interpretation
+- `b1b88b1` — `/review-impl` fixes: 2 MED + 3 LOW addressed, 2 new friction classes
+
+## Headline — the premise didn't hold, and that's fine
+
+Pre-sprint hypothesis: 20 harder queries would DROP aggregate MRR below the 0.9412 ceiling, creating measurement headroom for 12.1e2. What happened: aggregate MRR rose 0.9412 → 0.9730 (+3.4%, above noise floor). Two reasons:
+
+1. `adversarial-miss` queries contribute MRR=0. They dropped from 3/20 (15% weight) to 3/40 (7.5%), lifting the aggregate.
+2. MRR uses best-ranked target only. My 15 ambig queries all had at least one target at rank-1 → MRR=1.0 each.
+
+**Reframe:** the sprint DID deliver what it promised (broader goldenset + new reference baseline). What was wrong was the predicted METRIC. The real 12.1e2 signal lives in:
+- `nDCG@10 = 0.9594` (not at ceiling; sensitive to multi-target rank distributions)
+- Per-query `found_ranks` shifts (ambig queries returned targets at `[1,3,4,6]`, `[1,2,4,5]`, etc. — half-life tuning will shuffle these even when MRR stays pinned)
+
+## A/B result (40-query goldenset, back-to-back --control)
+
+| Metric | 12.1d-fix (20q) | 12.1e1-new (40q) | Δ | Noise floor | Reading |
+|---|---:|---:|---:|---:|---|
+| recall@10 | 0.9412 | 0.9730 | +0.0318 | 0.0270 | 🟢 above floor |
+| MRR | 0.9412 | 0.9730 | +0.0318 | 0.0198 | 🟢 above floor |
+| nDCG@5 | 0.9412 | 0.9603 | +0.0191 | 0.0280 | ⚪ within floor |
+| nDCG@10 | 0.9407 | 0.9594 | +0.0187 | 0.0134 | 🟢 above floor (but see MED-1) |
+| dup@10 nearsem | 0 | 0 | 0 | 0 | ⚪ unchanged |
+
+**Per-group breakdown (from per-query JSON)**
+
+| Group | n | MRR | Recall@10 | Hit rate |
+|---|---:|---:|---:|---:|
+| confident-hit | 10 | 1.0000 | 1.0000 | 10/10 |
+| duplicate-trap | 3 | 1.0000 | 1.0000 | 3/3 |
+| cross-topic | 4 | 0.7500 | 0.7500 | 3/4 |
+| adversarial-miss | 3 | 0.0000 | 0.0000 | 0/3 (correct) |
+| ambiguous-multi-target | 15 | 1.0000 | 1.0000 | 15/15 |
+| semantic-paraphrase | 5 | 1.0000 | 1.0000 | 5/5 |
+
+## Mining yield fallback (D4 fallback per spec)
+
+Mining from `lesson_access_log` yielded **zero novel queries** — all 20 distinct `consideration-search` query texts were the existing goldenset itself from prior baseline runs (each with 210 hits = goldenset run count). The `real-dogfood` group was dropped entirely; the 3 slots were absorbed as extra ambiguous queries (12 → 15). This is authorized by spec D4 ("all synthesized if zero yield"). Documented mechanically in the diff.md.
+
+## /review-impl findings (2 MED + 5 LOW + 2 COSMETIC — all addressed or accepted)
+
+### MED-1 — must_keywords grading asymmetry (FIXED via disclaimer)
+Cross-goldenset `nDCG@10` delta (+0.0187) is NOT purely retriever quality. `runBaseline.ts:201-202` grants automatic grade=2 (exact) when `must_keywords=[]` via vacuous `.every()`. My 15 ambig queries have `must_keywords=[]` by design; legacy `confident-hit` queries have populated must_keywords. Added explicit disclaimer to `.diff.md` + new `goldenset-grading-asymmetry` friction class. For 12.1e2: compare WITHIN-goldenset only; don't chain cross-sprint deltas across goldenset revisions.
+
+### MED-2 — `lesson-cross-workflow-gate` latent weak target (FIXED via re-target)
+Query `"workflow gate state machine 12-phase workflow v2.2"` with single target `a0792c20` (/review-impl default) was a loose keyword-overlap match. 12.1e1's broader corpus outranked it → spurious MISS. Re-targeted to 3 workflow-adjacent lessons `[a0792c20, e87cd142, 4e28d4bc]`. Per-query verification post-fix: hits at rank-1 (4e28d4bc) and rank-2 (a0792c20). Added `goldenset-target-drift` friction class. Note: committed baseline `6c45bf3` was run before the fix; next baseline (12.1e2) will show the corrected state — deliberate avoidance of a 30-min re-run.
+
+### LOW-1 — `.gitignore` hygiene (FIXED)
+Added `.scratch/` (per-session working dir) and `.claude/scheduled_tasks.lock` (runtime artifact).
+
+### LOW-3 — goldenset validator (FIXED)
+New `scripts/validate-goldenset.mjs` + `npm run qc:goldenset:validate`. Checks per-group cardinality (`ambiguous-multi-target` ∈ [2,4], `semantic-paraphrase` = 1, `adversarial-miss` = 0), UUID format, id uniqueness. Current state: OK 40 queries, 6 groups.
+
+### LOW-5 — diff.md wording reframe (FIXED)
+"Premise falsified" → "premise needs nuance." Sprint DID deliver; the predicted metric was wrong, not the deliverable.
+
+### LOW-2 — near-target adjacents graded=0 (ACCEPTED)
+Example from A1 (measurement-methodology): rank-2 is `a688cb2c` (popularity-feedback-loop), tangentially on-topic but not in target list → graded=0. Depresses nDCG@10 slightly. Accepted as a 12.1e1 design characteristic — expanding targets would dilute the "ambiguity" signal.
+
+### LOW-4 — target-ID selection inherits current ranking biases (ACCEPTED + DOCUMENTED)
+Per DESIGN §3, I used the current salience-on hybrid search to surface candidates. If 12.1e2 changes half-life dramatically, the "obvious alternative targets" I picked may feel less obvious under the new ranking. Not a bug, but the meaning of "ambiguity" is tied to today's retriever behavior.
+
+### COSMETIC-1 — reasoning format drift (CLOSED as non-issue)
+Ambig uses "Cluster — ..." prefix; paraphrase uses "Paraphrase of ...". Consistent within each group; the between-group difference signals the group semantics. Stylistically fine.
+
+### COSMETIC-2 — diff tool latency noise_floor is within-session only (DOCUMENTED)
+Its p95 floor (352ms) flagged cross-session +227% as 🔴. Cross-session jitter is expected — `measurement-jitter` friction class already documents this. Tool-scope item, not 12.1e1 scope.
+
+## New friction classes (2)
+
+- **goldenset-grading-asymmetry** (MED-1): cross-goldenset nDCG@10 comparison is biased by must_keywords distribution shift.
+- **goldenset-target-drift** (MED-2): loose single-target cross-topic queries degrade when corpus grows.
+
+## Files delivered
+
+```
+docs/specs/
+├── 2026-04-19-phase-12-sprint-12.1e1-spec.md       NEW — 6 decisions locked
+└── 2026-04-19-phase-12-sprint-12.1e1-design.md     NEW — 10 sections
+
+docs/plans/
+└── 2026-04-19-phase-12-sprint-12.1e1-plan.md       NEW — 14 tasks, 5 commits
+
+docs/qc/baselines/
+├── 2026-04-19-sprint-12.1e1.json                   NEW — 5253-line archive
+├── 2026-04-19-sprint-12.1e1.md                     NEW — 83-line summary
+└── 2026-04-19-sprint-12.1e1.diff.md                NEW — diff + human-written interpretation + MED-1 disclaimer
+
+docs/qc/friction-classes.md                         + 2 classes (goldenset-grading-asymmetry, goldenset-target-drift)
+
+qc/lessons-queries.json                             + 20 new queries + 1 re-target
+                                                     (15 ambig + 5 paraphrase, lesson-cross-workflow-gate re-targeted)
+
+scripts/validate-goldenset.mjs                      NEW — cardinality + UUID + id-uniqueness check
+package.json                                        + qc:goldenset:validate script
+.gitignore                                          + .scratch/, .claude/scheduled_tasks.lock
+```
+
+## Test count: 226/226 unit tests (unchanged; zero code changes)
+
+## Runtime verification
+- `npx tsc --noEmit` → clean (exit 0)
+- `npm test` → 226/226 pass in ~2.2s
+- `npm run qc:goldenset:validate` → OK 40 queries, 6 groups
+- Baseline run completed: 40 queries × 3 samples × 2 runs = 6 samples × 40 = 240 search calls, elapsed 1842958ms (~31min)
+- Per-query post-fix verification for MED-2 re-target: targets at ranks 1,2
+
+## Phase 12 scoreboard update
+
+| Sprint | Topic | Status | Nail |
+|---|---|---|---|
+| 12.0 | Baseline scorecard | ✅ | 4-surface measurement + diff CLI |
+| 12.0.1 | dup-rate v1 + code indexing | ✅ | `dup@10 nearsem` metric |
+| 12.1a | Lessons dedup | ✅ | dedup@10 nearsem 0.44 → 0 |
+| 12.0.2 | Measurement infra polish | ✅ | `--control` + noise-floor-aware diff |
+| 12.1b | Chunks dedup | ✅ | dedup@10 nearsem 0.29 → 0 |
+| 12.1c | Access-frequency salience | ✅ | infrastructure + popularity-feedback documented |
+| 12.1d | Query-conditional salience | ✅ | feedback-loop suppressed (+0.0373 δ-from-control) |
+| 12.1e1 | **Broaden lessons goldenset** | ✅ | **20 → 40q, new reference baseline, 2 friction classes** |
+
+## What's next — Sprint 12.1e2 candidates (split sprint continuation)
+
+The primary goal was always the half-life sweep. 12.1e1 laid the groundwork; 12.1e2 should:
+
+1. Run A/B sweep over half-life ∈ {3, 7, 14, 30}d against the 40q goldenset.
+2. Primary metric: **nDCG@10 per-group** (confident-hit + ambig + paraphrase separately). MRR on confident-hit and duplicate-trap will be pinned at 1.0 for all sweeps.
+3. Secondary metric: per-query `found_ranks` shifts — track how half-life changes rank ordering within ambig queries' target sets.
+4. Use **WITHIN-12.1e1-goldenset comparison only** (noise floor from this sprint's `.json`, don't chain cross-sprint deltas — MED-1 grading asymmetry applies).
+5. Consider `LESSONS_SALIENCE_ALPHA` sweep alongside half-life (env knob exists, no code change).
+
+Other candidates on the Phase-12 board:
+- Broaden chunks + code + global goldensets (same pattern, different surfaces)
+- 12.2 sleep consolidation (access-pattern re-clustering)
+- Prune-on-decay (archive lessons never retrieved in 180d)
+
+## Operational state
+- 4 commits on `phase-12-rag-quality`, NOT YET pushed to origin.
+- Branch NOT merged to main (deliberate; Phase 12 in progress).
+- `.workflow-state.json` advancing to commit + retro.
+- Docker stack healthy; 226/226 unit tests pass.
+- No pending todos.
+- **Session is ACTIVE** — this patch is Sprint 12.1e1's closure; next action is push + retro.
+
+---
+
+---
+
+---
 id: HANDOFF-2026-04-18-F
 date: 2026-04-18
 phase: HANDOFF
