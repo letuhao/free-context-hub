@@ -10,10 +10,11 @@ phase: PHASE_12
 ## Where We Are
 **Sprint 12.1e3 closed.** Measurement-infrastructure hygiene sprint. Added `LESSONS_SALIENCE_NO_WRITE` env gate at `logLessonAccess` function entry — suppresses access-log writes during salience-sensitive baseline runs while leaving reads intact. Also documented `goldenset-pollution` as a friction class, fixed a latent 12.1e2 docker-compose oversight (HL fallback `:-7` → `:-30`), and landed a validation baseline proving the gate works.
 
-## Commits (3, pushed pending)
+## Commits (4, pushed pending)
 - `b47b69a` — spec + design + plan (docs-only)
 - `ac5c556` — code change: env.ts + salience.ts + salience.test.ts + docker-compose.yml + friction-classes.md
-- (this one) — validation archive + SESSION_PATCH
+- `7d1060f` — validation archive + SESSION_PATCH (initial)
+- `cc2acd8` — **revert HL=30→7** after 2×2 reveals drift artifact (expanded below)
 
 ## What changed
 
@@ -52,6 +53,37 @@ phase: PHASE_12
 **Fix:** `docker compose build mcp` to incorporate the new code, then recreate with env override. Second run: N_BEFORE=90, N_AFTER=90. Gate confirmed working.
 
 **Worth remembering:** any salience code change needs `docker compose build mcp` before validation. `docker compose up -d --force-recreate mcp` alone is insufficient — it only picks up env + image changes, not local source changes.
+
+## POST-REVIEW deep dive — the 12.1e2 "HL=30 wins" finding was an artifact
+
+User picked option 3 at POST-REVIEW ("investigate the nDCG@10 gap further"). Followed up with a second clean run: HL=7 with NO_WRITE=true. Now I had the full 2×2:
+
+| | HL=7 | HL=30 | Δ (30−7) |
+|---|---:|---:|---:|
+| **With drift** (no NO_WRITE, samples=1) | nDCG@10 0.9495 | 0.9649 | +0.0154 |
+| **NOWRITE** (clean isolation) | 0.9521 | 0.9469 | **−0.0052** |
+
+MRR under NOWRITE: 0.9581 for BOTH HL=7 and HL=30 — absolutely identical.
+
+**Per-group nDCG@10 under NOWRITE (the TRUE half-life effect):**
+
+| Group | HL=7 NOWRITE | HL=30 NOWRITE | Δ |
+|---|---:|---:|---:|
+| confident-hit | 1.0000 | 1.0000 | 0 (saturated) |
+| duplicate-trap | 1.0000 | 1.0000 | 0 (saturated) |
+| **cross-topic** | 0.8184 | 0.8184 | **0 (identical — 12.1e2's +0.1533 was drift)** |
+| adversarial-miss | 0 | 0 | correct |
+| ambig | 0.9683 | 0.9553 | −0.0130 (HL=7 slightly better, within noise) |
+| **paraphrase** | 0.8861 | 0.8861 | **0 (identical)** |
+
+**The drift mechanism.** For a 40q baseline at samples=1, query 40 sees `N_start + 390` log rows vs query 1's `N_start`. Fresh rows (<15min old) decay ≈ equally at any HL ≥ 1d, so drift AMOUNT is HL-independent. But drift EFFECT on ranking is HL-dependent — drift competes differently with HL-sensitive bootstrap contributions (90-day-old rows: ~0.12 weight at HL=30, ~10⁻⁴ at HL=7). This interaction produces a systematic HL divergence under drift that disappears under NOWRITE.
+
+**Action taken (commit cc2acd8):**
+1. `src/env.ts` `LESSONS_SALIENCE_HALF_LIFE_DAYS` default reverted 30 → 7 with an updated comment explaining the 12.1e2→12.1e3 arc.
+2. `docker-compose.yml` fallback `:-30` → `:-7`.
+3. Added `measurement-write-drift` friction class to `docs/qc/friction-classes.md` — documents the 2×2 protocol for detecting write-drift artifacts.
+4. Archived `2026-04-19-sprint-12.1e3-hl7-nowrite.{json,md}` as the 4th corner of the 2×2 evidence.
+5. Updated `2026-04-19-sprint-12.1e2-summary.md` with a prominent correction block pointing at the revert.
 
 ## Metrics divergence vs 12.1e2 HL=30 CLEAN (worth noting)
 
@@ -111,8 +143,9 @@ docs/sessions/SESSION_PATCH.md                         + this entry
 
 | Sprint | Topic | Status | Nail |
 |---|---|---|---|
-| 12.0-12.1e2 | (prior) | ✅ | see earlier entries |
-| **12.1e3** | **NO_WRITE gate + goldenset-pollution friction class** | ✅ | **validated: 90 rows → 90 rows after 40-query baseline; gate short-circuits all 6 write sites** |
+| 12.0-12.1e1 | (prior) | ✅ | see earlier entries |
+| 12.1e2 | Half-life sweep, HL=30 default | ⚠️ corrected | 12.1e3 2×2 revealed the "win" was write-drift artifact; default reverted to 7 |
+| **12.1e3** | **NO_WRITE gate + write-drift 2×2 + HL revert** | ✅ | **2 new friction classes + goldenset-pollution mitigation + honest revert of 12.1e2 default change** |
 
 ---
 
