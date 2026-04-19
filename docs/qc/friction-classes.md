@@ -560,6 +560,86 @@ versus the target "Max retry attempts must be 3".
 
 ---
 
+### goldenset-grading-asymmetry
+
+**Definition.** Queries with `must_keywords=[]` receive automatic grade-2 (exact)
+for every target hit via vacuous truth on `mustKw.every(...)`. Queries with
+populated `must_keywords` can produce grade-1 (weak) hits when the snippet
+lacks the required tokens. Cross-goldenset nDCG comparison across runs with
+different must_keywords distributions is therefore apples-to-oranges — the
+delta includes a grading-treatment component, not just retriever behavior.
+
+**Why it happens.** The grade=2 vs grade=1 logic in
+`src/qc/runBaseline.ts:201-202` treats "no required keywords" as "fully
+trust the hit." This is the correct behavior for individual queries (a multi-
+target ambiguous query shouldn't force keyword gating) but it means two
+goldensets with different must_keywords proportions have systematically
+different nDCG ceilings.
+
+**Diagnostic signal.** nDCG@10 delta between two archives whose goldensets
+have meaningfully different ratios of empty-must_keywords queries. For the
+Sprint 12.1d-fix (20q) → 12.1e1 (40q) diff, the legacy queries have
+populated must_keywords; the 15 new ambig queries have
+`must_keywords=[]`. The +0.0187 nDCG@10 delta partly reflects the shift in
+grading treatment, not purely retriever quality.
+
+**Example — Sprint 12.1e1.** The cross-goldenset nDCG@10 rose 0.9407 → 0.9594.
+Spot-check: `lesson-ambig-dedup-key-design` returns targets at ranks [1,3,4,6]
+all graded-2 because its must_keywords is empty. If those ranks had been
+graded [2,1,1,1] under a populated must_keywords rule, the query's nDCG@10
+would be materially lower.
+
+**Mitigation.** Within-goldenset comparison (same goldenset, different runs)
+is unaffected — grading rules apply uniformly. For CROSS-goldenset comparison,
+explicitly disclose the must_keywords distribution shift in the diff
+interpretation. Sprint 12.1e2 should compare WITHIN-12.1e1-goldenset-only;
+don't chain cross-sprint deltas that span goldenset revisions.
+
+**Cross-ref.** Sprint 12.1e1 /review-impl MED-1 (commit pending).
+
+---
+
+### goldenset-target-drift
+
+**Definition.** A goldenset query's target lesson was chosen at authorship
+time via keyword-overlap or topic-proximity. New lessons added to the corpus
+can outrank the target for the same query, pushing it out of top-K. The
+query then reports a spurious MISS, flagged as "no-relevant-hit" friction,
+but the real issue is the loose target choice combined with corpus growth.
+
+**Why it happens.** Goldenset queries are frozen snapshots of "what was
+retrievable when authored." The corpus is a living system. As new content
+arrives, loose query↔target mappings degrade — especially when the original
+match relied on a surface token (e.g., "workflow") rather than semantic tightness.
+
+**Diagnostic signal.** A query that HIT in a prior baseline now MISSes, AND
+the query↔target mapping was never tight (the target lesson doesn't
+specifically describe the topic the query asks about). Distinguishable from
+a real retriever regression by: (a) top-10 contains other on-topic lessons,
+(b) the specific target was a loose keyword-adjacent choice originally.
+
+**Example — Sprint 12.1e1.** `lesson-cross-workflow-gate` query:
+`workflow gate state machine 12-phase workflow v2.2` with target
+`a0792c20` (Invoke /review-impl by default). The target lesson is about
+/review-impl default invocation, not the workflow-gate state machine — the
+original match was via "workflow" token overlap. 12.1e1's broader corpus
+(new salience + baseline lessons) outranks a0792c20 for generic "workflow"
+queries, producing a MISS that looks like a regression.
+
+**Mitigation (per-query).** When a loose cross-topic match starts missing,
+either: (a) re-target to a multi-target group of on-topic lessons (any-hit
+preserves probe intent + survives data drift), (b) retire the query if no
+lesson tightly describes its intent, or (c) tighten the query to match the
+existing target's actual content.
+
+**Sprint 12.1e1 response.** Re-targeted `lesson-cross-workflow-gate` to
+`[a0792c20, e87cd142, 4e28d4bc]` — all workflow-adjacent lessons. Documented
+as /review-impl MED-2.
+
+**Cross-ref.** Sprint 12.1e1 /review-impl MED-2 (commit pending).
+
+---
+
 ## Adding a new class
 
 When a Phase-12 sprint discovers a pathology not covered here:

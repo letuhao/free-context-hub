@@ -253,11 +253,14 @@
       "group": "cross-topic",
       "query": "workflow gate state machine 12-phase workflow v2.2",
       "target_lesson_ids": [
-        "a0792c20-305b-4640-b6c7-befffcf5c3e1"
+        "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+        "e87cd142-9fc3-4ef9-868f-11ed3e7577bf",
+        "4e28d4bc-5d6e-47c7-bda5-7b2dfb761736"
       ],
       "must_keywords": [
         "workflow"
-      ]
+      ],
+      "reasoning": "Re-targeted 2026-04-19 (12.1e1 /review-impl MED-2): no lesson describes the workflow-gate state machine itself. Original single target (a0792c20, /review-impl default) was a loose match via 'workflow' keyword overlap; 12.1e1 baseline data drift pushed it out of top-10, producing a spurious MISS. Re-targeted to 3 workflow-adjacent lessons — /review-impl default (a0792c20), /review-impl catches bugs (e87cd142), code-review workflow (4e28d4bc). Any-hit preserves the cross-topic probe intent while surviving data drift."
     },
     {
       "id": "lesson-cross-agent-bootstrap-e2e",

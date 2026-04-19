@@ -188,3 +188,9 @@ docs/qc/*-e2e-agent-report.md
 
 # Workflow state (per-session, not committed)
 .workflow-state.json
+
+# Per-session scratch dir (mining outputs, staging JSON, breakdowns)
+.scratch/
+
+# Scheduled-task lock (runtime artifact of .claude/ tooling)
+.claude/scheduled_tasks.lock
