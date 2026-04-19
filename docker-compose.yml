@@ -55,6 +55,7 @@ services:
       - neo4j
       - rabbitmq
       - redis
+      - tei-rerank
     env_file:
       - .env
     environment:
@@ -229,6 +230,28 @@ services:
       - contexthub_mcpdata:/data
       - ./:/workspace:ro
 
+  # Phase 12 Sprint 12.1g — HuggingFace text-embeddings-inference (TEI) for
+  # true cross-encoder rerank. Supports /rerank endpoint with (query, texts)
+  # pair scoring — unblocks bge-reranker, jina-reranker, and other cross-
+  # encoders that return garbage via LM Studio's /v1/embeddings. CPU-only
+  # to avoid VRAM contention with LM Studio. First `docker compose up`
+  # downloads ~560MB model (cached in named volume `tei_model_cache`);
+  # subsequent starts are <30s.
+  tei-rerank:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-latest
+    command: ["--model-id", "BAAI/bge-reranker-v2-m3"]
+    volumes:
+      - tei_model_cache:/data
+    ports:
+      - "8080:80"  # dev/debug expose; mcp reaches via docker network at http://tei-rerank:80
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --spider --tries=1 http://localhost:80/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 300s  # first run downloads model — up to ~4min
+    restart: unless-stopped
+
   # Optional S3-compatible storage (MinIO) for future indexing phases.
   # Start with: docker compose --profile s3 up -d
   minio:
@@ -250,4 +273,5 @@ volumes:
   contexthub_mcpdata:
   contexthub_minio_data:
   contexthub_redis_data:
+  tei_model_cache:   # Sprint 12.1g — bge-reranker-v2-m3 (~560MB) cached here
 
