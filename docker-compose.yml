@@ -122,6 +122,7 @@ services:
     volumes:
       - contexthub_mcpdata:/data
       - ./:/workspace
+      - D:/Works:/workspaces
 
   # Builder memory (Phase 6 deep) runs here: needs DISTILLATION_MODEL|BUILDER_AGENT_MODEL + chat-capable /v1/chat/completions in .env.
   worker:
@@ -167,6 +168,7 @@ services:
     volumes:
       - contexthub_mcpdata:/data
       - ./:/workspace
+      - D:/Works:/workspaces
 
   # Next.js GUI — talks to the REST API on mcp:3001 inside the Docker network.
   gui:
