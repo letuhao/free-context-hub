@@ -33,6 +33,25 @@ export { tieredSearch } from '../services/tieredRetriever.js';
 export { addLesson, batchUpdateLessonStatus, deleteWorkspace, listLessons, listLessonVersions, searchLessons, searchLessonsMulti, updateLesson, updateLessonStatus } from '../services/lessons.js';
 export { checkGuardrails, listGuardrailRules, simulateGuardrails } from '../services/guardrails.js';
 
+// ── Services: artifact leases (Phase 13 Sprint 13.1) ──
+export {
+  claimArtifact,
+  releaseArtifact,
+  renewArtifact,
+  listActiveClaims,
+  checkArtifactAvailability,
+  forceReleaseArtifact,
+} from '../services/artifactLeases.js';
+export type {
+  ClaimParams,
+  ClaimResult,
+  ReleaseResult,
+  RenewResult,
+  ListResult as ArtifactLeasesListResult,
+  AvailabilityResult,
+  LeaseSummary,
+} from '../services/artifactLeases.js';
+
 // ── Services: distillation & snapshots ──
 export { getProjectSnapshotBody } from '../services/snapshot.js';
 export { compressText, reflectOnTopic } from '../services/distiller.js';

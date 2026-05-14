@@ -25,6 +25,7 @@ import { projectGroupsRouter } from './routes/projectGroups.js';
 import { lessonTypesRouter } from './routes/lessonTypes.js';
 import { auditRouter } from './routes/audit.js';
 import { apiKeysRouter } from './routes/apiKeys.js';
+import { artifactLeasesRouter } from './routes/artifactLeases.js';  // Phase 13 Sprint 13.1
 
 /**
  * Creates the REST API Express app.
@@ -72,6 +73,10 @@ export function createApiApp() {
   app.use('/api/lessons', lessonsRouter);
   app.use('/api/search', searchRouter);
   app.use('/api/guardrails', guardrailsRouter);
+  // Phase 13 Sprint 13.1: artifact leases — MUST mount BEFORE projectsRouter
+  // because projectsRouter is mounted at /api/projects and would otherwise
+  // catch deeper /:id/* paths. Router uses mergeParams to access :id.
+  app.use('/api/projects/:id/artifact-leases', artifactLeasesRouter);
   app.use('/api/projects', projectsRouter);       // mixed — write routes gated inside
   app.use('/api/analytics', analyticsRouter);
   app.use('/api/activity', activityRouter);

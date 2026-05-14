@@ -214,7 +214,10 @@ GET    /api/projects/:id/artifact-leases            list active leases
 POST   /api/projects/:id/artifact-leases            claim  { agent_id, artifact_type, artifact_id, task_description, ttl_minutes? }
 PATCH  /api/projects/:id/artifact-leases/:leaseId   renew  { agent_id, extend_by_minutes }
 DELETE /api/projects/:id/artifact-leases/:leaseId   release { agent_id }
-GET    /api/projects/:id/artifact-leases/:leaseId   status check
+POST   /api/projects/:id/artifact-leases/check       availability check { artifact_type, artifact_id }
+# (Earlier draft had GET /:leaseId status check — superseded during Sprint 13.1
+#  REVIEW-CODE r1; see docs/audit/findings-sprint-13.1-code-r1.md BLOCK 1.
+#  POST /check mirrors the MCP check_artifact_availability tool 1:1.)
 ```
 
 Admin override (requires `admin` role API key):

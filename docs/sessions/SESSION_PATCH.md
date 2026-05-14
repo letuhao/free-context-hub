@@ -1,12 +1,93 @@
 ---
-id: PHASE-14-MODEL-SWAP-2026-05-15
+id: SPRINT-13.1-AMAW-AUTONOMOUS-2026-05-15
 date: 2026-05-15
-branch: phase-13-dlf-coordination
+branch: phase-13-dlf-coordination-amaw
 session_status: closed
 pushed_to_origin: false
 ---
 
-# Session — 2026-05-14 → 2026-05-15 (Phase 14 — Global Model Swap)
+# Session — 2026-05-15 (Sprint 13.1 — F1 Artifact Leasing, AMAW autonomous experiment)
+
+## TL;DR
+
+**First autonomous AMAW sprint completed end-to-end.** Phase 13 Sprint 13.1 (F1 artifact leasing core) shipped via full AMAW workflow with zero human intervention within the sprint. 7 files: migration 0048, service module, REST router, 5 MCP tools, 19/19 unit tests, convention doc, core re-export. **Scope Guard verdict: CLEAR** — 9/9 findings resolved across 4 review rounds, 12 ACs COVERED + 1 PARTIAL, no spec drift.
+
+**AMAW autonomous run measured cost:**
+- 5 sub-agent calls (~400K tokens, ~$3-5)
+- 9 distinct findings across 4 review rounds: 4 BLOCKs (design r1) + 1 BLOCK (code r1) + 1 BLOCK (BUILD phase, postgres IMMUTABLE) + 4 WARNs
+- All BLOCKs caught + fixed within autonomous loop — none escaped to Scope Guard
+
+**AMAW behavior observations:**
+- Adversary consistently found genuine BLOCKs (tenant isolation, silent no-op renew, synthetic agent_id, GET route bypass) at the rate of ~3 per round
+- 2 rounds per phase reaches diminishing returns; r2 typically catches issues introduced by r1 fixes
+- Scope Guard's spec-fingerprint check + AC matrix is the right shape for catching forgotten requirements
+- Sub-agent file-write blocking (harness) means main session must persist findings inline — manageable
+
+## Files changed (Sprint 13.1)
+
+### New
+- `migrations/0048_artifact_leases.sql` — table + 3 indexes (BUILD-phase fix: removed `WHERE expires_at > now()` from partial indexes — Postgres now() is STABLE not IMMUTABLE; service step-1 DELETE preserves semantics)
+- `src/services/artifactLeases.ts` — service module, 6 functions, atomic claim transaction with 23505 retry
+- `src/services/artifactLeases.test.ts` — 19 unit tests (concurrent claim, rate limit, renew cap, tenant isolation, type validation)
+- `src/api/routes/artifactLeases.ts` — REST router, 5 endpoints + admin force-release (project-scoped)
+- `docs/artifact-id-convention.md` — agent-facing format spec
+- `docs/specs/2026-05-15-phase-13-sprint-13.1-clarify.md` — CLARIFY spec (13 ACs, 9 risks)
+- `docs/specs/2026-05-15-phase-13-sprint-13.1-design.md` — DESIGN v2.1 (spec_hash f14ede2370dcfec5; 4 findings resolved through r1→v2→r2 polish)
+- `docs/plans/2026-05-15-phase-13-sprint-13.1-plan.md` — task decomposition
+- `docs/audit/findings-sprint-13.1-r1.md` — design review r1 (REJECTED 3 BLOCK)
+- `docs/audit/findings-sprint-13.1-r2.md` — design review r2 (APPROVED_WITH_WARNINGS 1 WARN)
+- `docs/audit/findings-sprint-13.1-code-r1.md` — code review r1 (REJECTED 1 BLOCK + 2 WARN)
+- `docs/audit/findings-sprint-13.1-code-r2.md` — code review r2 (APPROVED_WITH_WARNINGS 2 WARN)
+- `docs/audit/findings-sprint-13.1-post-review.md` — Scope Guard verdict (CLEAR)
+
+### Modified
+- `src/mcp/index.ts` — 5 new MCP tools (claim/release/renew/list/check), 3 outputSchemas as discriminatedUnion
+- `src/api/index.ts` — mount artifactLeasesRouter at `/api/projects/:id/artifact-leases` BEFORE projectsRouter
+- `src/core/index.ts` — re-export 6 service functions + 7 types
+- `docs/phase-13-design.md` — strike line 217 (GET /:leaseId obsoleted in code-review r1)
+- `package.json` — add artifactLeases.test.ts to test script
+- `docs/audit/AUDIT_LOG.jsonl` — appended 12+ events for this sprint
+- `docs/sessions/SESSION_PATCH.md` — this entry
+
+## Findings caught + fixed (autonomous)
+
+| Round | Phase | Severity | Finding | Resolution |
+|-------|-------|----------|---------|------------|
+| Design r1 | review-design | BLOCK | forceRelease cross-tenant | Added project_id, nested route |
+| Design r1 | review-design | BLOCK | Renew silent no-op at TTL cap | New cap_reached status + effective_extension_minutes |
+| Design r1 | review-design | WARN | Cursor-in-tx WAL bloat (carried from P14) | Not applicable; already keyset paginated |
+| Design r2 | review-design | WARN | rate_limited reason misleading | Added race_exhausted reason |
+| BUILD | build | BLOCK | Postgres now() not IMMUTABLE | Migration redesigned (full UNIQUE, service-level expiry filter) |
+| Code r1 | review-code | BLOCK | GET /:leaseId bypassed service + wrong miss semantics | Deleted route; POST /check mirrors MCP |
+| Code r1 | review-code | WARN | Flat MCP outputSchemas | 3 schemas → discriminatedUnion |
+| Code r1 | review-code | WARN | artifact_type accepts anything | Closed enum + test |
+| Code r2 | review-code | WARN | Asymmetric type validation | Symmetric across all 3 read ops |
+| Code r2 | review-code | WARN | Stale doc refs | Design.md updated |
+
+**Total: 5 BLOCKs (incl. 1 BUILD-phase) + 4 WARNs = 9 findings, all resolved.**
+
+## Operational state at sprint close
+
+- Branch `phase-13-dlf-coordination-amaw` at HEAD (sprint commit pending)
+- `.workflow-state.json` at `session` (9/12 complete, COMMIT + RETRO pending)
+- mcp + worker container still on old image (rebuild needed before commit for MCP tools to be live)
+- Test stack healthy: db + redis up; 19/19 tests pass via direct tsx
+- pre-Phase-14 pg_dump still at `backups/2026-05-15-pre-phase14.dump`
+- New lesson `d1feefef-fffc-4604-b87f-6335a0399045` added to phase-13-coordination MCP project (decision)
+
+## What's next
+
+Sprint 13.2 (F1 TTL + GUI):
+- `leases.sweep` background job + setTimeout scheduler
+- Active Work panel on `/agents` GUI page
+- 10-second auto-refresh
+- MCP smoke tests against running stack
+
+If user wants to continue autonomous Phase 13 run, simply trigger sprint 13.2 with a new prompt. Otherwise this experiment can pause here with a clean sprint commit.
+
+---
+
+
 
 ## TL;DR
 

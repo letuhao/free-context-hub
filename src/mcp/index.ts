@@ -59,6 +59,12 @@ import {
   removeProjectFromGroup,
   listGroupsForProject,
   resolveProjectIds,
+  // Phase 13 Sprint 13.1: artifact leases
+  claimArtifact,
+  releaseArtifact,
+  renewArtifact,
+  listActiveClaims,
+  checkArtifactAvailability,
 } from '../core/index.js';
 import { formatToolResponse, OutputFormatSchema } from './formatters.js';
 import { isFeatureEnabled } from '../services/featureToggles.js';
@@ -2665,6 +2671,176 @@ function createMcpToolsServer() {
       const groups = await listGroupsForProject(projectId);
       const summary = `list_project_groups: project=${projectId} groups=${groups.length}`;
       return formatToolResponse({ project_id: projectId, groups }, summary, output_format);
+    },
+  );
+
+  // ──────────────────────────────────────────────────────────────
+  // Phase 13 Sprint 13.1 — Artifact Leasing (5 tools)
+  // See docs/specs/2026-05-15-phase-13-sprint-13.1-design.md v2.1
+  // ──────────────────────────────────────────────────────────────
+
+  server.registerTool(
+    'claim_artifact',
+    {
+      description: 'Claim a time-bounded exclusive working lease on a named artifact (lesson, document, report-section, or custom). Prevents duplicate work by other agents. Returns conflict if another agent holds an active lease.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional().describe('Project identifier. Optional if DEFAULT_PROJECT_ID is set.'),
+        agent_id: z.string().min(1).describe('Caller identity — opaque string. Passed explicitly per design D1.'),
+        artifact_type: z.string().min(1).describe("Category: 'lesson' | 'document' | 'report-section' | 'custom'."),
+        artifact_id: z.string().min(1).describe('Lowercase kebab-case slug; see docs/artifact-id-convention.md.'),
+        task_description: z.string().min(1).max(500).describe('What this agent intends to do — shown in GUI Active Work panel.'),
+        ttl_minutes: z.number().int().min(1).max(240).optional().describe('Lease duration (default 30, max 240).'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.discriminatedUnion('status', [
+        z.object({ status: z.literal('claimed'), lease_id: z.string(), expires_at: z.string() }),
+        z.object({
+          status: z.literal('conflict'),
+          incumbent_agent_id: z.string(),
+          incumbent_task: z.string(),
+          expires_at: z.string(),
+          seconds_remaining: z.number(),
+        }),
+        z.object({
+          status: z.literal('rate_limited'),
+          reason: z.enum(['max_active_leases', 'race_exhausted']),
+          retry_after_seconds: z.number(),
+        }),
+      ]),
+    },
+    async ({ workspace_token, project_id, agent_id, artifact_type, artifact_id, task_description, ttl_minutes, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      const result = await claimArtifact({
+        project_id: projectId,
+        agent_id,
+        artifact_type,
+        artifact_id,
+        task_description,
+        ttl_minutes,
+      });
+      const summary = `claim_artifact: ${result.status}${result.status === 'claimed' ? ` lease_id=${result.lease_id}` : ''}${result.status === 'conflict' ? ` incumbent=${result.incumbent_agent_id}` : ''}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'release_artifact',
+    {
+      description: 'Release an active lease before its TTL expires. Only the lease owner (agent_id match) can release.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        agent_id: z.string().min(1).describe('Must match lease owner.'),
+        lease_id: z.string().min(1).describe('Lease UUID returned by claim_artifact.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.enum(['released', 'not_found', 'not_owner']),
+      }),
+    },
+    async ({ workspace_token, project_id, agent_id, lease_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      const result = await releaseArtifact({ project_id: projectId, agent_id, lease_id });
+      const summary = `release_artifact: ${result.status}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'renew_artifact',
+    {
+      description: 'Extend a lease before expiry. Returns cap_reached (with effective_extension_minutes) if the request would exceed MAX_TTL=240min from now.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        agent_id: z.string().min(1),
+        lease_id: z.string().min(1),
+        extend_by_minutes: z.number().int().min(1).max(120),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.discriminatedUnion('status', [
+        z.object({ status: z.literal('renewed'), expires_at: z.string(), effective_extension_minutes: z.number() }),
+        z.object({ status: z.literal('cap_reached'), expires_at: z.string(), effective_extension_minutes: z.number() }),
+        z.object({ status: z.literal('not_found') }),
+        z.object({ status: z.literal('not_owner') }),
+        z.object({ status: z.literal('expired') }),
+      ]),
+    },
+    async ({ workspace_token, project_id, agent_id, lease_id, extend_by_minutes, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      const result = await renewArtifact({ project_id: projectId, agent_id, lease_id, extend_by_minutes });
+      const summary = `renew_artifact: ${result.status}${'effective_extension_minutes' in result ? ` ext=${result.effective_extension_minutes}min` : ''}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'list_active_claims',
+    {
+      description: 'List all active (non-expired) artifact leases in this project. Optional artifact_type filter. Used by agents at session start to discover what other agents are working on.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        artifact_type: z.string().min(1).optional().describe('Optional filter.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        claims: z.array(z.object({
+          lease_id: z.string(),
+          artifact_type: z.string(),
+          artifact_id: z.string(),
+          agent_id: z.string(),
+          task_description: z.string(),
+          expires_at: z.string(),
+          seconds_remaining: z.number(),
+        })),
+      }),
+    },
+    async ({ workspace_token, project_id, artifact_type, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      const result = await listActiveClaims({ project_id: projectId, artifact_type });
+      const summary = `list_active_claims: ${result.claims.length} claim(s)`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'check_artifact_availability',
+    {
+      description: 'Snapshot check whether an artifact has an active lease. Note: this is a non-binding snapshot — always use claim_artifact as the authoritative claim.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        artifact_type: z.string().min(1),
+        artifact_id: z.string().min(1),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.discriminatedUnion('available', [
+        z.object({ available: z.literal(true) }),
+        z.object({
+          available: z.literal(false),
+          lease: z.object({
+            artifact_type: z.string(),
+            artifact_id: z.string(),
+            agent_id: z.string(),
+            task_description: z.string(),
+            expires_at: z.string(),
+            seconds_remaining: z.number(),
+          }),
+        }),
+      ]),
+    },
+    async ({ workspace_token, project_id, artifact_type, artifact_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      const result = await checkArtifactAvailability({ project_id: projectId, artifact_type, artifact_id });
+      const summary = `check_artifact_availability: available=${result.available}`;
+      return formatToolResponse(result, summary, output_format);
     },
   );
 
