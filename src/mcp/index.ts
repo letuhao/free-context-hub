@@ -2704,7 +2704,7 @@ function createMcpToolsServer() {
         }),
         z.object({
           status: z.literal('rate_limited'),
-          reason: z.enum(['max_active_leases', 'race_exhausted']),
+          reason: z.enum(['max_active_leases', 'race_exhausted', 'attempt_rate']),
           retry_after_seconds: z.number(),
         }),
       ]),

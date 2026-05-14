@@ -1,9 +1,35 @@
-# AMAW — Autonomous Multi-Agent Workflow (opt-in extension to v2.2)
+# AMAW — Adversarial Multi-Agent Workflow (opt-in extension to v2.2)
 
-**Version:** 3.0 (revised 2026-05-15 post-first-real-run calibration)
+**Version:** 3.1 (revised 2026-05-15 post-Sprint-13.1 honest calibration)
 **Status:** OPT-IN extension to the default v2.2 workflow in `WORKFLOW.md`
 **Trigger:** user types `/amaw` (slash command) OR includes "use AMAW workflow" / "spawn Adversary" / "AMAW mode" in the task description.
 **Without trigger:** default v2.2 (human-in-loop) is used. AMAW is never auto-activated.
+
+## v3.1 honest reframe — AMAW is NOT "autonomous"
+
+Earlier versions (v3.0) framed AMAW as "autonomous, no human intervention". Sprint 13.1 case study (first real autonomous run) revealed this overpromised. AMAW does NOT eliminate humans — it **shifts human involvement from in-task to between-sprint**:
+
+```
+v2.2 default:                        AMAW v3.0+:
+                                     
+human ─┬─task─┬─task─┬─task─...     human ─[setup]──┬─── sprint ───┬─[review]──> next
+       ▲     ▲      ▲                                ▲              ▲
+   (each task)                                  (turn trigger)  (sprint output)
+```
+
+Same total human time, just concentrated at sprint boundaries instead of distributed across tasks. The right framing is **"unattended execution between human checkpoints"**, NOT "autonomous". (The name acronym kept "AMAW" but the "A" is now read as "Adversarial".)
+
+## Where humans STILL must intervene
+
+| Role | Required at | Why no agent replaces this |
+|------|-------------|----------------------------|
+| **Setup**     | Before sprint starts          | Choosing scope, branch strategy, abort signals, budget |
+| **Turn trigger** | Between turns within a sprint | LLM session is request/response; long sprints span multiple turns |
+| **Strategic judgment** | Mid-sprint when scope drifts | "Is this addendum acceptable?" "Is this trade-off OK?" — agent guesses based on context but can't decide for the user |
+| **Product judgment** | Anywhere | "Is this feature even valuable?" "Is the 240-min cap the right number?" — sub-agents have NO product context |
+| **Sprint review** | After sprint closes | Verify the dataset of findings + commits matches user intent |
+
+Sprint 13.1 measured: **5 sub-agent calls, ~400K tokens** caught 9 technical findings. Same 9 findings cost ZERO sub-agent tokens to NOT-catch if the user had just reviewed inline. AMAW's value is concentration of review effort, not elimination.
 
 ---
 
@@ -18,6 +44,33 @@ AMAW replaces those self-review/human points with **cold-start AI sub-agents** t
 - **Scribe** *(optional)* — at CLARIFY, PLAN, mid-BUILD, SESSION. Detects deferred items, validates plans, writes session summaries.
 
 **Key principle: files are truth, chat is ephemeral.** Sub-agents cannot inherit the main session's biases because they read only the spec, plan, and audit log — never the conversation history.
+
+## Known blind spots of AMAW sub-agents
+
+Sprint 13.1 audit surfaced 2 systematic limitations. Treat these as **mandatory human checks** even in AMAW mode:
+
+### Blind spot 1: deploy-state vs source-state
+
+Scope Guard verifies code-level correctness (the spec matches the code in the repo). It does NOT check whether the running deployment matches the repo state. Sprint 13.1 shipped clean code that did NOT work end-to-end because the mcp container ran an older image — REST endpoint returned 404 despite all tests passing.
+
+**Mitigation:** After AMAW POST-REVIEW CLEAR but BEFORE marking sprint complete, the main session must run a deploy-state smoke check:
+- Container image freshness (`docker compose ps` + image creation time)
+- Migration registry (`schema_migrations` includes new entries)
+- Live endpoint probes (curl against deployed REST + actual MCP tool list)
+
+If integrating into workflow-gate.sh: add a `post-deploy-smoke` event to AUDIT_LOG.jsonl after commit.
+
+### Blind spot 2: cross-file context
+
+Each Adversary sub-agent reads ONLY the files listed in its prompt. If a constraint lives in a file the prompt didn't reference, the agent can't catch it. Sprint 13.1 missed the "20 attempts/min" rate limit (specified in `docs/phase-13-design.md` L228) because the Adversary's prompt only listed the CLARIFY spec, which didn't repeat that detail.
+
+**Mitigation:** Adversary prompt template MUST include the broader design context, not just the immediate spec:
+- `docs/specs/<task>-clarify.md` (CLARIFY locked assumptions)
+- `docs/specs/<task>-design.md` (DESIGN — your direct target)
+- **`docs/<phase>-design.md`** (broader phase context — easy to forget)
+- Plus the implementation files for code-review
+
+If a sprint is implementing a sub-feature of a larger phase, the broader phase doc MUST be in the sub-agent's file list.
 
 ---
 

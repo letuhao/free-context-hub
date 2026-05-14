@@ -23,6 +23,7 @@ import {
   listActiveClaims,
   checkArtifactAvailability,
   forceReleaseArtifact,
+  _resetAttemptLogForTest,
 } from './artifactLeases.js';
 import { getDbPool } from '../db/client.js';
 
@@ -36,6 +37,7 @@ async function cleanup() {
 
 before(async () => {
   await cleanup();
+  _resetAttemptLogForTest();
 });
 
 after(async () => {
@@ -44,6 +46,7 @@ after(async () => {
 
 beforeEach(async () => {
   await cleanup();
+  _resetAttemptLogForTest();  // post-audit R1: reset rate limit state between tests
 });
 
 test('claim succeeds when no existing lease', async () => {
@@ -285,6 +288,50 @@ test('invalid artifact_id format throws on claim', async () => {
       project_id: TEST_PROJECT, agent_id: 'a1',
       artifact_type: 'custom', artifact_id: 'Invalid Name With Spaces',
       task_description: 't',
+    }),
+    /artifact_id must be lowercase kebab-case/,
+  );
+});
+
+test('attempt-rate limit: 20/min cap per agent triggers rate_limited with attempt_rate reason', async () => {
+  // Burn 20 attempts on different artifacts (all conflicts after the first claim)
+  // The 21st should trigger attempt_rate.
+  for (let i = 0; i < 20; i++) {
+    await claimArtifact({
+      project_id: TEST_PROJECT, agent_id: 'burst-agent',
+      artifact_type: 'custom', artifact_id: `burst-${i}`, task_description: 't',
+    });
+  }
+  const r21 = await claimArtifact({
+    project_id: TEST_PROJECT, agent_id: 'burst-agent',
+    artifact_type: 'custom', artifact_id: 'burst-21', task_description: 't',
+  });
+  assert.equal(r21.status, 'rate_limited');
+  if (r21.status === 'rate_limited') {
+    assert.equal(r21.reason, 'attempt_rate');
+    assert.ok(r21.retry_after_seconds > 0 && r21.retry_after_seconds <= 60);
+  }
+});
+
+test('attempt-rate limit is per-agent (different agents have independent counters)', async () => {
+  for (let i = 0; i < 20; i++) {
+    await claimArtifact({
+      project_id: TEST_PROJECT, agent_id: 'agent-A',
+      artifact_type: 'custom', artifact_id: `a-${i}`, task_description: 't',
+    });
+  }
+  // agent-B should still be able to claim
+  const r = await claimArtifact({
+    project_id: TEST_PROJECT, agent_id: 'agent-B',
+    artifact_type: 'custom', artifact_id: 'b-1', task_description: 't',
+  });
+  assert.ok(r.status === 'claimed' || r.status === 'rate_limited' && r.reason === 'max_active_leases', `expected claimed (or different rate limit reason); got ${JSON.stringify(r)}`);
+});
+
+test('checkArtifactAvailability also validates artifact_id format (R7 fix)', async () => {
+  await assert.rejects(
+    checkArtifactAvailability({
+      project_id: TEST_PROJECT, artifact_type: 'custom', artifact_id: 'INVALID FORMAT',
     }),
     /artifact_id must be lowercase kebab-case/,
   );

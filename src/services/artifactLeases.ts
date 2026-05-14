@@ -23,6 +23,47 @@ const MAX_EXTEND_MINUTES = 120;
 const PG_UNIQUE_VIOLATION_CODE = '23505';
 const MAX_INTERNAL_RACE_RETRIES = 1;
 
+// post-audit R1: attempt-rate limit per phase-13-design.md L228
+// In-process sliding window. Known limitation: multi-replica deployment
+// loses shared state — DEFERRED to DB/Redis-backed implementation if
+// horizontal scaling is needed (track in DEFERRED.md when relevant).
+const MAX_CLAIM_ATTEMPTS_PER_MINUTE = 20;
+const ATTEMPT_WINDOW_MS = 60_000;
+const attemptLog = new Map<string, number[]>();
+
+function recordAndCheckAttemptRate(projectId: string, agentId: string): { allowed: boolean; retry_after_seconds: number } {
+  const key = `${projectId}\x00${agentId}`;
+  const now = Date.now();
+  const cutoff = now - ATTEMPT_WINDOW_MS;
+  const recent = (attemptLog.get(key) ?? []).filter((t) => t > cutoff);
+  if (recent.length >= MAX_CLAIM_ATTEMPTS_PER_MINUTE) {
+    // Don't record this attempt (caller already rate-limited)
+    attemptLog.set(key, recent);
+    // retry_after = when oldest entry in window will exit
+    const oldest = recent[0];
+    const retryAfterMs = Math.max(0, oldest + ATTEMPT_WINDOW_MS - now);
+    return { allowed: false, retry_after_seconds: Math.ceil(retryAfterMs / 1000) };
+  }
+  recent.push(now);
+  attemptLog.set(key, recent);
+  // Opportunistic cleanup: if Map grows large, prune empty/stale keys
+  if (attemptLog.size > 10_000) pruneAttemptLog(cutoff);
+  return { allowed: true, retry_after_seconds: 0 };
+}
+
+function pruneAttemptLog(cutoff: number) {
+  for (const [k, v] of attemptLog.entries()) {
+    const fresh = v.filter((t) => t > cutoff);
+    if (fresh.length === 0) attemptLog.delete(k);
+    else attemptLog.set(k, fresh);
+  }
+}
+
+// Test-only hook: reset the in-memory rate limiter state between tests.
+export function _resetAttemptLogForTest(): void {
+  attemptLog.clear();
+}
+
 // artifact_id convention: lowercase kebab-case with optional /-separated sub-segments.
 // First segment must start with [a-z0-9]; sub-segments may use [a-z0-9_-].
 // See docs/artifact-id-convention.md
@@ -44,7 +85,7 @@ export type ClaimParams = {
 export type ClaimResult =
   | { status: 'claimed'; lease_id: string; expires_at: string }
   | { status: 'conflict'; incumbent_agent_id: string; incumbent_task: string; expires_at: string; seconds_remaining: number }
-  | { status: 'rate_limited'; reason: 'max_active_leases' | 'race_exhausted'; retry_after_seconds: number };
+  | { status: 'rate_limited'; reason: 'max_active_leases' | 'race_exhausted' | 'attempt_rate'; retry_after_seconds: number };
 
 export type ReleaseResult = { status: 'released' | 'not_found' | 'not_owner' };
 
@@ -71,6 +112,17 @@ export type AvailabilityResult =
 
 export async function claimArtifact(p: ClaimParams): Promise<ClaimResult> {
   validateClaimInput(p);
+  // post-audit R1: attempt-rate limit (20/min per agent per project)
+  // Per phase-13-design.md L228. In-process; multi-replica is a known
+  // limitation (see DEFERRED.md when relevant).
+  const attemptCheck = recordAndCheckAttemptRate(p.project_id, p.agent_id);
+  if (!attemptCheck.allowed) {
+    return {
+      status: 'rate_limited',
+      reason: 'attempt_rate',
+      retry_after_seconds: attemptCheck.retry_after_seconds,
+    };
+  }
   for (let attempt = 0; attempt <= MAX_INTERNAL_RACE_RETRIES; attempt++) {
     const result = await _claimArtifactOnce(p);
     if (!('__retry' in result)) return result;
@@ -287,9 +339,16 @@ export async function listActiveClaims(params: { project_id: string; artifact_ty
 export async function checkArtifactAvailability(params: {
   project_id: string; artifact_type: string; artifact_id: string;
 }): Promise<AvailabilityResult> {
-  // v2-r2 WARN 1: validate type symmetrically with claimArtifact
+  // v2-r2 WARN 1 + post-audit R7: validate type AND id-format symmetrically
+  // with claimArtifact. Without R7 fix, a snapshot read with malformed id
+  // returns {available:true} (false negative) — caller may think artifact
+  // is free when actually their wrong-format id partitioned them from
+  // existing leases.
   if (!VALID_ARTIFACT_TYPES.has(params.artifact_type)) {
     throw new Error(`artifact_type must be one of: ${Array.from(VALID_ARTIFACT_TYPES).join(', ')}; got: ${params.artifact_type}`);
+  }
+  if (!ARTIFACT_ID_REGEX.test(params.artifact_id)) {
+    throw new Error(`artifact_id must be lowercase kebab-case (see docs/artifact-id-convention.md); got: ${params.artifact_id}`);
   }
   const pool = getDbPool();
   const r = await pool.query<{

@@ -1,12 +1,14 @@
 # Agentic Workflow Bundle
 
-**Bundle version 2.3** — default v2.2 workflow + opt-in AMAW v3.0 extension
+**Bundle version 2.4** — default v2.2 workflow + opt-in AMAW v3.1 extension
 
 A drop-in structured workflow for AI coding agents (Claude Code, Cursor, Codex, etc.).
 Prevents agents from skipping phases, undersizing tasks, and committing without verification.
 
 - **Default (v2.2):** human-in-loop with PO checkpoints at CLARIFY end + POST-REVIEW. Deep adversarial review is an on-demand command (`/review-impl`).
-- **Opt-in (AMAW v3.0):** invoke `/amaw` for high-stakes tasks (data migrations, schema changes, security-critical paths). Cold-start sub-agents replace human review at REVIEW + POST-REVIEW. Costs ~$1-5/task in tokens, catches issues human review misses.
+- **Opt-in (AMAW v3.1):** invoke `/amaw` for high-stakes tasks (data migrations, schema changes, security-critical paths). Cold-start sub-agents do adversarial review at REVIEW + POST-REVIEW. **NOT "autonomous"** — humans still set scope, trigger turns, and review sprint outputs. AMAW concentrates review effort at sprint boundaries instead of distributing across tasks. Costs ~$1-5/task in tokens, catches issues self-review misses.
+
+**v3.1 reframe:** Sprint 13.1 (first real AMAW run) revealed v3.0's "autonomous" framing overpromised. Read `AMAW.md` "v3.1 honest reframe" section for what AMAW IS and IS NOT.
 
 > **v2.2 — POST-REVIEW reshaped.** The earlier v2.1 "re-read from disk and adversarially review" rubber-stamps in practice — agents pattern-match to their own reasoning and emit "0 issues found" as ritual close-out. POST-REVIEW is now a **human-interactive checkpoint** (present summary → wait). Deep self-review moved to `/review-impl`.
 >

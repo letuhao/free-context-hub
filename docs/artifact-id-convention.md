@@ -21,7 +21,7 @@ Validation regex (enforced server-side):
 ## Rules
 
 1. **Lowercase only.** No uppercase letters anywhere.
-2. **Hyphens for spaces.** "Section One" → `section-one`, not `section_one` or `Section%20One`.
+2. **Hyphens for spaces (preferred).** "Section One" → `section-one`. Underscore (`_`) is technically accepted by the regex for project-specific compatibility but is discouraged — prefer hyphen for consistency. Mixed `-` and `_` within one ID will compare as different strings to other agents.
 3. **No special characters.** No `§`, no `.`, no `:`, no whitespace, no Unicode. Underscore (`_`) is permitted within segments.
 4. **`artifact_type` is a SEPARATE parameter**, NOT part of `artifact_id`. The `artifact_type` argument to `claim_artifact` (`'lesson' | 'document' | 'report-section' | 'custom'`) provides categorization; `artifact_id` is the within-category slug.
 5. **Slashes only between segments.** No leading or trailing slashes, no consecutive slashes (`//`), no slashes at segment boundaries.

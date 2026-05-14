@@ -1,10 +1,12 @@
 ---
-description: Enable AMAW (Autonomous Multi-Agent Workflow) mode for the current task. Spawns cold-start sub-agents at REVIEW + POST-REVIEW phases instead of using main-session self-review.
+description: Enable AMAW (Adversarial Multi-Agent Workflow) mode — concentrates human review at sprint boundaries instead of per-task. NOT autonomous — human still triggers turns, sets scope, reviews output.
 ---
 
 # /amaw — Enable AMAW mode for this task
 
 By default, this project uses the v2.2 human-in-loop workflow (see `WORKFLOW.md`). Invoke `/amaw` to enable the AMAW extension (see `AMAW.md`) for the current task only.
+
+**v3.1 honest framing:** AMAW is NOT autonomous. It shifts human involvement from per-task to per-sprint. You still need to: set up scope and abort signals upfront, trigger each turn within a sprint, and review the output dataset after sprint closes. The trade-off vs default v2.2: same total human time, concentrated at sprint boundaries instead of spread across each task.
 
 ## When to invoke /amaw
 
