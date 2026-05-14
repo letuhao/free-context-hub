@@ -277,15 +277,43 @@ Valid `update_lesson_status` transitions with `pending-review`:
 - `pending-review → superseded` ✗ (must be active first)
 - `draft → pending-review` via `update_lesson_status` ✗ (only `submit_for_review` creates the `review_requests` record; direct status update is blocked)
 
+### Implementation specification — status enum in `mcp/index.ts`
+
+The lesson status enum is hardcoded at 4 locations in `src/mcp/index.ts`. Each has a different intent; the change differs per location.
+
+**New shared constant** — create `src/constants/lessonStatus.ts`:
+```typescript
+export const LESSON_STATUS_WRITABLE = ['draft', 'active', 'superseded', 'archived'] as const;
+export const LESSON_STATUS_ALL      = [...LESSON_STATUS_WRITABLE, 'pending-review'] as const;
+export type LessonStatusWritable    = typeof LESSON_STATUS_WRITABLE[number];
+export type LessonStatusAll         = typeof LESSON_STATUS_ALL[number];
+```
+
+**Per-location changes** (grep: `z.enum.*draft.*active.*superseded.*archived`):
+
+| Line (approx) | Tool / context | Current | Change |
+|---|---|---|---|
+| ~954 | `add_lesson` output / reflection filter | `z.enum(['draft','active','superseded','archived'])` | → `z.enum(LESSON_STATUS_ALL)` (filter — `pending-review` must be visible) |
+| ~982 | `list_lessons` `status` filter | same | → `z.enum(LESSON_STATUS_ALL).optional()` |
+| ~1064 | `search_lessons` `status` filter | same | → `z.enum(LESSON_STATUS_ALL).optional()` |
+| ~1617 | `update_lesson_status` **input** target | same | **Keep as `z.enum(LESSON_STATUS_WRITABLE)`** — `pending-review` excluded at Zod level |
+
+Additionally, inside the `update_lesson_status` handler body, add an explicit runtime guard (belt-and-suspenders for raw REST callers that bypass Zod):
+```typescript
+if (params.status === 'pending-review') {
+  throw new ContextHubError(
+    'Cannot transition to pending-review via update_lesson_status. ' +
+    'Use submit_for_review to create a review request.'
+  );
+}
+```
+
 ### Database — migration 0049
 
 ```sql
 -- 0049_review_requests.sql
 
--- IMPORTANT: Before running this migration, verify the exact constraint name:
---   SELECT conname FROM pg_constraint
---   WHERE conrelid = 'lessons'::regclass AND contype = 'c' AND conname LIKE '%status%';
--- Replace 'lessons_status_check' below with the actual name found.
+-- Constraint name verified from migration 0003_lesson_intelligence.sql: 'lessons_status_check'
 ALTER TABLE lessons DROP CONSTRAINT IF EXISTS lessons_status_check;
 ALTER TABLE lessons ADD CONSTRAINT lessons_status_check
   CHECK (status IN ('draft', 'pending-review', 'active', 'superseded', 'archived'));
@@ -541,16 +569,74 @@ POST   /api/projects/:id/taxonomy-profile/activate    { slug }
 DELETE /api/projects/:id/taxonomy-profile             deactivate
 ```
 
+### Implementation specification — `lesson_type` centralization
+
+The lesson type enum is hardcoded at 3 locations in `src/mcp/index.ts` and 1 in `src/kg/linker.ts`. These must be replaced with dynamic validation routed through `taxonomyService`.
+
+**New shared constant** — create `src/constants/lessonTypes.ts`:
+```typescript
+export const BUILTIN_LESSON_TYPES = [
+  'decision', 'preference', 'guardrail', 'workaround', 'general_note'
+] as const;
+
+// Both types are treated as guardrail rules by check_guardrails engine
+export const GUARDRAIL_LESSON_TYPES = ['guardrail', 'codex-guardrail'] as const;
+
+export type BuiltinLessonType = typeof BUILTIN_LESSON_TYPES[number];
+```
+
+**Per-location changes** (grep: `z.enum.*decision.*preference.*guardrail.*workaround`):
+
+| File | Line (approx) | Tool / context | Change |
+|---|---|---|---|
+| `mcp/index.ts` | ~948 | `add_lesson` input | `z.enum([...])` → `z.string()` + runtime validation (see below) |
+| `mcp/index.ts` | ~1040 | `list_lessons` filter | `z.enum([...])` → `z.string().optional()` — no validation (pass-through WHERE) |
+| `mcp/index.ts` | ~1309 | `suggest_lessons_from_commits` | `z.enum([...])` → `z.string()` + runtime validation |
+
+**Runtime validation pattern** — add to every write-path handler after Zod parse:
+```typescript
+// In add_lesson handler and any tool that writes lesson_type:
+const validTypes = await taxonomyService.getValidLessonTypes(params.project_id);
+if (!validTypes.includes(params.lesson_type)) {
+  throw new ContextHubError(
+    `Invalid lesson_type '${params.lesson_type}'. ` +
+    `Valid types: ${validTypes.join(', ')}`
+  );
+}
+```
+
+**`src/kg/linker.ts` — add `codex-guardrail` edge mapping** (line ~7):
+```typescript
+// Before:
+if (t === 'guardrail') return 'CONSTRAINS';
+if (t === 'preference') return 'PREFERS';
+
+// After:
+if (t === 'guardrail' || t === 'codex-guardrail') return 'CONSTRAINS';
+if (t === 'preference') return 'PREFERS';
+```
+
+**Guardrail engine** — find the query in `src/services/` that fetches guardrail lessons and extend it:
+```sql
+-- Before:
+WHERE lesson_type = 'guardrail' AND status = 'active'
+
+-- After:
+WHERE lesson_type = ANY($guardrail_types) AND status = 'active'
+-- where guardrail_types = GUARDRAIL_LESSON_TYPES = ['guardrail', 'codex-guardrail']
+```
+
+**`src/services/analytics.ts`** — no changes needed. The analytics service does `GROUP BY lesson_type` from DB rows (no hardcoded type list). Profile types appear naturally in the breakdown.
+
 ### Search and `add_lesson` integration
 
 New `src/services/taxonomyService.ts`:
 ```typescript
 getValidLessonTypes(project_id: string): Promise<string[]>
+  // returns [...BUILTIN_LESSON_TYPES, ...activeProfile.lesson_types.map(t => t.type)]
 getProfileForProject(project_id: string): Promise<TaxonomyProfile | null>
 getLessonTypeLabel(project_id: string, type: string): Promise<string>
   // falls back to type itself if not in active profile
-isCodexGuardrailType(lesson_type: string): boolean
-  // returns true for 'guardrail' | 'codex-guardrail'
 ```
 
 `reflect` and `get_context`: when profile is active, group lessons by type using profile labels.
@@ -624,9 +710,9 @@ Phase 13 positions ContextHub as the *collaboration and review layer* for DLF Ph
 |---|---|---|
 | **13.1** | F1 core | Migration 0048 · `claim_artifact` (with `agent_id`, rate limiting, atomic tx), `release_artifact`, `renew_artifact`, `list_active_claims`, `check_artifact_availability` MCP tools · REST `/artifact-leases` CRUD + admin force-release · artifact_id convention documented · unit tests |
 | **13.2** | F1 TTL + GUI | `leases.sweep` job + setTimeout scheduler · Active Work panel on Agents page (10s refresh) · MCP smoke tests |
-| **13.3** | F2 core | Migration 0049 (verify constraint name first) · `submit_for_review`, `list_review_requests` (with `submitted_by` filter) MCP tools · REST `/review-requests` CRUD (approve / return) · status transition validation · unit tests |
+| **13.3** | F2 core | Migration 0049 · Create `src/constants/lessonStatus.ts` (LESSON_STATUS_WRITABLE / LESSON_STATUS_ALL) · Update 3 filter sites in `mcp/index.ts` → `z.enum(LESSON_STATUS_ALL)` · Keep `update_lesson_status` on WRITABLE + add runtime guard · `submit_for_review`, `list_review_requests` (with `submitted_by` filter) MCP tools · REST `/review-requests` CRUD (approve / return) · unit tests |
 | **13.4** | F2 GUI | "Submitted for Review" tab in Review Inbox · badge count = sum of both queues · approve/return actions · audit log entries · MCP smoke tests |
-| **13.5** | F3 core | Migration 0050 · taxonomy profile DB + seeding on startup · `dlf-phase0.json` bundled · `taxonomyService.ts` · `is_builtin` enforcement · shadowing validation · `codex-guardrail` → guardrail engine extension · REST profile management · **unit tests (taxonomyService + guardrail engine extension)** |
+| **13.5** | F3 core | Migration 0050 · Create `src/constants/lessonTypes.ts` (BUILTIN_LESSON_TYPES / GUARDRAIL_LESSON_TYPES) · `taxonomyService.ts` with `getValidLessonTypes` · Replace 2 write-path `z.enum([...lesson_type...])` in `mcp/index.ts` → `z.string()` + runtime validation · Replace 1 filter `z.enum` → `z.string().optional()` · Update `kg/linker.ts` line ~7 for `codex-guardrail → CONSTRAINS` · Extend guardrail engine query to `lesson_type = ANY(GUARDRAIL_LESSON_TYPES)` · Taxonomy profile DB + seeding + `dlf-phase0.json` · `is_builtin` enforcement · shadowing validation · REST profile management · **unit tests (taxonomyService, guardrail engine, linker edge mapping)** |
 | **13.6** | F3 GUI + search | Project Settings → Taxonomy tab · deactivation confirmation dialog with behavior note · profile activation UI · `list_lessons`/`search_lessons` label rendering · `reflect` grouping by profile type |
 | **13.7** | E2E + integration | Concurrent claim conflict · TTL expiry + auto-release · `renew_artifact` before expiry · `submit_for_review` → approve → `reckoning-record.md` write (DLF workflow) · taxonomy profile activation + `codex-guardrail` in `check_guardrails` · zero regressions on Phase 1–12 flows |
 
