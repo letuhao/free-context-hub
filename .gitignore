@@ -194,3 +194,5 @@ docs/qc/*-e2e-agent-report.md
 
 # Scheduled-task lock (runtime artifact of .claude/ tooling)
 .claude/scheduled_tasks.lock
+backups/
+.phase-gates/

@@ -73,9 +73,10 @@ Instruction: ${params.instruction}`;
           { role: 'user', content: userPrompt },
         ],
         temperature: 0.3,
-        max_tokens: 1500,
+        // Phase 14 round-2 fix: bumped 1500 → 5000 for reasoning models.
+        max_tokens: 5000,
       }),
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(180_000),
     });
 
     if (!res.ok) {
@@ -84,7 +85,9 @@ Instruction: ${params.instruction}`;
     }
 
     const json = (await res.json()) as any;
-    const text = json?.choices?.[0]?.message?.content ?? '';
+    const msg = json?.choices?.[0]?.message ?? {};
+    // Phase 14: fall back to reasoning_content for reasoning models (nemotron etc.)
+    const text = String(msg.content ?? '').trim() || String(msg.reasoning_content ?? '').trim();
 
     // Parse JSON from response (may have markdown fences).
     const match = text.match(/\{[\s\S]*\}/);

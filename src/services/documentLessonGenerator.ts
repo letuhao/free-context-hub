@@ -78,7 +78,9 @@ ${content}`;
     }
 
     const json = (await res.json()) as any;
-    const text = json?.choices?.[0]?.message?.content ?? '';
+    const msg = json?.choices?.[0]?.message ?? {};
+    // Phase 14: fall back to reasoning_content for reasoning models (nemotron etc.)
+    const text = String(msg.content ?? '').trim() || String(msg.reasoning_content ?? '').trim();
 
     const match = text.match(/\{[\s\S]*\}/);
     if (!match) {

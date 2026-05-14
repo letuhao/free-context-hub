@@ -494,9 +494,11 @@ async function llmRerank(params: {
       throw new Error(`[rerank] HTTP ${res.status}: ${txt}`);
     }
     const json = (await res.json()) as any;
-    const content = json?.choices?.[0]?.message?.content;
-    if (typeof content !== 'string') throw new Error('[rerank] missing content');
-    const raw = content.trim();
+    const msg = json?.choices?.[0]?.message ?? {};
+    // Phase 14: fall back to reasoning_content for reasoning models (nemotron etc.)
+    const content = String(msg.content ?? '').trim() || String(msg.reasoning_content ?? '').trim();
+    if (!content) throw new Error('[rerank] missing content (and reasoning_content also empty)');
+    const raw = content;
     const first = raw.indexOf('{');
     const last = raw.lastIndexOf('}');
     if (first < 0 || last <= first) throw new Error('[rerank] no JSON object found');

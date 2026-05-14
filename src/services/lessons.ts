@@ -165,14 +165,20 @@ async function generateSearchAliases(title: string, content: string): Promise<st
           { role: 'user', content: `Title: ${title}\nContent: ${content.slice(0, 500)}` },
         ],
         temperature: 0.3,
-        max_tokens: 200,
+        // Phase 14 round-2 fix: bumped from 200 to 3000 to accommodate reasoning
+        // models (nemotron-3-nano) that consume budget on chain-of-thought before
+        // emitting the final JSON array. 200 tokens was nearly always empty content
+        // + truncated reasoning_content → silent alias loss after Phase 14 swap.
+        max_tokens: 3000,
       }),
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(180000),
     });
 
     if (!res.ok) return '';
     const json = (await res.json()) as any;
-    const text = json?.choices?.[0]?.message?.content ?? '';
+    const msg = json?.choices?.[0]?.message ?? {};
+    // Phase 14: fall back to reasoning_content for reasoning models (nemotron etc.)
+    const text = (String(msg.content ?? '').trim() || String(msg.reasoning_content ?? '').trim()) ?? '';
     // Parse JSON array from response (may have markdown fences).
     const match = text.match(/\[[\s\S]*\]/);
     if (!match) return '';
@@ -551,10 +557,12 @@ async function rerankGenerative(query: string, candidates: RerankCandidate[]): P
     if (!res.ok) { logger.warn({ status: res.status }, 'generative rerank: HTTP error'); return candidates.map(c => c.index); }
 
     const json = (await res.json()) as any;
-    const content = json?.choices?.[0]?.message?.content;
-    if (typeof content !== 'string' || !content.trim()) return candidates.map(c => c.index);
+    const msg = json?.choices?.[0]?.message ?? {};
+    // Phase 14: fall back to reasoning_content for reasoning models (nemotron etc.)
+    const content = String(msg.content ?? '').trim() || String(msg.reasoning_content ?? '').trim();
+    if (!content) return candidates.map(c => c.index);
 
-    const raw = content.trim();
+    const raw = content;
     const n = candidates.length;
     let order: number[] = [];
 

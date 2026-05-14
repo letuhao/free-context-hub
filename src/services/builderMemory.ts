@@ -153,9 +153,11 @@ export async function builderChatCompletion(input: {
       return null;
     }
     const choice0 = json?.choices?.[0];
-    const out = choice0?.message?.content;
+    const msg = (choice0?.message ?? {}) as { content?: string; reasoning_content?: string };
+    // Phase 14: fall back to reasoning_content for reasoning models (nemotron etc.)
+    const out = String(msg.content ?? '').trim() || String(msg.reasoning_content ?? '').trim();
     const finishReason = choice0?.finish_reason;
-    if (typeof out !== 'string' || !out.trim()) {
+    if (!out) {
       logger.warn(
         {
           model,
