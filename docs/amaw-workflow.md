@@ -1,9 +1,23 @@
 # AMAW — Autonomous Multi-Agent Workflow
 
-**Version:** 1.0  
-**Date:** 2026-05-14  
-**Supersedes:** Task Workflow v2.2 (Phase 9 human-in-loop replaced with AI enforcement)  
-**Quick reference:** CLAUDE.md — "Task Workflow v3.0 (AMAW)"
+**Version:** 1.1 (revised 2026-05-15 post-first-run)
+**Date:** 2026-05-14 (initial), 2026-05-15 (calibration update)
+**Status:** **OPT-IN** — default workflow is v2.2 human-in-loop. AMAW is invoked when user types `/amaw` or includes "use AMAW workflow" in the task description.
+**Quick reference:** CLAUDE.md — "Task Workflow (default v2.2 · AMAW opt-in)"
+
+## Migration note — 2026-05-15
+
+The original AMAW spec below uses `.phase-gates/<phase>.gate` files as evidence. After Phase 14 (first real AMAW run) we learned this pollutes the repo with ~10 ephemeral files per task. **The current implementation uses `docs/audit/AUDIT_LOG.jsonl`** — an append-only JSONL file with one event per phase transition / agent verdict. References to `.phase-gates/<phase>.gate` below should be read as "append an event to AUDIT_LOG.jsonl with the same content" — see event schema in the "AUDIT_LOG.jsonl Schema" section. The architectural intent (files-as-truth, fingerprint tracking, conservative wins) is unchanged.
+
+## When NOT to use AMAW
+
+Phase 14 case study found AMAW worth its cost (~$1-5 / ~30 min wallclock per task) for:
+- Data migrations (vector schema, model swaps)
+- New service boundaries / multi-system contracts
+- Auth/tenant isolation / security-sensitive paths
+- Bulk operations affecting >1 project simultaneously
+
+For everyday work (single-file bug fixes, doc updates, small refactors), AMAW is overkill — the human-in-loop default catches the same issues at a fraction of the token cost.
 
 ---
 
@@ -51,38 +65,30 @@ A deferred item mentioned only in chat does not exist. It MUST be written to `do
 
 ---
 
-## File Architecture
+## File Architecture (v1.1 — AUDIT_LOG.jsonl as single source)
 
 ```
-.phase-gates/                          # Gate files — workflow-gate.sh checks these
-  clarify.gate                         # Assumptions written, Scribe completed
-  design.gate                          # Design doc path + spec fingerprint (sha256)
-  design-review.gate                   # Adversary output for design
-  plan.gate                            # Plan doc path + task count + size classification
-  build.gate                           # Files changed list
-  verify.gate                          # Test results + exit code (MUST include raw output)
-  code-review.gate                     # Adversary output for code
-  qc.gate                              # AC checklist results + Scope Guard sign-off
-  post-review.gate                     # Final conservative gate — all agents clear
-  session.gate                         # SESSION_PATCH updated + DEFERRED.md updated
-  commit.gate                          # Commit hash + audit log entry reference
-  retro.gate                           # Lessons added to MCP
-
 docs/
   amaw-workflow.md                     # This file — full AMAW spec
   deferred/
     DEFERRED.md                        # Deferred items lifecycle (Scribe-managed)
   audit/
     AUDIT_LOG.jsonl                    # Append-only audit trail (one JSON line per event)
+                                        # REPLACES the per-phase .phase-gates/*.gate files
+                                        # from v1.0. All phase completions, agent verdicts,
+                                        # deferred-detected events, size changes go here.
   specs/
-    YYYY-MM-DD-<topic>.md              # Design specs (main session writes)
+    YYYY-MM-DD-<topic>.md              # Design specs (main session writes; spec_hash
+                                        # recorded in AUDIT_LOG design events)
   plans/
     YYYY-MM-DD-<topic>.md              # Task plans (main session writes)
   sessions/
     SESSION_PATCH.md                   # Session summary (Scribe writes)
+
+.workflow-state.json                   # workflow-gate.sh state machine (gitignored)
 ```
 
-**Gate file invariant:** A phase cannot be marked complete in `.workflow-state.json` unless its `.phase-gates/<phase>.gate` file exists AND any associated agent review gate has `status: APPROVED` or `status: APPROVED_WITH_WARNINGS`. workflow-gate.sh enforces this.
+**Phase invariant (v1.1):** a phase cannot be marked complete in `.workflow-state.json` unless an `action: phase_complete` event exists for it in `AUDIT_LOG.jsonl` AND any associated review event has `status: APPROVED`, `APPROVED_WITH_WARNINGS`, or `CLEAR`. The main session writes phase_complete events; agents write review events.
 
 ---
 
@@ -181,6 +187,8 @@ Phase           │ Main session action                │ Spawn agent   │ Age
 ---
 
 ## Sub-Agent Prompt Templates
+
+> **v1.1 path note:** the templates below reference `.phase-gates/<phase>.gate` for backward compatibility. In current implementation, replace those instructions with "**append your verdict as a JSONL event to `docs/audit/AUDIT_LOG.jsonl`** with fields `ts`, `task`, `phase`, `agent`, `action: review`, `status`, `findings_count`, `block_count`, `warn_count`, `note`". The fingerprint reads (`spec_hash`) come from prior design events in AUDIT_LOG instead of from `design.gate`. Functional behavior is identical.
 
 ### Adversary — Design Review
 
