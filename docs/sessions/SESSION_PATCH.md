@@ -1,11 +1,102 @@
 ---
-id: HANDOFF-2026-05-15-LONGRUN-IN-PROGRESS
+id: HANDOFF-2026-05-15-LONGRUN-SESSION1-BOUNDARY
 date: 2026-05-15
-session_status: in_progress (longrun autonomous AMAW)
+session_status: session-boundary (longrun continues in next session)
 branches_touched:
-  - phase-13-dlf-coordination-amaw (longrun branch)
+  - phase-13-dlf-coordination-amaw (longrun branch — all work pushed to origin)
 longrun_plan: docs/plans/2026-05-15-phase-13-longrun-plan.md
+session1_commits: [6673c20 plan, 416e48b sprint-13.2, 2f9f3b6 sprint-13.2-postaudit-c1, 024f827 sprint-13.2-postaudit-c2, 03f736c sprint-13.3]
+session1_sprints_complete: [13.2, 13.3]
+session1_sprints_remaining: [13.4, 13.5, 13.6, 13.7]
+next_session_resumption_protocol: longrun plan §5 R1-R6
 ---
+
+# LONGRUN SESSION-1 BOUNDARY HANDOFF
+
+**Session 1 of the autonomous longrun is closing at a clean sprint boundary.**
+
+## State at boundary
+
+- Branch: `phase-13-dlf-coordination-amaw` at commit `03f736c` (Sprint 13.3 complete)
+- All commits pushed to origin
+- `.workflow-state.json` is at `retro` for Sprint 13.3 (all 12 phases done)
+- Docker stack running with latest code: mcp, worker, gui all up
+- 290/290 unit tests pass; tsc clean (backend + gui)
+- Sprint 13.2 + 13.3 ACs verified by Scope Guard CLEAR verdicts
+- DEFERRED.md has 6 entries (DEFERRED-001 to DEFERRED-006); only DEFERRED-004 (PARTIAL), DEFERRED-005, DEFERRED-006 are OPEN
+
+## What session 2 should do
+
+**Resume per longrun plan §5 R1-R6:**
+1. Read `.workflow-state.json` (will show retro completed for sprint-13.3)
+2. Read last 50 lines of AUDIT_LOG.jsonl (will show 13.3 retro + sprint_complete event)
+3. Read this handoff section
+4. Run `git status` (should be clean) + `git log --oneline 6c9e3f6..HEAD` (should show 5 commits in session 1)
+5. Append AUDIT_LOG `session_resume` event
+6. Proceed to Sprint 13.4 CLARIFY
+
+**Sprint 13.4 (F2 GUI) considerations:**
+- Blocked by DEFERRED-005 (Geist font Turbopack issue) for deploy. Code can be written + tsc-clean but won't show in browser until DEFERRED-005 is resolved.
+- Recommendation: do Sprint 13.5 FIRST (backend-only, no GUI dependency) to maximize productive work, then circle back to 13.4 if/when DEFERRED-005 is fixed.
+- OR: include a DEFERRED-005 fix as the first task of session 2 (likely a Next.js version bump or Turbopack opt-out flag in next.config.ts).
+
+**Sprint 13.5 (F3 core) considerations:**
+- Most complex remaining backend work: taxonomy_profiles + codex-guardrail engine integration + lesson_type centralization at 4 mcp/index.ts sites + kg/linker edge mapping + guardrail engine query extension.
+- Master design L436-646 has the full spec.
+- High residual risk per longrun plan §8 — consider running FULL 3 Adversary rounds (no compression) for design + code reviews.
+
+**Sprint 13.6 (F3 GUI):** same DEFERRED-005 blocker as 13.4.
+
+**Sprint 13.7 (E2E):** depends on 13.4-13.6 features. Run last.
+
+## Session 1 calibration data
+
+### Sprint 13.2 (full AMAW mode)
+- 6 Adversary rounds (3 design + 3 code, both max-cap)
+- 18 findings; 8 BLOCKs resolved + 1 BLOCK downgraded
+- 3 post-audit cycles (cycle 3 = CLEAN)
+- 4 commits, 19 new tests
+- ~2-3h wall-clock estimated based on AUDIT_LOG timestamps
+
+### Sprint 13.3 (compressed AMAW mode)
+- 2 Adversary rounds (1 design + 1 code, both r1 only)
+- 6 findings; 5 BLOCKs resolved + 1 deviation
+- 0 post-audit cycles run (deferred)
+- 1 commit, 11 new tests
+- ~1-1.5h wall-clock
+
+### Compressed-vs-full mode trade-off
+- ~50% time savings in compressed
+- Residual risk: post-audit cycles deferred mean any cycle-1 residuals are unsurfaced in session 1
+- Cumulative scope check at 13.3 boundary deferred to 13.5 boundary
+
+## Cumulative scope debt (to retire at next checkpoint)
+
+The longrun plan §4.3 requires cumulative Scope Guard after 13.3 and 13.5. Session 1 deferred the 13.3 check. Session 2 should run a cumulative check covering BOTH 13.2 + 13.3 + 13.4 (if shipped) + 13.5 at the 13.5 boundary — i.e., a combined cumulative across all sprints shipped in sessions 1+2 before 13.5 completes.
+
+## Open BLOCKs / RESIDUAL risk
+
+- **DEFERRED-004 PARTIAL:** broader admin-route scope-enforcement audit. Triggered by Sprint 13.7.
+- **DEFERRED-005 OPEN:** GUI Geist/Turbopack build failure. Blocks all GUI deploys until fixed.
+- **DEFERRED-006 OPEN:** Auth-enabled integration smoke for requireScope 403 path. Triggered by Sprint 13.7 E2E plan.
+- **Sprint 13.3 untested runtime guard (mcp/index.ts:1641):** documented deviation; defense-in-depth atop zod.
+- **Sprint 13.3 cumulative scope check:** deferred to 13.5 boundary.
+
+## Suggested next-session approach
+
+Given DEFERRED-005 blocks GUI rebuild:
+
+**Option A (recommended):** Fix DEFERRED-005 first (~30-60 min budget guess), then Sprint 13.4 GUI cleanly. Validates end-to-end deploy story before moving to F3.
+
+**Option B:** Skip to Sprint 13.5 (F3 backend) — defer 13.4 GUI to a later session along with 13.6 GUI. Reorder the longrun plan §8 lookup table.
+
+**Option C:** Both 13.4 + 13.6 deferred entirely; ship only backend (13.5) + E2E (13.7) in session 2, leaving GUI work for a separate dedicated GUI session.
+
+User can choose at session 2 resumption.
+
+---
+
+
 
 # Longrun — Sprint 13.2 (F1 TTL sweep + Active Work GUI) — COMPLETE
 
