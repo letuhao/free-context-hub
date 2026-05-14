@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useProject } from "@/contexts/project-context";
 import { api, type LeaseSummary } from "@/lib/api";
 import { relTime } from "@/lib/rel-time";
