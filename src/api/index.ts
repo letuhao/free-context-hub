@@ -27,6 +27,7 @@ import { auditRouter } from './routes/audit.js';
 import { apiKeysRouter } from './routes/apiKeys.js';
 import { artifactLeasesRouter } from './routes/artifactLeases.js';  // Phase 13 Sprint 13.1
 import { meRouter } from './routes/me.js';                          // Phase 13 Sprint 13.2
+import { reviewRequestsRouter } from './routes/reviewRequests.js';  // Phase 13 Sprint 13.3
 
 /**
  * Creates the REST API Express app.
@@ -80,6 +81,8 @@ export function createApiApp() {
   // because projectsRouter is mounted at /api/projects and would otherwise
   // catch deeper /:id/* paths. Router uses mergeParams to access :id.
   app.use('/api/projects/:id/artifact-leases', artifactLeasesRouter);
+  // Phase 13 Sprint 13.3: review requests — same nested-router pattern
+  app.use('/api/projects/:id/review-requests', reviewRequestsRouter);
   app.use('/api/projects', projectsRouter);       // mixed — write routes gated inside
   app.use('/api/analytics', analyticsRouter);
   app.use('/api/activity', activityRouter);

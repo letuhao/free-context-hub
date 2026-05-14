@@ -59,6 +59,20 @@ export {
   SWEEP_INTERVAL_MS,
 } from '../services/sweepScheduler.js';
 
+// ── Services: review requests (Phase 13 Sprint 13.3) ──
+export {
+  submitForReview,
+  listReviewRequests,
+  getReviewRequest,
+  approveReviewRequest,
+  returnReviewRequest,
+} from '../services/reviewRequests.js';
+export type {
+  SubmitResult,
+  ReviewRequestRow,
+  ResolveResult,
+} from '../services/reviewRequests.js';
+
 // ── Services: distillation & snapshots ──
 export { getProjectSnapshotBody } from '../services/snapshot.js';
 export { compressText, reflectOnTopic } from '../services/distiller.js';

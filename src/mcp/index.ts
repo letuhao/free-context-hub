@@ -65,7 +65,11 @@ import {
   renewArtifact,
   listActiveClaims,
   checkArtifactAvailability,
+  // Phase 13 Sprint 13.3: review requests
+  submitForReview,
+  listReviewRequests,
 } from '../core/index.js';
+import { LESSON_STATUS_ALL, LESSON_STATUS_WRITABLE } from '../constants/lessonStatus.js';
 import { formatToolResponse, OutputFormatSchema } from './formatters.js';
 import { isFeatureEnabled } from '../services/featureToggles.js';
 import { searchChunks } from '../services/documentChunks.js';
@@ -985,7 +989,7 @@ function createMcpToolsServer() {
             captured_by: z.string().nullable(),
             summary: z.string().nullable().optional(),
             quick_action: z.string().nullable().optional(),
-            status: z.enum(['draft', 'active', 'superseded', 'archived']).optional(),
+            status: z.enum(LESSON_STATUS_ALL).optional(),
             superseded_by: z.string().nullable().optional(),
           }),
         ),
@@ -1067,7 +1071,7 @@ function createMcpToolsServer() {
             content_snippet: z.string(),
             tags: z.array(z.string()),
             score: z.number(),
-            status: z.enum(['draft', 'active', 'superseded', 'archived']).optional(),
+            status: z.enum(LESSON_STATUS_ALL).optional(),
           }),
         ),
         explanations: z.array(z.string()),
@@ -1620,7 +1624,9 @@ function createMcpToolsServer() {
           .optional()
           .describe('Project identifier. Optional if DEFAULT_PROJECT_ID is set; otherwise required.'),
         lesson_id: z.string().min(1).describe('Lesson UUID to update.'),
-        status: z.enum(['draft', 'active', 'superseded', 'archived']).describe('New lifecycle status.'),
+        // Phase 13 Sprint 13.3: write-path keeps WRITABLE; 'pending-review' is
+        // reachable only via submit_for_review.
+        status: z.enum(LESSON_STATUS_WRITABLE).describe('New lifecycle status (writable only — pending-review is set via submit_for_review).'),
         superseded_by: z.string().min(1).optional().describe('Optional replacement lesson UUID when superseding.'),
         output_format: OutputFormatSchema.default('auto_both').describe('Response format: auto_both | json_only | json_pretty | summary_only.'),
       }),
@@ -1632,6 +1638,13 @@ function createMcpToolsServer() {
     async ({ workspace_token, project_id, lesson_id, status, superseded_by, output_format }) => {
       assertWorkspaceToken(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
+      // Phase 13 Sprint 13.3 runtime guard: belt-and-suspenders for raw callers bypassing zod.
+      if ((status as string) === 'pending-review') {
+        throw new ContextHubError(
+          'BAD_REQUEST',
+          "Cannot transition to 'pending-review' via update_lesson_status. Use submit_for_review to create a review request.",
+        );
+      }
       const result = await updateLessonStatus({
         projectId: pid,
         lessonId: lesson_id,
@@ -2840,6 +2853,100 @@ function createMcpToolsServer() {
       const projectId = resolveProjectIdOrThrow(project_id);
       const result = await checkArtifactAvailability({ project_id: projectId, artifact_type, artifact_id });
       const summary = `check_artifact_availability: available=${result.available}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  // ── Phase 13 Sprint 13.3: F2 core — review request tools ──
+  server.registerTool(
+    'submit_for_review',
+    {
+      description: 'Submit a draft lesson for human review. Transitions lesson.status to pending-review and creates a review_requests record. Note: it is recommended that the agent also call release_artifact for any active lease on the same lesson once submitted.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        agent_id: z.string().min(1).describe("Caller identity (passed explicitly, not derived)."),
+        lesson_id: z.string().uuid(),
+        reviewer_note: z.string().optional(),
+        intended_reviewer: z.string().optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.discriminatedUnion('status', [
+        z.object({
+          status: z.literal('submitted'),
+          request_id: z.string(),
+          lesson_id: z.string(),
+          lesson_title: z.string(),
+          created_at: z.string(),
+        }),
+        z.object({ status: z.literal('lesson_not_found') }),
+        z.object({
+          status: z.literal('wrong_lesson_status'),
+          current_status: z.string(),
+        }),
+        z.object({
+          status: z.literal('already_pending'),
+          existing_request_id: z.string(),
+        }),
+      ]),
+    },
+    async ({ workspace_token, project_id, agent_id, lesson_id, reviewer_note, intended_reviewer, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      const result = await submitForReview({
+        project_id: projectId,
+        agent_id,
+        lesson_id,
+        reviewer_note,
+        intended_reviewer,
+      });
+      const summary = `submit_for_review: status=${result.status}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'list_review_requests',
+    {
+      description: 'List review requests for a project. Default filter status=pending.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        status: z.enum(['pending', 'approved', 'returned']).optional(),
+        submitted_by: z.string().optional(),
+        limit: z.number().int().min(1).max(100).optional(),
+        offset: z.number().int().min(0).optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        items: z.array(z.object({
+          request_id: z.string(),
+          lesson_id: z.string(),
+          lesson_title: z.string(),
+          lesson_type: z.string(),
+          submitter_agent_id: z.string(),
+          reviewer_note: z.string().nullable(),
+          intended_reviewer: z.string().nullable(),
+          status: z.enum(['pending', 'approved', 'returned']),
+          resolved_at: z.string().nullable(),
+          resolved_by: z.string().nullable(),
+          resolution_note: z.string().nullable(),
+          created_at: z.string(),
+        })),
+        total_count: z.number().int(),
+      }),
+    },
+    async ({ workspace_token, project_id, status, submitted_by, limit, offset, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      const result = await listReviewRequests({
+        project_id: projectId,
+        status,
+        submitted_by,
+        limit,
+        offset,
+      });
+      const summary = `list_review_requests: count=${result.items.length} total=${result.total_count}`;
       return formatToolResponse(result, summary, output_format);
     },
   );

@@ -10,7 +10,9 @@ export type EventType =
   | 'job.queued' | 'job.succeeded' | 'job.failed'
   | 'document.uploaded' | 'document.deleted'
   | 'group.created' | 'group.deleted'
-  | 'comment.added';
+  | 'comment.added'
+  // Phase 13 Sprint 13.3: review-request lifecycle
+  | 'review.submitted' | 'review.approved' | 'review.returned';
 
 export interface ActivityEntry {
   activity_id: string;

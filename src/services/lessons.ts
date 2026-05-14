@@ -23,7 +23,8 @@ import { createModuleLogger } from '../utils/logger.js';
 const logger = createModuleLogger('lessons');
 
 export type LessonType = string;
-export type LessonStatus = 'draft' | 'active' | 'superseded' | 'archived';
+// Phase 13 Sprint 13.3: 'pending-review' added (reachable only via submit_for_review).
+export type LessonStatus = 'draft' | 'pending-review' | 'active' | 'superseded' | 'archived';
 
 export type GuardrailRulePayload = {
   trigger: string;
