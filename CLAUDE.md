@@ -48,31 +48,33 @@ Don't memorize tool schemas — `help()` is always current.
 
 ---
 
-## Task Workflow v2.2 (12 phases per task)
+## Task Workflow v3.0 (AMAW — Autonomous Multi-Agent Workflow)
 
-> v2 absorbs execution discipline from [Superpowers](https://github.com/obra/superpowers) (brainstorming protocol, plan decomposition, TDD, verification gate, debugging protocol, subagent dispatch) while keeping our strengths (session persistence, role perspectives, guardrails, MCP knowledge layer).
+> v3.0 replaces the human-in-loop Phase 9 checkpoint with cold-start AI sub-agents (Adversary, Scope Guard, Scribe, Audit Logger). The core insight: a sub-agent spawned fresh with only file access cannot inherit the main session's context rot or bias. **Full spec: `docs/amaw-workflow.md`**
 >
-> **v2.2 update:** POST-REVIEW is now a **human-interactive checkpoint** (present summary → wait for human), NOT a self-adversarial re-read. Deep adversarial review moved to the on-demand `/review-impl` command (`.claude/commands/review-impl.md`). Self-review-right-after-writing rubber-stamps in practice; explicit separate mental mode works better.
+> v2.2 heritage (kept): Superpowers TDD discipline, plan decomposition, evidence gate, session persistence, MCP knowledge layer.
+>
+> **v3.0 key change:** Files are truth, not chat. Main session MUST write gate files at each phase. Sub-agents read only files + MCP — never the conversation history.
 
-Every task follows this workflow. The agent plays all roles sequentially.
+Every task follows this workflow. The main session plays the executor role; sub-agents handle review, verification, recording, and audit.
 
-**ENFORCEMENT: This workflow uses a state machine (`.workflow-state.json`). You MUST call the phase transition protocol before moving between phases. Hooks will block commits if VERIFY, POST-REVIEW, or SESSION evidence is missing.**
+**ENFORCEMENT: This workflow uses a state machine (`.workflow-state.json`) + phase gate files (`.phase-gates/`). workflow-gate.sh blocks if gate files are missing or any agent review returns REJECTED/BLOCKED. Conservative wins — no voting, no override.**
 
 ```
 Phase          │ Role              │ What Happens
 ───────────────┼───────────────────┼──────────────────────────────────────
-1. CLARIFY     │ Architect + PO    │ Brainstorm, ask questions, define scope
-2. DESIGN      │ Lead              │ API contract / component API / data flow
-3. REVIEW      │ PO + Lead         │ Review design spec before coding
-4. PLAN        │ Lead + Developer  │ Decompose into bite-sized tasks (2-5 min)
-5. BUILD       │ Developer         │ Write code (TDD: red → green → refactor)
-6. VERIFY      │ Developer         │ Evidence-based verification gate
-7. REVIEW      │ Lead              │ Code review (spec compliance + quality)
-8. QC          │ QA / PO           │ Test against acceptance criteria
-9. POST-REVIEW │ Human + Developer │ Human-interactive CHECKPOINT (not deep review — see /review-impl)
-10. SESSION    │ Developer         │ Update SESSION_PATCH.md + task status
-11. COMMIT     │ Developer         │ Git commit + push
-12. RETRO      │ All               │ Add lesson if decision/workaround learned
+1. CLARIFY     │ Main + Scribe     │ Read MCP + files, write assumptions to spec, Scribe scans DEFERRED.md
+2. DESIGN      │ Main              │ API contract / data flow → docs/specs/DESIGN.md + spec fingerprint
+3. REVIEW      │ Adversary         │ Cold-start: reads spec, finds exactly 3 problems (BLOCK/WARN)
+4. PLAN        │ Main + Scribe     │ Decompose into tasks → docs/plans/PLAN.md, Scribe validates no placeholders
+5. BUILD       │ Main              │ Write code (TDD: red → green → refactor), write .phase-gates/build.gate
+6. VERIFY      │ Main              │ Run tests fresh, write raw exit code + output to verify.gate
+7. REVIEW      │ Adversary         │ Cold-start: reads code vs spec, finds exactly 3 divergences (BLOCK/WARN)
+8. QC          │ Scope Guard       │ Compares spec fingerprint vs implementation, checks AC coverage
+9. POST-REVIEW │ Scope Guard       │ Final conservative gate — BLOCKED if any unresolved issue
+10. SESSION    │ Scribe            │ SESSION_PATCH.md + DEFERRED.md + AUDIT_LOG.jsonl
+11. COMMIT     │ Main              │ Git commit + write commit.gate
+12. RETRO      │ Audit Logger      │ add_lesson to MCP + finalize AUDIT_LOG.jsonl
 ```
 
 **Status tracking:** `[ ]` not started · `[C]` clarify · `[D]` design · `[P]` plan · `[B]` build · `[V]` verify · `[R]` review · `[Q]` QC · `[PR]` post-review · `[S]` session · `[✓]` done
@@ -89,9 +91,9 @@ Agents are known to skip phases to "save time." This is explicitly forbidden.
 | Skip PLAN, jump to BUILD | "It's a small change" | Small changes grow; no plan = no checkpoint |
 | Skip VERIFY after BUILD | "Tests passed earlier" | Stale results are not evidence |
 | Skip REVIEW after VERIFY | "I wrote it, I know it's correct" | Author blindness is real |
-| Skip POST-REVIEW | "I already reviewed in phase 7" | Phase 7 has author blindness. POST-REVIEW is a **human-interactive pause** so the user can veto, redirect, or request `/review-impl` before SESSION/COMMIT burns the diff in. **NEVER skippable**, but lightweight (see Phase 9). |
-| Skip SESSION before COMMIT | "I'll update later" | You won't. Context is lost |
-| Combine multiple phases | "CLARIFY+DESIGN+PLAN in one go" | Phases exist to create pause points for user input |
+| Skip POST-REVIEW | "I already reviewed in phase 7" | Phase 7 has Adversary review; POST-REVIEW is Scope Guard's final conservative gate. Different agents, different scope. **NEVER skippable** — workflow-gate.sh blocks without post-review.gate. |
+| Skip SESSION before COMMIT | "I'll update later" | You won't. Context is lost. Scribe must run. |
+| Combine multiple phases | "CLARIFY+DESIGN+PLAN in one go" | Each phase boundary triggers a different sub-agent — combining skips the agent |
 
 **The only allowed skips** are for tasks classified as **XS** by the size protocol below. All other tasks must complete every phase. If a phase doesn't list skip conditions, it CANNOT be skipped.
 
@@ -141,55 +143,90 @@ If during BUILD you discover the task is larger than classified — STOP, reclas
 **Phase transition protocol:**
 1. State task size classification before starting (XS/S/M/L/XL with counts)
 2. Before starting any phase, update `.workflow-state.json` with current phase
-3. Before leaving any phase, record the phase output/evidence
-4. If during work you discover the task is larger than classified — STOP, reclassify, announce to user
-5. User can authorize additional skips explicitly — but the agent must never self-authorize
+3. Before leaving any phase, write the phase gate file to `.phase-gates/<phase>.gate`
+4. If during work you discover the task is larger than classified — STOP, reclassify, write to AUDIT_LOG
+5. No agent can self-authorize a skip. Conservative wins — any REJECTED/BLOCKED gate = must fix first
 
 **Task types:** `[FE]` frontend only · `[BE]` backend only · `[FS]` full-stack (backend + frontend)
 
 ### Role perspectives
-- **Architect** — scoping, dependencies, system-level impact
-- **PO (Product Owner)** — acceptance criteria, design sign-off, final QC
-- **Lead** — technical design, plan quality, code review (patterns, security, a11y)
-- **Developer** — implementation, TDD, verification, session tracking, commits
-- **QA** — test against acceptance criteria, edge cases, regression
 
-When playing each role, shift perspective accordingly. Architect thinks about system boundaries. PO thinks about user value and acceptance. Lead thinks about code quality and maintainability. Developer thinks about correctness and efficiency. QA thinks about what can break.
+**Main session roles (executor):**
+- **Architect** — scoping, dependencies, system-level impact
+- **Developer** — implementation, TDD, verification, session tracking, commits
+
+**Sub-agent roles (reviewers — cold-start, read files only):**
+- **Adversary** — finds exactly 3 problems (design review + code review). Never says what's good.
+- **Scope Guard** — compares spec fingerprint vs implementation, checks AC coverage, final gate
+- **Scribe** — records all decisions, detects deferred items, writes SESSION_PATCH + DEFERRED.md + AUDIT_LOG
+- **Audit Logger** — writes `add_lesson` to MCP, finalizes AUDIT_LOG.jsonl at RETRO
+
+See `docs/amaw-workflow.md` for full prompt templates and spawn protocol.
 
 ---
 
-### Phase 1: CLARIFY (Brainstorming Protocol)
+### AMAW Sub-Agent Spawn Protocol (Quick Reference)
 
-Absorbed from Superpowers. Don't jump into code — clarify first.
+**When main session spawns a sub-agent:**
+1. Write the required input files first (gate files, spec, plan, etc.)
+2. Spawn the agent with a prompt that specifies ONLY the files it should read
+3. Agent writes its output gate file
+4. Main session reads the gate file — if REJECTED/BLOCKED, fix and respawn
+5. Run `./scripts/workflow-gate.sh complete <phase> "<evidence>"`
 
-1. **Explore context** — read relevant files, docs, git history
-2. **Ask ONE question at a time** — multiple choice preferred, never overwhelm
-3. **Propose 2-3 approaches** with trade-offs after enough context
-4. **Present design in sections** — scale to complexity (few sentences to 300 words per section)
-5. **Write spec file** to `docs/specs/YYYY-MM-DD-<topic>.md` for non-trivial tasks
-6. **Self-review spec** — check for placeholders, contradictions, ambiguity, scope creep
-7. **User approval gate** — do NOT proceed to Phase 2 without user sign-off
+**Gate file format (all gate files use this structure):**
+```
+---
+agent: <who wrote this>
+phase: <phase name>
+status: COMPLETE | APPROVED | APPROVED_WITH_WARNINGS | REJECTED | BLOCKED | CLEAR
+[phase-specific fields]
+---
+```
 
-**Skip conditions:** Only for tasks classified **XS** (1 file, 0-1 logic changes, 0 side effects). If you haven't counted yet, you can't skip.
+**Deferred item protocol (mandatory):**
+Any time main session output contains "later", "deferred", "future sprint", "out of scope", "TODO", "TBD" → Scribe MUST write it to `docs/deferred/DEFERRED.md` before session.gate is written. An item mentioned only in chat does not exist.
+
+**Context budget guard:**
+If BUILD phase has 3+ tasks completed without spawning any agent → spawn Scribe checkpoint before continuing.
+
+**Full prompt templates:** `docs/amaw-workflow.md` — Sub-Agent Prompt Templates section.
+
+---
+
+### Phase 1: CLARIFY
+
+Don't jump into code — clarify first.
+
+1. **Explore context** — `search_lessons(query: "<task intent>")`, read relevant files, git history
+2. **Spawn Scribe (session-start scan)** — reads `docs/deferred/DEFERRED.md`, reports triggered items
+3. **Write assumptions** — explicit scope, constraints, open questions to `docs/specs/YYYY-MM-DD-<topic>.md`
+4. **Propose 2-3 approaches** with trade-offs
+5. **Self-review spec** — check for placeholders, contradictions, ambiguity, scope creep
+6. **Write `.phase-gates/clarify.gate`** — assumptions locked, Scribe scan complete
+7. **Run** `./scripts/workflow-gate.sh complete clarify "assumptions written: <one-liner>"`
+
+**No user approval gate in AMAW** — assumptions are written explicitly and challenged by Adversary at REVIEW.
+
+**Skip conditions:** Only for tasks classified **XS** (1 file, 0-1 logic changes, 0 side effects).
 
 ---
 
 ### Phase 4: PLAN (Task Decomposition)
 
-Absorbed from Superpowers. Break work into executable chunks before coding.
+Break work into executable chunks before coding.
 
 - Decompose into **bite-sized tasks (2-5 minutes each)**
 - Each task specifies: **exact file paths, complete code intent, verification command**
 - **No placeholders allowed** — no "TBD", "TODO", "add error handling here"
-- For large tasks (>5 files), write plan to `docs/plans/YYYY-MM-DD-<feature>.md`
-- Self-review checklist: spec coverage, placeholder scan, type/signature consistency
+- Write plan to `docs/plans/YYYY-MM-DD-<feature>.md`
+- **Spawn Scribe** to validate plan: no placeholders, tasks are concrete, size classification is correct
+- Write `.phase-gates/plan.gate` after Scribe confirms
+- **Run** `./scripts/workflow-gate.sh complete plan "<N> tasks, size <XS|S|M|L>"`
 
 **Execution mode decision** (for large plans):
-- **Inline** (default): agent executes tasks sequentially with checkpoints
-- **Subagent dispatch** (multi-file, independent tasks): fresh agent per task with 2-stage review
-  - Stage 1: spec compliance review
-  - Stage 2: code quality review
-  - Never skip either stage; never proceed with unfixed issues
+- **Inline** (default): main session executes tasks sequentially with context-budget checkpoints
+- **Subagent dispatch** (multi-file, independent tasks): fresh agent per task, Adversary review per batch
 
 **Skip conditions:** Only for tasks classified **XS** or **S**. If classified S, CLARIFY is still required.
 
@@ -241,37 +278,33 @@ Both stages must pass. If issues found → fix → re-verify (Phase 6) → re-re
 
 ---
 
-### Phase 9: POST-REVIEW (Human-Interactive Checkpoint) — NEVER skippable
+### Phase 9: POST-REVIEW (Scope Guard Final Gate) — NEVER skippable
 
-**Why this phase exists:** Forcing-function human pause before SESSION and COMMIT burn the diff in. The user can veto, redirect, or request deeper scrutiny.
+**Why this phase exists:** Scope Guard reads the full picture — verify.gate + code-review.gate + qc.gate — and issues a single conservative verdict. Any unresolved issue from any prior agent = BLOCKED. Nothing proceeds to SESSION until this gate is CLEAR.
 
-**Why it is NOT a self-adversarial re-read:** Self-review-right-after-writing-code rubber-stamps reliably. Agents pattern-match to their own reasoning and emit "0 issues found" as a ritual close-out, even when real coverage gaps exist. Deep review is moved to an explicit separate mental mode — the `/review-impl` command.
+**What Scope Guard checks:**
+1. Spec fingerprint (design.gate hash vs current DESIGN.md) — unexplained drift = BLOCKED
+2. All Adversary BLOCK findings resolved (code-review.gate)
+3. AC coverage complete (qc.gate, all criteria covered)
+4. No OPEN deferred items with trigger condition already met (Scribe must have flagged these)
 
-**What this phase IS:**
+**How to run:**
+```
+Spawn Scope Guard (cold-start):
+  Reads: design.gate, verify.gate, code-review.gate, qc.gate, build.gate
+  Writes: .phase-gates/post-review.gate
+  Output: status: CLEAR | BLOCKED
 
-1. **Present a concise summary** — files touched, key decisions, verify evidence (tests/build/lint).
-2. **STOP and WAIT for human response.** Do NOT proceed until the human replies.
-3. If the human asks for a deeper look — or the code is safety-sensitive (auth, tenant isolation, destructive ops, injection defense, new integration boundary) — invoke `/review-impl` before continuing.
-4. If the human approves, proceed to SESSION.
-
-**What this phase is NOT:** A ritual self-re-read that ends in "Post-review: 0 issues found." If you catch yourself about to output that line without a specific concern, you are rubber-stamping — just present the summary and stop.
+If BLOCKED → fix the specific blocker → re-run QC (Phase 8) → re-run POST-REVIEW
+If CLEAR → proceed to SESSION
+```
 
 **Completion evidence format:**
 ```
-./scripts/workflow-gate.sh complete post-review "summary presented, human approved: <one-liner>"
+./scripts/workflow-gate.sh complete post-review "Scope Guard CLEAR: <one-liner>"
 ```
 
-**When to proactively suggest `/review-impl` in your summary (without being asked):**
-- Auth, credential, or token handling
-- Tenant-isolation boundaries (project_id scoping)
-- Destructive operations (delete, truncate, force-push)
-- Injection / sanitization defenses (SQL params, HTML escape, SSRF guards)
-- Non-trivial integration points (new service boundary, external API)
-- Anything the user previously flagged as load-bearing
-
-### /review-impl (on-demand adversarial review)
-
-Separate from POST-REVIEW. Invoke when: human asks, safety-sensitive code, or something feels off. Scoped to ask **what the test coverage misses**, not **whether the tests as written pass**. See `.claude/commands/review-impl.md`.
+**For safety-sensitive code** (auth, tenant isolation, destructive ops, injection defense, new service boundary): spawn a second Adversary with security framing before Scope Guard runs. See `docs/amaw-workflow.md` — Anti-Consensus Mechanisms.
 
 ---
 

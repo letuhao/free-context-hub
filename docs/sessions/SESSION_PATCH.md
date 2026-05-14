@@ -1,4 +1,64 @@
 ---
+id: AMAW-DESIGN-2026-05-14
+date: 2026-05-14
+branch: phase-13-dlf-coordination
+session_status: closed
+pushed_to_origin: false
+---
+
+# Session — 2026-05-14 (AMAW Workflow Design)
+
+## TL;DR
+
+**Workflow v2.2 → v3.0 (AMAW).** Thiết kế và viết spec đầy đủ cho Autonomous Multi-Agent Workflow — thay thế human-in-loop Phase 9 bằng hệ thống 4 cold-start AI sub-agents (Adversary, Scribe, Scope Guard, Audit Logger). 2 files thay đổi, 0 code changes, 0 migrations.
+
+## Vấn đề được giải quyết
+
+Workflow v2.2 có 4 failure modes trong môi trường autonomous:
+1. **Deferred-but-forgotten** — item nói "later" trong chat nhưng không ghi ra file → biến mất
+2. **Context rot** — main session quên quyết định cũ khi context lớn dần
+3. **Power creep** — scope mở rộng trong BUILD mà không ai phát hiện
+4. **Rubber-stamp POST-REVIEW** — human hoặc self-review đọc xong nói "OK" vì bias
+
+## Thiết kế AMAW — 4 sub-agent roles
+
+| Agent | Trigger | Nhiệm vụ |
+|-------|---------|----------|
+| **Adversary** | Sau DESIGN, sau BUILD | Cold-start, tìm chính xác 3 vấn đề — KHÔNG nói gì tốt |
+| **Scribe** | CLARIFY, PLAN, mid-BUILD, SESSION | Ghi decisions, detect deferred items, write DEFERRED.md + AUDIT_LOG |
+| **Scope Guard** | QC, POST-REVIEW | So spec fingerprint vs implementation, conservative gate |
+| **Audit Logger** | RETRO | add_lesson MCP + finalize AUDIT_LOG.jsonl |
+
+## Files thay đổi
+
+- **`docs/amaw-workflow.md`** — NEW (657 dòng): full spec gồm core principles, file architecture, phase × agent spawn map, 5 prompt templates đầy đủ, DEFERRED.md schema + lifecycle, AUDIT_LOG.jsonl schema, workflow-gate.sh extension spec, spec fingerprint protocol, context budget guard, anti-consensus mechanisms, failure modes table, acceptance criteria
+- **`CLAUDE.md`** — UPDATED (v2.2 → v3.0): header, phase table, anti-skip rules, role perspectives, AMAW spawn protocol section (mới), CLARIFY phase, PLAN phase, Phase 9 rewrite (human → Scope Guard), tất cả human-interactive language đã xóa
+
+## Key design decisions
+
+- **D1: Cold-start sub-agents** — đọc files + MCP only, không thấy conversation history
+- **D2: Conservative wins** — bất kỳ REJECTED/BLOCKED nào = hard stop, không voting
+- **D3: Files là truth** — chat là ephemeral; gate files ở `.phase-gates/` là bằng chứng duy nhất
+- **D4: Deferred items first-class** — DEFERRED.md với sessions_open counter, trigger conditions, lifecycle
+- **D5: Adversary framing** — "tìm 3 điều có thể sai" thay vì "review này" — framing tạo ra output khác
+
+## Operational state
+
+- Branch `phase-13-dlf-coordination` — dirty commit (docs only)
+- Không có code changes, migrations, hay test changes
+- Phase 13 implementation (7 sprints) chưa bắt đầu — design đã lock từ trước session này
+- `.workflow-state.json` không tồn tại — cần khởi tạo khi bắt đầu Sprint 13.1
+
+## What's next
+
+Bắt đầu Phase 13 implementation theo sprint plan trong `docs/phase-13-design.md`:
+- **Sprint 13.1** — F1 core: migration 0048, claim/release/renew/list MCP tools, REST `/artifact-leases`
+- Trước khi bắt đầu 13.1: khởi tạo `.workflow-state.json` + `.phase-gates/` directory
+- Áp dụng AMAW từ Sprint 13.1 trở đi (cold-start sub-agents thay vì human POST-REVIEW)
+
+---
+
+---
 id: HANDOFF-2026-04-19-G
 date: 2026-04-19
 phase: HANDOFF
