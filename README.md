@@ -302,6 +302,17 @@ We tested 8 embedding models and 8 reranker models ([full benchmark](docs/benchm
   - Streaming JSONL decode (~99% jsonl peak memory reduction) + streaming base64 encode on import (~45% PDF peak reduction)
   - Batched SELECT on import (~99% SELECT-count reduction)
   - 9 sub-sprints, 61 API e2e + 1 GUI Playwright + 39 unit tests, all through v2.2 12-phase workflow with `/review-impl`
+- [x] **Phase 12**: RAG Quality Measurement & Rerank Optimization
+  - Retrieval measurement infrastructure: recall@k, MRR, latency budgets, golden-set harness
+  - 8 reranker models benchmarked; `qwen3-4b-instruct-ranker` recommended (+9% accuracy at 180 lessons, 1.8s latency)
+  - Rerank arc integrated into tiered search pipeline with configurable model + fallback
+  - 7 sprints
+
+**In Progress:**
+- [ ] **Phase 13**: Multi-Agent Coordination Protocol
+  - **Artifact ownership / leasing** — agents claim exclusive write access to a named target for a bounded time window; other agents see what is claimed, by whom, and for how long; prevents duplicate work and concurrent write conflicts without central orchestration
+  - **Review-request state** — a new `pending-review` lesson lifecycle step, distinct from `draft`; explicit agent-to-human handoff: submitting agent names the artifact and the human reviewer; triggers the Review Inbox queue with optional notification; no polling required
+  - **Domain taxonomy extension** — first-class support for custom lesson type hierarchies that map to external structured schemas (governance audits, compliance checklists, methodology sections); initial reference implementation uses Dead Light Framework's Phase 0 document structure (`reckoning-finding`, `candidate-decision`, `failure-candidate`, `implicit-principle`, `codex-guardrail`) as the motivating case
 
 **Intentionally Dropped:**
 - ~~Multi-Agent Passive Collection~~ — Parsing agent conversations costs tokens and captures noise. `add_lesson` captures verified conclusions explicitly.
@@ -319,7 +330,7 @@ We tested 8 embedding models and 8 reranker models ([full benchmark](docs/benchm
 | GUI Pages | 23 |
 | Database Migrations | 41 |
 | E2E Tests | 198+ (adds 15 Phase-11 tests; all passing) |
-| Development Phases | **11/11 complete** |
+| Development Phases | **12 complete · Phase 13 in progress** |
 
 ---
 

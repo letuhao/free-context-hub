@@ -1,7 +1,7 @@
 # ContextHub (Self-Hosted) White Paper
 
 ## Status
-Draft v0.4 (Phase 11 complete — 2026-04-18)
+Draft v0.5 (Phase 12 complete — 2026-04-19 · Phase 13 in progress — 2026-05-14)
 
 ## Abstract
 ContextHub is a self-hosted, team-friendly system that gives MCP-enabled AI coding agents **persistent memory and guardrails across sessions**. It is designed for small teams that want the essential productivity benefits of [ContextStream](https://contextstream.io/)-like workflows, without requiring a hosted SaaS dependency.
@@ -415,6 +415,101 @@ The "Exchange Hub" vision, shipped as 9 sub-sprints:
 - **Perf polish**: ~99% SELECT-count reduction on import via batched `= ANY($1::uuid[])`
 
 61 API e2e + 1 GUI Playwright + 39 unit tests. All 9 sub-sprints shipped through the v2.2 12-phase workflow with `/review-impl` — 23+ findings caught across the phase, zero regressions in live reruns.
+
+### Phase 12: RAG Quality Measurement & Rerank Optimization — ✅ Complete
+
+Phases 1–11 optimized for feature completeness. Phase 12 adds **measurement infrastructure** so retrieval quality can be tracked, compared, and improved with evidence rather than intuition.
+
+- **Golden-set harness**: curated query → expected-lesson dataset; recall@k and MRR computed per run
+- **Latency budgets**: p50 / p95 latency gates alongside accuracy; no quality improvement that degrades latency beyond threshold
+- **Reranker arc**: 8 reranker models benchmarked at 180 lessons / 33 queries
+  - `qwen3-4b-instruct-ranker`: 85% pass, 1.8s latency — **recommended**
+  - Baseline (no rerank): 76% pass, 99ms — available for latency-sensitive deploys
+- **Pipeline integration**: reranker slot in tiered search with configurable model + graceful fallback when model unavailable
+- **Benchmark artifacts**: reproducible benchmark reports at `docs/benchmarks/`
+
+7 sprints. Embedding model benchmark (8 models) and reranker benchmark (8 models) documented and reproducible.
+
+### Phase 13: Multi-Agent Coordination Protocol — 🔄 In Progress
+
+**Motivation**
+
+Phases 1–12 treat agent coordination as implicit: multiple agents share the same `project_id`, search each other's lessons, and check the same guardrails. This works for asynchronous, non-conflicting work. It breaks down when agents work in parallel on the same artifacts: two agents can produce contradictory findings, overwrite each other's drafts, or both block waiting for the same human review without either knowing the other is waiting.
+
+The specific failure modes Phase 13 addresses:
+
+1. **Concurrent write conflicts** — two agents modify the same lesson or audit artifact simultaneously; last write wins silently.
+2. **Duplicate effort** — agent B starts work that agent A is already doing; no signal exists to prevent this.
+3. **Review queue opacity** — an agent submits a finding for human review by setting `status: draft`; the human has no structured way to distinguish "this is ready for your decision" from "this is still being worked on."
+4. **Taxonomy mismatch** — governance frameworks and audit methodologies have domain-specific artifact types (decisions, findings, failure candidates, implicit principles) that do not map to the generic `lesson_type` vocabulary; agents can only approximate these with tags, reducing retrievability and human readability.
+
+Phase 13 is motivated by integrating ContextHub with **Dead Light Framework** (a governance methodology for human + AI software teams), where all four failure modes appeared during the first Phase 0 audit pass. The solutions are general — not DLF-specific — but DLF provides the initial reference implementation and acceptance criteria.
+
+**Feature 1: Artifact Ownership / Leasing**
+
+An agent working on a named artifact (a lesson, a document section, a report entry) can claim a **lease**: a time-bounded, agent-attributed lock that signals ownership to other agents and humans.
+
+Design principles:
+- **Optimistic by default** — leases do not block reads or prevent writes; they signal intent and enable conflict detection, not hard serialization
+- **Time-bounded** — every lease carries a TTL; expired leases are automatically released; no manual cleanup required
+- **Visible** — a new GUI surface ("Active Work" panel) shows current leases per project: who owns what, how long remains, what they declared as their task
+
+MCP tools added:
+- `claim_artifact(artifact_id, task_description, ttl_minutes)` → returns `lease_id` or `conflict` if already claimed
+- `release_artifact(lease_id)` → explicit release before TTL expiry
+- `list_active_claims()` → current leases visible to all agents in project
+- `check_artifact_availability(artifact_id)` → non-blocking availability check before starting work
+
+**Feature 2: Review-Request State**
+
+The existing lesson lifecycle (`draft → active → superseded → archived`) does not distinguish between "I am still working on this" and "I finished — a human needs to decide." Phase 13 adds `pending-review` as an explicit intermediate state between `draft` and `active`.
+
+When an agent moves a lesson or finding to `pending-review`:
+- It names the artifact and optionally the intended reviewer
+- The artifact appears in a dedicated **Review Request queue** in the GUI, separate from the auto-generated Review Inbox
+- The submitting agent's identity and task description are attached
+- Optional: webhook or notification trigger for the named reviewer
+
+This directly implements the human-in-the-loop pattern required by governance methodologies where AI-produced findings must not be treated as confirmed without explicit human sign-off (e.g., Dead Light Framework Hard Stop HS-2: *no final entries without project-owner sign-off*).
+
+MCP tools updated:
+- `submit_for_review(lesson_id, reviewer_note)` → transitions to `pending-review`; creates Review Request record
+- `list_review_requests()` → returns pending-review queue with submitter, timestamp, and attached note
+- Existing `update_lesson_status` extended to accept `pending-review` as a valid target state
+
+**Feature 3: Domain Taxonomy Extension**
+
+The generic `lesson_type` field (`decision | preference | guardrail | workaround | general_note`) is sufficient for ad-hoc team knowledge but too coarse for structured methodologies. Phase 13 introduces **taxonomy profiles**: named sets of lesson types that map to a specific domain schema.
+
+A taxonomy profile is declared in project settings and activates:
+- Domain-specific lesson type labels in the GUI and MCP responses
+- Type-aware retrieval hints (e.g., searching for `reckoning-finding` types only, not `implicit-principle`)
+- Structured export: lessons grouped by type map directly to audit document sections
+
+**Dead Light Framework reference profile** (initial implementation):
+
+| DLF artifact | ContextHub type | Maps to |
+|---|---|---|
+| Past decision candidate | `candidate-decision` | Reckoning Record §2 entry |
+| Failure / architect-rot finding | `failure-candidate` | Reckoning Record §3 entry |
+| Implicit principle observation | `implicit-principle` | Reckoning Record §4 AI-aide contribution |
+| Current state observation | `reckoning-finding` | Reckoning Record §1 entry |
+| Codex rule (HS-* / N-*) | `codex-guardrail` | Guardrail derived from Codex |
+
+Additional profiles can be defined per-project without code changes. The DLF profile ships as a bundled example in `config/taxonomy-profiles/`.
+
+**What Phase 13 is not**
+
+- **Not a task orchestrator.** Phase 13 does not assign work to agents, schedule agent runs, or manage dependencies between tasks. It provides visibility and signaling primitives that agents and humans use to coordinate — coordination remains human-driven.
+- **Not passive monitoring.** Following the same reasoning as the dropped "Multi-Agent Passive Collection" feature: agents call `claim_artifact` and `submit_for_review` explicitly when they mean it. There is no background conversation parser.
+- **Not a messaging bus.** Agents do not send messages to each other directly. All coordination flows through the shared knowledge store and the human reviewer. This is intentional: the human remains the authority; agents signal to the human, not to each other.
+
+**Acceptance criteria (Phase 13 complete when)**
+
+- `claim_artifact` / `release_artifact` / `list_active_claims` MCP tools operational with TTL enforcement and conflict detection
+- `pending-review` state in lesson lifecycle with Review Request queue in GUI
+- Dead Light Framework taxonomy profile bundled and loadable via project settings
+- E2E tests covering: concurrent claim conflict, TTL expiry and auto-release, review-request → human-approval flow, taxonomy profile activation and type-filtered search
 
 ### What's deferred beyond Phase 11
 - Merge conflict policy (beyond skip/overwrite/fail)
