@@ -1,12 +1,179 @@
 ---
-id: SPRINT-13.1-AMAW-AUTONOMOUS-2026-05-15
+id: HANDOFF-2026-05-15-FULL-SESSION
 date: 2026-05-15
-branch: phase-13-dlf-coordination-amaw
 session_status: closed
-pushed_to_origin: false
+pushed_to_origin: true
+branches_touched:
+  - phase-13-dlf-coordination (canonical, push to origin)
+  - phase-13-dlf-coordination-amaw (experiment, push to origin)
+commits_this_session: 5 (3e29a85, ff3feaf, dc142ec, 1e36c95, 0c98166)
 ---
 
-# Session — 2026-05-15 (Sprint 13.1 — F1 Artifact Leasing, AMAW autonomous experiment)
+# Handoff — 2026-05-15 (long session: Phase 14 + workflow + Sprint 13.1 + audit + reframe)
+
+## TL;DR — 5 commits, 2 branches, 3 distinct work arcs
+
+| Arc | Branch | Commits | Outcome |
+|-----|--------|---------|---------|
+| **1. Phase 14: global model swap** | `phase-13-dlf-coordination` | `3e29a85` | mxbai-large → bge-m3 + qwen-coder → nemotron-3-nano. All projects re-embedded in-place. DEFERRED-002 RESOLVED. 8 AMAW findings caught (5 BLOCK). |
+| **2. Workflow refactor + bundle** | `phase-13-dlf-coordination` | `ff3feaf`, `dc142ec` | AMAW v3.0 reframed as OPT-IN (default = v2.2 human-in-loop). AUDIT_LOG.jsonl replaces `.phase-gates/*.gate`. agentic-workflow bundle v2.3 → portable. |
+| **3. Sprint 13.1 AMAW autonomous experiment + post-audit** | `phase-13-dlf-coordination-amaw` | `1e36c95`, `0c98166` | F1 artifact leasing shipped via 12-phase AMAW. 9 findings caught in loop. Post-audit found 7 MORE residuals (R1-R7) that AMAW missed — all fixed. AMAW reframed v3.1 (Autonomous→Adversarial). |
+
+## Arc 1: Phase 14 — Global model swap (commit `3e29a85`)
+
+Re-embedded both projects to new models:
+- `EMBEDDINGS_MODEL`: `mixedbread-ai/text-embedding-mxbai-embed-large-v1` (512 ctx) → `text-embedding-bge-m3` (8192 ctx, same 1024 dim)
+- `DISTILLATION_MODEL`: `qwen/qwen2.5-coder-14b` → `nvidia/nemotron-3-nano`
+- New `src/scripts/reembedAll.ts` (keyset-paginated, per-batch BEGIN/COMMIT, SIGINT handler, failed-IDs to file)
+- Scope addendum: nemotron reasoning model → 8-site `reasoning_content` fallback + JSON extractor hardened + max_tokens bumps + DISTILLATION_TIMEOUT_MS 12s→180s
+- Re-embed results: free-context-hub (2069 chunks + 638 lessons + 11 doc-chunks all OK), phase-13-coordination (3334 chunks + 2 lessons all OK), 0 failed IDs
+- AMAW: 3 design Adversary rounds + 2 code Adversary rounds + Scope Guard CLEAR
+- DEFERRED-001 ABANDONED (per-project routing); DEFERRED-002 RESOLVED (mxbai truncation eliminated)
+
+## Arc 2: Workflow refactor (commits `ff3feaf`, `dc142ec`)
+
+**ff3feaf — AMAW becomes opt-in:**
+- CLAUDE.md default workflow returns to v2.2 (human-in-loop)
+- AMAW v3.0 opt-in via `/amaw` or "use AMAW workflow"
+- `docs/audit/AUDIT_LOG.jsonl` (append-only JSONL) replaces `.phase-gates/*.gate` files
+- 19 Phase 14 events back-filled into AUDIT_LOG
+
+**dc142ec — agentic-workflow bundle v2.3:**
+- Self-contained portable bundle in `agentic-workflow/`
+- New: `AMAW.md` (opt-in spec), `.claude/commands/amaw.md` (slash command)
+- `install.sh` defaults include AMAW; `--no-amaw` to exclude
+- Tested in two temp dirs: full install (8 files), minimal install (4 files)
+
+## Arc 3: Sprint 13.1 — AMAW autonomous experiment (commits `1e36c95`, `0c98166`)
+
+**1e36c95 — Sprint 13.1 F1 artifact leasing core:**
+- 7 production files: migration 0048, service, REST router, 5 MCP tools, 19 unit tests, convention doc, core re-export
+- 5 MCP tools: `claim_artifact`, `release_artifact`, `renew_artifact`, `list_active_claims`, `check_artifact_availability`
+- Service-level atomic transaction (4 steps) with 23505 race retry + `race_exhausted` fallback
+- Per-batch FOR UPDATE in renew + tenant-isolated force-release
+- AMAW autonomous: 5 sub-agent calls (~400K tokens, ~$3-5), 9 findings (5 BLOCK + 4 WARN), all resolved within loop
+- Scope Guard POST-REVIEW: CLEAR, 12 ACs COVERED + 1 PARTIAL, no spec drift
+- BUILD-phase BLOCK discovered: Postgres rejects `now()` in index predicate (STABLE not IMMUTABLE) → migration redesigned to full UNIQUE; service step-1 DELETE preserves semantics
+
+**0c98166 — Sprint 13.1 post-audit:**
+After "autonomous" framing was questioned, audit revealed 7 residuals AMAW missed:
+
+| # | Sev | Finding | Why AMAW missed |
+|---|-----|---------|-----------------|
+| R1 | MED | Attempt-rate limit (20/min) per `phase-13-design.md:228` not implemented | Cross-file context — broader phase doc not in Adversary prompt |
+| R2 | HIGH | Code committed but container ran OLD image (404 on REST) | Scope Guard checked code, not deployment |
+| R3 | MED | No end-to-end smoke against deployed stack | Same — deploy-state blind spot |
+| R4 | LOW | `schema_migrations` registry missing 0048 | Manual psql during BUILD bypassed runner |
+| R5 | LOW | `race_exhausted` path untested | Acknowledged rare; tracked as DEFERRED-003 |
+| R6 | LOW | Doc said "kebab-case" but regex allowed `_` | Spec drift in code-vs-doc |
+| R7 | LOW | `checkArtifactAvailability` validated type but not id format | Asymmetric across surface |
+
+All 7 fixed. 22/22 tests pass after fixes (added 3: attempt-rate cap, per-agent independence, R7 validation).
+
+**AMAW v3.1 reframe — bundle v2.4:**
+- Renamed `Autonomous Multi-Agent Workflow` → `Adversarial Multi-Agent Workflow`
+- Honest framing: AMAW does NOT eliminate humans — it shifts human role from per-task to per-sprint boundaries
+- 2 systematic blind spots documented as MANDATORY human checks:
+  - **Deploy-state vs source-state:** post-COMMIT smoke check against deployed stack required
+  - **Cross-file context:** Adversary prompts must include broader phase doc, not just immediate spec
+- MCP lesson `7e6c6b27` captures lessons for future agents
+
+## Files changed (full session)
+
+### Production code (8 files new, 11 modified)
+
+**New:**
+- `migrations/0048_artifact_leases.sql`
+- `src/services/artifactLeases.ts` + `.test.ts`
+- `src/api/routes/artifactLeases.ts`
+- `src/scripts/reembedAll.ts`
+- `docs/audit/AUDIT_LOG.jsonl`
+- `agentic-workflow/AMAW.md`
+- `agentic-workflow/.claude/commands/amaw.md`
+
+**Modified:**
+- `.env` (model swap)
+- `src/services/distiller.ts` + `lessons.ts` + `lessonImprover.ts` + `documentLessonGenerator.ts` + `builderMemory.ts` + `qaAgent.ts` + `retriever.ts` (reasoning_content fallback x8 sites + max_tokens bumps)
+- `src/mcp/index.ts` (5 new MCP tools + 3 schemas → discriminatedUnion)
+- `src/api/index.ts` (mount artifactLeasesRouter)
+- `src/core/index.ts` (re-export 6 service fns)
+- `CLAUDE.md` (workflow refactor)
+- `agentic-workflow/README.md` + `WORKFLOW.md` + `CLAUDE.md.snippet` + `install.sh`
+- `docs/phase-13-design.md` (route superseded note)
+- `docs/deferred/DEFERRED.md` (DEFERRED-001 ABANDONED, DEFERRED-002 RESOLVED, DEFERRED-003 added)
+- `docs/amaw-workflow.md` (path migration note)
+- `docs/artifact-id-convention.md` (R6 clarification)
+
+### Specs/plans/audit (15+ new files)
+- `docs/specs/2026-05-14-phase-14-{spec,design}.md`
+- `docs/plans/2026-05-14-phase-14-plan.md`
+- `docs/specs/2026-05-15-phase-13-sprint-13.1-{clarify,design}.md`
+- `docs/plans/2026-05-15-phase-13-sprint-13.1-plan.md`
+- `docs/qc/baselines/2026-05-14-phase-14-bge-m3-nemotron.{json,md}`
+- `docs/audit/findings-sprint-13.1-{r1,r2,code-r1,code-r2,post-review}.md`
+- `docs/audit/sprint-13.1-residuals.md`
+
+## MCP lessons added this session
+
+| Lesson ID | Type | Title |
+|-----------|------|-------|
+| `0b6140ed-baad-4441-a304-aa7f848391b2` | decision | Phase 14 model swap: global to bge-m3 + nemotron-3-nano |
+| `d1feefef-fffc-4604-b87f-6335a0399045` | decision | Sprint 13.1 — F1 Artifact Leasing Core shipped via full AMAW autonomous run |
+| `7e6c6b27-a834-4f01-af22-82e6179ec863` | decision | AMAW reframe v3.1 — not autonomous, just shifts human role from per-task to per-sprint |
+
+Plus `ecd2d610-1cdd-481f-bf4f-ef9f0ab356d8` (Phase 14 stale defer) superseded by `0b6140ed`.
+
+## Operational state at session close
+
+- Both branches pushed to origin
+- `.workflow-state.json` at `retro` for Sprint 13.1 (all 12 phases done)
+- mcp + worker running new image (verified: 5 MCP tools live, REST endpoints 200 OK)
+- 22/22 unit tests for artifactLeases pass; `tsc --noEmit` clean
+- pre-Phase-14 pg_dump still at `backups/2026-05-15-pre-phase14.dump` (49MB)
+
+## Key findings about AMAW from this session
+
+**What AMAW catches well (sub-agent strengths):**
+- Concurrency edge cases (tenant isolation, race conditions)
+- Type/contract mismatches (flat vs discriminated schemas)
+- Architectural drift (handler bypassing service module)
+- Subtle correctness bugs (renew silent no-op at cap, missing fs import)
+- 14/16 distinct findings across both phases were genuine BLOCKs or substantive WARNs
+
+**What AMAW misses (mandatory human / process gaps):**
+1. **Deploy-state vs source-state** — Scope Guard verifies code, not running deployment
+2. **Cross-file context** — Sub-agents read ONLY files in their prompt; specs in adjacent files invisible
+3. **Strategic judgment** — "Is this addendum acceptable?" requires user context
+4. **Product judgment** — "Is 240-min cap right?" no agent has this answer
+5. **Stopping conditions** — Calibration of "enough review rounds" still requires taste
+
+**Calibration learned:**
+- AMAW is `~$3-5 / sprint` (5-6 sub-agent calls)
+- 2 rounds reaches diminishing returns; round 3 typically only catches typo-level issues
+- ROI is good for L+ tasks (multi-system, schema, security); overkill for XS/S
+- Reframe: "concentrates human review at sprint boundaries" — same total human time, just shifted
+
+## What's next
+
+**Branches state:**
+- `phase-13-dlf-coordination` at `dc142ec` (canonical) — Phase 14 + workflow + bundle, no Sprint 13.1
+- `phase-13-dlf-coordination-amaw` at `0c98166` (experiment) — adds Sprint 13.1 + post-audit
+
+**Open questions for next session:**
+1. Sprint 13.2 (F1 TTL sweep + GUI) — start on `-amaw` branch with reframe applied, OR pause to review more
+2. Should `phase-13-dlf-coordination-amaw` merge back to `phase-13-dlf-coordination`? Or keep separate as experiment audit trail
+3. If continuing Sprint 13.2: apply the 2 blind-spot mitigations:
+   - Include `docs/phase-13-design.md` in Adversary prompts (cross-file context)
+   - Add post-COMMIT deploy-state smoke as workflow step
+
+**Continuation prompts (if resuming):**
+- "Sprint 13.2 với AMAW mode" → start TTL sweep + GUI work
+- "review and merge -amaw back to main branch" → integrate experiment
+- "post-mortem AMAW autonomous run" → deeper analysis of cost/benefit
+
+---
+
+
 
 ## TL;DR
 
