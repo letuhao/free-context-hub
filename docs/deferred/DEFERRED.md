@@ -1,7 +1,21 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 006 -->
+<!-- Next ID: 007 -->
+
+## DEFERRED-006
+
+- **What:** Integration-level smoke verification of `requireScope` 403 path under `MCP_AUTH_ENABLED=true`. Sprint 13.2 design Section 7 specified a 4-step smoke (steps 10a-10d) using a `docker-compose.auth-test.yml` override to verify: (10a) admin env-var token → 200 on force-release; (10b) writer DB key → 403 on force-release; (10c) reader key → 403; (10d) cross-tenant admin scope → 403. The Sprint 13.2 implementation has the unit-level coverage (requireScope.test.ts, me.test.ts) but the docker-compose override was never created and the end-to-end smoke was never run. Only the unauth-mode smoke ran in POST-REVIEW.
+- **Why deferred:** Setting up a separate docker-compose profile + seeding DB-backed API keys for the smoke is moderate effort that overlaps directly with the Sprint 13.7 E2E test plan. Combining the work in 13.7 is cleaner than duplicating it twice.
+- **Trigger condition:** Sprint 13.7 E2E test plan implementation. Tests should cover: env_token vs db_key paths on /api/me; requireScope 403 on cross-tenant force-release; requireRole 403 on writer attempting admin route. Cover all three identity types from the v4 design.
+- **Estimated size:** S-M (docker-compose override + seed script + 4-6 e2e test cases).
+- **Priority:** MED — backend code is reachable for cross-tenant exploits today (mitigated by the GUI + unit tests). Production deployments using MCP_AUTH_ENABLED=true should be advised to wait for 13.7 E2E sign-off before depending on scope enforcement.
+- **Session deferred:** 2026-05-15
+- **Sessions open:** 1
+- **Status:** OPEN
+- **Source:** Sprint 13.2 post-sprint audit (residual R2). Adversary noted: "cross-tenant force-release 403 path has zero integration-level verification — only unit-mocked tests at requireScope.test.ts."
+
+---
 
 ## DEFERRED-005
 

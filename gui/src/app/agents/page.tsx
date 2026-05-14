@@ -399,6 +399,9 @@ function ActiveWorkPanel() {
   const [currentRole, setCurrentRole] = useState<string | null>(null);
   const [currentScope, setCurrentScope] = useState<string | null>(null);
   const [authEnabled, setAuthEnabled] = useState<boolean | null>(null);
+  // post-audit R3 fix: keySource was dropped from v4 impl — restore it so
+  // env_token mode is observable in the GUI banner.
+  const [keySource, setKeySource] = useState<string | null>(null);
 
   // Ticker for live countdown of seconds_remaining
   const [, setNowTick] = useState(0);
@@ -415,25 +418,26 @@ function ActiveWorkPanel() {
         setCurrentRole(me.role ?? null);
         setCurrentScope(me.project_scope ?? null);
         setAuthEnabled(me.auth_enabled ?? null);
+        setKeySource(me.key_source ?? null);
       })
       .catch(() => {
         setCurrentRole(null);
         setCurrentScope(null);
         setAuthEnabled(null);
+        setKeySource(null);
       });
   }, []);
 
-  // Role+scope predicates
+  // post-audit R1 fix: header presence now only checks role. Per-row decides
+  // button vs em-dash based on row's project vs caller's scope. This restores
+  // the v4 design narrative (line 928) — scoped admin in "All Projects" mode
+  // sees a MIXED table: force-release for in-scope rows, em-dash for others.
   const canForceReleaseRow = useCallback(
     (rowProjectId: string) =>
       currentRole === "admin" && (currentScope === null || currentScope === rowProjectId),
     [currentRole, currentScope],
   );
-  const headerShowsForceRelease = useMemo(() => {
-    if (currentRole !== "admin") return false;
-    if (currentScope === null) return true;
-    return !isAllProjects && currentScope === projectId;
-  }, [currentRole, currentScope, isAllProjects, projectId]);
+  const headerShowsForceRelease = currentRole === "admin";
 
   const fetchClaims = useCallback(async () => {
     if (!projectsLoaded) return;
@@ -537,12 +541,22 @@ function ActiveWorkPanel() {
         </div>
       </div>
 
+      {/* post-audit R3 fix: banner now distinguishes no_auth from env_token */}
       {authEnabled === false && (
         <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
           <AlertTriangle size={14} className="mt-0.5 shrink-0" />
           <span>
             Authentication is disabled — all UI actions are unrestricted (dev mode). In production
             set <code className="font-mono text-[10px]">MCP_AUTH_ENABLED=true</code>.
+          </span>
+        </div>
+      )}
+      {authEnabled === true && keySource === "env_token" && (
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+          <span>
+            Connected via the shared env-var token (admin scope, no per-user audit). For better
+            traceability, prefer DB-backed API keys with explicit roles.
           </span>
         </div>
       )}

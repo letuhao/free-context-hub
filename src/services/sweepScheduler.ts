@@ -82,46 +82,56 @@ export function startSweepScheduler(opts: StartSweepOptions = {}): SweepHandle {
 
   const cycle = async (): Promise<void> => {
     if (stopped) return;
+    // post-audit R4 fix: outer try/finally guarantees the cycle re-schedules
+    // itself even on synchronous throws from _getDbPool() (env regression,
+    // pool init failure). Inner work is in its own try/catch for log/release.
     let gotLock = false;
-    const pool = _getDbPool();
-    const client = await pool.connect().catch(() => null);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let client: any = null;
     try {
-      if (!client) {
-        logger.error({ event: 'leases_sweep_pool_unavailable' }, 'db pool unavailable; will retry next interval');
-        return;
+      try {
+        const pool = _getDbPool();
+        client = await pool.connect().catch(() => null);
+        if (!client) {
+          logger.error({ event: 'leases_sweep_pool_unavailable' }, 'db pool unavailable; will retry next interval');
+          return;
+        }
+        const r = await client.query(
+          `SELECT pg_try_advisory_lock($1::bigint) AS acquired`,
+          [LEASES_SWEEP_ADVISORY_KEY.toString()],
+        );
+        gotLock = r.rows[0]?.acquired === true;
+        if (!gotLock) {
+          logger.info({ event: 'leases_sweep_skip_not_leader' }, 'another replica scheduled sweep this cycle');
+          return;
+        }
+        const enq = await _enqueueJob({
+          job_type: 'leases.sweep',
+          payload: { grace_minutes: grace },
+          correlation_id: `sweep-${Date.now()}`,
+        });
+        logger.info(
+          { event: 'leases_sweep_enqueued', job_id: enq.job_id, backend: enq.backend },
+          'leases.sweep scheduled',
+        );
+      } catch (err) {
+        logger.error(
+          { event: 'leases_sweep_cycle_failed', err: err instanceof Error ? err.message : String(err) },
+          'leases.sweep cycle failed; will retry next interval',
+        );
+      } finally {
+        if (gotLock && client) {
+          await client
+            .query(`SELECT pg_advisory_unlock($1::bigint)`, [LEASES_SWEEP_ADVISORY_KEY.toString()])
+            .catch(() => {
+              /* swallow — Postgres releases on disconnect anyway */
+            });
+        }
+        if (client) client.release();
       }
-      const r = await client.query<{ acquired: boolean }>(
-        `SELECT pg_try_advisory_lock($1::bigint) AS acquired`,
-        [LEASES_SWEEP_ADVISORY_KEY.toString()],
-      );
-      gotLock = r.rows[0]?.acquired === true;
-      if (!gotLock) {
-        logger.info({ event: 'leases_sweep_skip_not_leader' }, 'another replica scheduled sweep this cycle');
-        return;
-      }
-      const enq = await _enqueueJob({
-        job_type: 'leases.sweep',
-        payload: { grace_minutes: grace },
-        correlation_id: `sweep-${Date.now()}`,
-      });
-      logger.info(
-        { event: 'leases_sweep_enqueued', job_id: enq.job_id, backend: enq.backend },
-        'leases.sweep scheduled',
-      );
-    } catch (err) {
-      logger.error(
-        { event: 'leases_sweep_enqueue_failed', err: err instanceof Error ? err.message : String(err) },
-        'leases.sweep enqueue failed; will retry next interval',
-      );
     } finally {
-      if (gotLock && client) {
-        await client
-          .query(`SELECT pg_advisory_unlock($1::bigint)`, [LEASES_SWEEP_ADVISORY_KEY.toString()])
-          .catch(() => {
-            /* swallow — Postgres releases on disconnect anyway */
-          });
-      }
-      if (client) client.release();
+      // Outermost finally: ALWAYS reschedule (unless stopped). Guards against
+      // any escape from the inner try/catch/finally including synchronous throws.
       if (!stopped) {
         timer = setTimeout(() => {
           void cycle();
