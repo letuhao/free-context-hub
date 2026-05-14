@@ -26,6 +26,7 @@ import { lessonTypesRouter } from './routes/lessonTypes.js';
 import { auditRouter } from './routes/audit.js';
 import { apiKeysRouter } from './routes/apiKeys.js';
 import { artifactLeasesRouter } from './routes/artifactLeases.js';  // Phase 13 Sprint 13.1
+import { meRouter } from './routes/me.js';                          // Phase 13 Sprint 13.2
 
 /**
  * Creates the REST API Express app.
@@ -70,6 +71,8 @@ export function createApiApp() {
   app.use('/api', bearerAuth);
 
   // ── Routes: read (reader+) ──
+  // Phase 13 Sprint 13.2: identity-context endpoint for GUI role/scope checks
+  app.use('/api/me', meRouter);
   app.use('/api/lessons', lessonsRouter);
   app.use('/api/search', searchRouter);
   app.use('/api/guardrails', guardrailsRouter);

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useProject } from "@/contexts/project-context";
-import { api } from "@/lib/api";
+import { api, type LeaseSummary } from "@/lib/api";
 import { relTime } from "@/lib/rel-time";
 import { Breadcrumb, StatCard, Button } from "@/components/ui";
 import { StatCardSkeleton } from "@/components/ui/loading-skeleton";
@@ -10,7 +10,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
 import { ProjectBadge } from "@/components/project-badge";
-import { Plus, Shield, Edit3, Search, Ban, Check, X } from "lucide-react";
+import { Plus, Shield, Edit3, Search, Ban, Check, X, AlertTriangle, RefreshCw } from "lucide-react";
 
 interface AuditEntry {
   id: string;
@@ -269,6 +269,11 @@ export default function AgentAuditPage() {
         </div>
       )}
 
+      {/* Phase 13 Sprint 13.2 — Active Work panel (artifact leases) */}
+      <div className="mt-12 border-t border-zinc-800 pt-8">
+        <ActiveWorkPanel />
+      </div>
+
       {/* Agent Detail Slide-over */}
       {selectedAgent && (
         <>
@@ -357,6 +362,271 @@ export default function AgentAuditPage() {
                 <p className="text-xs text-zinc-600">Loading agent details...</p>
               </div>
             )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Phase 13 Sprint 13.2 — Active Work panel
+// ──────────────────────────────────────────────────────────────────────────
+// Lists currently-active artifact leases. Auto-refreshes every 10s when the
+// tab is visible. Force-release column visibility is gated on role+scope:
+//   - role must be 'admin'
+//   - scope must be either null (global) or match the row's project_id
+// An auth-disabled banner surfaces production-misconfiguration risk per
+// Sprint 13.2 design v4 §8 (post-Adversary r3 BLOCK 1).
+// ──────────────────────────────────────────────────────────────────────────
+
+interface LeaseRow extends LeaseSummary {
+  _project_id: string;
+}
+
+function ActiveWorkPanel() {
+  const { projectId, isAllProjects, effectiveProjectIds, projectsLoaded } = useProject();
+  const { toast } = useToast();
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
+
+  const [claims, setClaims] = useState<LeaseRow[]>([]);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [confirmRelease, setConfirmRelease] = useState<{ leaseId: string; projectId: string; artifactId: string } | null>(null);
+
+  // Identity context (loaded once on mount)
+  const [currentRole, setCurrentRole] = useState<string | null>(null);
+  const [currentScope, setCurrentScope] = useState<string | null>(null);
+  const [authEnabled, setAuthEnabled] = useState<boolean | null>(null);
+
+  // Ticker for live countdown of seconds_remaining
+  const [, setNowTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setNowTick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Fetch identity once on mount
+  useEffect(() => {
+    api
+      .getCurrentUser()
+      .then((me) => {
+        setCurrentRole(me.role ?? null);
+        setCurrentScope(me.project_scope ?? null);
+        setAuthEnabled(me.auth_enabled ?? null);
+      })
+      .catch(() => {
+        setCurrentRole(null);
+        setCurrentScope(null);
+        setAuthEnabled(null);
+      });
+  }, []);
+
+  // Role+scope predicates
+  const canForceReleaseRow = useCallback(
+    (rowProjectId: string) =>
+      currentRole === "admin" && (currentScope === null || currentScope === rowProjectId),
+    [currentRole, currentScope],
+  );
+  const headerShowsForceRelease = useMemo(() => {
+    if (currentRole !== "admin") return false;
+    if (currentScope === null) return true;
+    return !isAllProjects && currentScope === projectId;
+  }, [currentRole, currentScope, isAllProjects, projectId]);
+
+  const fetchClaims = useCallback(async () => {
+    if (!projectsLoaded) return;
+    setLoading(true);
+    try {
+      if (isAllProjects && effectiveProjectIds.length > 0) {
+        const results = await Promise.all(
+          effectiveProjectIds.map((pid) =>
+            api
+              .listActiveLeases(pid)
+              .then((r) => ({ pid, claims: r.claims ?? [] }))
+              .catch(() => ({ pid, claims: [] as LeaseSummary[] })),
+          ),
+        );
+        const rows: LeaseRow[] = results.flatMap(({ pid, claims }) =>
+          claims.map((c) => ({ ...c, _project_id: pid })),
+        );
+        setClaims(rows);
+      } else if (projectId) {
+        const r = await api.listActiveLeases(projectId);
+        setClaims((r.claims ?? []).map((c) => ({ ...c, _project_id: projectId })));
+      } else {
+        setClaims([]);
+      }
+      setLastUpdated(new Date());
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId, isAllProjects, effectiveProjectIds, projectsLoaded]);
+
+  // 10s auto-refresh, paused when tab is hidden
+  useEffect(() => {
+    fetchClaims();
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") fetchClaims();
+    }, 10_000);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") fetchClaims();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [fetchClaims]);
+
+  const handleForceRelease = async (leaseId: string, projectIdForLease: string) => {
+    try {
+      await api.forceReleaseLease(projectIdForLease, leaseId);
+      toastRef.current("success", "Lease force-released");
+      await fetchClaims();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("403")) {
+        toastRef.current("error", "Admin role required to force-release");
+      } else {
+        toastRef.current("error", "Force-release failed");
+      }
+    } finally {
+      setConfirmRelease(null);
+    }
+  };
+
+  const computeRemaining = (expiresAt: string): number => {
+    const ms = new Date(expiresAt).getTime() - Date.now();
+    return Math.max(0, Math.floor(ms / 1000));
+  };
+
+  const formatRemaining = (seconds: number): string => {
+    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    return `${h}h ${m}m`;
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-base font-semibold text-zinc-100">Active Work</h2>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            Artifact leases currently held by agents. Refreshes every 10 seconds.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          {lastUpdated && (
+            <span className="text-[10px] text-zinc-600">
+              Updated {relTime(lastUpdated.toISOString())}
+            </span>
+          )}
+          <button
+            onClick={fetchClaims}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs text-zinc-300 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 disabled:opacity-50"
+            aria-label="Refresh active work list"
+          >
+            <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      {authEnabled === false && (
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+          <span>
+            Authentication is disabled — all UI actions are unrestricted (dev mode). In production
+            set <code className="font-mono text-[10px]">MCP_AUTH_ENABLED=true</code>.
+          </span>
+        </div>
+      )}
+
+      {claims.length === 0 ? (
+        <div className="py-12 text-center text-xs text-zinc-600">
+          No active work claims — agents are not currently claiming artifacts.
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-zinc-800">
+          <table className="min-w-full text-xs">
+            <thead className="bg-zinc-900/50 text-zinc-500">
+              <tr>
+                {isAllProjects && (
+                  <th className="px-3 py-2 text-left font-medium">Project</th>
+                )}
+                <th className="px-3 py-2 text-left font-medium">Artifact</th>
+                <th className="px-3 py-2 text-left font-medium">Type</th>
+                <th className="px-3 py-2 text-left font-medium">Agent</th>
+                <th className="px-3 py-2 text-left font-medium">Task</th>
+                <th className="px-3 py-2 text-left font-medium">Remaining</th>
+                {headerShowsForceRelease && (
+                  <th className="px-3 py-2 text-right font-medium">Action</th>
+                )}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-800/70">
+              {claims.map((c) => {
+                const remaining = computeRemaining(c.expires_at);
+                const canRelease = canForceReleaseRow(c._project_id);
+                return (
+                  <tr key={c.lease_id} className="hover:bg-zinc-900/40">
+                    {isAllProjects && (
+                      <td className="px-3 py-2 text-zinc-400">{c._project_id}</td>
+                    )}
+                    <td className="px-3 py-2 font-mono text-zinc-200">{c.artifact_id}</td>
+                    <td className="px-3 py-2 text-zinc-400">{c.artifact_type}</td>
+                    <td className="px-3 py-2 text-zinc-300">{c.agent_id}</td>
+                    <td className="px-3 py-2 text-zinc-400 max-w-md truncate" title={c.task_description}>
+                      {c.task_description}
+                    </td>
+                    <td className={cn(
+                      "px-3 py-2 font-mono",
+                      remaining < 60 ? "text-amber-400" : "text-zinc-300",
+                    )}>
+                      {formatRemaining(remaining)}
+                    </td>
+                    {headerShowsForceRelease && (
+                      <td className="px-3 py-2 text-right">
+                        {canRelease ? (
+                          <button
+                            onClick={() => setConfirmRelease({ leaseId: c.lease_id, projectId: c._project_id, artifactId: c.artifact_id })}
+                            className="text-[10px] px-2 py-0.5 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20"
+                          >
+                            Force-release
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-zinc-700">—</span>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Confirm modal */}
+      {confirmRelease && (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" onClick={() => setConfirmRelease(null)} />
+          <div className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-96 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-5">
+            <h3 className="text-sm font-semibold text-zinc-100 mb-2">Force-release lease?</h3>
+            <p className="text-xs text-zinc-400 mb-4">
+              This will release the lease on <span className="font-mono text-zinc-200">{confirmRelease.artifactId}</span> regardless of which agent owns it. The agent currently holding it will not be notified.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setConfirmRelease(null)}>Cancel</Button>
+              <Button variant="danger" size="sm" onClick={() => handleForceRelease(confirmRelease.leaseId, confirmRelease.projectId)}>
+                Force-release
+              </Button>
+            </div>
           </div>
         </>
       )}

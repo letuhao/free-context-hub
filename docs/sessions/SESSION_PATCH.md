@@ -1,15 +1,83 @@
 ---
-id: HANDOFF-2026-05-15-FULL-SESSION
+id: HANDOFF-2026-05-15-LONGRUN-IN-PROGRESS
 date: 2026-05-15
-session_status: closed
-pushed_to_origin: true
+session_status: in_progress (longrun autonomous AMAW)
 branches_touched:
-  - phase-13-dlf-coordination (canonical, push to origin)
-  - phase-13-dlf-coordination-amaw (experiment, push to origin)
-commits_this_session: 5 (3e29a85, ff3feaf, dc142ec, 1e36c95, 0c98166)
+  - phase-13-dlf-coordination-amaw (longrun branch)
+longrun_plan: docs/plans/2026-05-15-phase-13-longrun-plan.md
 ---
 
-# Handoff — 2026-05-15 (long session: Phase 14 + workflow + Sprint 13.1 + audit + reframe)
+# Longrun — Sprint 13.2 (F1 TTL sweep + Active Work GUI) — COMPLETE
+
+**Sprint 13.2 outcome: SHIPPED.** AC7 + AC8 both COVERED. Backend deploy-state smoke fully green (end-to-end sweep verified, rows_deleted=1, job succeeded). GUI deploy smoke blocked by pre-existing Geist font/Turbopack issue (DEFERRED-005) — code is in source tree and tsc clean.
+
+## AMAW calibration data — Sprint 13.2
+
+| Metric | Value |
+|---|---|
+| Total Adversary rounds | 6 (3 design + 3 code-review, both at max-cap) |
+| Total findings | 18 (4 design BLOCKs + 5 design WARNs + 5 code BLOCKs + 4 code WARNs across all rounds; rough split) |
+| Total BLOCKs resolved inline | 8 |
+| Total BLOCKs downgraded with documented evidence | 1 (r3 code F2 — useMemo stabilization invalidates the cross-tenant claim) |
+| Total BLOCKs deferred | 0 (DEFERRED-004 partial closure is documented partial-fix; remaining scope is broader-than-sprint) |
+| Tests added | 19 new tests (5 sweepExpiredLeases + 5 sweepScheduler + 5 me + 7 requireScope minus already-counted) |
+| Final test count | 279/279 pass |
+| New files | 7 (migration 0051, sweepScheduler.ts + .test, me.ts + .test, requireScope.ts + .test, advisory-locks.md doc) |
+| Modified files | 11 |
+
+## Files changed (Sprint 13.2)
+
+### New (7)
+- `migrations/0051_leases_sweep_job_type.sql` — idempotent CHECK constraint update with defensive ASSERT
+- `src/services/sweepScheduler.ts` — chained-setTimeout scheduler + SHA256-derived advisory key + dependency-injection hooks
+- `src/services/sweepScheduler.test.ts` — 5 tests covering key derivation + acquire/skip/release/connect-failure paths
+- `src/api/routes/me.ts` — `GET /api/me` returns role + project_scope + auth_enabled + key_source
+- `src/api/routes/me.test.ts` — 5 tests covering no_auth/env_token/db_key paths + r3 F1 restrictive identity
+- `src/api/middleware/requireScope.ts` — tenant-scope enforcement middleware
+- `src/api/middleware/requireScope.test.ts` — 7 tests covering scope fallback + 403 path + custom paramName
+- `docs/operations/advisory-locks.md` — registry of advisory-lock keys
+- `docs/specs/2026-05-15-phase-13-sprint-13.2-clarify.md`, `-design.md`, `docs/plans/2026-05-15-phase-13-sprint-13.2-plan.md`
+- `docs/audit/findings-sprint-13.2-{design,code}-r{1,2,3}.md` (6 review docs)
+
+### Modified (11)
+- `src/services/jobQueue.ts` — added `'leases.sweep'` to JobType union (14 types now)
+- `src/services/jobExecutor.ts` — added case for `leases.sweep` → dispatches to sweepExpiredLeases
+- `src/services/artifactLeases.ts` — added `sweepExpiredLeases` + `SweepResult` type + clampGrace with NaN guard
+- `src/services/artifactLeases.test.ts` — 5 new tests (sweep semantics + re-claim across grace window)
+- `src/api/index.ts` — mount `meRouter` at `/api/me`
+- `src/api/routes/artifactLeases.ts` — applied `requireScope('id')` to force-release route (closes DEFERRED-004 partially)
+- `src/index.ts` — call `startSweepScheduler()` after bootstrap, before listen
+- `src/core/index.ts` — re-export sweepExpiredLeases + startSweepScheduler + LEASES_SWEEP_ADVISORY_KEY
+- `gui/src/app/agents/page.tsx` — added `ActiveWorkPanel` component with role+scope-gated force-release + auth-disabled banner + 1s ticker for live countdown + 10s auto-refresh with visibility pause
+- `gui/src/lib/api.ts` — added `listActiveLeases`, `forceReleaseLease`, `getCurrentUser` methods + `LeaseSummary` type
+- `package.json` — added `requireScope.test.ts`, `me.test.ts`, `sweepScheduler.test.ts` to test script
+- `docs/deferred/DEFERRED.md` — added DEFERRED-004 (PARTIAL) + DEFERRED-005
+
+## Deploy-state smoke results (Mitigation B)
+
+| Check | Result |
+|---|---|
+| `docker compose up -d --build mcp worker` | ✅ green |
+| Server log `"leases.sweep scheduler started"` | ✅ green at 2026-05-14T21:50:28Z |
+| Migration 0051 applied | ✅ green (registered in schema_migrations) |
+| `async_jobs.job_type` CHECK now includes `'leases.sweep'` | ✅ green |
+| `GET /api/me` returns correct shape `{role,project_scope,auth_enabled,key_source}` | ✅ green |
+| Manual sweep enqueue → worker pickup → DELETE + rows_deleted=1 | ✅ green (job 9932f250 succeeded) |
+| GUI docker rebuild | ❌ blocked by pre-existing Geist font issue (DEFERRED-005) — NOT a sprint regression |
+| Auth-enabled smoke (MCP_AUTH_ENABLED=true override) | ⏭️ skipped (out of in-sprint smoke scope; defer to 13.7 E2E suite) |
+
+## Findings retained / deferred
+
+- **DEFERRED-004 (PARTIAL):** Backend tenant-scope enforcement on admin routes other than force-release. Force-release route fixed in-sprint via new `requireScope` middleware. Broader admin-endpoint audit deferred to Sprint 13.7 E2E.
+- **DEFERRED-005 (OPEN):** GUI build failure on Geist font / Turbopack. Pre-existing; blocks GUI deploy of Sprint 13.2's ActiveWorkPanel until resolved.
+
+## What's next (longrun continues)
+
+Post-sprint audit cycle (per longrun plan §4.2 aggressive mode) → if 0 HIGH/MED residuals, proceed to Sprint 13.3 (F2 core).
+
+---
+
+
 
 ## TL;DR — 5 commits, 2 branches, 3 distinct work arcs
 

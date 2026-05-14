@@ -662,4 +662,35 @@ export const api = {
     if (params.status) qs.set("status", params.status);
     return request<any>("GET", `/api/jobs?${qs.toString()}`);
   },
+
+  // ── Phase 13 Sprint 13.2: artifact-lease APIs + identity context ──
+  listActiveLeases: (projectId: string, artifactType?: string) => {
+    const path = `/api/projects/${encodeURIComponent(projectId)}/artifact-leases${
+      artifactType ? `?artifact_type=${encodeURIComponent(artifactType)}` : ""
+    }`;
+    return request<{ claims: LeaseSummary[] }>("GET", path);
+  },
+  forceReleaseLease: (projectId: string, leaseId: string) =>
+    request<{ status: "force_released" | "not_found" }>(
+      "DELETE",
+      `/api/projects/${encodeURIComponent(projectId)}/artifact-leases/${encodeURIComponent(leaseId)}/force`,
+    ),
+  getCurrentUser: () =>
+    request<{
+      role: "reader" | "writer" | "admin";
+      project_scope: string | null;
+      auth_enabled: boolean;
+      key_source: "no_auth" | "env_token" | "db_key";
+    }>("GET", "/api/me"),
 };
+
+// ── Phase 13 Sprint 13.2 types ──
+export interface LeaseSummary {
+  lease_id: string;
+  artifact_type: string;
+  artifact_id: string;
+  agent_id: string;
+  task_description: string;
+  expires_at: string;
+  seconds_remaining: number;
+}

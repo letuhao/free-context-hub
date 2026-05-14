@@ -10,6 +10,7 @@ import {
 } from './core/index.js';
 import { createMcpToolsServer } from './mcp/index.js';
 import { createApiApp } from './api/index.js';
+import { startSweepScheduler } from './services/sweepScheduler.js';  // Phase 13 Sprint 13.2
 
 const logger = createModuleLogger('main');
 
@@ -20,6 +21,11 @@ async function main() {
   await bootstrapKgIfEnabled().catch(err => {
     logger.error({ error: err instanceof Error ? err.message : String(err) }, 'kg bootstrap failed');
   });
+
+  // Phase 13 Sprint 13.2 — background TTL sweep for artifact_leases.
+  // Enqueues a leases.sweep job every 15 min; advisory-lock guards against
+  // N× cadence in multi-replica deployments. Worker executes the actual DELETE.
+  startSweepScheduler();
 
   // ── MCP Server (:3000) ──
   const mcpApp = createMcpExpressApp();

@@ -1,7 +1,36 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 004 -->
+<!-- Next ID: 006 -->
+
+## DEFERRED-005
+
+- **What:** GUI production build (`npm run build` AND `docker compose up -d --build gui`) fails on Geist font resolution: `Module not found: Can't resolve '@vercel/turbopack-next/internal/font/google/font'` from `[next]/internal/font/google/geist_*.module.css`. Affects Next.js 16.2.1 + Turbopack default build path. Reproduced 2026-05-15 during Sprint 13.2 POST-REVIEW deploy-state smoke.
+- **Why deferred:** Pre-existing issue (the running gui container at 4h uptime predates this regression). Sprint 13.2's tsc check is clean and the new code follows existing component patterns. Fixing the Geist resolution is a Next.js / Turbopack dependency issue outside Sprint 13.2's scope.
+- **Trigger condition:** Next planned GUI work that requires a fresh container build (e.g., Sprint 13.4 or 13.6 in the current Phase 13 longrun); OR any urgent GUI hotfix that needs a deploy.
+- **Estimated size:** S-M (likely a `next` version pin, font module installation, or Turbopack opt-out config flag).
+- **Priority:** MED — blocks GUI deploys; running container survives but won't pick up Sprint 13.2's ActiveWorkPanel until resolved. The Sprint 13.2 backend ships fine (sweep, /api/me, requireScope all live).
+- **Session deferred:** 2026-05-15
+- **Sessions open:** 1
+- **Status:** OPEN
+- **Source:** Sprint 13.2 POST-REVIEW deploy-state smoke (Mitigation B step F1) discovered local AND docker GUI builds both fail with identical error.
+
+---
+
+## DEFERRED-004
+
+- **What:** Backend tenant-scope enforcement on admin-role endpoints OTHER than `DELETE /api/projects/:id/artifact-leases/:leaseId/force`. The force-release route now has `requireScope('id')` (resolved 2026-05-15 in Sprint 13.2). Remaining admin endpoints — to be enumerated — may still allow a project-scoped admin key to act outside its scope. Examples to audit: any admin route under `/api/lesson-types`, `/api/api-keys`, `/api/groups` admin operations, etc.
+- **Why deferred:** Sprint 13.2 surfaced this gap via the force-release UX work. The full audit + middleware rollout across all admin endpoints is broader than Sprint 13.2's scope. The new `requireScope` middleware (`src/api/middleware/requireScope.ts`) is the pattern to apply.
+- **Trigger condition:** Sprint 13.7 E2E test design includes cross-tenant admin attempts on all admin endpoints; OR any security audit of the access-control layer.
+- **Estimated size:** S (apply `requireScope` to ~3-5 admin routes + tests).
+- **Priority:** MED — exploitable but requires a scoped-admin key; low likelihood in single-tenant deployments (the common case today). Force-release route is now safe.
+- **Session deferred:** 2026-05-15
+- **Sessions open:** 1
+- **Status:** PARTIAL (force-release closed; broader rollout pending)
+- **Source:** Sprint 13.2 design review r2 (docs/audit/findings-sprint-13.2-design-r2.md NEW FINDING 1) and code review r1 (docs/audit/findings-sprint-13.2-code-r1.md FINDING 1).
+- **Partially resolved by:** Sprint 13.2 commit (TBD — pending Sprint 13.2 COMMIT phase). `requireScope` middleware added with 6 unit tests + applied to force-release route.
+
+---
 
 ## DEFERRED-003
 

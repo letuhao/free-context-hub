@@ -404,7 +404,60 @@ function validateClaimInput(p: ClaimParams) {
 
 function clampTtl(ttlMinutes?: number): number {
   if (ttlMinutes === undefined || ttlMinutes === null) return DEFAULT_TTL_MINUTES;
+  // r3 WARN 3 fix: NaN / non-finite → default
+  if (!Number.isFinite(ttlMinutes)) return DEFAULT_TTL_MINUTES;
   if (ttlMinutes < 1) return 1;
   if (ttlMinutes > MAX_TTL_MINUTES) return MAX_TTL_MINUTES;
   return Math.floor(ttlMinutes);
+}
+
+// ── Sprint 13.2: TTL background sweep ─────────────────────────────────────
+//
+// Migration 0048 ships a FULL UNIQUE index on (project_id, artifact_type, artifact_id)
+// — the original partial-index design was rejected by Postgres because now() is
+// not IMMUTABLE. Consequence: expired-but-unswept rows occupy unique slots until
+// either the lazy step-1 DELETE inside claimArtifact runs (re-claim path) OR the
+// background sweep deletes them.
+//
+// The sweep is NOT redundant with the lazy cleanup — it is the only path that
+// removes expired rows for artifacts no agent ever re-claims (long-tail abandoned
+// leases). Without sweep, abandoned rows accumulate indefinitely.
+//
+// Grace window of 60 min preserves recently-expired rows briefly as debugging
+// convenience (per master design phase-13-design.md L234). Concurrent step-1
+// DELETE + sweep DELETE are safe: both target rows by primary-key path, conflicts
+// resolve to last-writer-wins with no observable effect.
+
+export type SweepResult = { rows_deleted: number; swept_at: string };
+
+const DEFAULT_SWEEP_GRACE_MIN = 60;
+const MAX_SWEEP_GRACE_MIN = 1440;
+
+/**
+ * Background sweep: delete leases that expired more than `grace_minutes` ago.
+ * Idempotent and concurrency-safe.
+ *
+ * @param params.grace_minutes  Lower bound on age before deletion. Defaults to 60.
+ *                              Clamped to [0, 1440].
+ */
+export async function sweepExpiredLeases(params?: { grace_minutes?: number }): Promise<SweepResult> {
+  const grace = clampGrace(params?.grace_minutes);
+  const pool = getDbPool();
+  const r = await pool.query(
+    `DELETE FROM artifact_leases
+     WHERE expires_at < now() - make_interval(mins => $1)`,
+    [grace],
+  );
+  const swept: SweepResult = { rows_deleted: r.rowCount ?? 0, swept_at: new Date().toISOString() };
+  logger.info(swept, 'leases.sweep complete');
+  return swept;
+}
+
+function clampGrace(graceMinutes?: number): number {
+  if (graceMinutes === undefined || graceMinutes === null) return DEFAULT_SWEEP_GRACE_MIN;
+  // r3 WARN 3 fix: NaN / non-finite → default rather than passing NaN to SQL
+  if (!Number.isFinite(graceMinutes)) return DEFAULT_SWEEP_GRACE_MIN;
+  if (graceMinutes < 0) return 0;
+  if (graceMinutes > MAX_SWEEP_GRACE_MIN) return MAX_SWEEP_GRACE_MIN;
+  return Math.floor(graceMinutes);
 }

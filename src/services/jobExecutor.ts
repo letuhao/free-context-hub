@@ -492,6 +492,13 @@ async function executeByType(
         pages: result.pages,
       };
     }
+    case 'leases.sweep': {
+      // Phase 13 Sprint 13.2 — background TTL sweep for artifact_leases.
+      // project_id is intentionally null/global; payload.grace_minutes is optional.
+      const { sweepExpiredLeases } = await import('./artifactLeases.js');
+      const graceMinutes = typeof payload.grace_minutes === 'number' ? payload.grace_minutes : 60;
+      return (await sweepExpiredLeases({ grace_minutes: graceMinutes })) as unknown as Record<string, unknown>;
+    }
     default:
       throw new Error(`Unsupported job type: ${String(jobType)}`);
   }

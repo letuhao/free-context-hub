@@ -9,6 +9,7 @@ import {
   resolveProjectIdOrThrow,
 } from '../../core/index.js';
 import { requireRole } from '../middleware/requireRole.js';
+import { requireScope } from '../middleware/requireScope.js';
 
 /**
  * Phase 13 Sprint 13.1 — Artifact leases REST routes.
@@ -111,7 +112,7 @@ router.patch('/:leaseId', requireRole('writer'), async (req, res, next) => {
   }
 });
 
-router.delete('/:leaseId/force', requireRole('admin'), async (req, res, next) => {
+router.delete('/:leaseId/force', requireRole('admin'), requireScope('id'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String((req.params as Record<string, string>).id ?? ''));
     const leaseId = String(req.params.leaseId);

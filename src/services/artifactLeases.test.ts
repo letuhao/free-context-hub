@@ -355,3 +355,128 @@ test('invalid artifact_type (typo or case) throws on claim', async () => {
     /artifact_type must be one of/,
   );
 });
+
+// ──────────────────────────────────────────────────────────────────────────
+// Sprint 13.2 — sweepExpiredLeases + re-claim invariant
+// ──────────────────────────────────────────────────────────────────────────
+
+import { sweepExpiredLeases } from './artifactLeases.js';
+
+async function insertExpiredLease(opts: {
+  project_id: string;
+  agent_id: string;
+  artifact_type: string;
+  artifact_id: string;
+  expired_minutes_ago: number;
+}) {
+  const pool = getDbPool();
+  await pool.query(
+    `INSERT INTO artifact_leases
+       (lease_id, project_id, agent_id, artifact_type, artifact_id,
+        task_description, ttl_minutes, expires_at, created_at)
+     VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 1, now() - make_interval(mins => $6), now() - make_interval(mins => $6 + 1))`,
+    [opts.project_id, opts.agent_id, opts.artifact_type, opts.artifact_id, 'test-expired', opts.expired_minutes_ago],
+  );
+}
+
+test('sweepExpiredLeases deletes only leases beyond grace window', async () => {
+  // fresh lease
+  await claimArtifact({
+    project_id: TEST_PROJECT, agent_id: 'sw-fresh',
+    artifact_type: 'custom', artifact_id: 'sw-fresh', task_description: 'fresh',
+  });
+  // expired 30 min ago (within 60-min grace — keep)
+  await insertExpiredLease({
+    project_id: TEST_PROJECT, agent_id: 'sw-30',
+    artifact_type: 'custom', artifact_id: 'sw-30m', expired_minutes_ago: 30,
+  });
+  // expired 90 min ago (beyond 60-min grace — delete)
+  await insertExpiredLease({
+    project_id: TEST_PROJECT, agent_id: 'sw-90',
+    artifact_type: 'custom', artifact_id: 'sw-90m', expired_minutes_ago: 90,
+  });
+
+  const result = await sweepExpiredLeases({ grace_minutes: 60 });
+  assert.equal(result.rows_deleted, 1, 'only the 90m-expired row should be deleted');
+
+  const pool = getDbPool();
+  const r = await pool.query(
+    `SELECT artifact_id FROM artifact_leases WHERE project_id = $1 ORDER BY artifact_id`,
+    [TEST_PROJECT],
+  );
+  const remaining = r.rows.map((x: { artifact_id: string }) => x.artifact_id).sort();
+  assert.deepEqual(remaining, ['sw-30m', 'sw-fresh'], 'fresh + 30m-expired should remain');
+});
+
+test('sweepExpiredLeases default grace 60min protects within-window leases', async () => {
+  await insertExpiredLease({
+    project_id: TEST_PROJECT, agent_id: 'sw-45',
+    artifact_type: 'custom', artifact_id: 'sw-45m', expired_minutes_ago: 45,
+  });
+  const result = await sweepExpiredLeases();
+  assert.equal(result.rows_deleted, 0, 'default grace should keep 45m-expired row');
+});
+
+test('sweepExpiredLeases clamps grace to [0, 1440]', async () => {
+  // expired 1 min ago — should be deleted when grace clamps to 0
+  await insertExpiredLease({
+    project_id: TEST_PROJECT, agent_id: 'sw-clamp-low',
+    artifact_type: 'custom', artifact_id: 'sw-clamp-low', expired_minutes_ago: 1,
+  });
+  const r1 = await sweepExpiredLeases({ grace_minutes: -10 });
+  assert.equal(r1.rows_deleted, 1, 'negative grace should clamp to 0 and delete the 1m-expired row');
+
+  // expired 25 hours ago (1500 min) — should be deleted when grace clamps to 1440
+  await insertExpiredLease({
+    project_id: TEST_PROJECT, agent_id: 'sw-clamp-high',
+    artifact_type: 'custom', artifact_id: 'sw-clamp-high', expired_minutes_ago: 1500,
+  });
+  const r2 = await sweepExpiredLeases({ grace_minutes: 99999 });
+  assert.equal(r2.rows_deleted, 1, 'oversized grace should clamp to 1440min and delete the 25h-expired row');
+});
+
+test('sweepExpiredLeases is concurrent-safe (Promise.all sweeps)', async () => {
+  // Insert 3 expired-beyond-grace rows
+  for (let i = 0; i < 3; i++) {
+    await insertExpiredLease({
+      project_id: TEST_PROJECT, agent_id: `sw-c-${i}`,
+      artifact_type: 'custom', artifact_id: `sw-conc-${i}`, expired_minutes_ago: 90,
+    });
+  }
+  const [r1, r2] = await Promise.all([
+    sweepExpiredLeases({ grace_minutes: 60 }),
+    sweepExpiredLeases({ grace_minutes: 60 }),
+  ]);
+  const totalDeleted = r1.rows_deleted + r2.rows_deleted;
+  assert.equal(totalDeleted, 3, 'two concurrent sweeps should together delete all 3 rows exactly once');
+  const pool = getDbPool();
+  const c = await pool.query(`SELECT COUNT(*)::int AS n FROM artifact_leases WHERE project_id = $1`, [TEST_PROJECT]);
+  assert.equal(c.rows[0].n, 0);
+});
+
+test('claim_artifact succeeds when previous lease expired but is still within grace window', async () => {
+  // Insert an expired-30-min-ago lease (within 60-min grace — sweep would skip)
+  await insertExpiredLease({
+    project_id: TEST_PROJECT, agent_id: 'stale-incumbent',
+    artifact_type: 'custom', artifact_id: 'reclaim-test', expired_minutes_ago: 30,
+  });
+
+  // Re-claim by a different agent — must succeed because step-1 DELETE clears
+  // the unique slot inside claimArtifact's transaction (NOT because sweep ran).
+  const r = await claimArtifact({
+    project_id: TEST_PROJECT, agent_id: 'new-claimant',
+    artifact_type: 'custom', artifact_id: 'reclaim-test', task_description: 'fresh-claim',
+  });
+  assert.equal(r.status, 'claimed', 'expired-but-ungraced lease must not block re-claim');
+
+  const pool = getDbPool();
+  const c = await pool.query(
+    `SELECT COUNT(*)::int AS n, agent_id FROM artifact_leases
+     WHERE project_id = $1 AND artifact_id = $2 AND expires_at > now()
+     GROUP BY agent_id`,
+    [TEST_PROJECT, 'reclaim-test'],
+  );
+  assert.equal(c.rows.length, 1, 'exactly one active row for this artifact');
+  assert.equal(c.rows[0].agent_id, 'new-claimant', 'new claimant owns the slot');
+  assert.equal(c.rows[0].n, 1);
+});

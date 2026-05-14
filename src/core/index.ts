@@ -33,7 +33,7 @@ export { tieredSearch } from '../services/tieredRetriever.js';
 export { addLesson, batchUpdateLessonStatus, deleteWorkspace, listLessons, listLessonVersions, searchLessons, searchLessonsMulti, updateLesson, updateLessonStatus } from '../services/lessons.js';
 export { checkGuardrails, listGuardrailRules, simulateGuardrails } from '../services/guardrails.js';
 
-// ── Services: artifact leases (Phase 13 Sprint 13.1) ──
+// ── Services: artifact leases (Phase 13 Sprint 13.1 + 13.2) ──
 export {
   claimArtifact,
   releaseArtifact,
@@ -41,6 +41,7 @@ export {
   listActiveClaims,
   checkArtifactAvailability,
   forceReleaseArtifact,
+  sweepExpiredLeases,
 } from '../services/artifactLeases.js';
 export type {
   ClaimParams,
@@ -50,7 +51,13 @@ export type {
   ListResult as ArtifactLeasesListResult,
   AvailabilityResult,
   LeaseSummary,
+  SweepResult,
 } from '../services/artifactLeases.js';
+export {
+  startSweepScheduler,
+  LEASES_SWEEP_ADVISORY_KEY,
+  SWEEP_INTERVAL_MS,
+} from '../services/sweepScheduler.js';
 
 // ── Services: distillation & snapshots ──
 export { getProjectSnapshotBody } from '../services/snapshot.js';
