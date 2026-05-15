@@ -1,7 +1,22 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 007 -->
+<!-- Next ID: 008 -->
+
+## DEFERRED-007
+
+- **What:** MCP tool calls that use `z.discriminatedUnion` in their `outputSchema` return error `"Cannot read properties of undefined (reading '_zod')"` to the client, even when the underlying handler executed successfully and the side effects landed. Confirmed affects: `claim_artifact`, `check_artifact_availability`, `submit_for_review`, `list_review_requests` (any tool added during Phase 13 using the discriminated-union output pattern). The error originates from the MCP SDK's output validation step, after the handler has returned.
+- **Why deferred:** Latent regression — these tools' tests pass at the service level (bypass HTTP/MCP transport) and `tools/list` returns them correctly, so the issue was invisible until Sprint 13.4's end-to-end smoke directly invoked `tools/call`. The side effects DO land (verified: submit_for_review created the review_requests row and moved the lesson to pending-review), but clients receive an error response and may retry, causing double-execution risks. Sprint 13.4's GUI uses REST endpoints (not MCP), so its functionality is unaffected. Likely root cause is a version mismatch between `@modelcontextprotocol/sdk` and `zod/v4` after node_modules rebuild between sessions.
+- **Trigger condition:** Sprint 13.5 if it adds MCP tools with discriminated unions; OR any agent integration testing that calls these tools via MCP; OR Sprint 13.7 E2E plan.
+- **Estimated size:** S-M (likely a version pin or schema-shape adjustment; investigate via MCP SDK changelog).
+- **Priority:** HIGH — silent client-facing failures on Phase 13 MCP tools. The side effects landing without clear client acknowledgement is the worst combination (double-submit risk if clients retry).
+- **Session deferred:** 2026-05-15
+- **Sessions open:** 1
+- **Status:** OPEN
+- **Source:** Sprint 13.4 deploy-state smoke discovered the regression; verified affects Sprint 13.1 tools too (not my Sprint 13.4 regression — pre-existing latent).
+- **Workaround:** Use REST endpoints (`/api/projects/:id/review-requests`, `/api/projects/:id/artifact-leases`) which do not exhibit this issue.
+
+---
 
 ## DEFERRED-006
 

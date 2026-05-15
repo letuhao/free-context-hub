@@ -663,6 +663,35 @@ export const api = {
     return request<any>("GET", `/api/jobs?${qs.toString()}`);
   },
 
+  // ── Phase 13 Sprint 13.4: review-request APIs ──
+  listReviewRequests: (projectId: string, params: { status?: "pending" | "approved" | "returned"; submitted_by?: string; limit?: number; offset?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.status) qs.set("status", params.status);
+    if (params.submitted_by) qs.set("submitted_by", params.submitted_by);
+    if (params.limit) qs.set("limit", String(params.limit));
+    if (params.offset) qs.set("offset", String(params.offset));
+    const query = qs.toString();
+    const path = `/api/projects/${encodeURIComponent(projectId)}/review-requests${query ? `?${query}` : ""}`;
+    return request<{ items: ReviewRequest[]; total_count: number }>("GET", path);
+  },
+  getReviewRequest: (projectId: string, requestId: string) =>
+    request<ReviewRequest>(
+      "GET",
+      `/api/projects/${encodeURIComponent(projectId)}/review-requests/${encodeURIComponent(requestId)}`,
+    ),
+  approveReviewRequest: (projectId: string, requestId: string, body: { resolved_by: string; resolution_note?: string }) =>
+    request<{ status: "resolved" | "not_found" | "already_resolved"; new_lesson_status?: "active" | "draft"; request_id?: string; current_status?: "approved" | "returned" }>(
+      "POST",
+      `/api/projects/${encodeURIComponent(projectId)}/review-requests/${encodeURIComponent(requestId)}/approve`,
+      body,
+    ),
+  returnReviewRequest: (projectId: string, requestId: string, body: { resolved_by: string; resolution_note: string }) =>
+    request<{ status: "resolved" | "not_found" | "already_resolved"; new_lesson_status?: "active" | "draft"; request_id?: string; current_status?: "approved" | "returned" }>(
+      "POST",
+      `/api/projects/${encodeURIComponent(projectId)}/review-requests/${encodeURIComponent(requestId)}/return`,
+      body,
+    ),
+
   // ── Phase 13 Sprint 13.2: artifact-lease APIs + identity context ──
   listActiveLeases: (projectId: string, artifactType?: string) => {
     const path = `/api/projects/${encodeURIComponent(projectId)}/artifact-leases${
@@ -693,4 +722,21 @@ export interface LeaseSummary {
   task_description: string;
   expires_at: string;
   seconds_remaining: number;
+}
+
+// ── Phase 13 Sprint 13.4 types ──
+export interface ReviewRequest {
+  request_id: string;
+  project_id: string;
+  lesson_id: string;
+  lesson_title: string;
+  lesson_type: string;
+  submitter_agent_id: string;
+  reviewer_note: string | null;
+  intended_reviewer: string | null;
+  status: "pending" | "approved" | "returned";
+  resolved_at: string | null;
+  resolved_by: string | null;
+  resolution_note: string | null;
+  created_at: string;
 }

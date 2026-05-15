@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useProject } from "@/contexts/project-context";
-import { api } from "@/lib/api";
+import { api, type ReviewRequest } from "@/lib/api";
 import {
   Breadcrumb,
   PageHeader,
@@ -13,7 +13,7 @@ import {
 } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { relTime } from "@/lib/rel-time";
-import { Check, X, Eye, CheckCheck, Pencil, Shield, ChevronDown, ChevronRight } from "lucide-react";
+import { Check, X, Eye, CheckCheck, Pencil, Shield, ChevronDown, ChevronRight, ArrowLeft } from "lucide-react";
 import { LessonDetail } from "../lessons/lesson-detail";
 import { NoProjectGuard } from "@/components/no-project-guard";
 import { ProjectBadge } from "@/components/project-badge";
@@ -21,6 +21,10 @@ import { getColorClasses } from "@/lib/project-colors";
 import type { Lesson } from "../lessons/types";
 
 type ReviewFilter = "all" | "draft" | "pending_review";
+// Phase 13 Sprint 13.4: top-level mode for the two-tab Review Inbox.
+//   "auto_generated"        — existing flow: draft lessons proposed by distillation / git intel
+//   "submitted_for_review"  — new flow: lessons in pending-review with review_requests records
+type ReviewMode = "auto_generated" | "submitted_for_review";
 
 const REJECT_REASONS = ["Inaccurate", "Duplicate", "Too vague", "Not relevant", "Other"] as const;
 
@@ -101,6 +105,58 @@ function RejectDialog({ open, lessonTitle, onReject, onClose }: {
   );
 }
 
+/** Phase 13 Sprint 13.4: Return-to-draft confirm dialog (resolution note REQUIRED) */
+function ReturnReviewDialog({ lessonTitle, onConfirm, onClose }: {
+  lessonTitle: string;
+  onConfirm: (note: string) => void;
+  onClose: () => void;
+}) {
+  const [note, setNote] = useState("");
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/50 z-[60]" onClick={onClose} />
+      <div className="fixed inset-0 z-[70] flex items-center justify-center p-6">
+        <div className="bg-zinc-900 border border-zinc-700 rounded-lg max-w-sm w-full p-5 shadow-2xl">
+          <h3 className="text-sm font-semibold text-zinc-100 mb-1 flex items-center gap-2">
+            <ArrowLeft size={16} className="text-amber-400" />
+            Return to Draft
+          </h3>
+          <p className="text-xs text-zinc-500 mb-4 truncate">{lessonTitle}</p>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-zinc-500 mb-1 block">
+                Reason for returning <span className="text-amber-400">*</span>
+              </label>
+              <textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                rows={4}
+                placeholder="What needs to change before re-submission?"
+                className="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-md text-xs text-zinc-200 outline-none focus:border-blue-500/40 resize-none"
+                autoFocus
+              />
+              <p className="text-[10px] text-zinc-600 mt-1">
+                This note is required and will be saved to the audit log.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => onConfirm(note.trim())}
+                disabled={note.trim().length === 0}
+              >
+                Return to Draft
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 export default function ReviewInboxPage() {
   const { projectId, projects, isAllProjects, effectiveProjectIds, projectsLoaded } = useProject();
   const { toast } = useToast();
@@ -118,6 +174,108 @@ export default function ReviewInboxPage() {
   const [rejectTarget, setRejectTarget] = useState<Lesson | null>(null);
   const [agents, setAgents] = useState<any[]>([]);
   const [agentsOpen, setAgentsOpen] = useState(false);
+
+  // Phase 13 Sprint 13.4: top-level mode + review-request state
+  const [mode, setMode] = useState<ReviewMode>("auto_generated");
+  const [reviewRequests, setReviewRequests] = useState<ReviewRequest[]>([]);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [resolveTarget, setResolveTarget] = useState<{ req: ReviewRequest; action: "approve" | "return" } | null>(null);
+  const [identity, setIdentity] = useState<{ role: string; key_source: string; project_scope: string | null } | null>(null);
+
+  // Fetch identity once (used as resolved_by for approve/return)
+  useEffect(() => {
+    api.getCurrentUser().then((me) => setIdentity({
+      role: me.role,
+      key_source: me.key_source,
+      project_scope: me.project_scope,
+    })).catch(() => setIdentity(null));
+  }, []);
+
+  const resolvedByLabel = (): string => {
+    if (!identity) return "anonymous";
+    if (identity.key_source === "no_auth") return "dev-mode-admin";
+    if (identity.key_source === "env_token") return "env-admin";
+    return `${identity.role}${identity.project_scope ? `@${identity.project_scope}` : ""}`;
+  };
+
+  const fetchReviewRequests = useCallback(async () => {
+    if (!projectsLoaded) return;
+    setReviewLoading(true);
+    try {
+      if (isAllProjects && effectiveProjectIds.length > 0) {
+        const results = await Promise.all(
+          effectiveProjectIds.map((pid) =>
+            api.listReviewRequests(pid, { status: "pending", limit: 100 })
+              .catch(() => ({ items: [] as ReviewRequest[], total_count: 0 })),
+          ),
+        );
+        const rows = results.flatMap((r) => r.items ?? []);
+        rows.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        setReviewRequests(rows);
+      } else if (projectId) {
+        const r = await api.listReviewRequests(projectId, { status: "pending", limit: 100 });
+        setReviewRequests(r.items ?? []);
+      } else {
+        setReviewRequests([]);
+      }
+    } catch (err) {
+      toast("error", err instanceof Error ? err.message : "Failed to load review requests");
+    } finally {
+      setReviewLoading(false);
+    }
+  }, [projectId, isAllProjects, effectiveProjectIds, projectsLoaded, toast]);
+
+  useEffect(() => {
+    if (mode === "submitted_for_review") fetchReviewRequests();
+  }, [mode, fetchReviewRequests]);
+
+  const handleApproveReview = async (req: ReviewRequest, resolutionNote?: string) => {
+    try {
+      const r = await api.approveReviewRequest(req.project_id, req.request_id, {
+        resolved_by: resolvedByLabel(),
+        resolution_note: resolutionNote,
+      });
+      if (r.status === "resolved") {
+        toast("success", `Approved: ${req.lesson_title} → active`);
+        fetchReviewRequests();
+      } else if (r.status === "already_resolved") {
+        toast("error", `Already ${r.current_status} by another reviewer`);
+        fetchReviewRequests();
+      } else {
+        toast("error", `Approve failed: ${r.status}`);
+      }
+    } catch (err) {
+      toast("error", err instanceof Error ? err.message : "Approve failed");
+    } finally {
+      setResolveTarget(null);
+    }
+  };
+
+  const handleReturnReview = async (req: ReviewRequest, resolutionNote: string) => {
+    if (!resolutionNote || resolutionNote.trim().length === 0) {
+      toast("error", "Return requires a resolution note");
+      return;
+    }
+    try {
+      const r = await api.returnReviewRequest(req.project_id, req.request_id, {
+        resolved_by: resolvedByLabel(),
+        resolution_note: resolutionNote,
+      });
+      if (r.status === "resolved") {
+        toast("success", `Returned: ${req.lesson_title} → draft`);
+        fetchReviewRequests();
+      } else if (r.status === "already_resolved") {
+        toast("error", `Already ${r.current_status} by another reviewer`);
+        fetchReviewRequests();
+      } else {
+        toast("error", `Return failed: ${r.status}`);
+      }
+    } catch (err) {
+      toast("error", err instanceof Error ? err.message : "Return failed");
+    } finally {
+      setResolveTarget(null);
+    }
+  };
 
   const fetchReviewItems = useCallback(async () => {
     setLoading(true);
@@ -279,7 +437,34 @@ export default function ReviewInboxPage() {
         </div>
       )}
 
-      {/* Filter tabs */}
+      {/* Phase 13 Sprint 13.4: top-level mode tabs */}
+      <div className="flex items-center gap-1 border-b border-zinc-800 mb-4">
+        {([
+          { label: "Auto-Generated", value: "auto_generated" as ReviewMode, count: lessons.length },
+          { label: "Submitted for Review", value: "submitted_for_review" as ReviewMode, count: reviewRequests.length },
+        ]).map((tab) => (
+          <button
+            key={tab.value}
+            onClick={() => setMode(tab.value)}
+            className={`px-4 py-2 text-sm font-medium -mb-px transition-colors ${
+              mode === tab.value
+                ? "text-blue-400 border-b-2 border-blue-400"
+                : "text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            {tab.label}
+            <span className={`ml-1.5 inline-flex items-center justify-center min-w-[20px] h-[18px] px-1.5 rounded text-[10px] font-semibold ${
+              mode === tab.value ? "bg-blue-500/20 text-blue-300" : "bg-zinc-800 text-zinc-500"
+            }`}>
+              {(mode === tab.value && tab.value === "submitted_for_review" && reviewLoading) ||
+               (mode === tab.value && tab.value === "auto_generated" && loading) ? "…" : tab.count}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* Filter tabs (only visible in Auto-Generated mode) */}
+      {mode === "auto_generated" && (
       <div className="flex items-center gap-1 border-b border-zinc-800 mb-5">
         {([
           { label: "All Pending", value: "all" as ReviewFilter, count: lessons.length },
@@ -300,7 +485,10 @@ export default function ReviewInboxPage() {
           </button>
         ))}
       </div>
+      )}
 
+      {/* Phase 13 Sprint 13.4: Auto-Generated mode wraps existing flow */}
+      {mode === "auto_generated" && (<>
       {/* Batch action bar */}
       {selectedIds.size > 0 && (
         <div className="flex items-center gap-3 mb-4 px-3 py-2 bg-zinc-900/60 border border-zinc-800 rounded-lg animate-[fadeIn_0.15s_ease-out]">
@@ -491,6 +679,101 @@ export default function ReviewInboxPage() {
             );
           })}
         </div>
+      )}
+
+      </>)}
+
+      {/* Phase 13 Sprint 13.4: Submitted for Review mode */}
+      {mode === "submitted_for_review" && (
+      <>
+        {reviewLoading ? (
+          <TableSkeleton rows={4} />
+        ) : reviewRequests.length === 0 ? (
+          <EmptyState
+            icon="✅"
+            title="No pending reviews"
+            description="Agents have not submitted any lessons for human review yet. They appear here after calling submit_for_review."
+          />
+        ) : (
+          <div className="space-y-3">
+            {reviewRequests.map((req) => (
+              <div key={req.request_id} className="border border-zinc-800 rounded-lg bg-zinc-900/50 p-4 hover:border-zinc-700 transition-colors">
+                <div className="flex items-start justify-between gap-4 mb-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <h3 className="text-sm font-semibold text-zinc-100">{req.lesson_title}</h3>
+                      <Badge value={req.lesson_type} variant="type" />
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium">pending-review</span>
+                      {isAllProjects && req.project_id && (
+                        <span className="text-[10px] text-zinc-500">· {req.project_id}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-zinc-400 mb-1.5">
+                      <AgentAvatar name={req.submitter_agent_id} />
+                      <span>Submitted by <span className="text-zinc-200 font-medium">{req.submitter_agent_id}</span></span>
+                      <span className="text-zinc-700">·</span>
+                      <span className="text-zinc-500">{relTime(req.created_at)}</span>
+                    </div>
+                    {req.intended_reviewer && (
+                      <div className="text-xs text-zinc-500 mb-1.5">
+                        Intended reviewer: <span className="text-zinc-300">{req.intended_reviewer}</span>
+                      </div>
+                    )}
+                    {req.reviewer_note && (
+                      <div className="text-xs text-zinc-400 italic bg-zinc-950/50 border border-zinc-800/60 rounded-md p-2 mb-2">
+                        &ldquo;{req.reviewer_note}&rdquo;
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      const lesson: Lesson = {
+                        lesson_id: req.lesson_id,
+                        project_id: req.project_id,
+                        title: req.lesson_title,
+                        lesson_type: req.lesson_type,
+                        content: "",
+                        tags: [],
+                        source_refs: [],
+                        status: "pending_review",
+                        created_at: req.created_at,
+                        updated_at: req.created_at,
+                        captured_by: req.submitter_agent_id,
+                      } as unknown as Lesson;
+                      setPreviewLesson(lesson);
+                    }}
+                    className="px-2.5 py-1 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-md text-zinc-300 transition-colors flex items-center gap-1"
+                  >
+                    <Eye size={12} /> View Full Lesson
+                  </button>
+                  <button
+                    onClick={() => handleApproveReview(req)}
+                    className="px-2.5 py-1 text-xs bg-emerald-600 hover:bg-emerald-500 rounded-md text-white transition-colors flex items-center gap-1"
+                  >
+                    <Check size={12} /> Approve → Active
+                  </button>
+                  <button
+                    onClick={() => setResolveTarget({ req, action: "return" })}
+                    className="px-2.5 py-1 text-xs bg-zinc-800 hover:bg-amber-900/40 border border-zinc-700 hover:border-amber-800 rounded-md text-zinc-300 hover:text-amber-400 transition-colors flex items-center gap-1"
+                  >
+                    <ArrowLeft size={12} /> Return to Draft
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </>)}
+
+      {/* Phase 13 Sprint 13.4: Return-to-draft modal (requires resolution note) */}
+      {resolveTarget && resolveTarget.action === "return" && (
+        <ReturnReviewDialog
+          lessonTitle={resolveTarget.req.lesson_title}
+          onConfirm={(note) => handleReturnReview(resolveTarget.req, note)}
+          onClose={() => setResolveTarget(null)}
+        />
       )}
 
       {/* Reject Dialog */}
