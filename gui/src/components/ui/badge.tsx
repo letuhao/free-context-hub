@@ -11,7 +11,7 @@ const typeStyles: Record<string, string> = {
 const statusStyles: Record<string, string> = {
   active: "bg-emerald-500/10 text-emerald-400",
   draft: "bg-zinc-500/20 text-zinc-400",
-  pending_review: "bg-yellow-500/10 text-yellow-400",
+  "pending-review": "bg-yellow-500/10 text-yellow-400",
   superseded: "bg-amber-500/10 text-amber-400",
   archived: "bg-zinc-500/15 text-zinc-500",
 };

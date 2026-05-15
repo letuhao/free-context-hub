@@ -1482,12 +1482,25 @@ export async function batchUpdateLessonStatus(params: {
   if (params.lessonIds.length > 50) {
     return { status: 'error', error: 'max 50 lessons per batch' };
   }
+  // Phase 13 review-impl finding: the pending-review gate that updateLessonStatus
+  // enforces applies to this sibling write-path too. Reject batching INTO
+  // pending-review, and never batch a lesson OUT of pending-review (the
+  // `status <> 'pending-review'` predicate leaves those rows untouched — they
+  // surface in failed_ids). A lesson leaves pending-review only via the
+  // review-request approve/return flow.
+  if (params.status === 'pending-review') {
+    return {
+      status: 'error',
+      error: "Cannot batch-transition to 'pending-review'. Use submit_for_review to create a review request.",
+    };
+  }
 
   const pool = getDbPool();
 
   const result = await pool.query(
     `UPDATE lessons SET status = $3, updated_at = now()
      WHERE project_id = $1 AND lesson_id = ANY($2::uuid[])
+       AND status <> 'pending-review'
      RETURNING lesson_id`,
     [params.projectId, params.lessonIds, params.status],
   );

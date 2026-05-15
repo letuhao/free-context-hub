@@ -24,7 +24,7 @@ import {
   approveReviewRequest,
   returnReviewRequest,
 } from './reviewRequests.js';
-import { updateLessonStatus } from './lessons.js';
+import { updateLessonStatus, batchUpdateLessonStatus } from './lessons.js';
 import { getDbPool } from '../db/client.js';
 
 const TEST_PROJECT = '__test_review_requests__';
@@ -283,4 +283,30 @@ test('getReviewRequest returns the full lesson detail for the reviewer (BUG-13.4
   assert.ok(detail!.lesson, 'detail must include the nested lesson object');
   assert.equal(detail!.lesson.lesson_id, lessonId);
   assert.equal(detail!.lesson.content, 'test content', 'lesson content must be present (empty pre-fix)');
+});
+
+// review-impl finding (HIGH): batchUpdateLessonStatus is a sibling write-path to
+// updateLessonStatus — the pending-review gate must apply to it too, or the review
+// gate stays bypassable via POST /api/lessons/batch-status.
+test('batch_update_lesson_status leaves a pending-review lesson untouched (review-impl HIGH)', async () => {
+  const pendingId = await insertLesson('pending-review');
+  const draftId = await insertLesson('draft');
+  const r = await batchUpdateLessonStatus({
+    projectId: TEST_PROJECT, lessonIds: [pendingId, draftId], status: 'active',
+  });
+  assert.equal(r.status, 'ok');
+  const pool = getDbPool();
+  const pr = await pool.query(`SELECT status FROM lessons WHERE lesson_id = $1`, [pendingId]);
+  assert.equal(pr.rows[0].status, 'pending-review', 'pending-review lesson must NOT be batch-moved');
+  assert.ok((r.failed_ids ?? []).includes(pendingId), 'the pending-review lesson must surface in failed_ids');
+  const dr = await pool.query(`SELECT status FROM lessons WHERE lesson_id = $1`, [draftId]);
+  assert.equal(dr.rows[0].status, 'active', 'a normal (draft) lesson in the same batch still updates');
+});
+
+test('batch_update_lesson_status rejects target pending-review (review-impl HIGH)', async () => {
+  const draftId = await insertLesson('draft');
+  const r = await batchUpdateLessonStatus({
+    projectId: TEST_PROJECT, lessonIds: [draftId], status: 'pending-review',
+  });
+  assert.equal(r.status, 'error', 'batch → pending-review must be rejected');
 });

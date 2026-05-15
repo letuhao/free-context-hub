@@ -138,6 +138,30 @@ All 19 bugs from `docs/audit/phase-13-review.md` are resolved on branch `phase-1
 (off `phase-13-dlf-coordination-amaw` @ `acdf202`). 306/306 unit + 105/105 e2e API pass; tsc
 clean (backend + gui). Not yet pushed — awaiting review.
 
+## /review-impl follow-up — adversarial pass over the bug-fix branch
+
+A `/review-impl` adversarial review of the full bug-fix diff (`acdf202..a1d374f`) found two
+real issues the per-sub-sprint reviews missed — both fixed (commit after `a1d374f`):
+
+- **[HIGH] `batchUpdateLessonStatus` bypassed the SS1 review-gate guard.** SS1 guarded
+  `updateLessonStatus`, but the sibling write-path `batchUpdateLessonStatus`
+  (`POST /api/lessons/batch-status`) did a raw `UPDATE lessons SET status` with no
+  source/target check — a `pending-review` lesson could be batch-moved out, re-opening
+  BUG-13.3-2. Fix: reject target `pending-review`; add `AND status <> 'pending-review'` to
+  the UPDATE so pending-review rows are left untouched and surface in `failed_ids`. +2 tests.
+- **[MED] BUG-13.4-2's slug fix was incomplete.** The review cited only `review/page.tsx` +
+  `sidebar.tsx`; the `/lessons` page has its own pending-review filter/count and the status
+  `Badge` its own colour map, all still on `pending_review` (underscore). Fixed
+  `lessons/page.tsx`, `lessons/types.ts`, `badge.tsx` — completes BUG-13.4-2.
+- **[LOW, documented]** the SS3 admin-gate on approve/return is not e2e-verified under auth
+  (`phase13-auth-scope.test.ts` skips on the default stack). Accepted — tsc + known-good
+  `requireRole` middleware.
+
+**Verify:** 308/308 unit tests pass (+2 batch-guard tests); tsc clean (backend + gui);
+deploy-state smoke — `POST /api/lessons/batch-status` batching a pending-review lesson →
+HTTP 200, the lesson stays `pending-review` and is reported in `failed_ids`; batching →
+`pending-review` → HTTP 400.
+
 ---
 
 # Session 2026-05-15 (cont.) — Phase 13 post-hoc REVIEW + AMAW quality assessment (COMPLETE — see Phase D bug-fix above)
