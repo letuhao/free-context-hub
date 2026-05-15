@@ -73,6 +73,23 @@ export type {
   ResolveResult,
 } from '../services/reviewRequests.js';
 
+// ── Services: taxonomy profiles (Phase 13 Sprint 13.5) ──
+export {
+  listTaxonomyProfiles,
+  getTaxonomyProfileBySlug,
+  getTaxonomyProfileById,
+  createTaxonomyProfile,
+  upsertBuiltinProfile,
+  getActiveProfile,
+  activateProfile,
+  deactivateProfile,
+  getValidLessonTypes,
+  validateLessonType,
+  getLessonTypeLabel,
+} from '../services/taxonomyService.js';
+export type { TaxonomyProfile, ProfileLessonType } from '../services/taxonomyService.js';
+export { bootstrapBuiltinTaxonomyProfiles } from '../services/taxonomyBootstrap.js';
+
 // ── Services: distillation & snapshots ──
 export { getProjectSnapshotBody } from '../services/snapshot.js';
 export { compressText, reflectOnTopic } from '../services/distiller.js';

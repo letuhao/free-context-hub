@@ -68,6 +68,13 @@ import {
   // Phase 13 Sprint 13.3: review requests
   submitForReview,
   listReviewRequests,
+  // Phase 13 Sprint 13.5: taxonomy profiles
+  listTaxonomyProfiles,
+  getTaxonomyProfileBySlug,
+  getActiveProfile,
+  activateProfile,
+  deactivateProfile,
+  getValidLessonTypes,
 } from '../core/index.js';
 import { LESSON_STATUS_ALL, LESSON_STATUS_WRITABLE } from '../constants/lessonStatus.js';
 import { formatToolResponse, OutputFormatSchema } from './formatters.js';
@@ -955,15 +962,18 @@ function createMcpToolsServer() {
           .describe('Project identifier. Optional if DEFAULT_PROJECT_ID is set; otherwise required.'),
         filters: z
           .object({
+            // Phase 13 Sprint 13.5: pass-through string filter (was z.enum). Profile types are
+            // valid here as filters; backend SQL accepts any string + just filters rows.
             lesson_type: z
-              .enum(['decision', 'preference', 'guardrail', 'workaround', 'general_note'])
+              .string()
               .optional()
-              .describe('Optional lesson type filter.'),
+              .describe('Optional lesson type filter (built-in or active profile type).'),
             tags_any: z.array(z.string().min(1)).optional().describe('Optional tags-any filter (overlap).'),
+            // Phase 13 Sprint 13.3: extended with pending-review.
             status: z
-              .enum(['draft', 'active', 'superseded', 'archived'])
+              .enum(LESSON_STATUS_ALL)
               .optional()
-              .describe('Optional lifecycle status filter (Phase 3).'),
+              .describe('Optional lifecycle status filter.'),
           })
           .optional(),
         page: z
@@ -1047,10 +1057,11 @@ function createMcpToolsServer() {
         query: z.string().min(1).describe('Natural language query to embed and search against lesson embeddings.'),
         filters: z
           .object({
+            // Phase 13 Sprint 13.5: pass-through string filter (was z.enum).
             lesson_type: z
-              .enum(['decision', 'preference', 'guardrail', 'workaround', 'general_note'])
+              .string()
               .optional()
-              .describe('Optional lesson type filter.'),
+              .describe('Optional lesson type filter (built-in or active profile type).'),
             tags_any: z.array(z.string().min(1)).optional().describe('Optional tags-any filter (overlap).'),
             include_all_statuses: z
               .boolean()
@@ -1316,9 +1327,13 @@ function createMcpToolsServer() {
             .min(1)
             .optional()
             .describe('Project identifier for scoping this lesson. Optional if DEFAULT_PROJECT_ID is set on the server.'),
+          // Phase 13 Sprint 13.5: pass-through string. Validation lives at the
+          // service layer (addLesson → validateLessonType) so REST + MCP + import
+          // all hit the same gate using the project's active taxonomy profile.
           lesson_type: z
-            .enum(['decision', 'preference', 'guardrail', 'workaround', 'general_note'])
-            .describe('Lesson type (required).'),
+            .string()
+            .min(1)
+            .describe('Lesson type (required) — built-in or active profile type.'),
           title: z.string().min(1).describe('Short title (required).'),
           content: z.string().min(1).describe('Full content (required; embedded for semantic search).'),
           tags: z.array(z.string()).optional().describe('Optional tags for filtering/grouping.'),
@@ -2947,6 +2962,122 @@ function createMcpToolsServer() {
         offset,
       });
       const summary = `list_review_requests: count=${result.items.length} total=${result.total_count}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  // ── Phase 13 Sprint 13.5: F3 core — taxonomy profile tools ──
+  // NOTE: avoiding z.discriminatedUnion per DEFERRED-007 (MCP SDK regression).
+  // Output shapes use plain z.object with optional/nullable fields.
+
+  const taxonomyProfileShape = z.object({
+    profile_id: z.string(),
+    slug: z.string(),
+    name: z.string(),
+    description: z.string().nullable(),
+    version: z.string(),
+    lesson_types: z.array(z.object({
+      type: z.string(),
+      label: z.string(),
+      description: z.string().optional(),
+      color: z.string().optional(),
+    })),
+    is_builtin: z.boolean(),
+    owner_project_id: z.string().nullable(),
+    created_at: z.string(),
+    updated_at: z.string(),
+  });
+
+  server.registerTool(
+    'list_taxonomy_profiles',
+    {
+      description: 'List taxonomy profiles. Filter by is_builtin or owner_project_id (use "null" string for built-ins-only).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        is_builtin: z.boolean().optional(),
+        owner_project_id: z.string().optional().describe('Filter custom profiles by owner. Use literal "null" to fetch built-ins only.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        profiles: z.array(taxonomyProfileShape),
+      }),
+    },
+    async ({ workspace_token, is_builtin, owner_project_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const owner = owner_project_id === 'null' ? null : owner_project_id;
+      const profiles = await listTaxonomyProfiles({ owner_project_id: owner, is_builtin });
+      const summary = `list_taxonomy_profiles: count=${profiles.length}`;
+      return formatToolResponse({ profiles }, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'get_active_taxonomy_profile',
+    {
+      description: 'Get the active taxonomy profile for a project (or null if none active).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        profile: taxonomyProfileShape.nullable(),
+        valid_lesson_types: z.array(z.string()),
+      }),
+    },
+    async ({ workspace_token, project_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      const profile = await getActiveProfile(projectId);
+      const valid_lesson_types = await getValidLessonTypes(projectId);
+      const summary = `get_active_taxonomy_profile: ${profile ? profile.slug : 'none'} (valid_types=${valid_lesson_types.length})`;
+      return formatToolResponse({ profile, valid_lesson_types }, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'activate_taxonomy_profile',
+    {
+      description: 'Activate a taxonomy profile by slug for a project. Profile must be built-in OR owned by this project.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        slug: z.string().min(1),
+        activated_by: z.string().optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.enum(['activated', 'profile_not_found']),
+        profile: taxonomyProfileShape.optional(),
+      }),
+    },
+    async ({ workspace_token, project_id, slug, activated_by, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      const result = await activateProfile({ project_id: projectId, slug, activated_by });
+      const summary = `activate_taxonomy_profile: ${result.status} slug=${slug}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'deactivate_taxonomy_profile',
+    {
+      description: 'Deactivate the active taxonomy profile for a project. Idempotent.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.enum(['deactivated', 'no_active_profile']),
+      }),
+    },
+    async ({ workspace_token, project_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      const result = await deactivateProfile(projectId);
+      const summary = `deactivate_taxonomy_profile: ${result.status}`;
       return formatToolResponse(result, summary, output_format);
     },
   );

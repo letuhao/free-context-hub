@@ -28,6 +28,7 @@ import { apiKeysRouter } from './routes/apiKeys.js';
 import { artifactLeasesRouter } from './routes/artifactLeases.js';  // Phase 13 Sprint 13.1
 import { meRouter } from './routes/me.js';                          // Phase 13 Sprint 13.2
 import { reviewRequestsRouter } from './routes/reviewRequests.js';  // Phase 13 Sprint 13.3
+import { taxonomyProfilesRouter, projectTaxonomyProfileRouter } from './routes/taxonomy.js'; // Phase 13 Sprint 13.5
 
 /**
  * Creates the REST API Express app.
@@ -83,6 +84,10 @@ export function createApiApp() {
   app.use('/api/projects/:id/artifact-leases', artifactLeasesRouter);
   // Phase 13 Sprint 13.3: review requests — same nested-router pattern
   app.use('/api/projects/:id/review-requests', reviewRequestsRouter);
+  // Phase 13 Sprint 13.5: taxonomy profiles (project-scoped activation)
+  app.use('/api/projects/:id/taxonomy-profile', projectTaxonomyProfileRouter);
+  // Phase 13 Sprint 13.5: taxonomy profiles (global namespace)
+  app.use('/api/taxonomy-profiles', taxonomyProfilesRouter);
   app.use('/api/projects', projectsRouter);       // mixed — write routes gated inside
   app.use('/api/analytics', analyticsRouter);
   app.use('/api/activity', activityRouter);

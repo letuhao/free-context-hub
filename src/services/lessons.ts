@@ -8,6 +8,8 @@ import { distillLesson } from './distiller.js';
 import { rebuildProjectSnapshot } from './snapshot.js';
 import { expandForFtsIndex, buildFtsQuery } from '../utils/ftsTokenizer.js';
 import { nearSemanticKey } from '../utils/nearSemanticKey.js';
+import { GUARDRAIL_LESSON_TYPES } from '../constants/lessonTypes.js';
+import { validateLessonType } from './taxonomyService.js';
 import {
   logLessonAccess,
   isSalienceDisabled,
@@ -195,6 +197,12 @@ async function generateSearchAliases(title: string, content: string): Promise<st
 }
 
 export async function addLesson(payload: LessonPayload): Promise<AddLessonResult> {
+  // Phase 13 Sprint 13.5 — single source of truth for lesson_type validation.
+  // Runs at the SERVICE layer so REST POST /api/lessons, REST /import, MCP
+  // add_lesson, and any future caller all hit the same gate. Built-ins always
+  // accepted; active taxonomy profile types additively accepted.
+  await validateLessonType(payload.project_id, payload.lesson_type);
+
   const pool = getDbPool();
   const lessonId = randomUUID();
 
@@ -287,7 +295,12 @@ export async function addLesson(payload: LessonPayload): Promise<AddLessonResult
   }).catch(() => {});
 
   let guardrail_inserted = false;
-  if (payload.lesson_type === 'guardrail' || payload.guardrail) {
+  // Phase 13 Sprint 13.5: extended to fire on `codex-guardrail` lesson_type too.
+  // Preserves the `|| payload.guardrail` OR-branch for legacy callers (spec r1 F3).
+  if (
+    (GUARDRAIL_LESSON_TYPES as readonly string[]).includes(payload.lesson_type) ||
+    payload.guardrail
+  ) {
     const rule = payload.guardrail;
     if (!rule) {
       await rebuildProjectSnapshot(payload.project_id).catch(() => {});

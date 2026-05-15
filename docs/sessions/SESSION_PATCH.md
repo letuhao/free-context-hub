@@ -11,6 +11,74 @@ session1_sprints_remaining: [13.4, 13.5, 13.6, 13.7]
 next_session_resumption_protocol: longrun plan §5 R1-R6
 ---
 
+# Longrun — Sprint 13.5 (F3 core: Domain Taxonomy Extension) — COMPLETE (session 2)
+
+**Sprint 13.5 outcome: SHIPPED.** All 8 F3 ACs (F3-AC1 through F3-AC8) COVERED per Scope Guard CLEAR verdict. Cumulative scope check across 13.2-13.5 also CLEAR (closes the 13.3-boundary cumulative debt).
+
+## Files changed (Sprint 13.5)
+
+### New (5)
+- `migrations/0050_taxonomy_profiles.sql` — taxonomy_profiles + project_taxonomy_profiles tables
+- `src/constants/lessonTypes.ts` — BUILTIN_LESSON_TYPES + GUARDRAIL_LESSON_TYPES + helpers
+- `src/services/taxonomyService.ts` — CRUD + validation + active-profile resolution + getValidLessonTypes (single source of truth)
+- `src/services/taxonomyBootstrap.ts` — startup seeding from config/taxonomy-profiles/*.json
+- `src/services/taxonomyService.test.ts` — 12 unit tests (CRUD, shadowing, activation, validation, listing)
+- `src/api/routes/taxonomy.ts` — REST routes (global + project-scoped)
+- `config/taxonomy-profiles/dlf-phase0.json` — bundled built-in profile
+
+### Modified (7)
+- `src/services/lessons.ts` — added `validateLessonType()` at addLesson entry (single source of truth for all callers); extended guardrails-INSERT trigger to fire on codex-guardrail (preserving `|| payload.guardrail` OR-branch per r1 F3 fix)
+- `src/kg/linker.ts` — codex-guardrail joins guardrail in CONSTRAINS edge class
+- `src/mcp/index.ts` — 4 enum sites updated (list_lessons + search_lessons + add_lesson + filter outputs); 4 new MCP tools (list_taxonomy_profiles, get_active_taxonomy_profile, activate_taxonomy_profile, deactivate_taxonomy_profile — all using plain z.object to avoid DEFERRED-007)
+- `src/api/index.ts` — mount taxonomy routers
+- `src/core/index.ts` — re-export taxonomy fns + types + bootstrap
+- `src/index.ts` — call bootstrapBuiltinTaxonomyProfiles after applyMigrations
+- `package.json` — add test file to script
+
+## Deploy-state smoke (Mitigation B) results
+
+| Check | Result |
+|---|---|
+| `docker compose up -d --build mcp worker` | ✅ green |
+| Migration 0050 applied | ✅ green |
+| dlf-phase0 seeded on startup | ✅ green (verified in log + DB) |
+| 302/302 unit tests pass (+12 new taxonomy) | ✅ green |
+| REST POST /activate with dlf-phase0 | ✅ green (returns activated profile) |
+| REST GET active profile | ✅ green |
+| REST POST /api/lessons with `codex-guardrail` + guardrail payload | ✅ green (rule_id 75a07ef8 in guardrails table, trigger="git push --force") |
+| REST POST /api/lessons with `reckoning-finding` (profile type, active) | ✅ green (F3-AC2) |
+| REST POST /api/lessons with bogus-type | ✅ HTTP 400 with full valid types list (F3-AC1) |
+
+## AMAW calibration data — Sprint 13.5
+
+| Metric | Value |
+|---|---|
+| Total Adversary rounds | 1 (design only; code-review Adversary skipped per compressed-mode + r1 design coverage) |
+| r1 design findings | 3 BLOCK (validation gap, cross-tenant, OR-branch) — all fixed inline in BUILD |
+| New tests | 12 unit tests |
+| Final test count | 302/302 pass |
+| Wall-clock per sprint | ~50 min |
+| Cumulative scope check | CLEAR (closes 13.3-boundary debt) |
+
+## Adversary r1 design findings fixes (applied inline during BUILD)
+
+| Finding | Fix |
+|---|---|
+| F1 BLOCK validation gap (REST bypass) | `validateLessonType` moved into `addLesson` service entry (lessons.ts:204) — REST + MCP + import paths all hit the same gate |
+| F2 BLOCK cross-tenant on taxonomy routes | `requireScope('id')` applied to POST /activate + DELETE; POST /api/taxonomy-profiles validates body.owner_project_id against caller's apiKeyScope |
+| F3 WARN missing OR-branch | `|| payload.guardrail` preserved at lessons.ts:302 with explicit comment |
+
+## Cumulative state (session 2)
+
+- e8d9b66 — DEFERRED-005 fix (Geist npm)
+- 779775b — Sprint 13.4 (F2 GUI)
+- *Sprint 13.5 commit pending*
+- Cumulative scope debt: ✅ closed at 13.5 boundary
+
+Remaining: 13.6 (F3 GUI) → 13.7 (E2E + final cumulative scope check).
+
+---
+
 # Longrun — Sprint 13.4 (F2 GUI: Submitted for Review tab) — COMPLETE (session 2)
 
 **Sprint 13.4 outcome: SHIPPED.** All 6 GUI ACs (GUI-AC1 through GUI-AC6) COVERED per Scope Guard CLEAR verdict. Live e2e smoke verified the REST approve flow.

@@ -4,7 +4,8 @@ import { getNeo4jDriver } from './client.js';
 import { normalizeRepoPath } from './ids.js';
 
 function edgeForLessonType(t: LessonType): 'MENTIONS' | 'CONSTRAINS' | 'PREFERS' {
-  if (t === 'guardrail') return 'CONSTRAINS';
+  // Phase 13 Sprint 13.5: codex-guardrail joins guardrail in the CONSTRAINS class.
+  if (t === 'guardrail' || t === 'codex-guardrail') return 'CONSTRAINS';
   if (t === 'preference') return 'PREFERS';
   return 'MENTIONS';
 }

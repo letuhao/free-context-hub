@@ -23,9 +23,13 @@ async function main() {
   });
 
   // Phase 13 Sprint 13.2 — background TTL sweep for artifact_leases.
-  // Enqueues a leases.sweep job every 15 min; advisory-lock guards against
-  // N× cadence in multi-replica deployments. Worker executes the actual DELETE.
   startSweepScheduler();
+
+  // Phase 13 Sprint 13.5 — seed built-in taxonomy profiles from config/taxonomy-profiles/.
+  const { bootstrapBuiltinTaxonomyProfiles } = await import('./services/taxonomyBootstrap.js');
+  await bootstrapBuiltinTaxonomyProfiles().catch((err) => {
+    logger.error({ err: String(err) }, 'taxonomy bootstrap failed (non-fatal)');
+  });
 
   // ── MCP Server (:3000) ──
   const mcpApp = createMcpExpressApp();
