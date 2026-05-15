@@ -662,4 +662,147 @@ export const api = {
     if (params.status) qs.set("status", params.status);
     return request<any>("GET", `/api/jobs?${qs.toString()}`);
   },
+
+  // ── Phase 13 Sprint 13.6: taxonomy profile APIs ──
+  listTaxonomyProfiles: (params: { owner_project_id?: string | null; is_builtin?: boolean } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.owner_project_id === null) qs.set("owner_project_id", "null");
+    else if (params.owner_project_id) qs.set("owner_project_id", params.owner_project_id);
+    if (params.is_builtin !== undefined) qs.set("is_builtin", String(params.is_builtin));
+    const query = qs.toString();
+    return request<{ profiles: TaxonomyProfile[] }>("GET", `/api/taxonomy-profiles${query ? `?${query}` : ""}`);
+  },
+  getActiveTaxonomyProfile: (projectId: string) =>
+    request<{ profile: TaxonomyProfile | null }>(
+      "GET",
+      `/api/projects/${encodeURIComponent(projectId)}/taxonomy-profile`,
+    ),
+  activateTaxonomyProfile: (projectId: string, body: { slug: string; activated_by?: string }) =>
+    request<{ status: "activated" | "profile_not_found"; profile?: TaxonomyProfile }>(
+      "POST",
+      `/api/projects/${encodeURIComponent(projectId)}/taxonomy-profile/activate`,
+      body,
+    ),
+  deactivateTaxonomyProfile: (projectId: string) =>
+    request<{ status: "deactivated" | "no_active_profile" }>(
+      "DELETE",
+      `/api/projects/${encodeURIComponent(projectId)}/taxonomy-profile`,
+    ),
+
+  // ── Phase 13 Sprint 13.4: review-request APIs ──
+  listReviewRequests: (projectId: string, params: { status?: "pending" | "approved" | "returned"; submitted_by?: string; limit?: number; offset?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.status) qs.set("status", params.status);
+    if (params.submitted_by) qs.set("submitted_by", params.submitted_by);
+    if (params.limit) qs.set("limit", String(params.limit));
+    if (params.offset) qs.set("offset", String(params.offset));
+    const query = qs.toString();
+    const path = `/api/projects/${encodeURIComponent(projectId)}/review-requests${query ? `?${query}` : ""}`;
+    return request<{ items: ReviewRequest[]; total_count: number }>("GET", path);
+  },
+  getReviewRequest: (projectId: string, requestId: string) =>
+    request<ReviewRequestDetail>(
+      "GET",
+      `/api/projects/${encodeURIComponent(projectId)}/review-requests/${encodeURIComponent(requestId)}`,
+    ),
+  // SS3 (BUG-13.3-1): resolved_by is derived server-side from the authenticated
+  // API key — the GUI no longer sends it.
+  approveReviewRequest: (projectId: string, requestId: string, body: { resolution_note?: string } = {}) =>
+    request<{ status: "resolved" | "not_found" | "already_resolved"; new_lesson_status?: "active" | "draft"; request_id?: string; current_status?: "approved" | "returned" }>(
+      "POST",
+      `/api/projects/${encodeURIComponent(projectId)}/review-requests/${encodeURIComponent(requestId)}/approve`,
+      body,
+    ),
+  returnReviewRequest: (projectId: string, requestId: string, body: { resolution_note: string }) =>
+    request<{ status: "resolved" | "not_found" | "already_resolved"; new_lesson_status?: "active" | "draft"; request_id?: string; current_status?: "approved" | "returned" }>(
+      "POST",
+      `/api/projects/${encodeURIComponent(projectId)}/review-requests/${encodeURIComponent(requestId)}/return`,
+      body,
+    ),
+
+  // ── Phase 13 Sprint 13.2: artifact-lease APIs + identity context ──
+  listActiveLeases: (projectId: string, artifactType?: string) => {
+    const path = `/api/projects/${encodeURIComponent(projectId)}/artifact-leases${
+      artifactType ? `?artifact_type=${encodeURIComponent(artifactType)}` : ""
+    }`;
+    return request<{ claims: LeaseSummary[] }>("GET", path);
+  },
+  forceReleaseLease: (projectId: string, leaseId: string) =>
+    request<{ status: "force_released" | "not_found" }>(
+      "DELETE",
+      `/api/projects/${encodeURIComponent(projectId)}/artifact-leases/${encodeURIComponent(leaseId)}/force`,
+    ),
+  getCurrentUser: () =>
+    request<{
+      role: "reader" | "writer" | "admin";
+      project_scope: string | null;
+      auth_enabled: boolean;
+      key_source: "no_auth" | "env_token" | "db_key";
+    }>("GET", "/api/me"),
 };
+
+// ── Phase 13 Sprint 13.2 types ──
+export interface LeaseSummary {
+  lease_id: string;
+  artifact_type: string;
+  artifact_id: string;
+  agent_id: string;
+  task_description: string;
+  expires_at: string;
+  seconds_remaining: number;
+}
+
+// ── Phase 13 Sprint 13.6 types ──
+export interface ProfileLessonType {
+  type: string;
+  label: string;
+  description?: string;
+  color?: string;
+}
+
+export interface TaxonomyProfile {
+  profile_id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  version: string;
+  lesson_types: ProfileLessonType[];
+  is_builtin: boolean;
+  owner_project_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ── Phase 13 Sprint 13.4 types ──
+export interface ReviewRequest {
+  request_id: string;
+  project_id: string;
+  lesson_id: string;
+  lesson_title: string;
+  lesson_type: string;
+  submitter_agent_id: string;
+  reviewer_note: string | null;
+  intended_reviewer: string | null;
+  status: "pending" | "approved" | "returned";
+  resolved_at: string | null;
+  resolved_by: string | null;
+  resolution_note: string | null;
+  created_at: string;
+}
+
+/** Detail shape from GET /review-requests/:reqId — includes the full lesson. */
+export interface ReviewRequestDetail extends ReviewRequest {
+  lesson: {
+    lesson_id: string;
+    project_id: string;
+    title: string;
+    lesson_type: string;
+    content: string;
+    tags: string[];
+    source_refs: string[];
+    status: string;
+    captured_by: string | null;
+    created_at: string;
+    updated_at: string;
+  };
+}

@@ -222,4 +222,100 @@ export const allLessonTests: TestFn[] = [
     });
     if (r2.status !== 400 && r2.status !== 500) throw new Error(`Expected 400/500 for missing title, got ${r2.status}`);
   }),
+
+  // ── Test 9 (Sprint 12.0.2): dedup wiring — full-stack integration ──
+  // Proves `dedupLessonMatches` is invoked inside `searchLessons`'s pipeline
+  // at the right position (post-rerank, pre-trim).
+  //
+  // Known limitation (Sprint 12.1b /review-impl MED-1 reopened): when
+  // `DISTILLATION_ENABLED=true` the distiller generates a per-lesson
+  // summary via LLM at write time. Identical content may still produce
+  // slightly-different summaries (LLM non-determinism at temperature > 0,
+  // or model drift between runs). `content_snippet = summary ?? content`
+  // in the search response, so different summaries → different
+  // `nearSemanticKey(title, snippet)` → dedup misses some cluster
+  // members. Under DISTILLATION_ENABLED=false the test is deterministic.
+  //
+  // Skipping when distillation is on. The REAL wiring proof is the
+  // Sprint 12.1a A/B baseline archives (docs/qc/baselines/2026-04-18-
+  // sprint-12.1a-*.json) which show dup@10 nearsem 0.435 → 0 with same-
+  // goldenset back-to-back runs. Revisit when `addLesson` exposes a
+  // summary-override or when the test can run under a distillation-
+  // disabled sub-project.
+  lessonTest('dedup-wiring-collapses-near-duplicate-cluster', async ({ api, projectId, cleanup }) => {
+    if (process.env.DISTILLATION_ENABLED === 'true') {
+      throw new Error(
+        'SKIP: DISTILLATION_ENABLED=true introduces per-lesson summary variance that defeats content-based dedup key determinism. Wiring is proven by the A/B baseline archives; see test comment above.',
+      );
+    }
+    // Seed a 4-member cluster with identical title + snippet + same project + same type.
+    const clusterTitle = `Dedup wiring test ${st.marker}`;
+    const clusterContent = `Identical body for dedup wiring integration test marker=${st.marker}`;
+    for (let i = 0; i < 4; i++) {
+      const r = await api.post('/api/lessons', {
+        project_id: projectId,
+        lesson_type: 'decision',
+        title: clusterTitle,
+        content: clusterContent,
+        tags: ['e2e-dedup-wiring'],
+      });
+      expectStatus(r, 201);
+      cleanup.lessonIds.push(r.body?.lesson_id);
+    }
+
+    // Seed a distinct lesson so we know dedup isn't nuking everything.
+    const distinctTitle = `Dedup wiring distinct ${st.marker}`;
+    const distinctR = await api.post('/api/lessons', {
+      project_id: projectId,
+      lesson_type: 'decision',
+      title: distinctTitle,
+      content: `Different body for dedup wiring integration test marker=${st.marker}`,
+      tags: ['e2e-dedup-wiring'],
+    });
+    expectStatus(distinctR, 201);
+    cleanup.lessonIds.push(distinctR.body?.lesson_id);
+
+    // Search — uses the REST route which goes through searchLessons →
+    // post-rerank dedup → trim. Cluster should collapse to 1; distinct stays.
+    const searchR = await api.post('/api/lessons/search', {
+      project_id: projectId,
+      query: `wiring test ${st.marker}`,
+      limit: 20,
+    });
+    expectStatus(searchR, 200);
+    const matches = (searchR.body?.matches ?? []) as Array<{ title: string; lesson_id: string }>;
+
+    const clusterMatches = matches.filter((m) => m.title === clusterTitle);
+    if (clusterMatches.length !== 1) {
+      throw new Error(
+        `Dedup wiring broken: expected exactly 1 cluster representative in search output, got ${clusterMatches.length} copies of "${clusterTitle}"`,
+      );
+    }
+
+    const distinctMatches = matches.filter((m) => m.title === distinctTitle);
+    if (distinctMatches.length !== 1) {
+      throw new Error(
+        `Distinct lesson missing from search output (got ${distinctMatches.length}) — dedup may be collapsing too aggressively`,
+      );
+    }
+  }),
+
+  // ── Test 10 (Sprint 12.0.2): dedup explanation always emitted ──
+  // Closes 12.1a LOW-3. Whether dedup collapsed anything or not, the
+  // explanations array should always tell the caller what dedup did.
+  lessonTest('dedup-explanation-always-emitted', async ({ api, projectId, cleanup: _cleanup }) => {
+    const r = await api.post('/api/lessons/search', {
+      project_id: projectId,
+      query: `zephyr-ninja-pyramid no lessons match this ${st.marker}`,
+      limit: 10,
+    });
+    expectStatus(r, 200);
+    const explanations = (r.body?.explanations ?? []) as string[];
+    const hasDedupEntry = explanations.some((e) => e.startsWith('dedup:'));
+    if (!hasDedupEntry) {
+      throw new Error(
+        `Expected a 'dedup:' entry in explanations even on zero-collapse runs. Got: ${JSON.stringify(explanations)}`,
+      );
+    }
+  }),
 ];

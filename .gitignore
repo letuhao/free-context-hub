@@ -188,3 +188,13 @@ docs/qc/*-e2e-agent-report.md
 
 # Workflow state (per-session, not committed)
 .workflow-state.json
+
+# Per-session scratch dir (mining outputs, staging JSON, breakdowns)
+.scratch/
+
+# Scheduled-task lock (runtime artifact of .claude/ tooling)
+.claude/scheduled_tasks.lock
+backups/
+# .phase-gates/ retired 2026-05-15 — AMAW now uses docs/audit/AUDIT_LOG.jsonl
+# (which IS committed, durable history). Old gate file convention deprecated.
+.phase-gates/

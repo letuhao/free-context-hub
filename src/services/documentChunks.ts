@@ -14,6 +14,7 @@ import { getDbPool } from '../db/client.js';
 import { embedTexts } from './embedder.js';
 import { buildFtsQuery } from '../utils/ftsTokenizer.js';
 import { createModuleLogger } from '../utils/logger.js';
+import { nearSemanticKey } from '../utils/nearSemanticKey.js';
 
 const logger = createModuleLogger('document-chunks-search');
 
@@ -59,6 +60,82 @@ function snippet(content: string, maxChars = 240): string {
   const trimmed = content.replace(/\s+/g, ' ').trim();
   if (trimmed.length <= maxChars) return trimmed;
   return trimmed.slice(0, maxChars - 1).trimEnd() + '…';
+}
+
+/**
+ * Sprint 12.1b — near-semantic dedup for chunk search results.
+ *
+ * Collapses matches that share a `(project_id, chunk_type,
+ * nearSemanticKey(doc_name+heading, content_snippet))` tuple into a
+ * single representative (first-seen, respecting the hybrid semantic+FTS
+ * rank). Pure function — no I/O.
+ *
+ * Motivating pathology (Sprint 12.0.1 baseline): `chunks dup@10 nearsem
+ * = 0.29`. Primary driver is the three `sample.pdf` failed-extraction
+ * chunks (same doc_name, null heading, identical `[extraction failed:
+ * Vision model returned HTTP 400: ...]` content prefix) collapsing to
+ * one nearSemanticKey — retrieving all three wastes top-k slots. Plus
+ * smaller within-document clustering across sample.docx headings.
+ *
+ * Key composition mirrors Sprint 12.1a's lessons dedup (MED-1+2 lesson):
+ *   - `project_id` preserves cross-project "same content" variants
+ *     (e.g. a shared guardrail document replicated via include_groups).
+ *   - `chunk_type` keeps table/text/code/mermaid/diagram distinct even
+ *     when content overlaps — a table with numeric columns and a text
+ *     paragraph quoting those numbers are different data.
+ *   - `nearSemanticKey(doc_name + '/' + heading, content_snippet)` is
+ *     the same key shape the baseline `dup@10 nearsem` metric measures
+ *     with, so dedup drives the metric to 0 by construction.
+ *
+ * Opt-out: `CHUNKS_DEDUP_DISABLED=true` in the server environment
+ * restores legacy behavior. Intended for A/B measurement and emergency
+ * rollback, not a permanent toggle.
+ */
+/**
+ * ORDERING CONTRACT (Sprint 12.1b /review-impl LOW-3):
+ * Caller is responsible for sorting matches by desired retention priority
+ * BEFORE invocation. Dedup preserves first-seen order; it does NOT re-score
+ * or re-sort. `searchChunks`/`searchChunksMulti` both pass DB rows in
+ * `ORDER BY score DESC` order, so the first-seen representative is the
+ * highest-score cluster member. A future caller that passes matches in a
+ * different order will get a correspondingly-different representative.
+ *
+ * KEY CONSTRUCTION NOTES (LOW-1 + LOW-2):
+ *  - The `doc_name + ' / ' + heading` title is NOT injective: if either
+ *    field literally contains ' / ', two different (doc_name, heading)
+ *    pairs could produce the same title. Filesystem-unlikely (POSIX
+ *    disallows `/` in filenames) but possible via the editable
+ *    `documents.name` field. Acceptable risk for current data.
+ *  - `nearSemanticKey` takes `content_snippet.slice(0, 100)` internally,
+ *    and `searchChunks` already truncates content to 240 chars via
+ *    `snippet()`. So the effective dedup window is the first ~100 chars
+ *    of chunk content. Two chunks sharing a 100-char boilerplate prefix
+ *    but differing meaningfully in chars 101–240 will collapse. Not an
+ *    active issue for the current dataset; revisit if a real collision
+ *    surfaces.
+ */
+export function dedupChunkMatches<T extends {
+  project_id: string;
+  chunk_type: string;
+  doc_name: string;
+  heading: string | null;
+  content_snippet: string;
+}>(matches: ReadonlyArray<T>): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const m of matches) {
+    const title = m.heading ? `${m.doc_name} / ${m.heading}` : m.doc_name;
+    const key = `${m.project_id}|${m.chunk_type}|${nearSemanticKey(title, m.content_snippet)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(m);
+  }
+  return out;
+}
+
+/** Env-driven opt-out for chunks dedup. Read lazily so tests can toggle it. */
+function isChunksDedupDisabled(): boolean {
+  return process.env.CHUNKS_DEDUP_DISABLED === 'true';
 }
 
 export async function searchChunks(params: SearchChunksParams): Promise<SearchChunksResult> {
@@ -184,7 +261,7 @@ export async function searchChunks(params: SearchChunksParams): Promise<SearchCh
     explanations.push('semantic only (no keyword tokens)');
   }
 
-  const matches: ChunkMatch[] = (res.rows ?? [])
+  let matches: ChunkMatch[] = (res.rows ?? [])
     .map((r: any) => ({
       chunk_id: String(r.chunk_id),
       doc_id: String(r.doc_id),
@@ -202,6 +279,23 @@ export async function searchChunks(params: SearchChunksParams): Promise<SearchCh
       score: Number(r.score),
     }))
     .filter((m) => m.score >= minScore);
+
+  // Sprint 12.1b — near-semantic dedup. Collapses same-(project, chunk_type,
+  // doc_name+heading, snippet) clusters. Opt-out via CHUNKS_DEDUP_DISABLED=true.
+  // Always emit an explanation so operators can distinguish "dedup ON with no
+  // collapses" from "dedup OFF" (mirrors lessons LOW-3 from 12.1a).
+  if (isChunksDedupDisabled()) {
+    explanations.push('dedup: disabled via CHUNKS_DEDUP_DISABLED');
+  } else {
+    const before = matches.length;
+    matches = dedupChunkMatches(matches);
+    const dropped = before - matches.length;
+    explanations.push(
+      dropped > 0
+        ? `dedup: enabled, collapsed ${dropped} near-semantic duplicate${dropped === 1 ? '' : 's'} (${before}→${matches.length})`
+        : `dedup: enabled, 0 collapsed (all ${before} chunks already distinct)`,
+    );
+  }
 
   logger.info(
     { project: params.projectId, matches: matches.length, min_score: minScore },
@@ -274,7 +368,7 @@ export async function searchChunksMulti(params: {
     sqlParams,
   );
 
-  const matches: ChunkMatch[] = (res.rows ?? []).map((r: any) => ({
+  let matches: ChunkMatch[] = (res.rows ?? []).map((r: any) => ({
     chunk_id: String(r.chunk_id),
     doc_id: String(r.doc_id),
     project_id: String(r.project_id),
@@ -291,8 +385,20 @@ export async function searchChunksMulti(params: {
     score: Number(r.score),
   }));
 
-  return {
-    matches,
-    explanations: [`multi-project: ${projectIds.length} projects, ${matches.length} matches`],
-  };
+  // Sprint 12.1b — same dedup treatment as single-project.
+  const explanations: string[] = [`multi-project: ${projectIds.length} projects, ${matches.length} matches`];
+  if (isChunksDedupDisabled()) {
+    explanations.push('dedup: disabled via CHUNKS_DEDUP_DISABLED');
+  } else {
+    const before = matches.length;
+    matches = dedupChunkMatches(matches);
+    const dropped = before - matches.length;
+    explanations.push(
+      dropped > 0
+        ? `dedup: enabled, collapsed ${dropped} near-semantic duplicate${dropped === 1 ? '' : 's'} (${before}→${matches.length})`
+        : `dedup: enabled, 0 collapsed (all ${before} chunks already distinct)`,
+    );
+  }
+
+  return { matches, explanations };
 }

@@ -15,14 +15,53 @@ function chatHeaders(): Record<string, string> {
   return headers;
 }
 
+/** Extract a JSON object from model output. Phase 14: hardened for reasoning models
+ *  whose reasoning_content may include multiple {...} blocks (intermediate thoughts).
+ *  Strategy: scan all top-level {...} substrings (balanced brace tracking, respecting strings),
+ *  try parsing each from longest to shortest, return first valid parse.
+ */
 function extractJsonObject(text: string): any {
   const raw = String(text ?? '').trim();
+  // Strip markdown code fences if present
+  const fenced = raw.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+  if (fenced) {
+    try { return JSON.parse(fenced[1]); } catch { /* fall through */ }
+  }
+  // Find all balanced top-level {...} substrings.
+  const candidates: string[] = [];
+  let depth = 0;
+  let start = -1;
+  let inStr = false;
+  let escape = false;
+  for (let i = 0; i < raw.length; i++) {
+    const c = raw[i];
+    if (escape) { escape = false; continue; }
+    if (c === '\\') { escape = true; continue; }
+    if (c === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (c === '{') {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (c === '}') {
+      depth--;
+      if (depth === 0 && start >= 0) {
+        candidates.push(raw.slice(start, i + 1));
+        start = -1;
+      }
+    }
+  }
+  // Try longest candidate first (usually the most complete object)
+  candidates.sort((a, b) => b.length - a.length);
+  for (const cand of candidates) {
+    try { return JSON.parse(cand); } catch { /* try next */ }
+  }
+  // Fallback: first-to-last brace slice (legacy behavior)
   const first = raw.indexOf('{');
   const last = raw.lastIndexOf('}');
   if (first >= 0 && last > first) {
     return JSON.parse(raw.slice(first, last + 1));
   }
-  throw new Error('No JSON object found in model output');
+  throw new Error('No parseable JSON object found in model output');
 }
 
 async function chatCompletion(params: {
@@ -56,9 +95,16 @@ async function chatCompletion(params: {
       throw new Error(`[chat] HTTP ${res.status}: ${txt}`);
     }
     const json = (await res.json()) as any;
-    const content = json?.choices?.[0]?.message?.content;
-    if (typeof content !== 'string' || !content.trim()) {
-      throw new Error('[chat] Missing choices[0].message.content');
+    const message = json?.choices?.[0]?.message ?? {};
+    let content = String(message.content ?? '').trim();
+    // Phase 14: reasoning models (e.g. nvidia/nemotron-3-nano) put output in
+    // `reasoning_content` and may leave `content` empty when max_tokens runs
+    // out during reasoning. Mirror the vision.ts fallback pattern.
+    if (!content) {
+      content = String(message.reasoning_content ?? '').trim();
+    }
+    if (!content) {
+      throw new Error('[chat] Missing choices[0].message.content (and reasoning_content also empty)');
     }
     return content;
   } finally {
@@ -71,10 +117,14 @@ export type DistillLessonResult = {
   quick_action: string;
 };
 
-/** Heuristic: longer lessons need more completion budget so JSON is not truncated. */
+/** Heuristic: longer lessons need more completion budget so JSON is not truncated.
+ *  Phase 14: significantly bumped floor and cap to accommodate reasoning models
+ *  (nemotron-3-nano etc.) that consume substantial tokens on chain-of-thought
+ *  before writing the final JSON answer.
+ */
 function distillMaxTokens(title: string, content: string): number {
   const n = title.length + content.length;
-  return Math.min(2500, Math.max(500, Math.ceil(n / 2.5)));
+  return Math.min(8000, Math.max(2000, Math.ceil(n / 2.5)));
 }
 
 export async function distillLesson(input: { title: string; content: string }): Promise<DistillLessonResult> {
@@ -227,7 +277,9 @@ export async function suggestLessonFromCommit(input: {
       { role: 'system', content: system },
       { role: 'user', content: user },
     ],
-    max_tokens: 900,
+    // Phase 14 round-2 fix: bumped 900 → 3000 for reasoning models that consume
+    // budget on chain-of-thought before emitting the final JSON suggestion.
+    max_tokens: 3000,
     temperature: 0.2,
     timeoutMs: env.DISTILLATION_TIMEOUT_MS,
   });

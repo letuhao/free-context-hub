@@ -48,32 +48,38 @@ Don't memorize tool schemas — `help()` is always current.
 
 ---
 
-## Task Workflow v2.2 (12 phases per task)
+## Task Workflow (default: v2.2 human-in-loop · AMAW opt-in)
 
-> v2 absorbs execution discipline from [Superpowers](https://github.com/obra/superpowers) (brainstorming protocol, plan decomposition, TDD, verification gate, debugging protocol, subagent dispatch) while keeping our strengths (session persistence, role perspectives, guardrails, MCP knowledge layer).
+> **Default behavior (v2.2):** human stays in the loop. The same 12 phases run, but REVIEW + POST-REVIEW use main-session self-review with human checkpoints at CLARIFY end and POST-REVIEW end. Cheap, fast, works for most tasks.
 >
-> **v2.2 update:** POST-REVIEW is now a **human-interactive checkpoint** (present summary → wait for human), NOT a self-adversarial re-read. Deep adversarial review moved to the on-demand `/review-impl` command (`.claude/commands/review-impl.md`). Self-review-right-after-writing rubber-stamps in practice; explicit separate mental mode works better.
+> **AMAW opt-in (v3.0):** main session spawns cold-start sub-agents (Adversary, Scope Guard, Scribe) at REVIEW + POST-REVIEW. Catches issues human review misses (cache coherence, semantic edge cases, scope drift) but costs ~$1-5 in sub-agent tokens per task and ~30 extra min wall-clock per review loop. Reserve for high-stakes work: data migrations, schema changes, security-critical paths, multi-system contracts.
+>
+> **How to enable AMAW for a task:** user types `/amaw` OR includes "use AMAW workflow" / "spawn Adversary" / "AMAW mode" in the task description. Without this trigger, default = v2.2.
+>
+> v2.2 heritage (always-on regardless of mode): Superpowers TDD discipline, plan decomposition, evidence gate, session persistence, MCP knowledge layer.
+>
+> **Both modes use the same files-as-truth principle:** spec, plan, audit log are durable; chat is ephemeral. Full AMAW spec: `docs/amaw-workflow.md`.
 
-Every task follows this workflow. The agent plays all roles sequentially.
-
-**ENFORCEMENT: This workflow uses a state machine (`.workflow-state.json`). You MUST call the phase transition protocol before moving between phases. Hooks will block commits if VERIFY, POST-REVIEW, or SESSION evidence is missing.**
+**ENFORCEMENT (both modes):** state machine via `.workflow-state.json` + append-only `docs/audit/AUDIT_LOG.jsonl`. workflow-gate.sh tracks phase transitions. In default mode, human is the final review gate. In AMAW mode, Scope Guard sub-agent is the gate — conservative wins, any REJECTED/BLOCKED finding from any agent must be resolved before SESSION.
 
 ```
-Phase          │ Role              │ What Happens
-───────────────┼───────────────────┼──────────────────────────────────────
-1. CLARIFY     │ Architect + PO    │ Brainstorm, ask questions, define scope
-2. DESIGN      │ Lead              │ API contract / component API / data flow
-3. REVIEW      │ PO + Lead         │ Review design spec before coding
-4. PLAN        │ Lead + Developer  │ Decompose into bite-sized tasks (2-5 min)
-5. BUILD       │ Developer         │ Write code (TDD: red → green → refactor)
-6. VERIFY      │ Developer         │ Evidence-based verification gate
-7. REVIEW      │ Lead              │ Code review (spec compliance + quality)
-8. QC          │ QA / PO           │ Test against acceptance criteria
-9. POST-REVIEW │ Human + Developer │ Human-interactive CHECKPOINT (not deep review — see /review-impl)
-10. SESSION    │ Developer         │ Update SESSION_PATCH.md + task status
-11. COMMIT     │ Developer         │ Git commit + push
-12. RETRO      │ All               │ Add lesson if decision/workaround learned
+Phase          │ Default role          │ AMAW role             │ What Happens
+───────────────┼───────────────────────┼───────────────────────┼─────────────────────────────────
+1. CLARIFY     │ Main + human          │ Main + Scribe         │ Read MCP, write spec, scan DEFERRED.md
+2. DESIGN      │ Main                  │ Main                  │ API contract / data flow → docs/specs/DESIGN.md + hash
+3. REVIEW      │ Main self-review      │ Adversary (cold-start)│ Find spec gaps / contract holes — find exactly 3 problems
+4. PLAN        │ Main                  │ Main + Scribe         │ Decompose into tasks → docs/plans/PLAN.md, no placeholders
+5. BUILD       │ Main                  │ Main                  │ Write code (TDD: red → green → refactor)
+6. VERIFY      │ Main                  │ Main                  │ Run tests fresh, capture raw exit code + output
+7. REVIEW      │ Main self-review      │ Adversary (cold-start)│ Code vs spec — find exactly 3 divergences
+8. QC          │ Main                  │ Scope Guard           │ Spec fingerprint vs implementation, AC coverage
+9. POST-REVIEW │ Human checkpoint      │ Scope Guard           │ Final gate — BLOCKED on any unresolved issue
+10. SESSION    │ Main (acting as Scribe)│ Scribe               │ SESSION_PATCH.md + DEFERRED.md + AUDIT_LOG.jsonl
+11. COMMIT     │ Main                  │ Main                  │ Git commit
+12. RETRO      │ Main                  │ Audit Logger          │ add_lesson to MCP + finalize AUDIT_LOG.jsonl
 ```
+
+**AUDIT_LOG.jsonl:** committed file at `docs/audit/AUDIT_LOG.jsonl`. One event per line. Main + sub-agents append-only — never modify existing lines. Replaces per-phase `.phase-gates/*.gate` files from earlier AMAW iterations (which polluted the repo with ephemeral state). Schema documented in `docs/amaw-workflow.md`.
 
 **Status tracking:** `[ ]` not started · `[C]` clarify · `[D]` design · `[P]` plan · `[B]` build · `[V]` verify · `[R]` review · `[Q]` QC · `[PR]` post-review · `[S]` session · `[✓]` done
 
@@ -89,9 +95,9 @@ Agents are known to skip phases to "save time." This is explicitly forbidden.
 | Skip PLAN, jump to BUILD | "It's a small change" | Small changes grow; no plan = no checkpoint |
 | Skip VERIFY after BUILD | "Tests passed earlier" | Stale results are not evidence |
 | Skip REVIEW after VERIFY | "I wrote it, I know it's correct" | Author blindness is real |
-| Skip POST-REVIEW | "I already reviewed in phase 7" | Phase 7 has author blindness. POST-REVIEW is a **human-interactive pause** so the user can veto, redirect, or request `/review-impl` before SESSION/COMMIT burns the diff in. **NEVER skippable**, but lightweight (see Phase 9). |
-| Skip SESSION before COMMIT | "I'll update later" | You won't. Context is lost |
-| Combine multiple phases | "CLARIFY+DESIGN+PLAN in one go" | Phases exist to create pause points for user input |
+| Skip POST-REVIEW | "I already reviewed in phase 7" | Phase 7 is a code-review pass; POST-REVIEW is the final conservative gate (human in default mode, Scope Guard in AMAW). Different scope, different agent. **NEVER skippable.** |
+| Skip SESSION before COMMIT | "I'll update later" | You won't. Context is lost. Scribe must run. |
+| Combine multiple phases | "CLARIFY+DESIGN+PLAN in one go" | Each phase boundary triggers a different sub-agent — combining skips the agent |
 
 **The only allowed skips** are for tasks classified as **XS** by the size protocol below. All other tasks must complete every phase. If a phase doesn't list skip conditions, it CANNOT be skipped.
 
@@ -140,56 +146,92 @@ If during BUILD you discover the task is larger than classified — STOP, reclas
 
 **Phase transition protocol:**
 1. State task size classification before starting (XS/S/M/L/XL with counts)
-2. Before starting any phase, update `.workflow-state.json` with current phase
-3. Before leaving any phase, record the phase output/evidence
-4. If during work you discover the task is larger than classified — STOP, reclassify, announce to user
-5. User can authorize additional skips explicitly — but the agent must never self-authorize
+2. Detect mode: AMAW if user trigger present (`/amaw`, "use AMAW"), else default v2.2
+3. Before starting any phase, update `.workflow-state.json` (workflow-gate.sh phase <name>)
+4. Before leaving any phase, append an event to `docs/audit/AUDIT_LOG.jsonl` (one JSON line)
+5. After completion: `./scripts/workflow-gate.sh complete <phase> "<evidence>"`
+6. If during work you discover the task is larger than classified — STOP, reclassify, append `size_change` event to AUDIT_LOG
+7. Default mode: human is the gate at CLARIFY end and POST-REVIEW. AMAW mode: Scope Guard. Either way: no self-authorized skips.
 
 **Task types:** `[FE]` frontend only · `[BE]` backend only · `[FS]` full-stack (backend + frontend)
 
 ### Role perspectives
-- **Architect** — scoping, dependencies, system-level impact
-- **PO (Product Owner)** — acceptance criteria, design sign-off, final QC
-- **Lead** — technical design, plan quality, code review (patterns, security, a11y)
-- **Developer** — implementation, TDD, verification, session tracking, commits
-- **QA** — test against acceptance criteria, edge cases, regression
 
-When playing each role, shift perspective accordingly. Architect thinks about system boundaries. PO thinks about user value and acceptance. Lead thinks about code quality and maintainability. Developer thinks about correctness and efficiency. QA thinks about what can break.
+**Main session roles (executor, both modes):**
+- **Architect** — scoping, dependencies, system-level impact
+- **Developer** — implementation, TDD, verification, session tracking, commits
+
+**Default mode (v2.2) review:**
+- Main session does self-review at REVIEW phases with explicit adversarial framing ("if you wanted to break this, where would you look?")
+- Human approves at CLARIFY end + POST-REVIEW end before SESSION
+
+**AMAW mode sub-agent roles (cold-start, read files only):**
+- **Adversary** — finds exactly 3 problems (design review + code review). Never says what's good.
+- **Scope Guard** — compares spec fingerprint vs implementation, checks AC coverage, final gate
+- **Scribe** — records all decisions, detects deferred items, writes SESSION_PATCH + DEFERRED.md + AUDIT_LOG
+- **Audit Logger** — writes `add_lesson` to MCP, finalizes AUDIT_LOG.jsonl at RETRO
+
+See `docs/amaw-workflow.md` for full AMAW prompt templates and spawn protocol.
 
 ---
 
-### Phase 1: CLARIFY (Brainstorming Protocol)
+### AMAW Sub-Agent Spawn Protocol (opt-in, when AMAW mode is active)
 
-Absorbed from Superpowers. Don't jump into code — clarify first.
+**When main session spawns a sub-agent (AMAW mode only):**
+1. Ensure required input files exist (spec, plan, prior AUDIT_LOG events)
+2. Spawn the agent with a prompt that specifies ONLY the files it should read — never the chat history
+3. Agent appends its verdict event to `docs/audit/AUDIT_LOG.jsonl`
+4. Main session reads the agent's event — if REJECTED/BLOCKED, fix and respawn
+5. After completion: `./scripts/workflow-gate.sh complete <phase> "<evidence>"`
 
-1. **Explore context** — read relevant files, docs, git history
-2. **Ask ONE question at a time** — multiple choice preferred, never overwhelm
-3. **Propose 2-3 approaches** with trade-offs after enough context
-4. **Present design in sections** — scale to complexity (few sentences to 300 words per section)
-5. **Write spec file** to `docs/specs/YYYY-MM-DD-<topic>.md` for non-trivial tasks
-6. **Self-review spec** — check for placeholders, contradictions, ambiguity, scope creep
-7. **User approval gate** — do NOT proceed to Phase 2 without user sign-off
+**AUDIT_LOG.jsonl event format (one line per event):**
+```jsonl
+{"ts":"2026-05-15T17:42:00Z","task":"phase-14-model-swap","phase":"review-design","agent":"adversary","action":"review","status":"REJECTED","findings_count":3,"block_count":2,"warn_count":1,"note":"..."}
+```
 
-**Skip conditions:** Only for tasks classified **XS** (1 file, 0-1 logic changes, 0 side effects). If you haven't counted yet, you can't skip.
+Common actions: `phase_enter`, `phase_complete`, `review`, `qc`, `deferred_detected`, `size_change`, `commit`, `sprint_complete`.
+
+**Deferred item protocol (both modes):**
+Any time main session output contains "later", "deferred", "future sprint", "out of scope", "TODO", "TBD" → write it to `docs/deferred/DEFERRED.md` before SESSION phase completes. In AMAW mode the Scribe handles this; in default mode the main session does. An item mentioned only in chat does not exist.
+
+**Context budget guard (AMAW only):**
+If BUILD phase has 3+ tasks completed without spawning any agent → spawn Scribe checkpoint before continuing.
+
+**Full AMAW prompt templates:** `docs/amaw-workflow.md` — Sub-Agent Prompt Templates section.
+
+---
+
+### Phase 1: CLARIFY
+
+Don't jump into code — clarify first.
+
+1. **Explore context** — `search_lessons(query: "<task intent>")`, read relevant files, git history
+2. **Scan DEFERRED.md** for items whose trigger condition is now met (AMAW mode: spawn Scribe to do this; default mode: main session does)
+3. **Write assumptions** — explicit scope, constraints, open questions to `docs/specs/YYYY-MM-DD-<topic>.md`
+4. **Propose 2-3 approaches** with trade-offs
+5. **Self-review spec** — check for placeholders, contradictions, ambiguity, scope creep
+6. **Default mode:** present spec to human, get explicit OK before proceeding. **AMAW mode:** assumptions are written explicitly and challenged by Adversary at next phase — no human approval gate.
+7. **Append `phase_complete`** event to AUDIT_LOG.jsonl, then `./scripts/workflow-gate.sh complete clarify "<one-liner>"`
+
+**Skip conditions:** Only for tasks classified **XS** (1 file, 0-1 logic changes, 0 side effects).
 
 ---
 
 ### Phase 4: PLAN (Task Decomposition)
 
-Absorbed from Superpowers. Break work into executable chunks before coding.
+Break work into executable chunks before coding.
 
 - Decompose into **bite-sized tasks (2-5 minutes each)**
 - Each task specifies: **exact file paths, complete code intent, verification command**
 - **No placeholders allowed** — no "TBD", "TODO", "add error handling here"
-- For large tasks (>5 files), write plan to `docs/plans/YYYY-MM-DD-<feature>.md`
-- Self-review checklist: spec coverage, placeholder scan, type/signature consistency
+- Write plan to `docs/plans/YYYY-MM-DD-<feature>.md`
+- **AMAW mode:** spawn Scribe to validate plan (no placeholders, tasks are concrete, size classification correct). **Default mode:** main session self-validates.
+- Append `phase_complete` event to AUDIT_LOG.jsonl
+- **Run** `./scripts/workflow-gate.sh complete plan "<N> tasks, size <XS|S|M|L>"`
 
 **Execution mode decision** (for large plans):
-- **Inline** (default): agent executes tasks sequentially with checkpoints
-- **Subagent dispatch** (multi-file, independent tasks): fresh agent per task with 2-stage review
-  - Stage 1: spec compliance review
-  - Stage 2: code quality review
-  - Never skip either stage; never proceed with unfixed issues
+- **Inline** (default): main session executes tasks sequentially with context-budget checkpoints
+- **Subagent dispatch** (multi-file, independent tasks): fresh agent per task, Adversary review per batch
 
 **Skip conditions:** Only for tasks classified **XS** or **S**. If classified S, CLARIFY is still required.
 
@@ -241,37 +283,26 @@ Both stages must pass. If issues found → fix → re-verify (Phase 6) → re-re
 
 ---
 
-### Phase 9: POST-REVIEW (Human-Interactive Checkpoint) — NEVER skippable
+### Phase 9: POST-REVIEW — NEVER skippable
 
-**Why this phase exists:** Forcing-function human pause before SESSION and COMMIT burn the diff in. The user can veto, redirect, or request deeper scrutiny.
+**Why this phase exists:** the final conservative gate before SESSION. Reads the full picture (verify events + code-review events + qc events from AUDIT_LOG) and issues a single verdict. Any unresolved issue from any prior review = BLOCKED.
 
-**Why it is NOT a self-adversarial re-read:** Self-review-right-after-writing-code rubber-stamps reliably. Agents pattern-match to their own reasoning and emit "0 issues found" as a ritual close-out, even when real coverage gaps exist. Deep review is moved to an explicit separate mental mode — the `/review-impl` command.
+**Default mode:** human reviews the AUDIT_LOG, the spec, and the diff. Confirms all REVIEW findings addressed, AC coverage matches, no spec drift. Approves with "POST-REVIEW OK" or rejects with specific findings.
 
-**What this phase IS:**
+**AMAW mode:** spawn Scope Guard (cold-start). Reads AUDIT_LOG.jsonl events + spec + design + diff. Writes verdict event with `status: CLEAR | BLOCKED`. If BLOCKED → fix the specific blocker → re-run QC → re-run POST-REVIEW.
 
-1. **Present a concise summary** — files touched, key decisions, verify evidence (tests/build/lint).
-2. **STOP and WAIT for human response.** Do NOT proceed until the human replies.
-3. If the human asks for a deeper look — or the code is safety-sensitive (auth, tenant isolation, destructive ops, injection defense, new integration boundary) — invoke `/review-impl` before continuing.
-4. If the human approves, proceed to SESSION.
+**What gets checked (either mode):**
+1. Spec fingerprint (design event hash vs current DESIGN.md) — unexplained drift = BLOCKED
+2. All REVIEW-CODE BLOCK findings resolved
+3. AC coverage complete (all listed acceptance criteria covered or explicitly deferred)
+4. No OPEN deferred items with trigger condition already met
 
-**What this phase is NOT:** A ritual self-re-read that ends in "Post-review: 0 issues found." If you catch yourself about to output that line without a specific concern, you are rubber-stamping — just present the summary and stop.
-
-**Completion evidence format:**
+**Completion evidence:**
 ```
-./scripts/workflow-gate.sh complete post-review "summary presented, human approved: <one-liner>"
+./scripts/workflow-gate.sh complete post-review "<reviewer> CLEAR: <one-liner>"
 ```
 
-**When to proactively suggest `/review-impl` in your summary (without being asked):**
-- Auth, credential, or token handling
-- Tenant-isolation boundaries (project_id scoping)
-- Destructive operations (delete, truncate, force-push)
-- Injection / sanitization defenses (SQL params, HTML escape, SSRF guards)
-- Non-trivial integration points (new service boundary, external API)
-- Anything the user previously flagged as load-bearing
-
-### /review-impl (on-demand adversarial review)
-
-Separate from POST-REVIEW. Invoke when: human asks, safety-sensitive code, or something feels off. Scoped to ask **what the test coverage misses**, not **whether the tests as written pass**. See `.claude/commands/review-impl.md`.
+**For safety-sensitive code** (auth, tenant isolation, destructive ops, injection defense, new service boundary): in AMAW mode, spawn a second Adversary with security framing before Scope Guard runs. In default mode, the human should explicitly walk a security checklist. See `docs/amaw-workflow.md` — Anti-Consensus Mechanisms.
 
 ---
 

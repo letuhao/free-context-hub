@@ -10,6 +10,7 @@ import {
 } from './core/index.js';
 import { createMcpToolsServer } from './mcp/index.js';
 import { createApiApp } from './api/index.js';
+import { startSweepScheduler } from './services/sweepScheduler.js';  // Phase 13 Sprint 13.2
 
 const logger = createModuleLogger('main');
 
@@ -19,6 +20,15 @@ async function main() {
   await applyMigrations();
   await bootstrapKgIfEnabled().catch(err => {
     logger.error({ error: err instanceof Error ? err.message : String(err) }, 'kg bootstrap failed');
+  });
+
+  // Phase 13 Sprint 13.2 — background TTL sweep for artifact_leases.
+  startSweepScheduler();
+
+  // Phase 13 Sprint 13.5 — seed built-in taxonomy profiles from config/taxonomy-profiles/.
+  const { bootstrapBuiltinTaxonomyProfiles } = await import('./services/taxonomyBootstrap.js');
+  await bootstrapBuiltinTaxonomyProfiles().catch((err) => {
+    logger.error({ err: String(err) }, 'taxonomy bootstrap failed (non-fatal)');
   });
 
   // ── MCP Server (:3000) ──

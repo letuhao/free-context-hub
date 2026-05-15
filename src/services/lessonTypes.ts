@@ -10,14 +10,18 @@ export interface LessonType {
   color: string;
   template: string | null;
   is_builtin: boolean;
+  scope: string;
   created_at: string;
 }
 
 /** List all lesson types (built-in + custom). */
 export async function listLessonTypes(): Promise<LessonType[]> {
   const pool = getDbPool();
+  // SS2 unification: this flat list is the scope='global' registry surface
+  // (5 builtins + custom global types). scope='profile' types are managed via
+  // taxonomy profiles and surface through getActiveProfile, not this list.
   const res = await pool.query(
-    `SELECT * FROM lesson_types ORDER BY is_builtin DESC, type_key`,
+    `SELECT * FROM lesson_types WHERE scope = 'global' ORDER BY is_builtin DESC, type_key`,
   );
   return res.rows ?? [];
 }
@@ -39,8 +43,8 @@ export async function createLessonType(params: {
 }): Promise<LessonType> {
   const pool = getDbPool();
 
-  if (!/^[a-z][a-z0-9_]*$/.test(params.type_key)) {
-    throw new ContextHubError('BAD_REQUEST', 'type_key must be lowercase letters, numbers, and underscores (start with letter).');
+  if (!/^[a-z][a-z0-9_-]*$/.test(params.type_key)) {
+    throw new ContextHubError('BAD_REQUEST', 'type_key must be lowercase letters, numbers, hyphens, and underscores (start with letter).');
   }
   if (params.type_key.length > 64) {
     throw new ContextHubError('BAD_REQUEST', 'type_key must be 64 characters or fewer.');
@@ -54,8 +58,8 @@ export async function createLessonType(params: {
 
   try {
     const res = await pool.query(
-      `INSERT INTO lesson_types (type_key, display_name, description, color, template, is_builtin)
-       VALUES ($1, $2, $3, $4, $5, false) RETURNING *`,
+      `INSERT INTO lesson_types (type_key, display_name, description, color, template, is_builtin, scope)
+       VALUES ($1, $2, $3, $4, $5, false, 'global') RETURNING *`,
       [
         params.type_key,
         params.display_name,
@@ -113,13 +117,16 @@ export async function updateLessonType(
 export async function deleteLessonType(typeKey: string): Promise<void> {
   const pool = getDbPool();
 
-  // Check if built-in
-  const existing = await pool.query(`SELECT is_builtin FROM lesson_types WHERE type_key = $1`, [typeKey]);
+  // Check if built-in / profile-scoped
+  const existing = await pool.query(`SELECT is_builtin, scope FROM lesson_types WHERE type_key = $1`, [typeKey]);
   if (!existing.rows?.[0]) {
     throw new ContextHubError('NOT_FOUND', `Lesson type "${typeKey}" not found.`);
   }
   if (existing.rows[0].is_builtin) {
     throw new ContextHubError('BAD_REQUEST', 'Built-in lesson types cannot be deleted.');
+  }
+  if (existing.rows[0].scope === 'profile') {
+    throw new ContextHubError('BAD_REQUEST', 'Profile-scoped lesson types are managed via taxonomy profiles, not the type API.');
   }
 
   // Check if any lessons use this type

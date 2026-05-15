@@ -1,21 +1,17 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+// Phase 13 longrun (DEFERRED-005 fix): switched from next/font/google to the
+// official `geist` npm package. next/font/google requires network access to
+// fonts.gstatic.com at build time; the build host can't reach it in some
+// environments, breaking the production build. `geist` ships the font files
+// locally, making the build network-independent.
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
 import { ProjectProvider } from "@/contexts/project-context";
 import { ToastProvider } from "@/components/ui/toast";
 import { Sidebar } from "@/components/sidebar";
 import { KeyboardShortcutsTrigger } from "@/components/keyboard-shortcuts-trigger";
 import { CommandPalette } from "@/components/ui/command-palette";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "ContextHub",
@@ -30,7 +26,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full dark`}
+      className={`${GeistSans.variable} ${GeistMono.variable} h-full dark`}
     >
       <body className="h-screen overflow-hidden flex bg-zinc-950 text-zinc-100 font-[family-name:var(--font-geist-sans)]">
         <ProjectProvider>

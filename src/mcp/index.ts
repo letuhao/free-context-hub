@@ -59,10 +59,29 @@ import {
   removeProjectFromGroup,
   listGroupsForProject,
   resolveProjectIds,
+  // Phase 13 Sprint 13.1: artifact leases
+  claimArtifact,
+  releaseArtifact,
+  renewArtifact,
+  listActiveClaims,
+  checkArtifactAvailability,
+  // Phase 13 Sprint 13.3: review requests
+  submitForReview,
+  listReviewRequests,
+  // Phase 13 Sprint 13.5: taxonomy profiles
+  listTaxonomyProfiles,
+  getTaxonomyProfileBySlug,
+  getActiveProfile,
+  activateProfile,
+  deactivateProfile,
+  getValidLessonTypes,
 } from '../core/index.js';
+import { LESSON_STATUS_ALL, LESSON_STATUS_WRITABLE } from '../constants/lessonStatus.js';
 import { formatToolResponse, OutputFormatSchema } from './formatters.js';
 import { isFeatureEnabled } from '../services/featureToggles.js';
 import { searchChunks } from '../services/documentChunks.js';
+import { logLessonAccess, isSalienceDisabled, type AccessLogEntry } from '../services/salience.js';
+import { getDbPool } from '../db/client.js';
 
 // ── MCP error boundary: convert ContextHubError → McpError at protocol edge ──
 const CONTEXT_HUB_TO_MCP_CODE: Record<string, number> = {
@@ -943,15 +962,18 @@ function createMcpToolsServer() {
           .describe('Project identifier. Optional if DEFAULT_PROJECT_ID is set; otherwise required.'),
         filters: z
           .object({
+            // Phase 13 Sprint 13.5: pass-through string filter (was z.enum). Profile types are
+            // valid here as filters; backend SQL accepts any string + just filters rows.
             lesson_type: z
-              .enum(['decision', 'preference', 'guardrail', 'workaround', 'general_note'])
+              .string()
               .optional()
-              .describe('Optional lesson type filter.'),
+              .describe('Optional lesson type filter (built-in or active profile type).'),
             tags_any: z.array(z.string().min(1)).optional().describe('Optional tags-any filter (overlap).'),
+            // Phase 13 Sprint 13.3: extended with pending-review.
             status: z
-              .enum(['draft', 'active', 'superseded', 'archived'])
+              .enum(LESSON_STATUS_ALL)
               .optional()
-              .describe('Optional lifecycle status filter (Phase 3).'),
+              .describe('Optional lifecycle status filter.'),
           })
           .optional(),
         page: z
@@ -977,7 +999,7 @@ function createMcpToolsServer() {
             captured_by: z.string().nullable(),
             summary: z.string().nullable().optional(),
             quick_action: z.string().nullable().optional(),
-            status: z.enum(['draft', 'active', 'superseded', 'archived']).optional(),
+            status: z.enum(LESSON_STATUS_ALL).optional(),
             superseded_by: z.string().nullable().optional(),
           }),
         ),
@@ -1002,7 +1024,15 @@ function createMcpToolsServer() {
   server.registerTool(
     'search_lessons',
     {
-      description: 'Semantic search over lesson embeddings. Supports single project, multi-project, group-based, or include-all-groups search.',
+      description:
+        'Semantic search over lesson embeddings. Supports single project, multi-project, group-based, or include-all-groups search. ' +
+        'Results are deduplicated by (project_id, lesson_type, near-semantic content key) so near-duplicate fixtures or reimported ' +
+        'rows collapse to one representative — this MAY return fewer than `limit` items when the retrieval pool has many duplicates. ' +
+        'Set env LESSONS_DEDUP_DISABLED=true on the server to restore legacy behavior (returns every raw match including duplicates). ' +
+        'Results are ALSO salience-weighted: lessons that have been consumed more often (by reflect, improve, suggest-tags, ' +
+        'version-lookup) or historically fired as guardrails get a small ranking boost via time-decayed access counts. ' +
+        'Boost is multiplicative and capped at ~10% by default. Env knobs: LESSONS_SALIENCE_DISABLED=true for umbrella off, ' +
+        'LESSONS_SALIENCE_ALPHA=<0..1> for boost magnitude, LESSONS_SALIENCE_HALF_LIFE_DAYS=<int> for decay speed.',
       inputSchema: z.object({
         workspace_token: z.string().optional().describe('Workspace token (required only if MCP_AUTH_ENABLED=true).'),
         project_id: z
@@ -1027,10 +1057,11 @@ function createMcpToolsServer() {
         query: z.string().min(1).describe('Natural language query to embed and search against lesson embeddings.'),
         filters: z
           .object({
+            // Phase 13 Sprint 13.5: pass-through string filter (was z.enum).
             lesson_type: z
-              .enum(['decision', 'preference', 'guardrail', 'workaround', 'general_note'])
+              .string()
               .optional()
-              .describe('Optional lesson type filter.'),
+              .describe('Optional lesson type filter (built-in or active profile type).'),
             tags_any: z.array(z.string().min(1)).optional().describe('Optional tags-any filter (overlap).'),
             include_all_statuses: z
               .boolean()
@@ -1051,7 +1082,7 @@ function createMcpToolsServer() {
             content_snippet: z.string(),
             tags: z.array(z.string()),
             score: z.number(),
-            status: z.enum(['draft', 'active', 'superseded', 'archived']).optional(),
+            status: z.enum(LESSON_STATUS_ALL).optional(),
           }),
         ),
         explanations: z.array(z.string()),
@@ -1096,7 +1127,12 @@ function createMcpToolsServer() {
         'Hybrid semantic + FTS search over extracted document chunks (PDFs, DOCX, images). ' +
         'Returns chunks with parent document name, page number, heading, and chunk type ' +
         'so agents can cite the exact source. Use this for questions about content in ' +
-        'uploaded documents rather than lessons or code.',
+        'uploaded documents rather than lessons or code. ' +
+        'Results are deduplicated by (project_id, chunk_type, near-semantic content key) ' +
+        'so near-duplicate chunks (e.g. multiple extraction attempts of the same page, or ' +
+        'reimported documents) collapse to one representative — this MAY return fewer than ' +
+        '`limit` items when the retrieval pool has many duplicates. Set env ' +
+        'CHUNKS_DEDUP_DISABLED=true on the server to restore legacy behavior.',
       inputSchema: z.object({
         workspace_token: z.string().optional().describe('Workspace token (required only if MCP_AUTH_ENABLED=true).'),
         project_id: z.string().min(1).optional().describe('Project identifier. Optional if DEFAULT_PROJECT_ID is set.'),
@@ -1291,9 +1327,13 @@ function createMcpToolsServer() {
             .min(1)
             .optional()
             .describe('Project identifier for scoping this lesson. Optional if DEFAULT_PROJECT_ID is set on the server.'),
+          // Phase 13 Sprint 13.5: pass-through string. Validation lives at the
+          // service layer (addLesson → validateLessonType) so REST + MCP + import
+          // all hit the same gate using the project's active taxonomy profile.
           lesson_type: z
-            .enum(['decision', 'preference', 'guardrail', 'workaround', 'general_note'])
-            .describe('Lesson type (required).'),
+            .string()
+            .min(1)
+            .describe('Lesson type (required) — built-in or active profile type.'),
           title: z.string().min(1).describe('Short title (required).'),
           content: z.string().min(1).describe('Full content (required; embedded for semantic search).'),
           tags: z.array(z.string()).optional().describe('Optional tags for filtering/grouping.'),
@@ -1599,7 +1639,9 @@ function createMcpToolsServer() {
           .optional()
           .describe('Project identifier. Optional if DEFAULT_PROJECT_ID is set; otherwise required.'),
         lesson_id: z.string().min(1).describe('Lesson UUID to update.'),
-        status: z.enum(['draft', 'active', 'superseded', 'archived']).describe('New lifecycle status.'),
+        // Phase 13 Sprint 13.3: write-path keeps WRITABLE; 'pending-review' is
+        // reachable only via submit_for_review.
+        status: z.enum(LESSON_STATUS_WRITABLE).describe('New lifecycle status (writable only — pending-review is set via submit_for_review).'),
         superseded_by: z.string().min(1).optional().describe('Optional replacement lesson UUID when superseding.'),
         output_format: OutputFormatSchema.default('auto_both').describe('Response format: auto_both | json_only | json_pretty | summary_only.'),
       }),
@@ -1611,6 +1653,13 @@ function createMcpToolsServer() {
     async ({ workspace_token, project_id, lesson_id, status, superseded_by, output_format }) => {
       assertWorkspaceToken(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
+      // Phase 13 Sprint 13.3 runtime guard: belt-and-suspenders for raw callers bypassing zod.
+      if ((status as string) === 'pending-review') {
+        throw new ContextHubError(
+          'BAD_REQUEST',
+          "Cannot transition to 'pending-review' via update_lesson_status. Use submit_for_review to create a review request.",
+        );
+      }
       const result = await updateLessonStatus({
         projectId: pid,
         lessonId: lesson_id,
@@ -1686,6 +1735,24 @@ function createMcpToolsServer() {
         filters: { include_all_statuses: false },
       });
       const bullets = retrieved.matches.map(m => `- ${m.title}: ${m.content_snippet}`);
+
+      // Sprint 12.1c — write path #2: consumption-reflect. These lessons
+      // are about to be piped into LLM synthesis, which is THE canonical
+      // "this memory was used" signal. Full weight 1.0, fire-and-forget.
+      // The kill-switch is enforced by logLessonAccess's env check path —
+      // but we also guard here to skip the pool import + array build cost
+      // when disabled.
+      if (!isSalienceDisabled() && retrieved.matches.length > 0) {
+        const entries: AccessLogEntry[] = retrieved.matches.map((m) => ({
+          lesson_id: m.lesson_id,
+          project_id: m.project_id ?? pid,
+          context: 'consumption-reflect',
+          weight: 1.0,
+          metadata: { topic },
+        }));
+        void logLessonAccess(getDbPool(), entries);
+      }
+
       const synth = await reflectOnTopic({ topic, bullets });
       const result = {
         project_id: pid,
@@ -2632,6 +2699,373 @@ function createMcpToolsServer() {
       const groups = await listGroupsForProject(projectId);
       const summary = `list_project_groups: project=${projectId} groups=${groups.length}`;
       return formatToolResponse({ project_id: projectId, groups }, summary, output_format);
+    },
+  );
+
+  // ──────────────────────────────────────────────────────────────
+  // Phase 13 Sprint 13.1 — Artifact Leasing (5 tools)
+  // See docs/specs/2026-05-15-phase-13-sprint-13.1-design.md v2.1
+  // ──────────────────────────────────────────────────────────────
+
+  server.registerTool(
+    'claim_artifact',
+    {
+      description: 'Claim a time-bounded exclusive working lease on a named artifact (lesson, document, report-section, or custom). Prevents duplicate work by other agents. Returns conflict if another agent holds an active lease.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional().describe('Project identifier. Optional if DEFAULT_PROJECT_ID is set.'),
+        agent_id: z.string().min(1).describe('Caller identity — opaque string. Passed explicitly per design D1.'),
+        artifact_type: z.string().min(1).describe("Category: 'lesson' | 'document' | 'report-section' | 'custom'."),
+        artifact_id: z.string().min(1).describe('Lowercase kebab-case slug; see docs/artifact-id-convention.md.'),
+        task_description: z.string().min(1).max(500).describe('What this agent intends to do — shown in GUI Active Work panel.'),
+        ttl_minutes: z.number().int().min(1).max(240).optional().describe('Lease duration (default 30, max 240).'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      // DEFERRED-007 fix (Sprint 13.7): MCP SDK normalizeObjectSchema returns
+      // undefined for ZodDiscriminatedUnion → output validation crashes with
+      // _zod undefined-read. Flattened to z.object with optional discriminated fields.
+      outputSchema: z.object({
+        status: z.enum(['claimed', 'conflict', 'rate_limited']),
+        lease_id: z.string().optional(),
+        expires_at: z.string().optional(),
+        incumbent_agent_id: z.string().optional(),
+        incumbent_task: z.string().optional(),
+        seconds_remaining: z.number().optional(),
+        reason: z.enum(['max_active_leases', 'race_exhausted', 'attempt_rate']).optional(),
+        retry_after_seconds: z.number().optional(),
+      }),
+    },
+    async ({ workspace_token, project_id, agent_id, artifact_type, artifact_id, task_description, ttl_minutes, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      const result = await claimArtifact({
+        project_id: projectId,
+        agent_id,
+        artifact_type,
+        artifact_id,
+        task_description,
+        ttl_minutes,
+      });
+      const summary = `claim_artifact: ${result.status}${result.status === 'claimed' ? ` lease_id=${result.lease_id}` : ''}${result.status === 'conflict' ? ` incumbent=${result.incumbent_agent_id}` : ''}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'release_artifact',
+    {
+      description: 'Release an active lease before its TTL expires. Only the lease owner (agent_id match) can release.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        agent_id: z.string().min(1).describe('Must match lease owner.'),
+        lease_id: z.string().min(1).describe('Lease UUID returned by claim_artifact.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.enum(['released', 'not_found', 'not_owner']),
+      }),
+    },
+    async ({ workspace_token, project_id, agent_id, lease_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      const result = await releaseArtifact({ project_id: projectId, agent_id, lease_id });
+      const summary = `release_artifact: ${result.status}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'renew_artifact',
+    {
+      description: 'Extend a lease before expiry. Returns cap_reached (with effective_extension_minutes) if the request would exceed MAX_TTL=240min from now.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        agent_id: z.string().min(1),
+        lease_id: z.string().min(1),
+        extend_by_minutes: z.number().int().min(1).max(120),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      // DEFERRED-007 fix: flatten to z.object with optional fields.
+      outputSchema: z.object({
+        status: z.enum(['renewed', 'cap_reached', 'not_found', 'not_owner', 'expired']),
+        expires_at: z.string().optional(),
+        effective_extension_minutes: z.number().optional(),
+      }),
+    },
+    async ({ workspace_token, project_id, agent_id, lease_id, extend_by_minutes, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      const result = await renewArtifact({ project_id: projectId, agent_id, lease_id, extend_by_minutes });
+      const summary = `renew_artifact: ${result.status}${'effective_extension_minutes' in result ? ` ext=${result.effective_extension_minutes}min` : ''}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'list_active_claims',
+    {
+      description: 'List all active (non-expired) artifact leases in this project. Optional artifact_type filter. Used by agents at session start to discover what other agents are working on.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        artifact_type: z.string().min(1).optional().describe('Optional filter.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        claims: z.array(z.object({
+          lease_id: z.string(),
+          artifact_type: z.string(),
+          artifact_id: z.string(),
+          agent_id: z.string(),
+          task_description: z.string(),
+          expires_at: z.string(),
+          seconds_remaining: z.number(),
+        })),
+      }),
+    },
+    async ({ workspace_token, project_id, artifact_type, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      const result = await listActiveClaims({ project_id: projectId, artifact_type });
+      const summary = `list_active_claims: ${result.claims.length} claim(s)`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'check_artifact_availability',
+    {
+      description: 'Snapshot check whether an artifact has an active lease. Note: this is a non-binding snapshot — always use claim_artifact as the authoritative claim.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        artifact_type: z.string().min(1),
+        artifact_id: z.string().min(1),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      // DEFERRED-007 fix: flatten to z.object with optional fields.
+      outputSchema: z.object({
+        available: z.boolean(),
+        lease: z.object({
+          artifact_type: z.string(),
+          artifact_id: z.string(),
+          agent_id: z.string(),
+          task_description: z.string(),
+          expires_at: z.string(),
+          seconds_remaining: z.number(),
+        }).optional(),
+      }),
+    },
+    async ({ workspace_token, project_id, artifact_type, artifact_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      const result = await checkArtifactAvailability({ project_id: projectId, artifact_type, artifact_id });
+      const summary = `check_artifact_availability: available=${result.available}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  // ── Phase 13 Sprint 13.3: F2 core — review request tools ──
+  server.registerTool(
+    'submit_for_review',
+    {
+      description: 'Submit a draft lesson for human review. Transitions lesson.status to pending-review and creates a review_requests record. Note: it is recommended that the agent also call release_artifact for any active lease on the same lesson once submitted.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        agent_id: z.string().min(1).describe("Caller identity (passed explicitly, not derived)."),
+        lesson_id: z.string().uuid(),
+        reviewer_note: z.string().optional(),
+        intended_reviewer: z.string().optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      // DEFERRED-007 fix: flatten to z.object with optional fields.
+      outputSchema: z.object({
+        status: z.enum(['submitted', 'lesson_not_found', 'wrong_lesson_status', 'already_pending']),
+        request_id: z.string().optional(),
+        lesson_id: z.string().optional(),
+        lesson_title: z.string().optional(),
+        created_at: z.string().optional(),
+        current_status: z.string().optional(),
+        existing_request_id: z.string().optional(),
+      }),
+    },
+    async ({ workspace_token, project_id, agent_id, lesson_id, reviewer_note, intended_reviewer, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      const result = await submitForReview({
+        project_id: projectId,
+        agent_id,
+        lesson_id,
+        reviewer_note,
+        intended_reviewer,
+      });
+      const summary = `submit_for_review: status=${result.status}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'list_review_requests',
+    {
+      description: 'List review requests for a project. Default filter status=pending.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        status: z.enum(['pending', 'approved', 'returned']).optional(),
+        submitted_by: z.string().optional(),
+        limit: z.number().int().min(1).max(100).optional(),
+        offset: z.number().int().min(0).optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        items: z.array(z.object({
+          request_id: z.string(),
+          lesson_id: z.string(),
+          lesson_title: z.string(),
+          lesson_type: z.string(),
+          submitter_agent_id: z.string(),
+          reviewer_note: z.string().nullable(),
+          intended_reviewer: z.string().nullable(),
+          status: z.enum(['pending', 'approved', 'returned']),
+          resolved_at: z.string().nullable(),
+          resolved_by: z.string().nullable(),
+          resolution_note: z.string().nullable(),
+          created_at: z.string(),
+        })),
+        total_count: z.number().int(),
+      }),
+    },
+    async ({ workspace_token, project_id, status, submitted_by, limit, offset, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      const result = await listReviewRequests({
+        project_id: projectId,
+        status,
+        submitted_by,
+        limit,
+        offset,
+      });
+      const summary = `list_review_requests: count=${result.items.length} total=${result.total_count}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  // ── Phase 13 Sprint 13.5: F3 core — taxonomy profile tools ──
+  // NOTE: avoiding z.discriminatedUnion per DEFERRED-007 (MCP SDK regression).
+  // Output shapes use plain z.object with optional/nullable fields.
+
+  const taxonomyProfileShape = z.object({
+    profile_id: z.string(),
+    slug: z.string(),
+    name: z.string(),
+    description: z.string().nullable(),
+    version: z.string(),
+    lesson_types: z.array(z.object({
+      type: z.string(),
+      label: z.string(),
+      description: z.string().optional(),
+      color: z.string().optional(),
+    })),
+    is_builtin: z.boolean(),
+    owner_project_id: z.string().nullable(),
+    created_at: z.string(),
+    updated_at: z.string(),
+  });
+
+  server.registerTool(
+    'list_taxonomy_profiles',
+    {
+      description: 'List taxonomy profiles. Filter by is_builtin or owner_project_id (use "null" string for built-ins-only).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        is_builtin: z.boolean().optional(),
+        owner_project_id: z.string().optional().describe('Filter custom profiles by owner. Use literal "null" to fetch built-ins only.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        profiles: z.array(taxonomyProfileShape),
+      }),
+    },
+    async ({ workspace_token, is_builtin, owner_project_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const owner = owner_project_id === 'null' ? null : owner_project_id;
+      const profiles = await listTaxonomyProfiles({ owner_project_id: owner, is_builtin });
+      const summary = `list_taxonomy_profiles: count=${profiles.length}`;
+      return formatToolResponse({ profiles }, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'get_active_taxonomy_profile',
+    {
+      description: 'Get the active taxonomy profile for a project (or null if none active).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        profile: taxonomyProfileShape.nullable(),
+        valid_lesson_types: z.array(z.string()),
+      }),
+    },
+    async ({ workspace_token, project_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      const profile = await getActiveProfile(projectId);
+      const valid_lesson_types = await getValidLessonTypes(projectId);
+      const summary = `get_active_taxonomy_profile: ${profile ? profile.slug : 'none'} (valid_types=${valid_lesson_types.length})`;
+      return formatToolResponse({ profile, valid_lesson_types }, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'activate_taxonomy_profile',
+    {
+      description: 'Activate a taxonomy profile by slug for a project. Profile must be built-in OR owned by this project.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        slug: z.string().min(1),
+        activated_by: z.string().optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.enum(['activated', 'profile_not_found']),
+        profile: taxonomyProfileShape.optional(),
+      }),
+    },
+    async ({ workspace_token, project_id, slug, activated_by, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      const result = await activateProfile({ project_id: projectId, slug, activated_by });
+      const summary = `activate_taxonomy_profile: ${result.status} slug=${slug}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'deactivate_taxonomy_profile',
+    {
+      description: 'Deactivate the active taxonomy profile for a project. Idempotent.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.enum(['deactivated', 'no_active_profile']),
+      }),
+    },
+    async ({ workspace_token, project_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      const result = await deactivateProfile(projectId);
+      const summary = `deactivate_taxonomy_profile: ${result.status}`;
+      return formatToolResponse(result, summary, output_format);
     },
   );
 

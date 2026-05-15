@@ -7,6 +7,8 @@ export const API_BASE = process.env.API_BASE_URL?.trim() || 'http://localhost:30
 export const MCP_URL = process.env.MCP_SERVER_URL?.trim() || 'http://localhost:3000/mcp';
 export const GUI_URL = process.env.GUI_URL?.trim() || 'http://localhost:3002';
 export const E2E_PROJECT_ID = process.env.E2E_PROJECT_ID?.trim() || 'e2e-test-project';
+// Phase 13 Sprint 13.7: a second project for cross-tenant tests (requireScope).
+export const E2E_PROJECT_ID_B = process.env.E2E_PROJECT_ID_B?.trim() || 'e2e-test-project-b';
 export const ADMIN_TOKEN = process.env.CONTEXT_HUB_WORKSPACE_TOKEN?.trim() || '';
 
 /** Unique marker for this test run — used in titles/content to avoid collisions. */

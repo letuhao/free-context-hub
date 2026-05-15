@@ -1,0 +1,513 @@
+{
+  "version": "2026-04-19",
+  "surface": "lessons",
+  "project_id_suggested": "free-context-hub",
+  "notes": [
+    "Phase 12 Sprint 12.0 — lesson-search golden set.",
+    "Seeded by hand from real lessons in the free-context-hub project (Phase 11 closeout state).",
+    "20 queries across 4 groups: confident-hit, duplicate-trap, adversarial-miss, cross-topic.",
+    "Sprint 12.1a: duplicate-trap queries now list ALL known cluster members as targets — a hit is any cluster member, since dedup collapses clusters to one representative whose UUID varies. Without this, post-dedup recall would drop artificially when the representative differs from a fixed-UUID target.",
+    "Sprint 12.1e1 (2026-04-19): broadened 20→40 queries with 15 ambiguous-multi-target + 5 semantic-paraphrase entries. Mining from lesson_access_log yielded zero novel queries (all 20 distinct mined texts matched the goldenset itself from prior baseline runs) → zero-yield fallback per spec D4: extra synthesis instead of real-dogfood group. Each new query has a reasoning field (JSON-only, not in GoldenQuery TS type)."
+  ],
+  "queries": [
+    {
+      "id": "lesson-pg-uuid-casing",
+      "group": "confident-hit",
+      "query": "how to handle pg UUID casing when building map lookups after RETURNING",
+      "target_lesson_ids": [
+        "68b2f2cb-2271-454e-bf7e-7831fafb9e3c"
+      ],
+      "must_keywords": [
+        "uuid",
+        "canonical"
+      ]
+    },
+    {
+      "id": "lesson-undici-version-pinning",
+      "group": "confident-hit",
+      "query": "why must undici userland version match the Node bundled version",
+      "target_lesson_ids": [
+        "82e14086-dc76-40f5-81f5-e7ef0c4c97ef"
+      ],
+      "must_keywords": [
+        "undici",
+        "dispatcher"
+      ]
+    },
+    {
+      "id": "lesson-pyenv-python3-shim",
+      "group": "confident-hit",
+      "query": "pyenv-win python3.bat shim fails with multi-line -c bash arguments",
+      "target_lesson_ids": [
+        "8788dd3e-2f89-4bb5-b899-d9d3c362da11"
+      ],
+      "must_keywords": [
+        "pyenv",
+        "python3"
+      ]
+    },
+    {
+      "id": "lesson-npm-test-silent-skip",
+      "group": "confident-hit",
+      "query": "npm test script lists test files explicitly so new ones silently skip",
+      "target_lesson_ids": [
+        "0f4be646-18a0-4301-b329-301b12c0945e"
+      ],
+      "must_keywords": [
+        "npm",
+        "test"
+      ]
+    },
+    {
+      "id": "lesson-api-lessons-items-shape",
+      "group": "confident-hit",
+      "query": "GET /api/lessons response shape uses items not lessons",
+      "target_lesson_ids": [
+        "2af9bb39-e127-4527-8453-4813a66ae28b"
+      ],
+      "must_keywords": [
+        "items",
+        "/api/lessons"
+      ]
+    },
+    {
+      "id": "lesson-review-impl-default",
+      "group": "confident-hit",
+      "query": "should I invoke review-impl in post-review by default in the v2.2 workflow",
+      "target_lesson_ids": [
+        "a0792c20-305b-4640-b6c7-befffcf5c3e1"
+      ],
+      "must_keywords": [
+        "review-impl",
+        "post-review"
+      ]
+    },
+    {
+      "id": "lesson-noproject-guard-hydration",
+      "group": "confident-hit",
+      "query": "NoProjectGuard hydration-safe approach for Next.js data pages",
+      "target_lesson_ids": [
+        "abe242ea-31ef-4d14-9245-92cfa16b8975"
+      ],
+      "must_keywords": [
+        "NoProjectGuard",
+        "hydration"
+      ]
+    },
+    {
+      "id": "lesson-project-crud-validation",
+      "group": "confident-hit",
+      "query": "project CRUD POST PUT endpoints with validation rules",
+      "target_lesson_ids": [
+        "6247caba-5aa7-4ce9-b4ac-3fcc9377246d"
+      ],
+      "must_keywords": [
+        "crud",
+        "validation"
+      ]
+    },
+    {
+      "id": "lesson-multi-project-color",
+      "group": "confident-hit",
+      "query": "multi-project color and description schema additions",
+      "target_lesson_ids": [
+        "1f112bf8-7da1-4b1a-a181-13855d60f628"
+      ],
+      "must_keywords": [
+        "multi-project",
+        "color"
+      ]
+    },
+    {
+      "id": "lesson-code-review-workflow-pref",
+      "group": "confident-hit",
+      "query": "code review preference: review each file group separately after bulk implementation",
+      "target_lesson_ids": [
+        "4e28d4bc-5d6e-47c7-bda5-7b2dfb761736"
+      ],
+      "must_keywords": [
+        "code review"
+      ]
+    },
+    {
+      "id": "lesson-dup-max-retry-guardrail",
+      "group": "duplicate-trap",
+      "query": "max retry attempts must be 3 external API call guardrail",
+      "target_lesson_ids": [
+        "0e08eead-db62-4668-8d7b-20281747c7ac",
+        "4abf93d6-cbca-4006-aee6-a143bd3e8979",
+        "544aae14-08aa-436c-b54b-c8ecda4587fe",
+        "5a9982a8-83e4-40a1-a8f8-280fc519f19a",
+        "689aee2c-3043-459c-8c1b-5aec8135cba6",
+        "9a34ef12-bb6d-42d3-bee3-7ff53c4d86b0",
+        "a442e5e6-dd34-4495-b1d1-c4a8c0fabd46",
+        "be30985a-e45b-47ce-82d2-f6a75dc282b8",
+        "d66e5221-5e7b-42d8-b8fc-d91c8d2ee76a"
+      ],
+      "must_keywords": [
+        "retry",
+        "3"
+      ]
+    },
+    {
+      "id": "lesson-dup-global-search-retry-pattern",
+      "group": "duplicate-trap",
+      "query": "global search test retry pattern exponential backoff",
+      "target_lesson_ids": [
+        "08f31899-df67-4be1-926f-c5c3814e511d",
+        "0f6f2651-f475-42cc-b344-360f29dd9d8d",
+        "2b07085d-f625-4791-9606-3f2bdb6491cf",
+        "48eb3621-686c-4577-9a90-dee5d445e565",
+        "9f7e114a-763a-4f96-a8c9-50195267538b",
+        "a9c36f77-6bbd-4761-af28-f06a02fec8ea",
+        "bd5b5471-267e-4404-b282-2190c751a2fb",
+        "c3920936-dc58-4a39-a17e-31949774828d",
+        "c765738c-9a44-41e2-9902-38631426ea58",
+        "d3f80630-98c9-4494-ae03-2549a728c37d",
+        "ed815b58-45a0-4083-be40-4d3cb7770f42"
+      ],
+      "must_keywords": [
+        "retry",
+        "backoff"
+      ]
+    },
+    {
+      "id": "lesson-dup-valid-impexp-fixture",
+      "group": "duplicate-trap",
+      "query": "valid impexp extra entry fixture",
+      "target_lesson_ids": [
+        "18d8cc93-46b9-4c97-b216-9cca4bb067bf",
+        "56bc9983-5092-4ce0-aba4-3deafb79f925",
+        "7577e79f-9dfb-4c80-8592-9995223beae9",
+        "8d8c1509-8667-4a83-b9c6-b3e7ea2f8418",
+        "903840d3-eb60-406b-afcc-67c675480871",
+        "dcf28a28-5514-4aa4-9aeb-046682551f37",
+        "e8c8f59f-f39e-429b-92e5-dcba267abad3",
+        "ef0e5e43-c6f8-4aa6-9942-fd625e562a79",
+        "fbb870fb-3182-4b88-980e-54bb1485887a"
+      ],
+      "must_keywords": []
+    },
+    {
+      "id": "lesson-miss-unicorn",
+      "group": "adversarial-miss",
+      "query": "how to render a rainbow unicorn in WebGL with subsurface scattering",
+      "target_lesson_ids": []
+    },
+    {
+      "id": "lesson-miss-astrophysics",
+      "group": "adversarial-miss",
+      "query": "thermonuclear astrophysics of quark-gluon plasma at LHC",
+      "target_lesson_ids": []
+    },
+    {
+      "id": "lesson-miss-falconry",
+      "group": "adversarial-miss",
+      "query": "medieval falconry training manual hood design",
+      "target_lesson_ids": []
+    },
+    {
+      "id": "lesson-cross-integration-test-backoff",
+      "group": "cross-topic",
+      "query": "integration test exponential backoff retry strategy",
+      "target_lesson_ids": [
+        "0e08eead-db62-4668-8d7b-20281747c7ac",
+        "4abf93d6-cbca-4006-aee6-a143bd3e8979",
+        "544aae14-08aa-436c-b54b-c8ecda4587fe",
+        "5a9982a8-83e4-40a1-a8f8-280fc519f19a",
+        "689aee2c-3043-459c-8c1b-5aec8135cba6",
+        "9a34ef12-bb6d-42d3-bee3-7ff53c4d86b0",
+        "a442e5e6-dd34-4495-b1d1-c4a8c0fabd46",
+        "be30985a-e45b-47ce-82d2-f6a75dc282b8",
+        "d66e5221-5e7b-42d8-b8fc-d91c8d2ee76a",
+        "08f31899-df67-4be1-926f-c5c3814e511d",
+        "0f6f2651-f475-42cc-b344-360f29dd9d8d",
+        "2b07085d-f625-4791-9606-3f2bdb6491cf",
+        "48eb3621-686c-4577-9a90-dee5d445e565",
+        "9f7e114a-763a-4f96-a8c9-50195267538b",
+        "a9c36f77-6bbd-4761-af28-f06a02fec8ea",
+        "bd5b5471-267e-4404-b282-2190c751a2fb",
+        "c3920936-dc58-4a39-a17e-31949774828d",
+        "c765738c-9a44-41e2-9902-38631426ea58",
+        "d3f80630-98c9-4494-ae03-2549a728c37d",
+        "ed815b58-45a0-4083-be40-4d3cb7770f42"
+      ],
+      "must_keywords": [
+        "retry"
+      ]
+    },
+    {
+      "id": "lesson-cross-sprint-11-closeout",
+      "group": "cross-topic",
+      "query": "sprint 11.6c-sec DNS pinning body-stall timeout security polish",
+      "target_lesson_ids": [
+        "82e14086-dc76-40f5-81f5-e7ef0c4c97ef"
+      ],
+      "must_keywords": [
+        "dns",
+        "dispatcher"
+      ]
+    },
+    {
+      "id": "lesson-cross-workflow-gate",
+      "group": "cross-topic",
+      "query": "workflow gate state machine 12-phase workflow v2.2",
+      "target_lesson_ids": [
+        "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+        "e87cd142-9fc3-4ef9-868f-11ed3e7577bf",
+        "4e28d4bc-5d6e-47c7-bda5-7b2dfb761736"
+      ],
+      "must_keywords": [
+        "workflow"
+      ],
+      "reasoning": "Re-targeted 2026-04-19 (12.1e1 /review-impl MED-2): no lesson describes the workflow-gate state machine itself. Original single target (a0792c20, /review-impl default) was a loose match via 'workflow' keyword overlap; 12.1e1 baseline data drift pushed it out of top-10, producing a spurious MISS. Re-targeted to 3 workflow-adjacent lessons — /review-impl default (a0792c20), /review-impl catches bugs (e87cd142), code-review workflow (4e28d4bc). Any-hit preserves the cross-topic probe intent while surviving data drift."
+    },
+    {
+      "id": "lesson-cross-agent-bootstrap-e2e",
+      "group": "cross-topic",
+      "query": "agent context bootstrap end-to-end testing",
+      "target_lesson_ids": [
+        "6e17baa4-75a7-4b6b-960d-b543d90896fe",
+        "2f8b0b23-b858-4fae-9a70-31c104e7fe79"
+      ],
+      "must_keywords": [
+        "bootstrap"
+      ]
+    },
+    {
+      "id": "lesson-ambig-measurement-methodology",
+      "group": "ambiguous-multi-target",
+      "query": "how do we measure RAG ranking changes rigorously",
+      "target_lesson_ids": [
+        "db9027fb-986b-4915-9dac-e6e5688c3ac1",
+        "3ab6adbf-2c0e-4274-95a4-f2683d55cefb",
+        "862f189d-6e19-49fc-a427-739427489354",
+        "bb39fe5e-0345-4b98-976b-fe3b0743f169"
+      ],
+      "must_keywords": [],
+      "reasoning": "Measurement-methodology cluster — 4 lessons cover delta-from-control, measure-first-baseline, A/B-archive-as-wiring-test, back-to-back-determinism. Any is a valid answer depending on which measurement aspect the reader cares about."
+    },
+    {
+      "id": "lesson-ambig-dedup-key-design",
+      "group": "ambiguous-multi-target",
+      "query": "how to build a near-duplicate key that doesn't over-collapse or under-collapse",
+      "target_lesson_ids": [
+        "d32dc104-3fad-495c-bfba-cafcd3d63319",
+        "004444c4-3cb8-4405-85b8-120c73c6379d",
+        "720f912b-c304-4dc7-bb9a-280657c3ed3f",
+        "cd0db880-5c36-477f-9f15-6f85dca64596"
+      ],
+      "must_keywords": [],
+      "reasoning": "Dedup-key-design cluster — normalizeForHash digit-collapse tradeoff, project_id+type inclusion, empty-content fallback, exact-id blindness. All 4 debate the same design question from different angles."
+    },
+    {
+      "id": "lesson-ambig-review-impl-default",
+      "group": "ambiguous-multi-target",
+      "query": "invoke adversarial review in post-review by default",
+      "target_lesson_ids": [
+        "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+        "e87cd142-9fc3-4ef9-868f-11ed3e7577bf"
+      ],
+      "must_keywords": [],
+      "reasoning": "review-impl default-invocation cluster — one lesson justifies default-on, the other documents what /review-impl catches that POST-REVIEW misses. Both legitimately answer 'why default-invoke'."
+    },
+    {
+      "id": "lesson-ambig-popularity-feedback",
+      "group": "ambiguous-multi-target",
+      "query": "when salience boosts cause popular lessons to drown out specific hits",
+      "target_lesson_ids": [
+        "a688cb2c-3ed5-4fdd-ad07-0a8f5f4f5d6c",
+        "ac91bc6c-f467-4c37-b503-fec8e941ca9b"
+      ],
+      "must_keywords": [],
+      "reasoning": "Popularity-feedback-loop diagnosis + mitigation — one lesson documents the loop (naive rank-weighted logging), the other documents the fix (query-conditional + composite relevance). Both are legitimate answers."
+    },
+    {
+      "id": "lesson-ambig-baseline-drift",
+      "group": "ambiguous-multi-target",
+      "query": "why do baselines drift between runs",
+      "target_lesson_ids": [
+        "bb39fe5e-0345-4b98-976b-fe3b0743f169",
+        "3ab6adbf-2c0e-4274-95a4-f2683d55cefb"
+      ],
+      "must_keywords": [],
+      "reasoning": "Baseline-determinism cluster — back-to-back-only determinism lesson, plus measure-first invariant that assumes within-session controls. Together they explain why drift appears across sessions but not within."
+    },
+    {
+      "id": "lesson-ambig-numeric-edge-cases",
+      "group": "ambiguous-multi-target",
+      "query": "handling numeric edge cases and avoiding silent failures",
+      "target_lesson_ids": [
+        "05fde055-3cef-41d4-a5d7-a65d6daeb442",
+        "5bb997e9-31a1-4ad8-8182-eefb8bdf34a8"
+      ],
+      "must_keywords": [],
+      "reasoning": "Numeric-handling cluster — NaN-through-clamp propagation + floating-point-tolerance-in-tests. Both address 'defensive numeric code' from different angles."
+    },
+    {
+      "id": "lesson-ambig-test-infra-async",
+      "group": "ambiguous-multi-target",
+      "query": "integration test fixture timing and async work",
+      "target_lesson_ids": [
+        "a6a3a11d-00e8-4b7e-83f5-18d3c24b73a7",
+        "862f189d-6e19-49fc-a427-739427489354",
+        "bb39fe5e-0345-4b98-976b-fe3b0743f169"
+      ],
+      "must_keywords": [],
+      "reasoning": "Test-infra cluster — async-extraction defeats seed-and-verify, A/B archive as superior wiring test, back-to-back determinism. Three lessons about integration-test timing / non-determinism."
+    },
+    {
+      "id": "lesson-ambig-noise-floor",
+      "group": "ambiguous-multi-target",
+      "query": "noise floor for A/B diffs catches jitter",
+      "target_lesson_ids": [
+        "b1d76cc8-fd55-4457-b447-18314afc72f9",
+        "bb39fe5e-0345-4b98-976b-fe3b0743f169",
+        "db9027fb-986b-4915-9dac-e6e5688c3ac1",
+        "862f189d-6e19-49fc-a427-739427489354"
+      ],
+      "must_keywords": [],
+      "reasoning": "Noise-floor / variance-awareness cluster — diff-tool-must-consume-noise-floor, back-to-back-determinism defines the floor, delta-from-control builds on noise-floor, A/B archive as ground truth. All four are about variance-aware measurement."
+    },
+    {
+      "id": "lesson-ambig-downstream-propagation",
+      "group": "ambiguous-multi-target",
+      "query": "downstream consumers silently break when ranking shifts",
+      "target_lesson_ids": [
+        "f142bda7-8a61-4d56-b4b4-d7f8035f6b06",
+        "a688cb2c-3ed5-4fdd-ad07-0a8f5f4f5d6c",
+        "db9027fb-986b-4915-9dac-e6e5688c3ac1"
+      ],
+      "must_keywords": [],
+      "reasoning": "Downstream-propagation cluster — retrieval-layer changes ripple into reflect tool, popularity feedback loop is a propagation phenomenon, measurement (delta-from-control) is how you catch propagation after the fact."
+    },
+    {
+      "id": "lesson-ambig-fire-and-forget-pool",
+      "group": "ambiguous-multi-target",
+      "query": "how to avoid pool starvation when inserting asynchronously",
+      "target_lesson_ids": [
+        "500404f1-4284-442f-a8f5-960f6b3caca4",
+        "5258dbfe-b76d-42aa-b680-15eb9a7b83d7"
+      ],
+      "must_keywords": [],
+      "reasoning": "Fire-and-forget / pool-contention cluster — one lesson on pool-sizing assumptions for write-paths, one on batching to avoid N+1 saturation. Both are mitigations for the same class of pool-starvation problem."
+    },
+    {
+      "id": "lesson-ambig-multi-project-isolation",
+      "group": "ambiguous-multi-target",
+      "query": "how to keep project data isolated in queries and dedup",
+      "target_lesson_ids": [
+        "004444c4-3cb8-4405-85b8-120c73c6379d",
+        "1f112bf8-7da1-4b1a-a181-13855d60f628",
+        "5258dbfe-b76d-42aa-b680-15eb9a7b83d7"
+      ],
+      "must_keywords": [],
+      "reasoning": "Multi-project isolation cluster — dedup-key-must-include-project_id, multi-project schema support (color+description), multi-project-aware salience batching. Three angles on 'project_id as a first-class key.'"
+    },
+    {
+      "id": "lesson-ambig-composite-relevance",
+      "group": "ambiguous-multi-target",
+      "query": "why use a composite signal not pure semantic for ranking boost",
+      "target_lesson_ids": [
+        "ac91bc6c-f467-4c37-b503-fec8e941ca9b",
+        "a688cb2c-3ed5-4fdd-ad07-0a8f5f4f5d6c"
+      ],
+      "must_keywords": [],
+      "reasoning": "Composite-relevance cluster — query-conditional salience uses max(sem,fts), popularity-feedback lesson motivates why composite is needed. Different primary focus but both answer the 'why composite' question."
+    },
+    {
+      "id": "lesson-ambig-content-empty-dedup",
+      "group": "ambiguous-multi-target",
+      "query": "empty content fields cause false dedup collisions",
+      "target_lesson_ids": [
+        "720f912b-c304-4dc7-bb9a-280657c3ed3f",
+        "004444c4-3cb8-4405-85b8-120c73c6379d",
+        "cd0db880-5c36-477f-9f15-6f85dca64596"
+      ],
+      "must_keywords": [],
+      "reasoning": "Dedup-failure-mode cluster (distinct from A2's 'how to build a key') — empty-content-fallback, project+type beyond hash, exact-id blindness. Three failure modes of under-specified dedup."
+    },
+    {
+      "id": "lesson-ambig-recency-frequency-retrieval",
+      "group": "ambiguous-multi-target",
+      "query": "does recency and frequency belong in retrieval ranking",
+      "target_lesson_ids": [
+        "a688cb2c-3ed5-4fdd-ad07-0a8f5f4f5d6c",
+        "ac91bc6c-f467-4c37-b503-fec8e941ca9b"
+      ],
+      "must_keywords": [],
+      "reasoning": "Salience-as-bio-memory cluster — access-frequency needs conditioning, query-conditional composite signal. Both address the design question 'how should time/frequency factor into ranking'."
+    },
+    {
+      "id": "lesson-ambig-dedup-e2e-testing",
+      "group": "ambiguous-multi-target",
+      "query": "why can't I write a simple seed-and-verify e2e test for dedup",
+      "target_lesson_ids": [
+        "a6a3a11d-00e8-4b7e-83f5-18d3c24b73a7",
+        "862f189d-6e19-49fc-a427-739427489354"
+      ],
+      "must_keywords": [],
+      "reasoning": "Dedup-testing cluster — async-extraction + distillation defeat naive e2e, A/B baseline archive is the alternative wiring test. Reader asking 'how do I test dedup' gets either depending on whether they want a unit-ish e2e or a macro baseline."
+    },
+    {
+      "id": "lesson-para-pg-map-miss",
+      "group": "semantic-paraphrase",
+      "query": "why does a Map miss entries right after an insert returns the key",
+      "target_lesson_ids": [
+        "68b2f2cb-2271-454e-bf7e-7831fafb9e3c"
+      ],
+      "must_keywords": [
+        "uuid"
+      ],
+      "reasoning": "Paraphrase of lesson-pg-uuid-casing (same target, 68b2f2cb) without using UUID/RETURNING/pg/canonical/casing keywords. Tests whether semantic retrieval finds the lesson from a symptom-described query."
+    },
+    {
+      "id": "lesson-para-undici-node-mismatch",
+      "group": "semantic-paraphrase",
+      "query": "why does swapping http agents between the default and an installed one break streaming bodies",
+      "target_lesson_ids": [
+        "82e14086-dc76-40f5-81f5-e7ef0c4c97ef"
+      ],
+      "must_keywords": [
+        "undici"
+      ],
+      "reasoning": "Paraphrase of lesson-undici-version-pinning (same target, 82e14086) without using undici/userland/bundled keywords. Tests semantic match on the abstract 'HTTP dispatcher interop' concept."
+    },
+    {
+      "id": "lesson-para-nan-defensive-math",
+      "group": "semantic-paraphrase",
+      "query": "defensive bounds via min and max don't stop bad numeric input from corrupting results",
+      "target_lesson_ids": [
+        "05fde055-3cef-41d4-a5d7-a65d6daeb442"
+      ],
+      "must_keywords": [
+        "nan"
+      ],
+      "reasoning": "Paraphrase of the NaN-clamp lesson (05fde055) without using NaN/isFinite/clamp/propagates keywords. Tests semantic match on the abstract 'defensive math fails' concept."
+    },
+    {
+      "id": "lesson-para-new-test-not-running",
+      "group": "semantic-paraphrase",
+      "query": "why is a brand new unit test file not executing when the suite passes",
+      "target_lesson_ids": [
+        "0f4be646-18a0-4301-b329-301b12c0945e"
+      ],
+      "must_keywords": [
+        "test"
+      ],
+      "reasoning": "Paraphrase of lesson-npm-test-silent-skip (same target, 0f4be646) without using npm/explicitly/silently skipped keywords. Tests semantic match on the symptom rather than the cause."
+    },
+    {
+      "id": "lesson-para-windows-python-newlines",
+      "group": "semantic-paraphrase",
+      "query": "on Windows my inline Python script argument loses newlines at the batch-file boundary",
+      "target_lesson_ids": [
+        "8788dd3e-2f89-4bb5-b899-d9d3c362da11"
+      ],
+      "must_keywords": [
+        "python"
+      ],
+      "reasoning": "Paraphrase of lesson-pyenv-python3-shim (same target, 8788dd3e) without using pyenv-win/python3.bat/shim keywords. Tests semantic match on the symptom."
+    }
+  ]
+}

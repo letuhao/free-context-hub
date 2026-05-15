@@ -1,0 +1,92 @@
+{
+  "version": "2026-04-18",
+  "surface": "global",
+  "project_id_suggested": "free-context-hub",
+  "notes": [
+    "Phase 12 Sprint 12.0 — global (cross-entity) search golden set.",
+    "GET /api/search/global is ILIKE-only (not semantic), so queries use concrete substrings rather than natural-language intent.",
+    "Heterogeneous target_any: hits may come from lessons, documents, chunks, guardrails, or commits; any match counts.",
+    "Relevance is deliberately loose here — global is a Cmd+K palette search, not a precision retrieval."
+  ],
+  "queries": [
+    {
+      "id": "global-retry-substr",
+      "group": "confident-hit",
+      "query": "retry",
+      "target_any": [
+        { "type": "lesson", "id": "2b07085d-f625-4791-9606-3f2bdb6491cf" },
+        { "type": "lesson", "id": "4abf93d6-cbca-4006-aee6-a143bd3e8979" },
+        { "type": "chunk", "id": "f379c8f6-1c30-4ca7-971d-76c8c573d9d5" }
+      ]
+    },
+    {
+      "id": "global-validation-substr",
+      "group": "confident-hit",
+      "query": "validation",
+      "target_any": [
+        { "type": "lesson", "id": "6247caba-5aa7-4ce9-b4ac-3fcc9377246d" }
+      ]
+    },
+    {
+      "id": "global-authentication-substr",
+      "group": "confident-hit",
+      "query": "Authentication",
+      "target_any": [
+        { "type": "chunk", "id": "80f588e6-5b9a-4252-bb2d-9f06cdcf79c5" }
+      ]
+    },
+    {
+      "id": "global-max-retry-substr",
+      "group": "confident-hit",
+      "query": "Max retry",
+      "target_any": [
+        { "type": "guardrail", "id": "4abf93d6-cbca-4006-aee6-a143bd3e8979" }
+      ]
+    },
+    {
+      "id": "global-architecture-substr",
+      "group": "confident-hit",
+      "query": "Architecture Decision",
+      "target_any": [
+        { "type": "chunk", "id": "512d7a46-e7f5-45aa-b3e5-6902e3ca6cd8" },
+        { "type": "chunk", "id": "79e04437-5277-48af-9f9a-e45a7c078771" }
+      ]
+    },
+    {
+      "id": "global-pgvector-substr",
+      "group": "confident-hit",
+      "query": "pgvector",
+      "target_any": [
+        { "type": "chunk", "id": "0a02f1bd-8108-4efa-8a9e-f2fcd75ad4e3" }
+      ]
+    },
+    {
+      "id": "global-review-impl-substr",
+      "group": "confident-hit",
+      "query": "review-impl",
+      "target_any": [
+        { "type": "lesson", "id": "a0792c20-305b-4640-b6c7-befffcf5c3e1" }
+      ]
+    },
+    {
+      "id": "global-undici-substr",
+      "group": "confident-hit",
+      "query": "undici",
+      "target_any": [
+        { "type": "lesson", "id": "82e14086-dc76-40f5-81f5-e7ef0c4c97ef" }
+      ]
+    },
+    {
+      "id": "global-workspace-substr",
+      "group": "coverage-probe",
+      "query": "workspace",
+      "target_any": []
+    },
+    {
+      "id": "global-miss-zephyr",
+      "group": "adversarial-miss",
+      "query": "zephyr-ninja-pyramid-2026",
+      "target_any": []
+    }
+  ]
+}

@@ -17,7 +17,8 @@ export type JobType =
   | 'knowledge.loop.shallow'
   | 'knowledge.loop.deep'
   | 'knowledge.memory.build'
-  | 'document.extract.vision';
+  | 'document.extract.vision'
+  | 'leases.sweep';
 
 type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'dead_letter' | 'cancelled';
 

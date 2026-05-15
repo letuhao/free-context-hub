@@ -70,10 +70,11 @@ export async function qaSummarize(params: { text: string; maxChars?: number }): 
     });
     if (!res.ok) return null;
     const json = (await res.json()) as any;
-    const out = json?.choices?.[0]?.message?.content;
-    if (typeof out !== 'string' || !out.trim()) return null;
-    const s = out.trim();
-    return s.length > maxChars ? `${s.slice(0, maxChars)}…` : s;
+    const msg = json?.choices?.[0]?.message ?? {};
+    // Phase 14: fall back to reasoning_content for reasoning models (nemotron etc.)
+    const out = String(msg.content ?? '').trim() || String(msg.reasoning_content ?? '').trim();
+    if (!out) return null;
+    return out.length > maxChars ? `${out.slice(0, maxChars)}…` : out;
   } catch {
     return null;
   } finally {
@@ -128,10 +129,11 @@ export async function qaAnswerFromEvidence(params: {
     });
     if (!res.ok) return null;
     const json = (await res.json()) as any;
-    const out = json?.choices?.[0]?.message?.content;
-    if (typeof out !== 'string' || !out.trim()) return null;
-    const s = out.trim();
-    return s.length > maxChars ? `${s.slice(0, maxChars)}…` : s;
+    const msg = json?.choices?.[0]?.message ?? {};
+    // Phase 14: fall back to reasoning_content for reasoning models (nemotron etc.)
+    const out = String(msg.content ?? '').trim() || String(msg.reasoning_content ?? '').trim();
+    if (!out) return null;
+    return out.length > maxChars ? `${out.slice(0, maxChars)}…` : out;
   } catch {
     return null;
   } finally {

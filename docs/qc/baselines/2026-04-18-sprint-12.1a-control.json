@@ -1,0 +1,1305 @@
+{
+  "schema_version": "1.0",
+  "tag": "sprint-12.1a-control",
+  "run_started_at": "2026-04-18T11:08:44.029Z",
+  "run_ended_at": "2026-04-18T11:10:33.316Z",
+  "elapsed_ms": 109287,
+  "git_commit": "88bd383",
+  "git_branch": "phase-12-rag-quality",
+  "project_id": "free-context-hub",
+  "samples_per_query": 1,
+  "k": 10,
+  "surfaces": {
+    "lessons": {
+      "query_count": 20,
+      "errors": 0,
+      "project_id": "free-context-hub",
+      "metrics": {
+        "recall_at_5": 0.9412,
+        "recall_at_10": 0.9412,
+        "mrr": 0.8971,
+        "ndcg_at_5": 0.9077,
+        "ndcg_at_10": 0.9077,
+        "duplication_rate_at_10": 0,
+        "duplication_rate_nearsemantic_at_10": 0.435,
+        "coverage_pct": 0.9412,
+        "latency_p50_ms": 5606,
+        "latency_p95_ms": 6766,
+        "latency_mean_ms": 5453
+      },
+      "per_query": [
+        {
+          "id": "lesson-pg-uuid-casing",
+          "group": "confident-hit",
+          "query": "how to handle pg UUID casing when building map lookups after RETURNING",
+          "top_k_keys": [
+            "68b2f2cb-2271-454e-bf7e-7831fafb9e3c",
+            "7fa4967f-14dd-4062-8547-dd6bddf5e931",
+            "9cc03e36-2623-4398-952a-79bcaaeecaac",
+            "ba21de16-6de1-432c-81ab-e0b75cc1fe89",
+            "3b3a6860-6d84-48b6-b2eb-e40ec146c29d",
+            "9dafc515-1275-4f25-9bc0-a5f7bbcc8c74",
+            "d32dc104-3fad-495c-bfba-cafcd3d63319",
+            "08f31899-df67-4be1-926f-c5c3814e511d",
+            "ed815b58-45a0-4083-be40-4d3cb7770f42",
+            "0f6f2651-f475-42cc-b344-360f29dd9d8d"
+          ],
+          "top_k_titles": [
+            "pg UUID cast RETURNING is always canonical lowercase — map keys must match",
+            "Import A: impexp-1775297557060",
+            "Import B: impexp-1775318866580",
+            "Import A: impexp-1775318866580",
+            "Import B: impexp-1775367981432",
+            "Import A: impexp-1775320268166",
+            "normalizeForHash collapses digit-runs to 'n' — deliberate trade-off, load-bearing on dataset shape",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern"
+          ],
+          "top_k_snippets": [
+            "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…",
+            "The document titled 'Import A' with ID 'impexp-1775297557060' contains content labeled as 'Content A'. No specific actions are mentioned in the body.",
+            "The document titled 'Import B: impexp-1775318866580' contains the body text 'Content B'. No specific actions or details are provided beyond this basic information.",
+            "The document titled 'Import A: impexp-1775318866580' contains content labeled as 'Content A'. No specific details or actions are provided beyond the title and label.",
+            "The document titled 'Import B: impexp-1775367981432' contains the content labeled as 'Content B'. No specific instructions or tasks are mentioned in the body.",
+            "The document titled 'Import A' with the ID 'impexp-1775320268166' contains content labeled as 'Content A'. No specific actions or details are provided beyond this basic information.",
+            "The normalizeForHash function collapses digit-runs to 'n' in the v1 near-semantic key. This aggressive approach is designed to catch timestamp-variant fixture duplication but may equate semantically-distinct content when digits carry meaning. The load-bearing assumption is that …",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will increase the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will progressively increase the wait time between retries, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will progressively increase the wait time between retries, reducing the load on the system and improving the chances of successful test execution."
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            6503
+          ],
+          "latency_ms_median": 6503,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-undici-version-pinning",
+          "group": "confident-hit",
+          "query": "why must undici userland version match the Node bundled version",
+          "top_k_keys": [
+            "82e14086-dc76-40f5-81f5-e7ef0c4c97ef",
+            "49e65370-3815-4d9d-a966-0c3403d4edc0",
+            "2b07085d-f625-4791-9606-3f2bdb6491cf",
+            "4b036b6c-48a8-4d4a-9938-0f46c3cbc31f",
+            "9cc03e36-2623-4398-952a-79bcaaeecaac",
+            "8a76b417-7920-470e-9dd1-e778f65e289f",
+            "d819a3d8-1643-461e-a3de-47899310b76e",
+            "68696052-ea32-4097-904c-1fb059c90450",
+            "b3d92af9-49b9-48a1-b000-d88afc27a303",
+            "5f4b9671-0d82-455f-a107-93d41c0222b9"
+          ],
+          "top_k_titles": [
+            "undici userland version MUST match Node's bundled version for fetch dispatcher interop",
+            "Import A: impexp-1775296304858",
+            "Global search test retry pattern",
+            "Import B: impexp-1775300437866",
+            "Import B: impexp-1775318866580",
+            "Import B: impexp-1775296304858",
+            "Import A: impexp-1775298253521",
+            "Phase 8 smoke test — custom type via REST",
+            "Import B: impexp-1775320085666",
+            "Import B: impexp-1775320268166"
+          ],
+          "top_k_snippets": [
+            "Node's global fetch() requires the userland undici version to match its internally bundled version to avoid obscure errors. Node 23.11.1 bundles undici 6.21.2, so pinning userland undici to ^6.21.2 is recommended. Verify compatibility on Node upgrades as internal undici versions…",
+            "The document titled 'Import A: impexp-1775296304858' contains content labeled as 'Content A'. No specific details or actions are provided beyond the title and label.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "The document titled 'Import B: impexp-1775300437866' contains the body text 'Content B'. No specific actions or details are provided beyond this basic information.",
+            "The document titled 'Import B: impexp-1775318866580' contains the body text 'Content B'. No specific actions or details are provided beyond this basic information.",
+            "The document titled 'Import B: impexp-1775296304858' contains the body text 'Content B'. No specific instructions or actions are provided beyond this basic information.",
+            "The document titled 'Import A: impexp-1775298253521' contains content labeled as 'Content A'. No specific actions or details are provided beyond the title and label.",
+            "Conduct a Phase 8 smoke test to verify that the custom lesson type API change functions correctly end-to-end following the removal of the CHECK constraint in migration 0040. Ensure all components interact seamlessly and data integrity is maintained.",
+            "The document titled 'Import B: impexp-1775320085666' contains the content labeled as 'Content B'. No specific actions are mentioned in the body.",
+            "The document titled 'Import B: impexp-1775320268166' contains the content labeled as 'Content B'. No specific instructions or actions are provided in the body of the document."
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            6788
+          ],
+          "latency_ms_median": 6788,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-pyenv-python3-shim",
+          "group": "confident-hit",
+          "query": "pyenv-win python3.bat shim fails with multi-line -c bash arguments",
+          "top_k_keys": [
+            "8788dd3e-2f89-4bb5-b899-d9d3c362da11",
+            "9f769e62-8017-4a4b-8f38-0bde822547eb",
+            "2b07085d-f625-4791-9606-3f2bdb6491cf",
+            "5f4b9671-0d82-455f-a107-93d41c0222b9",
+            "8d2d9f18-6b13-4e74-ac03-b412060a6fc9",
+            "df2da4ff-69ec-4f18-899a-c079912573ce",
+            "be30985a-e45b-47ce-82d2-f6a75dc282b8",
+            "8a76b417-7920-470e-9dd1-e778f65e289f",
+            "4b036b6c-48a8-4d4a-9938-0f46c3cbc31f",
+            "0a2f87f2-e47b-498f-b7d4-f612065f416c"
+          ],
+          "top_k_titles": [
+            "pyenv-win python3.bat shim corrupts multi-line -c args",
+            "Import B: impexp-1775298253521",
+            "Global search test retry pattern",
+            "Import B: impexp-1775320268166",
+            "Import B: impexp-1775299429863",
+            "Import B: impexp-1775368419347",
+            "Max retry attempts must be 3",
+            "Import B: impexp-1775296304858",
+            "Import B: impexp-1775300437866",
+            "Import B: impexp-1775320598400"
+          ],
+          "top_k_snippets": [
+            "The python3.bat shim in pyenv-win corrupts multi-line -c arguments on Windows, causing silent IndentationErrors. A workaround is to use plain 'python' instead of 'python3' to avoid the issue.",
+            "The document titled 'Import B: impexp-1775298253521' contains the body text 'Content B'. No specific instructions or actions are mentioned in the provided information.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "The document titled 'Import B: impexp-1775320268166' contains the content labeled as 'Content B'. No specific instructions or actions are provided in the body of the document.",
+            "The document titled 'Import B: impexp-1775299429863' contains content labeled as 'Content B'. No specific actions or details are provided beyond the title and label.",
+            "The document titled 'Import B: impexp-1775368419347' contains content labeled as 'Content B'. No specific actions or details are provided beyond the title and label.",
+            "The policy requires setting the maximum number of retry attempts to 3. This change needs to be enforced across all relevant systems and configurations to ensure compliance with the new rule.",
+            "The document titled 'Import B: impexp-1775296304858' contains the body text 'Content B'. No specific instructions or actions are provided beyond this basic information.",
+            "The document titled 'Import B: impexp-1775300437866' contains the body text 'Content B'. No specific actions or details are provided beyond this basic information.",
+            "The document titled 'Import B: impexp-1775320598400' contains the body text 'Content B'. No specific actions are mentioned in the provided information."
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            5305
+          ],
+          "latency_ms_median": 5305,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-npm-test-silent-skip",
+          "group": "confident-hit",
+          "query": "npm test script lists test files explicitly so new ones silently skip",
+          "top_k_keys": [
+            "0f4be646-18a0-4301-b329-301b12c0945e",
+            "a9c36f77-6bbd-4761-af28-f06a02fec8ea",
+            "2b07085d-f625-4791-9606-3f2bdb6491cf",
+            "ed815b58-45a0-4083-be40-4d3cb7770f42",
+            "08f31899-df67-4be1-926f-c5c3814e511d",
+            "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+            "8788dd3e-2f89-4bb5-b899-d9d3c362da11",
+            "c3920936-dc58-4a39-a17e-31949774828d",
+            "9f7e114a-763a-4f96-a8c9-50195267538b",
+            "999db013-9162-4b6d-9155-86daea5a8291"
+          ],
+          "top_k_titles": [
+            "npm test script lists files explicitly — new test files silently skipped unless added",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types",
+            "pyenv-win python3.bat shim corrupts multi-line -c args",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "gui-create-1776171161702"
+          ],
+          "top_k_snippets": [
+            "The `test` script in package.json uses explicit file paths instead of a glob, causing new test files to be silently skipped unless manually added. This leads to missing tests during the build process without any warnings or errors.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient errors gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will progressively increase the wait time between retries, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will increase the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "During POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness with zero false positives and no regressions.",
+            "The python3.bat shim in pyenv-win corrupts multi-line -c arguments on Windows, causing silent IndentationErrors. A workaround is to use plain 'python' instead of 'python3' to avoid the issue.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach involves increasing the wait time between retries exponentially, which helps in reducing the load on the system and improving the chances of successf…",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "GUI test lesson content gui-create-1776171161702"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            5266
+          ],
+          "latency_ms_median": 5266,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-api-lessons-items-shape",
+          "group": "confident-hit",
+          "query": "GET /api/lessons response shape uses items not lessons",
+          "top_k_keys": [
+            "2af9bb39-e127-4527-8453-4813a66ae28b",
+            "68696052-ea32-4097-904c-1fb059c90450",
+            "c73a8738-874f-4832-92eb-16e6765924ba",
+            "dcf28a28-5514-4aa4-9aeb-046682551f37",
+            "6f6cafba-3a74-4070-9d4b-4980a332f952",
+            "0a2f87f2-e47b-498f-b7d4-f612065f416c",
+            "cd0db880-5c36-477f-9f15-6f85dca64596",
+            "4eb9d44f-3277-4621-87e4-0466838884e4",
+            "0ce6959b-8b78-48a3-bd3c-81d273a45f83",
+            "999db013-9162-4b6d-9155-86daea5a8291"
+          ],
+          "top_k_titles": [
+            "GET /api/lessons returns rows under `items`, not `lessons` or `results`",
+            "Phase 8 smoke test — custom type via REST",
+            "Test review lesson: Always validate API responses",
+            "Valid: impexp-1775300437866-extra",
+            "Import B: impexp-1775300018449",
+            "Import B: impexp-1775320598400",
+            "Dup-rate metric keyed on exact entity id is blind to same-title-different-UUID noise",
+            "Import B: impexp-1775297557060",
+            "Import A: impexp-1775367981432",
+            "gui-create-1776171161702"
+          ],
+          "top_k_snippets": [
+            "The API endpoint /api/lessons returns data under 'items', not 'lessons' or 'results'. Tests should read from body.items to avoid confusion and silent failures. Verify the field name against the service implementation, and if unsure, dump the response body in a test.",
+            "Conduct a Phase 8 smoke test to verify that the custom lesson type API change functions correctly end-to-end following the removal of the CHECK constraint in migration 0040. Ensure all components interact seamlessly and data integrity is maintained.",
+            "Ensure API response validation by checking status codes, verifying expected fields, and handling errors gracefully to prevent data processing issues.",
+            "The provided text is a title and body for an issue or task. The title 'impexp-1775300437866-extra' appears to be a unique identifier followed by a descriptive tag. The body contains only the word 'test', which suggests that further details need to be added.",
+            "The document titled 'Import B: impexp-1775300018449' contains content labeled as 'Content B'. No specific actions or details are provided beyond the title and label.",
+            "The document titled 'Import B: impexp-1775320598400' contains the body text 'Content B'. No specific actions are mentioned in the provided information.",
+            "The current duplication rate metric in src/qc/metrics.ts is flawed as it only considers exact entity IDs, ignoring same-title-different-UUID noise. This results in a dup-rate of 0 even when there are multiple near-duplicate lessons with distinct UUIDs. The first archived baselin…",
+            "The document titled 'Import B: impexp-1775297557060' contains the content labeled as 'Content B'. No specific instructions or actions are provided in the body of the document.",
+            "The document titled 'Import A: impexp-1775367981432' contains content labeled as 'Content A'. No specific details or actions are provided in the body.",
+            "GUI test lesson content gui-create-1776171161702"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            6766
+          ],
+          "latency_ms_median": 6766,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-review-impl-default",
+          "group": "confident-hit",
+          "query": "should I invoke review-impl in post-review by default in the v2.2 workflow",
+          "top_k_keys": [
+            "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+            "e87cd142-9fc3-4ef9-868f-11ed3e7577bf",
+            "4e28d4bc-5d6e-47c7-bda5-7b2dfb761736",
+            "abe242ea-31ef-4d14-9245-92cfa16b8975",
+            "e15edaef-1d63-4cff-a9cc-7f972a0887d5",
+            "c73a8738-874f-4832-92eb-16e6765924ba",
+            "3ab6adbf-2c0e-4274-95a4-f2683d55cefb",
+            "82e14086-dc76-40f5-81f5-e7ef0c4c97ef",
+            "6247caba-5aa7-4ce9-b4ac-3fcc9377246d",
+            "6e17baa4-75a7-4b6b-960d-b543d90896fe"
+          ],
+          "top_k_titles": [
+            "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types",
+            "/review-impl adversarial review catches silent-false-confidence bugs POST-REVIEW misses",
+            "Code review workflow: review each file group separately after bulk implementation",
+            "NoProjectGuard: hydration-safe guard for data pages",
+            "index_project default excludes cover .git + node_modules only; dist/ .next/ .claude/ leak into the chunks table",
+            "Test review lesson: Always validate API responses",
+            "Measure-first baseline sprints establish the scorecard before any improvement ships",
+            "undici userland version MUST match Node's bundled version for fetch dispatcher interop",
+            "Project CRUD: POST/PUT endpoints with validation",
+            "Agent context bootstrap e2e-1775880510559-urw0mj"
+          ],
+          "top_k_snippets": [
+            "During POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness with zero false positives and no regressions.",
+            "In Phase 12 Sprint 12.0, /review-impl caught 15 additional findings, including 6 MED and 6 LOW issues in benchmarking/measurement infrastructure. These bugs silently produce wrong numbers without crashing the system. Key examples include a dup-rate metric blind to certain pathol…",
+            "When implementing large features across multiple files, conduct a structured code review by focusing on specific groups such as BE service, BE routes, FE components, FE pages, and integration. This approach helps in identifying issues like bugs, security gaps, and logic errors t…",
+            "NoProjectGuard is a hydration-safe guard for 12 data pages, ensuring they only activate after projects load from the API. It has two variants: 'no project selected' and 'project not found'. Feature toggles are deferred to Phase 8, and non-functional UI was removed to avoid confu…",
+            "During Phase 12 Sprint 12.0.1, indexing the free-context-hub project ingested 3925 chunks but revealed ~4426 junk rows including dist/, .next/, and .claude/ files. The default exclude logic only covers .git and node_modules. A direct SQL query was used to purge these junk rows, …",
+            "Ensure API response validation by checking status codes, verifying expected fields, and handling errors gracefully to prevent data processing issues.",
+            "Sprint 12.0 focuses on establishing a baseline scorecard without shipping retrieval improvements. This sets a foundation for subsequent sprints to build upon, ensuring that all future work can be measured and compared effectively. The deliverables include numeric data archived i…",
+            "Node's global fetch() requires the userland undici version to match its internally bundled version to avoid obscure errors. Node 23.11.1 bundles undici 6.21.2, so pinning userland undici to ^6.21.2 is recommended. Verify compatibility on Node upgrades as internal undici versions…",
+            "Implemented POST and PUT endpoints for project management with validation rules including regex for project_id, color allow-list, input trimming, and error handling for duplicate IDs. Added a warning field for failed group additions during creation.",
+            "This document outlines a bootstrap lesson for agent tests, which will be archived. It provides essential information and steps needed to set up the testing environment effectively."
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            4237
+          ],
+          "latency_ms_median": 4237,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-noproject-guard-hydration",
+          "group": "confident-hit",
+          "query": "NoProjectGuard hydration-safe approach for Next.js data pages",
+          "top_k_keys": [
+            "abe242ea-31ef-4d14-9245-92cfa16b8975",
+            "cd0db880-5c36-477f-9f15-6f85dca64596",
+            "68b2f2cb-2271-454e-bf7e-7831fafb9e3c",
+            "c3920936-dc58-4a39-a17e-31949774828d",
+            "08f31899-df67-4be1-926f-c5c3814e511d",
+            "ed815b58-45a0-4083-be40-4d3cb7770f42",
+            "d3f80630-98c9-4494-ae03-2549a728c37d",
+            "2b07085d-f625-4791-9606-3f2bdb6491cf",
+            "1bdb9c01-b800-4861-a819-a4b61898eaa1",
+            "75d97ca9-3936-4fb5-90a2-0d95e428f641"
+          ],
+          "top_k_titles": [
+            "NoProjectGuard: hydration-safe guard for data pages",
+            "Dup-rate metric keyed on exact entity id is blind to same-title-different-UUID noise",
+            "pg UUID cast RETURNING is always canonical lowercase — map keys must match",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Import A: impexp-1775368159562",
+            "gui-create-1776490733660"
+          ],
+          "top_k_snippets": [
+            "NoProjectGuard is a hydration-safe guard for 12 data pages, ensuring they only activate after projects load from the API. It has two variants: 'no project selected' and 'project not found'. Feature toggles are deferred to Phase 8, and non-functional UI was removed to avoid confu…",
+            "The current duplication rate metric in src/qc/metrics.ts is flawed as it only considers exact entity IDs, ignoring same-title-different-UUID noise. This results in a dup-rate of 0 even when there are multiple near-duplicate lessons with distinct UUIDs. The first archived baselin…",
+            "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach involves increasing the wait time between retries exponentially, which helps in reducing the load on the system and improving the chances of successf…",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will increase the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will progressively increase the wait time between retries, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "The document titled 'Import A: impexp-1775368159562' contains content labeled as 'Content A'. No further details or context are provided in the given text.",
+            "GUI test lesson content gui-create-1776490733660"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            5842
+          ],
+          "latency_ms_median": 5842,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-project-crud-validation",
+          "group": "confident-hit",
+          "query": "project CRUD POST PUT endpoints with validation rules",
+          "top_k_keys": [
+            "6247caba-5aa7-4ce9-b4ac-3fcc9377246d",
+            "1f112bf8-7da1-4b1a-a181-13855d60f628",
+            "c4364cfc-03f5-453b-91db-5385d52e52f2",
+            "5b0f23a4-aa1a-4d7b-9b35-dc0b41b63d1d",
+            "8d8c1509-8667-4a83-b9c6-b3e7ea2f8418",
+            "7577e79f-9dfb-4c80-8592-9995223beae9",
+            "6e17baa4-75a7-4b6b-960d-b543d90896fe",
+            "d66e5221-5e7b-42d8-b8fc-d91c8d2ee76a",
+            "56bc9983-5092-4ce0-aba4-3deafb79f925",
+            "18f7f763-25d1-4ca1-952d-91f9ccadb93e"
+          ],
+          "top_k_titles": [
+            "Project CRUD: POST/PUT endpoints with validation",
+            "Multi-project support: color + description on projects table",
+            "Import A: impexp-1775320085666",
+            "Import A: impexp-1775300437866",
+            "Valid: impexp-1775320268166-extra",
+            "Valid: impexp-1775367981432-extra",
+            "Agent context bootstrap e2e-1775880510559-urw0mj",
+            "Max retry attempts must be 3",
+            "Valid: impexp-1775300018449-extra",
+            "Import A: impexp-1775320598400"
+          ],
+          "top_k_snippets": [
+            "Implemented POST and PUT endpoints for project management with validation rules including regex for project_id, color allow-list, input trimming, and error handling for duplicate IDs. Added a warning field for failed group additions during creation.",
+            "Added 'color' and 'description' columns to the projects table with validation for color against a fixed allow-list and a 2000-char limit for description. Ensure sync between BE VALID_COLORS and FE PROJECT_COLORS.",
+            "The title 'Import A: impexp-1775320085666' suggests a data import process with a specific identifier. The body contains only the text 'Content A', which is vague and does not provide additional context or details about the import process, its status, or any issues that might nee…",
+            "The document titled 'Import A: impexp-1775300437866' contains content labeled as 'Content A'. No specific actions are mentioned in the body.",
+            "The provided text is a title and body for an issue or task. The title 'impexp-1775320268166-extra' appears to be a unique identifier followed by a descriptive tag. The body simply contains the word 'test'.",
+            "The provided text is a title and body for an item with the ID 'impexp-1775367981432-extra'. The body contains only the word 'test'.",
+            "This document outlines a bootstrap lesson for agent tests, which will be archived. It provides essential information and steps needed to set up the testing environment effectively.",
+            "The system should enforce a maximum of three retry attempts to prevent infinite loops and ensure efficient resource utilization. This change will help maintain system stability and performance by limiting the number of times a failed operation is retried.",
+            "The provided text is a title and body for an issue or task. The title 'impexp-1775300018449-extra' appears to be a unique identifier, possibly for tracking imports or exports. The body contains only the word 'test', which suggests that further details or actions are needed.",
+            "The document titled 'Import A' with the ID 'impexp-1775320598400' contains content labeled as 'Content A'. No specific actions are mentioned in the body."
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            6074
+          ],
+          "latency_ms_median": 6074,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-multi-project-color",
+          "group": "confident-hit",
+          "query": "multi-project color and description schema additions",
+          "top_k_keys": [
+            "1f112bf8-7da1-4b1a-a181-13855d60f628",
+            "6247caba-5aa7-4ce9-b4ac-3fcc9377246d",
+            "6e17baa4-75a7-4b6b-960d-b543d90896fe",
+            "7fa4967f-14dd-4062-8547-dd6bddf5e931",
+            "bb39fe5e-0345-4b98-976b-fe3b0743f169",
+            "720f912b-c304-4dc7-bb9a-280657c3ed3f",
+            "c4364cfc-03f5-453b-91db-5385d52e52f2",
+            "e15edaef-1d63-4cff-a9cc-7f972a0887d5",
+            "9cc03e36-2623-4398-952a-79bcaaeecaac",
+            "4eb9d44f-3277-4621-87e4-0466838884e4"
+          ],
+          "top_k_titles": [
+            "Multi-project support: color + description on projects table",
+            "Project CRUD: POST/PUT endpoints with validation",
+            "Agent context bootstrap e2e-1775880510559-urw0mj",
+            "Import A: impexp-1775297557060",
+            "Baseline determinism holds for back-to-back runs only; hours-separated runs jitter by embeddings-service load",
+            "Content-based hash dup-rate metrics need a distinguishing fallback when retriever returns empty content fields",
+            "Import A: impexp-1775320085666",
+            "index_project default excludes cover .git + node_modules only; dist/ .next/ .claude/ leak into the chunks table",
+            "Import B: impexp-1775318866580",
+            "Import B: impexp-1775297557060"
+          ],
+          "top_k_snippets": [
+            "Added 'color' and 'description' columns to the projects table with validation for color against a fixed allow-list and a 2000-char limit for description. Ensure sync between BE VALID_COLORS and FE PROJECT_COLORS.",
+            "Implemented POST and PUT endpoints for project management with validation rules including regex for project_id, color allow-list, input trimming, and error handling for duplicate IDs. Added a warning field for failed group additions during creation.",
+            "This document outlines a bootstrap lesson for agent tests, which will be archived. It provides essential information and steps needed to set up the testing environment effectively.",
+            "The document titled 'Import A' with ID 'impexp-1775297557060' contains content labeled as 'Content A'. No specific actions are mentioned in the body.",
+            "Baseline determinism holds for back-to-back runs but varies with embeddings-service load when run hours apart. Root cause is transient CPU/memory load on the MCP container affecting query scoring. The diff generator flags this as a regression, but it's measurement noise. Operato…",
+            "The nearSemanticKey function returns '||' when both title and snippet are null/undefined, leading to a 100% duplication rate metric even with no actual content duplication. This issue occurred in src/qc/surfaces.ts where the callCode function did not populate the snippet field. …",
+            "The title 'Import A: impexp-1775320085666' suggests a data import process with a specific identifier. The body contains only the text 'Content A', which is vague and does not provide additional context or details about the import process, its status, or any issues that might nee…",
+            "During Phase 12 Sprint 12.0.1, indexing the free-context-hub project ingested 3925 chunks but revealed ~4426 junk rows including dist/, .next/, and .claude/ files. The default exclude logic only covers .git and node_modules. A direct SQL query was used to purge these junk rows, …",
+            "The document titled 'Import B: impexp-1775318866580' contains the body text 'Content B'. No specific actions or details are provided beyond this basic information.",
+            "The document titled 'Import B: impexp-1775297557060' contains the content labeled as 'Content B'. No specific instructions or actions are provided in the body of the document."
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            5934
+          ],
+          "latency_ms_median": 5934,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-code-review-workflow-pref",
+          "group": "confident-hit",
+          "query": "code review preference: review each file group separately after bulk implementation",
+          "top_k_keys": [
+            "4e28d4bc-5d6e-47c7-bda5-7b2dfb761736",
+            "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+            "a9c36f77-6bbd-4761-af28-f06a02fec8ea",
+            "ed815b58-45a0-4083-be40-4d3cb7770f42",
+            "c3920936-dc58-4a39-a17e-31949774828d",
+            "bd5b5471-267e-4404-b282-2190c751a2fb",
+            "c765738c-9a44-41e2-9902-38631426ea58",
+            "18f7f763-25d1-4ca1-952d-91f9ccadb93e",
+            "8a76b417-7920-470e-9dd1-e778f65e289f",
+            "7fa4967f-14dd-4062-8547-dd6bddf5e931"
+          ],
+          "top_k_titles": [
+            "Code review workflow: review each file group separately after bulk implementation",
+            "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Import A: impexp-1775320598400",
+            "Import B: impexp-1775296304858",
+            "Import A: impexp-1775297557060"
+          ],
+          "top_k_snippets": [
+            "When implementing large features across multiple files, conduct a structured code review by focusing on specific groups such as BE service, BE routes, FE components, FE pages, and integration. This approach helps in identifying issues like bugs, security gaps, and logic errors t…",
+            "During POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness with zero false positives and no regressions.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient errors gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will progressively increase the wait time between retries, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach involves increasing the wait time between retries exponentially, which helps in reducing the load on the system and improving the chances of successf…",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will progressively increase the wait time between retries, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will increase the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "The document titled 'Import A' with the ID 'impexp-1775320598400' contains content labeled as 'Content A'. No specific actions are mentioned in the body.",
+            "The document titled 'Import B: impexp-1775296304858' contains the body text 'Content B'. No specific instructions or actions are provided beyond this basic information.",
+            "The document titled 'Import A' with ID 'impexp-1775297557060' contains content labeled as 'Content A'. No specific actions are mentioned in the body."
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            6260
+          ],
+          "latency_ms_median": 6260,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-dup-max-retry-guardrail",
+          "group": "duplicate-trap",
+          "query": "max retry attempts must be 3 external API call guardrail",
+          "top_k_keys": [
+            "9a34ef12-bb6d-42d3-bee3-7ff53c4d86b0",
+            "0e08eead-db62-4668-8d7b-20281747c7ac",
+            "544aae14-08aa-436c-b54b-c8ecda4587fe",
+            "689aee2c-3043-459c-8c1b-5aec8135cba6",
+            "4abf93d6-cbca-4006-aee6-a143bd3e8979",
+            "5a9982a8-83e4-40a1-a8f8-280fc519f19a",
+            "be30985a-e45b-47ce-82d2-f6a75dc282b8",
+            "d66e5221-5e7b-42d8-b8fc-d91c8d2ee76a",
+            "a442e5e6-dd34-4495-b1d1-c4a8c0fabd46",
+            "2b07085d-f625-4791-9606-3f2bdb6491cf"
+          ],
+          "top_k_titles": [
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Global search test retry pattern"
+          ],
+          "top_k_snippets": [
+            "The policy requires setting the maximum number of retry attempts to 3 for all operations. This ensures that systems do not indefinitely attempt failed tasks, which can lead to resource exhaustion and system instability.",
+            "The system should enforce a maximum of three retry attempts for any operation to prevent infinite loops and resource exhaustion.",
+            "The policy requires that the maximum number of retry attempts for any operation should not exceed three. This is to prevent infinite loops and ensure system stability.",
+            "The system should enforce a maximum of three retry attempts for any operation to prevent infinite loops and resource exhaustion.",
+            "The system should enforce a maximum of three retry attempts for any operation to prevent infinite loops and resource exhaustion.",
+            "The system should enforce a maximum of three retry attempts for any operation to prevent infinite loops and resource exhaustion.",
+            "The policy requires setting the maximum number of retry attempts to 3. This change needs to be enforced across all relevant systems and configurations to ensure compliance with the new rule.",
+            "The system should enforce a maximum of three retry attempts to prevent infinite loops and ensure efficient resource utilization. This change will help maintain system stability and performance by limiting the number of times a failed operation is retried.",
+            "The system should enforce a maximum of three retry attempts for any operation to prevent infinite loops and resource exhaustion.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution."
+          ],
+          "found_ranks": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            2,
+            2,
+            2,
+            2,
+            2,
+            2,
+            2,
+            2,
+            0
+          ],
+          "latency_ms_samples": [
+            4005
+          ],
+          "latency_ms_median": 4005,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-dup-global-search-retry-pattern",
+          "group": "duplicate-trap",
+          "query": "global search test retry pattern exponential backoff",
+          "top_k_keys": [
+            "c765738c-9a44-41e2-9902-38631426ea58",
+            "2b07085d-f625-4791-9606-3f2bdb6491cf",
+            "9f7e114a-763a-4f96-a8c9-50195267538b",
+            "d3f80630-98c9-4494-ae03-2549a728c37d",
+            "48eb3621-686c-4577-9a90-dee5d445e565",
+            "08f31899-df67-4be1-926f-c5c3814e511d",
+            "ed815b58-45a0-4083-be40-4d3cb7770f42",
+            "c3920936-dc58-4a39-a17e-31949774828d",
+            "bd5b5471-267e-4404-b282-2190c751a2fb",
+            "0f6f2651-f475-42cc-b344-360f29dd9d8d"
+          ],
+          "top_k_titles": [
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern"
+          ],
+          "top_k_snippets": [
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will increase the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will increase the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will progressively increase the wait time between retries, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach involves increasing the wait time between retries exponentially, which helps in reducing the load on the system and improving the chances of successf…",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will progressively increase the wait time between retries, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will progressively increase the wait time between retries, reducing the load on the system and improving the chances of successful test execution."
+          ],
+          "found_ranks": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            2,
+            2,
+            2,
+            2,
+            2,
+            2,
+            2,
+            2,
+            2
+          ],
+          "latency_ms_samples": [
+            5382
+          ],
+          "latency_ms_median": 5382,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-dup-valid-impexp-fixture",
+          "group": "duplicate-trap",
+          "query": "valid impexp extra entry fixture",
+          "top_k_keys": [
+            "e8c8f59f-f39e-429b-92e5-dcba267abad3",
+            "18d8cc93-46b9-4c97-b216-9cca4bb067bf",
+            "dcf28a28-5514-4aa4-9aeb-046682551f37",
+            "fbb870fb-3182-4b88-980e-54bb1485887a",
+            "7577e79f-9dfb-4c80-8592-9995223beae9",
+            "56bc9983-5092-4ce0-aba4-3deafb79f925",
+            "903840d3-eb60-406b-afcc-67c675480871",
+            "8d8c1509-8667-4a83-b9c6-b3e7ea2f8418",
+            "ef0e5e43-c6f8-4aa6-9942-fd625e562a79",
+            "0a2f87f2-e47b-498f-b7d4-f612065f416c"
+          ],
+          "top_k_titles": [
+            "Valid: impexp-1775320598400-extra",
+            "Valid: impexp-1775318866580-extra",
+            "Valid: impexp-1775300437866-extra",
+            "Valid: impexp-1775368159562-extra",
+            "Valid: impexp-1775367981432-extra",
+            "Valid: impexp-1775300018449-extra",
+            "Valid: impexp-1775320085666-extra",
+            "Valid: impexp-1775320268166-extra",
+            "Valid: impexp-1775368419347-extra",
+            "Import B: impexp-1775320598400"
+          ],
+          "top_k_snippets": [
+            "The provided text is a title and body for an entry. The title 'impexp-1775320598400-extra' appears to be a unique identifier or code, possibly related to import/export operations. The body simply contains the word 'test'.",
+            "The provided document has a title 'impexp-1775318866580-extra' and a body containing only the word 'test'. There is no additional context or information provided.",
+            "The provided text is a title and body for an issue or task. The title 'impexp-1775300437866-extra' appears to be a unique identifier followed by a descriptive tag. The body contains only the word 'test', which suggests that further details need to be added.",
+            "The provided text is a title and body for an issue or task. The title 'impexp-1775368159562-extra' appears to be a unique identifier followed by a descriptive tag, while the body simply contains the word 'test'.",
+            "The provided text is a title and body for an item with the ID 'impexp-1775367981432-extra'. The body contains only the word 'test'.",
+            "The provided text is a title and body for an issue or task. The title 'impexp-1775300018449-extra' appears to be a unique identifier, possibly for tracking imports or exports. The body contains only the word 'test', which suggests that further details or actions are needed.",
+            "The provided text contains a title and body. The title is 'impexp-1775320085666-extra' and the body simply says 'test'. There are no specific instructions or tasks mentioned.",
+            "The provided text is a title and body for an issue or task. The title 'impexp-1775320268166-extra' appears to be a unique identifier followed by a descriptive tag. The body simply contains the word 'test'.",
+            "The provided text is a title and body for an issue or task. The title 'impexp-1775368419347-extra' appears to be a unique identifier followed by a descriptive tag, while the body simply contains the word 'test'.",
+            "The document titled 'Import B: impexp-1775320598400' contains the body text 'Content B'. No specific actions are mentioned in the provided information."
+          ],
+          "found_ranks": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            2,
+            2,
+            2,
+            2,
+            2,
+            2,
+            2,
+            2,
+            0
+          ],
+          "latency_ms_samples": [
+            6635
+          ],
+          "latency_ms_median": 6635,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-miss-unicorn",
+          "group": "adversarial-miss",
+          "query": "how to render a rainbow unicorn in WebGL with subsurface scattering",
+          "top_k_keys": [
+            "1f112bf8-7da1-4b1a-a181-13855d60f628",
+            "68b2f2cb-2271-454e-bf7e-7831fafb9e3c",
+            "75d97ca9-3936-4fb5-90a2-0d95e428f641",
+            "999db013-9162-4b6d-9155-86daea5a8291",
+            "f333214e-8e83-4049-a826-a7a5f4cf885a",
+            "720f912b-c304-4dc7-bb9a-280657c3ed3f",
+            "8edfeb1b-b28e-42f4-967b-78bf9f440134",
+            "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+            "4e28d4bc-5d6e-47c7-bda5-7b2dfb761736",
+            "a6ee1dd4-09d3-487c-b7de-910ec2f4cfaf"
+          ],
+          "top_k_titles": [
+            "Multi-project support: color + description on projects table",
+            "pg UUID cast RETURNING is always canonical lowercase — map keys must match",
+            "gui-create-1776490733660",
+            "gui-create-1776171161702",
+            "gui-create-1776188570090",
+            "Content-based hash dup-rate metrics need a distinguishing fallback when retriever returns empty content fields",
+            "Filter workaround gui-filter-1775838554751",
+            "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types",
+            "Code review workflow: review each file group separately after bulk implementation",
+            "gui-create-1775845003745"
+          ],
+          "top_k_snippets": [
+            "Added 'color' and 'description' columns to the projects table with validation for color against a fixed allow-list and a 2000-char limit for description. Ensure sync between BE VALID_COLORS and FE PROJECT_COLORS.",
+            "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…",
+            "GUI test lesson content gui-create-1776490733660",
+            "GUI test lesson content gui-create-1776171161702",
+            "GUI test lesson content gui-create-1776188570090",
+            "The nearSemanticKey function returns '||' when both title and snippet are null/undefined, leading to a 100% duplication rate metric even with no actual content duplication. This issue occurred in src/qc/surfaces.ts where the callCode function did not populate the snippet field. …",
+            "Seeded by GUI test: Filter workaround gui-filter-1775838554751",
+            "During POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness with zero false positives and no regressions.",
+            "When implementing large features across multiple files, conduct a structured code review by focusing on specific groups such as BE service, BE routes, FE components, FE pages, and integration. This approach helps in identifying issues like bugs, security gaps, and logic errors t…",
+            "The GUI test lesson content for 'gui-create-1775845003745' is available. This lesson likely covers the creation and testing of graphical user interfaces, providing guidance on how to design, implement, and validate user interactions within a software application."
+          ],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            3803
+          ],
+          "latency_ms_median": 3803,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-miss-astrophysics",
+          "group": "adversarial-miss",
+          "query": "thermonuclear astrophysics of quark-gluon plasma at LHC",
+          "top_k_keys": [
+            "bb39fe5e-0345-4b98-976b-fe3b0743f169",
+            "720f912b-c304-4dc7-bb9a-280657c3ed3f",
+            "d32dc104-3fad-495c-bfba-cafcd3d63319",
+            "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+            "1f112bf8-7da1-4b1a-a181-13855d60f628",
+            "0f6f2651-f475-42cc-b344-360f29dd9d8d",
+            "c765738c-9a44-41e2-9902-38631426ea58",
+            "d3f80630-98c9-4494-ae03-2549a728c37d",
+            "bd5b5471-267e-4404-b282-2190c751a2fb",
+            "a9c36f77-6bbd-4761-af28-f06a02fec8ea"
+          ],
+          "top_k_titles": [
+            "Baseline determinism holds for back-to-back runs only; hours-separated runs jitter by embeddings-service load",
+            "Content-based hash dup-rate metrics need a distinguishing fallback when retriever returns empty content fields",
+            "normalizeForHash collapses digit-runs to 'n' — deliberate trade-off, load-bearing on dataset shape",
+            "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types",
+            "Multi-project support: color + description on projects table",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern"
+          ],
+          "top_k_snippets": [
+            "Baseline determinism holds for back-to-back runs but varies with embeddings-service load when run hours apart. Root cause is transient CPU/memory load on the MCP container affecting query scoring. The diff generator flags this as a regression, but it's measurement noise. Operato…",
+            "The nearSemanticKey function returns '||' when both title and snippet are null/undefined, leading to a 100% duplication rate metric even with no actual content duplication. This issue occurred in src/qc/surfaces.ts where the callCode function did not populate the snippet field. …",
+            "The normalizeForHash function collapses digit-runs to 'n' in the v1 near-semantic key. This aggressive approach is designed to catch timestamp-variant fixture duplication but may equate semantically-distinct content when digits carry meaning. The load-bearing assumption is that …",
+            "During POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness with zero false positives and no regressions.",
+            "Added 'color' and 'description' columns to the projects table with validation for color against a fixed allow-list and a 2000-char limit for description. Ensure sync between BE VALID_COLORS and FE PROJECT_COLORS.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will progressively increase the wait time between retries, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will increase the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will progressively increase the wait time between retries, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient errors gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution."
+          ],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            3415
+          ],
+          "latency_ms_median": 3415,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-miss-falconry",
+          "group": "adversarial-miss",
+          "query": "medieval falconry training manual hood design",
+          "top_k_keys": [
+            "75d97ca9-3936-4fb5-90a2-0d95e428f641",
+            "f333214e-8e83-4049-a826-a7a5f4cf885a",
+            "999db013-9162-4b6d-9155-86daea5a8291",
+            "a6ee1dd4-09d3-487c-b7de-910ec2f4cfaf",
+            "6039c921-3e72-4d79-9977-a7da2f930d6a",
+            "5d6ccfbd-6c65-4a74-b845-084dbd8e9896",
+            "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+            "e469b60a-001f-4fa1-9f6e-a4ff24e66688",
+            "4c1db48c-f31e-4c2f-af98-fbb991d4fed8",
+            "36beca64-82e1-4db3-a527-b1419065f4af"
+          ],
+          "top_k_titles": [
+            "gui-create-1776490733660",
+            "gui-create-1776188570090",
+            "gui-create-1776171161702",
+            "gui-create-1775845003745",
+            "gui-create-1776490852416",
+            "gui-create-1776171045947",
+            "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types",
+            "gui-create-1775838823146",
+            "gui-create-1776170944457",
+            "gui-create-1775849075641"
+          ],
+          "top_k_snippets": [
+            "GUI test lesson content gui-create-1776490733660",
+            "GUI test lesson content gui-create-1776188570090",
+            "GUI test lesson content gui-create-1776171161702",
+            "The GUI test lesson content for 'gui-create-1775845003745' is available. This lesson likely covers the creation and testing of graphical user interfaces, providing guidance on how to design, implement, and validate user interactions within a software application.",
+            "This is a GUI test lesson content for the item with ID gui-create-1776490852416. The lesson likely covers testing graphical user interfaces, which involves verifying that the application's UI elements function correctly and meet design specifications.",
+            "This document is a GUI test lesson content titled 'gui-create-1776171045947'. It likely contains instructions or guidelines for creating a graphical user interface, possibly including steps, best practices, and examples.",
+            "During POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness with zero false positives and no regressions.",
+            "This is a GUI test lesson content for the item with ID gui-create-1775838823146. The lesson likely covers various aspects of graphical user interface testing, including how to create and manage GUI elements, perform user interactions, and validate the functionality of the applic…",
+            "GUI test lesson content gui-create-1776170944457",
+            "GUI test lesson content gui-create-1775849075641"
+          ],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            4185
+          ],
+          "latency_ms_median": 4185,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-cross-integration-test-backoff",
+          "group": "cross-topic",
+          "query": "integration test exponential backoff retry strategy",
+          "top_k_keys": [
+            "c765738c-9a44-41e2-9902-38631426ea58",
+            "08f31899-df67-4be1-926f-c5c3814e511d",
+            "ed815b58-45a0-4083-be40-4d3cb7770f42",
+            "bd5b5471-267e-4404-b282-2190c751a2fb",
+            "a9c36f77-6bbd-4761-af28-f06a02fec8ea",
+            "2b07085d-f625-4791-9606-3f2bdb6491cf",
+            "0f6f2651-f475-42cc-b344-360f29dd9d8d",
+            "9f7e114a-763a-4f96-a8c9-50195267538b",
+            "c3920936-dc58-4a39-a17e-31949774828d",
+            "48eb3621-686c-4577-9a90-dee5d445e565"
+          ],
+          "top_k_titles": [
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern"
+          ],
+          "top_k_snippets": [
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will increase the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will increase the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will progressively increase the wait time between retries, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will progressively increase the wait time between retries, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient errors gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will progressively increase the wait time between retries, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach involves increasing the wait time between retries exponentially, which helps in reducing the load on the system and improving the chances of successf…",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution."
+          ],
+          "found_ranks": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            2,
+            2,
+            2,
+            2,
+            2,
+            2,
+            2,
+            2,
+            2
+          ],
+          "latency_ms_samples": [
+            5275
+          ],
+          "latency_ms_median": 5275,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-cross-sprint-11-closeout",
+          "group": "cross-topic",
+          "query": "sprint 11.6c-sec DNS pinning body-stall timeout security polish",
+          "top_k_keys": [
+            "d32dc104-3fad-495c-bfba-cafcd3d63319",
+            "4abf93d6-cbca-4006-aee6-a143bd3e8979",
+            "689aee2c-3043-459c-8c1b-5aec8135cba6",
+            "5a9982a8-83e4-40a1-a8f8-280fc519f19a",
+            "544aae14-08aa-436c-b54b-c8ecda4587fe",
+            "be30985a-e45b-47ce-82d2-f6a75dc282b8",
+            "d66e5221-5e7b-42d8-b8fc-d91c8d2ee76a",
+            "0e08eead-db62-4668-8d7b-20281747c7ac",
+            "9a34ef12-bb6d-42d3-bee3-7ff53c4d86b0",
+            "abe242ea-31ef-4d14-9245-92cfa16b8975"
+          ],
+          "top_k_titles": [
+            "normalizeForHash collapses digit-runs to 'n' — deliberate trade-off, load-bearing on dataset shape",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "NoProjectGuard: hydration-safe guard for data pages"
+          ],
+          "top_k_snippets": [
+            "The normalizeForHash function collapses digit-runs to 'n' in the v1 near-semantic key. This aggressive approach is designed to catch timestamp-variant fixture duplication but may equate semantically-distinct content when digits carry meaning. The load-bearing assumption is that …",
+            "The system should enforce a maximum of three retry attempts for any operation to prevent infinite loops and resource exhaustion.",
+            "The system should enforce a maximum of three retry attempts for any operation to prevent infinite loops and resource exhaustion.",
+            "The system should enforce a maximum of three retry attempts for any operation to prevent infinite loops and resource exhaustion.",
+            "The policy requires that the maximum number of retry attempts for any operation should not exceed three. This is to prevent infinite loops and ensure system stability.",
+            "The policy requires setting the maximum number of retry attempts to 3. This change needs to be enforced across all relevant systems and configurations to ensure compliance with the new rule.",
+            "The system should enforce a maximum of three retry attempts to prevent infinite loops and ensure efficient resource utilization. This change will help maintain system stability and performance by limiting the number of times a failed operation is retried.",
+            "The system should enforce a maximum of three retry attempts for any operation to prevent infinite loops and resource exhaustion.",
+            "The policy requires setting the maximum number of retry attempts to 3 for all operations. This ensures that systems do not indefinitely attempt failed tasks, which can lead to resource exhaustion and system instability.",
+            "NoProjectGuard is a hydration-safe guard for 12 data pages, ensuring they only activate after projects load from the API. It has two variants: 'no project selected' and 'project not found'. Feature toggles are deferred to Phase 8, and non-functional UI was removed to avoid confu…"
+          ],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            5792
+          ],
+          "latency_ms_median": 5792,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "no-relevant-hit"
+          ]
+        },
+        {
+          "id": "lesson-cross-workflow-gate",
+          "group": "cross-topic",
+          "query": "workflow gate state machine 12-phase workflow v2.2",
+          "top_k_keys": [
+            "4e28d4bc-5d6e-47c7-bda5-7b2dfb761736",
+            "abe242ea-31ef-4d14-9245-92cfa16b8975",
+            "e87cd142-9fc3-4ef9-868f-11ed3e7577bf",
+            "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+            "acc75b5c-0eaa-4378-864d-ec713ac9d0db",
+            "3ab6adbf-2c0e-4274-95a4-f2683d55cefb",
+            "d3f80630-98c9-4494-ae03-2549a728c37d",
+            "08f31899-df67-4be1-926f-c5c3814e511d",
+            "9f7e114a-763a-4f96-a8c9-50195267538b",
+            "48eb3621-686c-4577-9a90-dee5d445e565"
+          ],
+          "top_k_titles": [
+            "Code review workflow: review each file group separately after bulk implementation",
+            "NoProjectGuard: hydration-safe guard for data pages",
+            "/review-impl adversarial review catches silent-false-confidence bugs POST-REVIEW misses",
+            "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types",
+            "Filter decision gui-filter-1775838554751",
+            "Measure-first baseline sprints establish the scorecard before any improvement ships",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern"
+          ],
+          "top_k_snippets": [
+            "When implementing large features across multiple files, conduct a structured code review by focusing on specific groups such as BE service, BE routes, FE components, FE pages, and integration. This approach helps in identifying issues like bugs, security gaps, and logic errors t…",
+            "NoProjectGuard is a hydration-safe guard for 12 data pages, ensuring they only activate after projects load from the API. It has two variants: 'no project selected' and 'project not found'. Feature toggles are deferred to Phase 8, and non-functional UI was removed to avoid confu…",
+            "In Phase 12 Sprint 12.0, /review-impl caught 15 additional findings, including 6 MED and 6 LOW issues in benchmarking/measurement infrastructure. These bugs silently produce wrong numbers without crashing the system. Key examples include a dup-rate metric blind to certain pathol…",
+            "During POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness with zero false positives and no regressions.",
+            "A GUI filter test named 'Filter decision gui-filter-1775838554751' has been seeded. This indicates that a new test case or scenario involving filtering functionality in the graphical user interface has been initiated for testing purposes.",
+            "Sprint 12.0 focuses on establishing a baseline scorecard without shipping retrieval improvements. This sets a foundation for subsequent sprints to build upon, ensuring that all future work can be measured and compared effectively. The deliverables include numeric data archived i…",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will increase the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution."
+          ],
+          "found_ranks": [
+            4
+          ],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            5995
+          ],
+          "latency_ms_median": 5995,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": [
+            "rank-order-inversion"
+          ]
+        },
+        {
+          "id": "lesson-cross-agent-bootstrap-e2e",
+          "group": "cross-topic",
+          "query": "agent context bootstrap end-to-end testing",
+          "top_k_keys": [
+            "2f8b0b23-b858-4fae-9a70-31c104e7fe79",
+            "6e17baa4-75a7-4b6b-960d-b543d90896fe",
+            "68696052-ea32-4097-904c-1fb059c90450",
+            "82e14086-dc76-40f5-81f5-e7ef0c4c97ef",
+            "2b07085d-f625-4791-9606-3f2bdb6491cf",
+            "ed815b58-45a0-4083-be40-4d3cb7770f42",
+            "08f31899-df67-4be1-926f-c5c3814e511d",
+            "4e28d4bc-5d6e-47c7-bda5-7b2dfb761736",
+            "d3f80630-98c9-4494-ae03-2549a728c37d",
+            "2af9bb39-e127-4527-8453-4813a66ae28b"
+          ],
+          "top_k_titles": [
+            "Agent context bootstrap e2e-1775840056667-clp98p",
+            "Agent context bootstrap e2e-1775880510559-urw0mj",
+            "Phase 8 smoke test — custom type via REST",
+            "undici userland version MUST match Node's bundled version for fetch dispatcher interop",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Code review workflow: review each file group separately after bulk implementation",
+            "Global search test retry pattern",
+            "GET /api/lessons returns rows under `items`, not `lessons` or `results`"
+          ],
+          "top_k_snippets": [
+            "This is a bootstrap lesson for agent tests that will be archived. It provides an initial setup and guidance for conducting end-to-end tests with the specified ID e2e-1775840056667-clp98p.",
+            "This document outlines a bootstrap lesson for agent tests, which will be archived. It provides essential information and steps needed to set up the testing environment effectively.",
+            "Conduct a Phase 8 smoke test to verify that the custom lesson type API change functions correctly end-to-end following the removal of the CHECK constraint in migration 0040. Ensure all components interact seamlessly and data integrity is maintained.",
+            "Node's global fetch() requires the userland undici version to match its internally bundled version to avoid obscure errors. Node 23.11.1 bundles undici 6.21.2, so pinning userland undici to ^6.21.2 is recommended. Verify compatibility on Node upgrades as internal undici versions…",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will progressively increase the wait time between retries, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will increase the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "When implementing large features across multiple files, conduct a structured code review by focusing on specific groups such as BE service, BE routes, FE components, FE pages, and integration. This approach helps in identifying issues like bugs, security gaps, and logic errors t…",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "The API endpoint /api/lessons returns data under 'items', not 'lessons' or 'results'. Tests should read from body.items to avoid confusion and silent failures. Verify the field name against the service implementation, and if unsure, dump the response body in a test."
+          ],
+          "found_ranks": [
+            1,
+            2
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            5606
+          ],
+          "latency_ms_median": 5606,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        }
+      ]
+    }
+  }
+}

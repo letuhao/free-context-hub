@@ -1,0 +1,38 @@
+{
+  "slug": "dlf-phase0",
+  "name": "Dead Light Framework — Phase 0 Reckoning",
+  "description": "Lesson types for Phase 0 (Reckoning) audits per Dead Light Framework. Each type maps to a Reckoning Record section. A lesson with type 'candidate-decision' and status 'pending-review' is the ContextHub equivalent of '[AI candidate — awaiting project-owner confirmation]' in reckoning-record.md.",
+  "version": "1.0",
+  "lesson_types": [
+    {
+      "type": "reckoning-finding",
+      "label": "Reckoning Finding",
+      "description": "Current state observation (§1 Current State Audit).",
+      "color": "blue"
+    },
+    {
+      "type": "candidate-decision",
+      "label": "Candidate Decision",
+      "description": "Past decision candidate (§2). Status pending-review = [AI candidate] awaiting project-owner confirmation.",
+      "color": "amber"
+    },
+    {
+      "type": "failure-candidate",
+      "label": "Failure Candidate",
+      "description": "Architect-rot or failure pattern (§3 Failure Inventory).",
+      "color": "red"
+    },
+    {
+      "type": "implicit-principle",
+      "label": "Implicit Principle",
+      "description": "\"Of course we'll...\" pattern surfaced for §4. AI aide writes independently before project-owner contribution.",
+      "color": "emerald"
+    },
+    {
+      "type": "codex-guardrail",
+      "label": "Codex Guardrail",
+      "description": "Hard Stop (HS-*) or Notify Trigger (N-*) from an agent Codex. Fed into check_guardrails engine same as 'guardrail' type.",
+      "color": "purple"
+    }
+  ]
+}

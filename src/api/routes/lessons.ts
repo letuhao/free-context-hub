@@ -13,6 +13,8 @@ import {
 } from '../../core/index.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { resolveProjectParams } from '../middleware/resolveProjectParams.js';
+import { logLessonAccess, isSalienceDisabled } from '../../services/salience.js';
+import { getDbPool } from '../../db/client.js';
 
 const router = Router();
 
@@ -108,6 +110,15 @@ router.post('/:id/improve', requireRole('writer'), async (req, res, next) => {
       res.status(502).json(result);
       return;
     }
+    // Sprint 12.1c — consumption-improve: LLM just read this lesson's content.
+    if (!isSalienceDisabled()) {
+      void logLessonAccess(pool, [{
+        lesson_id: String(req.params.id),
+        project_id: projectId,
+        context: 'consumption-improve',
+        weight: 1.0,
+      }]);
+    }
     res.json(result);
   } catch (e) { next(e); }
 });
@@ -149,6 +160,15 @@ router.post('/:id/suggest-tags', requireRole('writer'), async (req, res, next) =
       .slice(0, 5)
       .map(([tag]) => tag);
 
+    // Sprint 12.1c — consumption-tags: this lesson's content was scanned for tag generation.
+    if (!isSalienceDisabled()) {
+      void logLessonAccess(pool, [{
+        lesson_id: String(req.params.id),
+        project_id: projectId,
+        context: 'consumption-tags',
+        weight: 1.0,
+      }]);
+    }
     res.json({ status: 'ok', suggestions, current_tags: currentTags });
   } catch (e) { next(e); }
 });
@@ -164,6 +184,15 @@ router.get('/:id/versions', async (req, res, next) => {
     if (result.status === 'error') {
       res.status(404).json(result);
       return;
+    }
+    // Sprint 12.1c — consumption-versions: someone's looking at this lesson's history.
+    if (!isSalienceDisabled()) {
+      void logLessonAccess(getDbPool(), [{
+        lesson_id: String(req.params.id),
+        project_id: projectId,
+        context: 'consumption-versions',
+        weight: 1.0,
+      }]);
     }
     res.json(result);
   } catch (e) { next(e); }

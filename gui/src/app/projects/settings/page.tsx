@@ -11,6 +11,7 @@ import { cn } from "@/lib/cn";
 import { NoProjectGuard } from "@/components/no-project-guard";
 import { Copy, Users, AlertTriangle, GitBranch, Sparkles, ClipboardCheck, Activity } from "lucide-react";
 import { ExchangePanel } from "./exchange-panel";
+import { TaxonomyPanel } from "./taxonomy-panel";
 
 export default function ProjectSettingsPage() {
   const { projectId, projects, refreshProjects } = useProject();
@@ -286,6 +287,9 @@ export default function ProjectSettingsPage() {
 
       {/* Phase 11.4: Knowledge Exchange (export + import) */}
       <ExchangePanel projectId={projectId} />
+
+      {/* Phase 13 Sprint 13.6: Taxonomy Profile management */}
+      <TaxonomyPanel projectId={projectId} />
 
       {/* Danger Zone */}
       <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-6">

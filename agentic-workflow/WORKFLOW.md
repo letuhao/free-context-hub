@@ -1,10 +1,23 @@
-# Agent Workflow v2.2
+# Agent Workflow v2.2 (default) + AMAW v3.0 (opt-in)
 
 > A structured development workflow for AI coding agents. Combines the best of [Superpowers](https://github.com/obra/superpowers) (execution discipline, TDD, verification gates) with session persistence, role-based review, and enforcement mechanisms.
 >
 > **How to use:** Paste this into your `CLAUDE.md` or agent instructions. Customize paths marked with `[CUSTOMIZE]`.
 >
 > **v2.2 — POST-REVIEW reshaped.** Self-adversarial re-read right after BUILD has a very low hit rate (agents pattern-match to their own reasoning and rubber-stamp "0 issues"). POST-REVIEW is now a **human checkpoint only**. Deep adversarial review is an on-demand command: `/review-impl` (see `.claude/commands/review-impl.md`).
+>
+> **AMAW v3.0 — opt-in extension.** For high-stakes tasks (data migrations, schema changes, security paths, multi-system contracts), user can invoke `/amaw` at start of task to enable cold-start sub-agent reviews at REVIEW + POST-REVIEW phases. AMAW catches issues human review misses but costs ~$1-5/task. Default (v2.2) is always-on; AMAW activates only when user explicitly triggers it. See `AMAW.md` for the full opt-in spec.
+
+---
+
+## Quick mode-selection guide
+
+| Task | Mode | Why |
+|---|---|---|
+| Bug fix, doc update, small refactor (XS/S) | Default v2.2 | Human review catches issues at lower cost |
+| Feature work (M) | Default v2.2 + `/review-impl` if safety-sensitive | Self-review + on-demand deep review covers most |
+| Data migration, schema change, security-critical (L+) | **`/amaw`** | Cold-start sub-agents catch coherence + edge cases |
+| Multi-system / cross-project contract | **`/amaw`** | Edge cases compound; worth the token cost |
 
 ---
 
@@ -15,21 +28,23 @@ Every task follows this workflow. The agent plays all roles sequentially.
 **ENFORCEMENT: This workflow uses a state machine (`.workflow-state.json`). You MUST call the phase transition protocol before moving between phases. Hooks will block commits if verification evidence is missing.**
 
 ```
-Phase          | Role              | What Happens
----------------|-------------------|----------------------------------------------
-1. CLARIFY     | Architect + PO    | Brainstorm, ask questions, define scope
-2. DESIGN      | Lead              | API contract / component API / data flow
-3. REVIEW      | PO + Lead         | Review design spec before coding
-4. PLAN        | Lead + Developer  | Decompose into bite-sized tasks (2-5 min)
-5. BUILD       | Developer         | Write code (TDD: red -> green -> refactor)
-6. VERIFY      | Developer         | Evidence-based verification gate
-7. REVIEW      | Lead              | Code review (spec compliance + quality)
-8. QC          | QA / PO           | Test against acceptance criteria
-9. POST-REVIEW | Human + Developer | Human-interactive CHECKPOINT (context reset, NOT deep review)
-10. SESSION    | Developer         | Update session notes + task status
-11. COMMIT     | Developer         | Git commit (+ push if approved)
-12. RETRO      | All               | Record decision/workaround if learned
+Phase          | Default v2.2 role    | AMAW v3.0 role        | What Happens
+---------------|----------------------|-----------------------|----------------------------------------
+1. CLARIFY     | Architect + PO       | Main + Scribe         | Brainstorm, ask questions, define scope
+2. DESIGN      | Lead                 | Main                  | API contract / component API / data flow
+3. REVIEW      | PO + Lead self       | Adversary cold-start  | Find spec gaps / contract holes
+4. PLAN        | Lead + Developer     | Main + Scribe         | Decompose into bite-sized tasks
+5. BUILD       | Developer            | Main                  | TDD: red -> green -> refactor
+6. VERIFY      | Developer            | Main                  | Evidence-based verification gate
+7. REVIEW      | Lead self            | Adversary cold-start  | Code vs spec — find divergences
+8. QC          | QA / PO              | Scope Guard           | Spec fingerprint vs implementation
+9. POST-REVIEW | Human checkpoint     | Scope Guard           | Final gate — NEVER skippable
+10. SESSION    | Developer            | Scribe                | Update session notes + deferred items
+11. COMMIT     | Developer            | Main                  | Git commit (+ push if approved)
+12. RETRO      | All                  | Audit Logger          | Record decision/workaround if learned
 ```
+
+**AMAW activation:** the second column applies ONLY when user invoked `/amaw` at start of task. Without that, default v2.2 (column 2) is used. See `AMAW.md` for prompt templates.
 
 **Status tracking:** `[ ]` not started · `[C]` clarify · `[D]` design · `[P]` plan · `[B]` build · `[V]` verify · `[R]` review · `[Q]` QC · `[PR]` post-review · `[S]` session · `[x]` done
 

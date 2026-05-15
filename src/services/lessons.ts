@@ -7,13 +7,26 @@ import { embedTexts } from './embedder.js';
 import { distillLesson } from './distiller.js';
 import { rebuildProjectSnapshot } from './snapshot.js';
 import { expandForFtsIndex, buildFtsQuery } from '../utils/ftsTokenizer.js';
+import { nearSemanticKey } from '../utils/nearSemanticKey.js';
+import { GUARDRAIL_LESSON_TYPES } from '../constants/lessonTypes.js';
+import { validateLessonType } from './taxonomyService.js';
+import {
+  logLessonAccess,
+  isSalienceDisabled,
+  computeSalience,
+  computeSalienceMultiProject,
+  applyQueryConditionalSalienceBlend,
+  getSalienceConfig,
+  type AccessLogEntry,
+} from './salience.js';
 import * as z from 'zod/v4';
 import { createModuleLogger } from '../utils/logger.js';
 
 const logger = createModuleLogger('lessons');
 
 export type LessonType = string;
-export type LessonStatus = 'draft' | 'active' | 'superseded' | 'archived';
+// Phase 13 Sprint 13.3: 'pending-review' added (reachable only via submit_for_review).
+export type LessonStatus = 'draft' | 'pending-review' | 'active' | 'superseded' | 'archived';
 
 export type GuardrailRulePayload = {
   trigger: string;
@@ -155,14 +168,20 @@ async function generateSearchAliases(title: string, content: string): Promise<st
           { role: 'user', content: `Title: ${title}\nContent: ${content.slice(0, 500)}` },
         ],
         temperature: 0.3,
-        max_tokens: 200,
+        // Phase 14 round-2 fix: bumped from 200 to 3000 to accommodate reasoning
+        // models (nemotron-3-nano) that consume budget on chain-of-thought before
+        // emitting the final JSON array. 200 tokens was nearly always empty content
+        // + truncated reasoning_content → silent alias loss after Phase 14 swap.
+        max_tokens: 3000,
       }),
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(180000),
     });
 
     if (!res.ok) return '';
     const json = (await res.json()) as any;
-    const text = json?.choices?.[0]?.message?.content ?? '';
+    const msg = json?.choices?.[0]?.message ?? {};
+    // Phase 14: fall back to reasoning_content for reasoning models (nemotron etc.)
+    const text = (String(msg.content ?? '').trim() || String(msg.reasoning_content ?? '').trim()) ?? '';
     // Parse JSON array from response (may have markdown fences).
     const match = text.match(/\[[\s\S]*\]/);
     if (!match) return '';
@@ -178,6 +197,12 @@ async function generateSearchAliases(title: string, content: string): Promise<st
 }
 
 export async function addLesson(payload: LessonPayload): Promise<AddLessonResult> {
+  // Phase 13 Sprint 13.5 — single source of truth for lesson_type validation.
+  // Runs at the SERVICE layer so REST POST /api/lessons, REST /import, MCP
+  // add_lesson, and any future caller all hit the same gate. Built-ins always
+  // accepted; active taxonomy profile types additively accepted.
+  await validateLessonType(payload.project_id, payload.lesson_type);
+
   const pool = getDbPool();
   const lessonId = randomUUID();
 
@@ -270,7 +295,12 @@ export async function addLesson(payload: LessonPayload): Promise<AddLessonResult
   }).catch(() => {});
 
   let guardrail_inserted = false;
-  if (payload.lesson_type === 'guardrail' || payload.guardrail) {
+  // Phase 13 Sprint 13.5: extended to fire on `codex-guardrail` lesson_type too.
+  // Preserves the `|| payload.guardrail` OR-branch for legacy callers (spec r1 F3).
+  if (
+    (GUARDRAIL_LESSON_TYPES as readonly string[]).includes(payload.lesson_type) ||
+    payload.guardrail
+  ) {
     const rule = payload.guardrail;
     if (!rule) {
       await rebuildProjectSnapshot(payload.project_id).catch(() => {});
@@ -492,7 +522,7 @@ const RerankOrderSchema = z.object({
   order: z.array(z.number().int().nonnegative()),
 });
 
-type RerankCandidate = { index: number; title: string; snippet: string };
+export type RerankCandidate = { index: number; title: string; snippet: string };
 
 function rerankBaseUrl(): string {
   const env = getEnv();
@@ -541,10 +571,12 @@ async function rerankGenerative(query: string, candidates: RerankCandidate[]): P
     if (!res.ok) { logger.warn({ status: res.status }, 'generative rerank: HTTP error'); return candidates.map(c => c.index); }
 
     const json = (await res.json()) as any;
-    const content = json?.choices?.[0]?.message?.content;
-    if (typeof content !== 'string' || !content.trim()) return candidates.map(c => c.index);
+    const msg = json?.choices?.[0]?.message ?? {};
+    // Phase 14: fall back to reasoning_content for reasoning models (nemotron etc.)
+    const content = String(msg.content ?? '').trim() || String(msg.reasoning_content ?? '').trim();
+    if (!content) return candidates.map(c => c.index);
 
-    const raw = content.trim();
+    const raw = content;
     const n = candidates.length;
     let order: number[] = [];
 
@@ -660,12 +692,94 @@ function cosineSimilarity(a: number[], b: number[]): number {
   return denom > 0 ? dot / denom : 0;
 }
 
+/**
+ * Sprint 12.1g — External-API reranker.
+ *
+ * POSTs query + candidate texts to a Cohere/TEI-compatible /rerank endpoint
+ * and returns the new index order sorted by server-side score. Unblocks
+ * true cross-encoder rerank models (bge-reranker-v2-m3, jina-reranker-v3,
+ * etc.) that can't be used via LM Studio's /v1/embeddings bi-encoder path
+ * (Sprint 12.1f finding).
+ *
+ * Works with: HuggingFace text-embeddings-inference (TEI), Infinity, Cohere.
+ *
+ * Request body:  {query, texts: [string, ...]}
+ * Response body: [{index: number, score: number}, ...]  (sorted score DESC)
+ *
+ * Default server URL: http://tei-rerank:80 (docker-compose tei-rerank
+ * service). Override via RERANK_BASE_URL.
+ *
+ * Failure modes (network error, 5xx, malformed response) fall back to
+ * `candidates.map(c => c.index)` — effectively no-op. Same pattern as the
+ * sibling reranker functions.
+ */
+export async function rerankExternalApi(query: string, candidates: RerankCandidate[]): Promise<number[]> {
+  const env = getEnv();
+  const baseUrl = env.RERANK_BASE_URL ?? 'http://tei-rerank:80';
+
+  const ac = new AbortController();
+  const timeoutMs = (env.RERANK_TIMEOUT_MS ?? 10000) + 5000;
+  const t = setTimeout(() => ac.abort(), timeoutMs);
+
+  try {
+    const texts = candidates.map(c => `${c.title}. ${c.snippet}`);
+    const res = await fetch(`${baseUrl}/rerank`, {
+      method: 'POST',
+      headers: rerankHeaders(),
+      signal: ac.signal,
+      body: JSON.stringify({ query, texts }),
+    });
+
+    if (!res.ok) {
+      logger.warn({ status: res.status, url: `${baseUrl}/rerank` },
+        'external-api rerank: HTTP error — falling back to no-rerank. Ensure tei-rerank service is running: `docker compose --profile measurement up -d tei-rerank`');
+      return candidates.map(c => c.index);
+    }
+
+    const json = (await res.json()) as Array<{ index: number; score: number }>;
+    if (!Array.isArray(json) || json.length === 0) {
+      logger.warn({ shape: typeof json, url: `${baseUrl}/rerank` },
+        'external-api rerank: empty or malformed response — falling back to no-rerank');
+      return candidates.map(c => c.index);
+    }
+
+    // json is sorted by score DESC; map server-side indices (into `texts`)
+    // back to caller-supplied index fields.
+    const order = json
+      .map(r => candidates[r.index]?.index)
+      .filter((v): v is number => v !== undefined);
+
+    logger.info({
+      query: query.slice(0, 60),
+      candidates: candidates.length,
+      top3: order.slice(0, 3),
+      top3_scores: json.slice(0, 3).map(r => r.score.toFixed(5)),
+      mode: 'external-api',
+    }, 'lesson rerank: done');
+
+    return order;
+  } catch (err) {
+    logger.warn({ error: err instanceof Error ? err.message : String(err), url: `${baseUrl}/rerank` },
+      'external-api rerank: network error — falling back to no-rerank. Ensure tei-rerank service is running: `docker compose --profile measurement up -d tei-rerank`');
+    return candidates.map(c => c.index);
+  } finally { clearTimeout(t); }
+}
+
 /** Dispatch to the correct reranker based on RERANK_TYPE. */
 async function rerankLessons(params: {
   query: string;
   candidates: RerankCandidate[];
 }): Promise<number[]> {
   const env = getEnv();
+
+  // Sprint 12.1g — 'api' mode uses an external /rerank server (TEI, Infinity,
+  // Cohere). No LM Studio model required; RERANK_BASE_URL alone determines
+  // destination. Checked FIRST so the DISTILLATION_MODEL fallback below
+  // doesn't suppress api mode when DISTILLATION_ENABLED=false.
+  if (env.RERANK_TYPE === 'api') {
+    return rerankExternalApi(params.query, params.candidates);
+  }
+
   const model = env.RERANK_MODEL ?? env.DISTILLATION_MODEL;
   if (!model) return params.candidates.map(c => c.index);
 
@@ -677,6 +791,66 @@ async function rerankLessons(params: {
 
   if (!env.DISTILLATION_ENABLED) return params.candidates.map(c => c.index);
   return rerankGenerative(params.query, params.candidates);
+}
+
+/**
+ * Sprint 12.1a — near-semantic dedup for lesson search results.
+ *
+ * Collapses matches that share a `(project_id, lesson_type, nearSemanticKey(title, content_snippet))`
+ * tuple into a single representative: the first-seen (highest-ranked) item
+ * from each cluster. Preserves input ordering; drops subsequent cluster
+ * members. Pure function — no I/O.
+ *
+ * Motivation: the free-context-hub lesson catalog contains multiple
+ * same-title-different-UUID clusters ("Global search test retry pattern"
+ * x6+, "Max retry attempts must be 3" x5+, "Valid: impexp-<ts>-extra"
+ * x4+). Sprint 12.0.1 baseline measured `dup@10 nearsem = 0.42` on
+ * lessons via the content-level key. By deduplicating with the same
+ * content component, we collapse each cluster to one representative;
+ * the metric drops to 0 on the next baseline.
+ *
+ * Key tuple (Sprint 12.1a /review-impl MED-1 + MED-2):
+ *   - `project_id` included → cross-project "same content" variants
+ *     (e.g. shared guardrails in group-scoped projects) are NOT
+ *     collapsed; each project keeps its own representative.
+ *   - `lesson_type` included → a guardrail and a decision with
+ *     identical title+snippet stay distinct because they carry
+ *     different downstream roles.
+ *   - `nearSemanticKey(title, content_snippet)` → catches timestamp-
+ *     variant fixtures via normalizeForHash digit-collapse.
+ *
+ * Generic constraint uses `string | undefined` (not optional `?`) on
+ * content_snippet so TypeScript catches silent narrowing if the field
+ * is removed from the match type.
+ *
+ * Opt-out: `LESSONS_DEDUP_DISABLED=true` in the environment restores
+ * legacy behavior (no dedup). Intended for A/B measurement and emergency
+ * rollback, not as a permanent toggle.
+ */
+export function dedupLessonMatches<T extends {
+  project_id?: string;
+  lesson_type: string;
+  title: string;
+  content_snippet: string | undefined;
+}>(matches: ReadonlyArray<T>): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const m of matches) {
+    // `project_id` is optional on SearchLessonsResult.matches for historical
+    // reasons; always-populated-by-the-producer in practice but fall back to
+    // '' for type safety. Items missing project_id collapse together within
+    // same type+content — acceptable for the degenerate case (no known producer).
+    const key = `${m.project_id ?? ''}|${m.lesson_type}|${nearSemanticKey(m.title, m.content_snippet)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(m);
+  }
+  return out;
+}
+
+/** Env-driven opt-out for dedup. Read lazily so tests can toggle it. */
+function isDedupDisabled(): boolean {
+  return process.env.LESSONS_DEDUP_DISABLED === 'true';
 }
 
 export async function searchLessons(params: SearchLessonsParams): Promise<SearchLessonsResult> {
@@ -786,11 +960,33 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
   }
 
   // Build initial matches from DB results.
+  // Sprint 12.1d: retain a RELEVANCE SIGNAL per lesson so the salience blend
+  // can condition its boost on how well the lesson matches the current
+  // query. Sprint 12.1d /review-impl MED-2 — use `max(sem_score, fts_score)`
+  // rather than pure sem_score so FTS-only relevant matches (specific
+  // identifiers, short technical tokens) keep their legitimate boost instead
+  // of being cancelled by low semantic similarity.
+  //
+  // MED-1 NaN guard: Number(NaN) = NaN; the downstream blendHybridScore
+  // returns hybridScore unchanged when relevance is non-finite. Storing NaN
+  // here is safe — the blend function handles it. Prefer not to replace NaN
+  // with 0 at write-time so the signal path is debuggable.
+  const relevanceSignalByLessonId = new Map<string, number>();
   let matches: SearchLessonsResult['matches'] = (res.rows ?? []).map((r: any) => {
     const sum = r.summary != null ? String(r.summary).trim() : '';
     const snippetSource = sum.length ? sum : String(r.content);
+    const lessonId = String(r.lesson_id);
+    const semScore = Number(r.sem_score);
+    const ftsScore = Number(r.fts_score);
+    // Composite: whichever signal is stronger. Both are in ~[0, 1];
+    // ts_rank can rarely exceed 1 but the clamp in blendHybridScore caps it.
+    const relevance = Math.max(
+      Number.isFinite(semScore) ? semScore : 0,
+      Number.isFinite(ftsScore) ? ftsScore : 0,
+    );
+    relevanceSignalByLessonId.set(lessonId, relevance);
     return {
-      lesson_id: String(r.lesson_id),
+      lesson_id: lessonId,
       project_id: String(r.project_id),
       lesson_type: String(r.lesson_type) as LessonType,
       title: String(r.title),
@@ -800,6 +996,49 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
       status: String(r.status ?? 'active') as LessonStatus,
     };
   });
+
+  // Sprint 12.1c / 12.1d — salience blend (read path), query-conditional.
+  // Runs BEFORE rerank so rerank can refine on the salience-adjusted order.
+  // Multiplies each match's hybrid score by `(1 + α × salience × relevance)`.
+  // The relevance factor addresses the 12.1c popularity feedback loop by
+  // scaling boost with how well the lesson matches THIS query (semantic OR
+  // keyword), not just historical access frequency.
+  if (!isSalienceDisabled() && matches.length > 0) {
+    try {
+      const salienceConfig = getSalienceConfig();
+      const candidateIds = matches.map((m) => m.lesson_id);
+      const salienceMap = await computeSalience(
+        pool,
+        params.projectId,
+        candidateIds,
+        salienceConfig,
+      );
+      if (salienceMap.size > 0 && salienceConfig.alpha > 0) {
+        const { effectiveBoosts } = applyQueryConditionalSalienceBlend(
+          matches,
+          salienceMap,
+          relevanceSignalByLessonId,
+          salienceConfig.alpha,
+        );
+        explanations.push(
+          `salience: enabled query-conditional (α=${salienceConfig.alpha}, halfLife=${salienceConfig.halfLifeDays}d); ${salienceMap.size}/${matches.length} with access history, ${effectiveBoosts} effective after relevance-gating`,
+        );
+      } else {
+        explanations.push(
+          salienceConfig.alpha === 0
+            ? 'salience: α=0, no boost applied (logging still active)'
+            : `salience: no access history for any candidate (${matches.length} lessons)`,
+        );
+      }
+    } catch (err) {
+      // Salience is a boost, not a requirement — fail-open.
+      explanations.push(
+        `salience: skipped due to error (${err instanceof Error ? err.message : String(err)})`,
+      );
+    }
+  } else if (isSalienceDisabled()) {
+    explanations.push('salience: disabled via LESSONS_SALIENCE_DISABLED');
+  }
 
   // LLM rerank: re-order top candidates for better ranking.
   // Dynamic budget: skip for small sets, scale up for large lesson bases.
@@ -826,8 +1065,44 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
     }
   }
 
-  // Trim to the originally requested limit after reranking.
+  // Sprint 12.1a — near-semantic dedup. Collapses same-(project,type,title,
+  // snippet) clusters before trimming so unique items that were pushed below
+  // cluster duplicates get surfaced. Opt-out via LESSONS_DEDUP_DISABLED=true
+  // for A/B measurement and emergency rollback.
+  //
+  // Sprint 12.1a /review-impl LOW-3: always emit an explanation so operators
+  // can distinguish "dedup ON and no dupes found" from "dedup OFF entirely."
+  if (isDedupDisabled()) {
+    explanations.push('dedup: disabled via LESSONS_DEDUP_DISABLED');
+  } else {
+    const before = matches.length;
+    matches = dedupLessonMatches(matches);
+    const dropped = before - matches.length;
+    explanations.push(
+      dropped > 0
+        ? `dedup: enabled, collapsed ${dropped} near-semantic duplicate${dropped === 1 ? '' : 's'} (${before}→${matches.length})`
+        : `dedup: enabled, 0 collapsed (all ${before} items already distinct)`,
+    );
+  }
+
+  // Trim to the originally requested limit after reranking + dedup.
   matches = matches.slice(0, limit);
+
+  // Sprint 12.1c — write path #1: consideration-search. Every returned
+  // match contributes to salience, weighted inversely by rank so the
+  // top-1 counts fully and rank-10 contributes just 0.1. Fire-and-forget:
+  // a write failure must never break retrieval. Guarded by the salience
+  // kill-switch so --control A/B measurement works cleanly.
+  if (!isSalienceDisabled() && matches.length > 0) {
+    const entries: AccessLogEntry[] = matches.map((m, i) => ({
+      lesson_id: m.lesson_id,
+      project_id: m.project_id ?? params.projectId,
+      context: 'consideration-search',
+      weight: 1.0 / (i + 1),
+      metadata: { query: params.query, rank: i + 1 },
+    }));
+    void logLessonAccess(pool, entries);
+  }
 
   return { matches, explanations };
 }
@@ -952,11 +1227,22 @@ export async function searchLessonsMulti(params: SearchLessonsMultiParams): Prom
     explanations.push(`hybrid: sem + 0.40*fts, fts_hits=${ftsHits}/${(res.rows ?? []).length}`);
   }
 
+  // Sprint 12.1d: retain relevance signal (max sem/fts) for query-conditional
+  // salience blend. See searchLessons for the MED-2 rationale.
+  const relevanceSignalByLessonId = new Map<string, number>();
   let matches: SearchLessonsResult['matches'] = (res.rows ?? []).map((r: any) => {
     const sum = r.summary != null ? String(r.summary).trim() : '';
     const snippetSource = sum.length ? sum : String(r.content);
+    const lessonId = String(r.lesson_id);
+    const semScore = Number(r.sem_score);
+    const ftsScore = Number(r.fts_score);
+    const relevance = Math.max(
+      Number.isFinite(semScore) ? semScore : 0,
+      Number.isFinite(ftsScore) ? ftsScore : 0,
+    );
+    relevanceSignalByLessonId.set(lessonId, relevance);
     return {
-      lesson_id: String(r.lesson_id),
+      lesson_id: lessonId,
       project_id: String(r.project_id),
       lesson_type: String(r.lesson_type) as LessonType,
       title: String(r.title),
@@ -966,6 +1252,47 @@ export async function searchLessonsMulti(params: SearchLessonsMultiParams): Prom
       status: String(r.status ?? 'active') as LessonStatus,
     };
   });
+
+  // Sprint 12.1c + 12.1d — salience blend (multi-project, query-conditional).
+  // - MED-1 (12.1c review): batched via computeSalienceMultiProject (single
+  //   SQL query for all projectIds).
+  // - 12.1d: max(sem_score, fts_score) factor prevents popularity feedback
+  //   loop without cancelling legitimate FTS-only matches.
+  if (!isSalienceDisabled() && matches.length > 0) {
+    try {
+      const salienceConfig = getSalienceConfig();
+      const candidateIds = matches.map((m) => m.lesson_id);
+      const salienceMap = await computeSalienceMultiProject(
+        pool,
+        projectIds,
+        candidateIds,
+        salienceConfig,
+      );
+      if (salienceMap.size > 0 && salienceConfig.alpha > 0) {
+        const { effectiveBoosts } = applyQueryConditionalSalienceBlend(
+          matches,
+          salienceMap,
+          relevanceSignalByLessonId,
+          salienceConfig.alpha,
+        );
+        explanations.push(
+          `salience: enabled multi-project query-conditional (α=${salienceConfig.alpha}, halfLife=${salienceConfig.halfLifeDays}d); ${salienceMap.size}/${matches.length} with access history, ${effectiveBoosts} effective after relevance-gating`,
+        );
+      } else {
+        explanations.push(
+          salienceConfig.alpha === 0
+            ? 'salience: α=0, no boost applied (logging still active)'
+            : `salience: no access history (multi-project, ${matches.length} lessons)`,
+        );
+      }
+    } catch (err) {
+      explanations.push(
+        `salience: skipped due to error (${err instanceof Error ? err.message : String(err)})`,
+      );
+    }
+  } else if (isSalienceDisabled()) {
+    explanations.push('salience: disabled via LESSONS_SALIENCE_DISABLED');
+  }
 
   // Rerank pass (same logic as single-project).
   const env = getEnv();
@@ -987,7 +1314,30 @@ export async function searchLessonsMulti(params: SearchLessonsMultiParams): Prom
     }
   }
 
+  // Sprint 12.1a — near-semantic dedup (same treatment as single-project).
+  if (!isDedupDisabled()) {
+    const before = matches.length;
+    matches = dedupLessonMatches(matches);
+    const dropped = before - matches.length;
+    if (dropped > 0) {
+      explanations.push(`dedup: collapsed ${dropped} near-semantic duplicate${dropped === 1 ? '' : 's'} (${before}→${matches.length})`);
+    }
+  }
+
   matches = matches.slice(0, limit);
+
+  // Sprint 12.1c — consideration-search logging for multi-project path too.
+  if (!isSalienceDisabled() && matches.length > 0) {
+    const entries: AccessLogEntry[] = matches.map((m, i) => ({
+      lesson_id: m.lesson_id,
+      project_id: m.project_id ?? projectIds[0] ?? 'unknown',
+      context: 'consideration-search',
+      weight: 1.0 / (i + 1),
+      metadata: { query: params.query, rank: i + 1, multi_project: true },
+    }));
+    void logLessonAccess(pool, entries);
+  }
+
   return { matches, explanations };
 }
 
@@ -1132,12 +1482,25 @@ export async function batchUpdateLessonStatus(params: {
   if (params.lessonIds.length > 50) {
     return { status: 'error', error: 'max 50 lessons per batch' };
   }
+  // Phase 13 review-impl finding: the pending-review gate that updateLessonStatus
+  // enforces applies to this sibling write-path too. Reject batching INTO
+  // pending-review, and never batch a lesson OUT of pending-review (the
+  // `status <> 'pending-review'` predicate leaves those rows untouched — they
+  // surface in failed_ids). A lesson leaves pending-review only via the
+  // review-request approve/return flow.
+  if (params.status === 'pending-review') {
+    return {
+      status: 'error',
+      error: "Cannot batch-transition to 'pending-review'. Use submit_for_review to create a review request.",
+    };
+  }
 
   const pool = getDbPool();
 
   const result = await pool.query(
     `UPDATE lessons SET status = $3, updated_at = now()
      WHERE project_id = $1 AND lesson_id = ANY($2::uuid[])
+       AND status <> 'pending-review'
      RETURNING lesson_id`,
     [params.projectId, params.lessonIds, params.status],
   );
@@ -1162,12 +1525,41 @@ export async function updateLessonStatus(params: {
 }): Promise<{ status: 'ok' | 'error'; error?: string }> {
   const pool = getDbPool();
 
-  const existing = await pool.query(`SELECT lesson_id FROM lessons WHERE project_id=$1 AND lesson_id=$2`, [
-    params.projectId,
-    params.lessonId,
-  ]);
+  // Phase 13 Sprint 13.7 r3 F1 fix: read current status as part of the existence check
+  // so we can enforce the master design L275-281 ✗ transition table at the service
+  // layer (single source of truth for REST + MCP + import).
+  const existing = await pool.query<{ status: string }>(
+    `SELECT status FROM lessons WHERE project_id=$1 AND lesson_id=$2`,
+    [params.projectId, params.lessonId],
+  );
   if (!existing.rowCount) {
     return { status: 'error', error: 'lesson not found for project' };
+  }
+  const currentStatus = existing.rows[0].status;
+  const targetStatus = params.status;
+
+  // ── Phase 13 status-transition guard (master design L275-281; review BUG-13.3-2 / 13.7-1) ──
+  // 'pending-review' is a managed state: it is ENTERED only via submit_for_review
+  // and LEFT only via the review-request approve/return flow (resolveRequest runs
+  // its own guarded UPDATE and does NOT call updateLessonStatus). update_lesson_status
+  // must therefore reject 'pending-review' on BOTH sides:
+  //   (a) any → pending-review   ✗  use submit_for_review
+  //   (b) pending-review → any   ✗  use the review-request approve/return flow
+  // The 13.7 r3-F1 fix only blocked (b) for superseded/archived targets, leaving
+  // pending-review → active/draft open — which bypassed review and orphaned the
+  // review_requests row (BUG-13.7-1). This is the single source of truth for the
+  // REST + MCP + import callers.
+  if (targetStatus === 'pending-review') {
+    return {
+      status: 'error',
+      error: `Cannot transition '${currentStatus}' → 'pending-review' via update_lesson_status. Use submit_for_review to create a review request.`,
+    };
+  }
+  if (currentStatus === 'pending-review') {
+    return {
+      status: 'error',
+      error: `Cannot transition 'pending-review' → '${targetStatus}' via update_lesson_status. A lesson under review leaves 'pending-review' only through the review-request approve/return flow.`,
+    };
   }
 
   if (params.supersededBy) {

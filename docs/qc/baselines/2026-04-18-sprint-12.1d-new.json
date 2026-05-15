@@ -1,0 +1,2655 @@
+{
+  "schema_version": "1.0",
+  "tag": "sprint-12.1d-new",
+  "run_started_at": "2026-04-18T15:32:25.092Z",
+  "run_ended_at": "2026-04-18T15:35:32.402Z",
+  "elapsed_ms": 187310,
+  "git_commit": "489ef17+dirty",
+  "git_branch": "phase-12-rag-quality",
+  "project_id": "free-context-hub",
+  "samples_per_query": 3,
+  "k": 10,
+  "surfaces": {
+    "lessons": {
+      "query_count": 20,
+      "errors": 0,
+      "project_id": "free-context-hub",
+      "metrics": {
+        "recall_at_5": 0.9412,
+        "recall_at_10": 0.9412,
+        "mrr": 0.9412,
+        "ndcg_at_5": 0.9412,
+        "ndcg_at_10": 0.9407,
+        "duplication_rate_at_10": 0,
+        "duplication_rate_nearsemantic_at_10": 0,
+        "coverage_pct": 0.9412,
+        "latency_p50_ms": 1930,
+        "latency_p95_ms": 2575,
+        "latency_mean_ms": 1568
+      },
+      "per_query": [
+        {
+          "id": "lesson-pg-uuid-casing",
+          "group": "confident-hit",
+          "query": "how to handle pg UUID casing when building map lookups after RETURNING",
+          "top_k_keys": [
+            "68b2f2cb-2271-454e-bf7e-7831fafb9e3c",
+            "9cc03e36-2623-4398-952a-79bcaaeecaac",
+            "ba21de16-6de1-432c-81ab-e0b75cc1fe89",
+            "3b3a6860-6d84-48b6-b2eb-e40ec146c29d",
+            "9dafc515-1275-4f25-9bc0-a5f7bbcc8c74",
+            "0f6f2651-f475-42cc-b344-360f29dd9d8d",
+            "d32dc104-3fad-495c-bfba-cafcd3d63319",
+            "a9c36f77-6bbd-4761-af28-f06a02fec8ea",
+            "fe395858-9efb-42db-ae30-6369d9dd9992",
+            "6f6cafba-3a74-4070-9d4b-4980a332f952"
+          ],
+          "top_k_titles": [
+            "pg UUID cast RETURNING is always canonical lowercase — map keys must match",
+            "Import B: impexp-1775318866580",
+            "Import A: impexp-1775318866580",
+            "Import B: impexp-1775367981432",
+            "Import A: impexp-1775320268166",
+            "Global search test retry pattern",
+            "normalizeForHash collapses digit-runs to 'n' — deliberate trade-off, load-bearing on dataset shape",
+            "Global search test retry pattern",
+            "Node ESM CLI main-guard needs pathToFileURL on Windows, not plain `file://` concat",
+            "Import B: impexp-1775300018449"
+          ],
+          "top_k_snippets": [
+            "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…",
+            "The document titled 'Import B: impexp-1775318866580' contains the body text 'Content B'. No specific actions or details are provided beyond this basic information.",
+            "The document titled 'Import A: impexp-1775318866580' contains content labeled as 'Content A'. No specific details or actions are provided beyond the title and label.",
+            "The document titled 'Import B: impexp-1775367981432' contains the content labeled as 'Content B'. No specific instructions or tasks are mentioned in the body.",
+            "The document titled 'Import A' with the ID 'impexp-1775320268166' contains content labeled as 'Content A'. No specific actions or details are provided beyond this basic information.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will progressively increase the wait time between retries, reducing the load on the system and improving the chances of successful test execution.",
+            "The normalizeForHash function collapses digit-runs to 'n' in the v1 near-semantic key. This aggressive approach is designed to catch timestamp-variant fixture duplication but may equate semantically-distinct content when digits carry meaning. The load-bearing assumption is that …",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient errors gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "The guard condition `if (import.meta.url === \"file://\" + process.argv[1])` fails on Windows due to path format differences. The fix involves using `pathToFileURL` from node:url to normalize both sides of the comparison, ensuring consistent URL formats.",
+            "The document titled 'Import B: impexp-1775300018449' contains content labeled as 'Content B'. No specific actions or details are provided beyond the title and label."
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            2362,
+            2136,
+            2061
+          ],
+          "latency_ms_median": 2136,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-undici-version-pinning",
+          "group": "confident-hit",
+          "query": "why must undici userland version match the Node bundled version",
+          "top_k_keys": [
+            "82e14086-dc76-40f5-81f5-e7ef0c4c97ef",
+            "68696052-ea32-4097-904c-1fb059c90450",
+            "2660327d-bd6f-42f9-a720-8236bb2ef099",
+            "5258dbfe-b76d-42aa-b680-15eb9a7b83d7",
+            "5f4b9671-0d82-455f-a107-93d41c0222b9",
+            "9dafc515-1275-4f25-9bc0-a5f7bbcc8c74",
+            "ba21de16-6de1-432c-81ab-e0b75cc1fe89",
+            "8edfeb1b-b28e-42f4-967b-78bf9f440134",
+            "5bb997e9-31a1-4ad8-8182-eefb8bdf34a8",
+            "6f6cafba-3a74-4070-9d4b-4980a332f952"
+          ],
+          "top_k_titles": [
+            "undici userland version MUST match Node's bundled version for fetch dispatcher interop",
+            "Phase 8 smoke test — custom type via REST",
+            "Archive git_commit field appends +dirty when working tree has uncommitted changes",
+            "Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1",
+            "Import B: impexp-1775320268166",
+            "Import A: impexp-1775320268166",
+            "Import A: impexp-1775318866580",
+            "Filter workaround gui-filter-1775838554751",
+            "Floating-point arithmetic in tests needs tolerance comparison, not strictEqual",
+            "Import B: impexp-1775300018449"
+          ],
+          "top_k_snippets": [
+            "Node's global fetch() requires the userland undici version to match its internally bundled version to avoid obscure errors. Node 23.11.1 bundles undici 6.21.2, so pinning userland undici to ^6.21.2 is recommended. Verify compatibility on Node upgrades as internal undici versions…",
+            "Conduct a Phase 8 smoke test to verify that the custom lesson type API change functions correctly end-to-end following the removal of the CHECK constraint in migration 0040. Ensure all components interact seamlessly and data integrity is maintained.",
+            "The git_commit field now appends +dirty to the short SHA when there are uncommitted changes in the working tree. This ensures that archives accurately reflect the code state, preventing misleading comparisons during rapid iterations and benchmarking.",
+            "The codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[])` for multiple projects, avoiding the N+1 problem. This pattern should be app…",
+            "The document titled 'Import B: impexp-1775320268166' contains the content labeled as 'Content B'. No specific instructions or actions are provided in the body of the document.",
+            "The document titled 'Import A' with the ID 'impexp-1775320268166' contains content labeled as 'Content A'. No specific actions or details are provided beyond this basic information.",
+            "The document titled 'Import A: impexp-1775318866580' contains content labeled as 'Content A'. No specific details or actions are provided beyond the title and label.",
+            "Seeded by GUI test: Filter workaround gui-filter-1775838554751",
+            "Floating-point arithmetic in tests can lead to precision issues due to IEEE 754 standards, causing strict equality checks to fail. To resolve this, use a tolerance comparison for floating-point numbers instead of strictEqual. This applies to any test that computes a delta or fra…",
+            "The document titled 'Import B: impexp-1775300018449' contains content labeled as 'Content B'. No specific actions or details are provided beyond the title and label."
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            2581,
+            1969,
+            1941
+          ],
+          "latency_ms_median": 1969,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-pyenv-python3-shim",
+          "group": "confident-hit",
+          "query": "pyenv-win python3.bat shim fails with multi-line -c bash arguments",
+          "top_k_keys": [
+            "8788dd3e-2f89-4bb5-b899-d9d3c362da11",
+            "0ce6959b-8b78-48a3-bd3c-81d273a45f83",
+            "3b3a6860-6d84-48b6-b2eb-e40ec146c29d",
+            "ed815b58-45a0-4083-be40-4d3cb7770f42",
+            "9dafc515-1275-4f25-9bc0-a5f7bbcc8c74",
+            "0a2f87f2-e47b-498f-b7d4-f612065f416c",
+            "be30985a-e45b-47ce-82d2-f6a75dc282b8",
+            "1bdb9c01-b800-4861-a819-a4b61898eaa1",
+            "8edfeb1b-b28e-42f4-967b-78bf9f440134",
+            "e15edaef-1d63-4cff-a9cc-7f972a0887d5"
+          ],
+          "top_k_titles": [
+            "pyenv-win python3.bat shim corrupts multi-line -c args",
+            "Import A: impexp-1775367981432",
+            "Import B: impexp-1775367981432",
+            "Global search test retry pattern",
+            "Import A: impexp-1775320268166",
+            "Import B: impexp-1775320598400",
+            "Max retry attempts must be 3",
+            "Import A: impexp-1775368159562",
+            "Filter workaround gui-filter-1775838554751",
+            "index_project default excludes cover .git + node_modules only; dist/ .next/ .claude/ leak into the chunks table"
+          ],
+          "top_k_snippets": [
+            "The python3.bat shim in pyenv-win corrupts multi-line -c arguments on Windows, causing silent IndentationErrors. A workaround is to use plain 'python' instead of 'python3' to avoid the issue.",
+            "The document titled 'Import A: impexp-1775367981432' contains content labeled as 'Content A'. No specific details or actions are provided in the body.",
+            "The document titled 'Import B: impexp-1775367981432' contains the content labeled as 'Content B'. No specific instructions or tasks are mentioned in the body.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will progressively increase the wait time between retries, reducing the load on the system and improving the chances of successful test execution.",
+            "The document titled 'Import A' with the ID 'impexp-1775320268166' contains content labeled as 'Content A'. No specific actions or details are provided beyond this basic information.",
+            "The document titled 'Import B: impexp-1775320598400' contains the body text 'Content B'. No specific actions are mentioned in the provided information.",
+            "The policy requires setting the maximum number of retry attempts to 3. This change needs to be enforced across all relevant systems and configurations to ensure compliance with the new rule.",
+            "The document titled 'Import A: impexp-1775368159562' contains content labeled as 'Content A'. No further details or context are provided in the given text.",
+            "Seeded by GUI test: Filter workaround gui-filter-1775838554751",
+            "During Phase 12 Sprint 12.0.1, indexing the free-context-hub project ingested 3925 chunks but revealed ~4426 junk rows including dist/, .next/, and .claude/ files. The default exclude logic only covers .git and node_modules. A direct SQL query was used to purge these junk rows, …"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            2519,
+            2356,
+            1964
+          ],
+          "latency_ms_median": 2356,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-npm-test-silent-skip",
+          "group": "confident-hit",
+          "query": "npm test script lists test files explicitly so new ones silently skip",
+          "top_k_keys": [
+            "0f4be646-18a0-4301-b329-301b12c0945e",
+            "2af9bb39-e127-4527-8453-4813a66ae28b",
+            "4e28d4bc-5d6e-47c7-bda5-7b2dfb761736",
+            "fd065e32-6221-49d4-889c-b624fb728a6d",
+            "bb39fe5e-0345-4b98-976b-fe3b0743f169",
+            "abe242ea-31ef-4d14-9245-92cfa16b8975",
+            "3ab6adbf-2c0e-4274-95a4-f2683d55cefb",
+            "5258dbfe-b76d-42aa-b680-15eb9a7b83d7",
+            "e87cd142-9fc3-4ef9-868f-11ed3e7577bf",
+            "720f912b-c304-4dc7-bb9a-280657c3ed3f"
+          ],
+          "top_k_titles": [
+            "npm test script lists files explicitly — new test files silently skipped unless added",
+            "GET /api/lessons returns rows under `items`, not `lessons` or `results`",
+            "Code review workflow: review each file group separately after bulk implementation",
+            "JSDoc block comment closes early on '**/' pattern — escape or reword",
+            "Baseline determinism holds for back-to-back runs only; hours-separated runs jitter by embeddings-service load",
+            "NoProjectGuard: hydration-safe guard for data pages",
+            "Measure-first baseline sprints establish the scorecard before any improvement ships",
+            "Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1",
+            "/review-impl adversarial review catches silent-false-confidence bugs POST-REVIEW misses",
+            "Content-based hash dup-rate metrics need a distinguishing fallback when retriever returns empty content fields"
+          ],
+          "top_k_snippets": [
+            "The `test` script in package.json uses explicit file paths instead of a glob, causing new test files to be silently skipped unless manually added. This leads to missing tests during the build process without any warnings or errors.",
+            "The API endpoint /api/lessons returns data under 'items', not 'lessons' or 'results'. Tests should read from body.items to avoid confusion and silent failures. Verify the field name against the service implementation, and if unsure, dump the response body in a test.",
+            "When implementing large features across multiple files, conduct a structured code review by focusing on specific groups such as BE service, BE routes, FE components, FE pages, and integration. This approach helps in identifying issues like bugs, security gaps, and logic errors t…",
+            "In JSDoc block comments, avoid using literal '*/' to prevent premature comment closure. Use alternative phrasing or switch to line comments for glob patterns and regex syntax involving '*/'. TypeScript's lexer treats '*/' as the end of a block comment regardless of context.",
+            "Baseline determinism holds for back-to-back runs but varies with embeddings-service load when run hours apart. Root cause is transient CPU/memory load on the MCP container affecting query scoring. The diff generator flags this as a regression, but it's measurement noise. Operato…",
+            "NoProjectGuard is a hydration-safe guard for 12 data pages, ensuring they only activate after projects load from the API. It has two variants: 'no project selected' and 'project not found'. Feature toggles are deferred to Phase 8, and non-functional UI was removed to avoid confu…",
+            "Sprint 12.0 focuses on establishing a baseline scorecard without shipping retrieval improvements. This sets a foundation for subsequent sprints to build upon, ensuring that all future work can be measured and compared effectively. The deliverables include numeric data archived i…",
+            "The codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[])` for multiple projects, avoiding the N+1 problem. This pattern should be app…",
+            "In Phase 12 Sprint 12.0, /review-impl caught 15 additional findings, including 6 MED and 6 LOW issues in benchmarking/measurement infrastructure. These bugs silently produce wrong numbers without crashing the system. Key examples include a dup-rate metric blind to certain pathol…",
+            "The nearSemanticKey function returns '||' when both title and snippet are null/undefined, leading to a 100% duplication rate metric even with no actual content duplication. This issue occurred in src/qc/surfaces.ts where the callCode function did not populate the snippet field. …"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            2325,
+            1721,
+            1740
+          ],
+          "latency_ms_median": 1740,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-api-lessons-items-shape",
+          "group": "confident-hit",
+          "query": "GET /api/lessons response shape uses items not lessons",
+          "top_k_keys": [
+            "2af9bb39-e127-4527-8453-4813a66ae28b",
+            "68696052-ea32-4097-904c-1fb059c90450",
+            "a6a3a11d-00e8-4b7e-83f5-18d3c24b73a7",
+            "c73a8738-874f-4832-92eb-16e6765924ba",
+            "ef0e5e43-c6f8-4aa6-9942-fd625e562a79",
+            "e8c8f59f-f39e-429b-92e5-dcba267abad3",
+            "7577e79f-9dfb-4c80-8592-9995223beae9",
+            "903840d3-eb60-406b-afcc-67c675480871",
+            "c4364cfc-03f5-453b-91db-5385d52e52f2",
+            "18f7f763-25d1-4ca1-952d-91f9ccadb93e"
+          ],
+          "top_k_titles": [
+            "GET /api/lessons returns rows under `items`, not `lessons` or `results`",
+            "Phase 8 smoke test — custom type via REST",
+            "REST e2e dedup-wiring tests fight infrastructure: distillation + async extraction defeat naive seed-and-verify",
+            "Test review lesson: Always validate API responses",
+            "Valid: impexp-1775368419347-extra",
+            "Valid: impexp-1775320598400-extra",
+            "Valid: impexp-1775367981432-extra",
+            "Valid: impexp-1775320085666-extra",
+            "Import A: impexp-1775320085666",
+            "Import A: impexp-1775320598400"
+          ],
+          "top_k_snippets": [
+            "The API endpoint /api/lessons returns data under 'items', not 'lessons' or 'results'. Tests should read from body.items to avoid confusion and silent failures. Verify the field name against the service implementation, and if unsure, dump the response body in a test.",
+            "Conduct a Phase 8 smoke test to verify that the custom lesson type API change functions correctly end-to-end following the removal of the CHECK constraint in migration 0040. Ensure all components interact seamlessly and data integrity is maintained.",
+            "In Phase 12 Sprint 12.1b, adding e2e integration tests for dedup wiring encountered infrastructure challenges. For lessons, LLM non-determinism caused slight summary variations, leading to dedup misses. For chunks, the async nature of chunking resulted in immediate search return…",
+            "Ensure API response validation by checking status codes, verifying expected fields, and handling errors gracefully to prevent data processing issues.",
+            "The provided text is a title and body for an issue or task. The title 'impexp-1775368419347-extra' appears to be a unique identifier followed by a descriptive tag, while the body simply contains the word 'test'.",
+            "The provided text is a title and body for an entry. The title 'impexp-1775320598400-extra' appears to be a unique identifier or code, possibly related to import/export operations. The body simply contains the word 'test'.",
+            "The provided text is a title and body for an item with the ID 'impexp-1775367981432-extra'. The body contains only the word 'test'.",
+            "The provided text contains a title and body. The title is 'impexp-1775320085666-extra' and the body simply says 'test'. There are no specific instructions or tasks mentioned.",
+            "The title 'Import A: impexp-1775320085666' suggests a data import process with a specific identifier. The body contains only the text 'Content A', which is vague and does not provide additional context or details about the import process, its status, or any issues that might nee…",
+            "The document titled 'Import A' with the ID 'impexp-1775320598400' contains content labeled as 'Content A'. No specific actions are mentioned in the body."
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            2575,
+            1930,
+            1929
+          ],
+          "latency_ms_median": 1930,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-review-impl-default",
+          "group": "confident-hit",
+          "query": "should I invoke review-impl in post-review by default in the v2.2 workflow",
+          "top_k_keys": [
+            "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+            "e87cd142-9fc3-4ef9-868f-11ed3e7577bf",
+            "4e28d4bc-5d6e-47c7-bda5-7b2dfb761736",
+            "abe242ea-31ef-4d14-9245-92cfa16b8975",
+            "a6a3a11d-00e8-4b7e-83f5-18d3c24b73a7",
+            "e15edaef-1d63-4cff-a9cc-7f972a0887d5",
+            "f142bda7-8a61-4d56-b4b4-d7f8035f6b06",
+            "5258dbfe-b76d-42aa-b680-15eb9a7b83d7",
+            "2660327d-bd6f-42f9-a720-8236bb2ef099",
+            "862f189d-6e19-49fc-a427-739427489354"
+          ],
+          "top_k_titles": [
+            "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types",
+            "/review-impl adversarial review catches silent-false-confidence bugs POST-REVIEW misses",
+            "Code review workflow: review each file group separately after bulk implementation",
+            "NoProjectGuard: hydration-safe guard for data pages",
+            "REST e2e dedup-wiring tests fight infrastructure: distillation + async extraction defeat naive seed-and-verify",
+            "index_project default excludes cover .git + node_modules only; dist/ .next/ .claude/ leak into the chunks table",
+            "Retrieval-layer changes silently propagate to downstream consumers (reflect tool example)",
+            "Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1",
+            "Archive git_commit field appends +dirty when working tree has uncommitted changes",
+            "A/B baseline archive is a superior wiring-integration test for retrieval changes"
+          ],
+          "top_k_snippets": [
+            "During POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness with zero false positives and no regressions.",
+            "In Phase 12 Sprint 12.0, /review-impl caught 15 additional findings, including 6 MED and 6 LOW issues in benchmarking/measurement infrastructure. These bugs silently produce wrong numbers without crashing the system. Key examples include a dup-rate metric blind to certain pathol…",
+            "When implementing large features across multiple files, conduct a structured code review by focusing on specific groups such as BE service, BE routes, FE components, FE pages, and integration. This approach helps in identifying issues like bugs, security gaps, and logic errors t…",
+            "NoProjectGuard is a hydration-safe guard for 12 data pages, ensuring they only activate after projects load from the API. It has two variants: 'no project selected' and 'project not found'. Feature toggles are deferred to Phase 8, and non-functional UI was removed to avoid confu…",
+            "In Phase 12 Sprint 12.1b, adding e2e integration tests for dedup wiring encountered infrastructure challenges. For lessons, LLM non-determinism caused slight summary variations, leading to dedup misses. For chunks, the async nature of chunking resulted in immediate search return…",
+            "During Phase 12 Sprint 12.0.1, indexing the free-context-hub project ingested 3925 chunks but revealed ~4426 junk rows including dist/, .next/, and .claude/ files. The default exclude logic only covers .git and node_modules. A direct SQL query was used to purge these junk rows, …",
+            "The retrieval-layer changes in Phase 12 Sprint 12.1a affected the reflect MCP tool's output, leading to different synthesis results before and after deduplication. This behavior change wasn't within the sprint's scope, causing discrepancies for operators running the same query. …",
+            "The codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[])` for multiple projects, avoiding the N+1 problem. This pattern should be app…",
+            "The git_commit field now appends +dirty to the short SHA when there are uncommitted changes in the working tree. This ensures that archives accurately reflect the code state, preventing misleading comparisons during rapid iterations and benchmarking.",
+            "The A/B baseline archive method is recommended for integration testing of retrieval-layer changes, especially in pipelines with async ingestion or LLM-backed distillation. It provides a stronger signal than traditional REST e2e tests and automatically runs on every sprint close.…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            856,
+            227,
+            222
+          ],
+          "latency_ms_median": 227,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-noproject-guard-hydration",
+          "group": "confident-hit",
+          "query": "NoProjectGuard hydration-safe approach for Next.js data pages",
+          "top_k_keys": [
+            "abe242ea-31ef-4d14-9245-92cfa16b8975",
+            "8edfeb1b-b28e-42f4-967b-78bf9f440134",
+            "5b0f23a4-aa1a-4d7b-9b35-dc0b41b63d1d",
+            "18f7f763-25d1-4ca1-952d-91f9ccadb93e",
+            "1bdb9c01-b800-4861-a819-a4b61898eaa1",
+            "2b07085d-f625-4791-9606-3f2bdb6491cf",
+            "c73a8738-874f-4832-92eb-16e6765924ba",
+            "f142bda7-8a61-4d56-b4b4-d7f8035f6b06",
+            "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+            "862f189d-6e19-49fc-a427-739427489354"
+          ],
+          "top_k_titles": [
+            "NoProjectGuard: hydration-safe guard for data pages",
+            "Filter workaround gui-filter-1775838554751",
+            "Import A: impexp-1775300437866",
+            "Import A: impexp-1775320598400",
+            "Import A: impexp-1775368159562",
+            "Global search test retry pattern",
+            "Test review lesson: Always validate API responses",
+            "Retrieval-layer changes silently propagate to downstream consumers (reflect tool example)",
+            "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types",
+            "A/B baseline archive is a superior wiring-integration test for retrieval changes"
+          ],
+          "top_k_snippets": [
+            "NoProjectGuard is a hydration-safe guard for 12 data pages, ensuring they only activate after projects load from the API. It has two variants: 'no project selected' and 'project not found'. Feature toggles are deferred to Phase 8, and non-functional UI was removed to avoid confu…",
+            "Seeded by GUI test: Filter workaround gui-filter-1775838554751",
+            "The document titled 'Import A: impexp-1775300437866' contains content labeled as 'Content A'. No specific actions are mentioned in the body.",
+            "The document titled 'Import A' with the ID 'impexp-1775320598400' contains content labeled as 'Content A'. No specific actions are mentioned in the body.",
+            "The document titled 'Import A: impexp-1775368159562' contains content labeled as 'Content A'. No further details or context are provided in the given text.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Ensure API response validation by checking status codes, verifying expected fields, and handling errors gracefully to prevent data processing issues.",
+            "The retrieval-layer changes in Phase 12 Sprint 12.1a affected the reflect MCP tool's output, leading to different synthesis results before and after deduplication. This behavior change wasn't within the sprint's scope, causing discrepancies for operators running the same query. …",
+            "During POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness with zero false positives and no regressions.",
+            "The A/B baseline archive method is recommended for integration testing of retrieval-layer changes, especially in pipelines with async ingestion or LLM-backed distillation. It provides a stronger signal than traditional REST e2e tests and automatically runs on every sprint close.…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            2602,
+            1898,
+            1934
+          ],
+          "latency_ms_median": 1934,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-project-crud-validation",
+          "group": "confident-hit",
+          "query": "project CRUD POST PUT endpoints with validation rules",
+          "top_k_keys": [
+            "6247caba-5aa7-4ce9-b4ac-3fcc9377246d",
+            "1f112bf8-7da1-4b1a-a181-13855d60f628",
+            "fd065e32-6221-49d4-889c-b624fb728a6d",
+            "5b0f23a4-aa1a-4d7b-9b35-dc0b41b63d1d",
+            "500404f1-4284-442f-a8f5-960f6b3caca4",
+            "68b2f2cb-2271-454e-bf7e-7831fafb9e3c",
+            "7577e79f-9dfb-4c80-8592-9995223beae9",
+            "6e17baa4-75a7-4b6b-960d-b543d90896fe",
+            "d66e5221-5e7b-42d8-b8fc-d91c8d2ee76a",
+            "a6a3a11d-00e8-4b7e-83f5-18d3c24b73a7"
+          ],
+          "top_k_titles": [
+            "Project CRUD: POST/PUT endpoints with validation",
+            "Multi-project support: color + description on projects table",
+            "JSDoc block comment closes early on '**/' pattern — escape or reword",
+            "Import A: impexp-1775300437866",
+            "Fire-and-forget DB writes need documented pool-sizing assumptions + future batching plan",
+            "pg UUID cast RETURNING is always canonical lowercase — map keys must match",
+            "Valid: impexp-1775367981432-extra",
+            "Agent context bootstrap e2e-1775880510559-urw0mj",
+            "Max retry attempts must be 3",
+            "REST e2e dedup-wiring tests fight infrastructure: distillation + async extraction defeat naive seed-and-verify"
+          ],
+          "top_k_snippets": [
+            "Implemented POST and PUT endpoints for project management with validation rules including regex for project_id, color allow-list, input trimming, and error handling for duplicate IDs. Added a warning field for failed group additions during creation.",
+            "Added 'color' and 'description' columns to the projects table with validation for color against a fixed allow-list and a 2000-char limit for description. Ensure sync between BE VALID_COLORS and FE PROJECT_COLORS.",
+            "In JSDoc block comments, avoid using literal '*/' to prevent premature comment closure. Use alternative phrasing or switch to line comments for glob patterns and regex syntax involving '*/'. TypeScript's lexer treats '*/' as the end of a block comment regardless of context.",
+            "The document titled 'Import A: impexp-1775300437866' contains content labeled as 'Content A'. No specific actions are mentioned in the body.",
+            "Added fire-and-forget DB writes in multiple paths, which can saturate a default connection pool under concurrent load. Documented mitigation for salience-enabled deployments and planned future work on write-behind batching or semaphore capping. Need to document pool-sizing assum…",
+            "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…",
+            "The provided text is a title and body for an item with the ID 'impexp-1775367981432-extra'. The body contains only the word 'test'.",
+            "This document outlines a bootstrap lesson for agent tests, which will be archived. It provides essential information and steps needed to set up the testing environment effectively.",
+            "The system should enforce a maximum of three retry attempts to prevent infinite loops and ensure efficient resource utilization. This change will help maintain system stability and performance by limiting the number of times a failed operation is retried.",
+            "In Phase 12 Sprint 12.1b, adding e2e integration tests for dedup wiring encountered infrastructure challenges. For lessons, LLM non-determinism caused slight summary variations, leading to dedup misses. For chunks, the async nature of chunking resulted in immediate search return…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            2549,
+            2010,
+            1951
+          ],
+          "latency_ms_median": 2010,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-multi-project-color",
+          "group": "confident-hit",
+          "query": "multi-project color and description schema additions",
+          "top_k_keys": [
+            "1f112bf8-7da1-4b1a-a181-13855d60f628",
+            "6247caba-5aa7-4ce9-b4ac-3fcc9377246d",
+            "e15edaef-1d63-4cff-a9cc-7f972a0887d5",
+            "720f912b-c304-4dc7-bb9a-280657c3ed3f",
+            "5258dbfe-b76d-42aa-b680-15eb9a7b83d7",
+            "abe242ea-31ef-4d14-9245-92cfa16b8975",
+            "bb39fe5e-0345-4b98-976b-fe3b0743f169",
+            "b3d92af9-49b9-48a1-b000-d88afc27a303",
+            "6e17baa4-75a7-4b6b-960d-b543d90896fe",
+            "9cc03e36-2623-4398-952a-79bcaaeecaac"
+          ],
+          "top_k_titles": [
+            "Multi-project support: color + description on projects table",
+            "Project CRUD: POST/PUT endpoints with validation",
+            "index_project default excludes cover .git + node_modules only; dist/ .next/ .claude/ leak into the chunks table",
+            "Content-based hash dup-rate metrics need a distinguishing fallback when retriever returns empty content fields",
+            "Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1",
+            "NoProjectGuard: hydration-safe guard for data pages",
+            "Baseline determinism holds for back-to-back runs only; hours-separated runs jitter by embeddings-service load",
+            "Import B: impexp-1775320085666",
+            "Agent context bootstrap e2e-1775880510559-urw0mj",
+            "Import B: impexp-1775318866580"
+          ],
+          "top_k_snippets": [
+            "Added 'color' and 'description' columns to the projects table with validation for color against a fixed allow-list and a 2000-char limit for description. Ensure sync between BE VALID_COLORS and FE PROJECT_COLORS.",
+            "Implemented POST and PUT endpoints for project management with validation rules including regex for project_id, color allow-list, input trimming, and error handling for duplicate IDs. Added a warning field for failed group additions during creation.",
+            "During Phase 12 Sprint 12.0.1, indexing the free-context-hub project ingested 3925 chunks but revealed ~4426 junk rows including dist/, .next/, and .claude/ files. The default exclude logic only covers .git and node_modules. A direct SQL query was used to purge these junk rows, …",
+            "The nearSemanticKey function returns '||' when both title and snippet are null/undefined, leading to a 100% duplication rate metric even with no actual content duplication. This issue occurred in src/qc/surfaces.ts where the callCode function did not populate the snippet field. …",
+            "The codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[])` for multiple projects, avoiding the N+1 problem. This pattern should be app…",
+            "NoProjectGuard is a hydration-safe guard for 12 data pages, ensuring they only activate after projects load from the API. It has two variants: 'no project selected' and 'project not found'. Feature toggles are deferred to Phase 8, and non-functional UI was removed to avoid confu…",
+            "Baseline determinism holds for back-to-back runs but varies with embeddings-service load when run hours apart. Root cause is transient CPU/memory load on the MCP container affecting query scoring. The diff generator flags this as a regression, but it's measurement noise. Operato…",
+            "The document titled 'Import B: impexp-1775320085666' contains the content labeled as 'Content B'. No specific actions are mentioned in the body.",
+            "This document outlines a bootstrap lesson for agent tests, which will be archived. It provides essential information and steps needed to set up the testing environment effectively.",
+            "The document titled 'Import B: impexp-1775318866580' contains the body text 'Content B'. No specific actions or details are provided beyond this basic information."
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            2528,
+            1909,
+            1883
+          ],
+          "latency_ms_median": 1909,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-code-review-workflow-pref",
+          "group": "confident-hit",
+          "query": "code review preference: review each file group separately after bulk implementation",
+          "top_k_keys": [
+            "4e28d4bc-5d6e-47c7-bda5-7b2dfb761736",
+            "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+            "e87cd142-9fc3-4ef9-868f-11ed3e7577bf",
+            "5258dbfe-b76d-42aa-b680-15eb9a7b83d7",
+            "862f189d-6e19-49fc-a427-739427489354",
+            "e15edaef-1d63-4cff-a9cc-7f972a0887d5",
+            "a6a3a11d-00e8-4b7e-83f5-18d3c24b73a7",
+            "004444c4-3cb8-4405-85b8-120c73c6379d",
+            "abe242ea-31ef-4d14-9245-92cfa16b8975",
+            "f142bda7-8a61-4d56-b4b4-d7f8035f6b06"
+          ],
+          "top_k_titles": [
+            "Code review workflow: review each file group separately after bulk implementation",
+            "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types",
+            "/review-impl adversarial review catches silent-false-confidence bugs POST-REVIEW misses",
+            "Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1",
+            "A/B baseline archive is a superior wiring-integration test for retrieval changes",
+            "index_project default excludes cover .git + node_modules only; dist/ .next/ .claude/ leak into the chunks table",
+            "REST e2e dedup-wiring tests fight infrastructure: distillation + async extraction defeat naive seed-and-verify",
+            "Retrieval dedup keys should include project_id + lesson_type beyond content hash",
+            "NoProjectGuard: hydration-safe guard for data pages",
+            "Retrieval-layer changes silently propagate to downstream consumers (reflect tool example)"
+          ],
+          "top_k_snippets": [
+            "When implementing large features across multiple files, conduct a structured code review by focusing on specific groups such as BE service, BE routes, FE components, FE pages, and integration. This approach helps in identifying issues like bugs, security gaps, and logic errors t…",
+            "During POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness with zero false positives and no regressions.",
+            "In Phase 12 Sprint 12.0, /review-impl caught 15 additional findings, including 6 MED and 6 LOW issues in benchmarking/measurement infrastructure. These bugs silently produce wrong numbers without crashing the system. Key examples include a dup-rate metric blind to certain pathol…",
+            "The codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[])` for multiple projects, avoiding the N+1 problem. This pattern should be app…",
+            "The A/B baseline archive method is recommended for integration testing of retrieval-layer changes, especially in pipelines with async ingestion or LLM-backed distillation. It provides a stronger signal than traditional REST e2e tests and automatically runs on every sprint close.…",
+            "During Phase 12 Sprint 12.0.1, indexing the free-context-hub project ingested 3925 chunks but revealed ~4426 junk rows including dist/, .next/, and .claude/ files. The default exclude logic only covers .git and node_modules. A direct SQL query was used to purge these junk rows, …",
+            "In Phase 12 Sprint 12.1b, adding e2e integration tests for dedup wiring encountered infrastructure challenges. For lessons, LLM non-determinism caused slight summary variations, leading to dedup misses. For chunks, the async nature of chunking resulted in immediate search return…",
+            "The current deduplication key implementation using `nearSemanticKey(title, snippet)` is insufficient as it collapses legitimate cross-project and cross-type variants. The fix involves updating the key to include `project_id` and `lesson_type`, resulting in a more precise dedupli…",
+            "NoProjectGuard is a hydration-safe guard for 12 data pages, ensuring they only activate after projects load from the API. It has two variants: 'no project selected' and 'project not found'. Feature toggles are deferred to Phase 8, and non-functional UI was removed to avoid confu…",
+            "The retrieval-layer changes in Phase 12 Sprint 12.1a affected the reflect MCP tool's output, leading to different synthesis results before and after deduplication. This behavior change wasn't within the sprint's scope, causing discrepancies for operators running the same query. …"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            823,
+            240,
+            230
+          ],
+          "latency_ms_median": 240,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-dup-max-retry-guardrail",
+          "group": "duplicate-trap",
+          "query": "max retry attempts must be 3 external API call guardrail",
+          "top_k_keys": [
+            "9a34ef12-bb6d-42d3-bee3-7ff53c4d86b0",
+            "0e08eead-db62-4668-8d7b-20281747c7ac",
+            "544aae14-08aa-436c-b54b-c8ecda4587fe",
+            "be30985a-e45b-47ce-82d2-f6a75dc282b8",
+            "d66e5221-5e7b-42d8-b8fc-d91c8d2ee76a",
+            "2b07085d-f625-4791-9606-3f2bdb6491cf",
+            "a9c36f77-6bbd-4761-af28-f06a02fec8ea",
+            "abe242ea-31ef-4d14-9245-92cfa16b8975",
+            "2af9bb39-e127-4527-8453-4813a66ae28b",
+            "720f912b-c304-4dc7-bb9a-280657c3ed3f"
+          ],
+          "top_k_titles": [
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "NoProjectGuard: hydration-safe guard for data pages",
+            "GET /api/lessons returns rows under `items`, not `lessons` or `results`",
+            "Content-based hash dup-rate metrics need a distinguishing fallback when retriever returns empty content fields"
+          ],
+          "top_k_snippets": [
+            "The policy requires setting the maximum number of retry attempts to 3 for all operations. This ensures that systems do not indefinitely attempt failed tasks, which can lead to resource exhaustion and system instability.",
+            "The system should enforce a maximum of three retry attempts for any operation to prevent infinite loops and resource exhaustion.",
+            "The policy requires that the maximum number of retry attempts for any operation should not exceed three. This is to prevent infinite loops and ensure system stability.",
+            "The policy requires setting the maximum number of retry attempts to 3. This change needs to be enforced across all relevant systems and configurations to ensure compliance with the new rule.",
+            "The system should enforce a maximum of three retry attempts to prevent infinite loops and ensure efficient resource utilization. This change will help maintain system stability and performance by limiting the number of times a failed operation is retried.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient errors gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "NoProjectGuard is a hydration-safe guard for 12 data pages, ensuring they only activate after projects load from the API. It has two variants: 'no project selected' and 'project not found'. Feature toggles are deferred to Phase 8, and non-functional UI was removed to avoid confu…",
+            "The API endpoint /api/lessons returns data under 'items', not 'lessons' or 'results'. Tests should read from body.items to avoid confusion and silent failures. Verify the field name against the service implementation, and if unsure, dump the response body in a test.",
+            "The nearSemanticKey function returns '||' when both title and snippet are null/undefined, leading to a 100% duplication rate metric even with no actual content duplication. This issue occurred in src/qc/surfaces.ts where the callCode function did not populate the snippet field. …"
+          ],
+          "found_ranks": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            2,
+            2,
+            2,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            1059,
+            1048,
+            539
+          ],
+          "latency_ms_median": 1048,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-dup-global-search-retry-pattern",
+          "group": "duplicate-trap",
+          "query": "global search test retry pattern exponential backoff",
+          "top_k_keys": [
+            "ed815b58-45a0-4083-be40-4d3cb7770f42",
+            "a9c36f77-6bbd-4761-af28-f06a02fec8ea",
+            "a688cb2c-3ed5-4fdd-ad07-0a8f5f4f5d6c",
+            "fbb870fb-3182-4b88-980e-54bb1485887a",
+            "f142bda7-8a61-4d56-b4b4-d7f8035f6b06",
+            "e87cd142-9fc3-4ef9-868f-11ed3e7577bf",
+            "5258dbfe-b76d-42aa-b680-15eb9a7b83d7",
+            "720f912b-c304-4dc7-bb9a-280657c3ed3f",
+            "69fe0db0-6621-434e-90ea-4499ec4879e1",
+            "862f189d-6e19-49fc-a427-739427489354"
+          ],
+          "top_k_titles": [
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Access-frequency salience needs query-conditioning OR drop weak signals — naive rank-weighted logging creates popularity feedback loop",
+            "Valid: impexp-1775368159562-extra",
+            "Retrieval-layer changes silently propagate to downstream consumers (reflect tool example)",
+            "/review-impl adversarial review catches silent-false-confidence bugs POST-REVIEW misses",
+            "Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1",
+            "Content-based hash dup-rate metrics need a distinguishing fallback when retriever returns empty content fields",
+            "test-flake-check",
+            "A/B baseline archive is a superior wiring-integration test for retrieval changes"
+          ],
+          "top_k_snippets": [
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will progressively increase the wait time between retries, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient errors gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "In Phase 12 Sprint 12.1c, adding `lesson_access_log` and related features led to a popularity feedback loop, causing MRR and nDCG drops. The issue arises from rank-weighted logs being too cheap, allowing broad-coverage lessons to dominate salience. Mitigation paths include query…",
+            "The provided text is a title and body for an issue or task. The title 'impexp-1775368159562-extra' appears to be a unique identifier followed by a descriptive tag, while the body simply contains the word 'test'.",
+            "The retrieval-layer changes in Phase 12 Sprint 12.1a affected the reflect MCP tool's output, leading to different synthesis results before and after deduplication. This behavior change wasn't within the sprint's scope, causing discrepancies for operators running the same query. …",
+            "In Phase 12 Sprint 12.0, /review-impl caught 15 additional findings, including 6 MED and 6 LOW issues in benchmarking/measurement infrastructure. These bugs silently produce wrong numbers without crashing the system. Key examples include a dup-rate metric blind to certain pathol…",
+            "The codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[])` for multiple projects, avoiding the N+1 problem. This pattern should be app…",
+            "The nearSemanticKey function returns '||' when both title and snippet are null/undefined, leading to a 100% duplication rate metric even with no actual content duplication. This issue occurred in src/qc/surfaces.ts where the callCode function did not populate the snippet field. …",
+            "The test-flake-check is incomplete or contains invalid data. It only includes a single character 'x' without any context or details about the issue being reported.",
+            "The A/B baseline archive method is recommended for integration testing of retrieval-layer changes, especially in pipelines with async ingestion or LLM-backed distillation. It provides a stronger signal than traditional REST e2e tests and automatically runs on every sprint close.…"
+          ],
+          "found_ranks": [
+            1,
+            2
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            2411,
+            1937,
+            2015
+          ],
+          "latency_ms_median": 2015,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-dup-valid-impexp-fixture",
+          "group": "duplicate-trap",
+          "query": "valid impexp extra entry fixture",
+          "top_k_keys": [
+            "e8c8f59f-f39e-429b-92e5-dcba267abad3",
+            "18d8cc93-46b9-4c97-b216-9cca4bb067bf",
+            "fbb870fb-3182-4b88-980e-54bb1485887a",
+            "7577e79f-9dfb-4c80-8592-9995223beae9",
+            "903840d3-eb60-406b-afcc-67c675480871",
+            "6f6cafba-3a74-4070-9d4b-4980a332f952",
+            "9cc03e36-2623-4398-952a-79bcaaeecaac",
+            "18f7f763-25d1-4ca1-952d-91f9ccadb93e",
+            "ba21de16-6de1-432c-81ab-e0b75cc1fe89",
+            "5f4b9671-0d82-455f-a107-93d41c0222b9"
+          ],
+          "top_k_titles": [
+            "Valid: impexp-1775320598400-extra",
+            "Valid: impexp-1775318866580-extra",
+            "Valid: impexp-1775368159562-extra",
+            "Valid: impexp-1775367981432-extra",
+            "Valid: impexp-1775320085666-extra",
+            "Import B: impexp-1775300018449",
+            "Import B: impexp-1775318866580",
+            "Import A: impexp-1775320598400",
+            "Import A: impexp-1775318866580",
+            "Import B: impexp-1775320268166"
+          ],
+          "top_k_snippets": [
+            "The provided text is a title and body for an entry. The title 'impexp-1775320598400-extra' appears to be a unique identifier or code, possibly related to import/export operations. The body simply contains the word 'test'.",
+            "The provided document has a title 'impexp-1775318866580-extra' and a body containing only the word 'test'. There is no additional context or information provided.",
+            "The provided text is a title and body for an issue or task. The title 'impexp-1775368159562-extra' appears to be a unique identifier followed by a descriptive tag, while the body simply contains the word 'test'.",
+            "The provided text is a title and body for an item with the ID 'impexp-1775367981432-extra'. The body contains only the word 'test'.",
+            "The provided text contains a title and body. The title is 'impexp-1775320085666-extra' and the body simply says 'test'. There are no specific instructions or tasks mentioned.",
+            "The document titled 'Import B: impexp-1775300018449' contains content labeled as 'Content B'. No specific actions or details are provided beyond the title and label.",
+            "The document titled 'Import B: impexp-1775318866580' contains the body text 'Content B'. No specific actions or details are provided beyond this basic information.",
+            "The document titled 'Import A' with the ID 'impexp-1775320598400' contains content labeled as 'Content A'. No specific actions are mentioned in the body.",
+            "The document titled 'Import A: impexp-1775318866580' contains content labeled as 'Content A'. No specific details or actions are provided beyond the title and label.",
+            "The document titled 'Import B: impexp-1775320268166' contains the content labeled as 'Content B'. No specific instructions or actions are provided in the body of the document."
+          ],
+          "found_ranks": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            2,
+            2,
+            2,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            2563,
+            1958,
+            1946
+          ],
+          "latency_ms_median": 1958,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-miss-unicorn",
+          "group": "adversarial-miss",
+          "query": "how to render a rainbow unicorn in WebGL with subsurface scattering",
+          "top_k_keys": [
+            "f142bda7-8a61-4d56-b4b4-d7f8035f6b06",
+            "1f112bf8-7da1-4b1a-a181-13855d60f628",
+            "68b2f2cb-2271-454e-bf7e-7831fafb9e3c",
+            "75d97ca9-3936-4fb5-90a2-0d95e428f641",
+            "720f912b-c304-4dc7-bb9a-280657c3ed3f",
+            "8edfeb1b-b28e-42f4-967b-78bf9f440134",
+            "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+            "b1d76cc8-fd55-4457-b447-18314afc72f9",
+            "4e28d4bc-5d6e-47c7-bda5-7b2dfb761736",
+            "a6a3a11d-00e8-4b7e-83f5-18d3c24b73a7"
+          ],
+          "top_k_titles": [
+            "Retrieval-layer changes silently propagate to downstream consumers (reflect tool example)",
+            "Multi-project support: color + description on projects table",
+            "pg UUID cast RETURNING is always canonical lowercase — map keys must match",
+            "gui-create-1776490733660",
+            "Content-based hash dup-rate metrics need a distinguishing fallback when retriever returns empty content fields",
+            "Filter workaround gui-filter-1775838554751",
+            "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types",
+            "Benchmark diff generator must consume noise_floor or the data is useless",
+            "Code review workflow: review each file group separately after bulk implementation",
+            "REST e2e dedup-wiring tests fight infrastructure: distillation + async extraction defeat naive seed-and-verify"
+          ],
+          "top_k_snippets": [
+            "The retrieval-layer changes in Phase 12 Sprint 12.1a affected the reflect MCP tool's output, leading to different synthesis results before and after deduplication. This behavior change wasn't within the sprint's scope, causing discrepancies for operators running the same query. …",
+            "Added 'color' and 'description' columns to the projects table with validation for color against a fixed allow-list and a 2000-char limit for description. Ensure sync between BE VALID_COLORS and FE PROJECT_COLORS.",
+            "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…",
+            "GUI test lesson content gui-create-1776490733660",
+            "The nearSemanticKey function returns '||' when both title and snippet are null/undefined, leading to a 100% duplication rate metric even with no actual content duplication. This issue occurred in src/qc/surfaces.ts where the callCode function did not populate the snippet field. …",
+            "Seeded by GUI test: Filter workaround gui-filter-1775838554751",
+            "During POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness with zero false positives and no regressions.",
+            "The benchmark diff generator was not consuming noise_floor data, leading to incorrect regression flags. The fix involves teaching the comparison tooling to consume noise floor data and rendering within-floor deltas as '⚪ (within floor)'. This ensures that the data is both writte…",
+            "When implementing large features across multiple files, conduct a structured code review by focusing on specific groups such as BE service, BE routes, FE components, FE pages, and integration. This approach helps in identifying issues like bugs, security gaps, and logic errors t…",
+            "In Phase 12 Sprint 12.1b, adding e2e integration tests for dedup wiring encountered infrastructure challenges. For lessons, LLM non-determinism caused slight summary variations, leading to dedup misses. For chunks, the async nature of chunking resulted in immediate search return…"
+          ],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            699,
+            82,
+            84
+          ],
+          "latency_ms_median": 84,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-miss-astrophysics",
+          "group": "adversarial-miss",
+          "query": "thermonuclear astrophysics of quark-gluon plasma at LHC",
+          "top_k_keys": [
+            "bb39fe5e-0345-4b98-976b-fe3b0743f169",
+            "720f912b-c304-4dc7-bb9a-280657c3ed3f",
+            "d32dc104-3fad-495c-bfba-cafcd3d63319",
+            "f142bda7-8a61-4d56-b4b4-d7f8035f6b06",
+            "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+            "a6a3a11d-00e8-4b7e-83f5-18d3c24b73a7",
+            "862f189d-6e19-49fc-a427-739427489354",
+            "1f112bf8-7da1-4b1a-a181-13855d60f628",
+            "0f6f2651-f475-42cc-b344-360f29dd9d8d",
+            "a9c36f77-6bbd-4761-af28-f06a02fec8ea"
+          ],
+          "top_k_titles": [
+            "Baseline determinism holds for back-to-back runs only; hours-separated runs jitter by embeddings-service load",
+            "Content-based hash dup-rate metrics need a distinguishing fallback when retriever returns empty content fields",
+            "normalizeForHash collapses digit-runs to 'n' — deliberate trade-off, load-bearing on dataset shape",
+            "Retrieval-layer changes silently propagate to downstream consumers (reflect tool example)",
+            "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types",
+            "REST e2e dedup-wiring tests fight infrastructure: distillation + async extraction defeat naive seed-and-verify",
+            "A/B baseline archive is a superior wiring-integration test for retrieval changes",
+            "Multi-project support: color + description on projects table",
+            "Global search test retry pattern",
+            "Global search test retry pattern"
+          ],
+          "top_k_snippets": [
+            "Baseline determinism holds for back-to-back runs but varies with embeddings-service load when run hours apart. Root cause is transient CPU/memory load on the MCP container affecting query scoring. The diff generator flags this as a regression, but it's measurement noise. Operato…",
+            "The nearSemanticKey function returns '||' when both title and snippet are null/undefined, leading to a 100% duplication rate metric even with no actual content duplication. This issue occurred in src/qc/surfaces.ts where the callCode function did not populate the snippet field. …",
+            "The normalizeForHash function collapses digit-runs to 'n' in the v1 near-semantic key. This aggressive approach is designed to catch timestamp-variant fixture duplication but may equate semantically-distinct content when digits carry meaning. The load-bearing assumption is that …",
+            "The retrieval-layer changes in Phase 12 Sprint 12.1a affected the reflect MCP tool's output, leading to different synthesis results before and after deduplication. This behavior change wasn't within the sprint's scope, causing discrepancies for operators running the same query. …",
+            "During POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness with zero false positives and no regressions.",
+            "In Phase 12 Sprint 12.1b, adding e2e integration tests for dedup wiring encountered infrastructure challenges. For lessons, LLM non-determinism caused slight summary variations, leading to dedup misses. For chunks, the async nature of chunking resulted in immediate search return…",
+            "The A/B baseline archive method is recommended for integration testing of retrieval-layer changes, especially in pipelines with async ingestion or LLM-backed distillation. It provides a stronger signal than traditional REST e2e tests and automatically runs on every sprint close.…",
+            "Added 'color' and 'description' columns to the projects table with validation for color against a fixed allow-list and a 2000-char limit for description. Ensure sync between BE VALID_COLORS and FE PROJECT_COLORS.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will progressively increase the wait time between retries, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient errors gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution."
+          ],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            690,
+            86,
+            86
+          ],
+          "latency_ms_median": 86,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-miss-falconry",
+          "group": "adversarial-miss",
+          "query": "medieval falconry training manual hood design",
+          "top_k_keys": [
+            "75d97ca9-3936-4fb5-90a2-0d95e428f641",
+            "a6ee1dd4-09d3-487c-b7de-910ec2f4cfaf",
+            "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+            "6039c921-3e72-4d79-9977-a7da2f930d6a",
+            "5d6ccfbd-6c65-4a74-b845-084dbd8e9896",
+            "abe242ea-31ef-4d14-9245-92cfa16b8975",
+            "1f112bf8-7da1-4b1a-a181-13855d60f628",
+            "7577e79f-9dfb-4c80-8592-9995223beae9",
+            "fbb870fb-3182-4b88-980e-54bb1485887a",
+            "6e17baa4-75a7-4b6b-960d-b543d90896fe"
+          ],
+          "top_k_titles": [
+            "gui-create-1776490733660",
+            "gui-create-1775845003745",
+            "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types",
+            "gui-create-1776490852416",
+            "gui-create-1776171045947",
+            "NoProjectGuard: hydration-safe guard for data pages",
+            "Multi-project support: color + description on projects table",
+            "Valid: impexp-1775367981432-extra",
+            "Valid: impexp-1775368159562-extra",
+            "Agent context bootstrap e2e-1775880510559-urw0mj"
+          ],
+          "top_k_snippets": [
+            "GUI test lesson content gui-create-1776490733660",
+            "The GUI test lesson content for 'gui-create-1775845003745' is available. This lesson likely covers the creation and testing of graphical user interfaces, providing guidance on how to design, implement, and validate user interactions within a software application.",
+            "During POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness with zero false positives and no regressions.",
+            "This is a GUI test lesson content for the item with ID gui-create-1776490852416. The lesson likely covers testing graphical user interfaces, which involves verifying that the application's UI elements function correctly and meet design specifications.",
+            "This document is a GUI test lesson content titled 'gui-create-1776171045947'. It likely contains instructions or guidelines for creating a graphical user interface, possibly including steps, best practices, and examples.",
+            "NoProjectGuard is a hydration-safe guard for 12 data pages, ensuring they only activate after projects load from the API. It has two variants: 'no project selected' and 'project not found'. Feature toggles are deferred to Phase 8, and non-functional UI was removed to avoid confu…",
+            "Added 'color' and 'description' columns to the projects table with validation for color against a fixed allow-list and a 2000-char limit for description. Ensure sync between BE VALID_COLORS and FE PROJECT_COLORS.",
+            "The provided text is a title and body for an item with the ID 'impexp-1775367981432-extra'. The body contains only the word 'test'.",
+            "The provided text is a title and body for an issue or task. The title 'impexp-1775368159562-extra' appears to be a unique identifier followed by a descriptive tag, while the body simply contains the word 'test'.",
+            "This document outlines a bootstrap lesson for agent tests, which will be archived. It provides essential information and steps needed to set up the testing environment effectively."
+          ],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            699,
+            82,
+            77
+          ],
+          "latency_ms_median": 82,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-cross-integration-test-backoff",
+          "group": "cross-topic",
+          "query": "integration test exponential backoff retry strategy",
+          "top_k_keys": [
+            "ed815b58-45a0-4083-be40-4d3cb7770f42",
+            "a9c36f77-6bbd-4761-af28-f06a02fec8ea",
+            "9a34ef12-bb6d-42d3-bee3-7ff53c4d86b0",
+            "0e08eead-db62-4668-8d7b-20281747c7ac",
+            "be30985a-e45b-47ce-82d2-f6a75dc282b8",
+            "544aae14-08aa-436c-b54b-c8ecda4587fe",
+            "862f189d-6e19-49fc-a427-739427489354",
+            "a6a3a11d-00e8-4b7e-83f5-18d3c24b73a7",
+            "d66e5221-5e7b-42d8-b8fc-d91c8d2ee76a",
+            "bb39fe5e-0345-4b98-976b-fe3b0743f169"
+          ],
+          "top_k_titles": [
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "A/B baseline archive is a superior wiring-integration test for retrieval changes",
+            "REST e2e dedup-wiring tests fight infrastructure: distillation + async extraction defeat naive seed-and-verify",
+            "Max retry attempts must be 3",
+            "Baseline determinism holds for back-to-back runs only; hours-separated runs jitter by embeddings-service load"
+          ],
+          "top_k_snippets": [
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will progressively increase the wait time between retries, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient errors gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "The policy requires setting the maximum number of retry attempts to 3 for all operations. This ensures that systems do not indefinitely attempt failed tasks, which can lead to resource exhaustion and system instability.",
+            "The system should enforce a maximum of three retry attempts for any operation to prevent infinite loops and resource exhaustion.",
+            "The policy requires setting the maximum number of retry attempts to 3. This change needs to be enforced across all relevant systems and configurations to ensure compliance with the new rule.",
+            "The policy requires that the maximum number of retry attempts for any operation should not exceed three. This is to prevent infinite loops and ensure system stability.",
+            "The A/B baseline archive method is recommended for integration testing of retrieval-layer changes, especially in pipelines with async ingestion or LLM-backed distillation. It provides a stronger signal than traditional REST e2e tests and automatically runs on every sprint close.…",
+            "In Phase 12 Sprint 12.1b, adding e2e integration tests for dedup wiring encountered infrastructure challenges. For lessons, LLM non-determinism caused slight summary variations, leading to dedup misses. For chunks, the async nature of chunking resulted in immediate search return…",
+            "The system should enforce a maximum of three retry attempts to prevent infinite loops and ensure efficient resource utilization. This change will help maintain system stability and performance by limiting the number of times a failed operation is retried.",
+            "Baseline determinism holds for back-to-back runs but varies with embeddings-service load when run hours apart. Root cause is transient CPU/memory load on the MCP container affecting query scoring. The diff generator flags this as a regression, but it's measurement noise. Operato…"
+          ],
+          "found_ranks": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            9
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            2,
+            2,
+            2,
+            2,
+            2,
+            0,
+            0,
+            2,
+            0
+          ],
+          "latency_ms_samples": [
+            1226,
+            691,
+            675
+          ],
+          "latency_ms_median": 691,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-cross-sprint-11-closeout",
+          "group": "cross-topic",
+          "query": "sprint 11.6c-sec DNS pinning body-stall timeout security polish",
+          "top_k_keys": [
+            "82e14086-dc76-40f5-81f5-e7ef0c4c97ef",
+            "2af9bb39-e127-4527-8453-4813a66ae28b",
+            "862f189d-6e19-49fc-a427-739427489354",
+            "a688cb2c-3ed5-4fdd-ad07-0a8f5f4f5d6c",
+            "fd065e32-6221-49d4-889c-b624fb728a6d",
+            "a6a3a11d-00e8-4b7e-83f5-18d3c24b73a7",
+            "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+            "2b07085d-f625-4791-9606-3f2bdb6491cf",
+            "a9c36f77-6bbd-4761-af28-f06a02fec8ea",
+            "bb39fe5e-0345-4b98-976b-fe3b0743f169"
+          ],
+          "top_k_titles": [
+            "undici userland version MUST match Node's bundled version for fetch dispatcher interop",
+            "GET /api/lessons returns rows under `items`, not `lessons` or `results`",
+            "A/B baseline archive is a superior wiring-integration test for retrieval changes",
+            "Access-frequency salience needs query-conditioning OR drop weak signals — naive rank-weighted logging creates popularity feedback loop",
+            "JSDoc block comment closes early on '**/' pattern — escape or reword",
+            "REST e2e dedup-wiring tests fight infrastructure: distillation + async extraction defeat naive seed-and-verify",
+            "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Baseline determinism holds for back-to-back runs only; hours-separated runs jitter by embeddings-service load"
+          ],
+          "top_k_snippets": [
+            "Node's global fetch() requires the userland undici version to match its internally bundled version to avoid obscure errors. Node 23.11.1 bundles undici 6.21.2, so pinning userland undici to ^6.21.2 is recommended. Verify compatibility on Node upgrades as internal undici versions…",
+            "The API endpoint /api/lessons returns data under 'items', not 'lessons' or 'results'. Tests should read from body.items to avoid confusion and silent failures. Verify the field name against the service implementation, and if unsure, dump the response body in a test.",
+            "The A/B baseline archive method is recommended for integration testing of retrieval-layer changes, especially in pipelines with async ingestion or LLM-backed distillation. It provides a stronger signal than traditional REST e2e tests and automatically runs on every sprint close.…",
+            "In Phase 12 Sprint 12.1c, adding `lesson_access_log` and related features led to a popularity feedback loop, causing MRR and nDCG drops. The issue arises from rank-weighted logs being too cheap, allowing broad-coverage lessons to dominate salience. Mitigation paths include query…",
+            "In JSDoc block comments, avoid using literal '*/' to prevent premature comment closure. Use alternative phrasing or switch to line comments for glob patterns and regex syntax involving '*/'. TypeScript's lexer treats '*/' as the end of a block comment regardless of context.",
+            "In Phase 12 Sprint 12.1b, adding e2e integration tests for dedup wiring encountered infrastructure challenges. For lessons, LLM non-determinism caused slight summary variations, leading to dedup misses. For chunks, the async nature of chunking resulted in immediate search return…",
+            "During POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness with zero false positives and no regressions.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient errors gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Baseline determinism holds for back-to-back runs but varies with embeddings-service load when run hours apart. Root cause is transient CPU/memory load on the MCP container affecting query scoring. The diff generator flags this as a regression, but it's measurement noise. Operato…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            2216,
+            2044,
+            2375
+          ],
+          "latency_ms_median": 2216,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-cross-workflow-gate",
+          "group": "cross-topic",
+          "query": "workflow gate state machine 12-phase workflow v2.2",
+          "top_k_keys": [
+            "4e28d4bc-5d6e-47c7-bda5-7b2dfb761736",
+            "862f189d-6e19-49fc-a427-739427489354",
+            "f142bda7-8a61-4d56-b4b4-d7f8035f6b06",
+            "3ab6adbf-2c0e-4274-95a4-f2683d55cefb",
+            "b1d76cc8-fd55-4457-b447-18314afc72f9",
+            "6247caba-5aa7-4ce9-b4ac-3fcc9377246d",
+            "1f112bf8-7da1-4b1a-a181-13855d60f628",
+            "68696052-ea32-4097-904c-1fb059c90450",
+            "5258dbfe-b76d-42aa-b680-15eb9a7b83d7",
+            "500404f1-4284-442f-a8f5-960f6b3caca4"
+          ],
+          "top_k_titles": [
+            "Code review workflow: review each file group separately after bulk implementation",
+            "A/B baseline archive is a superior wiring-integration test for retrieval changes",
+            "Retrieval-layer changes silently propagate to downstream consumers (reflect tool example)",
+            "Measure-first baseline sprints establish the scorecard before any improvement ships",
+            "Benchmark diff generator must consume noise_floor or the data is useless",
+            "Project CRUD: POST/PUT endpoints with validation",
+            "Multi-project support: color + description on projects table",
+            "Phase 8 smoke test — custom type via REST",
+            "Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1",
+            "Fire-and-forget DB writes need documented pool-sizing assumptions + future batching plan"
+          ],
+          "top_k_snippets": [
+            "When implementing large features across multiple files, conduct a structured code review by focusing on specific groups such as BE service, BE routes, FE components, FE pages, and integration. This approach helps in identifying issues like bugs, security gaps, and logic errors t…",
+            "The A/B baseline archive method is recommended for integration testing of retrieval-layer changes, especially in pipelines with async ingestion or LLM-backed distillation. It provides a stronger signal than traditional REST e2e tests and automatically runs on every sprint close.…",
+            "The retrieval-layer changes in Phase 12 Sprint 12.1a affected the reflect MCP tool's output, leading to different synthesis results before and after deduplication. This behavior change wasn't within the sprint's scope, causing discrepancies for operators running the same query. …",
+            "Sprint 12.0 focuses on establishing a baseline scorecard without shipping retrieval improvements. This sets a foundation for subsequent sprints to build upon, ensuring that all future work can be measured and compared effectively. The deliverables include numeric data archived i…",
+            "The benchmark diff generator was not consuming noise_floor data, leading to incorrect regression flags. The fix involves teaching the comparison tooling to consume noise floor data and rendering within-floor deltas as '⚪ (within floor)'. This ensures that the data is both writte…",
+            "Implemented POST and PUT endpoints for project management with validation rules including regex for project_id, color allow-list, input trimming, and error handling for duplicate IDs. Added a warning field for failed group additions during creation.",
+            "Added 'color' and 'description' columns to the projects table with validation for color against a fixed allow-list and a 2000-char limit for description. Ensure sync between BE VALID_COLORS and FE PROJECT_COLORS.",
+            "Conduct a Phase 8 smoke test to verify that the custom lesson type API change functions correctly end-to-end following the removal of the CHECK constraint in migration 0040. Ensure all components interact seamlessly and data integrity is maintained.",
+            "The codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[])` for multiple projects, avoiding the N+1 problem. This pattern should be app…",
+            "Added fire-and-forget DB writes in multiple paths, which can saturate a default connection pool under concurrent load. Documented mitigation for salience-enabled deployments and planned future work on write-behind batching or semaphore capping. Need to document pool-sizing assum…"
+          ],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            2504,
+            1847,
+            1855
+          ],
+          "latency_ms_median": 1855,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "no-relevant-hit"
+          ]
+        },
+        {
+          "id": "lesson-cross-agent-bootstrap-e2e",
+          "group": "cross-topic",
+          "query": "agent context bootstrap end-to-end testing",
+          "top_k_keys": [
+            "2f8b0b23-b858-4fae-9a70-31c104e7fe79",
+            "6e17baa4-75a7-4b6b-960d-b543d90896fe",
+            "a6a3a11d-00e8-4b7e-83f5-18d3c24b73a7",
+            "862f189d-6e19-49fc-a427-739427489354",
+            "68696052-ea32-4097-904c-1fb059c90450",
+            "82e14086-dc76-40f5-81f5-e7ef0c4c97ef",
+            "2b07085d-f625-4791-9606-3f2bdb6491cf",
+            "4e28d4bc-5d6e-47c7-bda5-7b2dfb761736",
+            "2af9bb39-e127-4527-8453-4813a66ae28b",
+            "bb39fe5e-0345-4b98-976b-fe3b0743f169"
+          ],
+          "top_k_titles": [
+            "Agent context bootstrap e2e-1775840056667-clp98p",
+            "Agent context bootstrap e2e-1775880510559-urw0mj",
+            "REST e2e dedup-wiring tests fight infrastructure: distillation + async extraction defeat naive seed-and-verify",
+            "A/B baseline archive is a superior wiring-integration test for retrieval changes",
+            "Phase 8 smoke test — custom type via REST",
+            "undici userland version MUST match Node's bundled version for fetch dispatcher interop",
+            "Global search test retry pattern",
+            "Code review workflow: review each file group separately after bulk implementation",
+            "GET /api/lessons returns rows under `items`, not `lessons` or `results`",
+            "Baseline determinism holds for back-to-back runs only; hours-separated runs jitter by embeddings-service load"
+          ],
+          "top_k_snippets": [
+            "This is a bootstrap lesson for agent tests that will be archived. It provides an initial setup and guidance for conducting end-to-end tests with the specified ID e2e-1775840056667-clp98p.",
+            "This document outlines a bootstrap lesson for agent tests, which will be archived. It provides essential information and steps needed to set up the testing environment effectively.",
+            "In Phase 12 Sprint 12.1b, adding e2e integration tests for dedup wiring encountered infrastructure challenges. For lessons, LLM non-determinism caused slight summary variations, leading to dedup misses. For chunks, the async nature of chunking resulted in immediate search return…",
+            "The A/B baseline archive method is recommended for integration testing of retrieval-layer changes, especially in pipelines with async ingestion or LLM-backed distillation. It provides a stronger signal than traditional REST e2e tests and automatically runs on every sprint close.…",
+            "Conduct a Phase 8 smoke test to verify that the custom lesson type API change functions correctly end-to-end following the removal of the CHECK constraint in migration 0040. Ensure all components interact seamlessly and data integrity is maintained.",
+            "Node's global fetch() requires the userland undici version to match its internally bundled version to avoid obscure errors. Node 23.11.1 bundles undici 6.21.2, so pinning userland undici to ^6.21.2 is recommended. Verify compatibility on Node upgrades as internal undici versions…",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "When implementing large features across multiple files, conduct a structured code review by focusing on specific groups such as BE service, BE routes, FE components, FE pages, and integration. This approach helps in identifying issues like bugs, security gaps, and logic errors t…",
+            "The API endpoint /api/lessons returns data under 'items', not 'lessons' or 'results'. Tests should read from body.items to avoid confusion and silent failures. Verify the field name against the service implementation, and if unsure, dump the response body in a test.",
+            "Baseline determinism holds for back-to-back runs but varies with embeddings-service load when run hours apart. Root cause is transient CPU/memory load on the MCP container affecting query scoring. The diff generator flags this as a regression, but it's measurement noise. Operato…"
+          ],
+          "found_ranks": [
+            1,
+            2
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            2581,
+            2030,
+            2008
+          ],
+          "latency_ms_median": 2030,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        }
+      ]
+    }
+  },
+  "control_run_surfaces": {
+    "lessons": {
+      "query_count": 20,
+      "errors": 0,
+      "project_id": "free-context-hub",
+      "metrics": {
+        "recall_at_5": 1,
+        "recall_at_10": 1,
+        "mrr": 0.9559,
+        "ndcg_at_5": 0.9665,
+        "ndcg_at_10": 0.966,
+        "duplication_rate_at_10": 0,
+        "duplication_rate_nearsemantic_at_10": 0,
+        "coverage_pct": 1,
+        "latency_p50_ms": 1953,
+        "latency_p95_ms": 2554,
+        "latency_mean_ms": 1550
+      },
+      "per_query": [
+        {
+          "id": "lesson-pg-uuid-casing",
+          "group": "confident-hit",
+          "query": "how to handle pg UUID casing when building map lookups after RETURNING",
+          "top_k_keys": [
+            "68b2f2cb-2271-454e-bf7e-7831fafb9e3c",
+            "9cc03e36-2623-4398-952a-79bcaaeecaac",
+            "ba21de16-6de1-432c-81ab-e0b75cc1fe89",
+            "3b3a6860-6d84-48b6-b2eb-e40ec146c29d",
+            "9dafc515-1275-4f25-9bc0-a5f7bbcc8c74",
+            "0f6f2651-f475-42cc-b344-360f29dd9d8d",
+            "fe395858-9efb-42db-ae30-6369d9dd9992",
+            "d32dc104-3fad-495c-bfba-cafcd3d63319",
+            "a9c36f77-6bbd-4761-af28-f06a02fec8ea",
+            "6f6cafba-3a74-4070-9d4b-4980a332f952"
+          ],
+          "top_k_titles": [
+            "pg UUID cast RETURNING is always canonical lowercase — map keys must match",
+            "Import B: impexp-1775318866580",
+            "Import A: impexp-1775318866580",
+            "Import B: impexp-1775367981432",
+            "Import A: impexp-1775320268166",
+            "Global search test retry pattern",
+            "Node ESM CLI main-guard needs pathToFileURL on Windows, not plain `file://` concat",
+            "normalizeForHash collapses digit-runs to 'n' — deliberate trade-off, load-bearing on dataset shape",
+            "Global search test retry pattern",
+            "Import B: impexp-1775300018449"
+          ],
+          "top_k_snippets": [
+            "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…",
+            "The document titled 'Import B: impexp-1775318866580' contains the body text 'Content B'. No specific actions or details are provided beyond this basic information.",
+            "The document titled 'Import A: impexp-1775318866580' contains content labeled as 'Content A'. No specific details or actions are provided beyond the title and label.",
+            "The document titled 'Import B: impexp-1775367981432' contains the content labeled as 'Content B'. No specific instructions or tasks are mentioned in the body.",
+            "The document titled 'Import A' with the ID 'impexp-1775320268166' contains content labeled as 'Content A'. No specific actions or details are provided beyond this basic information.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will progressively increase the wait time between retries, reducing the load on the system and improving the chances of successful test execution.",
+            "The guard condition `if (import.meta.url === \"file://\" + process.argv[1])` fails on Windows due to path format differences. The fix involves using `pathToFileURL` from node:url to normalize both sides of the comparison, ensuring consistent URL formats.",
+            "The normalizeForHash function collapses digit-runs to 'n' in the v1 near-semantic key. This aggressive approach is designed to catch timestamp-variant fixture duplication but may equate semantically-distinct content when digits carry meaning. The load-bearing assumption is that …",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient errors gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "The document titled 'Import B: impexp-1775300018449' contains content labeled as 'Content B'. No specific actions or details are provided beyond the title and label."
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            2679,
+            2211,
+            1894
+          ],
+          "latency_ms_median": 2211,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-undici-version-pinning",
+          "group": "confident-hit",
+          "query": "why must undici userland version match the Node bundled version",
+          "top_k_keys": [
+            "82e14086-dc76-40f5-81f5-e7ef0c4c97ef",
+            "9cc03e36-2623-4398-952a-79bcaaeecaac",
+            "68696052-ea32-4097-904c-1fb059c90450",
+            "5f4b9671-0d82-455f-a107-93d41c0222b9",
+            "9dafc515-1275-4f25-9bc0-a5f7bbcc8c74",
+            "ba21de16-6de1-432c-81ab-e0b75cc1fe89",
+            "8edfeb1b-b28e-42f4-967b-78bf9f440134",
+            "5bb997e9-31a1-4ad8-8182-eefb8bdf34a8",
+            "6f6cafba-3a74-4070-9d4b-4980a332f952",
+            "f142bda7-8a61-4d56-b4b4-d7f8035f6b06"
+          ],
+          "top_k_titles": [
+            "undici userland version MUST match Node's bundled version for fetch dispatcher interop",
+            "Import B: impexp-1775318866580",
+            "Phase 8 smoke test — custom type via REST",
+            "Import B: impexp-1775320268166",
+            "Import A: impexp-1775320268166",
+            "Import A: impexp-1775318866580",
+            "Filter workaround gui-filter-1775838554751",
+            "Floating-point arithmetic in tests needs tolerance comparison, not strictEqual",
+            "Import B: impexp-1775300018449",
+            "Retrieval-layer changes silently propagate to downstream consumers (reflect tool example)"
+          ],
+          "top_k_snippets": [
+            "Node's global fetch() requires the userland undici version to match its internally bundled version to avoid obscure errors. Node 23.11.1 bundles undici 6.21.2, so pinning userland undici to ^6.21.2 is recommended. Verify compatibility on Node upgrades as internal undici versions…",
+            "The document titled 'Import B: impexp-1775318866580' contains the body text 'Content B'. No specific actions or details are provided beyond this basic information.",
+            "Conduct a Phase 8 smoke test to verify that the custom lesson type API change functions correctly end-to-end following the removal of the CHECK constraint in migration 0040. Ensure all components interact seamlessly and data integrity is maintained.",
+            "The document titled 'Import B: impexp-1775320268166' contains the content labeled as 'Content B'. No specific instructions or actions are provided in the body of the document.",
+            "The document titled 'Import A' with the ID 'impexp-1775320268166' contains content labeled as 'Content A'. No specific actions or details are provided beyond this basic information.",
+            "The document titled 'Import A: impexp-1775318866580' contains content labeled as 'Content A'. No specific details or actions are provided beyond the title and label.",
+            "Seeded by GUI test: Filter workaround gui-filter-1775838554751",
+            "Floating-point arithmetic in tests can lead to precision issues due to IEEE 754 standards, causing strict equality checks to fail. To resolve this, use a tolerance comparison for floating-point numbers instead of strictEqual. This applies to any test that computes a delta or fra…",
+            "The document titled 'Import B: impexp-1775300018449' contains content labeled as 'Content B'. No specific actions or details are provided beyond the title and label.",
+            "The retrieval-layer changes in Phase 12 Sprint 12.1a affected the reflect MCP tool's output, leading to different synthesis results before and after deduplication. This behavior change wasn't within the sprint's scope, causing discrepancies for operators running the same query. …"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            2512,
+            1973,
+            1997
+          ],
+          "latency_ms_median": 1997,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-pyenv-python3-shim",
+          "group": "confident-hit",
+          "query": "pyenv-win python3.bat shim fails with multi-line -c bash arguments",
+          "top_k_keys": [
+            "8788dd3e-2f89-4bb5-b899-d9d3c362da11",
+            "2b07085d-f625-4791-9606-3f2bdb6491cf",
+            "fe395858-9efb-42db-ae30-6369d9dd9992",
+            "fd065e32-6221-49d4-889c-b624fb728a6d",
+            "9a34ef12-bb6d-42d3-bee3-7ff53c4d86b0",
+            "544aae14-08aa-436c-b54b-c8ecda4587fe",
+            "720f912b-c304-4dc7-bb9a-280657c3ed3f",
+            "0e08eead-db62-4668-8d7b-20281747c7ac",
+            "6f6cafba-3a74-4070-9d4b-4980a332f952",
+            "a6a3a11d-00e8-4b7e-83f5-18d3c24b73a7"
+          ],
+          "top_k_titles": [
+            "pyenv-win python3.bat shim corrupts multi-line -c args",
+            "Global search test retry pattern",
+            "Node ESM CLI main-guard needs pathToFileURL on Windows, not plain `file://` concat",
+            "JSDoc block comment closes early on '**/' pattern — escape or reword",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Content-based hash dup-rate metrics need a distinguishing fallback when retriever returns empty content fields",
+            "Max retry attempts must be 3",
+            "Import B: impexp-1775300018449",
+            "REST e2e dedup-wiring tests fight infrastructure: distillation + async extraction defeat naive seed-and-verify"
+          ],
+          "top_k_snippets": [
+            "The python3.bat shim in pyenv-win corrupts multi-line -c arguments on Windows, causing silent IndentationErrors. A workaround is to use plain 'python' instead of 'python3' to avoid the issue.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "The guard condition `if (import.meta.url === \"file://\" + process.argv[1])` fails on Windows due to path format differences. The fix involves using `pathToFileURL` from node:url to normalize both sides of the comparison, ensuring consistent URL formats.",
+            "In JSDoc block comments, avoid using literal '*/' to prevent premature comment closure. Use alternative phrasing or switch to line comments for glob patterns and regex syntax involving '*/'. TypeScript's lexer treats '*/' as the end of a block comment regardless of context.",
+            "The policy requires setting the maximum number of retry attempts to 3 for all operations. This ensures that systems do not indefinitely attempt failed tasks, which can lead to resource exhaustion and system instability.",
+            "The policy requires that the maximum number of retry attempts for any operation should not exceed three. This is to prevent infinite loops and ensure system stability.",
+            "The nearSemanticKey function returns '||' when both title and snippet are null/undefined, leading to a 100% duplication rate metric even with no actual content duplication. This issue occurred in src/qc/surfaces.ts where the callCode function did not populate the snippet field. …",
+            "The system should enforce a maximum of three retry attempts for any operation to prevent infinite loops and resource exhaustion.",
+            "The document titled 'Import B: impexp-1775300018449' contains content labeled as 'Content B'. No specific actions or details are provided beyond the title and label.",
+            "In Phase 12 Sprint 12.1b, adding e2e integration tests for dedup wiring encountered infrastructure challenges. For lessons, LLM non-determinism caused slight summary variations, leading to dedup misses. For chunks, the async nature of chunking resulted in immediate search return…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            858,
+            256,
+            247
+          ],
+          "latency_ms_median": 256,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-npm-test-silent-skip",
+          "group": "confident-hit",
+          "query": "npm test script lists test files explicitly so new ones silently skip",
+          "top_k_keys": [
+            "0f4be646-18a0-4301-b329-301b12c0945e",
+            "004444c4-3cb8-4405-85b8-120c73c6379d",
+            "82e14086-dc76-40f5-81f5-e7ef0c4c97ef",
+            "2b07085d-f625-4791-9606-3f2bdb6491cf",
+            "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+            "f333214e-8e83-4049-a826-a7a5f4cf885a",
+            "68696052-ea32-4097-904c-1fb059c90450",
+            "8788dd3e-2f89-4bb5-b899-d9d3c362da11",
+            "5258dbfe-b76d-42aa-b680-15eb9a7b83d7",
+            "720f912b-c304-4dc7-bb9a-280657c3ed3f"
+          ],
+          "top_k_titles": [
+            "npm test script lists files explicitly — new test files silently skipped unless added",
+            "Retrieval dedup keys should include project_id + lesson_type beyond content hash",
+            "undici userland version MUST match Node's bundled version for fetch dispatcher interop",
+            "Global search test retry pattern",
+            "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types",
+            "gui-create-1776188570090",
+            "Phase 8 smoke test — custom type via REST",
+            "pyenv-win python3.bat shim corrupts multi-line -c args",
+            "Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1",
+            "Content-based hash dup-rate metrics need a distinguishing fallback when retriever returns empty content fields"
+          ],
+          "top_k_snippets": [
+            "The `test` script in package.json uses explicit file paths instead of a glob, causing new test files to be silently skipped unless manually added. This leads to missing tests during the build process without any warnings or errors.",
+            "The current deduplication key implementation using `nearSemanticKey(title, snippet)` is insufficient as it collapses legitimate cross-project and cross-type variants. The fix involves updating the key to include `project_id` and `lesson_type`, resulting in a more precise dedupli…",
+            "Node's global fetch() requires the userland undici version to match its internally bundled version to avoid obscure errors. Node 23.11.1 bundles undici 6.21.2, so pinning userland undici to ^6.21.2 is recommended. Verify compatibility on Node upgrades as internal undici versions…",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "During POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness with zero false positives and no regressions.",
+            "GUI test lesson content gui-create-1776188570090",
+            "Conduct a Phase 8 smoke test to verify that the custom lesson type API change functions correctly end-to-end following the removal of the CHECK constraint in migration 0040. Ensure all components interact seamlessly and data integrity is maintained.",
+            "The python3.bat shim in pyenv-win corrupts multi-line -c arguments on Windows, causing silent IndentationErrors. A workaround is to use plain 'python' instead of 'python3' to avoid the issue.",
+            "The codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[])` for multiple projects, avoiding the N+1 problem. This pattern should be app…",
+            "The nearSemanticKey function returns '||' when both title and snippet are null/undefined, leading to a 100% duplication rate metric even with no actual content duplication. This issue occurred in src/qc/surfaces.ts where the callCode function did not populate the snippet field. …"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            2362,
+            2066,
+            1894
+          ],
+          "latency_ms_median": 2066,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-api-lessons-items-shape",
+          "group": "confident-hit",
+          "query": "GET /api/lessons response shape uses items not lessons",
+          "top_k_keys": [
+            "2af9bb39-e127-4527-8453-4813a66ae28b",
+            "68696052-ea32-4097-904c-1fb059c90450",
+            "a6a3a11d-00e8-4b7e-83f5-18d3c24b73a7",
+            "c73a8738-874f-4832-92eb-16e6765924ba",
+            "4eb9d44f-3277-4621-87e4-0466838884e4",
+            "0a2f87f2-e47b-498f-b7d4-f612065f416c",
+            "0ce6959b-8b78-48a3-bd3c-81d273a45f83",
+            "999db013-9162-4b6d-9155-86daea5a8291",
+            "df2da4ff-69ec-4f18-899a-c079912573ce",
+            "720f912b-c304-4dc7-bb9a-280657c3ed3f"
+          ],
+          "top_k_titles": [
+            "GET /api/lessons returns rows under `items`, not `lessons` or `results`",
+            "Phase 8 smoke test — custom type via REST",
+            "REST e2e dedup-wiring tests fight infrastructure: distillation + async extraction defeat naive seed-and-verify",
+            "Test review lesson: Always validate API responses",
+            "Import B: impexp-1775297557060",
+            "Import B: impexp-1775320598400",
+            "Import A: impexp-1775367981432",
+            "gui-create-1776171161702",
+            "Import B: impexp-1775368419347",
+            "Content-based hash dup-rate metrics need a distinguishing fallback when retriever returns empty content fields"
+          ],
+          "top_k_snippets": [
+            "The API endpoint /api/lessons returns data under 'items', not 'lessons' or 'results'. Tests should read from body.items to avoid confusion and silent failures. Verify the field name against the service implementation, and if unsure, dump the response body in a test.",
+            "Conduct a Phase 8 smoke test to verify that the custom lesson type API change functions correctly end-to-end following the removal of the CHECK constraint in migration 0040. Ensure all components interact seamlessly and data integrity is maintained.",
+            "In Phase 12 Sprint 12.1b, adding e2e integration tests for dedup wiring encountered infrastructure challenges. For lessons, LLM non-determinism caused slight summary variations, leading to dedup misses. For chunks, the async nature of chunking resulted in immediate search return…",
+            "Ensure API response validation by checking status codes, verifying expected fields, and handling errors gracefully to prevent data processing issues.",
+            "The document titled 'Import B: impexp-1775297557060' contains the content labeled as 'Content B'. No specific instructions or actions are provided in the body of the document.",
+            "The document titled 'Import B: impexp-1775320598400' contains the body text 'Content B'. No specific actions are mentioned in the provided information.",
+            "The document titled 'Import A: impexp-1775367981432' contains content labeled as 'Content A'. No specific details or actions are provided in the body.",
+            "GUI test lesson content gui-create-1776171161702",
+            "The document titled 'Import B: impexp-1775368419347' contains content labeled as 'Content B'. No specific actions or details are provided beyond the title and label.",
+            "The nearSemanticKey function returns '||' when both title and snippet are null/undefined, leading to a 100% duplication rate metric even with no actual content duplication. This issue occurred in src/qc/surfaces.ts where the callCode function did not populate the snippet field. …"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            2409,
+            2351,
+            2461
+          ],
+          "latency_ms_median": 2409,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-review-impl-default",
+          "group": "confident-hit",
+          "query": "should I invoke review-impl in post-review by default in the v2.2 workflow",
+          "top_k_keys": [
+            "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+            "e87cd142-9fc3-4ef9-868f-11ed3e7577bf",
+            "4e28d4bc-5d6e-47c7-bda5-7b2dfb761736",
+            "abe242ea-31ef-4d14-9245-92cfa16b8975",
+            "a6a3a11d-00e8-4b7e-83f5-18d3c24b73a7",
+            "e15edaef-1d63-4cff-a9cc-7f972a0887d5",
+            "f142bda7-8a61-4d56-b4b4-d7f8035f6b06",
+            "862f189d-6e19-49fc-a427-739427489354",
+            "3ab6adbf-2c0e-4274-95a4-f2683d55cefb",
+            "82e14086-dc76-40f5-81f5-e7ef0c4c97ef"
+          ],
+          "top_k_titles": [
+            "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types",
+            "/review-impl adversarial review catches silent-false-confidence bugs POST-REVIEW misses",
+            "Code review workflow: review each file group separately after bulk implementation",
+            "NoProjectGuard: hydration-safe guard for data pages",
+            "REST e2e dedup-wiring tests fight infrastructure: distillation + async extraction defeat naive seed-and-verify",
+            "index_project default excludes cover .git + node_modules only; dist/ .next/ .claude/ leak into the chunks table",
+            "Retrieval-layer changes silently propagate to downstream consumers (reflect tool example)",
+            "A/B baseline archive is a superior wiring-integration test for retrieval changes",
+            "Measure-first baseline sprints establish the scorecard before any improvement ships",
+            "undici userland version MUST match Node's bundled version for fetch dispatcher interop"
+          ],
+          "top_k_snippets": [
+            "During POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness with zero false positives and no regressions.",
+            "In Phase 12 Sprint 12.0, /review-impl caught 15 additional findings, including 6 MED and 6 LOW issues in benchmarking/measurement infrastructure. These bugs silently produce wrong numbers without crashing the system. Key examples include a dup-rate metric blind to certain pathol…",
+            "When implementing large features across multiple files, conduct a structured code review by focusing on specific groups such as BE service, BE routes, FE components, FE pages, and integration. This approach helps in identifying issues like bugs, security gaps, and logic errors t…",
+            "NoProjectGuard is a hydration-safe guard for 12 data pages, ensuring they only activate after projects load from the API. It has two variants: 'no project selected' and 'project not found'. Feature toggles are deferred to Phase 8, and non-functional UI was removed to avoid confu…",
+            "In Phase 12 Sprint 12.1b, adding e2e integration tests for dedup wiring encountered infrastructure challenges. For lessons, LLM non-determinism caused slight summary variations, leading to dedup misses. For chunks, the async nature of chunking resulted in immediate search return…",
+            "During Phase 12 Sprint 12.0.1, indexing the free-context-hub project ingested 3925 chunks but revealed ~4426 junk rows including dist/, .next/, and .claude/ files. The default exclude logic only covers .git and node_modules. A direct SQL query was used to purge these junk rows, …",
+            "The retrieval-layer changes in Phase 12 Sprint 12.1a affected the reflect MCP tool's output, leading to different synthesis results before and after deduplication. This behavior change wasn't within the sprint's scope, causing discrepancies for operators running the same query. …",
+            "The A/B baseline archive method is recommended for integration testing of retrieval-layer changes, especially in pipelines with async ingestion or LLM-backed distillation. It provides a stronger signal than traditional REST e2e tests and automatically runs on every sprint close.…",
+            "Sprint 12.0 focuses on establishing a baseline scorecard without shipping retrieval improvements. This sets a foundation for subsequent sprints to build upon, ensuring that all future work can be measured and compared effectively. The deliverables include numeric data archived i…",
+            "Node's global fetch() requires the userland undici version to match its internally bundled version to avoid obscure errors. Node 23.11.1 bundles undici 6.21.2, so pinning userland undici to ^6.21.2 is recommended. Verify compatibility on Node upgrades as internal undici versions…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            891,
+            245,
+            250
+          ],
+          "latency_ms_median": 250,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-noproject-guard-hydration",
+          "group": "confident-hit",
+          "query": "NoProjectGuard hydration-safe approach for Next.js data pages",
+          "top_k_keys": [
+            "abe242ea-31ef-4d14-9245-92cfa16b8975",
+            "8edfeb1b-b28e-42f4-967b-78bf9f440134",
+            "5b0f23a4-aa1a-4d7b-9b35-dc0b41b63d1d",
+            "18f7f763-25d1-4ca1-952d-91f9ccadb93e",
+            "1bdb9c01-b800-4861-a819-a4b61898eaa1",
+            "2b07085d-f625-4791-9606-3f2bdb6491cf",
+            "c73a8738-874f-4832-92eb-16e6765924ba",
+            "f142bda7-8a61-4d56-b4b4-d7f8035f6b06",
+            "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+            "862f189d-6e19-49fc-a427-739427489354"
+          ],
+          "top_k_titles": [
+            "NoProjectGuard: hydration-safe guard for data pages",
+            "Filter workaround gui-filter-1775838554751",
+            "Import A: impexp-1775300437866",
+            "Import A: impexp-1775320598400",
+            "Import A: impexp-1775368159562",
+            "Global search test retry pattern",
+            "Test review lesson: Always validate API responses",
+            "Retrieval-layer changes silently propagate to downstream consumers (reflect tool example)",
+            "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types",
+            "A/B baseline archive is a superior wiring-integration test for retrieval changes"
+          ],
+          "top_k_snippets": [
+            "NoProjectGuard is a hydration-safe guard for 12 data pages, ensuring they only activate after projects load from the API. It has two variants: 'no project selected' and 'project not found'. Feature toggles are deferred to Phase 8, and non-functional UI was removed to avoid confu…",
+            "Seeded by GUI test: Filter workaround gui-filter-1775838554751",
+            "The document titled 'Import A: impexp-1775300437866' contains content labeled as 'Content A'. No specific actions are mentioned in the body.",
+            "The document titled 'Import A' with the ID 'impexp-1775320598400' contains content labeled as 'Content A'. No specific actions are mentioned in the body.",
+            "The document titled 'Import A: impexp-1775368159562' contains content labeled as 'Content A'. No further details or context are provided in the given text.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Ensure API response validation by checking status codes, verifying expected fields, and handling errors gracefully to prevent data processing issues.",
+            "The retrieval-layer changes in Phase 12 Sprint 12.1a affected the reflect MCP tool's output, leading to different synthesis results before and after deduplication. This behavior change wasn't within the sprint's scope, causing discrepancies for operators running the same query. …",
+            "During POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness with zero false positives and no regressions.",
+            "The A/B baseline archive method is recommended for integration testing of retrieval-layer changes, especially in pipelines with async ingestion or LLM-backed distillation. It provides a stronger signal than traditional REST e2e tests and automatically runs on every sprint close.…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            2576,
+            1974,
+            1969
+          ],
+          "latency_ms_median": 1974,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-project-crud-validation",
+          "group": "confident-hit",
+          "query": "project CRUD POST PUT endpoints with validation rules",
+          "top_k_keys": [
+            "6247caba-5aa7-4ce9-b4ac-3fcc9377246d",
+            "1f112bf8-7da1-4b1a-a181-13855d60f628",
+            "fd065e32-6221-49d4-889c-b624fb728a6d",
+            "5b0f23a4-aa1a-4d7b-9b35-dc0b41b63d1d",
+            "68b2f2cb-2271-454e-bf7e-7831fafb9e3c",
+            "7577e79f-9dfb-4c80-8592-9995223beae9",
+            "1bdb9c01-b800-4861-a819-a4b61898eaa1",
+            "6e17baa4-75a7-4b6b-960d-b543d90896fe",
+            "0e08eead-db62-4668-8d7b-20281747c7ac",
+            "be30985a-e45b-47ce-82d2-f6a75dc282b8"
+          ],
+          "top_k_titles": [
+            "Project CRUD: POST/PUT endpoints with validation",
+            "Multi-project support: color + description on projects table",
+            "JSDoc block comment closes early on '**/' pattern — escape or reword",
+            "Import A: impexp-1775300437866",
+            "pg UUID cast RETURNING is always canonical lowercase — map keys must match",
+            "Valid: impexp-1775367981432-extra",
+            "Import A: impexp-1775368159562",
+            "Agent context bootstrap e2e-1775880510559-urw0mj",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3"
+          ],
+          "top_k_snippets": [
+            "Implemented POST and PUT endpoints for project management with validation rules including regex for project_id, color allow-list, input trimming, and error handling for duplicate IDs. Added a warning field for failed group additions during creation.",
+            "Added 'color' and 'description' columns to the projects table with validation for color against a fixed allow-list and a 2000-char limit for description. Ensure sync between BE VALID_COLORS and FE PROJECT_COLORS.",
+            "In JSDoc block comments, avoid using literal '*/' to prevent premature comment closure. Use alternative phrasing or switch to line comments for glob patterns and regex syntax involving '*/'. TypeScript's lexer treats '*/' as the end of a block comment regardless of context.",
+            "The document titled 'Import A: impexp-1775300437866' contains content labeled as 'Content A'. No specific actions are mentioned in the body.",
+            "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…",
+            "The provided text is a title and body for an item with the ID 'impexp-1775367981432-extra'. The body contains only the word 'test'.",
+            "The document titled 'Import A: impexp-1775368159562' contains content labeled as 'Content A'. No further details or context are provided in the given text.",
+            "This document outlines a bootstrap lesson for agent tests, which will be archived. It provides essential information and steps needed to set up the testing environment effectively.",
+            "The system should enforce a maximum of three retry attempts for any operation to prevent infinite loops and resource exhaustion.",
+            "The policy requires setting the maximum number of retry attempts to 3. This change needs to be enforced across all relevant systems and configurations to ensure compliance with the new rule."
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            2416,
+            2082,
+            2050
+          ],
+          "latency_ms_median": 2082,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-multi-project-color",
+          "group": "confident-hit",
+          "query": "multi-project color and description schema additions",
+          "top_k_keys": [
+            "1f112bf8-7da1-4b1a-a181-13855d60f628",
+            "6247caba-5aa7-4ce9-b4ac-3fcc9377246d",
+            "bb39fe5e-0345-4b98-976b-fe3b0743f169",
+            "720f912b-c304-4dc7-bb9a-280657c3ed3f",
+            "862f189d-6e19-49fc-a427-739427489354",
+            "5258dbfe-b76d-42aa-b680-15eb9a7b83d7",
+            "abe242ea-31ef-4d14-9245-92cfa16b8975",
+            "e15edaef-1d63-4cff-a9cc-7f972a0887d5",
+            "0ce6959b-8b78-48a3-bd3c-81d273a45f83",
+            "f142bda7-8a61-4d56-b4b4-d7f8035f6b06"
+          ],
+          "top_k_titles": [
+            "Multi-project support: color + description on projects table",
+            "Project CRUD: POST/PUT endpoints with validation",
+            "Baseline determinism holds for back-to-back runs only; hours-separated runs jitter by embeddings-service load",
+            "Content-based hash dup-rate metrics need a distinguishing fallback when retriever returns empty content fields",
+            "A/B baseline archive is a superior wiring-integration test for retrieval changes",
+            "Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1",
+            "NoProjectGuard: hydration-safe guard for data pages",
+            "index_project default excludes cover .git + node_modules only; dist/ .next/ .claude/ leak into the chunks table",
+            "Import A: impexp-1775367981432",
+            "Retrieval-layer changes silently propagate to downstream consumers (reflect tool example)"
+          ],
+          "top_k_snippets": [
+            "Added 'color' and 'description' columns to the projects table with validation for color against a fixed allow-list and a 2000-char limit for description. Ensure sync between BE VALID_COLORS and FE PROJECT_COLORS.",
+            "Implemented POST and PUT endpoints for project management with validation rules including regex for project_id, color allow-list, input trimming, and error handling for duplicate IDs. Added a warning field for failed group additions during creation.",
+            "Baseline determinism holds for back-to-back runs but varies with embeddings-service load when run hours apart. Root cause is transient CPU/memory load on the MCP container affecting query scoring. The diff generator flags this as a regression, but it's measurement noise. Operato…",
+            "The nearSemanticKey function returns '||' when both title and snippet are null/undefined, leading to a 100% duplication rate metric even with no actual content duplication. This issue occurred in src/qc/surfaces.ts where the callCode function did not populate the snippet field. …",
+            "The A/B baseline archive method is recommended for integration testing of retrieval-layer changes, especially in pipelines with async ingestion or LLM-backed distillation. It provides a stronger signal than traditional REST e2e tests and automatically runs on every sprint close.…",
+            "The codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[])` for multiple projects, avoiding the N+1 problem. This pattern should be app…",
+            "NoProjectGuard is a hydration-safe guard for 12 data pages, ensuring they only activate after projects load from the API. It has two variants: 'no project selected' and 'project not found'. Feature toggles are deferred to Phase 8, and non-functional UI was removed to avoid confu…",
+            "During Phase 12 Sprint 12.0.1, indexing the free-context-hub project ingested 3925 chunks but revealed ~4426 junk rows including dist/, .next/, and .claude/ files. The default exclude logic only covers .git and node_modules. A direct SQL query was used to purge these junk rows, …",
+            "The document titled 'Import A: impexp-1775367981432' contains content labeled as 'Content A'. No specific details or actions are provided in the body.",
+            "The retrieval-layer changes in Phase 12 Sprint 12.1a affected the reflect MCP tool's output, leading to different synthesis results before and after deduplication. This behavior change wasn't within the sprint's scope, causing discrepancies for operators running the same query. …"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            2505,
+            1938,
+            1924
+          ],
+          "latency_ms_median": 1938,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-code-review-workflow-pref",
+          "group": "confident-hit",
+          "query": "code review preference: review each file group separately after bulk implementation",
+          "top_k_keys": [
+            "4e28d4bc-5d6e-47c7-bda5-7b2dfb761736",
+            "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+            "0f6f2651-f475-42cc-b344-360f29dd9d8d",
+            "2af9bb39-e127-4527-8453-4813a66ae28b",
+            "a9c36f77-6bbd-4761-af28-f06a02fec8ea",
+            "bb39fe5e-0345-4b98-976b-fe3b0743f169",
+            "2660327d-bd6f-42f9-a720-8236bb2ef099",
+            "fe395858-9efb-42db-ae30-6369d9dd9992",
+            "500404f1-4284-442f-a8f5-960f6b3caca4",
+            "862f189d-6e19-49fc-a427-739427489354"
+          ],
+          "top_k_titles": [
+            "Code review workflow: review each file group separately after bulk implementation",
+            "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types",
+            "Global search test retry pattern",
+            "GET /api/lessons returns rows under `items`, not `lessons` or `results`",
+            "Global search test retry pattern",
+            "Baseline determinism holds for back-to-back runs only; hours-separated runs jitter by embeddings-service load",
+            "Archive git_commit field appends +dirty when working tree has uncommitted changes",
+            "Node ESM CLI main-guard needs pathToFileURL on Windows, not plain `file://` concat",
+            "Fire-and-forget DB writes need documented pool-sizing assumptions + future batching plan",
+            "A/B baseline archive is a superior wiring-integration test for retrieval changes"
+          ],
+          "top_k_snippets": [
+            "When implementing large features across multiple files, conduct a structured code review by focusing on specific groups such as BE service, BE routes, FE components, FE pages, and integration. This approach helps in identifying issues like bugs, security gaps, and logic errors t…",
+            "During POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness with zero false positives and no regressions.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will progressively increase the wait time between retries, reducing the load on the system and improving the chances of successful test execution.",
+            "The API endpoint /api/lessons returns data under 'items', not 'lessons' or 'results'. Tests should read from body.items to avoid confusion and silent failures. Verify the field name against the service implementation, and if unsure, dump the response body in a test.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient errors gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Baseline determinism holds for back-to-back runs but varies with embeddings-service load when run hours apart. Root cause is transient CPU/memory load on the MCP container affecting query scoring. The diff generator flags this as a regression, but it's measurement noise. Operato…",
+            "The git_commit field now appends +dirty to the short SHA when there are uncommitted changes in the working tree. This ensures that archives accurately reflect the code state, preventing misleading comparisons during rapid iterations and benchmarking.",
+            "The guard condition `if (import.meta.url === \"file://\" + process.argv[1])` fails on Windows due to path format differences. The fix involves using `pathToFileURL` from node:url to normalize both sides of the comparison, ensuring consistent URL formats.",
+            "Added fire-and-forget DB writes in multiple paths, which can saturate a default connection pool under concurrent load. Documented mitigation for salience-enabled deployments and planned future work on write-behind batching or semaphore capping. Need to document pool-sizing assum…",
+            "The A/B baseline archive method is recommended for integration testing of retrieval-layer changes, especially in pipelines with async ingestion or LLM-backed distillation. It provides a stronger signal than traditional REST e2e tests and automatically runs on every sprint close.…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            861,
+            1703,
+            1983
+          ],
+          "latency_ms_median": 1703,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-dup-max-retry-guardrail",
+          "group": "duplicate-trap",
+          "query": "max retry attempts must be 3 external API call guardrail",
+          "top_k_keys": [
+            "9a34ef12-bb6d-42d3-bee3-7ff53c4d86b0",
+            "544aae14-08aa-436c-b54b-c8ecda4587fe",
+            "5a9982a8-83e4-40a1-a8f8-280fc519f19a",
+            "be30985a-e45b-47ce-82d2-f6a75dc282b8",
+            "d66e5221-5e7b-42d8-b8fc-d91c8d2ee76a",
+            "2b07085d-f625-4791-9606-3f2bdb6491cf",
+            "a9c36f77-6bbd-4761-af28-f06a02fec8ea",
+            "abe242ea-31ef-4d14-9245-92cfa16b8975",
+            "2af9bb39-e127-4527-8453-4813a66ae28b",
+            "720f912b-c304-4dc7-bb9a-280657c3ed3f"
+          ],
+          "top_k_titles": [
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "NoProjectGuard: hydration-safe guard for data pages",
+            "GET /api/lessons returns rows under `items`, not `lessons` or `results`",
+            "Content-based hash dup-rate metrics need a distinguishing fallback when retriever returns empty content fields"
+          ],
+          "top_k_snippets": [
+            "The policy requires setting the maximum number of retry attempts to 3 for all operations. This ensures that systems do not indefinitely attempt failed tasks, which can lead to resource exhaustion and system instability.",
+            "The policy requires that the maximum number of retry attempts for any operation should not exceed three. This is to prevent infinite loops and ensure system stability.",
+            "The system should enforce a maximum of three retry attempts for any operation to prevent infinite loops and resource exhaustion.",
+            "The policy requires setting the maximum number of retry attempts to 3. This change needs to be enforced across all relevant systems and configurations to ensure compliance with the new rule.",
+            "The system should enforce a maximum of three retry attempts to prevent infinite loops and ensure efficient resource utilization. This change will help maintain system stability and performance by limiting the number of times a failed operation is retried.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient errors gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "NoProjectGuard is a hydration-safe guard for 12 data pages, ensuring they only activate after projects load from the API. It has two variants: 'no project selected' and 'project not found'. Feature toggles are deferred to Phase 8, and non-functional UI was removed to avoid confu…",
+            "The API endpoint /api/lessons returns data under 'items', not 'lessons' or 'results'. Tests should read from body.items to avoid confusion and silent failures. Verify the field name against the service implementation, and if unsure, dump the response body in a test.",
+            "The nearSemanticKey function returns '||' when both title and snippet are null/undefined, leading to a 100% duplication rate metric even with no actual content duplication. This issue occurred in src/qc/surfaces.ts where the callCode function did not populate the snippet field. …"
+          ],
+          "found_ranks": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            2,
+            2,
+            2,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            1067,
+            547,
+            550
+          ],
+          "latency_ms_median": 550,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-dup-global-search-retry-pattern",
+          "group": "duplicate-trap",
+          "query": "global search test retry pattern exponential backoff",
+          "top_k_keys": [
+            "2b07085d-f625-4791-9606-3f2bdb6491cf",
+            "a9c36f77-6bbd-4761-af28-f06a02fec8ea",
+            "9a34ef12-bb6d-42d3-bee3-7ff53c4d86b0",
+            "544aae14-08aa-436c-b54b-c8ecda4587fe",
+            "be30985a-e45b-47ce-82d2-f6a75dc282b8",
+            "5a9982a8-83e4-40a1-a8f8-280fc519f19a",
+            "d66e5221-5e7b-42d8-b8fc-d91c8d2ee76a",
+            "a6a3a11d-00e8-4b7e-83f5-18d3c24b73a7",
+            "bb39fe5e-0345-4b98-976b-fe3b0743f169",
+            "862f189d-6e19-49fc-a427-739427489354"
+          ],
+          "top_k_titles": [
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "REST e2e dedup-wiring tests fight infrastructure: distillation + async extraction defeat naive seed-and-verify",
+            "Baseline determinism holds for back-to-back runs only; hours-separated runs jitter by embeddings-service load",
+            "A/B baseline archive is a superior wiring-integration test for retrieval changes"
+          ],
+          "top_k_snippets": [
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient errors gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "The policy requires setting the maximum number of retry attempts to 3 for all operations. This ensures that systems do not indefinitely attempt failed tasks, which can lead to resource exhaustion and system instability.",
+            "The policy requires that the maximum number of retry attempts for any operation should not exceed three. This is to prevent infinite loops and ensure system stability.",
+            "The policy requires setting the maximum number of retry attempts to 3. This change needs to be enforced across all relevant systems and configurations to ensure compliance with the new rule.",
+            "The system should enforce a maximum of three retry attempts for any operation to prevent infinite loops and resource exhaustion.",
+            "The system should enforce a maximum of three retry attempts to prevent infinite loops and ensure efficient resource utilization. This change will help maintain system stability and performance by limiting the number of times a failed operation is retried.",
+            "In Phase 12 Sprint 12.1b, adding e2e integration tests for dedup wiring encountered infrastructure challenges. For lessons, LLM non-determinism caused slight summary variations, leading to dedup misses. For chunks, the async nature of chunking resulted in immediate search return…",
+            "Baseline determinism holds for back-to-back runs but varies with embeddings-service load when run hours apart. Root cause is transient CPU/memory load on the MCP container affecting query scoring. The diff generator flags this as a regression, but it's measurement noise. Operato…",
+            "The A/B baseline archive method is recommended for integration testing of retrieval-layer changes, especially in pipelines with async ingestion or LLM-backed distillation. It provides a stronger signal than traditional REST e2e tests and automatically runs on every sprint close.…"
+          ],
+          "found_ranks": [
+            1,
+            2
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            2455,
+            848,
+            674
+          ],
+          "latency_ms_median": 848,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-dup-valid-impexp-fixture",
+          "group": "duplicate-trap",
+          "query": "valid impexp extra entry fixture",
+          "top_k_keys": [
+            "18d8cc93-46b9-4c97-b216-9cca4bb067bf",
+            "fbb870fb-3182-4b88-980e-54bb1485887a",
+            "e8c8f59f-f39e-429b-92e5-dcba267abad3",
+            "7577e79f-9dfb-4c80-8592-9995223beae9",
+            "903840d3-eb60-406b-afcc-67c675480871",
+            "6f6cafba-3a74-4070-9d4b-4980a332f952",
+            "9cc03e36-2623-4398-952a-79bcaaeecaac",
+            "18f7f763-25d1-4ca1-952d-91f9ccadb93e",
+            "ba21de16-6de1-432c-81ab-e0b75cc1fe89",
+            "a0792c20-305b-4640-b6c7-befffcf5c3e1"
+          ],
+          "top_k_titles": [
+            "Valid: impexp-1775318866580-extra",
+            "Valid: impexp-1775368159562-extra",
+            "Valid: impexp-1775320598400-extra",
+            "Valid: impexp-1775367981432-extra",
+            "Valid: impexp-1775320085666-extra",
+            "Import B: impexp-1775300018449",
+            "Import B: impexp-1775318866580",
+            "Import A: impexp-1775320598400",
+            "Import A: impexp-1775318866580",
+            "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types"
+          ],
+          "top_k_snippets": [
+            "The provided document has a title 'impexp-1775318866580-extra' and a body containing only the word 'test'. There is no additional context or information provided.",
+            "The provided text is a title and body for an issue or task. The title 'impexp-1775368159562-extra' appears to be a unique identifier followed by a descriptive tag, while the body simply contains the word 'test'.",
+            "The provided text is a title and body for an entry. The title 'impexp-1775320598400-extra' appears to be a unique identifier or code, possibly related to import/export operations. The body simply contains the word 'test'.",
+            "The provided text is a title and body for an item with the ID 'impexp-1775367981432-extra'. The body contains only the word 'test'.",
+            "The provided text contains a title and body. The title is 'impexp-1775320085666-extra' and the body simply says 'test'. There are no specific instructions or tasks mentioned.",
+            "The document titled 'Import B: impexp-1775300018449' contains content labeled as 'Content B'. No specific actions or details are provided beyond the title and label.",
+            "The document titled 'Import B: impexp-1775318866580' contains the body text 'Content B'. No specific actions or details are provided beyond this basic information.",
+            "The document titled 'Import A' with the ID 'impexp-1775320598400' contains content labeled as 'Content A'. No specific actions are mentioned in the body.",
+            "The document titled 'Import A: impexp-1775318866580' contains content labeled as 'Content A'. No specific details or actions are provided beyond the title and label.",
+            "During POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness with zero false positives and no regressions."
+          ],
+          "found_ranks": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            2,
+            2,
+            2,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            2554,
+            1953,
+            1967
+          ],
+          "latency_ms_median": 1967,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-miss-unicorn",
+          "group": "adversarial-miss",
+          "query": "how to render a rainbow unicorn in WebGL with subsurface scattering",
+          "top_k_keys": [
+            "f142bda7-8a61-4d56-b4b4-d7f8035f6b06",
+            "1f112bf8-7da1-4b1a-a181-13855d60f628",
+            "68b2f2cb-2271-454e-bf7e-7831fafb9e3c",
+            "75d97ca9-3936-4fb5-90a2-0d95e428f641",
+            "720f912b-c304-4dc7-bb9a-280657c3ed3f",
+            "8edfeb1b-b28e-42f4-967b-78bf9f440134",
+            "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+            "b1d76cc8-fd55-4457-b447-18314afc72f9",
+            "4e28d4bc-5d6e-47c7-bda5-7b2dfb761736",
+            "a6a3a11d-00e8-4b7e-83f5-18d3c24b73a7"
+          ],
+          "top_k_titles": [
+            "Retrieval-layer changes silently propagate to downstream consumers (reflect tool example)",
+            "Multi-project support: color + description on projects table",
+            "pg UUID cast RETURNING is always canonical lowercase — map keys must match",
+            "gui-create-1776490733660",
+            "Content-based hash dup-rate metrics need a distinguishing fallback when retriever returns empty content fields",
+            "Filter workaround gui-filter-1775838554751",
+            "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types",
+            "Benchmark diff generator must consume noise_floor or the data is useless",
+            "Code review workflow: review each file group separately after bulk implementation",
+            "REST e2e dedup-wiring tests fight infrastructure: distillation + async extraction defeat naive seed-and-verify"
+          ],
+          "top_k_snippets": [
+            "The retrieval-layer changes in Phase 12 Sprint 12.1a affected the reflect MCP tool's output, leading to different synthesis results before and after deduplication. This behavior change wasn't within the sprint's scope, causing discrepancies for operators running the same query. …",
+            "Added 'color' and 'description' columns to the projects table with validation for color against a fixed allow-list and a 2000-char limit for description. Ensure sync between BE VALID_COLORS and FE PROJECT_COLORS.",
+            "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…",
+            "GUI test lesson content gui-create-1776490733660",
+            "The nearSemanticKey function returns '||' when both title and snippet are null/undefined, leading to a 100% duplication rate metric even with no actual content duplication. This issue occurred in src/qc/surfaces.ts where the callCode function did not populate the snippet field. …",
+            "Seeded by GUI test: Filter workaround gui-filter-1775838554751",
+            "During POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness with zero false positives and no regressions.",
+            "The benchmark diff generator was not consuming noise_floor data, leading to incorrect regression flags. The fix involves teaching the comparison tooling to consume noise floor data and rendering within-floor deltas as '⚪ (within floor)'. This ensures that the data is both writte…",
+            "When implementing large features across multiple files, conduct a structured code review by focusing on specific groups such as BE service, BE routes, FE components, FE pages, and integration. This approach helps in identifying issues like bugs, security gaps, and logic errors t…",
+            "In Phase 12 Sprint 12.1b, adding e2e integration tests for dedup wiring encountered infrastructure challenges. For lessons, LLM non-determinism caused slight summary variations, leading to dedup misses. For chunks, the async nature of chunking resulted in immediate search return…"
+          ],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            701,
+            88,
+            81
+          ],
+          "latency_ms_median": 88,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-miss-astrophysics",
+          "group": "adversarial-miss",
+          "query": "thermonuclear astrophysics of quark-gluon plasma at LHC",
+          "top_k_keys": [
+            "bb39fe5e-0345-4b98-976b-fe3b0743f169",
+            "720f912b-c304-4dc7-bb9a-280657c3ed3f",
+            "d32dc104-3fad-495c-bfba-cafcd3d63319",
+            "f142bda7-8a61-4d56-b4b4-d7f8035f6b06",
+            "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+            "a6a3a11d-00e8-4b7e-83f5-18d3c24b73a7",
+            "862f189d-6e19-49fc-a427-739427489354",
+            "1f112bf8-7da1-4b1a-a181-13855d60f628",
+            "0f6f2651-f475-42cc-b344-360f29dd9d8d",
+            "a9c36f77-6bbd-4761-af28-f06a02fec8ea"
+          ],
+          "top_k_titles": [
+            "Baseline determinism holds for back-to-back runs only; hours-separated runs jitter by embeddings-service load",
+            "Content-based hash dup-rate metrics need a distinguishing fallback when retriever returns empty content fields",
+            "normalizeForHash collapses digit-runs to 'n' — deliberate trade-off, load-bearing on dataset shape",
+            "Retrieval-layer changes silently propagate to downstream consumers (reflect tool example)",
+            "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types",
+            "REST e2e dedup-wiring tests fight infrastructure: distillation + async extraction defeat naive seed-and-verify",
+            "A/B baseline archive is a superior wiring-integration test for retrieval changes",
+            "Multi-project support: color + description on projects table",
+            "Global search test retry pattern",
+            "Global search test retry pattern"
+          ],
+          "top_k_snippets": [
+            "Baseline determinism holds for back-to-back runs but varies with embeddings-service load when run hours apart. Root cause is transient CPU/memory load on the MCP container affecting query scoring. The diff generator flags this as a regression, but it's measurement noise. Operato…",
+            "The nearSemanticKey function returns '||' when both title and snippet are null/undefined, leading to a 100% duplication rate metric even with no actual content duplication. This issue occurred in src/qc/surfaces.ts where the callCode function did not populate the snippet field. …",
+            "The normalizeForHash function collapses digit-runs to 'n' in the v1 near-semantic key. This aggressive approach is designed to catch timestamp-variant fixture duplication but may equate semantically-distinct content when digits carry meaning. The load-bearing assumption is that …",
+            "The retrieval-layer changes in Phase 12 Sprint 12.1a affected the reflect MCP tool's output, leading to different synthesis results before and after deduplication. This behavior change wasn't within the sprint's scope, causing discrepancies for operators running the same query. …",
+            "During POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness with zero false positives and no regressions.",
+            "In Phase 12 Sprint 12.1b, adding e2e integration tests for dedup wiring encountered infrastructure challenges. For lessons, LLM non-determinism caused slight summary variations, leading to dedup misses. For chunks, the async nature of chunking resulted in immediate search return…",
+            "The A/B baseline archive method is recommended for integration testing of retrieval-layer changes, especially in pipelines with async ingestion or LLM-backed distillation. It provides a stronger signal than traditional REST e2e tests and automatically runs on every sprint close.…",
+            "Added 'color' and 'description' columns to the projects table with validation for color against a fixed allow-list and a 2000-char limit for description. Ensure sync between BE VALID_COLORS and FE PROJECT_COLORS.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will progressively increase the wait time between retries, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient errors gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution."
+          ],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            689,
+            91,
+            81
+          ],
+          "latency_ms_median": 91,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-miss-falconry",
+          "group": "adversarial-miss",
+          "query": "medieval falconry training manual hood design",
+          "top_k_keys": [
+            "75d97ca9-3936-4fb5-90a2-0d95e428f641",
+            "a6ee1dd4-09d3-487c-b7de-910ec2f4cfaf",
+            "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+            "6039c921-3e72-4d79-9977-a7da2f930d6a",
+            "5d6ccfbd-6c65-4a74-b845-084dbd8e9896",
+            "abe242ea-31ef-4d14-9245-92cfa16b8975",
+            "1f112bf8-7da1-4b1a-a181-13855d60f628",
+            "7577e79f-9dfb-4c80-8592-9995223beae9",
+            "fbb870fb-3182-4b88-980e-54bb1485887a",
+            "6e17baa4-75a7-4b6b-960d-b543d90896fe"
+          ],
+          "top_k_titles": [
+            "gui-create-1776490733660",
+            "gui-create-1775845003745",
+            "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types",
+            "gui-create-1776490852416",
+            "gui-create-1776171045947",
+            "NoProjectGuard: hydration-safe guard for data pages",
+            "Multi-project support: color + description on projects table",
+            "Valid: impexp-1775367981432-extra",
+            "Valid: impexp-1775368159562-extra",
+            "Agent context bootstrap e2e-1775880510559-urw0mj"
+          ],
+          "top_k_snippets": [
+            "GUI test lesson content gui-create-1776490733660",
+            "The GUI test lesson content for 'gui-create-1775845003745' is available. This lesson likely covers the creation and testing of graphical user interfaces, providing guidance on how to design, implement, and validate user interactions within a software application.",
+            "During POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness with zero false positives and no regressions.",
+            "This is a GUI test lesson content for the item with ID gui-create-1776490852416. The lesson likely covers testing graphical user interfaces, which involves verifying that the application's UI elements function correctly and meet design specifications.",
+            "This document is a GUI test lesson content titled 'gui-create-1776171045947'. It likely contains instructions or guidelines for creating a graphical user interface, possibly including steps, best practices, and examples.",
+            "NoProjectGuard is a hydration-safe guard for 12 data pages, ensuring they only activate after projects load from the API. It has two variants: 'no project selected' and 'project not found'. Feature toggles are deferred to Phase 8, and non-functional UI was removed to avoid confu…",
+            "Added 'color' and 'description' columns to the projects table with validation for color against a fixed allow-list and a 2000-char limit for description. Ensure sync between BE VALID_COLORS and FE PROJECT_COLORS.",
+            "The provided text is a title and body for an item with the ID 'impexp-1775367981432-extra'. The body contains only the word 'test'.",
+            "The provided text is a title and body for an issue or task. The title 'impexp-1775368159562-extra' appears to be a unique identifier followed by a descriptive tag, while the body simply contains the word 'test'.",
+            "This document outlines a bootstrap lesson for agent tests, which will be archived. It provides essential information and steps needed to set up the testing environment effectively."
+          ],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            668,
+            520,
+            659
+          ],
+          "latency_ms_median": 659,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-cross-integration-test-backoff",
+          "group": "cross-topic",
+          "query": "integration test exponential backoff retry strategy",
+          "top_k_keys": [
+            "ed815b58-45a0-4083-be40-4d3cb7770f42",
+            "a9c36f77-6bbd-4761-af28-f06a02fec8ea",
+            "9a34ef12-bb6d-42d3-bee3-7ff53c4d86b0",
+            "be30985a-e45b-47ce-82d2-f6a75dc282b8",
+            "0e08eead-db62-4668-8d7b-20281747c7ac",
+            "544aae14-08aa-436c-b54b-c8ecda4587fe",
+            "862f189d-6e19-49fc-a427-739427489354",
+            "a6a3a11d-00e8-4b7e-83f5-18d3c24b73a7",
+            "d66e5221-5e7b-42d8-b8fc-d91c8d2ee76a",
+            "bb39fe5e-0345-4b98-976b-fe3b0743f169"
+          ],
+          "top_k_titles": [
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "A/B baseline archive is a superior wiring-integration test for retrieval changes",
+            "REST e2e dedup-wiring tests fight infrastructure: distillation + async extraction defeat naive seed-and-verify",
+            "Max retry attempts must be 3",
+            "Baseline determinism holds for back-to-back runs only; hours-separated runs jitter by embeddings-service load"
+          ],
+          "top_k_snippets": [
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach will progressively increase the wait time between retries, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient errors gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "The policy requires setting the maximum number of retry attempts to 3 for all operations. This ensures that systems do not indefinitely attempt failed tasks, which can lead to resource exhaustion and system instability.",
+            "The policy requires setting the maximum number of retry attempts to 3. This change needs to be enforced across all relevant systems and configurations to ensure compliance with the new rule.",
+            "The system should enforce a maximum of three retry attempts for any operation to prevent infinite loops and resource exhaustion.",
+            "The policy requires that the maximum number of retry attempts for any operation should not exceed three. This is to prevent infinite loops and ensure system stability.",
+            "The A/B baseline archive method is recommended for integration testing of retrieval-layer changes, especially in pipelines with async ingestion or LLM-backed distillation. It provides a stronger signal than traditional REST e2e tests and automatically runs on every sprint close.…",
+            "In Phase 12 Sprint 12.1b, adding e2e integration tests for dedup wiring encountered infrastructure challenges. For lessons, LLM non-determinism caused slight summary variations, leading to dedup misses. For chunks, the async nature of chunking resulted in immediate search return…",
+            "The system should enforce a maximum of three retry attempts to prevent infinite loops and ensure efficient resource utilization. This change will help maintain system stability and performance by limiting the number of times a failed operation is retried.",
+            "Baseline determinism holds for back-to-back runs but varies with embeddings-service load when run hours apart. Root cause is transient CPU/memory load on the MCP container affecting query scoring. The diff generator flags this as a regression, but it's measurement noise. Operato…"
+          ],
+          "found_ranks": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            9
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            2,
+            2,
+            2,
+            2,
+            2,
+            0,
+            0,
+            2,
+            0
+          ],
+          "latency_ms_samples": [
+            1221,
+            1217,
+            1011
+          ],
+          "latency_ms_median": 1217,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-cross-sprint-11-closeout",
+          "group": "cross-topic",
+          "query": "sprint 11.6c-sec DNS pinning body-stall timeout security polish",
+          "top_k_keys": [
+            "82e14086-dc76-40f5-81f5-e7ef0c4c97ef",
+            "862f189d-6e19-49fc-a427-739427489354",
+            "f142bda7-8a61-4d56-b4b4-d7f8035f6b06",
+            "2af9bb39-e127-4527-8453-4813a66ae28b",
+            "a6a3a11d-00e8-4b7e-83f5-18d3c24b73a7",
+            "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+            "2b07085d-f625-4791-9606-3f2bdb6491cf",
+            "a9c36f77-6bbd-4761-af28-f06a02fec8ea",
+            "bb39fe5e-0345-4b98-976b-fe3b0743f169",
+            "720f912b-c304-4dc7-bb9a-280657c3ed3f"
+          ],
+          "top_k_titles": [
+            "undici userland version MUST match Node's bundled version for fetch dispatcher interop",
+            "A/B baseline archive is a superior wiring-integration test for retrieval changes",
+            "Retrieval-layer changes silently propagate to downstream consumers (reflect tool example)",
+            "GET /api/lessons returns rows under `items`, not `lessons` or `results`",
+            "REST e2e dedup-wiring tests fight infrastructure: distillation + async extraction defeat naive seed-and-verify",
+            "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types",
+            "Global search test retry pattern",
+            "Global search test retry pattern",
+            "Baseline determinism holds for back-to-back runs only; hours-separated runs jitter by embeddings-service load",
+            "Content-based hash dup-rate metrics need a distinguishing fallback when retriever returns empty content fields"
+          ],
+          "top_k_snippets": [
+            "Node's global fetch() requires the userland undici version to match its internally bundled version to avoid obscure errors. Node 23.11.1 bundles undici 6.21.2, so pinning userland undici to ^6.21.2 is recommended. Verify compatibility on Node upgrades as internal undici versions…",
+            "The A/B baseline archive method is recommended for integration testing of retrieval-layer changes, especially in pipelines with async ingestion or LLM-backed distillation. It provides a stronger signal than traditional REST e2e tests and automatically runs on every sprint close.…",
+            "The retrieval-layer changes in Phase 12 Sprint 12.1a affected the reflect MCP tool's output, leading to different synthesis results before and after deduplication. This behavior change wasn't within the sprint's scope, causing discrepancies for operators running the same query. …",
+            "The API endpoint /api/lessons returns data under 'items', not 'lessons' or 'results'. Tests should read from body.items to avoid confusion and silent failures. Verify the field name against the service implementation, and if unsure, dump the response body in a test.",
+            "In Phase 12 Sprint 12.1b, adding e2e integration tests for dedup wiring encountered infrastructure challenges. For lessons, LLM non-determinism caused slight summary variations, leading to dedup misses. For chunks, the async nature of chunking resulted in immediate search return…",
+            "During POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness with zero false positives and no regressions.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient errors gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "Baseline determinism holds for back-to-back runs but varies with embeddings-service load when run hours apart. Root cause is transient CPU/memory load on the MCP container affecting query scoring. The diff generator flags this as a regression, but it's measurement noise. Operato…",
+            "The nearSemanticKey function returns '||' when both title and snippet are null/undefined, leading to a 100% duplication rate metric even with no actual content duplication. This issue occurred in src/qc/surfaces.ts where the callCode function did not populate the snippet field. …"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            2489,
+            1976,
+            1957
+          ],
+          "latency_ms_median": 1976,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        },
+        {
+          "id": "lesson-cross-workflow-gate",
+          "group": "cross-topic",
+          "query": "workflow gate state machine 12-phase workflow v2.2",
+          "top_k_keys": [
+            "4e28d4bc-5d6e-47c7-bda5-7b2dfb761736",
+            "862f189d-6e19-49fc-a427-739427489354",
+            "f142bda7-8a61-4d56-b4b4-d7f8035f6b06",
+            "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+            "6247caba-5aa7-4ce9-b4ac-3fcc9377246d",
+            "1f112bf8-7da1-4b1a-a181-13855d60f628",
+            "5258dbfe-b76d-42aa-b680-15eb9a7b83d7",
+            "500404f1-4284-442f-a8f5-960f6b3caca4",
+            "abe242ea-31ef-4d14-9245-92cfa16b8975",
+            "68b2f2cb-2271-454e-bf7e-7831fafb9e3c"
+          ],
+          "top_k_titles": [
+            "Code review workflow: review each file group separately after bulk implementation",
+            "A/B baseline archive is a superior wiring-integration test for retrieval changes",
+            "Retrieval-layer changes silently propagate to downstream consumers (reflect tool example)",
+            "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types",
+            "Project CRUD: POST/PUT endpoints with validation",
+            "Multi-project support: color + description on projects table",
+            "Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1",
+            "Fire-and-forget DB writes need documented pool-sizing assumptions + future batching plan",
+            "NoProjectGuard: hydration-safe guard for data pages",
+            "pg UUID cast RETURNING is always canonical lowercase — map keys must match"
+          ],
+          "top_k_snippets": [
+            "When implementing large features across multiple files, conduct a structured code review by focusing on specific groups such as BE service, BE routes, FE components, FE pages, and integration. This approach helps in identifying issues like bugs, security gaps, and logic errors t…",
+            "The A/B baseline archive method is recommended for integration testing of retrieval-layer changes, especially in pipelines with async ingestion or LLM-backed distillation. It provides a stronger signal than traditional REST e2e tests and automatically runs on every sprint close.…",
+            "The retrieval-layer changes in Phase 12 Sprint 12.1a affected the reflect MCP tool's output, leading to different synthesis results before and after deduplication. This behavior change wasn't within the sprint's scope, causing discrepancies for operators running the same query. …",
+            "During POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness with zero false positives and no regressions.",
+            "Implemented POST and PUT endpoints for project management with validation rules including regex for project_id, color allow-list, input trimming, and error handling for duplicate IDs. Added a warning field for failed group additions during creation.",
+            "Added 'color' and 'description' columns to the projects table with validation for color against a fixed allow-list and a 2000-char limit for description. Ensure sync between BE VALID_COLORS and FE PROJECT_COLORS.",
+            "The codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[])` for multiple projects, avoiding the N+1 problem. This pattern should be app…",
+            "Added fire-and-forget DB writes in multiple paths, which can saturate a default connection pool under concurrent load. Documented mitigation for salience-enabled deployments and planned future work on write-behind batching or semaphore capping. Need to document pool-sizing assum…",
+            "NoProjectGuard is a hydration-safe guard for 12 data pages, ensuring they only activate after projects load from the API. It has two variants: 'no project selected' and 'project not found'. Feature toggles are deferred to Phase 8, and non-functional UI was removed to avoid confu…",
+            "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…"
+          ],
+          "found_ranks": [
+            4
+          ],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            2359,
+            2332,
+            2162
+          ],
+          "latency_ms_median": 2332,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": [
+            "rank-order-inversion"
+          ]
+        },
+        {
+          "id": "lesson-cross-agent-bootstrap-e2e",
+          "group": "cross-topic",
+          "query": "agent context bootstrap end-to-end testing",
+          "top_k_keys": [
+            "2f8b0b23-b858-4fae-9a70-31c104e7fe79",
+            "6e17baa4-75a7-4b6b-960d-b543d90896fe",
+            "a6a3a11d-00e8-4b7e-83f5-18d3c24b73a7",
+            "862f189d-6e19-49fc-a427-739427489354",
+            "68696052-ea32-4097-904c-1fb059c90450",
+            "82e14086-dc76-40f5-81f5-e7ef0c4c97ef",
+            "2b07085d-f625-4791-9606-3f2bdb6491cf",
+            "4e28d4bc-5d6e-47c7-bda5-7b2dfb761736",
+            "2af9bb39-e127-4527-8453-4813a66ae28b",
+            "bb39fe5e-0345-4b98-976b-fe3b0743f169"
+          ],
+          "top_k_titles": [
+            "Agent context bootstrap e2e-1775840056667-clp98p",
+            "Agent context bootstrap e2e-1775880510559-urw0mj",
+            "REST e2e dedup-wiring tests fight infrastructure: distillation + async extraction defeat naive seed-and-verify",
+            "A/B baseline archive is a superior wiring-integration test for retrieval changes",
+            "Phase 8 smoke test — custom type via REST",
+            "undici userland version MUST match Node's bundled version for fetch dispatcher interop",
+            "Global search test retry pattern",
+            "Code review workflow: review each file group separately after bulk implementation",
+            "GET /api/lessons returns rows under `items`, not `lessons` or `results`",
+            "Baseline determinism holds for back-to-back runs only; hours-separated runs jitter by embeddings-service load"
+          ],
+          "top_k_snippets": [
+            "This is a bootstrap lesson for agent tests that will be archived. It provides an initial setup and guidance for conducting end-to-end tests with the specified ID e2e-1775840056667-clp98p.",
+            "This document outlines a bootstrap lesson for agent tests, which will be archived. It provides essential information and steps needed to set up the testing environment effectively.",
+            "In Phase 12 Sprint 12.1b, adding e2e integration tests for dedup wiring encountered infrastructure challenges. For lessons, LLM non-determinism caused slight summary variations, leading to dedup misses. For chunks, the async nature of chunking resulted in immediate search return…",
+            "The A/B baseline archive method is recommended for integration testing of retrieval-layer changes, especially in pipelines with async ingestion or LLM-backed distillation. It provides a stronger signal than traditional REST e2e tests and automatically runs on every sprint close.…",
+            "Conduct a Phase 8 smoke test to verify that the custom lesson type API change functions correctly end-to-end following the removal of the CHECK constraint in migration 0040. Ensure all components interact seamlessly and data integrity is maintained.",
+            "Node's global fetch() requires the userland undici version to match its internally bundled version to avoid obscure errors. Node 23.11.1 bundles undici 6.21.2, so pinning userland undici to ^6.21.2 is recommended. Verify compatibility on Node upgrades as internal undici versions…",
+            "Implement an exponential backoff strategy for retrying global search tests to handle transient failures gracefully. This approach increases the wait time between retries exponentially, reducing the load on the system and improving the chances of successful test execution.",
+            "When implementing large features across multiple files, conduct a structured code review by focusing on specific groups such as BE service, BE routes, FE components, FE pages, and integration. This approach helps in identifying issues like bugs, security gaps, and logic errors t…",
+            "The API endpoint /api/lessons returns data under 'items', not 'lessons' or 'results'. Tests should read from body.items to avoid confusion and silent failures. Verify the field name against the service implementation, and if unsure, dump the response body in a test.",
+            "Baseline determinism holds for back-to-back runs but varies with embeddings-service load when run hours apart. Root cause is transient CPU/memory load on the MCP container affecting query scoring. The diff generator flags this as a regression, but it's measurement noise. Operato…"
+          ],
+          "found_ranks": [
+            1,
+            2
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            2578,
+            2000,
+            1980
+          ],
+          "latency_ms_median": 2000,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": []
+        }
+      ]
+    }
+  },
+  "noise_floor": {
+    "lessons": {
+      "recall_at_5": 0.05879999999999996,
+      "recall_at_10": 0.05879999999999996,
+      "mrr": 0.014699999999999935,
+      "ndcg_at_5": 0.02529999999999999,
+      "ndcg_at_10": 0.02529999999999999,
+      "duplication_rate_at_10": 0,
+      "duplication_rate_nearsemantic_at_10": 0,
+      "coverage_pct": 0.05879999999999996,
+      "latency_p50_ms": 23,
+      "latency_p95_ms": 21,
+      "latency_mean_ms": 18
+    }
+  },
+  "control_elapsed_ms": 93017,
+  "new_elapsed_ms": 94087
+}
