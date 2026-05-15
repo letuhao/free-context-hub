@@ -132,7 +132,7 @@ lessons, guardrails, phase10, phase11, …) stays green = no regression from any
 | SS2 type-system unification | `5d18196` | BUG-13.5-1, 13.5-2, 13.5-3 |
 | SS3 F2 GUI + review identity | `ce59449` | BUG-13.3-1, 13.4-1/-2/-3/-4, 13.6-1 |
 | SS4 HTTP-contract fixes | `2ccf70b` | BUG-13.1-1/-2/-3, 13.3-3, 13.3-4, 13.2-1 |
-| SS5 real E2E coverage | *(this commit)* | BUG-13.7-2, 13.7-3 |
+| SS5 real E2E coverage | `a1d374f` | BUG-13.7-2, 13.7-3 |
 
 All 19 bugs from `docs/audit/phase-13-review.md` are resolved on branch `phase-13-bugfix`
 (off `phase-13-dlf-coordination-amaw` @ `acdf202`). 306/306 unit + 105/105 e2e API pass; tsc
@@ -141,7 +141,7 @@ clean (backend + gui). Not yet pushed — awaiting review.
 ## /review-impl follow-up — adversarial pass over the bug-fix branch
 
 A `/review-impl` adversarial review of the full bug-fix diff (`acdf202..a1d374f`) found two
-real issues the per-sub-sprint reviews missed — both fixed (commit after `a1d374f`):
+real issues the per-sub-sprint reviews missed — both fixed at `00acfa4`:
 
 - **[HIGH] `batchUpdateLessonStatus` bypassed the SS1 review-gate guard.** SS1 guarded
   `updateLessonStatus`, but the sibling write-path `batchUpdateLessonStatus`
@@ -161,6 +161,22 @@ real issues the per-sub-sprint reviews missed — both fixed (commit after `a1d3
 deploy-state smoke — `POST /api/lessons/batch-status` batching a pending-review lesson →
 HTTP 200, the lesson stays `pending-review` and is reported in `failed_ids`; batching →
 `pending-review` → HTTP 400.
+
+## Session close-out — RETRO + DEFERRED hygiene ✅
+
+**RETRO** — three durable lessons added to the MCP knowledge base (`add_lesson`, project `free-context-hub`):
+- `49b21049` *(decision)* — "Phase 13 post-hoc review: AMAW caught real bugs in-loop but 19 escaped (3 HIGH) — 3 structural gaps". The audited counterpart to the optimistic in-loop sprint retrospectives — AMAW never reviews its own fixes; review budget tracked feature-area not blast-radius; POST-REVIEW + one-phase-one-event degraded under self-logged "time pressure".
+- `45c8cb44` *(preference)* — "When guarding a lessons.status transition, mirror the guard on ALL sibling write paths (single + batch + MCP)". The root pattern behind BUG-13.3-2 / 13.7-1 and the /review-impl HIGH.
+- `c0e76a3d` *(preference)* — "Canonical lesson status slug is `pending-review` (hyphen) — never `pending_review`". The root pattern behind BUG-13.4-2 and the /review-impl MED.
+
+**DEFERRED.md hygiene** — `docs/deferred/DEFERRED.md`:
+- **DEFERRED-008 added** (OPEN, LOW) — Phase 11 knowledge-bundle export/import omits the new `lesson_types.scope` column (migration 0052). `exportProject.ts:127` and `importProject.ts:464` use explicit column lists without `scope`, so `scope` is dropped on export and every imported type lands as `global`. Surfaced by /review-impl Finding 3.
+- DEFERRED-003 confirmed **OPEN** — SS5 covered owner-release + an honest sweep skip; it did not add the `race_exhausted` stress test.
+- DEFERRED-004 confirmed **PARTIAL** — BUG-13.3-1 added role-gating (approve/return → `requireRole('admin')`), consistent with DEFERRED-004's existing "admin is global-by-design" decision; the remaining service-layer scope audit is untouched.
+
+## Branch state — `phase-13-bugfix`, not pushed
+
+8 commits: `acdf202` review · `29e68fa` SS1 · `5d18196` SS2 · `ce59449` SS3 · `2ccf70b` SS4 · `a1d374f` SS5 · `00acfa4` /review-impl · this SESSION_PATCH + DEFERRED close-out. All 19 review bugs + 2 /review-impl escapes fixed; 308/308 unit + 105/105 e2e API pass; tsc clean (backend + gui). **Push / PR / merge awaiting the user's decision** — run `check_guardrails` before any push.
 
 ---
 
