@@ -1,3 +1,51 @@
+# Session 2026-05-15 (cont.) — Phase 13 post-hoc REVIEW + AMAW quality assessment (IN PROGRESS)
+
+**Task:** review every Phase 13 sprint (13.1–13.7) for bugs, and evaluate AMAW workflow
+quality. Collaborative — human is in the loop, checkpoint after each sprint. Not a feature
+task; this is an audit of work already shipped on `phase-13-dlf-coordination-amaw`.
+
+## Method (decided with the user)
+- **Review method:** main-session self-review (user chose this over cold-start sub-agents).
+- **AMAW eval — 4 dimensions:** adversary effectiveness · process integrity · size-classification
+  accuracy · cost vs value.
+- **Bug handling:** collect all into a report first, fix later per user decision (do NOT fix
+  during review).
+- **Cadence:** review one sprint → report findings to the human → wait for confirmation → next.
+
+## State lives in `docs/audit/phase-13-review.md`
+That file is the living review doc — commit↔sprint map, per-sprint findings, the consolidated
+bug table, and the AMAW assessment scaffold. **The resuming session must read it first.**
+
+## Progress so far
+- ✅ Phase A — scaffold + commit↔sprint map.
+- ✅ Sprints 13.1–13.7 all reviewed — **19 bugs** (3 HIGH, 7 MED, 8 LOW, 1 COSMETIC).
+- ✅ Phase C — AMAW 4-dimension assessment complete.
+- ⬜ Phase D — bug triage + fix decision with the human (IN PROGRESS — awaiting disposition).
+
+## Consolidated bugs (19) — full table + per-sprint detail in `docs/audit/phase-13-review.md`
+**3 HIGH:**
+- BUG-13.3-2 — review gate bypassable via `update_lesson_status`; orphans `review_requests` row.
+  Partially fixed in 13.7.
+- BUG-13.5-1 — `validateLessonType` ignores the Phase 8 `lesson_types` table → `add_lesson` HTTP
+  400s every Phase 8 custom lesson type.
+- BUG-13.7-1 — the 13.7 source-status guard is incomplete; still allows `pending-review→active`/
+  `draft`, so BUG-13.3-2 remains partly open.
+
+## AMAW assessment — bottom line
+Adversary design rounds are the workflow's best feature and caught real issues — but (1) it never
+reviews the fixes it triggers (all 3 HIGH bugs live there), (2) review budget was allocated by
+surface area not blast radius (13.4/13.5 — highest risk — got 0/1 rounds), (3) POST-REVIEW + the
+post-sprint audit were skipped for all 5 back-half sprints under self-logged "time pressure."
+Process integrity degraded monotonically 13.1→13.7; size accuracy improved but went unused.
+
+## Resume protocol for next session
+1. Read `docs/audit/phase-13-review.md` — the complete review (7 sprint sections + consolidated
+   bug table + Phase C assessment).
+2. Phase D is the only remaining step: the human triages the 19 bugs and decides what to fix.
+3. Do NOT start fixing without the human's disposition.
+
+---
+
 # Longrun — Phase 13 CLOSEOUT (session 3, Sprint 13.7)
 
 **Phase 13 outcome: SHIPPED COMPLETE.** All 24 acceptance criteria across F1+F2+F3 hold with file:line evidence; 3 of 4 originally-open DEFERRED items RESOLVED (004 PARTIAL with documented policy, 005/006/007 RESOLVED); 94/94 e2e API tests pass; 302/302 unit tests pass.
