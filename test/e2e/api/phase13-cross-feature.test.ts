@@ -62,22 +62,47 @@ export const allPhase13CrossFeatureTests: TestFn[] = [
     cleanup.leaseIds.push({ leaseId: cR.body.lease_id, projectId, agentId: `agent-cross-${runMarker}` });
   }),
 
-  // ── F2+F3: review request lifecycle works on profile-type lessons (just the REST shape) ──
-  xTest('cross-f2-f3-review-list-works-with-profile-types', async ({ api, projectId, cleanup, runMarker }) => {
-    // Ensure dlf-phase0 active
-    const aActive = await api.get(`/api/projects/${projectId}/taxonomy-profile`);
-    if (!aActive.body?.profile) {
-      await api.post(`/api/projects/${projectId}/taxonomy-profile/activate`, {
-        slug: 'dlf-phase0',
-        activated_by: `e2e-${runMarker}`,
-      });
-      cleanup.taxonomyActivations.push(projectId);
+  // ── F2+F3: a real review request can be submitted for an F3 profile-type lesson ──
+  // SS5 (BUG-13.7-2): the original test only GET'd the (empty) review list. This
+  // exercises the actual F2×F3 interaction — submit_for_review on a lesson whose
+  // lesson_type comes from an active taxonomy profile.
+  xTest('cross-f2-f3-review-a-profile-type-lesson', async ({ api, mcp, projectId, cleanup, runMarker }) => {
+    if (!mcp) throw new Error('SKIP: MCP client not connected');
+    // F3: activate dlf-phase0 so 'candidate-decision' is a valid lesson_type.
+    const aR = await api.post(`/api/projects/${projectId}/taxonomy-profile/activate`, {
+      slug: 'dlf-phase0', activated_by: `e2e-${runMarker}`,
+    });
+    expectStatus(aR, 200);
+    cleanup.taxonomyActivations.push(projectId);
+
+    // Create a profile-type lesson and demote it to draft.
+    const lr = await api.post('/api/lessons', {
+      project_id: projectId, lesson_type: 'candidate-decision',
+      title: `Cross F2+F3 ${runMarker}`, content: 'review a profile-type lesson',
+    });
+    expectStatus(lr, 201);
+    cleanup.lessonIds.push(lr.body.lesson_id);
+    await api.patch(`/api/lessons/${lr.body.lesson_id}/status`, { project_id: projectId, status: 'draft' });
+
+    // F2: submit it for review via the MCP tool.
+    const submitRes: any = await mcp.callTool({
+      name: 'submit_for_review',
+      arguments: { project_id: projectId, agent_id: `agent-${runMarker}`, lesson_id: lr.body.lesson_id },
+    });
+    const sc = submitRes?.structuredContent ?? {};
+    const text: string = submitRes?.content?.[0]?.text ?? '';
+    if (sc.status !== 'submitted' && !text.includes('submitted')) {
+      throw new Error(`F2+F3: submit_for_review failed for a profile-type lesson: ${text.slice(0, 200)}`);
     }
 
-    // Review-requests list endpoint works regardless of active profile
-    const r = await api.get(`/api/projects/${projectId}/review-requests`);
-    expectStatus(r, 200);
-    if (!Array.isArray(r.body.items)) throw new Error('items not array');
+    // It appears in the review list carrying its profile lesson_type.
+    const listR = await api.get(`/api/projects/${projectId}/review-requests?status=pending`);
+    expectStatus(listR, 200);
+    const found = (listR.body.items ?? []).find((i: any) => i.lesson_id === lr.body.lesson_id);
+    if (!found) throw new Error('F2+F3: the submitted profile-type lesson is not in the review list');
+    if (found.lesson_type !== 'candidate-decision') {
+      throw new Error(`F2+F3: expected lesson_type 'candidate-decision', got '${found.lesson_type}'`);
+    }
   }),
 
   // ── F1+F2: existing review_requests don't affect lease availability ──

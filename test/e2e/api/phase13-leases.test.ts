@@ -90,25 +90,36 @@ export const allPhase13LeaseTests: TestFn[] = [
     }
   }),
 
-  leaseTest('lease-release-by-owner', async ({ api, projectId, cleanup, runMarker }) => {
-    // Note: api.delete helper doesn't accept request bodies (only path+token), but
-    // the release route requires agent_id in body. We use force-release instead
-    // (admin path), which the owner-only release is functionally a subset of.
-    // Owner-release behavior is unit-tested in artifactLeases.test.ts.
+  // SS5 (BUG-13.7-2): a real owner-release test. The original test was mislabeled
+  // — it called force-release (admin). Owner-release needs agent_id in the body,
+  // which api.delete cannot send, so it goes through the MCP release_artifact tool.
+  leaseTest('lease-release-by-owner', async ({ api, mcp, projectId, cleanup, runMarker }) => {
+    if (!mcp) throw new Error('SKIP: MCP client not connected — release_artifact (with agent_id) is MCP-only');
     const agentId = `agent-release-${runMarker}`;
+    const artifactId = `lease-release-${runMarker}`;
     const c = await api.post(`/api/projects/${projectId}/artifact-leases`, {
       agent_id: agentId,
       artifact_type: 'custom',
-      artifact_id: `lease-release-${runMarker}`,
-      task_description: 'will be released (via force-release as admin equivalent)',
+      artifact_id: artifactId,
+      task_description: 'will be released by its owner',
       ttl_minutes: 5,
     });
     expectStatus(c, 201);
-    const leaseId = c.body.lease_id;
+    cleanup.leaseIds.push({ leaseId: c.body.lease_id, projectId, agentId });
 
-    const r = await api.delete(`/api/projects/${projectId}/artifact-leases/${leaseId}/force`);
-    expectStatus(r, 200);
-    if (r.body.status !== 'force_released') throw new Error(`Expected force_released, got ${r.body.status}`);
+    await mcp.callTool({
+      name: 'release_artifact',
+      arguments: { project_id: projectId, agent_id: agentId, lease_id: c.body.lease_id },
+    });
+
+    // The release worked iff the artifact is available again.
+    const chk = await api.post(`/api/projects/${projectId}/artifact-leases/check`, {
+      artifact_type: 'custom', artifact_id: artifactId,
+    });
+    expectStatus(chk, 200);
+    if (chk.body.available !== true) {
+      throw new Error('expected artifact available after the owner released its lease');
+    }
   }),
 
   leaseTest('lease-renew-extends-ttl', async ({ api, projectId, cleanup, runMarker }) => {
@@ -208,50 +219,13 @@ export const allPhase13LeaseTests: TestFn[] = [
     if (r.body.status !== 'force_released') throw new Error(`Expected force_released, got ${r.body.status}`);
   }),
 
-  leaseTest('lease-sweep-deletes-expired-via-grace-zero', async ({ api, projectId, cleanup, runMarker }) => {
-    // Insert a lease with TTL=1, wait briefly, then enqueue a sweep job with
-    // grace_minutes=0 in the payload. The job runs in the worker process; we
-    // poll the lease list to confirm DELETE. If worker isn't running, the
-    // test logs SKIP rather than hanging.
-    const agentId = `agent-sweep-${runMarker}`;
-    const artifactId = `lease-sweep-${runMarker}`;
-    const c = await api.post(`/api/projects/${projectId}/artifact-leases`, {
-      agent_id: agentId,
-      artifact_type: 'custom',
-      artifact_id: artifactId,
-      task_description: 'will be swept',
-      ttl_minutes: 1,
-    });
-    expectStatus(c, 201);
-    const leaseId = c.body.lease_id;
-
-    // Quick-check: is the worker reachable via a jobs query?
-    // If not, skip (sweep test requires a running worker).
-    const jobsCheck = await api.get(`/api/jobs?limit=1`).catch(() => null);
-    if (!jobsCheck || jobsCheck.status >= 500) {
-      cleanup.leaseIds.push({ leaseId, projectId, agentId });
-      throw new Error('SKIP: worker/jobs endpoint not reachable');
-    }
-
-    // Enqueue sweep with grace_minutes=0 via admin jobs endpoint.
-    // The admin jobs route accepts arbitrary job_type + payload.
-    // If no such endpoint exists, the test SKIPs and the lease cleanup
-    // happens via the registry.
-    const enq = await api.post('/api/jobs', {
-      job_type: 'leases.sweep',
-      payload: { grace_minutes: 0 },
-    }).catch(() => null);
-    if (!enq || enq.status >= 400) {
-      cleanup.leaseIds.push({ leaseId, projectId, agentId });
-      throw new Error('SKIP: cannot enqueue leases.sweep job via REST');
-    }
-
-    // Wait briefly for TTL to elapse (1 min would be slow; for this test,
-    // we use direct SQL via a service-level helper instead). Since the
-    // grace_minutes=0 path means "delete anything already expired", a lease
-    // with TTL=1 needs ~60s wait. To keep tests fast, we instead manually
-    // age the row via the existing service module (not available via REST).
-    // For now: SKIP if we can't manipulate time.
-    throw new Error('SKIP: sweep-with-grace-0 requires server-side TTL aging; covered by unit test sweepExpiredLeases.test.ts');
+  // SS5 (BUG-13.7-2): honest, minimal skip — no fake setup. The sweep DELETE
+  // (sweepExpiredLeases: grace clamping + the expired-row predicate) is covered
+  // by src/services/artifactLeases.test.ts, and the scheduler's advisory-lock +
+  // enqueue path by src/services/sweepScheduler.test.ts. A black-box e2e test
+  // cannot age a lease past the grace window without server-side time control,
+  // so it is recorded as an explicit skip rather than dead setup that pretends.
+  leaseTest('lease-sweep-delete-coverage-note', async () => {
+    throw new Error('SKIP: sweep DELETE covered by artifactLeases.test.ts + sweepScheduler.test.ts unit tests (a fast e2e test would need server-side TTL aging)');
   }),
 ];

@@ -103,6 +103,41 @@ two misleading docs/comments are corrected.
 `/check` with an invalid `artifact_type` → HTTP 400 (was 500); `GET /review-requests?limit=abc` →
 HTTP 200 (was 500); `PATCH` renew on a missing lease → 404.
 
+## SS5 — real E2E coverage ✅ (BUG-13.7-2, BUG-13.7-3)
+
+**Outcome:** the Phase 13 e2e API suite genuinely exercises the F2 lifecycle and all four
+DEFERRED-007 MCP tools — the "94/94 PASS" headline no longer overstates coverage.
+
+- **BUG-13.7-2** — `phase13-reviews.test.ts` rewritten: the F2 lifecycle (submit_for_review via
+  the MCP client → list → detail → approve; submit → return → re-submit) is tested end-to-end
+  (was an unconditional SKIP). All three master-design ✗ transitions are exercised — including
+  `pending-review → superseded` (b), the test the original file's header promised but never
+  shipped. `phase13-mcp.test.ts` now covers all four DEFERRED-007 tools (added `submit_for_review`
+  + `renew_artifact`, previously omitted). `phase13-leases.test.ts`'s `lease-release-by-owner` is
+  a real owner-release test via the MCP `release_artifact` tool (was mislabeled — it called
+  force-release); the infeasible sweep e2e test is a short honest skip citing its real unit
+  coverage. `phase13-cross-feature.test.ts` has a real F2×F3 test replacing a GET shape-check.
+- **BUG-13.7-3** — `phase13-mcp.test.ts`'s claim test (and the new renew test) register every
+  claimed lease for cleanup; the original claim test leaked one lease per run.
+
+**Verify:** `npm run test:e2e:api` → **105/105 passed, 0 failed** against the live SS1-SS4 stack
+— the new F2-lifecycle + ✗-transition + MCP tests pass, and the full pre-existing suite (auth,
+lessons, guardrails, phase10, phase11, …) stays green = no regression from any sub-sprint. tsc clean.
+
+## Phase D complete — all 19 review bugs fixed
+
+| Sub-sprint | Commit | Bugs |
+|---|---|---|
+| SS1 review-gate guard | `29e68fa` | BUG-13.3-2, 13.7-1 |
+| SS2 type-system unification | `5d18196` | BUG-13.5-1, 13.5-2, 13.5-3 |
+| SS3 F2 GUI + review identity | `ce59449` | BUG-13.3-1, 13.4-1/-2/-3/-4, 13.6-1 |
+| SS4 HTTP-contract fixes | `2ccf70b` | BUG-13.1-1/-2/-3, 13.3-3, 13.3-4, 13.2-1 |
+| SS5 real E2E coverage | *(this commit)* | BUG-13.7-2, 13.7-3 |
+
+All 19 bugs from `docs/audit/phase-13-review.md` are resolved on branch `phase-13-bugfix`
+(off `phase-13-dlf-coordination-amaw` @ `acdf202`). 306/306 unit + 105/105 e2e API pass; tsc
+clean (backend + gui). Not yet pushed — awaiting review.
+
 ---
 
 # Session 2026-05-15 (cont.) — Phase 13 post-hoc REVIEW + AMAW quality assessment (COMPLETE — see Phase D bug-fix above)
