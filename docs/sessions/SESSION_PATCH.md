@@ -1,3 +1,84 @@
+# LONGRUN SESSION-2 BOUNDARY HANDOFF
+
+**Session 2 of the autonomous longrun is closing at the Sprint 13.6 retro boundary. Only Sprint 13.7 (E2E + final cumulative scope check) remains.**
+
+## State at session-2 boundary
+
+- Branch: `phase-13-dlf-coordination-amaw` at commit `7d690a1` (Sprint 13.6 complete)
+- All commits pushed to origin
+- `.workflow-state.json` is at `retro` for Sprint 13.6 (12 phases done; will reset on next sprint)
+- Docker stack: 8/8 containers running with latest code (mcp, worker, gui all rebuilt)
+- 302/302 backend unit tests pass; tsc clean (backend + gui)
+- All sprints 13.2-13.6 ACs verified by Scope Guard CLEAR verdicts
+- DEFERRED.md: 005 RESOLVED; 004 PARTIAL; 006 OPEN; 007 OPEN (HIGH)
+
+## Session 2 commits
+
+| Commit | Sprint | Wall-clock | Description |
+|---|---|---|---|
+| `e8d9b66` | DEFERRED-005 hotfix | ~30m | Geist npm package replaces next/font/google (unblocks GUI builds) |
+| `779775b` | 13.4 (F2 GUI) | ~45m | Submitted for Review tab + approve/return |
+| `47954d1` | 13.5 (F3 core) | ~75m | taxonomy_profiles + codex-guardrail engine + lesson_type centralization |
+| `7d690a1` | 13.6 (F3 GUI) | ~25m | Taxonomy panel on Project Settings |
+
+Session 2 total: ~3h wall-clock; 4 commits; +12 unit tests (Sprint 13.5).
+
+## What session 3 should do (Sprint 13.7)
+
+Sprint 13.7 is the **final sprint** of the longrun. Per longrun plan §8 + master design:
+
+1. **E2E test suite** covering all of F1+F2+F3:
+   - Artifact-lease lifecycle (claim → renew → release → sweep)
+   - Review-request lifecycle (submit → approve / return → re-submit)
+   - Taxonomy lifecycle (activate → add codex-guardrail → check_guardrails matches → deactivate)
+   - Cross-feature: F1+F2 integration (submit_for_review releases the lease implicitly per master design "Inter-feature integration")
+2. **Phase 1-12 regression check**: run existing e2e suites (`npm run test:e2e:smoke`, `test:e2e:api`, `test:e2e:gui`, `test:e2e:agent`) and confirm no regressions
+3. **DEFERRED-006 trigger met**: implement auth-enabled integration smoke (docker-compose.auth-test.yml + 4 e2e cases for requireScope 403 + admin/writer/reader paths)
+4. **DEFERRED-004 broader audit**: enumerate remaining admin routes lacking requireScope; apply where appropriate (rollout from Sprint 13.2 + 13.5 partial)
+5. **DEFERRED-007 fix**: investigate MCP discriminatedUnion `_zod` regression; likely zod-v4 / @modelcontextprotocol/sdk version pin
+6. **Final cumulative scope check** across all phases (13.2-13.7 + Phase 1-12 prior baseline)
+7. **Phase 13 retrospective**: lessons learned across the longrun; calibration synthesis (full-mode vs compressed-mode vs hyper-compressed-mode AMAW)
+
+Estimated wall-clock for Sprint 13.7: 2-4 hours. Recommend dedicated session.
+
+## DEFERRED items at session-2 close
+
+| ID | Status | Priority | Trigger for resolution |
+|---|---|---|---|
+| 001 | OPEN | (Phase 14 carry-over) | Phase 14 model routing |
+| 002 | (unknown — pre-Phase-13) | — | — |
+| 003 | OPEN | LOW | Sprint 13.7 |
+| 004 | PARTIAL | MED | Sprint 13.7 broader admin-route audit |
+| 005 | RESOLVED | — | (fixed by e8d9b66 in session 2) |
+| 006 | OPEN | MED | Sprint 13.7 E2E plan |
+| 007 | OPEN | HIGH | Sprint 13.7 investigation; affects MCP tools w/ discriminatedUnion |
+
+## Session 1+2 cumulative calibration
+
+| Sprint | Mode | Adversary rounds | Wall-clock |
+|---|---|---|---|
+| 13.2 (F1: TTL + GUI) | full | 6 (3 design + 3 code) + 3 post-audit cycles | ~3h |
+| 13.3 (F2 core) | compressed | 2 (1 design + 1 code) | ~1h |
+| 13.4 (F2 GUI) | hyper-compressed | 0 (Scope Guard only) | ~45m |
+| 13.5 (F3 core) | compressed | 1 (design only) | ~75m |
+| 13.6 (F3 GUI) | hyper-compressed | 0 (Scope Guard only) | ~25m |
+
+**Compression-time pareto:** full mode catches the most but takes 3-5x longer; compressed is the sweet spot for moderate-risk backend; hyper-compressed is right for low-risk GUI work where deploy-state smoke is the gate.
+
+## Suggested approach for Sprint 13.7
+
+**Option A (recommended):** Full mode AMAW for the E2E test plan (3 Adversary rounds on the test suite design — test gaps are exactly what they catch best). Compressed for the DEFERRED-007 fix + DEFERRED-004 audit + DEFERRED-006 smoke. Wall-clock: ~3-4h.
+
+**Option B:** Compressed-mode for everything; Scope Guard CLEAR is the gate. Faster (~2h) but skips test-coverage-gap-finding which is the test sprint's specific value.
+
+**Option C:** Split 13.7 into 13.7a (E2E test suite, full mode) and 13.7b (deferred cleanup, compressed). Costs slightly more time but isolates risk.
+
+User to choose at session 3 start.
+
+---
+
+# LONGRUN SESSION-1 BOUNDARY HANDOFF
+
 ---
 id: HANDOFF-2026-05-15-LONGRUN-SESSION1-BOUNDARY
 date: 2026-05-15
