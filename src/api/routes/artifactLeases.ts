@@ -52,14 +52,7 @@ router.post('/', requireRole('writer'), async (req, res, next) => {
       ttl_minutes: typeof ttl_minutes === 'number' ? ttl_minutes : undefined,
     });
     res.status(result.status === 'claimed' ? 201 : 200).json(result);
-  } catch (e) {
-    const err = e as Error;
-    if (err.message?.startsWith('artifact_id must be') || err.message?.startsWith('claim_artifact:')) {
-      res.status(400).json({ error: err.message });
-      return;
-    }
-    next(e);
-  }
+  } catch (e) { next(e); }  // SS4 (BUG-13.1-1): service throws ContextHubError → errorHandler maps BAD_REQUEST→400
 });
 
 // v2-r1 fix (BLOCK 1): GET /:leaseId removed — bypassed service + wrong
@@ -97,19 +90,13 @@ router.patch('/:leaseId', requireRole('writer'), async (req, res, next) => {
       lease_id: leaseId,
       extend_by_minutes,
     });
-    if (result.status === 'not_found') {
-      res.status(404).json(result);
-      return;
-    }
+    // SS4 (BUG-13.1-3): map ownership/state failures to real status codes —
+    // not_owner→403 (matches the release route), expired→409 Conflict.
+    if (result.status === 'not_found') { res.status(404).json(result); return; }
+    if (result.status === 'not_owner') { res.status(403).json(result); return; }
+    if (result.status === 'expired') { res.status(409).json(result); return; }
     res.json(result);
-  } catch (e) {
-    const err = e as Error;
-    if (err.message?.startsWith('extend_by_minutes')) {
-      res.status(400).json({ error: err.message });
-      return;
-    }
-    next(e);
-  }
+  } catch (e) { next(e); }  // SS4 (BUG-13.1-1): ContextHubError → errorHandler maps BAD_REQUEST→400
 });
 
 router.delete('/:leaseId/force', requireRole('admin'), requireScope('id'), async (req, res, next) => {

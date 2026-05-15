@@ -368,12 +368,11 @@ Side effects:
   2. INSERT INTO review_requests (...)
   3. INSERT INTO audit_log (action_type = 'lesson.submitted-for-review', ...)
 
-Output:
-  request_id: UUID
-  lesson_id: UUID
-  lesson_title: string
-  status: 'pending'
-  created_at: ISO timestamp
+Output (result object, discriminated on `status`):
+  status: 'submitted' | 'lesson_not_found' | 'wrong_lesson_status' | 'already_pending'
+  on status='submitted':           request_id, lesson_id, lesson_title, created_at
+  on status='wrong_lesson_status': current_status
+  on status='already_pending':     existing_request_id
 ```
 
 **`list_review_requests`**

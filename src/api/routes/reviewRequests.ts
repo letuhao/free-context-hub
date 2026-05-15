@@ -42,8 +42,12 @@ router.get('/', async (req, res, next) => {
       ? req.query.status as 'pending' | 'approved' | 'returned'
       : undefined;
     const submitted_by = req.query.submitted_by ? String(req.query.submitted_by) : undefined;
-    const limit = req.query.limit ? Math.min(parseInt(String(req.query.limit), 10), 100) : 20;
-    const offset = req.query.offset ? parseInt(String(req.query.offset), 10) : 0;
+    // SS4 (BUG-13.3-3): a non-numeric ?limit / ?offset must not become NaN
+    // (which reaches SQL as `LIMIT NaN` → Postgres error → HTTP 500).
+    const limitRaw = parseInt(String(req.query.limit ?? ''), 10);
+    const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 100) : 20;
+    const offsetRaw = parseInt(String(req.query.offset ?? ''), 10);
+    const offset = Number.isFinite(offsetRaw) ? Math.max(offsetRaw, 0) : 0;
     res.json(await listReviewRequests({ project_id: projectId, status, submitted_by, limit, offset }));
   } catch (e) { next(e); }
 });

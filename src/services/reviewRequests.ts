@@ -177,8 +177,12 @@ export async function listReviewRequests(params: {
 }): Promise<{ items: ReviewRequestRow[]; total_count: number }> {
   const pool = getDbPool();
   const status = params.status ?? 'pending';
-  const limit = Math.min(Math.max(params.limit ?? 20, 1), 100);
-  const offset = Math.max(params.offset ?? 0, 0);
+  // SS4 (BUG-13.3-3): coerce non-finite (NaN) limit/offset to defaults — `??`
+  // alone does not catch NaN, which would reach SQL as `LIMIT NaN`.
+  const limit = typeof params.limit === 'number' && Number.isFinite(params.limit)
+    ? Math.min(Math.max(params.limit, 1), 100) : 20;
+  const offset = typeof params.offset === 'number' && Number.isFinite(params.offset)
+    ? Math.max(params.offset, 0) : 0;
 
   const where: string[] = [`rr.project_id = $1`, `rr.status = $2`];
   const args: unknown[] = [params.project_id, status];

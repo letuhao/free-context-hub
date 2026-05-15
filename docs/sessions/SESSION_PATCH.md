@@ -80,6 +80,29 @@ deploy-state smoke — backend + gui rebuilt; `GET /review-requests/:reqId` retu
 `POST /approve` → HTTP 200 `resolved`, DB shows `resolved_by='dev-mode-admin'` (server-derived) +
 lesson `active`.
 
+## SS4 — HTTP-contract fixes ✅ (BUG-13.1-1/-2/-3, 13.3-3, 13.3-4, 13.2-1)
+
+**Outcome:** client-input errors return 4xx (not 500), renew failures use real status codes, and
+two misleading docs/comments are corrected.
+
+- **BUG-13.1-1 + 13.1-2** — `artifactLeases.ts` input validation now throws
+  `ContextHubError('BAD_REQUEST', …)` instead of a plain `Error`; the routes drop their brittle
+  message-prefix matching and just `next(e)`, so `errorHandler` maps BAD_REQUEST → 400. An invalid
+  `artifact_type` on `POST /artifact-leases` or `/check` returns 400, not 500.
+- **BUG-13.1-3** — `PATCH /artifact-leases/:id` (renew) maps `not_owner` → 403 (matching the
+  release route) and `expired` → 409; both used to fall through to HTTP 200.
+- **BUG-13.3-3** — `GET /review-requests?limit=abc` no longer 500s: the route and
+  `listReviewRequests` coerce non-finite `limit`/`offset` to defaults (`??` alone misses `NaN`).
+- **BUG-13.3-4** — `docs/phase-13-design.md` `submit_for_review` output corrected to the
+  discriminated-result shape (`status: submitted | lesson_not_found | …`), matching the impl.
+- **BUG-13.2-1** — `sweepScheduler.ts` header/comments corrected: the advisory lock is NOT
+  multi-replica leader election — it only collapses the rare simultaneous case, harmless because
+  the sweep DELETE is idempotent.
+
+**Verify:** 306/306 unit tests pass; tsc clean; deploy-state smoke — `POST /artifact-leases` and
+`/check` with an invalid `artifact_type` → HTTP 400 (was 500); `GET /review-requests?limit=abc` →
+HTTP 200 (was 500); `PATCH` renew on a missing lease → 404.
+
 ---
 
 # Session 2026-05-15 (cont.) — Phase 13 post-hoc REVIEW + AMAW quality assessment (COMPLETE — see Phase D bug-fix above)
