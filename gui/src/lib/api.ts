@@ -663,6 +663,32 @@ export const api = {
     return request<any>("GET", `/api/jobs?${qs.toString()}`);
   },
 
+  // ── Phase 13 Sprint 13.6: taxonomy profile APIs ──
+  listTaxonomyProfiles: (params: { owner_project_id?: string | null; is_builtin?: boolean } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.owner_project_id === null) qs.set("owner_project_id", "null");
+    else if (params.owner_project_id) qs.set("owner_project_id", params.owner_project_id);
+    if (params.is_builtin !== undefined) qs.set("is_builtin", String(params.is_builtin));
+    const query = qs.toString();
+    return request<{ profiles: TaxonomyProfile[] }>("GET", `/api/taxonomy-profiles${query ? `?${query}` : ""}`);
+  },
+  getActiveTaxonomyProfile: (projectId: string) =>
+    request<{ profile: TaxonomyProfile | null }>(
+      "GET",
+      `/api/projects/${encodeURIComponent(projectId)}/taxonomy-profile`,
+    ),
+  activateTaxonomyProfile: (projectId: string, body: { slug: string; activated_by?: string }) =>
+    request<{ status: "activated" | "profile_not_found"; profile?: TaxonomyProfile }>(
+      "POST",
+      `/api/projects/${encodeURIComponent(projectId)}/taxonomy-profile/activate`,
+      body,
+    ),
+  deactivateTaxonomyProfile: (projectId: string) =>
+    request<{ status: "deactivated" | "no_active_profile" }>(
+      "DELETE",
+      `/api/projects/${encodeURIComponent(projectId)}/taxonomy-profile`,
+    ),
+
   // ── Phase 13 Sprint 13.4: review-request APIs ──
   listReviewRequests: (projectId: string, params: { status?: "pending" | "approved" | "returned"; submitted_by?: string; limit?: number; offset?: number } = {}) => {
     const qs = new URLSearchParams();
@@ -722,6 +748,27 @@ export interface LeaseSummary {
   task_description: string;
   expires_at: string;
   seconds_remaining: number;
+}
+
+// ── Phase 13 Sprint 13.6 types ──
+export interface ProfileLessonType {
+  type: string;
+  label: string;
+  description?: string;
+  color?: string;
+}
+
+export interface TaxonomyProfile {
+  profile_id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  version: string;
+  lesson_types: ProfileLessonType[];
+  is_builtin: boolean;
+  owner_project_id: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 // ── Phase 13 Sprint 13.4 types ──

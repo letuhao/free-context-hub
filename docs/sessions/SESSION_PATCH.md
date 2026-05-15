@@ -11,6 +11,51 @@ session1_sprints_remaining: [13.4, 13.5, 13.6, 13.7]
 next_session_resumption_protocol: longrun plan §5 R1-R6
 ---
 
+# Longrun — Sprint 13.6 (F3 GUI: Taxonomy panel) — COMPLETE (session 2)
+
+**Sprint 13.6 outcome: SHIPPED.** GUI-F3 ACs 1-5 covered. Taxonomy panel rendered live on `/projects/settings`; REST get/activate/deactivate flows verified end-to-end.
+
+## Files changed (Sprint 13.6)
+
+| File | Type | Change |
+|---|---|---|
+| `gui/src/lib/api.ts` | MOD | + 4 taxonomy methods (listTaxonomyProfiles, getActiveTaxonomyProfile, activate, deactivate) + ProfileLessonType + TaxonomyProfile types |
+| `gui/src/app/projects/settings/taxonomy-panel.tsx` | NEW | TaxonomyPanel component (active profile + picker + deactivate dialog) |
+| `gui/src/app/projects/settings/page.tsx` | MOD | Mount TaxonomyPanel between ExchangePanel and Danger Zone |
+
+3 files total. M size.
+
+## Deploy-state smoke
+
+| Check | Result |
+|---|---|
+| `npx tsc --noEmit` in gui/ | ✅ green |
+| `npm run build` in gui/ | ✅ green (24 routes) |
+| `docker compose up -d --build gui` | ✅ green |
+| `curl /projects/settings` finds "Taxonomy" in HTML | ✅ green |
+| REST GET active profile (dlf-phase0 active from 13.5) | ✅ green |
+| REST DELETE deactivate | ✅ green |
+| REST POST /activate re-activation | ✅ green |
+
+## AMAW calibration — Sprint 13.6
+
+| Metric | Value |
+|---|---|
+| Adversary rounds | 0 (compressed-mode GUI sprint following 13.4 pattern) |
+| New tests | 0 (live smoke as gate) |
+| Wall-clock | ~25 min |
+
+## Session 2 cumulative state
+
+- e8d9b66 — DEFERRED-005 fix
+- 779775b — Sprint 13.4 (F2 GUI)
+- 47954d1 — Sprint 13.5 (F3 core)
+- *Sprint 13.6 commit pending*
+
+Remaining: 13.7 (E2E + final cumulative scope check) — substantial work; recommend dedicated session.
+
+---
+
 # Longrun — Sprint 13.5 (F3 core: Domain Taxonomy Extension) — COMPLETE (session 2)
 
 **Sprint 13.5 outcome: SHIPPED.** All 8 F3 ACs (F3-AC1 through F3-AC8) COVERED per Scope Guard CLEAR verdict. Cumulative scope check across 13.2-13.5 also CLEAR (closes the 13.3-boundary cumulative debt).
