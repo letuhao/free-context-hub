@@ -24,6 +24,7 @@ import {
   approveReviewRequest,
   returnReviewRequest,
 } from './reviewRequests.js';
+import { updateLessonStatus } from './lessons.js';
 import { getDbPool } from '../db/client.js';
 
 const TEST_PROJECT = '__test_review_requests__';
@@ -244,4 +245,27 @@ test('approve does NOT promote lesson that has been moved out of pending-review 
   assert.equal(lr.rows[0].status, 'archived');
   const rr = await pool.query(`SELECT status FROM review_requests WHERE request_id = $1`, [submitR.request_id]);
   assert.equal(rr.rows[0].status, 'pending');
+});
+
+// ── BUG-13.3-2 / BUG-13.7-1 fix: update_lesson_status must not move a lesson
+//    OUT of 'pending-review'. A lesson under review leaves that state ONLY via
+//    the review-request approve/return flow (resolveRequest runs its own guarded
+//    UPDATE and does not call updateLessonStatus). The 13.7 guard only blocked
+//    pending-review → superseded/archived; → active and → draft leaked through,
+//    bypassing review and orphaning the review_requests row.
+test('update_lesson_status cannot move a lesson OUT of pending-review (BUG-13.3-2 / 13.7-1)', async () => {
+  const lessonId = await insertLesson('pending-review');
+  for (const target of ['active', 'draft', 'superseded'] as const) {
+    const r = await updateLessonStatus({ projectId: TEST_PROJECT, lessonId, status: target });
+    assert.equal(r.status, 'error', `pending-review → ${target} must be rejected`);
+  }
+  const pool = getDbPool();
+  const lr = await pool.query(`SELECT status FROM lessons WHERE lesson_id = $1`, [lessonId]);
+  assert.equal(lr.rows[0].status, 'pending-review', 'lesson status unchanged after rejected transitions');
+});
+
+test('update_lesson_status rejects any → pending-review (BUG-13.3-2 / 13.7-1)', async () => {
+  const activeId = await insertLesson('active');
+  const r = await updateLessonStatus({ projectId: TEST_PROJECT, lessonId: activeId, status: 'pending-review' });
+  assert.equal(r.status, 'error', 'active → pending-review must be rejected');
 });

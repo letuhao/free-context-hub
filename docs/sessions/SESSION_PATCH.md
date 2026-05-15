@@ -1,4 +1,33 @@
-# Session 2026-05-15 (cont.) — Phase 13 post-hoc REVIEW + AMAW quality assessment (IN PROGRESS)
+# Session 2026-05-15 (cont.) — Phase 13 bug-fix (Phase D of the review)
+
+**Task:** fix all 19 bugs from the Phase 13 post-hoc review (`docs/audit/phase-13-review.md`).
+Branch `phase-13-bugfix` off `phase-13-dlf-coordination-amaw`; review committed at `acdf202`.
+User decisions: fix all 19; BUG-13.5-1 → unify the two lesson-type systems (with data migration);
+BUG-13.3-1 → gate F2 approve/return to `admin` + derive `resolved_by` from the authenticated key.
+
+Plan — 5 sub-sprints, each BUILD→VERIFY→checkpoint: SS1 review-gate guard · SS2 type-system
+unification · SS3 F2 GUI + identity · SS4 HTTP-contract fixes · SS5 E2E coverage.
+
+## SS1 — review-gate guard ✅ (BUG-13.3-2, BUG-13.7-1, BUG-13.4-1 symptom)
+
+**Outcome:** the `pending-review` review gate can no longer be bypassed via `update_lesson_status`.
+
+- `src/services/lessons.ts` — `updateLessonStatus` now rejects **all** `pending-review → *`
+  transitions. The Sprint 13.7 guard only blocked `→superseded/archived`; `→active`/`→draft`
+  leaked, re-opening BUG-13.3-2. A lesson leaves `pending-review` only via the review-request
+  approve/return flow (`resolveRequest`, which runs its own guarded UPDATE and never calls
+  `updateLessonStatus`).
+- `gui/src/app/lessons/lesson-detail.tsx` — the LessonDetail "Approve" button (a direct
+  `draft→active` status change) no longer renders for `pending-review` lessons — the GUI symptom
+  of BUG-13.4-1.
+- `src/services/reviewRequests.test.ts` — +2 regression tests (TDD: the OUT-of-pending-review
+  test was RED before the fix).
+
+**Verify:** 304/304 unit tests pass (+2 new); `npx tsc --noEmit` clean (backend + gui).
+
+---
+
+# Session 2026-05-15 (cont.) — Phase 13 post-hoc REVIEW + AMAW quality assessment (COMPLETE — see Phase D bug-fix above)
 
 **Task:** review every Phase 13 sprint (13.1–13.7) for bugs, and evaluate AMAW workflow
 quality. Collaborative — human is in the loop, checkpoint after each sprint. Not a feature

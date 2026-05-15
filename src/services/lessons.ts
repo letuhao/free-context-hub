@@ -1525,25 +1525,27 @@ export async function updateLessonStatus(params: {
   const currentStatus = existing.rows[0].status;
   const targetStatus = params.status;
 
-  // ── Phase 13 transition rule table (master design L275-281) ──
-  // (a) {active, superseded, archived} → pending-review : ✗ (must use submit_for_review)
-  // (b) pending-review → {superseded, archived}         : ✗ (must resolve review request first)
-  // (c) draft → pending-review (any path)               : ✗ (must use submit_for_review)
-  //
-  // The MCP zod schema already restricts the target to LESSON_STATUS_WRITABLE
-  // (no 'pending-review'), so targetStatus==='pending-review' should be
-  // unreachable via MCP — but REST + import paths bypass that, and we want a
-  // single defense-in-depth layer here.
+  // ── Phase 13 status-transition guard (master design L275-281; review BUG-13.3-2 / 13.7-1) ──
+  // 'pending-review' is a managed state: it is ENTERED only via submit_for_review
+  // and LEFT only via the review-request approve/return flow (resolveRequest runs
+  // its own guarded UPDATE and does NOT call updateLessonStatus). update_lesson_status
+  // must therefore reject 'pending-review' on BOTH sides:
+  //   (a) any → pending-review   ✗  use submit_for_review
+  //   (b) pending-review → any   ✗  use the review-request approve/return flow
+  // The 13.7 r3-F1 fix only blocked (b) for superseded/archived targets, leaving
+  // pending-review → active/draft open — which bypassed review and orphaned the
+  // review_requests row (BUG-13.7-1). This is the single source of truth for the
+  // REST + MCP + import callers.
   if (targetStatus === 'pending-review') {
     return {
       status: 'error',
       error: `Cannot transition '${currentStatus}' → 'pending-review' via update_lesson_status. Use submit_for_review to create a review request.`,
     };
   }
-  if (currentStatus === 'pending-review' && (targetStatus === 'superseded' || targetStatus === 'archived')) {
+  if (currentStatus === 'pending-review') {
     return {
       status: 'error',
-      error: `Cannot transition 'pending-review' → '${targetStatus}' directly. Resolve the review request first (approve or return).`,
+      error: `Cannot transition 'pending-review' → '${targetStatus}' via update_lesson_status. A lesson under review leaves 'pending-review' only through the review-request approve/return flow.`,
     };
   }
 
