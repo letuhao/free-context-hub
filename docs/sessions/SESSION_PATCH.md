@@ -25,6 +25,33 @@ unification · SS3 F2 GUI + identity · SS4 HTTP-contract fixes · SS5 E2E cover
 
 **Verify:** 304/304 unit tests pass (+2 new); `npx tsc --noEmit` clean (backend + gui).
 
+## SS2 — lesson-type system unification ✅ (BUG-13.5-1, BUG-13.5-2, BUG-13.5-3)
+
+**Outcome:** the Phase 8 `lesson_types` table and the Phase 13 `taxonomy_profiles` are now one
+system — `lesson_types` is the single type-definition registry; profiles store `type_key`
+references into it. `add_lesson` once again accepts Phase 8 custom lesson types (BUG-13.5-1).
+Architecture Option 1; design doc `docs/specs/2026-05-15-ss2-type-system-unification.md`.
+
+- `migrations/0052_unify_lesson_types.sql` (NEW) — `lesson_types.scope` column (`global` =
+  always-valid · `profile` = valid only via an active profile); converts every
+  `taxonomy_profiles.lesson_types` JSONB from inline objects to `type_key` string-arrays,
+  registering each type. Idempotent + data-preserving (verified: applied twice, no double-convert).
+- `src/services/taxonomyService.ts` — `getValidLessonTypes` resolves from the registry
+  (`scope='global'` types + active-profile types); profiles store/return via registry hydration
+  so the REST + MCP output contracts are unchanged. **Closes BUG-13.5-1.**
+- `src/services/lessonTypes.ts` — `type_key` regex allows hyphens (DLF types); `createLessonType`
+  writes `scope='global'`; `listLessonTypes` returns `scope='global'` rows only (admin page +
+  add-lesson dropdown unchanged vs pre-SS2); `deleteLessonType` blocks `scope='profile'` types.
+- `src/kg/linker.ts` — drives the guardrail-class set from `GUARDRAIL_LESSON_TYPES`. **BUG-13.5-2.**
+- `config/taxonomy-profiles/dlf-phase0.json` + `taxonomy-panel.tsx` — named colors; the panel
+  renders via `getTypeBadgeStyle`. **BUG-13.5-3.**
+- `src/services/taxonomyService.test.ts` — updated for the registry model + a BUG-13.5-1
+  regression test.
+
+**Verify:** migration applied idempotently; 305/305 unit tests pass; tsc clean (backend + gui);
+deploy-state smoke — backend rebuilt, bootstrap re-seeds dlf-phase0, DLF colors refreshed to
+named, REST `POST /api/lessons` with a Phase 8 custom type → HTTP 201 (pre-SS2: 400).
+
 ---
 
 # Session 2026-05-15 (cont.) — Phase 13 post-hoc REVIEW + AMAW quality assessment (COMPLETE — see Phase D bug-fix above)

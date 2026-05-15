@@ -10,6 +10,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { api, type TaxonomyProfile } from "@/lib/api";
+import { getTypeBadgeStyle } from "@/lib/use-lesson-types";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -140,12 +141,7 @@ export function TaxonomyPanel({ projectId }: TaxonomyPanelProps) {
                   {active.lesson_types.map((lt) => (
                     <span
                       key={lt.type}
-                      className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md border"
-                      style={{
-                        backgroundColor: lt.color ? `${lt.color}15` : "rgba(63,63,70,0.4)",
-                        borderColor: lt.color ? `${lt.color}40` : "rgb(63,63,70)",
-                        color: lt.color ?? "rgb(212,212,216)",
-                      }}
+                      className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md ${getTypeBadgeStyle(lt.color ?? "zinc")}`}
                       title={lt.description}
                     >
                       {lt.label}

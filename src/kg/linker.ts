@@ -1,11 +1,14 @@
 import { getEnv } from '../env.js';
 import type { LessonType } from '../services/lessons.js';
+import { GUARDRAIL_LESSON_TYPES } from '../constants/lessonTypes.js';
 import { getNeo4jDriver } from './client.js';
 import { normalizeRepoPath } from './ids.js';
 
 function edgeForLessonType(t: LessonType): 'MENTIONS' | 'CONSTRAINS' | 'PREFERS' {
-  // Phase 13 Sprint 13.5: codex-guardrail joins guardrail in the CONSTRAINS class.
-  if (t === 'guardrail' || t === 'codex-guardrail') return 'CONSTRAINS';
+  // Phase 13 bug-fix SS2 (BUG-13.5-2): drive the guardrail-class set from the
+  // GUARDRAIL_LESSON_TYPES constant — the single source of truth, also used by
+  // lessons.ts — so a future guardrail-class type is picked up here automatically.
+  if ((GUARDRAIL_LESSON_TYPES as readonly string[]).includes(t)) return 'CONSTRAINS';
   if (t === 'preference') return 'PREFERS';
   return 'MENTIONS';
 }

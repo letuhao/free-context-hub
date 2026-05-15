@@ -8,31 +8,31 @@
       "type": "reckoning-finding",
       "label": "Reckoning Finding",
       "description": "Current state observation (§1 Current State Audit).",
-      "color": "#6366f1"
+      "color": "blue"
     },
     {
       "type": "candidate-decision",
       "label": "Candidate Decision",
       "description": "Past decision candidate (§2). Status pending-review = [AI candidate] awaiting project-owner confirmation.",
-      "color": "#f59e0b"
+      "color": "amber"
     },
     {
       "type": "failure-candidate",
       "label": "Failure Candidate",
       "description": "Architect-rot or failure pattern (§3 Failure Inventory).",
-      "color": "#ef4444"
+      "color": "red"
     },
     {
       "type": "implicit-principle",
       "label": "Implicit Principle",
       "description": "\"Of course we'll...\" pattern surfaced for §4. AI aide writes independently before project-owner contribution.",
-      "color": "#10b981"
+      "color": "emerald"
     },
     {
       "type": "codex-guardrail",
       "label": "Codex Guardrail",
       "description": "Hard Stop (HS-*) or Notify Trigger (N-*) from an agent Codex. Fed into check_guardrails engine same as 'guardrail' type.",
-      "color": "#8b5cf6"
+      "color": "purple"
     }
   ]
 }
