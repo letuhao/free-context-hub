@@ -1512,12 +1512,39 @@ export async function updateLessonStatus(params: {
 }): Promise<{ status: 'ok' | 'error'; error?: string }> {
   const pool = getDbPool();
 
-  const existing = await pool.query(`SELECT lesson_id FROM lessons WHERE project_id=$1 AND lesson_id=$2`, [
-    params.projectId,
-    params.lessonId,
-  ]);
+  // Phase 13 Sprint 13.7 r3 F1 fix: read current status as part of the existence check
+  // so we can enforce the master design L275-281 ✗ transition table at the service
+  // layer (single source of truth for REST + MCP + import).
+  const existing = await pool.query<{ status: string }>(
+    `SELECT status FROM lessons WHERE project_id=$1 AND lesson_id=$2`,
+    [params.projectId, params.lessonId],
+  );
   if (!existing.rowCount) {
     return { status: 'error', error: 'lesson not found for project' };
+  }
+  const currentStatus = existing.rows[0].status;
+  const targetStatus = params.status;
+
+  // ── Phase 13 transition rule table (master design L275-281) ──
+  // (a) {active, superseded, archived} → pending-review : ✗ (must use submit_for_review)
+  // (b) pending-review → {superseded, archived}         : ✗ (must resolve review request first)
+  // (c) draft → pending-review (any path)               : ✗ (must use submit_for_review)
+  //
+  // The MCP zod schema already restricts the target to LESSON_STATUS_WRITABLE
+  // (no 'pending-review'), so targetStatus==='pending-review' should be
+  // unreachable via MCP — but REST + import paths bypass that, and we want a
+  // single defense-in-depth layer here.
+  if (targetStatus === 'pending-review') {
+    return {
+      status: 'error',
+      error: `Cannot transition '${currentStatus}' → 'pending-review' via update_lesson_status. Use submit_for_review to create a review request.`,
+    };
+  }
+  if (currentStatus === 'pending-review' && (targetStatus === 'superseded' || targetStatus === 'archived')) {
+    return {
+      status: 'error',
+      error: `Cannot transition 'pending-review' → '${targetStatus}' directly. Resolve the review request first (approve or return).`,
+    };
   }
 
   if (params.supersededBy) {

@@ -1,0 +1,14 @@
+# Phase 13 Sprint 13.7 - auth-enabled override for DEFERRED-006 integration smoke.
+# Used as: docker compose -f docker-compose.yml -f docker-compose.auth-test.yml up -d
+#
+# Flips MCP_AUTH_ENABLED=true so bearerAuth middleware actually requires a token
+# and seeded DB-backed keys exercise the requireRole + requireScope code paths.
+# The base CONTEXT_HUB_WORKSPACE_TOKEN remains the env-var admin token.
+
+services:
+  mcp:
+    environment:
+      MCP_AUTH_ENABLED: "true"
+  worker:
+    environment:
+      MCP_AUTH_ENABLED: "true"

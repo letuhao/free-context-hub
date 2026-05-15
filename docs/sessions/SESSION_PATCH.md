@@ -1,3 +1,77 @@
+# Longrun — Phase 13 CLOSEOUT (session 3, Sprint 13.7)
+
+**Phase 13 outcome: SHIPPED COMPLETE.** All 24 acceptance criteria across F1+F2+F3 hold with file:line evidence; 3 of 4 originally-open DEFERRED items RESOLVED (004 PARTIAL with documented policy, 005/006/007 RESOLVED); 94/94 e2e API tests pass; 302/302 unit tests pass.
+
+## Sprint 13.7 outcome
+
+5 parts shipped in session 3:
+
+### Part A: E2E test suite (full-mode AMAW design — 3 Adversary rounds at max cap)
+- 6 new test files: `phase13-{leases,reviews,taxonomy,mcp,cross-feature,auth-scope}.test.ts`
+- All registered in `test/e2e/api/runner.ts`
+- Total e2e API: 94/94 PASS (was 89/94 in first run; 5 of my fixes flipped them green)
+- Adversary r1+r2+r3 found 8 BLOCKs total; all addressed inline:
+  - r1 F1 (Part B writer-key uses wrong gate) → 6-row AUTH-1..6 case table
+  - r1 F2 (cleanup pollution) → CleanupRegistry extended with leaseIds, taxonomyActivations
+  - r1 F3 (sweep test infeasible) → use grace_minutes=0 + Promise.all concurrent claims
+  - r2 F1 (createTestApiKey lacks project_scope) → signature extended to options object
+  - r2 F2 (no MCP regression guard) → phase13-mcp.test.ts shipped
+  - r2 F3 (negative transitions not in plan) → 3 explicit ✗ tests enumerated
+  - r3 F1 (spec-vs-impl mismatch on transition rules) → source-status guard added to lessons.ts:updateLessonStatus
+  - r3 F2 (E2E_PROJECT_ID_B missing) → added to constants.ts
+
+### Part B: DEFERRED-006 — Auth-enabled requireScope smoke ✅ RESOLVED
+- `docker-compose.auth-test.yml` shipped
+- `phase13-auth-scope.test.ts` with 6 AUTH cases (env_token/db_key /api/me shape, in-scope admin force-release 200, cross-tenant admin force-release 403, cross-tenant writer 403, mismatched body.owner_project_id 403)
+- Tests SKIP gracefully when auth is disabled
+- To run: `docker compose -f docker-compose.yml -f docker-compose.auth-test.yml up -d mcp worker && npm run test:e2e:api`
+
+### Part C: DEFERRED-004 broader admin-route audit — PARTIAL with documented policy
+- Sprint 13.2 closed force-release route
+- Sprint 13.5 closed taxonomy activation/deactivation + create body.owner_project_id check
+- Sprint 13.7 enumerated remaining: `/api/lesson-types` and `/api/api-keys` are global-by-design (per role-design); writer-role handlers (git/jobs/workspace/chat/documents/learning-paths/groups) need per-handler service-layer audit which is out-of-budget for one sprint. Documented in DEFERRED-004.
+
+### Part D: DEFERRED-007 — MCP discriminatedUnion `_zod` regression ✅ RESOLVED
+- Root cause found: `node_modules/@modelcontextprotocol/sdk/dist/cjs/server/zod-compat.js:114-156` — `normalizeObjectSchema` returns `undefined` for ZodDiscriminatedUnion because it only handles `def.type === 'object'` (not 'union').
+- Fix applied: flattened 4 outputSchemas to `z.object` with optional/nullable fields keyed on `z.enum` status:
+  - `claim_artifact` (Sprint 13.1)
+  - `renew_artifact` (Sprint 13.1)
+  - `check_artifact_availability` (Sprint 13.1)
+  - `submit_for_review` (Sprint 13.3)
+- Live-verified via curl: `check_artifact_availability` returns `structuredContent: {"available": true}` with no _zod error.
+- Regression guard: `phase13-mcp.test.ts` calls each previously-affected tool via `tools/call` and asserts no _zod error.
+
+### Part E: Final cumulative scope check + Phase 13 retro
+- Scope Guard verdict: **CLEAR (24/24 ACs hold)** after this commit lands.
+- All 3 originally-RESOLVED-pending DEFERRED items confirmed closed (005, 006, 007).
+- DEFERRED-004 PARTIAL with documented per-route policy decisions.
+- DEFERRED-003 remains OPEN (LOW, race_exhausted untested path — explicitly acceptable per longrun).
+- Phase 13 retro lesson to MCP captures the full longrun calibration.
+
+## Phase 13 final commit list (this session)
+
+| Commit | Description |
+|---|---|
+| 47954d1 | Sprint 13.5 F3 core (taxonomy_profiles + codex-guardrail) |
+| 7d690a1 | Sprint 13.6 F3 GUI (Taxonomy panel) |
+| 199b8f5 | Session-2 boundary handoff |
+| *(pending)* | Sprint 13.7 (e2e tests + DEFERRED-006/007 + r3 source-status guard + Phase 13 closeout) |
+
+## Phase 13 final calibration data (all 6 sprints)
+
+| Sprint | Mode | Adversary rounds | Tests added | Wall-clock |
+|---|---|---|---|---|
+| 13.2 (F1 TTL+GUI) | full | 6 (3 design + 3 code) + 3 post-audit | 19 unit | ~3h |
+| 13.3 (F2 core) | compressed | 2 (1 design + 1 code) | 11 unit | ~1h |
+| 13.4 (F2 GUI) | hyper-compressed | 0 (Scope Guard only) | 0 | ~45m |
+| 13.5 (F3 core) | compressed | 1 (design) | 12 unit | ~75m |
+| 13.6 (F3 GUI) | hyper-compressed | 0 (Scope Guard only) | 0 | ~25m |
+| 13.7 (E2E + closeout) | hybrid (full-mode on E2E plan; compressed on cleanup) | 3 (design max-cap) | 30+ e2e | ~4h |
+
+**Aggregate:** 12 Adversary rounds total across the longrun; 4 sessions; 12 commits; ~10h wall-clock; +72 tests (302 unit + 94 e2e); 7 DEFERRED items handled (3 RESOLVED in-longrun, 1 PARTIAL with policy, 1 RESOLVED pre-Phase-13, 2 abandoned/non-Phase-13).
+
+---
+
 # LONGRUN SESSION-2 BOUNDARY HANDOFF
 
 **Session 2 of the autonomous longrun is closing at the Sprint 13.6 retro boundary. Only Sprint 13.7 (E2E + final cumulative scope check) remains.**

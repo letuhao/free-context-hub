@@ -34,9 +34,9 @@ export const allAuthTests: TestFn[] = [
   // ── Setup: create reader + writer keys ──
   authTest('setup-create-test-keys', async (ctx) => {
     if (!ADMIN_TOKEN) throw new Error('SKIP: no ADMIN_TOKEN set, cannot test auth');
-    keys.reader = await createTestApiKey('reader', `e2e-reader-${ctx.runMarker}`);
+    keys.reader = await createTestApiKey('reader', { name: `e2e-reader-${ctx.runMarker}` });
     ctx.cleanup.apiKeyIds.push(keys.reader.key_id);
-    keys.writer = await createTestApiKey('writer', `e2e-writer-${ctx.runMarker}`);
+    keys.writer = await createTestApiKey('writer', { name: `e2e-writer-${ctx.runMarker}` });
     ctx.cleanup.apiKeyIds.push(keys.writer.key_id);
   }),
 

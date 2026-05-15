@@ -19,6 +19,13 @@ import { allSystemTests } from './system.test.js';
 import { allPhase10Tests } from './phase10.test.js';
 import { allPhase11PullTests } from './phase11-pull.test.js';
 import { allPhase11ImportTests } from './phase11-import.test.js';
+// Phase 13 Sprint 13.7
+import { allPhase13LeaseTests } from './phase13-leases.test.js';
+import { allPhase13ReviewTests } from './phase13-reviews.test.js';
+import { allPhase13TaxonomyTests } from './phase13-taxonomy.test.js';
+import { allPhase13McpTests } from './phase13-mcp.test.js';
+import { allPhase13CrossFeatureTests } from './phase13-cross-feature.test.js';
+import { allPhase13AuthScopeTests } from './phase13-auth-scope.test.js';
 
 async function main() {
   const startMs = Date.now();
@@ -41,6 +48,13 @@ async function main() {
     ...allPhase10Tests,
     ...allPhase11PullTests,
     ...allPhase11ImportTests,
+    // Phase 13 Sprint 13.7
+    ...allPhase13LeaseTests,
+    ...allPhase13ReviewTests,
+    ...allPhase13TaxonomyTests,
+    ...allPhase13McpTests,
+    ...allPhase13CrossFeatureTests,
+    ...allPhase13AuthScopeTests, // skipped automatically when auth is disabled
   ];
 
   console.log(`  ${allTests.length} tests registered.\n`);

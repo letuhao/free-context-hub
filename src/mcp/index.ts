@@ -2721,21 +2721,19 @@ function createMcpToolsServer() {
         ttl_minutes: z.number().int().min(1).max(240).optional().describe('Lease duration (default 30, max 240).'),
         output_format: OutputFormatSchema.default('auto_both'),
       }),
-      outputSchema: z.discriminatedUnion('status', [
-        z.object({ status: z.literal('claimed'), lease_id: z.string(), expires_at: z.string() }),
-        z.object({
-          status: z.literal('conflict'),
-          incumbent_agent_id: z.string(),
-          incumbent_task: z.string(),
-          expires_at: z.string(),
-          seconds_remaining: z.number(),
-        }),
-        z.object({
-          status: z.literal('rate_limited'),
-          reason: z.enum(['max_active_leases', 'race_exhausted', 'attempt_rate']),
-          retry_after_seconds: z.number(),
-        }),
-      ]),
+      // DEFERRED-007 fix (Sprint 13.7): MCP SDK normalizeObjectSchema returns
+      // undefined for ZodDiscriminatedUnion → output validation crashes with
+      // _zod undefined-read. Flattened to z.object with optional discriminated fields.
+      outputSchema: z.object({
+        status: z.enum(['claimed', 'conflict', 'rate_limited']),
+        lease_id: z.string().optional(),
+        expires_at: z.string().optional(),
+        incumbent_agent_id: z.string().optional(),
+        incumbent_task: z.string().optional(),
+        seconds_remaining: z.number().optional(),
+        reason: z.enum(['max_active_leases', 'race_exhausted', 'attempt_rate']).optional(),
+        retry_after_seconds: z.number().optional(),
+      }),
     },
     async ({ workspace_token, project_id, agent_id, artifact_type, artifact_id, task_description, ttl_minutes, output_format }) => {
       assertWorkspaceToken(workspace_token);
@@ -2789,13 +2787,12 @@ function createMcpToolsServer() {
         extend_by_minutes: z.number().int().min(1).max(120),
         output_format: OutputFormatSchema.default('auto_both'),
       }),
-      outputSchema: z.discriminatedUnion('status', [
-        z.object({ status: z.literal('renewed'), expires_at: z.string(), effective_extension_minutes: z.number() }),
-        z.object({ status: z.literal('cap_reached'), expires_at: z.string(), effective_extension_minutes: z.number() }),
-        z.object({ status: z.literal('not_found') }),
-        z.object({ status: z.literal('not_owner') }),
-        z.object({ status: z.literal('expired') }),
-      ]),
+      // DEFERRED-007 fix: flatten to z.object with optional fields.
+      outputSchema: z.object({
+        status: z.enum(['renewed', 'cap_reached', 'not_found', 'not_owner', 'expired']),
+        expires_at: z.string().optional(),
+        effective_extension_minutes: z.number().optional(),
+      }),
     },
     async ({ workspace_token, project_id, agent_id, lease_id, extend_by_minutes, output_format }) => {
       assertWorkspaceToken(workspace_token);
@@ -2848,20 +2845,18 @@ function createMcpToolsServer() {
         artifact_id: z.string().min(1),
         output_format: OutputFormatSchema.default('auto_both'),
       }),
-      outputSchema: z.discriminatedUnion('available', [
-        z.object({ available: z.literal(true) }),
-        z.object({
-          available: z.literal(false),
-          lease: z.object({
-            artifact_type: z.string(),
-            artifact_id: z.string(),
-            agent_id: z.string(),
-            task_description: z.string(),
-            expires_at: z.string(),
-            seconds_remaining: z.number(),
-          }),
-        }),
-      ]),
+      // DEFERRED-007 fix: flatten to z.object with optional fields.
+      outputSchema: z.object({
+        available: z.boolean(),
+        lease: z.object({
+          artifact_type: z.string(),
+          artifact_id: z.string(),
+          agent_id: z.string(),
+          task_description: z.string(),
+          expires_at: z.string(),
+          seconds_remaining: z.number(),
+        }).optional(),
+      }),
     },
     async ({ workspace_token, project_id, artifact_type, artifact_id, output_format }) => {
       assertWorkspaceToken(workspace_token);
@@ -2886,24 +2881,16 @@ function createMcpToolsServer() {
         intended_reviewer: z.string().optional(),
         output_format: OutputFormatSchema.default('auto_both'),
       }),
-      outputSchema: z.discriminatedUnion('status', [
-        z.object({
-          status: z.literal('submitted'),
-          request_id: z.string(),
-          lesson_id: z.string(),
-          lesson_title: z.string(),
-          created_at: z.string(),
-        }),
-        z.object({ status: z.literal('lesson_not_found') }),
-        z.object({
-          status: z.literal('wrong_lesson_status'),
-          current_status: z.string(),
-        }),
-        z.object({
-          status: z.literal('already_pending'),
-          existing_request_id: z.string(),
-        }),
-      ]),
+      // DEFERRED-007 fix: flatten to z.object with optional fields.
+      outputSchema: z.object({
+        status: z.enum(['submitted', 'lesson_not_found', 'wrong_lesson_status', 'already_pending']),
+        request_id: z.string().optional(),
+        lesson_id: z.string().optional(),
+        lesson_title: z.string().optional(),
+        created_at: z.string().optional(),
+        current_status: z.string().optional(),
+        existing_request_id: z.string().optional(),
+      }),
     },
     async ({ workspace_token, project_id, agent_id, lesson_id, reviewer_note, intended_reviewer, output_format }) => {
       assertWorkspaceToken(workspace_token);

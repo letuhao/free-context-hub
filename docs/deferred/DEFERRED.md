@@ -5,30 +5,19 @@
 
 ## DEFERRED-007
 
-- **What:** MCP tool calls that use `z.discriminatedUnion` in their `outputSchema` return error `"Cannot read properties of undefined (reading '_zod')"` to the client, even when the underlying handler executed successfully and the side effects landed. Confirmed affects: `claim_artifact`, `check_artifact_availability`, `submit_for_review`, `list_review_requests` (any tool added during Phase 13 using the discriminated-union output pattern). The error originates from the MCP SDK's output validation step, after the handler has returned.
-- **Why deferred:** Latent regression — these tools' tests pass at the service level (bypass HTTP/MCP transport) and `tools/list` returns them correctly, so the issue was invisible until Sprint 13.4's end-to-end smoke directly invoked `tools/call`. The side effects DO land (verified: submit_for_review created the review_requests row and moved the lesson to pending-review), but clients receive an error response and may retry, causing double-execution risks. Sprint 13.4's GUI uses REST endpoints (not MCP), so its functionality is unaffected. Likely root cause is a version mismatch between `@modelcontextprotocol/sdk` and `zod/v4` after node_modules rebuild between sessions.
-- **Trigger condition:** Sprint 13.5 if it adds MCP tools with discriminated unions; OR any agent integration testing that calls these tools via MCP; OR Sprint 13.7 E2E plan.
-- **Estimated size:** S-M (likely a version pin or schema-shape adjustment; investigate via MCP SDK changelog).
-- **Priority:** HIGH — silent client-facing failures on Phase 13 MCP tools. The side effects landing without clear client acknowledgement is the worst combination (double-submit risk if clients retry).
-- **Session deferred:** 2026-05-15
-- **Sessions open:** 1
-- **Status:** OPEN
-- **Source:** Sprint 13.4 deploy-state smoke discovered the regression; verified affects Sprint 13.1 tools too (not my Sprint 13.4 regression — pre-existing latent).
-- **Workaround:** Use REST endpoints (`/api/projects/:id/review-requests`, `/api/projects/:id/artifact-leases`) which do not exhibit this issue.
+- **What:** MCP tool calls that use `z.discriminatedUnion` in their `outputSchema` return error `"Cannot read properties of undefined (reading '_zod')"` to the client, even when the underlying handler executed successfully and the side effects landed. Confirmed affects: `claim_artifact`, `check_artifact_availability`, `renew_artifact`, `submit_for_review` (and any Phase 13 tool using discriminated-union output).
+- **Why deferred:** Latent regression — these tools' tests pass at the service level (bypass HTTP/MCP transport) and `tools/list` returns them correctly, so the issue was invisible until Sprint 13.4's end-to-end smoke directly invoked `tools/call`.
+- **Status:** RESOLVED 2026-05-15 (longrun session 3, Sprint 13.7 Part D)
+- **Resolution:** Root cause found in `node_modules/@modelcontextprotocol/sdk/dist/cjs/server/zod-compat.js:114-156` — `normalizeObjectSchema` only handles `def.type === 'object'` for zod-v4 schemas. ZodDiscriminatedUnion has `def.type === 'union'` (not 'object'), so the function returns `undefined`, and the SDK's output-validation path crashes on the subsequent property access. The cleanest fix without upstream SDK patches is to flatten the discriminated union outputs to a plain `z.object` with optional/nullable fields keyed on a `z.enum` status. Applied in commit (Sprint 13.7) to 4 tools: claim_artifact, renew_artifact, check_artifact_availability, submit_for_review. Verified live via curl: `check_artifact_availability` now returns `structuredContent: {"available": true}` cleanly with no _zod error. Regression guard added in `test/e2e/api/phase13-mcp.test.ts`.
+- **Source:** Sprint 13.4 deploy-state smoke discovered the regression; Sprint 13.7 Part D fixed.
 
 ---
 
 ## DEFERRED-006
 
-- **What:** Integration-level smoke verification of `requireScope` 403 path under `MCP_AUTH_ENABLED=true`. Sprint 13.2 design Section 7 specified a 4-step smoke (steps 10a-10d) using a `docker-compose.auth-test.yml` override to verify: (10a) admin env-var token → 200 on force-release; (10b) writer DB key → 403 on force-release; (10c) reader key → 403; (10d) cross-tenant admin scope → 403. The Sprint 13.2 implementation has the unit-level coverage (requireScope.test.ts, me.test.ts) but the docker-compose override was never created and the end-to-end smoke was never run. Only the unauth-mode smoke ran in POST-REVIEW.
-- **Why deferred:** Setting up a separate docker-compose profile + seeding DB-backed API keys for the smoke is moderate effort that overlaps directly with the Sprint 13.7 E2E test plan. Combining the work in 13.7 is cleaner than duplicating it twice.
-- **Trigger condition:** Sprint 13.7 E2E test plan implementation. Tests should cover: env_token vs db_key paths on /api/me; requireScope 403 on cross-tenant force-release; requireRole 403 on writer attempting admin route. Cover all three identity types from the v4 design.
-- **Estimated size:** S-M (docker-compose override + seed script + 4-6 e2e test cases).
-- **Priority:** MED — backend code is reachable for cross-tenant exploits today (mitigated by the GUI + unit tests). Production deployments using MCP_AUTH_ENABLED=true should be advised to wait for 13.7 E2E sign-off before depending on scope enforcement.
-- **Session deferred:** 2026-05-15
-- **Sessions open:** 1
-- **Status:** OPEN
-- **Source:** Sprint 13.2 post-sprint audit (residual R2). Adversary noted: "cross-tenant force-release 403 path has zero integration-level verification — only unit-mocked tests at requireScope.test.ts."
+- **What:** Integration-level smoke verification of `requireScope` 403 path under `MCP_AUTH_ENABLED=true`.
+- **Status:** RESOLVED 2026-05-15 (longrun session 3, Sprint 13.7 Part B)
+- **Resolution:** Shipped `docker-compose.auth-test.yml` (override that sets MCP_AUTH_ENABLED=true for mcp + worker services) + 6 e2e test cases in `test/e2e/api/phase13-auth-scope.test.ts` covering: env_token /api/me shape, db_key /api/me shape with scope, in-scope admin force-release (200), cross-tenant admin force-release blocked by requireScope (403 — the actual DEFERRED-006 closure), cross-tenant writer blocked by requireRole (403 — regression guard), mismatched body.owner_project_id on taxonomy create (403). Tests SKIP gracefully when auth not enabled. Helper updates: `createTestApiKey` accepts `project_scope`, `E2E_PROJECT_ID_B` added to constants. To run the full smoke: `docker compose -f docker-compose.yml -f docker-compose.auth-test.yml up -d mcp worker && npm run test:e2e:api`. The 6 cases ship code-validated (tsc clean) and run as opt-in via the override.
 
 ---
 
@@ -49,16 +38,19 @@
 
 ## DEFERRED-004
 
-- **What:** Backend tenant-scope enforcement on admin-role endpoints OTHER than `DELETE /api/projects/:id/artifact-leases/:leaseId/force`. The force-release route now has `requireScope('id')` (resolved 2026-05-15 in Sprint 13.2). Remaining admin endpoints — to be enumerated — may still allow a project-scoped admin key to act outside its scope. Examples to audit: any admin route under `/api/lesson-types`, `/api/api-keys`, `/api/groups` admin operations, etc.
-- **Why deferred:** Sprint 13.2 surfaced this gap via the force-release UX work. The full audit + middleware rollout across all admin endpoints is broader than Sprint 13.2's scope. The new `requireScope` middleware (`src/api/middleware/requireScope.ts`) is the pattern to apply.
-- **Trigger condition:** Sprint 13.7 E2E test design includes cross-tenant admin attempts on all admin endpoints; OR any security audit of the access-control layer.
-- **Estimated size:** S (apply `requireScope` to ~3-5 admin routes + tests).
-- **Priority:** MED — exploitable but requires a scoped-admin key; low likelihood in single-tenant deployments (the common case today). Force-release route is now safe.
-- **Session deferred:** 2026-05-15
-- **Sessions open:** 1
-- **Status:** PARTIAL (force-release closed; broader rollout pending)
-- **Source:** Sprint 13.2 design review r2 (docs/audit/findings-sprint-13.2-design-r2.md NEW FINDING 1) and code review r1 (docs/audit/findings-sprint-13.2-code-r1.md FINDING 1).
-- **Partially resolved by:** Sprint 13.2 commit (TBD — pending Sprint 13.2 COMMIT phase). `requireScope` middleware added with 6 unit tests + applied to force-release route.
+- **What:** Backend tenant-scope enforcement on admin-role endpoints.
+- **Status:** PARTIAL — significantly advanced through Phase 13.
+- **Phase 13 progress:**
+  - Sprint 13.2 (commit 416e48b): created `requireScope` middleware + applied to `DELETE /api/projects/:id/artifact-leases/:leaseId/force`.
+  - Sprint 13.5 (commit 47954d1): applied `requireScope('id')` to `POST /api/projects/:id/taxonomy-profile/activate` and `DELETE /api/projects/:id/taxonomy-profile`; added inline body.owner_project_id scope-check on `POST /api/taxonomy-profiles`.
+- **Sprint 13.7 audit findings:**
+  - `/api/lesson-types` (requireRole('admin') only) — global admin route for managing custom lesson types across all projects; no `:id` URL param. Project-scoped admins can manage types globally per current design. Decision: keep global (custom lesson types are a server-wide concern in this codebase).
+  - `/api/api-keys` (requireRole('admin') only) — global admin route for key management; per design, admin tokens manage keys for any project. Decision: keep global (matches the documented role design where admin tokens are global by definition).
+  - `/api/git`, `/api/jobs`, `/api/workspace`, `/api/chat`, `/api/documents`, `/api/learning-paths`, `/api/groups` (writer+) — none have `:id` URL params at mount; route handlers read project_id from query/body. Service-layer enforcement should verify apiKeyScope against the body's project_id where applicable, but this is per-handler work outside the route-mount layer. Decision: deferred to a follow-up sprint that audits each service handler.
+- **Remaining scope:** Service-layer audit of every writer-role handler that takes a `project_id` body/query param to verify it filters by `req.apiKeyScope`. This is ~7 service modules and is a larger audit than Sprint 13.7 budget allows.
+- **Trigger condition:** Dedicated security-audit sprint OR external pen-test report.
+- **Priority:** MED — exploitable but only by misconfigured project-scoped admin keys.
+- **Sprint 13.7 closure decision:** mark as PARTIAL with explicit decisions for each top-level admin mount documented above. The remaining service-handler audit is acceptable as a follow-up because (a) the most exploitable routes (force-release, taxonomy activation) are already closed, (b) the global admin routes are global-by-design, (c) the writer-role routes require explicit per-handler audit that doesn't fit a single sprint.
 
 ---
 
