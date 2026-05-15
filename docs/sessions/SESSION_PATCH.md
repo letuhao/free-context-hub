@@ -1,3 +1,233 @@
+# Session 2026-05-15 (cont.) — Phase 13 bug-fix (Phase D of the review)
+
+**Task:** fix all 19 bugs from the Phase 13 post-hoc review (`docs/audit/phase-13-review.md`).
+Branch `phase-13-bugfix` off `phase-13-dlf-coordination-amaw`; review committed at `acdf202`.
+User decisions: fix all 19; BUG-13.5-1 → unify the two lesson-type systems (with data migration);
+BUG-13.3-1 → gate F2 approve/return to `admin` + derive `resolved_by` from the authenticated key.
+
+Plan — 5 sub-sprints, each BUILD→VERIFY→checkpoint: SS1 review-gate guard · SS2 type-system
+unification · SS3 F2 GUI + identity · SS4 HTTP-contract fixes · SS5 E2E coverage.
+
+## SS1 — review-gate guard ✅ (BUG-13.3-2, BUG-13.7-1, BUG-13.4-1 symptom)
+
+**Outcome:** the `pending-review` review gate can no longer be bypassed via `update_lesson_status`.
+
+- `src/services/lessons.ts` — `updateLessonStatus` now rejects **all** `pending-review → *`
+  transitions. The Sprint 13.7 guard only blocked `→superseded/archived`; `→active`/`→draft`
+  leaked, re-opening BUG-13.3-2. A lesson leaves `pending-review` only via the review-request
+  approve/return flow (`resolveRequest`, which runs its own guarded UPDATE and never calls
+  `updateLessonStatus`).
+- `gui/src/app/lessons/lesson-detail.tsx` — the LessonDetail "Approve" button (a direct
+  `draft→active` status change) no longer renders for `pending-review` lessons — the GUI symptom
+  of BUG-13.4-1.
+- `src/services/reviewRequests.test.ts` — +2 regression tests (TDD: the OUT-of-pending-review
+  test was RED before the fix).
+
+**Verify:** 304/304 unit tests pass (+2 new); `npx tsc --noEmit` clean (backend + gui).
+
+## SS2 — lesson-type system unification ✅ (BUG-13.5-1, BUG-13.5-2, BUG-13.5-3)
+
+**Outcome:** the Phase 8 `lesson_types` table and the Phase 13 `taxonomy_profiles` are now one
+system — `lesson_types` is the single type-definition registry; profiles store `type_key`
+references into it. `add_lesson` once again accepts Phase 8 custom lesson types (BUG-13.5-1).
+Architecture Option 1; design doc `docs/specs/2026-05-15-ss2-type-system-unification.md`.
+
+- `migrations/0052_unify_lesson_types.sql` (NEW) — `lesson_types.scope` column (`global` =
+  always-valid · `profile` = valid only via an active profile); converts every
+  `taxonomy_profiles.lesson_types` JSONB from inline objects to `type_key` string-arrays,
+  registering each type. Idempotent + data-preserving (verified: applied twice, no double-convert).
+- `src/services/taxonomyService.ts` — `getValidLessonTypes` resolves from the registry
+  (`scope='global'` types + active-profile types); profiles store/return via registry hydration
+  so the REST + MCP output contracts are unchanged. **Closes BUG-13.5-1.**
+- `src/services/lessonTypes.ts` — `type_key` regex allows hyphens (DLF types); `createLessonType`
+  writes `scope='global'`; `listLessonTypes` returns `scope='global'` rows only (admin page +
+  add-lesson dropdown unchanged vs pre-SS2); `deleteLessonType` blocks `scope='profile'` types.
+- `src/kg/linker.ts` — drives the guardrail-class set from `GUARDRAIL_LESSON_TYPES`. **BUG-13.5-2.**
+- `config/taxonomy-profiles/dlf-phase0.json` + `taxonomy-panel.tsx` — named colors; the panel
+  renders via `getTypeBadgeStyle`. **BUG-13.5-3.**
+- `src/services/taxonomyService.test.ts` — updated for the registry model + a BUG-13.5-1
+  regression test.
+
+**Verify:** migration applied idempotently; 305/305 unit tests pass; tsc clean (backend + gui);
+deploy-state smoke — backend rebuilt, bootstrap re-seeds dlf-phase0, DLF colors refreshed to
+named, REST `POST /api/lessons` with a Phase 8 custom type → HTTP 201 (pre-SS2: 400).
+
+## SS3 — F2 review GUI + reviewer identity ✅ (BUG-13.3-1, 13.4-1/-2/-3/-4, 13.6-1)
+
+**Outcome:** the F2 review GUI works correctly and the review audit trail records a real,
+server-derived reviewer identity instead of a forgeable client string.
+
+- **BUG-13.3-1 + 13.4-3** — `approve`/`return` now require the `admin` role (F2 is a human gate
+  and agents hold writer keys). `resolved_by` is derived server-side from the authenticated API
+  key's name — `auth.ts` attaches `apiKeyName`; `routes/reviewRequests.ts` `reviewerIdentity()`
+  resolves to the key name · `env-admin` · `dev-mode-admin` — never read from the request body.
+  The GUI dropped its role-label `resolvedByLabel()` and no longer sends `resolved_by`.
+- **BUG-13.4-1** — `getReviewRequest` (`GET /review-requests/:reqId`) returns the full lesson
+  (`ReviewRequestDetail.lesson`); the GUI "View Full Lesson" fetches it instead of opening an
+  empty stub.
+- **BUG-13.4-2** — `pending_review` (underscore) → `pending-review` (hyphen) across
+  `review/page.tsx` (filter type, status query, count, tab) and `sidebar.tsx` (badge query) —
+  the sidebar review badge now counts pending-review lessons (GUI-AC6) and the "Pending Review"
+  filter works.
+- **BUG-13.4-4** — `handleApproveReview`/`handleReturnReview` rewritten: the 409/404 cases (the
+  api client throws on non-2xx) are detected from the error and shown with a clear message; the
+  list always refreshes in `finally`, so a stale row never lingers.
+- **BUG-13.6-1** — the taxonomy picker preselects the first available profile whenever the picker
+  has options, so the Activate button is no longer stuck disabled when switching profiles.
+
+**Verify:** 306/306 unit tests pass (+1 BUG-13.4-1 detail test); tsc clean (backend + gui);
+deploy-state smoke — backend + gui rebuilt; `GET /review-requests/:reqId` returns `lesson.content`;
+`POST /approve` → HTTP 200 `resolved`, DB shows `resolved_by='dev-mode-admin'` (server-derived) +
+lesson `active`.
+
+## SS4 — HTTP-contract fixes ✅ (BUG-13.1-1/-2/-3, 13.3-3, 13.3-4, 13.2-1)
+
+**Outcome:** client-input errors return 4xx (not 500), renew failures use real status codes, and
+two misleading docs/comments are corrected.
+
+- **BUG-13.1-1 + 13.1-2** — `artifactLeases.ts` input validation now throws
+  `ContextHubError('BAD_REQUEST', …)` instead of a plain `Error`; the routes drop their brittle
+  message-prefix matching and just `next(e)`, so `errorHandler` maps BAD_REQUEST → 400. An invalid
+  `artifact_type` on `POST /artifact-leases` or `/check` returns 400, not 500.
+- **BUG-13.1-3** — `PATCH /artifact-leases/:id` (renew) maps `not_owner` → 403 (matching the
+  release route) and `expired` → 409; both used to fall through to HTTP 200.
+- **BUG-13.3-3** — `GET /review-requests?limit=abc` no longer 500s: the route and
+  `listReviewRequests` coerce non-finite `limit`/`offset` to defaults (`??` alone misses `NaN`).
+- **BUG-13.3-4** — `docs/phase-13-design.md` `submit_for_review` output corrected to the
+  discriminated-result shape (`status: submitted | lesson_not_found | …`), matching the impl.
+- **BUG-13.2-1** — `sweepScheduler.ts` header/comments corrected: the advisory lock is NOT
+  multi-replica leader election — it only collapses the rare simultaneous case, harmless because
+  the sweep DELETE is idempotent.
+
+**Verify:** 306/306 unit tests pass; tsc clean; deploy-state smoke — `POST /artifact-leases` and
+`/check` with an invalid `artifact_type` → HTTP 400 (was 500); `GET /review-requests?limit=abc` →
+HTTP 200 (was 500); `PATCH` renew on a missing lease → 404.
+
+## SS5 — real E2E coverage ✅ (BUG-13.7-2, BUG-13.7-3)
+
+**Outcome:** the Phase 13 e2e API suite genuinely exercises the F2 lifecycle and all four
+DEFERRED-007 MCP tools — the "94/94 PASS" headline no longer overstates coverage.
+
+- **BUG-13.7-2** — `phase13-reviews.test.ts` rewritten: the F2 lifecycle (submit_for_review via
+  the MCP client → list → detail → approve; submit → return → re-submit) is tested end-to-end
+  (was an unconditional SKIP). All three master-design ✗ transitions are exercised — including
+  `pending-review → superseded` (b), the test the original file's header promised but never
+  shipped. `phase13-mcp.test.ts` now covers all four DEFERRED-007 tools (added `submit_for_review`
+  + `renew_artifact`, previously omitted). `phase13-leases.test.ts`'s `lease-release-by-owner` is
+  a real owner-release test via the MCP `release_artifact` tool (was mislabeled — it called
+  force-release); the infeasible sweep e2e test is a short honest skip citing its real unit
+  coverage. `phase13-cross-feature.test.ts` has a real F2×F3 test replacing a GET shape-check.
+- **BUG-13.7-3** — `phase13-mcp.test.ts`'s claim test (and the new renew test) register every
+  claimed lease for cleanup; the original claim test leaked one lease per run.
+
+**Verify:** `npm run test:e2e:api` → **105/105 passed, 0 failed** against the live SS1-SS4 stack
+— the new F2-lifecycle + ✗-transition + MCP tests pass, and the full pre-existing suite (auth,
+lessons, guardrails, phase10, phase11, …) stays green = no regression from any sub-sprint. tsc clean.
+
+## Phase D complete — all 19 review bugs fixed
+
+| Sub-sprint | Commit | Bugs |
+|---|---|---|
+| SS1 review-gate guard | `29e68fa` | BUG-13.3-2, 13.7-1 |
+| SS2 type-system unification | `5d18196` | BUG-13.5-1, 13.5-2, 13.5-3 |
+| SS3 F2 GUI + review identity | `ce59449` | BUG-13.3-1, 13.4-1/-2/-3/-4, 13.6-1 |
+| SS4 HTTP-contract fixes | `2ccf70b` | BUG-13.1-1/-2/-3, 13.3-3, 13.3-4, 13.2-1 |
+| SS5 real E2E coverage | `a1d374f` | BUG-13.7-2, 13.7-3 |
+
+All 19 bugs from `docs/audit/phase-13-review.md` are resolved on branch `phase-13-bugfix`
+(off `phase-13-dlf-coordination-amaw` @ `acdf202`). 306/306 unit + 105/105 e2e API pass; tsc
+clean (backend + gui). Not yet pushed — awaiting review.
+
+## /review-impl follow-up — adversarial pass over the bug-fix branch
+
+A `/review-impl` adversarial review of the full bug-fix diff (`acdf202..a1d374f`) found two
+real issues the per-sub-sprint reviews missed — both fixed at `00acfa4`:
+
+- **[HIGH] `batchUpdateLessonStatus` bypassed the SS1 review-gate guard.** SS1 guarded
+  `updateLessonStatus`, but the sibling write-path `batchUpdateLessonStatus`
+  (`POST /api/lessons/batch-status`) did a raw `UPDATE lessons SET status` with no
+  source/target check — a `pending-review` lesson could be batch-moved out, re-opening
+  BUG-13.3-2. Fix: reject target `pending-review`; add `AND status <> 'pending-review'` to
+  the UPDATE so pending-review rows are left untouched and surface in `failed_ids`. +2 tests.
+- **[MED] BUG-13.4-2's slug fix was incomplete.** The review cited only `review/page.tsx` +
+  `sidebar.tsx`; the `/lessons` page has its own pending-review filter/count and the status
+  `Badge` its own colour map, all still on `pending_review` (underscore). Fixed
+  `lessons/page.tsx`, `lessons/types.ts`, `badge.tsx` — completes BUG-13.4-2.
+- **[LOW, documented]** the SS3 admin-gate on approve/return is not e2e-verified under auth
+  (`phase13-auth-scope.test.ts` skips on the default stack). Accepted — tsc + known-good
+  `requireRole` middleware.
+
+**Verify:** 308/308 unit tests pass (+2 batch-guard tests); tsc clean (backend + gui);
+deploy-state smoke — `POST /api/lessons/batch-status` batching a pending-review lesson →
+HTTP 200, the lesson stays `pending-review` and is reported in `failed_ids`; batching →
+`pending-review` → HTTP 400.
+
+## Session close-out — RETRO + DEFERRED hygiene ✅
+
+**RETRO** — three durable lessons added to the MCP knowledge base (`add_lesson`, project `free-context-hub`):
+- `49b21049` *(decision)* — "Phase 13 post-hoc review: AMAW caught real bugs in-loop but 19 escaped (3 HIGH) — 3 structural gaps". The audited counterpart to the optimistic in-loop sprint retrospectives — AMAW never reviews its own fixes; review budget tracked feature-area not blast-radius; POST-REVIEW + one-phase-one-event degraded under self-logged "time pressure".
+- `45c8cb44` *(preference)* — "When guarding a lessons.status transition, mirror the guard on ALL sibling write paths (single + batch + MCP)". The root pattern behind BUG-13.3-2 / 13.7-1 and the /review-impl HIGH.
+- `c0e76a3d` *(preference)* — "Canonical lesson status slug is `pending-review` (hyphen) — never `pending_review`". The root pattern behind BUG-13.4-2 and the /review-impl MED.
+
+**DEFERRED.md hygiene** — `docs/deferred/DEFERRED.md`:
+- **DEFERRED-008 added** (OPEN, LOW) — Phase 11 knowledge-bundle export/import omits the new `lesson_types.scope` column (migration 0052). `exportProject.ts:127` and `importProject.ts:464` use explicit column lists without `scope`, so `scope` is dropped on export and every imported type lands as `global`. Surfaced by /review-impl Finding 3.
+- DEFERRED-003 confirmed **OPEN** — SS5 covered owner-release + an honest sweep skip; it did not add the `race_exhausted` stress test.
+- DEFERRED-004 confirmed **PARTIAL** — BUG-13.3-1 added role-gating (approve/return → `requireRole('admin')`), consistent with DEFERRED-004's existing "admin is global-by-design" decision; the remaining service-layer scope audit is untouched.
+
+## Branch state — `phase-13-bugfix`, not pushed
+
+8 commits: `acdf202` review · `29e68fa` SS1 · `5d18196` SS2 · `ce59449` SS3 · `2ccf70b` SS4 · `a1d374f` SS5 · `00acfa4` /review-impl · this SESSION_PATCH + DEFERRED close-out. All 19 review bugs + 2 /review-impl escapes fixed; 308/308 unit + 105/105 e2e API pass; tsc clean (backend + gui). **Push / PR / merge awaiting the user's decision** — run `check_guardrails` before any push.
+
+---
+
+# Session 2026-05-15 (cont.) — Phase 13 post-hoc REVIEW + AMAW quality assessment (COMPLETE — see Phase D bug-fix above)
+
+**Task:** review every Phase 13 sprint (13.1–13.7) for bugs, and evaluate AMAW workflow
+quality. Collaborative — human is in the loop, checkpoint after each sprint. Not a feature
+task; this is an audit of work already shipped on `phase-13-dlf-coordination-amaw`.
+
+## Method (decided with the user)
+- **Review method:** main-session self-review (user chose this over cold-start sub-agents).
+- **AMAW eval — 4 dimensions:** adversary effectiveness · process integrity · size-classification
+  accuracy · cost vs value.
+- **Bug handling:** collect all into a report first, fix later per user decision (do NOT fix
+  during review).
+- **Cadence:** review one sprint → report findings to the human → wait for confirmation → next.
+
+## State lives in `docs/audit/phase-13-review.md`
+That file is the living review doc — commit↔sprint map, per-sprint findings, the consolidated
+bug table, and the AMAW assessment scaffold. **The resuming session must read it first.**
+
+## Progress so far
+- ✅ Phase A — scaffold + commit↔sprint map.
+- ✅ Sprints 13.1–13.7 all reviewed — **19 bugs** (3 HIGH, 7 MED, 8 LOW, 1 COSMETIC).
+- ✅ Phase C — AMAW 4-dimension assessment complete.
+- ⬜ Phase D — bug triage + fix decision with the human (IN PROGRESS — awaiting disposition).
+
+## Consolidated bugs (19) — full table + per-sprint detail in `docs/audit/phase-13-review.md`
+**3 HIGH:**
+- BUG-13.3-2 — review gate bypassable via `update_lesson_status`; orphans `review_requests` row.
+  Partially fixed in 13.7.
+- BUG-13.5-1 — `validateLessonType` ignores the Phase 8 `lesson_types` table → `add_lesson` HTTP
+  400s every Phase 8 custom lesson type.
+- BUG-13.7-1 — the 13.7 source-status guard is incomplete; still allows `pending-review→active`/
+  `draft`, so BUG-13.3-2 remains partly open.
+
+## AMAW assessment — bottom line
+Adversary design rounds are the workflow's best feature and caught real issues — but (1) it never
+reviews the fixes it triggers (all 3 HIGH bugs live there), (2) review budget was allocated by
+surface area not blast radius (13.4/13.5 — highest risk — got 0/1 rounds), (3) POST-REVIEW + the
+post-sprint audit were skipped for all 5 back-half sprints under self-logged "time pressure."
+Process integrity degraded monotonically 13.1→13.7; size accuracy improved but went unused.
+
+## Resume protocol for next session
+1. Read `docs/audit/phase-13-review.md` — the complete review (7 sprint sections + consolidated
+   bug table + Phase C assessment).
+2. Phase D is the only remaining step: the human triages the 19 bugs and decides what to fix.
+3. Do NOT start fixing without the human's disposition.
+
+---
+
 # Longrun — Phase 13 CLOSEOUT (session 3, Sprint 13.7)
 
 **Phase 13 outcome: SHIPPED COMPLETE.** All 24 acceptance criteria across F1+F2+F3 hold with file:line evidence; 3 of 4 originally-open DEFERRED items RESOLVED (004 PARTIAL with documented policy, 005/006/007 RESOLVED); 94/94 e2e API tests pass; 302/302 unit tests pass.

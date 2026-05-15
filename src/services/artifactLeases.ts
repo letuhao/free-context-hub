@@ -11,6 +11,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { getDbPool } from '../db/client.js';
+import { ContextHubError } from '../core/errors.js';
 import { createModuleLogger } from '../utils/logger.js';
 
 const logger = createModuleLogger('artifact-leases');
@@ -256,7 +257,7 @@ export async function renewArtifact(params: {
   project_id: string; agent_id: string; lease_id: string; extend_by_minutes: number;
 }): Promise<RenewResult> {
   if (params.extend_by_minutes < MIN_EXTEND_MINUTES || params.extend_by_minutes > MAX_EXTEND_MINUTES) {
-    throw new Error(`extend_by_minutes must be ${MIN_EXTEND_MINUTES}-${MAX_EXTEND_MINUTES}`);
+    throw new ContextHubError('BAD_REQUEST', `extend_by_minutes must be ${MIN_EXTEND_MINUTES}-${MAX_EXTEND_MINUTES}`);
   }
   const pool = getDbPool();
   const client = await pool.connect();
@@ -303,7 +304,7 @@ export async function renewArtifact(params: {
 export async function listActiveClaims(params: { project_id: string; artifact_type?: string }): Promise<ListResult> {
   // v2-r2 WARN 1: validate filter type if provided (symmetric with claimArtifact)
   if (params.artifact_type !== undefined && !VALID_ARTIFACT_TYPES.has(params.artifact_type)) {
-    throw new Error(`artifact_type must be one of: ${Array.from(VALID_ARTIFACT_TYPES).join(', ')}; got: ${params.artifact_type}`);
+    throw new ContextHubError('BAD_REQUEST', `artifact_type must be one of: ${Array.from(VALID_ARTIFACT_TYPES).join(', ')}; got: ${params.artifact_type}`);
   }
   const pool = getDbPool();
   const whereParts = [`project_id = $1`, `expires_at > now()`];
@@ -345,10 +346,10 @@ export async function checkArtifactAvailability(params: {
   // is free when actually their wrong-format id partitioned them from
   // existing leases.
   if (!VALID_ARTIFACT_TYPES.has(params.artifact_type)) {
-    throw new Error(`artifact_type must be one of: ${Array.from(VALID_ARTIFACT_TYPES).join(', ')}; got: ${params.artifact_type}`);
+    throw new ContextHubError('BAD_REQUEST', `artifact_type must be one of: ${Array.from(VALID_ARTIFACT_TYPES).join(', ')}; got: ${params.artifact_type}`);
   }
   if (!ARTIFACT_ID_REGEX.test(params.artifact_id)) {
-    throw new Error(`artifact_id must be lowercase kebab-case (see docs/artifact-id-convention.md); got: ${params.artifact_id}`);
+    throw new ContextHubError('BAD_REQUEST', `artifact_id must be lowercase kebab-case (see docs/artifact-id-convention.md); got: ${params.artifact_id}`);
   }
   const pool = getDbPool();
   const r = await pool.query<{
@@ -395,10 +396,10 @@ function validateClaimInput(p: ClaimParams) {
     throw new Error('claim_artifact: project_id, agent_id, artifact_type, artifact_id, task_description are all required');
   }
   if (!VALID_ARTIFACT_TYPES.has(p.artifact_type)) {
-    throw new Error(`artifact_type must be one of: ${Array.from(VALID_ARTIFACT_TYPES).join(', ')}; got: ${p.artifact_type}`);
+    throw new ContextHubError('BAD_REQUEST', `artifact_type must be one of: ${Array.from(VALID_ARTIFACT_TYPES).join(', ')}; got: ${p.artifact_type}`);
   }
   if (!ARTIFACT_ID_REGEX.test(p.artifact_id)) {
-    throw new Error(`artifact_id must be lowercase kebab-case (see docs/artifact-id-convention.md); got: ${p.artifact_id}`);
+    throw new ContextHubError('BAD_REQUEST', `artifact_id must be lowercase kebab-case (see docs/artifact-id-convention.md); got: ${p.artifact_id}`);
   }
 }
 

@@ -128,7 +128,7 @@ export function Sidebar() {
     const fetchCount = () => {
       Promise.all([
         fetch(`${apiUrl}/api/lessons?project_id=${encodeURIComponent(projectId)}&status=draft&limit=1`).then(r => r.ok ? r.json() : { total_count: 0 }),
-        fetch(`${apiUrl}/api/lessons?project_id=${encodeURIComponent(projectId)}&status=pending_review&limit=1`).then(r => r.ok ? r.json() : { total_count: 0 }),
+        fetch(`${apiUrl}/api/lessons?project_id=${encodeURIComponent(projectId)}&status=pending-review&limit=1`).then(r => r.ok ? r.json() : { total_count: 0 }),
       ]).then(([d, p]) => {
         if (active) setReviewCount((d.total_count ?? 0) + (p.total_count ?? 0));
       }).catch(() => {});

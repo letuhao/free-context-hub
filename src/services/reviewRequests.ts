@@ -147,6 +147,27 @@ export type ReviewRequestRow = {
   created_at: string;
 };
 
+/**
+ * Detail shape for GET /review-requests/:reqId — includes the full lesson so a
+ * reviewer can read what they are approving/returning (master design L404,
+ * review BUG-13.4-1).
+ */
+export type ReviewRequestDetail = ReviewRequestRow & {
+  lesson: {
+    lesson_id: string;
+    project_id: string;
+    title: string;
+    lesson_type: string;
+    content: string;
+    tags: string[];
+    source_refs: string[];
+    status: string;
+    captured_by: string | null;
+    created_at: string;
+    updated_at: string;
+  };
+};
+
 export async function listReviewRequests(params: {
   project_id: string;
   status?: 'pending' | 'approved' | 'returned';
@@ -156,8 +177,12 @@ export async function listReviewRequests(params: {
 }): Promise<{ items: ReviewRequestRow[]; total_count: number }> {
   const pool = getDbPool();
   const status = params.status ?? 'pending';
-  const limit = Math.min(Math.max(params.limit ?? 20, 1), 100);
-  const offset = Math.max(params.offset ?? 0, 0);
+  // SS4 (BUG-13.3-3): coerce non-finite (NaN) limit/offset to defaults — `??`
+  // alone does not catch NaN, which would reach SQL as `LIMIT NaN`.
+  const limit = typeof params.limit === 'number' && Number.isFinite(params.limit)
+    ? Math.min(Math.max(params.limit, 1), 100) : 20;
+  const offset = typeof params.offset === 'number' && Number.isFinite(params.offset)
+    ? Math.max(params.offset, 0) : 0;
 
   const where: string[] = [`rr.project_id = $1`, `rr.status = $2`];
   const args: unknown[] = [params.project_id, status];
@@ -204,13 +229,16 @@ export async function listReviewRequests(params: {
   };
 }
 
-export async function getReviewRequest(params: { project_id: string; request_id: string }): Promise<ReviewRequestRow | null> {
+export async function getReviewRequest(params: { project_id: string; request_id: string }): Promise<ReviewRequestDetail | null> {
   const pool = getDbPool();
   const r = await pool.query<Record<string, unknown>>(
     `SELECT rr.request_id, rr.project_id, rr.lesson_id,
             l.title AS lesson_title, l.lesson_type AS lesson_type,
             rr.submitter_agent_id, rr.reviewer_note, rr.intended_reviewer,
-            rr.status, rr.resolved_at, rr.resolved_by, rr.resolution_note, rr.created_at
+            rr.status, rr.resolved_at, rr.resolved_by, rr.resolution_note, rr.created_at,
+            l.content AS lesson_content, l.tags AS lesson_tags, l.source_refs AS lesson_source_refs,
+            l.status AS lesson_status, l.captured_by AS lesson_captured_by,
+            l.created_at AS lesson_created_at, l.updated_at AS lesson_updated_at
      FROM review_requests rr
      JOIN lessons l ON l.lesson_id = rr.lesson_id
      WHERE rr.request_id = $1 AND rr.project_id = $2`,
@@ -232,6 +260,20 @@ export async function getReviewRequest(params: { project_id: string; request_id:
     resolved_by: row.resolved_by as string | null,
     resolution_note: row.resolution_note as string | null,
     created_at: (row.created_at as Date).toISOString(),
+    // BUG-13.4-1: the full lesson, so "View Full Lesson" shows real content.
+    lesson: {
+      lesson_id: String(row.lesson_id),
+      project_id: String(row.project_id),
+      title: String(row.lesson_title),
+      lesson_type: String(row.lesson_type),
+      content: row.lesson_content == null ? '' : String(row.lesson_content),
+      tags: Array.isArray(row.lesson_tags) ? (row.lesson_tags as string[]) : [],
+      source_refs: Array.isArray(row.lesson_source_refs) ? (row.lesson_source_refs as string[]) : [],
+      status: String(row.lesson_status),
+      captured_by: row.lesson_captured_by as string | null,
+      created_at: (row.lesson_created_at as Date).toISOString(),
+      updated_at: (row.lesson_updated_at as Date).toISOString(),
+    },
   };
 }
 

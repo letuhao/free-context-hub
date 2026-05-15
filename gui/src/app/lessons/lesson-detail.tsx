@@ -811,7 +811,11 @@ export function LessonDetail({ lesson, onClose, onStatusChange, onTagClick, init
                     <RefreshCw size={13} className="mr-1" /> Reactivate
                   </Button>
                 )}
-                {(lesson.status === "draft" || lesson.status === "pending_review") && (
+                {/* Phase 13 review BUG-13.4-1 fix: the Approve button does a direct
+                    draft→active status change. It must NOT appear for pending-review
+                    lessons — those are resolved via the Review Inbox "Submitted for
+                    Review" tab (approve/return), never by a direct status mutation. */}
+                {lesson.status === "draft" && (
                   <Button variant="primary" size="sm" onClick={() => changeStatus("active")}>
                     Approve
                   </Button>

@@ -20,7 +20,7 @@ import { ProjectBadge } from "@/components/project-badge";
 import { getColorClasses } from "@/lib/project-colors";
 import type { Lesson } from "../lessons/types";
 
-type ReviewFilter = "all" | "draft" | "pending_review";
+type ReviewFilter = "all" | "draft" | "pending-review";
 // Phase 13 Sprint 13.4: top-level mode for the two-tab Review Inbox.
 //   "auto_generated"        — existing flow: draft lessons proposed by distillation / git intel
 //   "submitted_for_review"  — new flow: lessons in pending-review with review_requests records
@@ -180,23 +180,8 @@ export default function ReviewInboxPage() {
   const [reviewRequests, setReviewRequests] = useState<ReviewRequest[]>([]);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [resolveTarget, setResolveTarget] = useState<{ req: ReviewRequest; action: "approve" | "return" } | null>(null);
-  const [identity, setIdentity] = useState<{ role: string; key_source: string; project_scope: string | null } | null>(null);
-
-  // Fetch identity once (used as resolved_by for approve/return)
-  useEffect(() => {
-    api.getCurrentUser().then((me) => setIdentity({
-      role: me.role,
-      key_source: me.key_source,
-      project_scope: me.project_scope,
-    })).catch(() => setIdentity(null));
-  }, []);
-
-  const resolvedByLabel = (): string => {
-    if (!identity) return "anonymous";
-    if (identity.key_source === "no_auth") return "dev-mode-admin";
-    if (identity.key_source === "env_token") return "env-admin";
-    return `${identity.role}${identity.project_scope ? `@${identity.project_scope}` : ""}`;
-  };
+  // SS3 (BUG-13.3-1): resolved_by is derived server-side from the authenticated
+  // API key — the GUI no longer computes or sends a reviewer label.
 
   const fetchReviewRequests = useCallback(async () => {
     if (!projectsLoaded) return;
@@ -229,25 +214,21 @@ export default function ReviewInboxPage() {
     if (mode === "submitted_for_review") fetchReviewRequests();
   }, [mode, fetchReviewRequests]);
 
+  // SS3 (BUG-13.4-4): approve/return return HTTP 409 (already resolved) / 404,
+  // and the api client throws on non-2xx — so detect those from the error and
+  // always refresh in `finally` (the listed row is stale on success OR conflict).
   const handleApproveReview = async (req: ReviewRequest, resolutionNote?: string) => {
     try {
-      const r = await api.approveReviewRequest(req.project_id, req.request_id, {
-        resolved_by: resolvedByLabel(),
-        resolution_note: resolutionNote,
-      });
-      if (r.status === "resolved") {
-        toast("success", `Approved: ${req.lesson_title} → active`);
-        fetchReviewRequests();
-      } else if (r.status === "already_resolved") {
-        toast("error", `Already ${r.current_status} by another reviewer`);
-        fetchReviewRequests();
-      } else {
-        toast("error", `Approve failed: ${r.status}`);
-      }
+      await api.approveReviewRequest(req.project_id, req.request_id, { resolution_note: resolutionNote });
+      toast("success", `Approved: ${req.lesson_title} → active`);
     } catch (err) {
-      toast("error", err instanceof Error ? err.message : "Approve failed");
+      const msg = err instanceof Error ? err.message : "Approve failed";
+      if (msg.includes("(409)")) toast("error", "Already resolved by another reviewer");
+      else if (msg.includes("(404)")) toast("error", "Review request no longer exists");
+      else toast("error", msg);
     } finally {
       setResolveTarget(null);
+      fetchReviewRequests();
     }
   };
 
@@ -257,23 +238,16 @@ export default function ReviewInboxPage() {
       return;
     }
     try {
-      const r = await api.returnReviewRequest(req.project_id, req.request_id, {
-        resolved_by: resolvedByLabel(),
-        resolution_note: resolutionNote,
-      });
-      if (r.status === "resolved") {
-        toast("success", `Returned: ${req.lesson_title} → draft`);
-        fetchReviewRequests();
-      } else if (r.status === "already_resolved") {
-        toast("error", `Already ${r.current_status} by another reviewer`);
-        fetchReviewRequests();
-      } else {
-        toast("error", `Return failed: ${r.status}`);
-      }
+      await api.returnReviewRequest(req.project_id, req.request_id, { resolution_note: resolutionNote });
+      toast("success", `Returned: ${req.lesson_title} → draft`);
     } catch (err) {
-      toast("error", err instanceof Error ? err.message : "Return failed");
+      const msg = err instanceof Error ? err.message : "Return failed";
+      if (msg.includes("(409)")) toast("error", "Already resolved by another reviewer");
+      else if (msg.includes("(404)")) toast("error", "Review request no longer exists");
+      else toast("error", msg);
     } finally {
       setResolveTarget(null);
+      fetchReviewRequests();
     }
   };
 
@@ -281,7 +255,7 @@ export default function ReviewInboxPage() {
     setLoading(true);
     try {
       const useMulti = isAllProjects && projectsLoaded && effectiveProjectIds.length > 0;
-      const statuses = filter === "all" ? ["draft", "pending_review"] : [filter];
+      const statuses = filter === "all" ? ["draft", "pending-review"] : [filter];
       const results = await Promise.all(
         statuses.map((status) =>
           useMulti
@@ -400,7 +374,7 @@ export default function ReviewInboxPage() {
     return acc;
   }, {});
   const draftCount = lessons.filter((l) => l.status === "draft").length;
-  const pendingCount = lessons.filter((l) => l.status === "pending_review").length;
+  const pendingCount = lessons.filter((l) => l.status === "pending-review").length;
 
   return (
     <NoProjectGuard>
@@ -469,7 +443,7 @@ export default function ReviewInboxPage() {
         {([
           { label: "All Pending", value: "all" as ReviewFilter, count: lessons.length },
           { label: "Draft", value: "draft" as ReviewFilter, count: draftCount },
-          { label: "Pending Review", value: "pending_review" as ReviewFilter, count: pendingCount },
+          { label: "Pending Review", value: "pending-review" as ReviewFilter, count: pendingCount },
         ]).map((tab) => (
           <button
             key={tab.value}
@@ -728,21 +702,15 @@ export default function ReviewInboxPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => {
-                      const lesson: Lesson = {
-                        lesson_id: req.lesson_id,
-                        project_id: req.project_id,
-                        title: req.lesson_title,
-                        lesson_type: req.lesson_type,
-                        content: "",
-                        tags: [],
-                        source_refs: [],
-                        status: "pending_review",
-                        created_at: req.created_at,
-                        updated_at: req.created_at,
-                        captured_by: req.submitter_agent_id,
-                      } as unknown as Lesson;
-                      setPreviewLesson(lesson);
+                    onClick={async () => {
+                      // SS3 (BUG-13.4-1): fetch the real lesson (with content) from
+                      // the detail endpoint instead of opening an empty stub.
+                      try {
+                        const detail = await api.getReviewRequest(req.project_id, req.request_id);
+                        setPreviewLesson(detail.lesson as unknown as Lesson);
+                      } catch (err) {
+                        toast("error", err instanceof Error ? err.message : "Failed to load lesson");
+                      }
                     }}
                     className="px-2.5 py-1 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-md text-zinc-300 transition-colors flex items-center gap-1"
                   >

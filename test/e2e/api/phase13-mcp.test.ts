@@ -1,14 +1,13 @@
 /**
- * Phase 13 Sprint 13.7 Part A (r2 F2 fix) — MCP-path regression guard.
+ * Phase 13 Sprint 13.7 Part A — MCP-path regression guard.
+ * Phase 13 bug-fix SS5: covers ALL four tools DEFERRED-007 affected
+ * (claim_artifact, check_artifact_availability, submit_for_review,
+ * renew_artifact — the original file omitted submit + renew) and registers
+ * every created resource for cleanup (BUG-13.7-3 — the claim test leaked
+ * its lease).
  *
- * DEFERRED-007 documented a latent MCP discriminatedUnion `_zod` regression
- * affecting claim_artifact, check_artifact_availability, submit_for_review,
- * list_review_requests. After Part D fixes (or applies a workaround), this
- * test file is the regression guard for future SDK/zod version skews.
- *
- * Each test calls one of the affected tools via tools/call and asserts:
- *   (a) result is NOT an error response with "_zod" in the message
- *   (b) result has the expected status field (claim/availability/submit/list shapes)
+ * Each test calls a tool via tools/call and asserts the result is NOT an
+ * error response containing "_zod" (the DEFERRED-007 regression signature).
  */
 
 import type { TestFn } from '../shared/testContext.js';
@@ -49,14 +48,11 @@ async function callMcpTool(toolName: string, args: Record<string, any>): Promise
     }),
   });
   const raw = await res.text();
-  // SSE format: "event: message\ndata: {...}\n"
   const dataMatch = raw.match(/data:\s*(\{[^\n]*\})/);
   const json = dataMatch ? JSON.parse(dataMatch[1]) : null;
   const text = json?.result?.content?.[0]?.text ?? raw;
   const isError = json?.result?.isError === true;
   let parsed: any;
-  // The text often has format "summary line\n{json}" — extract the JSON portion
-  // by finding the first opening brace and parsing from there.
   try { parsed = JSON.parse(text); } catch {
     const firstBrace = text.indexOf('{');
     if (firstBrace >= 0) {
@@ -76,10 +72,11 @@ function assertNotZodError(result: McpCallResult, toolName: string): void {
 }
 
 export const allPhase13McpTests: TestFn[] = [
-  mcpTest('mcp-claim-artifact-no-zod-error', async ({ projectId, runMarker }) => {
+  mcpTest('mcp-claim-artifact-no-zod-error', async ({ projectId, runMarker, cleanup }) => {
+    const agentId = `mcp-claim-${runMarker}`;
     const r = await callMcpTool('claim_artifact', {
       project_id: projectId,
-      agent_id: `mcp-test-${runMarker}`,
+      agent_id: agentId,
       artifact_type: 'custom',
       artifact_id: `mcp-claim-${runMarker}`,
       task_description: 'mcp regression test',
@@ -89,9 +86,10 @@ export const allPhase13McpTests: TestFn[] = [
     if (!r.parsed?.status) {
       throw new Error(`claim_artifact: expected parsed.status field; got text: ${r.text.slice(0, 200)}`);
     }
-    // Cleanup: release the lease via REST (MCP release would hit same regression class)
-    // For now we rely on cleanup runAll to handle it via force-release. Push to leaseIds.
-    // (Note: parsed.status === 'claimed' has lease_id; if 'conflict' or 'rate_limited' there's nothing to clean.)
+    // BUG-13.7-3 fix: register the claimed lease so cleanup releases it.
+    if (r.parsed.status === 'claimed' && r.parsed.lease_id) {
+      cleanup.leaseIds.push({ leaseId: r.parsed.lease_id, projectId, agentId });
+    }
   }),
 
   mcpTest('mcp-check-artifact-availability-no-zod-error', async ({ projectId, runMarker }) => {
@@ -106,6 +104,59 @@ export const allPhase13McpTests: TestFn[] = [
     }
   }),
 
+  mcpTest('mcp-renew-artifact-no-zod-error', async ({ projectId, runMarker, cleanup }) => {
+    const agentId = `mcp-renew-${runMarker}`;
+    const claim = await callMcpTool('claim_artifact', {
+      project_id: projectId,
+      agent_id: agentId,
+      artifact_type: 'custom',
+      artifact_id: `mcp-renew-${runMarker}`,
+      task_description: 'renew regression test',
+      ttl_minutes: 5,
+    });
+    assertNotZodError(claim, 'claim_artifact');
+    if (claim.parsed?.status !== 'claimed' || !claim.parsed.lease_id) {
+      throw new Error(`SKIP: could not claim a lease to renew (status=${claim.parsed?.status})`);
+    }
+    cleanup.leaseIds.push({ leaseId: claim.parsed.lease_id, projectId, agentId });
+    const renew = await callMcpTool('renew_artifact', {
+      project_id: projectId,
+      agent_id: agentId,
+      lease_id: claim.parsed.lease_id,
+      extend_by_minutes: 10,
+    });
+    assertNotZodError(renew, 'renew_artifact');
+    if (renew.parsed?.status !== 'renewed' && renew.parsed?.status !== 'cap_reached') {
+      throw new Error(`renew_artifact: expected renewed/cap_reached; got: ${renew.text.slice(0, 200)}`);
+    }
+  }),
+
+  mcpTest('mcp-submit-for-review-no-zod-error', async ({ api, projectId, runMarker, cleanup }) => {
+    // submit_for_review needs a draft lesson — create one via REST.
+    const lr = await api.post('/api/lessons', {
+      project_id: projectId,
+      lesson_type: 'general_note',
+      title: `MCP submit regression ${runMarker}`,
+      content: 'mcp submit_for_review _zod regression guard',
+    });
+    if (lr.status !== 201 || !lr.body?.lesson_id) {
+      throw new Error(`SKIP: could not create a lesson (status=${lr.status})`);
+    }
+    const lessonId = lr.body.lesson_id;
+    cleanup.lessonIds.push(lessonId);
+    await api.patch(`/api/lessons/${lessonId}/status`, { project_id: projectId, status: 'draft' });
+
+    const r = await callMcpTool('submit_for_review', {
+      project_id: projectId,
+      agent_id: `mcp-submit-${runMarker}`,
+      lesson_id: lessonId,
+    });
+    assertNotZodError(r, 'submit_for_review');
+    if (r.parsed?.status !== 'submitted') {
+      throw new Error(`submit_for_review: expected status=submitted; got: ${r.text.slice(0, 200)}`);
+    }
+  }),
+
   mcpTest('mcp-list-review-requests-no-zod-error', async ({ projectId }) => {
     const r = await callMcpTool('list_review_requests', {
       project_id: projectId,
@@ -117,8 +168,4 @@ export const allPhase13McpTests: TestFn[] = [
       throw new Error(`list_review_requests: expected parsed.items array; got: ${r.text.slice(0, 200)}`);
     }
   }),
-
-  // Note: submit_for_review requires a draft lesson; skip if too complex to set up in this test file.
-  // Coverage of submit_for_review side effects is in phase13-reviews.test.ts (REST-level) plus
-  // unit tests in src/services/reviewRequests.test.ts.
 ];

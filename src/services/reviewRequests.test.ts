@@ -24,6 +24,7 @@ import {
   approveReviewRequest,
   returnReviewRequest,
 } from './reviewRequests.js';
+import { updateLessonStatus, batchUpdateLessonStatus } from './lessons.js';
 import { getDbPool } from '../db/client.js';
 
 const TEST_PROJECT = '__test_review_requests__';
@@ -244,4 +245,68 @@ test('approve does NOT promote lesson that has been moved out of pending-review 
   assert.equal(lr.rows[0].status, 'archived');
   const rr = await pool.query(`SELECT status FROM review_requests WHERE request_id = $1`, [submitR.request_id]);
   assert.equal(rr.rows[0].status, 'pending');
+});
+
+// ── BUG-13.3-2 / BUG-13.7-1 fix: update_lesson_status must not move a lesson
+//    OUT of 'pending-review'. A lesson under review leaves that state ONLY via
+//    the review-request approve/return flow (resolveRequest runs its own guarded
+//    UPDATE and does not call updateLessonStatus). The 13.7 guard only blocked
+//    pending-review → superseded/archived; → active and → draft leaked through,
+//    bypassing review and orphaning the review_requests row.
+test('update_lesson_status cannot move a lesson OUT of pending-review (BUG-13.3-2 / 13.7-1)', async () => {
+  const lessonId = await insertLesson('pending-review');
+  for (const target of ['active', 'draft', 'superseded'] as const) {
+    const r = await updateLessonStatus({ projectId: TEST_PROJECT, lessonId, status: target });
+    assert.equal(r.status, 'error', `pending-review → ${target} must be rejected`);
+  }
+  const pool = getDbPool();
+  const lr = await pool.query(`SELECT status FROM lessons WHERE lesson_id = $1`, [lessonId]);
+  assert.equal(lr.rows[0].status, 'pending-review', 'lesson status unchanged after rejected transitions');
+});
+
+test('update_lesson_status rejects any → pending-review (BUG-13.3-2 / 13.7-1)', async () => {
+  const activeId = await insertLesson('active');
+  const r = await updateLessonStatus({ projectId: TEST_PROJECT, lessonId: activeId, status: 'pending-review' });
+  assert.equal(r.status, 'error', 'active → pending-review must be rejected');
+});
+
+// BUG-13.4-1: getReviewRequest must return the full lesson so the GUI's
+// "View Full Lesson" shows real content (pre-fix it built an empty stub).
+test('getReviewRequest returns the full lesson detail for the reviewer (BUG-13.4-1)', async () => {
+  const lessonId = await insertLesson('draft');
+  const submitR = await submitForReview({ project_id: TEST_PROJECT, agent_id: 'agent-x', lesson_id: lessonId });
+  assert.equal(submitR.status, 'submitted');
+  if (submitR.status !== 'submitted') return;
+
+  const detail = await getReviewRequest({ project_id: TEST_PROJECT, request_id: submitR.request_id });
+  assert.ok(detail, 'detail must not be null');
+  assert.ok(detail!.lesson, 'detail must include the nested lesson object');
+  assert.equal(detail!.lesson.lesson_id, lessonId);
+  assert.equal(detail!.lesson.content, 'test content', 'lesson content must be present (empty pre-fix)');
+});
+
+// review-impl finding (HIGH): batchUpdateLessonStatus is a sibling write-path to
+// updateLessonStatus — the pending-review gate must apply to it too, or the review
+// gate stays bypassable via POST /api/lessons/batch-status.
+test('batch_update_lesson_status leaves a pending-review lesson untouched (review-impl HIGH)', async () => {
+  const pendingId = await insertLesson('pending-review');
+  const draftId = await insertLesson('draft');
+  const r = await batchUpdateLessonStatus({
+    projectId: TEST_PROJECT, lessonIds: [pendingId, draftId], status: 'active',
+  });
+  assert.equal(r.status, 'ok');
+  const pool = getDbPool();
+  const pr = await pool.query(`SELECT status FROM lessons WHERE lesson_id = $1`, [pendingId]);
+  assert.equal(pr.rows[0].status, 'pending-review', 'pending-review lesson must NOT be batch-moved');
+  assert.ok((r.failed_ids ?? []).includes(pendingId), 'the pending-review lesson must surface in failed_ids');
+  const dr = await pool.query(`SELECT status FROM lessons WHERE lesson_id = $1`, [draftId]);
+  assert.equal(dr.rows[0].status, 'active', 'a normal (draft) lesson in the same batch still updates');
+});
+
+test('batch_update_lesson_status rejects target pending-review (review-impl HIGH)', async () => {
+  const draftId = await insertLesson('draft');
+  const r = await batchUpdateLessonStatus({
+    projectId: TEST_PROJECT, lessonIds: [draftId], status: 'pending-review',
+  });
+  assert.equal(r.status, 'error', 'batch → pending-review must be rejected');
 });

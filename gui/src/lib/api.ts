@@ -701,17 +701,19 @@ export const api = {
     return request<{ items: ReviewRequest[]; total_count: number }>("GET", path);
   },
   getReviewRequest: (projectId: string, requestId: string) =>
-    request<ReviewRequest>(
+    request<ReviewRequestDetail>(
       "GET",
       `/api/projects/${encodeURIComponent(projectId)}/review-requests/${encodeURIComponent(requestId)}`,
     ),
-  approveReviewRequest: (projectId: string, requestId: string, body: { resolved_by: string; resolution_note?: string }) =>
+  // SS3 (BUG-13.3-1): resolved_by is derived server-side from the authenticated
+  // API key — the GUI no longer sends it.
+  approveReviewRequest: (projectId: string, requestId: string, body: { resolution_note?: string } = {}) =>
     request<{ status: "resolved" | "not_found" | "already_resolved"; new_lesson_status?: "active" | "draft"; request_id?: string; current_status?: "approved" | "returned" }>(
       "POST",
       `/api/projects/${encodeURIComponent(projectId)}/review-requests/${encodeURIComponent(requestId)}/approve`,
       body,
     ),
-  returnReviewRequest: (projectId: string, requestId: string, body: { resolved_by: string; resolution_note: string }) =>
+  returnReviewRequest: (projectId: string, requestId: string, body: { resolution_note: string }) =>
     request<{ status: "resolved" | "not_found" | "already_resolved"; new_lesson_status?: "active" | "draft"; request_id?: string; current_status?: "approved" | "returned" }>(
       "POST",
       `/api/projects/${encodeURIComponent(projectId)}/review-requests/${encodeURIComponent(requestId)}/return`,
@@ -786,4 +788,21 @@ export interface ReviewRequest {
   resolved_by: string | null;
   resolution_note: string | null;
   created_at: string;
+}
+
+/** Detail shape from GET /review-requests/:reqId — includes the full lesson. */
+export interface ReviewRequestDetail extends ReviewRequest {
+  lesson: {
+    lesson_id: string;
+    project_id: string;
+    title: string;
+    lesson_type: string;
+    content: string;
+    tags: string[];
+    source_refs: string[];
+    status: string;
+    captured_by: string | null;
+    created_at: string;
+    updated_at: string;
+  };
 }

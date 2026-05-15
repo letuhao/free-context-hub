@@ -4,14 +4,18 @@
  * Design ref:  docs/specs/2026-05-15-phase-13-sprint-13.2-design.md §5a (v4)
  * Spec hash:   d691fbb5c0b9f92c
  *
- * In-process setTimeout-chained scheduler. Each cycle:
- *   1. Acquire a Postgres advisory lock (leader election for multi-replica)
- *   2. If lock acquired: enqueue a `leases.sweep` job (worker runs the DELETE)
- *   3. If not acquired: another replica is the leader this cycle; skip
- *   4. Release lock, chain next cycle
+ * In-process setTimeout-chained scheduler. Each cycle: try a Postgres advisory
+ * lock, enqueue a `leases.sweep` job, release the lock, chain the next cycle.
+ * The worker runs the actual DELETE.
  *
- * The lock is NOT held during the actual sweep — only across the enqueue.
- * Worker processes the queued job independently.
+ * On the advisory lock — this is NOT multi-replica leader election. The lock is
+ * acquired and released within one cycle, around the enqueue only. Two replicas
+ * with offset 15-min timers each acquire the (uncontended) lock and each enqueue
+ * a job, so an N-replica deployment enqueues ~N sweep jobs per cycle. That is
+ * harmless: sweepExpiredLeases' DELETE is idempotent, so duplicate jobs delete
+ * nothing extra. The lock only collapses the rare sub-millisecond *simultaneous*
+ * case. True per-cycle dedup would need the lock held for the whole interval, or
+ * a last_swept_at staleness check — not worth it for an idempotent DELETE.
  *
  * Registry: docs/operations/advisory-locks.md
  */
@@ -71,8 +75,9 @@ export interface StartSweepOptions {
 /**
  * Start the periodic sweep scheduler.
  *
- * Multi-replica safety: each cycle attempts to acquire a Postgres advisory
- * lock; only the lock-holder enqueues a leases.sweep job.
+ * Each cycle attempts a Postgres advisory lock around the enqueue. Per the
+ * file header: this is NOT leader election — it only collapses the rare
+ * simultaneous case; an idempotent sweep DELETE makes any extra jobs harmless.
  */
 export function startSweepScheduler(opts: StartSweepOptions = {}): SweepHandle {
   const interval = opts.intervalMs ?? SWEEP_INTERVAL_MS;
@@ -102,7 +107,7 @@ export function startSweepScheduler(opts: StartSweepOptions = {}): SweepHandle {
         );
         gotLock = r.rows[0]?.acquired === true;
         if (!gotLock) {
-          logger.info({ event: 'leases_sweep_skip_not_leader' }, 'another replica scheduled sweep this cycle');
+          logger.info({ event: 'leases_sweep_lock_not_acquired' }, 'advisory lock not acquired this cycle; sweep enqueue skipped (harmless — the DELETE is idempotent)');
           return;
         }
         const enq = await _enqueueJob({

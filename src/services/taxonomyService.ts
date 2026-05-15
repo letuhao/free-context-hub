@@ -1,18 +1,21 @@
 /**
  * Phase 13 Sprint 13.5 — Taxonomy profile service.
+ * Phase 13 bug-fix SS2 — unified with the Phase 8 `lesson_types` registry.
  *
- * Manages domain taxonomy profiles (custom lesson_type vocabularies per project).
+ * Architecture (Option 1): `lesson_types` is the single type-definition registry;
+ * `taxonomy_profiles` rows store an array of `type_key` references into it.
+ *   - registry rows with scope='global' are always-valid (5 builtins + custom types)
+ *   - registry rows with scope='profile' are valid only via an active profile
+ * Profile-returning functions HYDRATE the type_key refs back to {type,label,
+ * description,color} objects so the REST + MCP output contracts are unchanged.
  *
  * Master design: docs/phase-13-design.md §"Feature 3: Domain Taxonomy Extension"
- * Spec: docs/specs/2026-05-15-phase-13-sprint-13.5-spec.md (v2)
+ * SS2 design:    docs/specs/2026-05-15-ss2-type-system-unification.md
  */
 
 import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
 import { BUILTIN_LESSON_TYPES } from '../constants/lessonTypes.js';
-import { createModuleLogger } from '../utils/logger.js';
-
-const logger = createModuleLogger('taxonomy');
 
 export interface ProfileLessonType {
   type: string;
@@ -34,27 +37,53 @@ export interface TaxonomyProfile {
   updated_at: string;
 }
 
+/** Raw DB row — `lesson_types` is a JSONB string-array of type_key references. */
 interface ProfileRow {
   profile_id: string;
   slug: string;
   name: string;
   description: string | null;
   version: string;
-  lesson_types: ProfileLessonType[];
+  lesson_types: string[];
   is_builtin: boolean;
   owner_project_id: string | null;
   created_at: Date;
   updated_at: Date;
 }
 
-function rowToProfile(r: ProfileRow): TaxonomyProfile {
+/**
+ * Hydrate type_key references into full {type,label,description,color} objects
+ * from the `lesson_types` registry, preserving the profile's declared order.
+ * type_keys absent from the registry are dropped (defensive — should not happen).
+ */
+async function hydrateTypes(typeKeys: string[]): Promise<ProfileLessonType[]> {
+  if (typeKeys.length === 0) return [];
+  const pool = getDbPool();
+  const r = await pool.query<{ type_key: string; display_name: string; description: string | null; color: string }>(
+    `SELECT type_key, display_name, description, color FROM lesson_types WHERE type_key = ANY($1)`,
+    [typeKeys],
+  );
+  const byKey = new Map(r.rows.map((row) => [row.type_key, row]));
+  return typeKeys.flatMap((k) => {
+    const row = byKey.get(k);
+    if (!row) return [];
+    return [{
+      type: row.type_key,
+      label: row.display_name,
+      description: row.description ?? undefined,
+      color: row.color ?? undefined,
+    }];
+  });
+}
+
+async function rowToProfile(r: ProfileRow): Promise<TaxonomyProfile> {
   return {
     profile_id: r.profile_id,
     slug: r.slug,
     name: r.name,
     description: r.description,
     version: r.version,
-    lesson_types: r.lesson_types,
+    lesson_types: await hydrateTypes(Array.isArray(r.lesson_types) ? r.lesson_types : []),
     is_builtin: r.is_builtin,
     owner_project_id: r.owner_project_id,
     created_at: r.created_at.toISOString(),
@@ -63,8 +92,47 @@ function rowToProfile(r: ProfileRow): TaxonomyProfile {
 }
 
 /**
+ * Register a profile's lesson types in the canonical `lesson_types` registry
+ * (scope='profile') and return the ordered list of type_keys.
+ *   - builtinProfile=false (custom): ON CONFLICT DO NOTHING — never touch an
+ *     existing registry row (a global type, or a type another profile owns).
+ *   - builtinProfile=true (bootstrap): ON CONFLICT DO UPDATE, but only when the
+ *     existing row is already scope='profile' — so re-seeding a built-in profile
+ *     refreshes its type metadata without ever clobbering a global type.
+ * Non-transactional: a failed profile INSERT downstream leaves only inert
+ * registry rows (a scope='profile' type no profile references — never valid).
+ */
+async function registerProfileTypes(types: ProfileLessonType[], builtinProfile: boolean): Promise<string[]> {
+  const pool = getDbPool();
+  const keys: string[] = [];
+  for (const t of types) {
+    if (builtinProfile) {
+      await pool.query(
+        `INSERT INTO lesson_types (type_key, display_name, description, color, is_builtin, scope)
+         VALUES ($1, $2, $3, $4, true, 'profile')
+         ON CONFLICT (type_key) DO UPDATE SET
+           display_name = EXCLUDED.display_name,
+           description  = EXCLUDED.description,
+           color        = EXCLUDED.color
+         WHERE lesson_types.scope = 'profile'`,
+        [t.type, t.label, t.description ?? null, t.color ?? 'zinc'],
+      );
+    } else {
+      await pool.query(
+        `INSERT INTO lesson_types (type_key, display_name, description, color, is_builtin, scope)
+         VALUES ($1, $2, $3, $4, false, 'profile')
+         ON CONFLICT (type_key) DO NOTHING`,
+        [t.type, t.label, t.description ?? null, t.color ?? 'zinc'],
+      );
+    }
+    keys.push(t.type);
+  }
+  return keys;
+}
+
+/**
  * List profiles with optional filters.
- *   owner_project_id?: 'NULL' (built-ins only) | string (custom for that project) | undefined (all)
+ *   owner_project_id?: null (built-ins only) | string (custom for that project) | undefined (all)
  *   is_builtin?: boolean filter
  */
 export async function listTaxonomyProfiles(params: {
@@ -96,7 +164,7 @@ export async function listTaxonomyProfiles(params: {
      ORDER BY is_builtin DESC, slug ASC`,
     args,
   );
-  return r.rows.map(rowToProfile);
+  return Promise.all(r.rows.map(rowToProfile));
 }
 
 export async function getTaxonomyProfileBySlug(
@@ -125,6 +193,8 @@ export async function getTaxonomyProfileById(profileId: string): Promise<Taxonom
 /**
  * Create a custom taxonomy profile. is_builtin is FORCED to false.
  * Shadowing of built-in type names is rejected (per master design L539-540).
+ * The profile's types are registered in the `lesson_types` registry (scope='profile')
+ * and the profile row stores type_key references.
  */
 export async function createTaxonomyProfile(params: {
   slug: string;
@@ -163,6 +233,8 @@ export async function createTaxonomyProfile(params: {
     );
   }
 
+  const keys = await registerProfileTypes(params.lesson_types, false);
+
   const pool = getDbPool();
   try {
     const r = await pool.query<ProfileRow>(
@@ -175,7 +247,7 @@ export async function createTaxonomyProfile(params: {
         params.name,
         params.description ?? null,
         params.version ?? '1.0',
-        JSON.stringify(params.lesson_types),
+        JSON.stringify(keys),
         params.owner_project_id,
       ],
     );
@@ -193,7 +265,9 @@ export async function createTaxonomyProfile(params: {
 
 /**
  * Bootstrap: upsert a built-in profile from JSON (called from server startup).
- * is_builtin is FORCED to true, owner_project_id to NULL.
+ * is_builtin is FORCED to true, owner_project_id to NULL. The profile's types are
+ * (re-)registered in the `lesson_types` registry so editing the bundled JSON and
+ * restarting refreshes the registry.
  */
 export async function upsertBuiltinProfile(params: {
   slug: string;
@@ -202,6 +276,8 @@ export async function upsertBuiltinProfile(params: {
   version?: string;
   lesson_types: ProfileLessonType[];
 }): Promise<TaxonomyProfile> {
+  const keys = await registerProfileTypes(params.lesson_types, true);
+
   const pool = getDbPool();
   const r = await pool.query<ProfileRow>(
     `INSERT INTO taxonomy_profiles
@@ -219,7 +295,7 @@ export async function upsertBuiltinProfile(params: {
       params.name,
       params.description ?? null,
       params.version ?? '1.0',
-      JSON.stringify(params.lesson_types),
+      JSON.stringify(keys),
     ],
   );
   return rowToProfile(r.rows[0]);
@@ -269,7 +345,7 @@ export async function activateProfile(params: {
        activated_by = EXCLUDED.activated_by`,
     [params.project_id, profile.profile_id, params.activated_by ?? null],
   );
-  return { status: 'activated', profile: rowToProfile(profile) };
+  return { status: 'activated', profile: await rowToProfile(profile) };
 }
 
 /**
@@ -285,14 +361,21 @@ export async function deactivateProfile(projectId: string): Promise<{ status: 'd
 }
 
 /**
- * Get all valid lesson types for a project: built-ins + active profile types (if any).
- * Used as the single source of truth for lesson_type validation in add_lesson +
- * REST POST /api/lessons + import path.
+ * Get all valid lesson types for a project: every scope='global' registry type
+ * (the 5 builtins + Phase 8 custom types) + the active profile's types (if any).
+ * Single source of truth for lesson_type validation in add_lesson + REST
+ * POST /api/lessons + the import path.
  */
 export async function getValidLessonTypes(projectId: string): Promise<string[]> {
+  const pool = getDbPool();
+  const globals = await pool.query<{ type_key: string }>(
+    `SELECT type_key FROM lesson_types WHERE scope = 'global'`,
+  );
+  // BUILTIN_LESSON_TYPES is a defensive floor in case the registry seed is incomplete.
+  const valid = new Set<string>([...BUILTIN_LESSON_TYPES, ...globals.rows.map((r) => r.type_key)]);
   const active = await getActiveProfile(projectId);
-  const profileTypes = active ? active.lesson_types.map((t) => t.type) : [];
-  return [...BUILTIN_LESSON_TYPES, ...profileTypes];
+  if (active) for (const t of active.lesson_types) valid.add(t.type);
+  return [...valid];
 }
 
 /**
@@ -309,14 +392,14 @@ export async function validateLessonType(projectId: string, lessonType: string):
 }
 
 /**
- * Get the human-readable label for a lesson_type. Falls back to the raw type
- * string if not in the active profile (covers built-ins + deactivated profile types).
+ * Get the human-readable label for a lesson_type from the `lesson_types` registry.
+ * Falls back to the raw type string when the type is not registered.
  */
-export async function getLessonTypeLabel(projectId: string, type: string): Promise<string> {
-  const active = await getActiveProfile(projectId);
-  if (active) {
-    const found = active.lesson_types.find((t) => t.type === type);
-    if (found) return found.label;
-  }
-  return type;
+export async function getLessonTypeLabel(_projectId: string, type: string): Promise<string> {
+  const pool = getDbPool();
+  const r = await pool.query<{ display_name: string }>(
+    `SELECT display_name FROM lesson_types WHERE type_key = $1`,
+    [type],
+  );
+  return r.rows.length > 0 ? r.rows[0].display_name : type;
 }

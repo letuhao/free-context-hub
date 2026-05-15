@@ -33,9 +33,12 @@ export function bearerAuth(req: Request, res: Response, next: NextFunction) {
         res.status(401).json({ error: 'Unauthorized: invalid token' });
         return;
       }
-      // Attach role + scope to request for future permission enforcement
+      // Attach role + scope + key name to request for permission enforcement
+      // and audit identity (Phase 13 SS3 — review approve/return derives
+      // resolved_by from apiKeyName).
       (req as any).apiKeyRole = keyEntry.role;
       (req as any).apiKeyScope = keyEntry.project_scope;
+      (req as any).apiKeyName = keyEntry.name;
       next();
     })
     .catch(() => {

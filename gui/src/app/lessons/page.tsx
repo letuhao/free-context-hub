@@ -158,7 +158,7 @@ export default function LessonsPage() {
 
   // Fetch tab counts (on mount + when lessons change)
   useEffect(() => {
-    const statuses = ["active", "draft", "pending_review", "superseded", "archived"];
+    const statuses = ["active", "draft", "pending-review", "superseded", "archived"];
     Promise.all(
       statuses.map((s) =>
         api.listLessons({ project_id: projectId, status: s, limit: 1 })
@@ -170,7 +170,7 @@ export default function LessonsPage() {
       let total = 0;
       for (const [s, c] of results) { counts[s] = c; total += c; }
       counts.all = total;
-      counts.review = (counts.draft ?? 0) + (counts.pending_review ?? 0);
+      counts.review = (counts.draft ?? 0) + (counts["pending-review"] ?? 0);
       setTabCounts(counts);
     });
   }, [projectId, loading]); // re-fetch when loading changes (after data mutation)
@@ -416,7 +416,7 @@ export default function LessonsPage() {
           {([
             { label: "All", countKey: "all", statuses: undefined, hasAmberDot: false },
             { label: "Active", countKey: "active", statuses: "active", hasAmberDot: false },
-            { label: "Draft / Pending Review", countKey: "review", statuses: "draft,pending_review", hasAmberDot: true },
+            { label: "Draft / Pending Review", countKey: "review", statuses: "draft,pending-review", hasAmberDot: true },
             { label: "Superseded", countKey: "superseded", statuses: "superseded", hasAmberDot: false },
           ] as const).map((tab) => {
             // "All" tab is active when showAllStatuses is true

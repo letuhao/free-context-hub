@@ -70,6 +70,7 @@ export {
 export type {
   SubmitResult,
   ReviewRequestRow,
+  ReviewRequestDetail,
   ResolveResult,
 } from '../services/reviewRequests.js';
 
