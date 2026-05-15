@@ -41,11 +41,10 @@ export function TaxonomyPanel({ projectId }: TaxonomyPanelProps) {
       setActive(activeRes.profile);
       const merged = [...builtins.profiles, ...custom.profiles];
       setAvailable(merged.filter((p) => p.profile_id !== activeRes.profile?.profile_id));
-      if (merged.length > 0 && !activeRes.profile) {
-        setSelectedSlug(merged[0].slug);
-      } else {
-        setSelectedSlug("");
-      }
+      // SS3 (BUG-13.6-1): preselect the first available profile whenever the
+      // picker has options — otherwise the Activate button is stuck disabled
+      // when a profile is already active and the user wants to switch.
+      setSelectedSlug(merged.length > 0 ? merged[0].slug : "");
     } catch (err) {
       toast("error", err instanceof Error ? err.message : "Failed to load taxonomy profiles");
     } finally {

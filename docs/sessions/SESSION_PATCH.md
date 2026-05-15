@@ -52,6 +52,34 @@ Architecture Option 1; design doc `docs/specs/2026-05-15-ss2-type-system-unifica
 deploy-state smoke — backend rebuilt, bootstrap re-seeds dlf-phase0, DLF colors refreshed to
 named, REST `POST /api/lessons` with a Phase 8 custom type → HTTP 201 (pre-SS2: 400).
 
+## SS3 — F2 review GUI + reviewer identity ✅ (BUG-13.3-1, 13.4-1/-2/-3/-4, 13.6-1)
+
+**Outcome:** the F2 review GUI works correctly and the review audit trail records a real,
+server-derived reviewer identity instead of a forgeable client string.
+
+- **BUG-13.3-1 + 13.4-3** — `approve`/`return` now require the `admin` role (F2 is a human gate
+  and agents hold writer keys). `resolved_by` is derived server-side from the authenticated API
+  key's name — `auth.ts` attaches `apiKeyName`; `routes/reviewRequests.ts` `reviewerIdentity()`
+  resolves to the key name · `env-admin` · `dev-mode-admin` — never read from the request body.
+  The GUI dropped its role-label `resolvedByLabel()` and no longer sends `resolved_by`.
+- **BUG-13.4-1** — `getReviewRequest` (`GET /review-requests/:reqId`) returns the full lesson
+  (`ReviewRequestDetail.lesson`); the GUI "View Full Lesson" fetches it instead of opening an
+  empty stub.
+- **BUG-13.4-2** — `pending_review` (underscore) → `pending-review` (hyphen) across
+  `review/page.tsx` (filter type, status query, count, tab) and `sidebar.tsx` (badge query) —
+  the sidebar review badge now counts pending-review lessons (GUI-AC6) and the "Pending Review"
+  filter works.
+- **BUG-13.4-4** — `handleApproveReview`/`handleReturnReview` rewritten: the 409/404 cases (the
+  api client throws on non-2xx) are detected from the error and shown with a clear message; the
+  list always refreshes in `finally`, so a stale row never lingers.
+- **BUG-13.6-1** — the taxonomy picker preselects the first available profile whenever the picker
+  has options, so the Activate button is no longer stuck disabled when switching profiles.
+
+**Verify:** 306/306 unit tests pass (+1 BUG-13.4-1 detail test); tsc clean (backend + gui);
+deploy-state smoke — backend + gui rebuilt; `GET /review-requests/:reqId` returns `lesson.content`;
+`POST /approve` → HTTP 200 `resolved`, DB shows `resolved_by='dev-mode-admin'` (server-derived) +
+lesson `active`.
+
 ---
 
 # Session 2026-05-15 (cont.) — Phase 13 post-hoc REVIEW + AMAW quality assessment (COMPLETE — see Phase D bug-fix above)

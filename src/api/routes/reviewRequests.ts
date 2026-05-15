@@ -1,10 +1,11 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import {
   listReviewRequests,
   getReviewRequest,
   approveReviewRequest,
   returnReviewRequest,
   resolveProjectIdOrThrow,
+  getEnv,
 } from '../../core/index.js';
 import { requireRole } from '../middleware/requireRole.js';
 
@@ -13,14 +14,26 @@ import { requireRole } from '../middleware/requireRole.js';
  * Mounted at /api/projects/:id/review-requests (parent uses mergeParams).
  *
  *   GET    /                   list (filter: status, submitted_by; pagination)
- *   GET    /:reqId             detail (joined with lesson)
- *   POST   /:reqId/approve     resolve → approved + lesson → active   (writer+)
- *   POST   /:reqId/return      resolve → returned + lesson → draft    (writer+)
+ *   GET    /:reqId             detail — joined with the full lesson (for review)
+ *   POST   /:reqId/approve     resolve → approved + lesson → active   (admin)
+ *   POST   /:reqId/return      resolve → returned + lesson → draft    (admin)
  *
- * Approve/return require explicit `resolved_by` (reviewer identity) in body —
- * coarse role from apiKeyRole is insufficient per r1 F1 BLOCK.
+ * Phase 13 bug-fix SS3 (BUG-13.3-1): approve/return require the `admin` role —
+ * F2 is a human-review gate and agents hold writer keys, so writer must not be
+ * able to self-approve. `resolved_by` is derived server-side from the
+ * authenticated API key (its name), never read from the request body, so the
+ * audit trail records a real, unforgeable reviewer identity.
  */
 const router = Router({ mergeParams: true });
+
+/** Reviewer identity for the audit trail — derived from the authenticated key. */
+function reviewerIdentity(req: Request): string {
+  const r = req as Request & { apiKeyName?: string };
+  if (typeof r.apiKeyName === 'string' && r.apiKeyName.length > 0) return r.apiKeyName;
+  // No DB-backed key: env-var admin token, or auth disabled (dev). Neither
+  // carries a per-user identity — label the path honestly.
+  return getEnv().MCP_AUTH_ENABLED ? 'env-admin' : 'dev-mode-admin';
+}
 
 router.get('/', async (req, res, next) => {
   try {
@@ -45,18 +58,13 @@ router.get('/:reqId', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-router.post('/:reqId/approve', requireRole('writer'), async (req, res, next) => {
+router.post('/:reqId/approve', requireRole('admin'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String((req.params as Record<string, string>).id ?? ''));
     const reqId = String(req.params.reqId);
-    const resolvedBy = req.body?.resolved_by;
-    if (typeof resolvedBy !== 'string' || resolvedBy.length === 0) {
-      res.status(400).json({ error: 'resolved_by (string, the human reviewer identity) is required' });
-      return;
-    }
     const resolutionNote = req.body?.resolution_note;
     const result = await approveReviewRequest({
-      project_id: projectId, request_id: reqId, resolved_by: resolvedBy,
+      project_id: projectId, request_id: reqId, resolved_by: reviewerIdentity(req),
       resolution_note: typeof resolutionNote === 'string' ? resolutionNote : undefined,
     });
     if (result.status === 'not_found') { res.status(404).json(result); return; }
@@ -65,22 +73,17 @@ router.post('/:reqId/approve', requireRole('writer'), async (req, res, next) => 
   } catch (e) { next(e); }
 });
 
-router.post('/:reqId/return', requireRole('writer'), async (req, res, next) => {
+router.post('/:reqId/return', requireRole('admin'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String((req.params as Record<string, string>).id ?? ''));
     const reqId = String(req.params.reqId);
-    const resolvedBy = req.body?.resolved_by;
-    if (typeof resolvedBy !== 'string' || resolvedBy.length === 0) {
-      res.status(400).json({ error: 'resolved_by (string, the human reviewer identity) is required' });
-      return;
-    }
     const resolutionNote = req.body?.resolution_note;
     if (typeof resolutionNote !== 'string' || resolutionNote.length === 0) {
       res.status(400).json({ error: 'resolution_note is required for return' });
       return;
     }
     const result = await returnReviewRequest({
-      project_id: projectId, request_id: reqId, resolved_by: resolvedBy, resolution_note: resolutionNote,
+      project_id: projectId, request_id: reqId, resolved_by: reviewerIdentity(req), resolution_note: resolutionNote,
     });
     if (result.status === 'not_found') { res.status(404).json(result); return; }
     if (result.status === 'already_resolved') { res.status(409).json(result); return; }

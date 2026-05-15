@@ -269,3 +269,18 @@ test('update_lesson_status rejects any → pending-review (BUG-13.3-2 / 13.7-1)'
   const r = await updateLessonStatus({ projectId: TEST_PROJECT, lessonId: activeId, status: 'pending-review' });
   assert.equal(r.status, 'error', 'active → pending-review must be rejected');
 });
+
+// BUG-13.4-1: getReviewRequest must return the full lesson so the GUI's
+// "View Full Lesson" shows real content (pre-fix it built an empty stub).
+test('getReviewRequest returns the full lesson detail for the reviewer (BUG-13.4-1)', async () => {
+  const lessonId = await insertLesson('draft');
+  const submitR = await submitForReview({ project_id: TEST_PROJECT, agent_id: 'agent-x', lesson_id: lessonId });
+  assert.equal(submitR.status, 'submitted');
+  if (submitR.status !== 'submitted') return;
+
+  const detail = await getReviewRequest({ project_id: TEST_PROJECT, request_id: submitR.request_id });
+  assert.ok(detail, 'detail must not be null');
+  assert.ok(detail!.lesson, 'detail must include the nested lesson object');
+  assert.equal(detail!.lesson.lesson_id, lessonId);
+  assert.equal(detail!.lesson.content, 'test content', 'lesson content must be present (empty pre-fix)');
+});
