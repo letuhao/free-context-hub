@@ -231,13 +231,13 @@ ContextHub uses OpenAI-compatible APIs. Run locally with [LM Studio](https://lms
 
 ### Recommended Combo (benchmarked)
 
-We tested 8 embedding models and 8 reranker models ([full benchmark](docs/benchmarks/2026-03-28-embedding-model-benchmark.md)). Best combo:
+We tested 8 embedding models and 8 reranker models ([embedding/reranker benchmark](docs/benchmarks/2026-03-28-embedding-model-benchmark.md)), plus 6 distillation models ([distillation benchmark](docs/benchmarks/2026-05-15-distillation-model-benchmark.md)). Best combo:
 
 | Role | Model | Config |
 |:-----|:------|:-------|
 | **Embeddings** | `qwen3-embedding-0.6b` | `EMBEDDINGS_DIM=1024` — best accuracy (18/18 pass, avg 0.652) |
 | **Reranker** | `qwen3-4b-instruct-ranker` | `RERANK_MODEL=qwen3-4b-instruct-ranker` — +9% accuracy at 180 lessons |
-| **Distillation** | `qwen2.5-coder-7b-instruct` | `DISTILLATION_ENABLED=true` — reflect, compress, summarize |
+| **Distillation** | `ibm/granite-4-h-tiny` | `DISTILLATION_ENABLED=true` — non-reasoning, ~100K context; reflect, compress, summarize |
 
 ### Alternative Models
 
@@ -257,6 +257,17 @@ We tested 8 embedding models and 8 reranker models ([full benchmark](docs/benchm
 | qwen.qwen3-reranker-4b | generative | 85% | 1.9s | Thinking mode, same accuracy |
 | rank_zephyr_7b | generative | 82% | ~2s | RankGPT format |
 | (no rerank) | — | 76% | 99ms | Baseline |
+
+**Distillation** (6 tested — chat model for `reflect`/`compress`/summarize; [full benchmark](docs/benchmarks/2026-05-15-distillation-model-benchmark.md)):
+
+| Model | Reasoning | Speed | Notes |
+|:------|:----------|:------|:------|
+| **ibm/granite-4-h-tiny** | No | in-stack `add_lesson` ~5.6s | Recommended — 0 reasoning tokens, ~100K context (max 1M) |
+| microsoft/phi-4 | No | in-stack `add_lesson` ~3.7s | Faster, but only a 16K context window |
+| mistral-nemo-instruct-2407 | No | non-reasoning | Viable alternative, 128K context |
+| qwen3.5-9b | Yes | — | Reasoning cannot be disabled via the API |
+| deepseek-r1-distill-qwen-32b | Yes | ~5 tok/s | Non-thinking is possible (32B) but too slow |
+| nvidia/nemotron-3-nano | Yes | ~25-35s/call | Previous default — chain-of-thought overhead |
 
 > **Note:** Code search uses ripgrep/FTS (deterministic), not embeddings. Cross-encoder rerankers (bge-reranker, gte-reranker) don't work via LM Studio — they need a dedicated `/v1/rerank` API.
 
