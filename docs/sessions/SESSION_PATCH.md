@@ -1,3 +1,96 @@
+# Session 2026-05-16 — Phase 15 Sprint 15.1: Coordination Substrate (AMAW, COMPLETE)
+
+**Task:** Phase 15 Sprint 15.1 — the coordination substrate: the durable append-only event
+log + the Topic/Actor/participant model that every later Phase 15 sprint builds on. Branch
+`phase-15`. AMAW workflow (`/amaw`), full 12 phases, size XL.
+
+**Outcome:** an actor can charter a topic, join it (receiving an induction pack), read it,
+close it (sealing the event log), replay events from a cursor, and subscribe to a live SSE
+stream — over both REST (`/api/topics/*`) and 5 MCP tools. All 12 phases passed; POST-REVIEW
+Scope Guard verdict **CLEAR**.
+
+## Migration
+
+- `migrations/0053_coordination_substrate.sql` (NEW) — 4 tables: `topics` (with a `next_seq`
+  per-topic event counter), `actors` (project-scoped PK `(project_id, actor_id)`),
+  `topic_participants`, `coordination_events` (the append-only log, PK `(topic_id, seq)`).
+  All `CREATE … IF NOT EXISTS`; applied cleanly via `npm run migrate`.
+
+## New files (7)
+
+- `migrations/0053_coordination_substrate.sql`
+- `src/services/coordinationConstants.ts` — level / actor-type / subject-type enums + the
+  design-C.3 event-type catalog (service-layer validated; no DB CHECK on `type`, so the
+  catalog grows per sprint with no constraint migration).
+- `src/services/coordinationEvents.ts` — the event log: `appendEvent(client, evt)`
+  (txn-joining; allocates `seq` + enforces the close-seal in one `UPDATE … RETURNING`),
+  `replayEvents(params, executor?)` (cursor replay).
+- `src/services/coordinationEvents.test.ts` — 11 tests (seq monotonic, the seal, unknown
+  type/subject, concurrent-append → exactly 1..N, cursor replay + pagination).
+- `src/services/topics.ts` — `charterTopic` / `joinTopic` / `getTopic` / `closeTopic` + the
+  §4.0 txn/connection contract (verbatim Phase 13 `artifactLeases.ts` pattern). `joinTopic`
+  is two transactions: txn 1 writes the join, txn 2 (`REPEATABLE READ READ ONLY`) builds a
+  coherent induction pack holding no write lock.
+- `src/services/topics.test.ts` — 7 tests (charter, join, idempotent re-join, type conflict,
+  getTopic, close+seal, project-scoped identity).
+- `src/api/routes/topics.ts` — 5 REST endpoints + the poll-based SSE handler (pre-flight
+  existence check, self-scheduling tick, `MAX_STREAM_MS` cap, `Last-Event-ID` resume).
+- `src/api/routes/topics.test.ts` — 3 SSE route tests (backlog + `stream_end`, 404, disconnect
+  cleanup) — added in design rev 5 to close a REVIEW-CODE coverage WARN.
+
+## Modified files (4)
+
+- `src/core/index.ts` — Phase 15 substrate exports.
+- `src/api/index.ts` — `app.use('/api/topics', topicsRouter)`.
+- `src/mcp/index.ts` — 5 MCP tools (`charter_topic`, `join_topic`, `get_topic`,
+  `close_topic`, `replay_topic_events`); flat `z.object` outputs (DEFERRED-007-safe).
+- `package.json` — registered the 2 new service test files + the route test in `test`.
+
+## AMAW review — what the cold-start agents caught
+
+- **REVIEW-DESIGN** — 3 cold-start Adversary rounds, 9 findings (4 BLOCK, 5 WARN), all
+  resolved across design rev 2→4 + a rev-4 main self-review (3-round cap). Standout: the
+  rev-3 two-transaction `joinTopic` had no `catch`/`ROLLBACK` → connection-pool poisoning
+  (r3 BLOCK), fixed with the verbatim Phase 13 transaction pattern. The fix-interaction
+  pattern held every round (each fix spawned the next round's findings) until rev 4 added
+  no new mechanism → the loop terminated.
+- **REVIEW-CODE** — 1 cold-start Adversary round, APPROVED_WITH_WARNINGS (0 BLOCK, 3 WARN):
+  WARN-1 (induction-pack coherence invariant overstated past the 1000-event replay cap) →
+  design rev 5 honest cursor-pagination wording + a `replayEvents` pagination test (the code
+  was already correct cursor semantics); WARN-3 (SSE handler untested) → new
+  `src/api/routes/topics.test.ts`; WARN-2 (no cross-project topic scoping) → DEFERRED-009;
+  WARN-1's pagination residual → DEFERRED-010.
+- **POST-REVIEW** — cold-start Scope Guard, verdict **CLEAR**: no spec drift (rev-5 hash
+  re-verified, all revisions logged), 13/13 ACs covered (Scope Guard independently re-ran
+  the 21 new tests + `tsc`), 12/12 findings resolved, deferred triggers not met.
+
+## Verification (real stack)
+
+- `tsc --noEmit` exit 0; `npm test` **329/329** (308 prior + 21 new).
+- Deploy-state: `docker compose up -d --build mcp worker` — migration 0053 live.
+- Live REST smoke: charter→join→get→events→close all `{status:'ok'}`; topic flips
+  `chartered→active` on first join; SSE backlog + `stream_end`; **HTTP 404** on a missing
+  topic's stream (not a hung 200).
+- MCP smoke: all 5 topic tools in `tools/list`; `charter_topic` `tools/call` returns clean
+  `structuredContent` (no DEFERRED-007 `_zod` crash).
+
+## Deferred
+
+- **DEFERRED-009** — Phase 15 topic operations lack project-scope (cross-tenant) enforcement
+  (REVIEW-CODE WARN-2). MED. Trigger: a Phase 15 auth pass / `MCP_AUTH_ENABLED=true` in prod.
+- **DEFERRED-010** — `replayEvents` / the induction pack has no real pagination API beyond
+  the 1000-event cap (REVIEW-CODE WARN-1 residual). LOW. Trigger: Sprint 15.2 (topics grow).
+
+## What's next
+
+- COMMIT + RETRO close out Sprint 15.1.
+- **Phase 15 Sprint 15.2 — the Board:** `tasks`, derived-identity `artifacts` + versioning,
+  `claims` (evolves Phase 13 leasing) + fencing tokens, the abandoned-claim sweep, and the
+  `closing`-drain transition for `closeTopic`. Sprint 15.2 makes topics accrue many events —
+  DEFERRED-010's trigger condition.
+
+---
+
 # Session 2026-05-15 (cont.) — Phase 13 bug-fix (Phase D of the review)
 
 **Task:** fix all 19 bugs from the Phase 13 post-hoc review (`docs/audit/phase-13-review.md`).
