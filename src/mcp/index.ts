@@ -75,6 +75,12 @@ import {
   activateProfile,
   deactivateProfile,
   getValidLessonTypes,
+  // Phase 15 Sprint 15.1: coordination substrate
+  charterTopic,
+  joinTopic,
+  getTopic,
+  closeTopic,
+  replayEvents,
 } from '../core/index.js';
 import { LESSON_STATUS_ALL, LESSON_STATUS_WRITABLE } from '../constants/lessonStatus.js';
 import { formatToolResponse, OutputFormatSchema } from './formatters.js';
@@ -2949,6 +2955,205 @@ function createMcpToolsServer() {
         offset,
       });
       const summary = `list_review_requests: count=${result.items.length} total=${result.total_count}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  // ──────────────────────────────────────────────────────────────
+  // Phase 15 Sprint 15.1 — Coordination Substrate (5 tools)
+  // See docs/specs/2026-05-16-phase-15-sprint-15.1-design.md §6.
+  // Flat z.object outputs (no z.discriminatedUnion) per DEFERRED-007.
+  // ──────────────────────────────────────────────────────────────
+
+  const topicShape = z.object({
+    topic_id: z.string(),
+    project_id: z.string(),
+    name: z.string(),
+    charter: z.string(),
+    status: z.string(),
+    created_by: z.string(),
+    created_at: z.string(),
+  });
+  const participantShape = z.object({
+    actor_id: z.string(),
+    type: z.string(),
+    display_name: z.string(),
+    level: z.string(),
+    joined_at: z.string(),
+  });
+  const eventShape = z.object({
+    topic_id: z.string(),
+    seq: z.number(),
+    event_id: z.string(),
+    ts: z.string(),
+    actor_id: z.string(),
+    type: z.string(),
+    subject_type: z.string(),
+    subject_id: z.string(),
+    payload: z.unknown(),
+  });
+
+  server.registerTool(
+    'charter_topic',
+    {
+      description: 'Charter a new coordination topic — a bounded collaborative initiative with a goal. Returns the topic_id; actors then call join_topic to participate.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional().describe('Project identifier. Optional if DEFAULT_PROJECT_ID is set.'),
+        name: z.string().min(1).describe('Human-readable topic name.'),
+        charter: z.string().min(1).describe('The charter — scope, goal, authority.'),
+        created_by: z.string().min(1).describe('Actor id of the chartering actor.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.literal('ok'),
+        topic_id: z.string(),
+        project_id: z.string(),
+        name: z.string(),
+        charter: z.string(),
+        topic_status: z.string(),
+        created_by: z.string(),
+        created_at: z.string(),
+      }),
+    },
+    async ({ workspace_token, project_id, name, charter, created_by, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      const t = await charterTopic({ project_id: projectId, name, charter, created_by });
+      const result = {
+        status: 'ok',
+        topic_id: t.topic_id,
+        project_id: t.project_id,
+        name: t.name,
+        charter: t.charter,
+        topic_status: t.status,
+        created_by: t.created_by,
+        created_at: t.created_at,
+      };
+      const summary = `charter_topic: topic_id=${t.topic_id} status=${t.status}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'join_topic',
+    {
+      description: 'Join a coordination topic as an actor. Auto-registers the (project-scoped) actor and returns an induction pack — topic record, participant roster, and the event log from a cursor — so an ephemeral agent re-primes purely by joining.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        topic_id: z.string().min(1),
+        actor_id: z.string().min(1).describe('Caller identity — opaque project-scoped string.'),
+        actor_type: z.string().min(1).describe("'human' or 'ai' — a staffing attribute."),
+        display_name: z.string().min(1),
+        level: z.string().min(1).describe("Chain-of-command level: 'authority' | 'coordination' | 'execution'."),
+        since: z.number().int().min(0).optional().describe('Replay cursor — events after this seq (default 0 = full replay).'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.literal('ok'),
+        topic: topicShape,
+        roster: z.array(participantShape),
+        events: z.array(eventShape),
+        your_cursor: z.number(),
+      }),
+    },
+    async ({ workspace_token, topic_id, actor_id, actor_type, display_name, level, since, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const pack = await joinTopic({ topic_id, actor_id, actor_type, display_name, level, since_seq: since });
+      const result = {
+        status: 'ok',
+        topic: pack.topic,
+        roster: pack.roster,
+        events: pack.events,
+        your_cursor: pack.your_cursor,
+      };
+      const summary = `join_topic: topic=${topic_id} roster=${pack.roster.length} events=${pack.events.length} cursor=${pack.your_cursor}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'get_topic',
+    {
+      description: 'Get a coordination topic — its record and full participant roster.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        topic_id: z.string().min(1),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.literal('ok'),
+        topic: topicShape,
+        roster: z.array(participantShape),
+      }),
+    },
+    async ({ workspace_token, topic_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const tr = await getTopic({ topic_id });
+      const result = { status: 'ok', topic: tr.topic, roster: tr.roster };
+      const summary = `get_topic: topic=${topic_id} status=${tr.topic.status} roster=${tr.roster.length}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'close_topic',
+    {
+      description: 'Close a coordination topic — seals its event log (no further events may be appended). Idempotent.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        topic_id: z.string().min(1),
+        actor_id: z.string().min(1).describe('Actor id performing the close.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.literal('ok'),
+        topic_id: z.string(),
+        topic_status: z.literal('closed'),
+        already_closed: z.boolean(),
+      }),
+    },
+    async ({ workspace_token, topic_id, actor_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const r = await closeTopic({ topic_id, actor_id });
+      const result = {
+        status: 'ok',
+        topic_id: r.topic_id,
+        topic_status: r.status,
+        already_closed: r.already_closed,
+      };
+      const summary = `close_topic: topic=${topic_id} already_closed=${r.already_closed}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'replay_topic_events',
+    {
+      description: "Replay a topic's event log from a cursor — events after the given seq, in order. The cheap way for an agent to catch up on a topic.",
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        topic_id: z.string().min(1),
+        since: z.number().int().min(0).optional().describe('Replay cursor — events after this seq (default 0).'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.literal('ok'),
+        topic_id: z.string(),
+        events: z.array(eventShape),
+        next_cursor: z.number(),
+      }),
+    },
+    async ({ workspace_token, topic_id, since, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const r = await replayEvents({ topic_id, since_seq: since });
+      const result = {
+        status: 'ok',
+        topic_id: r.topic_id,
+        events: r.events,
+        next_cursor: r.next_cursor,
+      };
+      const summary = `replay_topic_events: topic=${topic_id} events=${r.events.length} next_cursor=${r.next_cursor}`;
       return formatToolResponse(result, summary, output_format);
     },
   );

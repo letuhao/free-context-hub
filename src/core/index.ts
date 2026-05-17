@@ -91,6 +91,37 @@ export {
 export type { TaxonomyProfile, ProfileLessonType } from '../services/taxonomyService.js';
 export { bootstrapBuiltinTaxonomyProfiles } from '../services/taxonomyBootstrap.js';
 
+// ── Services: coordination substrate (Phase 15 Sprint 15.1) ──
+export { appendEvent, replayEvents } from '../services/coordinationEvents.js';
+export type {
+  CoordinationEventInput,
+  CoordinationEvent,
+  ReplayResult,
+  AppendResult,
+} from '../services/coordinationEvents.js';
+export { charterTopic, joinTopic, getTopic, closeTopic } from '../services/topics.js';
+export type {
+  TopicRecord,
+  Participant,
+  TopicWithRoster,
+  InductionPack,
+  CloseResult,
+} from '../services/topics.js';
+export {
+  LEVELS,
+  ACTOR_TYPES,
+  SUBJECT_TYPES,
+  TOPIC_STATUSES,
+  EVENT_TYPES,
+} from '../services/coordinationConstants.js';
+export type {
+  Level,
+  ActorType,
+  SubjectType,
+  TopicStatus,
+  EventType,
+} from '../services/coordinationConstants.js';
+
 // ── Services: distillation & snapshots ──
 export { getProjectSnapshotBody } from '../services/snapshot.js';
 export { compressText, reflectOnTopic } from '../services/distiller.js';
