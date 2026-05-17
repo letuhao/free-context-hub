@@ -18,11 +18,12 @@
 
 import assert from 'node:assert/strict';
 import test, { before, after, beforeEach } from 'node:test';
-import { sweepAbandonedClaims } from './coordinationSweep.js';
+import { sweepAbandonedClaims, sweepStalledSteps } from './coordinationSweep.js';
 import { postTask, claimTask } from './board.js';
 import { writeArtifact, baselineArtifact } from './artifacts.js';
 import { charterTopic, joinTopic, closeTopic } from './topics.js';
 import { replayEvents } from './coordinationEvents.js';
+import { submitRequest } from './requests.js';
 import { getDbPool } from '../db/client.js';
 
 const TEST_PROJECT = '__test_coordination_sweep__';
@@ -34,6 +35,10 @@ async function cleanup() {
     [TEST_PROJECT],
   );
   for (const { topic_id } of topicIds.rows) {
+    // Clean up request_steps + requests (added by Sprint 15.3)
+    await pool.query(`DELETE FROM request_steps WHERE request_id IN
+      (SELECT request_id FROM requests WHERE topic_id=$1)`, [topic_id]);
+    await pool.query(`DELETE FROM requests WHERE topic_id = $1`, [topic_id]);
     await pool.query(`DELETE FROM claims WHERE topic_id = $1`, [topic_id]);
     await pool.query(
       `DELETE FROM artifact_versions WHERE artifact_id IN
@@ -314,4 +319,255 @@ test('T17: a batch with one un-recoverable claim + one good claim → the good o
     `SELECT COUNT(*)::int AS n FROM claims WHERE claim_id = $1`, [bad.claim_id],
   );
   assert.equal(badClaims.rows[0].n, 1, 'un-recoverable claim left intact for a retry');
+});
+
+// ── sweepStalledSteps (T17–T20) ──────────────────────────────────────────────
+
+/**
+ * Helper: create an active topic with 3 participants, submit a request, and
+ * force-expire its current step's deadline so the sweep will pick it up.
+ */
+async function mkTopicWithStalledStep(slot: string, submitterLevel: 'execution' | 'coordination' | 'authority') {
+  const pool = getDbPool();
+
+  const t = await charterTopic({
+    project_id: TEST_PROJECT, name: `Sweep Step Test ${slot}`,
+    charter: 'stalled step sweep test', created_by: `actor-auth-${slot}`,
+  });
+  const topicId = t.topic_id;
+  await joinTopic({ topic_id: topicId, actor_id: `actor-exec-${slot}`, actor_type: 'ai', display_name: 'Exec', level: 'execution' });
+  await joinTopic({ topic_id: topicId, actor_id: `actor-coord-${slot}`, actor_type: 'ai', display_name: 'Coord', level: 'coordination' });
+  await joinTopic({ topic_id: topicId, actor_id: `actor-auth-${slot}`, actor_type: 'ai', display_name: 'Auth', level: 'authority' });
+
+  // Create a for_review artifact
+  const task = await postTask({
+    topic_id: topicId, title: `Task ${slot}`, topology: 'parallel',
+    slot, kind: 'document', created_by: `actor-exec-${slot}`,
+  });
+  const claim = await claimTask({ task_id: task.task_id, actor_id: `actor-exec-${slot}` });
+  if (claim.status !== 'claimed') throw new Error('setup: claim failed');
+  const { completeTask } = await import('./board.js');
+  await completeTask({ task_id: task.task_id, actor_id: `actor-exec-${slot}` });
+  const artifactId = task.artifact_id;
+
+  // Submit a request. Use the seeded __default__ weight=10 (coordination/counter_sign).
+  const subBy = submitterLevel === 'execution' ? `actor-exec-${slot}`
+    : submitterLevel === 'coordination' ? `actor-coord-${slot}`
+    : `actor-auth-${slot}`;
+
+  const sub = await submitRequest({
+    topic_id: topicId,
+    subject_type: 'artifact',
+    subject_id: artifactId,
+    kind: 'artifact_review',
+    weight: 10,
+    procedure: 'unilateral',
+    submitted_by: subBy,
+  });
+  if (sub.status !== 'submitted') throw new Error(`submitRequest failed: ${sub.status}`);
+
+  // Force-expire the current step's deadline so the sweep picks it up
+  await pool.query(
+    `UPDATE request_steps SET deadline = now() - interval '10 minutes'
+     WHERE request_id=$1 AND step_index=0`,
+    [sub.request_id],
+  );
+
+  return { topicId, requestId: sub.request_id, route: sub.route, artifactId };
+}
+
+// ── T17: stalled step below authority climbs one level ────────────────────
+
+test('T17: stalled step below authority → climbs one level with fresh deadline + emits request.step_escalated', async () => {
+  // execution submitter, weight=10 → coordination/counter_sign → ['coordination']
+  // step 0 targets coordination
+  const { topicId, requestId } = await mkTopicWithStalledStep('t17', 'execution');
+
+  const pool = getDbPool();
+  const stepBefore = await pool.query<{ target_office: string; status: string }>(
+    `SELECT target_office, status FROM request_steps WHERE request_id=$1 AND step_index=0`,
+    [requestId],
+  );
+  assert.equal(stepBefore.rows[0].target_office, 'coordination');
+
+  const result = await sweepStalledSteps({ grace_minutes: 0 });
+  assert.equal(result.escalated, 1);
+
+  const stepAfter = await pool.query<{ target_office: string; status: string }>(
+    `SELECT target_office, status FROM request_steps WHERE request_id=$1 AND step_index=0`,
+    [requestId],
+  );
+  // coordination → authority (one level up)
+  assert.equal(stepAfter.rows[0].target_office, 'authority', 'step climbed to authority');
+  assert.equal(stepAfter.rows[0].status, 'pending', 'status stays pending');
+
+  const ev = await replayEvents({ topic_id: topicId });
+  const escalatedEvents = ev.events.filter((e) => e.type === 'request.step_escalated');
+  assert.equal(escalatedEvents.length, 1, 'exactly one step_escalated event emitted');
+  assert.equal(escalatedEvents[0].payload.step_index, 0);
+  assert.equal(escalatedEvents[0].payload.from_office, 'coordination');
+  assert.equal(escalatedEvents[0].payload.to_office, 'authority');
+
+  // Request still open
+  const req = await pool.query<{ status: string }>(
+    `SELECT status FROM requests WHERE request_id=$1`,
+    [requestId],
+  );
+  assert.equal(req.rows[0].status, 'open');
+});
+
+// ── T18: stalled authority step → escalation_exhausted ───────────────────
+
+test('T18: stalled authority step → escalation_exhausted', async () => {
+  // coordination submitter, weight=10 → __default__: coordination/counter_sign
+  // deriveRoute('coordination','coordination','counter_sign') → empty → ['coordination']
+  // Step 0 targets coordination. Force it up to authority by a direct DB update.
+  const { topicId, requestId } = await mkTopicWithStalledStep('t18', 'coordination');
+
+  const pool = getDbPool();
+  // Manually set target_office to authority (as if a previous sweep already climbed it)
+  await pool.query(
+    `UPDATE request_steps SET target_office='authority', deadline = now() - interval '10 minutes'
+     WHERE request_id=$1 AND step_index=0`,
+    [requestId],
+  );
+
+  const result = await sweepStalledSteps({ grace_minutes: 0 });
+  assert.equal(result.escalated, 1);
+
+  const stepAfter = await pool.query<{ status: string; decided_by: string }>(
+    `SELECT status, decided_by FROM request_steps WHERE request_id=$1 AND step_index=0`,
+    [requestId],
+  );
+  assert.equal(stepAfter.rows[0].status, 'escalated', 'terminal step status = escalated');
+  assert.equal(stepAfter.rows[0].decided_by, 'system:sweep');
+
+  const reqAfter = await pool.query<{ status: string }>(
+    `SELECT status FROM requests WHERE request_id=$1`,
+    [requestId],
+  );
+  assert.equal(reqAfter.rows[0].status, 'escalation_exhausted');
+
+  const ev = await replayEvents({ topic_id: topicId });
+  const escalatedEvents = ev.events.filter((e) => e.type === 'request.step_escalated');
+  assert.equal(escalatedEvents.length, 1);
+  assert.equal(escalatedEvents[0].payload.exhausted, true);
+
+  const resolvedEvents = ev.events.filter((e) => e.type === 'request.resolved');
+  assert.equal(resolvedEvents.length, 1);
+  assert.equal(resolvedEvents[0].payload.outcome, 'escalation_exhausted');
+});
+
+// ── T19: stalled step on a closed topic → skipped ────────────────────────
+
+test('T19: stalled step on a closed topic → skipped (no mutation, no events)', async () => {
+  const { topicId, requestId } = await mkTopicWithStalledStep('t19', 'execution');
+  const pool = getDbPool();
+
+  // Close the topic after submission (simulates a race or deliberate close)
+  await closeTopic({ topic_id: topicId, actor_id: `actor-auth-t19` });
+
+  const evBefore = await replayEvents({ topic_id: topicId });
+  const evCountBefore = evBefore.events.length;
+
+  const stepBefore = await pool.query<{ target_office: string; deadline: Date }>(
+    `SELECT target_office, deadline FROM request_steps WHERE request_id=$1 AND step_index=0`,
+    [requestId],
+  );
+  const officeBefore = stepBefore.rows[0].target_office;
+
+  const result = await sweepStalledSteps({ grace_minutes: 0 });
+  assert.equal(result.escalated, 0, 'closed-topic step not counted as escalated');
+
+  // No mutation
+  const stepAfter = await pool.query<{ target_office: string; status: string }>(
+    `SELECT target_office, status FROM request_steps WHERE request_id=$1 AND step_index=0`,
+    [requestId],
+  );
+  assert.equal(stepAfter.rows[0].target_office, officeBefore, 'target_office unchanged');
+  assert.equal(stepAfter.rows[0].status, 'pending', 'status unchanged');
+
+  // No events on the closed topic
+  // (replayEvents works even on closed topics — it just reads the sealed log)
+  const evAfter = await replayEvents({ topic_id: topicId });
+  assert.equal(evAfter.events.length, evCountBefore, 'no new events on closed topic');
+});
+
+// ── T20: batch with one bad + one good → good still escalates (genuine crash) ─
+//
+// The previous T20 set the bad request to status='approved', which caused the
+// sweep's pre-step lock-check to skip it via the WHERE-clause filter — the
+// per-step try/catch was NEVER entered. This rework plants a real DB-level fault
+// (a 23505 PK collision on coordination_events, identical to the T17 technique)
+// so the bad step's per-step transaction throws inside the try-block, driving
+// the §0.1-loop catch. The good step must still escalate.
+//
+// Technique (mirrors T17 for sweepAbandonedClaims):
+//   1. Both requests are open (status='open'), both have expired deadlines, so
+//      the initial scan picks them both up.
+//   2. Read the bad topic's current topics.next_seq.
+//   3. Pre-insert a coordination_events row at seq = next_seq + 1 (the seq the
+//      sweep will attempt to use for the first appendEvent inside the bad step's
+//      transaction). This causes a 23505 PK violation on (topic_id, seq).
+//   4. Call sweepStalledSteps — the bad step's transaction throws, the §0.1-loop
+//      catch rolls back and continues, and the good step escalates normally.
+
+test('T20: batch with one bad and one good stalled step → good one still escalates (genuine crash isolation)', async () => {
+  const { topicId: topicGood, requestId: reqGood } = await mkTopicWithStalledStep('t20g', 'execution');
+  const { topicId: topicBad, requestId: reqBad } = await mkTopicWithStalledStep('t20b', 'execution');
+
+  const pool = getDbPool();
+
+  // Verify both requests are open and their steps have expired deadlines —
+  // the scan's WHERE filter must include them both.
+  const reqBadRow = await pool.query<{ status: string }>(
+    `SELECT status FROM requests WHERE request_id=$1`, [reqBad],
+  );
+  assert.equal(reqBadRow.rows[0].status, 'open', 'bad request is open so the scan picks it up');
+  const reqGoodRow = await pool.query<{ status: string }>(
+    `SELECT status FROM requests WHERE request_id=$1`, [reqGood],
+  );
+  assert.equal(reqGoodRow.rows[0].status, 'open', 'good request is open so the scan picks it up');
+
+  // Plant a 23505 PK collision on the bad topic's coordination_events.
+  // appendEvent does: UPDATE topics SET next_seq=next_seq+1 ... RETURNING next_seq
+  // then INSERTs at (topic_id, next_seq). We pre-occupy that slot so the INSERT throws.
+  const seqRow = await pool.query<{ next_seq: string }>(
+    `SELECT next_seq FROM topics WHERE topic_id=$1`, [topicBad],
+  );
+  const collidingSeq = Number(seqRow.rows[0].next_seq) + 1;
+  await pool.query(
+    `INSERT INTO coordination_events (topic_id, seq, actor_id, type, subject_type, subject_id, payload)
+     VALUES ($1, $2, 'test', 'request.step_escalated', 'request', $3, '{}')`,
+    [topicBad, collidingSeq, reqBad],
+  );
+
+  // Both steps are stalled (deadlines already expired by mkTopicWithStalledStep).
+  const result = await sweepStalledSteps({ grace_minutes: 0 });
+
+  // The bad step's transaction threw (23505 PK violation) → caught by §0.1-loop
+  // catch → logged + rolled back + continued. Only the good step committed.
+  assert.equal(result.escalated, 1, 'exactly the good step is counted escalated');
+
+  // Good step must have been escalated (coordination → authority)
+  const stepGoodAfter = await pool.query<{ target_office: string }>(
+    `SELECT target_office FROM request_steps WHERE request_id=$1 AND step_index=0`,
+    [reqGood],
+  );
+  assert.equal(stepGoodAfter.rows[0].target_office, 'authority', 'good step escalated to authority');
+
+  // Bad step must be unchanged (its transaction rolled back)
+  const stepBadAfter = await pool.query<{ target_office: string; status: string }>(
+    `SELECT target_office, status FROM request_steps WHERE request_id=$1 AND step_index=0`,
+    [reqBad],
+  );
+  assert.equal(stepBadAfter.rows[0].target_office, 'coordination', 'bad step target_office unchanged (rolled back)');
+  assert.equal(stepBadAfter.rows[0].status, 'pending', 'bad step status unchanged (rolled back)');
+
+  // Good topic must have exactly one step_escalated event
+  const ev = await replayEvents({ topic_id: topicGood });
+  const escalatedEvents = ev.events.filter((e) => e.type === 'request.step_escalated');
+  assert.equal(escalatedEvents.length, 1, 'exactly 1 step_escalated event on the good topic');
+  assert.equal(escalatedEvents[0].payload.from_office, 'coordination');
+  assert.equal(escalatedEvents[0].payload.to_office, 'authority');
 });
