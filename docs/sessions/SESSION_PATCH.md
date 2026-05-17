@@ -1,8 +1,10 @@
 # LONGRUN CHECKPOINT — Phase 15 autonomous longrun, session boundary (2026-05-18)
 
-**Status:** **Sprint 15.3 (Request-Approval) is COMPLETE** — all 12 AMAW phases passed,
-POST-REVIEW Scope Guard verdict CLEAR. Committed to branch `phase-15-sprint-15.3`. The next
-session resumes at **Sprint 15.4 (collective decision)**, autonomous.
+**Status:** Sprint 15.3 (Request-Approval) shipped all 12 AMAW phases (POST-REVIEW CLEAR,
+committed `8a27312` to `phase-15-sprint-15.3`, PR #15). The **2026-05-18 human-in-loop
+review** then ran a security-framed cold-start audit that found a **CRITICAL authorization
+gap** — so a **Sprint 15.3.1 security fix-up is queued FIRST**. The next session resumes at
+**Sprint 15.3.1**, then Sprint 15.4.
 
 ## Phase 15 longrun progress
 
@@ -10,8 +12,9 @@ session resumes at **Sprint 15.4 (collective decision)**, autonomous.
 |--------|-------|-----|
 | 15.1 — Coordination substrate | ✅ COMPLETE | PR #13 · branch `phase-15-sprint-15.1` |
 | 15.2 — The Board | ✅ COMPLETE | PR #14 · branch `phase-15-sprint-15.2` · `307ba3c` + `275ee7c` (15.2.1) |
-| 15.3 — Request-Approval | ✅ COMPLETE | branch `phase-15-sprint-15.3` · design rev 3 (`6f79057f9e42e4fc`) — PR + SHA in the AUDIT_LOG `commit` event |
-| 15.4 — Collective decision | ⏳ NEXT | — |
+| 15.3 — Request-Approval | ✅ shipped (12 phases) | branch `phase-15-sprint-15.3` · `8a27312` · PR #15 · design rev 3 (`6f79057f9e42e4fc`) |
+| 15.3.1 — security fix-up | ⏳ NEXT | human-review security audit → F1/F3a/F4/F5/F7; commit to `phase-15-sprint-15.3` → PR #15 |
+| 15.4 — Collective decision | pending (after 15.3.1) | — |
 | 15.5–15.7 | pending | — |
 
 PRs are stacked against `main` (each diff includes the prior sprint's commits until merge).
@@ -27,21 +30,45 @@ files, 5 modified, migration 0056. REVIEW-DESIGN ran 3 cold-start Adversary roun
 → r2 1 BLOCK + 1 WARN → r3 ACCEPTED); REVIEW-CODE was one `/review-impl` round (2 MED, fixed
 test-only). 414/414 tests, live smoke 14/14. DEFERRED-013 + DEFERRED-014 logged.
 
-## Resume protocol for the next session (Sprint 15.4 — full AMAW cycle)
+## Resume protocol for the next session (Sprint 15.3.1 — security fix-up)
 
-1. Read `docs/plans/2026-05-16-phase-15-longrun-plan.md` (execution contract + **Calibration
-   notes**), this CHECKPOINT, and `docs/phase-15-design.md` (the master design — Part E row 15.4).
-2. Read `docs/audit/AUDIT_LOG.jsonl` (tail) + `.workflow-state.json`. You are on branch
-   `phase-15-sprint-15.3`.
-3. Cut branch `phase-15-sprint-15.4` off `phase-15-sprint-15.3`. Run the full AMAW 12-phase
-   cycle for Sprint 15.4 — collective decision (motions, votes, tally, veto).
-4. **Calibration notes still apply:** front-load the §10 per-transaction lock-order table in
-   DESIGN; exactly one REVIEW-CODE round must use the `/review-impl` framing (input-trust /
-   coverage gaps / boundary drift), not another concurrency pass.
-5. Sprint 15.4 — likely L–XL; realistically its own session. Branch + PR per sprint;
-   `check_guardrails` before push.
-6. **DEFERRED-013** (counter-sign distinct-endorser enforcement) names Sprint 15.4/15.5 as a
-   trigger — if 15.4 formalizes multi-party endorsement, fold DEFERRED-013 in.
+The 2026-05-18 human-in-loop review of Sprint 15.3 commissioned a security-framed cold-start
+audit (`docs/audit/findings-sprint-15.3-human-review-security.md`) — **2 CRITICAL + 1 HIGH +
+2 MED + 2 LOW**. The user chose: a **Sprint 15.3.1 fix-up** + defer the level-authority half
+(DEFERRED-015). Do 15.3.1 **before** Sprint 15.4.
+
+**Sprint 15.3.1 scope** (commit to `phase-15-sprint-15.3` → updates PR #15 — the 15.2.1 pattern):
+1. **F1 — bind acting identity to the token.** `submitRequest`'s `submitted_by` and
+   `decideStep`'s `actor_id` must derive from / be verified against the authenticated
+   principal (`req.apiKeyName` — the Phase-13 "resolved_by from apiKeyName" pattern; read
+   `src/api/middleware/auth.ts` + a Phase-13 review handler first). When `MCP_AUTH_ENABLED`
+   is off (`apiKeyName` absent) the body value stands (dev posture). Forces a real distinct
+   principal → closes the self-approval forgery (audit F1, CRITICAL).
+2. **F3a — cross-topic artifact bug.** `submitRequest` must require the subject artifact's
+   `topic_id` to equal the request's `topic_id`; `resolveArtifact` must derive the topic
+   from the artifact (as 15.2's `writeArtifact` does via `topicIdForArtifact`), not be passed
+   the request's topic (audit F3a, HIGH).
+3. **F4 — GET-route role gate.** Add `requireRole('reader')` to `GET /api/topics/:id/requests`
+   and `GET /api/requests/:id` (check 15.2's `boardRouter` for consistency first).
+4. **F5 — `step_index` validation.** Reject non-integer / negative `step_index` in
+   `decideStep` (mirrors the `weight` B4 bound; the audit traced it fail-safe — hardening).
+5. **F7 — length cap.** Bound `kind` / `subject_id` length (~256) in `submitRequest`.
+6. Run as a fix-up mini-cycle: implement → VERIFY (tsc + `npm test` + a live smoke of the
+   closed holes) → a **cold-start security re-review** confirming F1/F3a are actually closed
+   → update SESSION_PATCH + AUDIT_LOG → commit + push (updates PR #15) → a RETRO lesson.
+- **DEFERRED-015** (F2 — self-declared participant `level`) is the deferred half: making
+  `level` authoritative is a 15.1 `joinTopic` change with its own design — HARD trigger
+  (before auth-enabled multi-actor / 15.6 self-serve / production).
+
+## Then Sprint 15.4 — collective decision (full AMAW cycle)
+
+After 15.3.1: cut `phase-15-sprint-15.4` off `phase-15-sprint-15.3`, full AMAW 12-phase cycle
+for collective decision (motions, votes, tally, veto). Calibration notes apply (front-load
+the §10 lock table; one `/review-impl` REVIEW-CODE round). **NEW guardrail (RETRO lesson,
+this review): a security-framed cold-start Adversary is mandatory for 15.4 and 15.5** — both
+are governance primitives, the exact case 15.3 missed. **DEFERRED-013** (counter-sign
+distinct-endorser) names 15.4/15.5 as its trigger — fold it in if 15.4 formalizes
+multi-party endorsement.
 
 ## Environment state
 
@@ -50,7 +77,8 @@ test-only). 414/414 tests, live smoke 14/14. DEFERRED-013 + DEFERRED-014 logged.
   generalized coordination-sweep scheduler runs both `sweepAbandonedClaims` and
   `sweepStalledSteps`).
 - `npm test` **414/414** green on `phase-15-sprint-15.3`; `tsc` clean.
-- Deferred items OPEN: DEFERRED-009, 010, 011, 012, 013, 014 — triggers not yet met.
+- Deferred items OPEN: DEFERRED-009, 010, 011, 012, 013, 014, **015** — DEFERRED-015
+  (self-declared participant `level`) has a HARD pre-production trigger; the rest unmet.
 - `jq` is NOT installed in the shell env — live smoke scripts must parse JSON via `node`/`tsx`.
 
 ## Execution-contract reminders (from the longrun plan)
