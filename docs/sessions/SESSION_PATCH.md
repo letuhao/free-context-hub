@@ -1,3 +1,102 @@
+# Session 2026-05-17 — Phase 15 Sprint 15.2: The Board (AMAW autonomous longrun, COMPLETE)
+
+**Task:** Phase 15 Sprint 15.2 — the Board: tasks posted to a topic, derived-identity
+artifacts with versioned states, claims (Phase-13 leasing evolved with a fencing token +
+claim-liveness), and the abandoned-claim sweep. Branch `phase-15-sprint-15.2` (cut from
+`phase-15-sprint-15.1`). AMAW autonomous longrun, full 12 phases, size XL.
+
+**Outcome:** a coordinator posts a task to a topic's board; an execution actor claims it
+(an exclusive fenced lease on its output artifact), writes versioned content, baselines it,
+and completes the task — and if the actor vanishes, the in-process sweep returns the task to
+the board and reverts the artifact to its last safe version. Over both REST (`/api/*`) and 7
+MCP tools. All 12 phases passed; POST-REVIEW Scope Guard verdict **CLEAR**.
+
+## Migration
+
+- `migrations/0054_coordination_board.sql` (NEW) — `coordination_fencing_seq` SEQUENCE + 4
+  tables: `tasks`, `artifacts` (derived id `<topic>:<task>:<slot>` — closes Run 1's #1 gap),
+  `artifact_versions` (append-only history), `claims` (ephemeral, `claims_active_uniq`). All
+  `CREATE … IF NOT EXISTS`; applied + idempotent.
+
+## New files (8)
+
+- `migrations/0054_coordination_board.sql`
+- `src/services/board.ts` — `postTask` / `listBoard` / `claimTask` / `releaseTask` /
+  `completeTask`. `claimTask`'s task-row `SELECT … FOR UPDATE` is the claim serializer (no
+  23505 handler — structurally impossible).
+- `src/services/board.test.ts` — 17 tests.
+- `src/services/artifacts.ts` — `writeArtifact` / `baselineArtifact` (one guarded `UPDATE`
+  fusing writable-state + fencing + claim-liveness) + internal `revertArtifact`.
+- `src/services/artifacts.test.ts` — 9 tests.
+- `src/services/coordinationSweep.ts` — `sweepAbandonedClaims` (per-claim §0.1-loop txn,
+  crash-isolated) + `startClaimsSweepScheduler` (in-process, advisory-locked).
+- `src/services/coordinationSweep.test.ts` — 6 tests.
+- `src/api/routes/board.ts` — the 7-endpoint `boardRouter`.
+
+## Modified files (5)
+
+- `src/core/index.ts` — Sprint 15.2 service exports (the board's `ClaimResult`/`ReleaseResult`
+  /`SweepResult` aliased to `Task*` / `ClaimsSweepResult` to avoid a Phase-13 `artifactLeases`
+  name collision).
+- `src/api/index.ts` — `app.use('/api', boardRouter)` after the `/api/topics` mount.
+- `src/mcp/index.ts` — 7 MCP tools (`post_task` / `list_board` / `claim_task` /
+  `release_task` / `complete_task` / `write_artifact` / `baseline_artifact`); flat `z.object`
+  outputs (DEFERRED-007-safe).
+- `src/index.ts` — `startClaimsSweepScheduler()` at boot, beside `startSweepScheduler()`.
+- `package.json` — registered the 3 new service test files.
+
+## Canonical lock order
+
+`task → claim → artifact → topics` — every transaction acquires row locks as a
+prefix-consistent subsequence (design §10 derived table). `appendEvent`'s `UPDATE topics SET
+next_seq…` is always the last lock. No ABBA cycle.
+
+## AMAW review — what the cold-start agents caught
+
+- **REVIEW-DESIGN** — 3 cold-start Adversary rounds, 9 findings (7 BLOCK, 2 WARN), all
+  resolved across design rev 2→4 + a rev-4 main self-review (3-round cap). Each round's
+  lock-order fix spawned the next round's finding (sweep ABBA deadlock → mis-placed
+  `completeTask` claim lock → an asserted-not-derived lock-order proof) until rev 4 *derived*
+  the §10 per-transaction lock table and the loop terminated.
+- **REVIEW-CODE** — 1 cold-start Adversary round, REJECTED (1 BLOCK, 2 WARN); main
+  self-review round 2 APPROVED (design rev 5). BLOCK: a BUILD-time `WITH prev` CTE read
+  pre-transition state for the `artifact.state_changed` event, but its correctness under
+  READ COMMITTED EvalPlanQual was not verifiable → replaced in `completeTask` /
+  `writeArtifact` / `baselineArtifact` with an explicit `SELECT state … FOR UPDATE` that
+  locks the artifact row and reads its true pre-image. WARNs: `postTask` `depends_on` UUID
+  validation (clean 400, not a raw 22P02→500); the sweep skips a no-op `state_changed` on a
+  draft→draft revert + counts `recovered` consistently.
+- **POST-REVIEW** — cold-start Scope Guard verdict **CLEAR**: spec_drift false (rev5 hash
+  `737d0febc8e1c455`, full v1→v5 trail logged), 15/15 ACs verified independently at
+  `file:line`, all 8 BLOCKs + 4 WARNs resolved, fresh `tsc` 0 + `npm test` 361/361.
+
+## Live verification (real Docker stack)
+
+- `npm test` 361/361 (329 existing + 32 new: board 17, artifacts 9, sweep 6); `tsc` exit 0.
+- mcp + worker rebuilt + redeployed; boot log shows `claims.sweep scheduler started`.
+- Live REST smoke ALL_PASS — happy path charter→join→post→claim→write→baseline→complete
+  (all 9 event types, derived `artifact_id` asserted, monotonic fencing token) + the sweep
+  scenario (force-expired claim → `recovered=1`, task→posted, `claim.expired` emitted).
+- REVIEW-CODE re-smoke ALL_PASS — F1 `state_changed` from-values correct
+  (draft→working→baselined→for_review), F2 malformed `depends_on` → 400, F3 no no-op
+  `state_changed`.
+- MCP smoke — 7 board tools in `tools/list`; `list_board` `tools/call` returns clean
+  `structuredContent` (no DEFERRED-007 `_zod` crash).
+
+## Deferred
+
+- **DEFERRED-011** (NEW) — active topology-ordering enforcement (`topology` / `depends_on`
+  columns ship; enforcing `sequential` / `rolling` ordering does not). OPEN, LOW.
+- **DEFERRED-009 / 010** — inherited from Sprint 15.1, OPEN; triggers not met in 15.2.
+
+## What's next
+
+Sprint 15.3 — Request-Approval (`requests` + `request_steps` multi-level routing; step
+deadline + escalation sweep). The next sprint in the Phase 15 AMAW autonomous longrun
+(`docs/plans/2026-05-16-phase-15-longrun-plan.md`).
+
+---
+
 # Session 2026-05-16 — Phase 15 Sprint 15.1: Coordination Substrate (AMAW, COMPLETE)
 
 **Task:** Phase 15 Sprint 15.1 — the coordination substrate: the durable append-only event

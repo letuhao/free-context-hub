@@ -30,6 +30,7 @@ import { meRouter } from './routes/me.js';                          // Phase 13 
 import { reviewRequestsRouter } from './routes/reviewRequests.js';  // Phase 13 Sprint 13.3
 import { taxonomyProfilesRouter, projectTaxonomyProfileRouter } from './routes/taxonomy.js'; // Phase 13 Sprint 13.5
 import { topicsRouter } from './routes/topics.js';                  // Phase 15 Sprint 15.1
+import { boardRouter } from './routes/board.js';                    // Phase 15 Sprint 15.2
 
 /**
  * Creates the REST API Express app.
@@ -91,6 +92,9 @@ export function createApiApp() {
   app.use('/api/taxonomy-profiles', taxonomyProfilesRouter);
   // Phase 15 Sprint 15.1: coordination topics (top-level — topic_id is a global PK)
   app.use('/api/topics', topicsRouter);
+  // Phase 15 Sprint 15.2: The Board — mounted at /api AFTER /api/topics so the
+  // /topics/:id/{tasks,board} board routes fall through topicsRouter to here.
+  app.use('/api', boardRouter);
   app.use('/api/projects', projectsRouter);       // mixed — write routes gated inside
   app.use('/api/analytics', analyticsRouter);
   app.use('/api/activity', activityRouter);
