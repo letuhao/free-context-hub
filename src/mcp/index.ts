@@ -81,6 +81,14 @@ import {
   getTopic,
   closeTopic,
   replayEvents,
+  // Phase 15 Sprint 15.2: The Board
+  postTask,
+  listBoard,
+  claimTask,
+  releaseTask,
+  completeTask,
+  writeArtifact,
+  baselineArtifact,
 } from '../core/index.js';
 import { LESSON_STATUS_ALL, LESSON_STATUS_WRITABLE } from '../constants/lessonStatus.js';
 import { formatToolResponse, OutputFormatSchema } from './formatters.js';
@@ -3055,6 +3063,7 @@ function createMcpToolsServer() {
         roster: z.array(participantShape),
         events: z.array(eventShape),
         your_cursor: z.number(),
+        has_more: z.boolean(),
       }),
     },
     async ({ workspace_token, topic_id, actor_id, actor_type, display_name, level, since, output_format }) => {
@@ -3066,6 +3075,7 @@ function createMcpToolsServer() {
         roster: pack.roster,
         events: pack.events,
         your_cursor: pack.your_cursor,
+        has_more: pack.has_more,
       };
       const summary = `join_topic: topic=${topic_id} roster=${pack.roster.length} events=${pack.events.length} cursor=${pack.your_cursor}`;
       return formatToolResponse(result, summary, output_format);
@@ -3142,6 +3152,7 @@ function createMcpToolsServer() {
         topic_id: z.string(),
         events: z.array(eventShape),
         next_cursor: z.number(),
+        has_more: z.boolean(),
       }),
     },
     async ({ workspace_token, topic_id, since, output_format }) => {
@@ -3152,9 +3163,226 @@ function createMcpToolsServer() {
         topic_id: r.topic_id,
         events: r.events,
         next_cursor: r.next_cursor,
+        has_more: r.has_more,
       };
-      const summary = `replay_topic_events: topic=${topic_id} events=${r.events.length} next_cursor=${r.next_cursor}`;
+      const summary = `replay_topic_events: topic=${topic_id} events=${r.events.length} next_cursor=${r.next_cursor} has_more=${r.has_more}`;
       return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  // ──────────────────────────────────────────────────────────────
+  // Phase 15 Sprint 15.2 — The Board (7 tools)
+  // See docs/specs/2026-05-16-phase-15-sprint-15.2-design.md §6.
+  // Flat z.object outputs (no z.discriminatedUnion) per DEFERRED-007 — business
+  // failures (conflict/not_found/…) return a {status:…} object inside
+  // structuredContent with a z.enum status field; they are NOT thrown errors.
+  // ──────────────────────────────────────────────────────────────
+
+  const taskRecordShape = z.object({
+    task_id: z.string(),
+    topic_id: z.string(),
+    title: z.string(),
+    topology: z.string(),
+    depends_on: z.array(z.string()),
+    raci: z.unknown(),
+    status: z.string(),
+    created_by: z.string(),
+    created_at: z.string(),
+    artifact_id: z.string(),
+  });
+  const taskSummaryShape = z.object({
+    task_id: z.string(),
+    topic_id: z.string(),
+    title: z.string(),
+    topology: z.string(),
+    depends_on: z.array(z.string()),
+    raci: z.unknown(),
+    status: z.string(),
+    created_by: z.string(),
+    created_at: z.string(),
+    artifact_id: z.string(),
+    artifact_state: z.string(),
+  });
+
+  server.registerTool(
+    'post_task',
+    {
+      description: 'Post a task onto a topic\'s board. Creates the task plus its one output artifact (draft, v1). Returns the task record including the derived artifact_id.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        topic_id: z.string().min(1),
+        title: z.string().min(1).describe('Human-readable task title.'),
+        topology: z.string().min(1).describe("'parallel' | 'sequential' | 'rolling'."),
+        depends_on: z.array(z.string()).optional().describe('Predecessor task_ids.'),
+        raci: z.record(z.string(), z.unknown()).optional().describe('RACI assignment map.'),
+        slot: z.string().min(1).describe('Lowercase-kebab slug for the output artifact slot.'),
+        kind: z.string().min(1).describe('Artifact kind, e.g. "document".'),
+        created_by: z.string().min(1).describe('Actor id posting the task.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.literal('ok'),
+        task: taskRecordShape,
+      }),
+    },
+    async ({ workspace_token, topic_id, title, topology, depends_on, raci, slot, kind, created_by, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const task = await postTask({ topic_id, title, topology, depends_on, raci, slot, kind, created_by });
+      const result = { status: 'ok' as const, task };
+      const summary = `post_task: task_id=${task.task_id} artifact_id=${task.artifact_id} status=${task.status}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'list_board',
+    {
+      description: 'List a topic\'s board — every task plus its output artifact id and state. Pass status to narrow (e.g. status="posted" for the claimable set).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        topic_id: z.string().min(1),
+        status: z.string().optional().describe('Optional task-status filter.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.literal('ok'),
+        tasks: z.array(taskSummaryShape),
+      }),
+    },
+    async ({ workspace_token, topic_id, status, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const board = await listBoard({ topic_id, status });
+      const result = { status: 'ok' as const, tasks: board.tasks };
+      const summary = `list_board: topic=${topic_id} tasks=${board.tasks.length}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'claim_task',
+    {
+      description: 'Claim a task — gain a time-bounded, fencing-tokened lease on its output artifact. Returns status="claimed" with the claim_id + fencing_token, or status="conflict"/"not_found".',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        task_id: z.string().min(1),
+        actor_id: z.string().min(1).describe('Claiming actor id.'),
+        ttl_minutes: z.number().int().positive().optional().describe('Claim TTL in minutes (default 30, max 240).'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.enum(['claimed', 'conflict', 'not_found']),
+        claim_id: z.string().optional(),
+        fencing_token: z.number().optional(),
+        expires_at: z.string().optional(),
+        artifact_id: z.string().optional(),
+        reason: z.string().optional(),
+        incumbent_actor_id: z.string().optional(),
+      }),
+    },
+    async ({ workspace_token, task_id, actor_id, ttl_minutes, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const r = await claimTask({ task_id, actor_id, ttl_minutes });
+      const summary = `claim_task: task=${task_id} status=${r.status}`;
+      return formatToolResponse(r, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'release_task',
+    {
+      description: 'Release a task — a holder voluntarily gives up a LIVE claim, returning the task to the board. An expired claim is the sweep\'s domain (returns status="claim_expired").',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        task_id: z.string().min(1),
+        actor_id: z.string().min(1).describe('The holding actor id.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.enum(['released', 'not_found', 'claim_expired', 'not_owner', 'topic_closed']),
+      }),
+    },
+    async ({ workspace_token, task_id, actor_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const r = await releaseTask({ task_id, actor_id });
+      const summary = `release_task: task=${task_id} status=${r.status}`;
+      return formatToolResponse(r, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'complete_task',
+    {
+      description: 'Complete a task — task → completed, its artifact → for_review, the claim is released. The caller must be the live claim holder.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        task_id: z.string().min(1),
+        actor_id: z.string().min(1).describe('The completing actor id (must be the claim holder).'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.enum(['completed', 'not_found', 'already_completed', 'no_live_claim', 'not_owner', 'bad_artifact_state', 'topic_closed']),
+      }),
+    },
+    async ({ workspace_token, task_id, actor_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const r = await completeTask({ task_id, actor_id });
+      const summary = `complete_task: task=${task_id} status=${r.status}`;
+      return formatToolResponse(r, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'write_artifact',
+    {
+      description: 'Write a new version of an artifact. Requires the live claim_id + its fencing_token. Returns status="ok" with the new version, or status="conflict" with a reason (the stale-holder defense).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        artifact_id: z.string().min(1),
+        claim_id: z.string().min(1).describe('The claim granting write authority.'),
+        fencing_token: z.number().int().describe('The claim\'s fencing token.'),
+        content_ref: z.string().describe('Reference to the new content.'),
+        actor_id: z.string().min(1).describe('The writing actor id.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.enum(['ok', 'conflict']),
+        version: z.number().optional(),
+        state: z.string().optional(),
+        reason: z.string().optional(),
+      }),
+    },
+    async ({ workspace_token, artifact_id, claim_id, fencing_token, content_ref, actor_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const r = await writeArtifact({ artifact_id, claim_id, fencing_token, content_ref, actor_id });
+      const summary = `write_artifact: artifact=${artifact_id} status=${r.status}`;
+      return formatToolResponse(r, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'baseline_artifact',
+    {
+      description: 'Mark an artifact checkpoint — draft|working → baselined. Requires the live claim_id + its fencing_token. Returns status="ok" or status="conflict" with a reason.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        artifact_id: z.string().min(1),
+        claim_id: z.string().min(1).describe('The claim granting write authority.'),
+        fencing_token: z.number().int().describe('The claim\'s fencing token.'),
+        actor_id: z.string().min(1).describe('The baselining actor id.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.enum(['ok', 'conflict']),
+        version: z.number().optional(),
+        state: z.string().optional(),
+        reason: z.string().optional(),
+      }),
+    },
+    async ({ workspace_token, artifact_id, claim_id, fencing_token, actor_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const r = await baselineArtifact({ artifact_id, claim_id, fencing_token, actor_id });
+      const summary = `baseline_artifact: artifact=${artifact_id} status=${r.status}`;
+      return formatToolResponse(r, summary, output_format);
     },
   );
 

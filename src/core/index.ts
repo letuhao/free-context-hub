@@ -122,6 +122,30 @@ export type {
   EventType,
 } from '../services/coordinationConstants.js';
 
+// ── Services: coordination board (Phase 15 Sprint 15.2) ──
+export { postTask, listBoard, claimTask, releaseTask, completeTask } from '../services/board.js';
+export type {
+  TaskRecord,
+  TaskSummary,
+  ListBoardResult,
+  // aliased — ClaimResult / ReleaseResult already exported by artifactLeases above.
+  ClaimResult as TaskClaimResult,
+  ReleaseResult as TaskReleaseResult,
+  CompleteResult,
+} from '../services/board.js';
+export { writeArtifact, baselineArtifact, revertArtifact } from '../services/artifacts.js';
+export type {
+  WriteResult,
+  BaselineResult,
+  ConflictReason,
+} from '../services/artifacts.js';
+export { sweepAbandonedClaims, startClaimsSweepScheduler, CLAIMS_SWEEP_ADVISORY_KEY } from '../services/coordinationSweep.js';
+export type {
+  SweepResult as ClaimsSweepResult,
+  ClaimsSweepHandle,
+  StartClaimsSweepOptions,
+} from '../services/coordinationSweep.js';
+
 // ── Services: distillation & snapshots ──
 export { getProjectSnapshotBody } from '../services/snapshot.js';
 export { compressText, reflectOnTopic } from '../services/distiller.js';

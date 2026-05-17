@@ -17,6 +17,7 @@ import assert from 'node:assert/strict';
 import test, { before, after, beforeEach } from 'node:test';
 import { appendEvent, replayEvents } from './coordinationEvents.js';
 import type { CoordinationEventInput, AppendResult } from './coordinationEvents.js';
+import { ContextHubError } from '../core/errors.js';
 import { getDbPool } from '../db/client.js';
 
 const TEST_PROJECT = '__test_coordination_events__';
@@ -101,18 +102,27 @@ test('appendEvent rejects an unknown subject_type', async () => {
   );
 });
 
-test('appendEvent on a closed topic throws (the seal)', async () => {
+test('appendEvent on a closed topic throws BAD_REQUEST (the seal)', async () => {
+  // [LOW-12] a closed (existing) topic → BAD_REQUEST, distinct from a missing one.
   await makeTopic('ce-closed', 'closed');
   await assert.rejects(
     appendInTxn(evt('ce-closed')),
-    /closed or does not exist/,
+    (err: unknown) =>
+      err instanceof ContextHubError &&
+      err.code === 'BAD_REQUEST' &&
+      /is closed/.test(err.message) &&
+      !/does not exist/.test(err.message),
   );
 });
 
-test('appendEvent on a missing topic throws', async () => {
+test('appendEvent on a missing topic throws NOT_FOUND', async () => {
+  // [LOW-12] a missing topic → NOT_FOUND, distinct from a closed one.
   await assert.rejects(
     appendInTxn(evt('ce-nonexistent')),
-    /closed or does not exist/,
+    (err: unknown) =>
+      err instanceof ContextHubError &&
+      err.code === 'NOT_FOUND' &&
+      /does not exist/.test(err.message),
   );
 });
 
@@ -190,4 +200,29 @@ test('replayEvents honors the limit; the cursor continues the read correctly', a
   const page2 = await replayEvents({ topic_id: 'ce-paginate', since_seq: page1.next_cursor, limit: 2 });
   assert.deepEqual(page2.events.map((e) => e.seq), [3]);
   assert.equal(page2.next_cursor, 3);
+});
+
+test('replayEvents: has_more is true on a truncated page, false on the tail [MED-5]', async () => {
+  await makeTopic('ce-hasmore');
+  // 3 events, page size 2 → the topic has more events than the limit.
+  await appendInTxn(evt('ce-hasmore'));
+  await appendInTxn(evt('ce-hasmore'));
+  await appendInTxn(evt('ce-hasmore'));
+
+  // a capped page (events.length === limit) → has_more true: more may remain.
+  const truncated = await replayEvents({ topic_id: 'ce-hasmore', limit: 2 });
+  assert.equal(truncated.events.length, 2);
+  assert.equal(truncated.has_more, true, 'a full page signals possible truncation');
+
+  // continuing from the cursor — the tail page is short → has_more false.
+  const tail = await replayEvents({
+    topic_id: 'ce-hasmore', since_seq: truncated.next_cursor, limit: 2,
+  });
+  assert.equal(tail.events.length, 1);
+  assert.equal(tail.has_more, false, 'a non-full page is the tail');
+
+  // an un-truncated full read (default limit ≫ event count) → has_more false.
+  const full = await replayEvents({ topic_id: 'ce-hasmore' });
+  assert.equal(full.events.length, 3);
+  assert.equal(full.has_more, false, 'a non-truncated call has has_more false');
 });

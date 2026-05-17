@@ -11,6 +11,7 @@ import {
 import { createMcpToolsServer } from './mcp/index.js';
 import { createApiApp } from './api/index.js';
 import { startSweepScheduler } from './services/sweepScheduler.js';  // Phase 13 Sprint 13.2
+import { startClaimsSweepScheduler } from './services/coordinationSweep.js';  // Phase 15 Sprint 15.2
 
 const logger = createModuleLogger('main');
 
@@ -24,6 +25,9 @@ async function main() {
 
   // Phase 13 Sprint 13.2 — background TTL sweep for artifact_leases.
   startSweepScheduler();
+
+  // Phase 15 Sprint 15.2 — background sweep that recovers abandoned claims.
+  startClaimsSweepScheduler();
 
   // Phase 13 Sprint 13.5 — seed built-in taxonomy profiles from config/taxonomy-profiles/.
   const { bootstrapBuiltinTaxonomyProfiles } = await import('./services/taxonomyBootstrap.js');
