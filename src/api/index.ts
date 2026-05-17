@@ -32,6 +32,7 @@ import { taxonomyProfilesRouter, projectTaxonomyProfileRouter } from './routes/t
 import { topicsRouter } from './routes/topics.js';                  // Phase 15 Sprint 15.1
 import { boardRouter } from './routes/board.js';                    // Phase 15 Sprint 15.2
 import { requestsRouter } from './routes/requests.js';              // Phase 15 Sprint 15.3
+import { motionsRouter } from './routes/motions.js';                // Phase 15 Sprint 15.4
 
 /**
  * Creates the REST API Express app.
@@ -99,6 +100,9 @@ export function createApiApp() {
   // Phase 15 Sprint 15.3: Request-Approval — mounted at /api AFTER boardRouter;
   // handles /topics/:id/requests + /requests/:id + /requests/:id/steps/:n/decide.
   app.use('/api', requestsRouter);
+  // Phase 15 Sprint 15.4: Collective Decision — mounted at /api AFTER requestsRouter;
+  // handles /decision-bodies/* + /topics/:id/motions + /motions/:id/*.
+  app.use('/api', motionsRouter);
   app.use('/api/projects', projectsRouter);       // mixed — write routes gated inside
   app.use('/api/analytics', analyticsRouter);
   app.use('/api/activity', activityRouter);

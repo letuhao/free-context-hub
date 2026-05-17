@@ -160,6 +160,43 @@ export type {
 export { resolveMatrixRow, deriveRoute } from '../services/doaMatrix.js';
 export type { MatrixRow } from '../services/doaMatrix.js';
 
+// ── Services: collective decision (Phase 15 Sprint 15.4) ──
+export { createBody, addBodyMember, getBody, listBodies } from '../services/decisionBodies.js';
+export type {
+  BodyRecord,
+  BodyMember,
+  AddMemberResult,
+  ListBodiesResult,
+} from '../services/decisionBodies.js';
+export {
+  proposeMotion,
+  secondMotion,
+  castVote,
+  vetoMotion,
+  tallyMotion,
+  getMotion,
+  listMotions,
+  computeMotionTally,
+  MOTION_DEADLINE_DEFAULT_MINUTES,
+  MOTION_DEADLINE_MIN_MINUTES,
+  MOTION_DEADLINE_MAX_MINUTES,
+} from '../services/motions.js';
+export type {
+  MotionRecord,
+  MotionVote,
+  MotionTally,
+  MotionVoteChoice,
+  ProposeResult,
+  SecondResult,
+  VoteResult,
+  VetoResult,
+  TallyResult,
+  TallyOutcome,
+  ListMotionsResult,
+} from '../services/motions.js';
+export { sweepExpiredMotions } from '../services/coordinationSweep.js';
+export type { ExpiredMotionsSweepResult } from '../services/coordinationSweep.js';
+
 // ── Services: distillation & snapshots ──
 export { getProjectSnapshotBody } from '../services/snapshot.js';
 export { compressText, reflectOnTopic } from '../services/distiller.js';

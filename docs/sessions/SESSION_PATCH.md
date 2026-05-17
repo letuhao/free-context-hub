@@ -1,10 +1,11 @@
 # LONGRUN CHECKPOINT — Phase 15 autonomous longrun, session boundary (2026-05-18)
 
-**Status:** Sprint 15.3 (Request-Approval) shipped, then the 2026-05-18 human-in-loop review
-found a CRITICAL authorization gap → **Sprint 15.3.1 security fix-up — now COMPLETE** (all 12
-AMAW phases, POST-REVIEW security Adversary CLEAR). The next session resumes at **Sprint 15.4**
-(collective decision). 15.3.1 is committed as `50fb866` to `phase-15-sprint-15.3` → PR #15
-(the 15.2.1 same-branch pattern).
+**Status:** **Sprint 15.4 (Collective Decision) — COMPLETE** via the v2.2 human-in-loop
+12-phase workflow (the user chose human-in-loop for 15.4). All 12 phases passed; the
+guardrail-mandated POST-REVIEW security Adversary returned **CLEAR**; a user-invoked
+`/review-impl` at the POST-REVIEW checkpoint found 1 MED + 1 LOW + 2 COSMETIC, all fixed +
+re-verified. The next session resumes at **Sprint 15.5** (intake + dispute). 15.4 is on branch
+`phase-15-sprint-15.4` (cut from `phase-15-sprint-15.3`).
 
 ## Phase 15 longrun progress
 
@@ -13,50 +14,57 @@ AMAW phases, POST-REVIEW security Adversary CLEAR). The next session resumes at 
 | 15.1 — Coordination substrate | ✅ COMPLETE | PR #13 · branch `phase-15-sprint-15.1` |
 | 15.2 — The Board | ✅ COMPLETE | PR #14 · branch `phase-15-sprint-15.2` · `307ba3c` + `275ee7c` (15.2.1) |
 | 15.3 — Request-Approval | ✅ COMPLETE | branch `phase-15-sprint-15.3` · `8a27312` · PR #15 |
-| 15.3.1 — security fix-up | ✅ COMPLETE | `phase-15-sprint-15.3` · `50fb866` · PR #15 · F1/F3a/F4/F5/F7 · design rev 3 (`e8b03d5b5f5b71d2`) |
-| 15.4 — Collective decision | ⏳ NEXT | full AMAW 12-phase cycle |
-| 15.5–15.7 | pending | — |
+| 15.3.1 — security fix-up | ✅ COMPLETE | `phase-15-sprint-15.3` · `50fb866` · PR #15 · F1/F3a/F4/F5/F7 |
+| 15.4 — Collective decision | ✅ COMPLETE | branch `phase-15-sprint-15.4` · v2.2 human-in-loop · design rev 2 (`a12f419578588e6d`) |
+| 15.5 — Intake + dispute | ⏳ NEXT | full 12-phase cycle |
+| 15.6–15.7 | pending | — |
 
 PRs are stacked against `main` (each diff includes the prior sprint's commits until merge).
 
-## Sprint 15.3.1 outcome
+## Sprint 15.4 outcome
 
-The 2026-05-18 human-in-loop security audit of Sprint 15.3 found 2 CRITICAL + 1 HIGH + 2 MED
-+ 2 LOW. Sprint 15.3.1 closed the in-scope half: **F1** (the REST acting identity is bound to
-the authenticated api key via `resolveActorIdentity`; a mismatching body value → 403),
-**F3a** (`submitRequest` requires `artifact.topic_id == request topic`; `resolveArtifact`
-derives the topic from the artifact), **F4** (`requireRole('reader')` on the 2 GET routes),
-**F5** (`step_index` non-negative-integer validation), **F7** (256-char cap on
-`kind`/`subject_id`). 4 files changed + an `mcp/index.ts` doc comment; no migration.
-REVIEW-DESIGN: 2 cold-start security Adversary rounds (r1 2 BLOCK + 1 WARN → rev 2; r2
-ACCEPTED + 2 WARN → rev 3, `DEFERRED-016` filed). REVIEW-CODE: one `/review-impl` round (0
-HIGH/MED, 5 LOW, 2 fixed inline). POST-REVIEW: cold-start security Adversary **CLEAR** —
-F1/F3a/F4/F5/F7 all traceably closed. 429/429 tests, live smoke 5/5.
+Sprint 15.4 shipped the **collective-decision primitive** — the voting half of the Phase 15
+governance model. Migration `0057` (4 tables: `decision_bodies`, `body_members`, `motions`,
+`votes`); `decisionBodies.ts` (project-scoped body/membership config) + `motions.ts` (the
+motion lifecycle: propose → second → ballot → tally|veto); a third sweep `sweepExpiredMotions`
+in `coordinationSweep.ts`; 11 REST routes + 11 MCP tools. 13 files; `coordinationConstants.ts`
+unchanged (15.1 pre-provisioned the `motion.*`/`vote.cast` types + the `motion` subject type).
 
-**F1 honest scope:** F1 closes the *identity-spoofing* half of the audit CRITICAL on the
-`MCP_AUTH_ENABLED=true` DB-key path. The full CRITICAL closes only with **F2 → DEFERRED-015**
-(self-declared participant `level`) and **DEFERRED-016** (api-key multiplicity — one human
-can mint N keys). Under `MCP_AUTH_ENABLED=false` the forgery stays reachable — accepted dev
-posture; DEFERRED-015/016 carry the HARD pre-production trigger.
+A motion is decided by an **exact Postgres-`NUMERIC` tally** — quorum (a participating-weight
+floor) + threshold (the inclusive `for ≥ threshold·base` fraction; abstain counts to quorum,
+not the threshold base). A `veto_holders` member can veto a `balloting` motion. The **central
+design fix** (REVIEW-DESIGN BLOCK-1): a ballot is tallied **only post-deadline** — `tallyMotion`
+rejects `now() < deadline` → `balloting_open`; before the fix a proposer could tally a
+transient `for` lead and manufacture a `carried`. Post-deadline the vote set is frozen, so the
+tally is deterministic.
 
-## Resume protocol — Sprint 15.4 (collective decision)
+**Honest authorization scope (DESIGN §0.5 / DEFERRED-017):** 15.4 builds the voting *mechanism*
+— sound; not subvertible by a mutually-distrusting body member. It does **not** authorize
+*who* may create a body, grant veto power, set a vote weight, or hold a proxy — that is
+coordinator-trusted under `MCP_AUTH_ENABLED=false`, the same self-declared-authority class as
+DEFERRED-015/016. **DEFERRED-017** owns the residual (HARD pre-production trigger).
 
-Cut `phase-15-sprint-15.4` off `phase-15-sprint-15.3`. Full AMAW 12-phase cycle for the
-collective-decision primitive (motions, votes, tally, veto). Calibration: front-load the §10
-lock table; one `/review-impl` REVIEW-CODE round. **Guardrail (lesson `5c0b7b25`, now an
-enforced rule): a security-framed cold-start Adversary is mandatory at POST-REVIEW for 15.4
-and 15.5** — both are governance primitives, the exact case the 15.3 autonomous run missed.
-**DEFERRED-013** (counter-sign distinct-endorser) names 15.4/15.5 as its trigger — fold it in
-if 15.4 formalizes multi-party endorsement.
+## Resume protocol — Sprint 15.5 (intake + dispute)
+
+Cut `phase-15-sprint-15.5` off `phase-15-sprint-15.4`. Full 12-phase cycle for the **intake
+mailbox + dispute resolution** primitives (master design B.8 / C.1 — `intake_items`,
+`disputes`; a dispute is a Request-Approval routed to an arbiter or a tribunal). Calibration:
+front-load the §10 lock table; one `/review-impl` REVIEW-CODE round. **Guardrail (lesson
+`5c0b7b25`, an enforced rule): a security-framed cold-start Adversary is mandatory at
+POST-REVIEW for 15.5** — a dispute is a governance/adjudication primitive. Triggered deferred
+items to fold in or evaluate at 15.5 CLARIFY: **DEFERRED-013** (counter-sign distinct-endorser
+— re-deferred from 15.4, its trigger is now 15.5); **DEFERRED-012** (the topic `closing`-drain
+— its trigger is Sprint 15.5, by which point the full in-flight item set exists).
+**DEFERRED-017/015/016** carry the HARD pre-production authz trigger.
 
 ## Environment state
 
 - Docker stack UP — `db`/`mcp`/`worker`/`neo4j`/`rabbitmq`/`redis` running; migrations
-  0053–**0056** applied; `mcp`/`worker` rebuilt + running the **Sprint 15.3.1** code.
-- `npm test` **429/429** green on `phase-15-sprint-15.3`; `tsc` clean.
-- Deferred items OPEN: DEFERRED-009, 010, 011, 012, 013, 014, **015**, **016** —
-  DEFERRED-015 + 016 (the auth-enabled-multi-actor authorization residuals) carry a HARD
-  pre-production trigger; the rest unmet.
+  0053–**0057** applied; `mcp`/`worker` rebuilt + running the **Sprint 15.4** code.
+- `npm test` **527/527** green on `phase-15-sprint-15.4`; `tsc` clean.
+- Deferred items OPEN: DEFERRED-009, 010, 011, 012, 013, 014, **015**, **016**, **017**,
+  018, 019 — DEFERRED-015 + 016 + **017** (the auth-enabled-multi-actor authorization
+  residuals) carry a HARD pre-production trigger; DEFERRED-012 + 013 trigger at Sprint 15.5.
 - `jq` is NOT installed in the shell env — live smoke scripts must parse JSON via `node`/`tsx`.
 
 ## Execution-contract reminders (from the longrun plan)
@@ -68,6 +76,96 @@ if 15.4 formalizes multi-party endorsement.
 - Each sprint → its own branch + PR to `main`; `check_guardrails` before push.
 - Sub-agents cannot write files under `docs/audit/` — they return findings in their final
   message and the main session persists them.
+
+---
+
+# Session 2026-05-18 — Phase 15 Sprint 15.4: Collective Decision (v2.2 human-in-loop, COMPLETE)
+
+**Task:** Phase 15 Sprint 15.4 — the collective-decision primitive: project-scoped decision
+bodies with weighted membership, topic-scoped motions (propose → second → ballot → tally|veto),
+an exact quorum/threshold tally, a first-class veto, an expired-motion sweep. Branch
+`phase-15-sprint-15.4` (cut from `phase-15-sprint-15.3`). **v2.2 human-in-loop** 12-phase
+workflow (the user's explicit choice for 15.4), size XL.
+
+**Outcome:** A `decision_body` is a project-scoped electorate of weighted members
+(`createBody`/`addBodyMember` — ungated config, no events — D2). A `motion` is topic+body
+scoped: `proposeMotion` → `proposed`; `secondMotion` by a distinct body member → `balloting`;
+`castVote` records a principal-keyed weighted ballot (`vote_weight` snapshotted at cast — D7);
+`tallyMotion` (post-deadline only — BLOCK-1) runs the exact-`NUMERIC` §4 tally → `carried` /
+`failed` / `lapsed`; `vetoMotion` by a `veto_holders` member → `vetoed`. The expired-motion
+sweep (`sweepExpiredMotions`, the 3rd sweep in `coordinationSweep.ts`) auto-resolves a motion
+past its deadline. Over REST (11 routes) + 11 MCP tools. All 12 phases passed; POST-REVIEW
+security Adversary **CLEAR**.
+
+## Migration
+
+- `migrations/0057_collective_decision.sql` (NEW) — `decision_bodies` (project-scoped;
+  quorum/threshold/`veto_holders`), `body_members` (weighted), `motions` (topic+body scoped,
+  the frozen `tally` JSONB), `votes` (principal-keyed, `proxy_for` audit column) + 3 indexes.
+  No ALTER, no seed. `coordinationConstants.ts` untouched — 15.1 pre-provisioned the
+  `motion.*`/`vote.cast` event types + the `motion` subject type.
+
+## New files (7) / modified (6)
+
+- NEW: `migrations/0057_collective_decision.sql`; `src/services/decisionBodies.ts` + `.test.ts`;
+  `src/services/motions.ts` + `.test.ts`; `src/api/routes/motions.ts` + `.test.ts`.
+- MODIFIED: `src/services/coordinationSweep.ts` (+`sweepExpiredMotions`, the 3rd sweep) +
+  `.test.ts`; `src/mcp/index.ts` (11 tools); `src/core/index.ts`; `src/api/index.ts`;
+  `package.json`.
+
+## Canonical lock order
+
+15.4 extended the global order to `task → claim → request → request_step → artifact → motion
+→ vote → topics`. A motion transaction locks `motion … FOR UPDATE`, then `appendEvent`'s
+`topics` lock last; `decision_bodies`/`body_members` are plain reads (config — never locked).
+15.4's lock set `{motion, vote, topics}` is disjoint from the Board/Request sets except
+`topics` — no ABBA, derived up front in design §10.
+
+## Review summary
+
+- **REVIEW-DESIGN** — 2 main-session adversarial self-review rounds (v2.2): r1 **1 BLOCK**
+  (early-tally forgery — `tallyMotion` had no deadline gate; a proposer could tally a transient
+  `for` lead → a manufactured `carried`) + 2 WARN → design **rev 2** (hash `a12f419578588e6d`);
+  r2 ACCEPTED.
+- **BUILD** — dispatched to one fresh subagent, TDD per task; 0 design gaps.
+- **REVIEW-CODE** — `/review-impl` cold review of the subagent-built code: 0 HIGH, 0 MED, 5
+  LOW; LOW-5 (a missing proxy-in-tally test) fixed inline; LOW-3 (`veto_holders` cap) →
+  DEFERRED-017.
+- **QC** — Scope Guard CLEAR: fingerprint `a12f419578588e6d` match, no drift; AC1–AC13 covered.
+- **POST-REVIEW** — the guardrail-mandated (`5c0b7b25`) cold-start security Adversary **CLEAR**:
+  12 live attacks all defended; §0.5 honest-scope claim verified accurate; 1 WARN
+  (the ungated-propose-gate note → DEFERRED-017). Then a **user-invoked `/review-impl`** at the
+  checkpoint found **1 MED** (`veto_holders` stored un-trimmed — a whitespace-configured veto
+  holder silently could not veto; fails safe) + 1 LOW (the 11 MCP tools were never invoked) +
+  2 COSMETIC — **all 4 fixed** (the MED RED-confirmed then GREEN) + re-verified.
+
+## Live verification
+
+- `tsc` exit 0; `npm test` **527/527** (429 prior + 98 new — decisionBodies 19, motions 54,
+  routes/motions 21, coordinationSweep +4).
+- Live deployment smoke on rebuilt `mcp`+`worker` Docker images (15.4 code, migration 0057
+  applied): **REST 11/11** (charter→body→propose→second→3 votes→tally→`carried`; veto→`vetoed`;
+  pre-deadline tally→409 — BLOCK-1 verified live) + **MCP `tools/call` 9/9** (all 11 tools
+  registered; 8 exercised end-to-end through the MCP transport).
+
+## Deferred
+
+- **DEFERRED-017** (NEW) — the 15.4 collective-decision authorization residual
+  (body/membership/veto-holder/vote-weight/proxy-grant creation ungated; + the `veto_holders`
+  length cap, REVIEW-CODE LOW-3). HIGH, HARD pre-production trigger (the DEFERRED-015/016
+  family).
+- **DEFERRED-018** (NEW) — collective-procedure request steps (`procedure='collective'` wiring
+  a request step to a motion). LOW, a feature follow-on.
+- **DEFERRED-019** (NEW) — primitive-outcome → board-task chaining (master C.4 — a carried
+  motion / approved request posts a board task). LOW, interlocks with DEFERRED-012.
+- **DEFERRED-013** — re-deferred to Sprint 15.5 (15.4's CLARIFY Q2 kept 15.4 off `requests.ts`).
+
+## What's next
+
+Sprint 15.5 — intake mailbox + dispute resolution. Cut `phase-15-sprint-15.5` off
+`phase-15-sprint-15.4`, full 12-phase cycle. A security-framed cold-start Adversary is
+mandatory at POST-REVIEW (guardrail `5c0b7b25`). Fold/evaluate DEFERRED-013 (distinct-endorser)
++ DEFERRED-012 (the `closing`-drain) at 15.5 CLARIFY.
 
 ---
 

@@ -32,6 +32,7 @@ import { createModuleLogger } from '../utils/logger.js';
 import { appendEvent } from './coordinationEvents.js';
 import { revertArtifact } from './artifacts.js';
 import { LEVELS_ASC, LEVEL_RANK, STEP_DEADLINE_MINUTES } from './doaMatrix.js';
+import { computeMotionTally } from './motions.js';
 
 const logger = createModuleLogger('coordination-sweep');
 
@@ -41,6 +42,8 @@ const DEFAULT_GRACE_MINUTES = 0;
 const MAX_GRACE_MINUTES = 1440;
 
 export type StalledStepsSweepResult = { escalated: number; swept_at: string };
+
+export type ExpiredMotionsSweepResult = { resolved: number; swept_at: string };
 
 export type SweepResult = { recovered: number; swept_at: string };
 
@@ -376,6 +379,139 @@ export async function sweepStalledSteps(params?: {
   return result;
 }
 
+// ── §5 sweepExpiredMotions (Phase 15 Sprint 15.4) ────────────────────────────
+
+/**
+ * Resolve all expired motions (§5). A third swept entity alongside
+ * `sweepAbandonedClaims` + `sweepStalledSteps`.
+ *
+ * "Expired" = a `proposed` or `balloting` motion whose deadline has passed.
+ * Each motion is processed in its own §0.1-loop transaction (catch → log →
+ * `continue` — never re-throws). Lock order: `motion → topics`.
+ *
+ * Branch logic (D9):
+ *   - status='proposed' (never seconded): UPDATE to 'lapsed', emit
+ *     motion.tallied{outcome:'lapsed', reason:'not_seconded'}.
+ *   - status='balloting': run the §4 tally, UPDATE to the outcome, emit
+ *     motion.tallied{outcome, auto:true, ...tally}.
+ *
+ * Closed-topic branch: skip (no mutation, no event) — a motion on a closed topic
+ * is frozen mid-flight in the sealed log (DEFERRED-012's `closing`-drain will
+ * force-lapse it). The topics row is locked FOR UPDATE — closeTopic is serialized.
+ *
+ * Convergence — an expired motion is moved to a terminal status in one tick;
+ * terminal statuses are excluded by the scan predicate, so it cannot re-enter.
+ */
+export async function sweepExpiredMotions(params?: {
+  grace_minutes?: number;
+}): Promise<ExpiredMotionsSweepResult> {
+  const grace = clampGrace(params?.grace_minutes);
+  const pool = getDbPool();
+
+  // Scan — snapshot the expired-motion set. Each motion is re-checked under a
+  // lock inside its own transaction (it may have been vetoed/tallied since).
+  const expired = await pool.query<{ motion_id: string; topic_id: string }>(
+    `SELECT motion_id, topic_id FROM motions
+      WHERE status IN ('proposed','balloting')
+        AND deadline < now() - make_interval(mins => $1)`,
+    [grace],
+  );
+
+  let resolved = 0;
+
+  for (const row of expired.rows) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // ── (motion) row lock ──────────────────────────────────────────────────
+      const motionRes = await client.query<{
+        body_id: string; status: string; expired: boolean;
+      }>(
+        `SELECT body_id, status, (deadline < now()) AS expired
+           FROM motions WHERE motion_id=$1 FOR UPDATE`,
+        [row.motion_id],
+      );
+      if (
+        motionRes.rowCount === 0 ||
+        !['proposed', 'balloting'].includes(motionRes.rows[0].status) ||
+        !motionRes.rows[0].expired
+      ) {
+        // Vetoed / tallied / no longer expired since the scan — skip.
+        await client.query('ROLLBACK');
+        continue;
+      }
+      const motion = motionRes.rows[0];
+
+      // ── (topics) row lock — serializes closeTopic ─────────────────────────
+      const topicRes = await client.query<{ status: string }>(
+        `SELECT status FROM topics WHERE topic_id=$1 FOR UPDATE`,
+        [row.topic_id],
+      );
+      if (topicRes.rows[0]?.status === 'closed') {
+        // Closed topic: skip — frozen mid-flight (DEFERRED-012). No mutation,
+        // no event.
+        await client.query('ROLLBACK');
+        continue;
+      }
+
+      if (motion.status === 'proposed') {
+        // Never seconded — lapse it (D9).
+        await client.query(
+          `UPDATE motions SET status='lapsed', tally=NULL WHERE motion_id=$1`,
+          [row.motion_id],
+        );
+        await appendEvent(client, {
+          topic_id: row.topic_id,
+          actor_id: 'system:sweep',
+          type: 'motion.tallied',
+          subject_type: 'motion',
+          subject_id: row.motion_id,
+          payload: { outcome: 'lapsed', reason: 'not_seconded' },
+        });
+      } else {
+        // 'balloting' — run the §4 tally.
+        const bodyRes = await client.query<{ quorum: string; threshold: string }>(
+          `SELECT quorum, threshold FROM decision_bodies WHERE body_id=$1`,
+          [motion.body_id],
+        );
+        const quorum = Number(bodyRes.rows[0].quorum);
+        const threshold = Number(bodyRes.rows[0].threshold);
+        const { outcome, tally } = await computeMotionTally(client, row.motion_id, quorum, threshold);
+        await client.query(
+          `UPDATE motions SET status=$1, tally=$2 WHERE motion_id=$3`,
+          [outcome, JSON.stringify(tally), row.motion_id],
+        );
+        await appendEvent(client, {
+          topic_id: row.topic_id,
+          actor_id: 'system:sweep',
+          type: 'motion.tallied',
+          subject_type: 'motion',
+          subject_id: row.motion_id,
+          payload: { outcome, auto: true, ...tally },
+        });
+      }
+
+      await client.query('COMMIT');
+      resolved++;
+    } catch (err) {
+      // §0.1-loop variant — log and CONTINUE; never re-throw.
+      await client.query('ROLLBACK').catch(() => {});
+      logger.error(
+        { err: String(err), motion_id: row.motion_id },
+        'sweep expired-motion resolution failed',
+      );
+      /* continue */
+    } finally {
+      client.release();
+    }
+  }
+
+  const result: ExpiredMotionsSweepResult = { resolved, swept_at: new Date().toISOString() };
+  logger.info(result, 'motions.sweep complete');
+  return result;
+}
+
 // ── §4.2 in-process scheduler ────────────────────────────────────────────────
 
 // Test-injectable dependencies. Production uses the defaults; tests call
@@ -383,6 +519,7 @@ export async function sweepStalledSteps(params?: {
 let _getDbPool: typeof defaultGetDbPool = defaultGetDbPool;
 let _sweepAbandonedClaims: typeof sweepAbandonedClaims = sweepAbandonedClaims;
 let _sweepStalledSteps: typeof sweepStalledSteps = sweepStalledSteps;
+let _sweepExpiredMotions: typeof sweepExpiredMotions = sweepExpiredMotions;
 
 function getDbPool(): ReturnType<typeof defaultGetDbPool> {
   return _getDbPool();
@@ -392,16 +529,19 @@ export function __setSweepDependenciesForTest(deps: {
   getDbPool?: typeof defaultGetDbPool;
   sweepAbandonedClaims?: typeof sweepAbandonedClaims;
   sweepStalledSteps?: typeof sweepStalledSteps;
+  sweepExpiredMotions?: typeof sweepExpiredMotions;
 }): void {
   if (deps.getDbPool) _getDbPool = deps.getDbPool;
   if (deps.sweepAbandonedClaims) _sweepAbandonedClaims = deps.sweepAbandonedClaims;
   if (deps.sweepStalledSteps) _sweepStalledSteps = deps.sweepStalledSteps;
+  if (deps.sweepExpiredMotions) _sweepExpiredMotions = deps.sweepExpiredMotions;
 }
 
 export function __resetSweepDependenciesForTest(): void {
   _getDbPool = defaultGetDbPool;
   _sweepAbandonedClaims = sweepAbandonedClaims;
   _sweepStalledSteps = sweepStalledSteps;
+  _sweepExpiredMotions = sweepExpiredMotions;
 }
 
 /**
@@ -473,6 +613,10 @@ export function startClaimsSweepScheduler(opts: StartClaimsSweepOptions = {}): C
         // §4.2 — also run stalled-step escalation in the same advisory-lock hold
         const stepsSwept = await _sweepStalledSteps();
         logger.info({ event: 'steps_sweep_done', escalated: stepsSwept.escalated }, 'steps.sweep cycle complete');
+        // §5.1 — also run expired-motion resolution (the third sweep) in the
+        // same advisory-lock hold.
+        const motionsSwept = await _sweepExpiredMotions();
+        logger.info({ event: 'motions_sweep_done', resolved: motionsSwept.resolved }, 'motions.sweep cycle complete');
       } catch (err) {
         logger.error(
           { event: 'claims_sweep_cycle_failed', err: err instanceof Error ? err.message : String(err) },
