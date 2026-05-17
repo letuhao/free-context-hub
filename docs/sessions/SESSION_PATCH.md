@@ -1,3 +1,52 @@
+# LONGRUN CHECKPOINT — Phase 15 autonomous longrun, session boundary (2026-05-17)
+
+**Status:** Sprint 15.2 (the Board) shipped. Paused at a clean sprint boundary (user choice);
+the next session resumes at Sprint 15.3.
+
+## Phase 15 longrun progress
+
+| Sprint | State | Ref |
+|--------|-------|-----|
+| 15.1 — Coordination substrate | ✅ COMPLETE | PR #13 · branch `phase-15-sprint-15.1` · `e6e57d2`+`ee1394f` |
+| 15.2 — The Board | ✅ COMPLETE | PR #14 · branch `phase-15-sprint-15.2` · `307ba3c` |
+| 15.3 — Request-Approval | ⏳ NEXT | — |
+| 15.4–15.7 | pending | — |
+
+PR #13 and PR #14 are both open against `main` (stacked — #14's diff includes #13's commits
+until #13 merges).
+
+## Resume protocol for the next session (Sprint 15.3)
+
+1. Read `docs/plans/2026-05-16-phase-15-longrun-plan.md` — the longrun execution contract +
+   sprint sequence — and this CHECKPOINT section.
+2. Read `docs/audit/AUDIT_LOG.jsonl` (tail) and `.workflow-state.json`.
+3. Sprint 15.3 = **Request-Approval** — `requests` + `request_steps` multi-level routing;
+   step deadline + escalation sweep. AMAW FULL mode, est. size L–XL. Run the full 12-phase
+   AMAW cycle (cold-start Adversary at REVIEW-DESIGN / REVIEW-CODE; Scope Guard at POST-REVIEW).
+4. Spec source: `docs/phase-15-design.md` (rev 4) — Part B/C/D, Part E sprint row 15.3.
+5. **Branch:** cut `phase-15-sprint-15.3` off `phase-15-sprint-15.2` (15.1+15.2 are not yet
+   merged to `main`; the stack stays linear). Begin with `./scripts/workflow-gate.sh phase clarify`.
+
+## Environment state
+
+- Docker stack UP — `db`/`mcp`/`worker`/`neo4j`/`rabbitmq`/`redis` running; migrations 0053 +
+  0054 applied; `mcp`/`worker` run the Sprint 15.2 code (the claims-sweep scheduler is live).
+- `npm test` 361/361 green on `phase-15-sprint-15.2`; `tsc` clean.
+- Deferred items OPEN: DEFERRED-009, 010, 011 — triggers not yet met.
+- `jq` is NOT installed in the shell env — live smoke scripts must parse JSON via `node`/`tsx`.
+
+## Execution-contract reminders (from the longrun plan)
+
+- Autonomous within a sprint (no per-phase human gate); cold-start sub-agents only at
+  REVIEW-DESIGN / REVIEW-CODE / POST-REVIEW.
+- Check in with the user only at: a sprint boundary, a genuine BLOCK needing a scope/design
+  decision, or the 3-failed-fixes architecture stop.
+- Each sprint → its own branch + PR to `main`; `check_guardrails` before push.
+- Sub-agents have been unable to write files under `docs/audit/` this session — they return
+  the findings content in their final message and the main session persists it.
+
+---
+
 # Session 2026-05-17 — Phase 15 Sprint 15.2: The Board (AMAW autonomous longrun, COMPLETE)
 
 **Task:** Phase 15 Sprint 15.2 — the Board: tasks posted to a topic, derived-identity
