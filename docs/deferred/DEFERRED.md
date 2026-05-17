@@ -1,7 +1,49 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 016 -->
+<!-- Next ID: 017 -->
+
+## DEFERRED-016
+
+- **What:** Phase 15 coordination identity has no bound on **api-key multiplicity**. One
+  operator who can mint api keys (`createApiKey`, `src/services/apiKeys.ts` — no per-operator
+  key limit) can create N distinct DB keys; Sprint 15.3.1's F1 token-binding faithfully
+  stamps each request/step with that key's `name`. So F1 makes the acting identity a
+  token-bound credential handle, but it does **not** make "one human = one principal": an
+  operator with key-minting power obtains as many distinct coordination identities as it
+  creates keys, and can still drive a multi-level approval single-handed. (`api_keys.name`
+  is also not schema-`UNIQUE`, but same-`name` keys *collapse* to one identity and are caught
+  by `decideStep`'s self-decision guard — non-uniqueness is an audit-trail ambiguity, not a
+  forgery vector. The residual here is key *multiplicity*, not name collision.)
+- **Why deferred:** Surfaced at Sprint 15.3.1 REVIEW-DESIGN round 2 (Adversary NEW FINDING 1).
+  Sprint 15.3.1's F1 closes the body-string identity-forgery vector (audit Finding 1's "pick
+  two JSON strings"); bounding how many credentials one principal may hold is the
+  **key-provisioning authorization model** — a different subsystem (`api_keys` /
+  `createApiKey` / the `/api/api-keys` admin surface, related to DEFERRED-004) with its own
+  design. An early 15.3.1 design draft wrongly described this residual as "covered by
+  DEFERRED-015's trigger"; DEFERRED-015 scopes strictly to making the participant `level`
+  authoritative (a `joinTopic` change) and does not own key provisioning. This item gives
+  the residual a real owner.
+- **Trigger condition:** Same HARD class as DEFERRED-015 — MUST be resolved (together with
+  DEFERRED-015) before ANY of: (a) `MCP_AUTH_ENABLED=true` in a deployment with more than
+  one non-mutually-trusting actor; (b) Sprint 15.6 (GUI self-serve coordination); (c) any
+  production / multi-tenant use of the Board or Request-Approval primitives. **The Sprint
+  15.3 audit's CRITICAL Finding 1 is fully closed only when F1 (Sprint 15.3.1, done),
+  F2/level-authority (DEFERRED-015), and key-multiplicity bounding (this item) are all
+  resolved.**
+- **Estimated size:** M — a provisioning-side rule (who may mint keys; and/or binding a
+  coordination actor to exactly one credential — a 1:1 actor↔key map, or per-key
+  coordination-actor scoping); interacts with DEFERRED-004 (tenant-scope on admin endpoints)
+  and the Phase 15 authz model (DEFERRED-009). **Verification (Sprint 15.3.1 POST-REVIEW WARN-1):** bundle an auth-on (`MCP_AUTH_ENABLED=true`) end-to-end smoke of Sprint 15.3.1's F1 (identity binding) + F4 (GET role gate) with this work — 15.3.1 verified F1/F4 via a route test-shim that reproduces `bearerAuth`'s `apiKeyName`/`apiKeyRole` contract, not a live auth-on stack.
+- **Priority:** HIGH — a residual of a CRITICAL finding; only the `MCP_AUTH_ENABLED=false`
+  single-operator dev posture keeps it non-exploitable now (same as DEFERRED-015).
+- **Session deferred:** 2026-05-18
+- **Sessions open:** 1
+- **Status:** OPEN
+- **Source:** Phase 15 Sprint 15.3.1 REVIEW-DESIGN round 2, Adversary NEW FINDING 1
+  (`docs/audit/findings-sprint-15.3.1-design-r2.md`).
+
+---
 
 ## DEFERRED-015
 
@@ -19,15 +61,15 @@
 
 ## DEFERRED-014
 
-- **What:** Two LOW-severity consistency residuals from the Sprint 15.3 REVIEW-CODE `/review-impl` pass, both in `src/services/requests.ts`. **(a)** `listRequests` does not check topic existence — `GET /api/topics/<unknown>/requests` returns `200 {requests:[]}`, whereas the 15.2 sibling `listBoard` carries an explicit topic-existence check (`board.ts` `[LOW-7]`) returning `NOT_FOUND`, and `getRequest` returns 404 for an unknown request; a caller cannot distinguish "topic has no requests" from "topic does not exist". **(b)** The `request.resolved` event payload is non-uniform — `approved`/`returned` carry `artifact_advanced`, while `rejected` (`requests.ts`) and `escalation_exhausted` (`coordinationSweep.ts`) omit it, so a consumer replaying the event log (AC11's authoritative record) sees the field on only 2 of 4 outcomes.
+- **What:** Two LOW-severity consistency residuals from the Sprint 15.3 REVIEW-CODE `/review-impl` pass, both in `src/services/requests.ts`. **(a)** `listRequests` does not check topic existence — `GET /api/topics/<unknown>/requests` returns `200 {requests:[]}`, whereas the 15.2 sibling `listBoard` carries an explicit topic-existence check (`board.ts` `[LOW-7]`) returning `NOT_FOUND`, and `getRequest` returns 404 for an unknown request; a caller cannot distinguish "topic has no requests" from "topic does not exist". **(b)** The `request.resolved` event payload is non-uniform — `approved`/`returned` carry `artifact_advanced`, while `rejected` (`requests.ts`) and `escalation_exhausted` (`coordinationSweep.ts`) omit it, so a consumer replaying the event log (AC11's authoritative record) sees the field on only 2 of 4 outcomes. **(c)** [Sprint 15.3.1 POST-REVIEW WARN-2] the REST decide route (`routes/requests.ts`) derives `step_index` via `parseInt(req.params.n)`, which truncates a fractional path segment (`/steps/1.5/decide` → `1`) — so Sprint 15.3.1's F5 fractional-rejection in `decideStep` is unreachable from REST (cosmetic: the truncated step fails safe to `not_current_step`; the negative case still reaches `decideStep` and is rejected; MCP rejects fractionals at `z.number().int()`). **(d)** [Sprint 15.3.1 REVIEW-CODE LOW-5] `submitted_by` / `actor_id` are not length-capped while 15.3.1's F7 caps `kind`/`subject_id` at 256 — an asymmetry (defensible: auth-on binds the identity to `apiKeyName` ≤128, auth-off is operator-trusted).
 - **Why deferred:** Sprint 15.3 REVIEW-CODE `/review-impl` findings #4 + #5, both LOW. The code faithfully implements design rev 3 (which passed 3 cold-start Adversary rounds) — both items are "the reviewed contract could be marginally more consistent", not defects. Changing them in REVIEW-CODE would deviate from the reviewed design contract without re-running REVIEW-DESIGN. The REVIEW-DESIGN round-3 Adversary explicitly considered (a) and judged the current behavior "defensible, not worth a finding". Bundled for a future touch of the requests surface.
-- **Trigger condition:** Sprint 15.6 (the GUI lists requests — a 404-vs-empty distinction becomes user-visible) OR any sprint that edits `src/services/requests.ts` or the coordination event-payload schema.
-- **Estimated size:** S — (a) a plain `SELECT 1 FROM topics` existence check in `listRequests` + a test; (b) emit `artifact_advanced:false` on the reject + `escalation_exhausted` paths for a uniform payload + adjust the assertions.
+- **Trigger condition:** Sprint 15.6 (the GUI lists requests — a 404-vs-empty distinction becomes user-visible) OR any sprint that edits `src/services/requests.ts` or the coordination event-payload schema. **Re-defer note (Sprint 15.3.1):** 15.3.1 edited `requests.ts` / `routes/requests.ts` — nominally this trigger — but it was a deliberately-minimal security fix-up (F1/F3a/F4/F5/F7 only); bundling these non-security consistency residuals would have broadened the change and the security-review surface. Re-deferred — the trigger now means the next *feature* touch of the requests surface, or Sprint 15.6.
+- **Estimated size:** S — (a) a plain `SELECT 1 FROM topics` existence check in `listRequests` + a test; (b) emit `artifact_advanced:false` on the reject + `escalation_exhausted` paths for a uniform payload + adjust the assertions; (c) a route-layer integer check on `req.params.n` for an honest 400; (d) a 256-char cap on `submitted_by` / `actor_id`.
 - **Priority:** LOW — (a) `topic_id` is a UUID (not guessable) and an empty list is functional; (b) a replay consumer can treat a missing `artifact_advanced` as `false`.
 - **Session deferred:** 2026-05-18
-- **Sessions open:** 1
+- **Sessions open:** 2
 - **Status:** OPEN
-- **Source:** Phase 15 Sprint 15.3 REVIEW-CODE `/review-impl` review, findings #4 + #5 (`docs/audit/findings-sprint-15.3-code-r1.md`).
+- **Source:** Phase 15 Sprint 15.3 REVIEW-CODE `/review-impl` review, findings #4 + #5 (`docs/audit/findings-sprint-15.3-code-r1.md`); extended (c)+(d) by Sprint 15.3.1 POST-REVIEW WARN-2 + REVIEW-CODE LOW-5.
 
 ---
 

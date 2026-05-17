@@ -3394,6 +3394,13 @@ function createMcpToolsServer() {
   // ── Phase 15 Sprint 15.3: Request-Approval tools ──
   // NOTE: avoiding z.discriminatedUnion per DEFERRED-007 (MCP SDK regression).
   // Output shapes use flat z.object with optional fields for all business statuses.
+  //
+  // IDENTITY (Sprint 15.3.1 F1): submitted_by / actor_id on these tools are
+  // workspace-trusted — the MCP transport authenticates a workspace (one shared
+  // workspace_token), not a per-caller identity. The REST routes bind those fields
+  // to the api-key identity (routes/requests.ts resolveActorIdentity); MCP cannot,
+  // as there is no per-caller principal. A workspace-token holder is a single
+  // trusted principal. Real MCP per-caller identity = Phase 15 authz (DEFERRED-009/015).
 
   server.registerTool(
     'submit_request',

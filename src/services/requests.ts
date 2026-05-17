@@ -26,6 +26,12 @@
  *   B2 — resolveArtifact takes actorId; artifact_versions INSERT has all columns
  *   B3 — submitRequest + decideStep plain-read topics.status; → topic_closed
  *   B4 — weight bounded to [0, 2147483647]; above → clean BAD_REQUEST
+ *
+ * Sprint 15.3.1 security fix-up:
+ *   F3a — submitRequest requires artifact.topic_id == request topic; resolveArtifact
+ *         derives the artifact's topic itself (no caller-passed topic)
+ *   F5  — decideStep validates step_index is a non-negative integer
+ *   F7  — submitRequest caps kind / subject_id length at 256
  */
 
 import { randomUUID } from 'node:crypto';
@@ -125,6 +131,15 @@ export async function submitRequest(params: {
     );
   }
 
+  // F7 — bound the free-text fields written verbatim to rows + the request.submitted event
+  const MAX_FIELD_LEN = 256;
+  if (kind.length > MAX_FIELD_LEN || subjectId.length > MAX_FIELD_LEN) {
+    throw new ContextHubError(
+      'BAD_REQUEST',
+      `kind and subject_id must each be at most ${MAX_FIELD_LEN} characters`,
+    );
+  }
+
   // B4 — weight must be an integer in [0, 2147483647]
   if (!Number.isInteger(weight) || weight < 0 || weight > 2_147_483_647) {
     throw new ContextHubError(
@@ -164,13 +179,15 @@ export async function submitRequest(params: {
     return { status: 'topic_closed' };
   }
 
-  // Check artifact exists
-  const artRes = await pool.query(
-    `SELECT 1 FROM artifacts WHERE artifact_id=$1`,
+  // Check the artifact exists AND belongs to this request's topic (F3a). One status
+  // for "missing" and "in another topic" — does not confirm the artifact exists under
+  // a different topic (id-probing defense).
+  const artRes = await pool.query<{ topic_id: string }>(
+    `SELECT topic_id FROM artifacts WHERE artifact_id=$1`,
     [subjectId],
   );
-  if (artRes.rowCount === 0) {
-    throw new ContextHubError('NOT_FOUND', `artifact ${subjectId} not found`);
+  if (artRes.rowCount === 0 || artRes.rows[0].topic_id !== topicId) {
+    throw new ContextHubError('NOT_FOUND', `artifact ${subjectId} not found in topic ${topicId}`);
   }
 
   // Check submitter is a participant
@@ -260,9 +277,10 @@ export async function submitRequest(params: {
  *   'return'  → for_review → working
  *   'reject'  → (not called — artifact untouched)
  *
- * Uses a guarded `UPDATE … WHERE state='for_review' RETURNING version, content_ref`
- * — the constant `from` state. On 0 rows (artifact not in for_review), emits
- * nothing; the request still resolves (best-effort, idempotent).
+ * Uses a guarded `UPDATE … WHERE state='for_review' RETURNING version, content_ref,
+ * topic_id` — the constant `from` state. On 0 rows (artifact not in for_review), emits
+ * nothing; the request still resolves (best-effort, idempotent). The artifact's own
+ * `topic_id` is read from that same locked UPDATE row (F3a) — never passed by the caller.
  *
  * Lock order position: `artifact` (after `request_step`, before `topics`).
  */
@@ -271,16 +289,15 @@ async function resolveArtifact(
   outcome: 'approve' | 'return',
   artifactId: string,
   actorId: string,
-  topicId: string,
 ): Promise<{ artifact_advanced: boolean }> {
   const newState = outcome === 'approve' ? 'final' : 'working';
   const note = `request ${outcome === 'approve' ? 'approved' : 'returned'}`;
 
   // Guarded UPDATE — pins the from state to 'for_review' (§3.3)
-  const upd = await client.query<{ version: number; content_ref: string | null }>(
+  const upd = await client.query<{ version: number; content_ref: string | null; topic_id: string }>(
     `UPDATE artifacts SET state=$1, version=version+1
        WHERE artifact_id=$2 AND state='for_review'
-       RETURNING version, content_ref`,
+       RETURNING version, content_ref, topic_id`,
     [newState, artifactId],
   );
 
@@ -289,7 +306,7 @@ async function resolveArtifact(
     return { artifact_advanced: false };
   }
 
-  const { version, content_ref } = upd.rows[0];
+  const { version, content_ref, topic_id } = upd.rows[0];
 
   // Fully column-specified artifact_versions INSERT (B2 — all NOT NULL columns explicit)
   await client.query(
@@ -301,7 +318,7 @@ async function resolveArtifact(
 
   // artifact.versioned + artifact.state_changed events (artifact lock held; topics acquired next)
   await appendEvent(client, {
-    topic_id: topicId,
+    topic_id,
     actor_id: actorId,
     type: 'artifact.versioned',
     subject_type: 'artifact',
@@ -309,7 +326,7 @@ async function resolveArtifact(
     payload: { version },
   });
   await appendEvent(client, {
-    topic_id: topicId,
+    topic_id,
     actor_id: actorId,
     type: 'artifact.state_changed',
     subject_type: 'artifact',
@@ -346,6 +363,10 @@ export async function decideStep(params: {
   }
   if (!['endorse', 'return', 'reject'].includes(decision)) {
     throw new ContextHubError('BAD_REQUEST', `decision must be one of: endorse, return, reject`);
+  }
+  // F5 — step_index must be a non-negative integer (mirrors the B4 weight bound)
+  if (!Number.isInteger(stepIndex) || stepIndex < 0) {
+    throw new ContextHubError('BAD_REQUEST', 'step_index must be a non-negative integer');
   }
 
   const pool = getDbPool();
@@ -470,7 +491,7 @@ export async function decideStep(params: {
           [requestId],
         );
         // (artifact) advance — lock order: artifact after request_step, before topics
-        const artResult = await resolveArtifact(client, 'approve', artifactId, actorId, topicId);
+        const artResult = await resolveArtifact(client, 'approve', artifactId, actorId);
         await appendEvent(client, {
           topic_id: topicId,
           actor_id: actorId,
@@ -495,7 +516,7 @@ export async function decideStep(params: {
         `UPDATE requests SET status='returned' WHERE request_id=$1`,
         [requestId],
       );
-      const artResult = await resolveArtifact(client, 'return', artifactId, actorId, topicId);
+      const artResult = await resolveArtifact(client, 'return', artifactId, actorId);
       await appendEvent(client, {
         topic_id: topicId,
         actor_id: actorId,

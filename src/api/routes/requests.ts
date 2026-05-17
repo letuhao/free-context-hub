@@ -9,8 +9,8 @@
  *
  * Routes:
  *   POST /api/topics/:id/requests    → submitRequest (writer)
- *   GET  /api/topics/:id/requests    → listRequests
- *   GET  /api/requests/:id           → getRequest
+ *   GET  /api/topics/:id/requests    → listRequests (reader)
+ *   GET  /api/requests/:id           → getRequest (reader)
  *   POST /api/requests/:id/steps/:n/decide → decideStep (writer)
  *
  * Response envelope: success → { status:'ok', data }; ContextHubError →
@@ -83,10 +83,44 @@ function asNumber(v: unknown): number {
   return typeof v === 'number' ? v : NaN;
 }
 
+/**
+ * F1 (Sprint 15.3.1) — resolve the acting coordination identity.
+ *
+ * A DB-keyed caller (`req.apiKeyName` set by bearerAuth) acts as its own key: a body
+ * value naming a different actor is rejected. The env-token admin and the auth-disabled
+ * dev posture carry no `apiKeyName` — there the body value stands (DESIGN §0.5).
+ *
+ * Precondition: F1's DB-key guarantee assumes the caller already passed the
+ * `requireRole('writer')` gate on the two POST routes — `bearerAuth` attaches
+ * `apiKeyName` for every valid key including `reader` keys; the writer gate (unchanged
+ * by 15.3.1) is what keeps a `reader` key out of submit/decide.
+ */
+function resolveActorIdentity(
+  req: Request,
+  bodyValue: string,
+): { ok: true; actor: string } | { ok: false } {
+  const authedName = (req as Request & { apiKeyName?: string }).apiKeyName;
+  if (typeof authedName === 'string' && authedName.length > 0) {
+    if (bodyValue && bodyValue !== authedName) return { ok: false };
+    return { ok: true, actor: authedName };
+  }
+  return { ok: true, actor: bodyValue };
+}
+
 // POST /api/topics/:id/requests — submit a new approval request
 router.post('/topics/:id/requests', requireRole('writer'), async (req, res, next) => {
   try {
     const body = req.body ?? {};
+    // F1 — bind submitted_by to the authenticated key (Sprint 15.3.1)
+    const id = resolveActorIdentity(req, asString(body.submitted_by));
+    if (!id.ok) {
+      res.status(403).json({
+        status: 'error',
+        error: 'submitted_by does not match the authenticated key',
+        code: 'IDENTITY_MISMATCH',
+      });
+      return;
+    }
     const result = await submitRequest({
       topic_id: String(req.params.id),
       subject_type: 'artifact',       // fixed in 15.3 (D7)
@@ -94,14 +128,14 @@ router.post('/topics/:id/requests', requireRole('writer'), async (req, res, next
       kind: asString(body.kind),
       weight: asNumber(body.weight),
       procedure: asString(body.procedure) || 'unilateral',
-      submitted_by: asString(body.submitted_by),
+      submitted_by: id.actor,
     });
     res.status(statusToHttp(result.status)).json({ status: 'ok', data: result });
   } catch (e) { next(e); }
 });
 
 // GET /api/topics/:id/requests — list requests for a topic
-router.get('/topics/:id/requests', async (req, res, next) => {
+router.get('/topics/:id/requests', requireRole('reader'), async (req, res, next) => {
   try {
     const statusQ = req.query.status;
     const statusFilter = typeof statusQ === 'string' && statusQ ? statusQ : undefined;
@@ -114,7 +148,7 @@ router.get('/topics/:id/requests', async (req, res, next) => {
 });
 
 // GET /api/requests/:id — get a single request + its steps
-router.get('/requests/:id', async (req, res, next) => {
+router.get('/requests/:id', requireRole('reader'), async (req, res, next) => {
   try {
     const req2 = await getRequest({ request_id: String(req.params.id) });
     if (req2 === null) {
@@ -134,10 +168,20 @@ router.post('/requests/:id/steps/:n/decide', requireRole('writer'), async (req, 
       res.status(400).json({ status: 'error', error: 'step index must be a number', code: 'BAD_REQUEST' });
       return;
     }
+    // F1 — bind actor_id to the authenticated key (Sprint 15.3.1)
+    const id = resolveActorIdentity(req, asString(body.actor_id));
+    if (!id.ok) {
+      res.status(403).json({
+        status: 'error',
+        error: 'actor_id does not match the authenticated key',
+        code: 'IDENTITY_MISMATCH',
+      });
+      return;
+    }
     const result = await decideStep({
       request_id: String(req.params.id),
       step_index: stepIndex,
-      actor_id: asString(body.actor_id),
+      actor_id: id.actor,
       decision: asString(body.decision),
     });
     res.status(statusToHttp(result.status)).json({ status: 'ok', data: result });

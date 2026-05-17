@@ -696,3 +696,111 @@ test('decide on a closed topic → topic_closed', async () => {
   });
   assert.equal(decide.status, 'topic_closed');
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// Sprint 15.3.1 — security fix-up tests (F3a, F5, F7)
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── F7: length cap on kind / subject_id ──────────────────────────────────────
+
+test('F7: submitRequest rejects an over-long kind (>256 chars)', async () => {
+  const { topicId, executionActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-f7k', executionActor);
+  await assert.rejects(
+    () => submitRequest({
+      topic_id: topicId, subject_type: 'artifact', subject_id: artifactId,
+      kind: 'x'.repeat(257), weight: 10, procedure: 'unilateral', submitted_by: executionActor,
+    }),
+    (err: any) => { assert.equal(err.code, 'BAD_REQUEST'); return true; },
+  );
+});
+
+test('F7: submitRequest rejects an over-long subject_id (>256 chars)', async () => {
+  const { topicId, executionActor } = await mkTopicWithParticipants();
+  await assert.rejects(
+    () => submitRequest({
+      topic_id: topicId, subject_type: 'artifact', subject_id: 'y'.repeat(257),
+      kind: 'artifact_review', weight: 10, procedure: 'unilateral', submitted_by: executionActor,
+    }),
+    (err: any) => { assert.equal(err.code, 'BAD_REQUEST'); return true; },
+  );
+});
+
+// ── F5: step_index validation in decideStep ──────────────────────────────────
+
+test('F5: decideStep rejects a negative step_index', async () => {
+  const { topicId, executionActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-f5n', executionActor);
+  const sub = await submitRequest({
+    topic_id: topicId, subject_type: 'artifact', subject_id: artifactId,
+    kind: 'artifact_review', weight: 10, procedure: 'unilateral', submitted_by: executionActor,
+  });
+  assert.equal(sub.status, 'submitted');
+  if (sub.status !== 'submitted') throw new Error('setup failed');
+  await assert.rejects(
+    () => decideStep({ request_id: sub.request_id, step_index: -1, actor_id: 'coordination-actor', decision: 'endorse' }),
+    (err: any) => { assert.equal(err.code, 'BAD_REQUEST'); return true; },
+  );
+});
+
+test('F5: decideStep rejects a fractional step_index', async () => {
+  const { topicId, executionActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-f5f', executionActor);
+  const sub = await submitRequest({
+    topic_id: topicId, subject_type: 'artifact', subject_id: artifactId,
+    kind: 'artifact_review', weight: 10, procedure: 'unilateral', submitted_by: executionActor,
+  });
+  assert.equal(sub.status, 'submitted');
+  if (sub.status !== 'submitted') throw new Error('setup failed');
+  await assert.rejects(
+    () => decideStep({ request_id: sub.request_id, step_index: 1.5, actor_id: 'coordination-actor', decision: 'endorse' }),
+    (err: any) => { assert.equal(err.code, 'BAD_REQUEST'); return true; },
+  );
+});
+
+// ── F3a: submitRequest must reject a cross-topic artifact ────────────────────
+
+test('F3a: submitRequest rejects an artifact that belongs to another topic', async () => {
+  const a = await mkTopicWithParticipants();
+  const b = await mkTopicWithParticipants();
+  const foreignArtifact = await mkForReviewArtifact(b.topicId, 'doc-xtopic', b.executionActor);
+  await assert.rejects(
+    () => submitRequest({
+      topic_id: a.topicId, subject_type: 'artifact', subject_id: foreignArtifact,
+      kind: 'artifact_review', weight: 10, procedure: 'unilateral', submitted_by: a.executionActor,
+    }),
+    (err: any) => { assert.equal(err.code, 'NOT_FOUND'); return true; },
+  );
+});
+
+// ── F3a: approved request emits artifact events on the artifact's topic (guard) ──
+
+test('F3a: an approved request emits artifact events on the artifact topic', async () => {
+  const { topicId, executionActor, authorityActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-f3a-ev', executionActor);
+  // weight=100 → seeded __default__ authority/escalate_to_authority → single-step [authority]
+  const sub = await submitRequest({
+    topic_id: topicId, subject_type: 'artifact', subject_id: artifactId,
+    kind: 'artifact_review', weight: 100, procedure: 'unilateral', submitted_by: executionActor,
+  });
+  assert.equal(sub.status, 'submitted');
+  if (sub.status !== 'submitted') throw new Error('setup failed');
+
+  const decide = await decideStep({
+    request_id: sub.request_id, step_index: 0, actor_id: authorityActor, decision: 'endorse',
+  });
+  assert.equal(decide.status, 'approved');
+
+  // resolveArtifact derives the topic from the artifact (F3a); the artifact events
+  // must therefore appear in THIS topic's event log.
+  const { replayEvents } = await import('./coordinationEvents.js');
+  const ev = await replayEvents({ topic_id: topicId });
+  assert.ok(
+    ev.events.some((e) => e.type === 'artifact.versioned'),
+    'artifact.versioned present in the artifact topic event log',
+  );
+  assert.ok(
+    ev.events.some((e) => e.type === 'artifact.state_changed'),
+    'artifact.state_changed present in the artifact topic event log',
+  );
+});

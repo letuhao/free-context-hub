@@ -56,8 +56,18 @@ before(async () => {
   await cleanup();
   const app = express();
   app.use(express.json());
-  // Mount requestsRouter — no auth middleware (requireRole('writer') allows
-  // everything when apiKeyRole is unset, mirroring board.test.ts).
+  // Test-shim middleware (Sprint 15.3.1) — reproduces what bearerAuth attaches
+  // (req.apiKeyName / req.apiKeyRole) from x-test-key-name / x-test-key-role headers,
+  // so F1 (identity binding) and F4 (GET role gate) can be exercised without the full
+  // auth stack. Inert when those headers are absent → the 6 original tests are unaffected.
+  app.use((req, _res, next) => {
+    const auth = req as unknown as { apiKeyName?: string; apiKeyRole?: string };
+    const n = req.headers['x-test-key-name'];
+    const r = req.headers['x-test-key-role'];
+    if (typeof n === 'string' && n) auth.apiKeyName = n;
+    if (typeof r === 'string' && r) auth.apiKeyRole = r;
+    next();
+  });
   app.use('/api', requestsRouter);
   server = http.createServer(app);
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
@@ -76,6 +86,7 @@ function request(
   method: string,
   path: string,
   body?: unknown,
+  extraHeaders?: Record<string, string>,
 ): Promise<{ status: number; json: any }> {
   return new Promise((resolve, reject) => {
     const payload = body === undefined ? undefined : JSON.stringify(body);
@@ -86,6 +97,7 @@ function request(
         headers: {
           'Content-Type': 'application/json',
           ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
+          ...(extraHeaders ?? {}),
         },
       },
       (res) => {
@@ -234,4 +246,111 @@ test('POST /api/topics/:id/requests → weight out of range → 400', async () =
 test('GET /api/requests/:id → unknown request → 404', async () => {
   const res = await request('GET', '/api/requests/00000000-0000-0000-0000-000000000000');
   assert.equal(res.status, 404, `expected 404, got ${res.status}`);
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// Sprint 15.3.1 — F1 (identity binding) + F4 (GET role gate) route tests
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── F1: submit / decide identity is bound to the authenticated key ──────────
+
+test('F1: POST submit — apiKeyName ≠ body submitted_by → 403 IDENTITY_MISMATCH', async () => {
+  const topicId = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-f1a', 'execution-actor');
+  const res = await request('POST', `/api/topics/${topicId}/requests`, {
+    subject_id: artifactId, kind: 'artifact_review', weight: 10,
+    procedure: 'unilateral', submitted_by: 'coordination-actor',
+  }, { 'x-test-key-name': 'execution-actor' });
+  assert.equal(res.status, 403, `expected 403, got ${res.status}: ${JSON.stringify(res.json)}`);
+  assert.equal(res.json.code, 'IDENTITY_MISMATCH');
+});
+
+test('F1: POST submit — apiKeyName == body submitted_by → 201', async () => {
+  const topicId = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-f1b', 'execution-actor');
+  const res = await request('POST', `/api/topics/${topicId}/requests`, {
+    subject_id: artifactId, kind: 'artifact_review', weight: 10,
+    procedure: 'unilateral', submitted_by: 'execution-actor',
+  }, { 'x-test-key-name': 'execution-actor' });
+  assert.equal(res.status, 201, `expected 201, got ${res.status}: ${JSON.stringify(res.json)}`);
+  assert.equal(res.json.data.status, 'submitted');
+});
+
+test('F1: POST submit — body submitted_by omitted, apiKeyName supplies the identity → 201', async () => {
+  const topicId = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-f1c', 'execution-actor');
+  const res = await request('POST', `/api/topics/${topicId}/requests`, {
+    subject_id: artifactId, kind: 'artifact_review', weight: 10, procedure: 'unilateral',
+  }, { 'x-test-key-name': 'execution-actor' });
+  assert.equal(res.status, 201, `expected 201, got ${res.status}: ${JSON.stringify(res.json)}`);
+  assert.equal(res.json.data.status, 'submitted');
+});
+
+test('F1: POST decide — apiKeyName ≠ body actor_id → 403 IDENTITY_MISMATCH', async () => {
+  const topicId = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-f1d', 'execution-actor');
+  const sub = await request('POST', `/api/topics/${topicId}/requests`, {
+    subject_id: artifactId, kind: 'artifact_review', weight: 10,
+    procedure: 'unilateral', submitted_by: 'execution-actor',
+  });
+  assert.equal(sub.status, 201);
+  const requestId = sub.json.data.request_id;
+  // body actor_id is the correct officeholder (coordination), but the authenticated
+  // key name differs → F1 rejects before decideStep runs.
+  const res = await request('POST', `/api/requests/${requestId}/steps/0/decide`, {
+    actor_id: 'coordination-actor', decision: 'endorse',
+  }, { 'x-test-key-name': 'execution-actor' });
+  assert.equal(res.status, 403, `expected 403, got ${res.status}: ${JSON.stringify(res.json)}`);
+  assert.equal(res.json.code, 'IDENTITY_MISMATCH');
+});
+
+test('F1: POST decide — apiKeyName == body actor_id → endorses (200)', async () => {
+  const topicId = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-f1f', 'execution-actor');
+  const sub = await request('POST', `/api/topics/${topicId}/requests`, {
+    subject_id: artifactId, kind: 'artifact_review', weight: 10,
+    procedure: 'unilateral', submitted_by: 'execution-actor',
+  });
+  assert.equal(sub.status, 201);
+  const requestId = sub.json.data.request_id;
+  // weight 10 → single coordination step; the coordination officeholder decides,
+  // its key name matches the body actor_id → F1 admits, decideStep runs.
+  const res = await request('POST', `/api/requests/${requestId}/steps/0/decide`, {
+    actor_id: 'coordination-actor', decision: 'endorse',
+  }, { 'x-test-key-name': 'coordination-actor' });
+  assert.equal(res.status, 200, `expected 200, got ${res.status}: ${JSON.stringify(res.json)}`);
+  assert.ok(['step_endorsed', 'approved'].includes(res.json.data.status),
+    `expected endorsed/approved, got ${res.json.data.status}`);
+});
+
+test('F1 precondition (AC1b): a reader-role key POST is still 403 (requireRole writer gate)', async () => {
+  const topicId = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-f1e', 'execution-actor');
+  const res = await request('POST', `/api/topics/${topicId}/requests`, {
+    subject_id: artifactId, kind: 'artifact_review', weight: 10,
+    procedure: 'unilateral', submitted_by: 'execution-actor',
+  }, { 'x-test-key-role': 'reader' });
+  assert.equal(res.status, 403, `expected 403, got ${res.status}: ${JSON.stringify(res.json)}`);
+});
+
+// ── F4: the GET routes require the reader role ──────────────────────────────
+
+test('F4: GET /api/topics/:id/requests with an unknown role → 403', async () => {
+  const topicId = await mkTopicWithParticipants();
+  const res = await request('GET', `/api/topics/${topicId}/requests`, undefined,
+    { 'x-test-key-role': 'intruder' });
+  assert.equal(res.status, 403, `expected 403, got ${res.status}: ${JSON.stringify(res.json)}`);
+});
+
+test('F4: GET /api/requests/:id with an unknown role → 403', async () => {
+  const res = await request('GET', '/api/requests/00000000-0000-0000-0000-000000000000', undefined,
+    { 'x-test-key-role': 'intruder' });
+  assert.equal(res.status, 403, `expected 403, got ${res.status}: ${JSON.stringify(res.json)}`);
+});
+
+test('F4: GET /api/topics/:id/requests with role reader → not 403 (reader admitted)', async () => {
+  const topicId = await mkTopicWithParticipants();
+  const res = await request('GET', `/api/topics/${topicId}/requests`, undefined,
+    { 'x-test-key-role': 'reader' });
+  assert.notEqual(res.status, 403, `reader must pass the gate; got ${res.status}`);
 });
