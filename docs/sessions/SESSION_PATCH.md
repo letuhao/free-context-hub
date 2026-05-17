@@ -4,8 +4,9 @@
 12-phase workflow (the user chose human-in-loop for 15.4). All 12 phases passed; the
 guardrail-mandated POST-REVIEW security Adversary returned **CLEAR**; a user-invoked
 `/review-impl` at the POST-REVIEW checkpoint found 1 MED + 1 LOW + 2 COSMETIC, all fixed +
-re-verified. The next session resumes at **Sprint 15.5** (intake + dispute). 15.4 is on branch
-`phase-15-sprint-15.4` (cut from `phase-15-sprint-15.3`).
+re-verified. The next session resumes at **Sprint 15.5** (intake + dispute). 15.4 is committed
+(`0b3b329`) on branch `phase-15-sprint-15.4` (cut from `phase-15-sprint-15.3`) → **PR #16** to
+`main`.
 
 ## Phase 15 longrun progress
 
@@ -15,7 +16,7 @@ re-verified. The next session resumes at **Sprint 15.5** (intake + dispute). 15.
 | 15.2 — The Board | ✅ COMPLETE | PR #14 · branch `phase-15-sprint-15.2` · `307ba3c` + `275ee7c` (15.2.1) |
 | 15.3 — Request-Approval | ✅ COMPLETE | branch `phase-15-sprint-15.3` · `8a27312` · PR #15 |
 | 15.3.1 — security fix-up | ✅ COMPLETE | `phase-15-sprint-15.3` · `50fb866` · PR #15 · F1/F3a/F4/F5/F7 |
-| 15.4 — Collective decision | ✅ COMPLETE | branch `phase-15-sprint-15.4` · v2.2 human-in-loop · design rev 2 (`a12f419578588e6d`) |
+| 15.4 — Collective decision | ✅ COMPLETE | branch `phase-15-sprint-15.4` · `0b3b329` · PR #16 · v2.2 human-in-loop |
 | 15.5 — Intake + dispute | ⏳ NEXT | full 12-phase cycle |
 | 15.6–15.7 | pending | — |
 
