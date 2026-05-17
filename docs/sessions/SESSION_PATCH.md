@@ -1,8 +1,8 @@
 # LONGRUN CHECKPOINT — Phase 15 autonomous longrun, session boundary (2026-05-17)
 
-**Status:** Sprint 15.2 (the Board) shipped; then a **human-in-loop review** of the
-autonomous 15.1+15.2 runs ran; then the **Sprint 15.2.1 post-review fix-up** shipped. The
-next session resumes at Sprint 15.3, autonomous.
+**Status:** Sprint 15.2 + the 15.2.1 post-review fix-up shipped; the 2026-05-17 human-in-loop
+review concluded; **Sprint 15.3 CLARIFY is done** (human-in-loop pre-flight — scope settled,
+spec written). The next session resumes at **Sprint 15.3 DESIGN**, autonomous.
 
 ## Phase 15 longrun progress
 
@@ -11,7 +11,7 @@ next session resumes at Sprint 15.3, autonomous.
 | 15.1 — Coordination substrate | ✅ COMPLETE | PR #13 · branch `phase-15-sprint-15.1` · `e6e57d2`+`ee1394f` |
 | 15.2 — The Board | ✅ COMPLETE | PR #14 · branch `phase-15-sprint-15.2` · `307ba3c` |
 | 15.2.1 — post-review fix-up | ✅ COMPLETE | PR #14 · `275ee7c` · design rev 6 (`ea26ef6367e133ef`) |
-| 15.3 — Request-Approval | ⏳ NEXT | — |
+| 15.3 — Request-Approval | ⏳ CLARIFY done · DESIGN next | `docs/specs/2026-05-17-phase-15-sprint-15.3-clarify.md` (XL) |
 | 15.4–15.7 | pending | — |
 
 PR #13 and PR #14 are both open against `main` (stacked — #14's diff includes #13's commits
@@ -33,17 +33,27 @@ The user reviewed the autonomous 15.1+15.2 runs (shipped code · process · desi
   **Apply both in 15.3.**
 - **Mode** — 15.3+ stays **autonomous**.
 
-## Resume protocol for the next session (Sprint 15.3)
+## Resume protocol for the next session (Sprint 15.3 — DESIGN onward)
 
-1. Read `docs/plans/2026-05-16-phase-15-longrun-plan.md` — the longrun execution contract +
-   sprint sequence — and this CHECKPOINT section.
+**CLARIFY is already done** — `docs/specs/2026-05-17-phase-15-sprint-15.3-clarify.md` was
+written in a human-in-loop pre-flight (2026-05-17): the scope, the 11 decided open-questions,
+the DoA-matrix shape, and the 14 ACs are all settled there. Resume at **DESIGN**:
+
+1. Read `docs/plans/2026-05-16-phase-15-longrun-plan.md` (execution contract + the
+   **Calibration notes**), this CHECKPOINT, and the 15.3 CLARIFY spec.
 2. Read `docs/audit/AUDIT_LOG.jsonl` (tail) and `.workflow-state.json`.
-3. Sprint 15.3 = **Request-Approval** — `requests` + `request_steps` multi-level routing;
-   step deadline + escalation sweep. AMAW FULL mode, est. size L–XL. Run the full 12-phase
-   AMAW cycle (cold-start Adversary at REVIEW-DESIGN / REVIEW-CODE; Scope Guard at POST-REVIEW).
-4. Spec source: `docs/phase-15-design.md` (rev 4) — Part B/C/D, Part E sprint row 15.3.
-5. **Branch:** cut `phase-15-sprint-15.3` off `phase-15-sprint-15.2` (15.1+15.2 are not yet
-   merged to `main`; the stack stays linear). Begin with `./scripts/workflow-gate.sh phase clarify`.
+3. **Branch:** cut `phase-15-sprint-15.3` off `phase-15-sprint-15.2`; via
+   `./scripts/workflow-gate.sh` start the 15.3 task, mark CLARIFY complete (the spec exists),
+   enter DESIGN.
+4. **DESIGN** — produce `docs/specs/2026-05-17-phase-15-sprint-15.3-design.md`: migration 0056
+   DDL, the `doa_matrix` shape + the route-derivation algorithm, the request lifecycle + the
+   guarded artifact-advance, the escalation-sweep transaction, **and the §10 per-transaction
+   lock-order table derived up front** (calibration note — 15.3 adds a second concurrent
+   sweep). Then the full autonomous AMAW cycle: cold-start Adversary at REVIEW-DESIGN +
+   REVIEW-CODE (one REVIEW-CODE round in the `/review-impl` framing — calibration note),
+   Scope Guard at POST-REVIEW.
+5. 15.3 is **XL** — realistically its own session (or two). Master-design ref:
+   `docs/phase-15-design.md` (rev 4) — B.7, C.1, C.3, C.4, Part D, Part E row 15.3.
 
 ## Environment state
 
