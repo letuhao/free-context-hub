@@ -1,7 +1,112 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 017 -->
+<!-- Next ID: 020 -->
+
+## DEFERRED-019
+
+- **What:** Master design C.4 specifies that a **resolved Request** or a **carried Motion**
+  emits an event whose handler **posts a new board task** ("execute the approved/carried
+  outcome") — unless the topic is `closing`/`closed`, in which case it emits `task.deferred`.
+  Neither Sprint 15.3 (request) nor Sprint 15.4 (motion) implemented this chaining: a 15.3
+  `approved` request's outcome = the artifact advance + `request.resolved`; a 15.4 `carried`
+  motion's outcome = the status flip + `motion.tallied`. No chained board task is posted by
+  either primitive.
+- **Why deferred:** Sprint 15.3 CLARIFY out-of-scope ("underspecified — *what task?* — and it
+  interlocks with the topic `closing`-drain, DEFERRED-012") and Sprint 15.4 CLARIFY out-of-scope
+  (the same, for motions). The chaining is one concern spanning both primitives and interlocks
+  with DEFERRED-012 — the `closing`-drain handler must *suppress* chaining (emit `task.deferred`
+  into the sealed trail) so a draining topic is never re-filled. Best built once, with
+  DEFERRED-012, after the "what task does a carried motion / approved request spawn?" question
+  is settled.
+- **Trigger condition:** a Phase 15 sprint that implements primitive-outcome chaining — likely
+  alongside or after DEFERRED-012 (the `closing`-drain), since the two interlock. No hard
+  deadline; a feature follow-on.
+- **Estimated size:** M — an event handler that posts a board task on `request.resolved`
+  (approved) / `motion.tallied` (carried), suppressed on a `closing`/`closed` topic; tests;
+  interlocks with DEFERRED-012.
+- **Priority:** LOW — the resolved/carried outcome is fully recorded in the event log; a human
+  or a successor process acts on it from the log. Automatic chaining is an ergonomics
+  enhancement.
+- **Session deferred:** 2026-05-18
+- **Sessions open:** 1
+- **Status:** OPEN
+- **Source:** Phase 15 Sprint 15.3 + 15.4 CLARIFY out-of-scope; master design
+  `docs/phase-15-design.md` C.4.
+
+---
+
+## DEFERRED-018
+
+- **What:** A Sprint 15.3 `request_steps` row carries a `procedure` column
+  (`unilateral`/`collective`); `submitRequest` (`src/services/requests.ts`) rejects
+  `procedure='collective'` with "collective steps are Sprint 15.4". Sprint 15.4 built the
+  **standalone** collective-decision primitive (`decision_bodies`/`motions`/`votes`/tally/veto)
+  but did **not** wire it into request-step decision — a `procedure='collective'` step decided
+  by a motion's tally instead of one officeholder's `decideStep`. `submitRequest` still rejects
+  `collective`.
+- **Why deferred:** Sprint 15.4 CLARIFY Q1 — the user's decision: 15.4 = the standalone motion
+  machinery (the master roadmap's stated 15.4 scope). The `procedure='collective'` request-step
+  integration is a cross-primitive contract (a request step's deadline/escalation interacting
+  with a motion's full lifecycle) deserving its own design focus; folding it in would have
+  re-expanded the security-review surface of the just-hardened (15.3.1) `requests.ts`.
+- **Trigger condition:** a Phase 15 sprint that wires the Request and collective-decision
+  primitives — makes a request step resolvable by a decision body. No hard deadline; a feature
+  follow-on.
+- **Estimated size:** M — `decideStep` (or a new path) routes a `collective`-procedure step to
+  a motion; the motion's `carried`/`failed` maps to the step's `endorsed`/`returned`; the step
+  deadline ↔ the motion deadline reconciled; per-path tests.
+- **Priority:** LOW — `unilateral` (the only shipped request procedure) covers the current
+  need; `collective` request steps are an enhancement.
+- **Session deferred:** 2026-05-18
+- **Sessions open:** 1
+- **Status:** OPEN
+- **Source:** Phase 15 Sprint 15.4 CLARIFY Q1 / out-of-scope
+  (`docs/specs/2026-05-18-phase-15-sprint-15.4-clarify.md`); the Sprint 15.3 design decision D6.
+
+---
+
+## DEFERRED-017
+
+- **What:** Phase 15 Sprint 15.4's collective-decision primitive
+  (`decision_bodies`/`body_members`/`motions`/`votes`) carries the **same self-declared-authority
+  class as DEFERRED-015/016**. `createBody` (`src/services/decisionBodies.ts`) is **ungated** —
+  any `writer`-role caller mints a body with itself as the sole weighted member + itself in
+  `veto_holders`. `addBodyMember` is ungated — anyone adds anyone at any weight. `castVote`'s
+  `proxy_for` is **recorded but the proxy grant is unverified** (no `proxies` table). And
+  `proposeMotion`'s `not_participant` gate is itself satisfiable by any caller because
+  `joinTopic` is ungated (the Sprint 15.4 POST-REVIEW Adversary WARN-1). The *mechanism* is
+  sound — quorum/threshold/veto/the vote-weight snapshot/the atomic ballot FSM cannot be
+  subverted by a mutually-distrusting body member, and the early-tally vector is closed — but
+  *who* may create a body / grant veto power / set a vote weight / hold a proxy is **not
+  authorized**. Also (Sprint 15.4 REVIEW-CODE LOW-3): `decision_bodies.veto_holders` has no
+  array-length / element-length cap — input hygiene on the same body-creation surface.
+- **Why deferred:** Sprint 15.4 DESIGN §0.5 (the explicit honest-scope section) + CLARIFY (the
+  user's decision — 15.4 = the standalone motion *mechanism*, coordinator-trusted under the
+  `MCP_AUTH_ENABLED=false` single-operator dev posture). Body / membership / veto-power
+  authorization is the **Phase 15 authorization model** — the same subsystem as DEFERRED-015
+  (self-declared participant `level`), DEFERRED-016 (api-key multiplicity), DEFERRED-009
+  (topic-scope authz); best built once as a coherent piece, not bolted onto the motion
+  primitive.
+- **Trigger condition:** **HARD trigger — same class as DEFERRED-015/016: MUST be resolved
+  (together with 015 + 016) before ANY of:** (a) `MCP_AUTH_ENABLED=true` in a deployment with
+  more than one non-mutually-trusting actor; (b) Sprint 15.6 (the GUI makes coordination
+  interactively self-serve); (c) any production / multi-tenant use of the coordination
+  primitives. Whichever comes first.
+- **Estimated size:** M–L — a body/membership authorization model (who may create a body, grant
+  veto power, assign a vote weight); a `proxies` grant table + verification; the `veto_holders`
+  length cap (an S sub-item); interacts with the Phase 15 authz model
+  (DEFERRED-009/015/016).
+- **Priority:** HIGH — a residual of a governance primitive; only the `MCP_AUTH_ENABLED=false`
+  single-operator dev posture keeps it non-exploitable now (the same posture as 015/016).
+- **Session deferred:** 2026-05-18
+- **Sessions open:** 1
+- **Status:** OPEN
+- **Source:** Phase 15 Sprint 15.4 DESIGN §0.5; POST-REVIEW security Adversary WARN-1
+  (`docs/audit/findings-sprint-15.4-post-review.md`); REVIEW-CODE LOW-3
+  (`docs/audit/findings-sprint-15.4-code-r1.md`).
+
+---
 
 ## DEFERRED-016
 
@@ -77,11 +182,11 @@
 
 - **What:** A `counter_sign` request route requires a *distinct* endorsement at each level on the route — that is its multi-party guarantee. Sprint 15.3's escalation sweep (`sweepStalledSteps`, `src/services/coordinationSweep.ts`) climbs a timed-out step's `target_office` up one level in place (design D9); when it climbs to a level a *later* step on the same route also targets, the route then has two steps at the same level. `decideStep` (`src/services/requests.ts`) authorizes by `level == target_office` (+ `actor ≠ submitted_by`) and does **not** track which actors decided earlier steps — so a single officeholder at that level can endorse both steps, collapsing the counter-sign's distinct-endorser guarantee into a single-endorser approval. Neither same-level step-collapse/de-duplication nor distinct-endorser enforcement (`decideStep` rejecting an actor who already decided an earlier step of the same request) is implemented in 15.3.
 - **Why deferred:** Sprint 15.3 REVIEW-DESIGN round-2 Adversary finding W1 (WARN — non-fatal). It arises only on the post-deadline escalation path (already an abnormal route), the outcome is fully recorded in the event log, and the request still terminates correctly. The 15.3 design (§11.2, invariant 3) accepts it explicitly. The clean fix interacts with the collective-decision model (15.4) and the dispute model (15.5) — a route's quorum / distinct-endorser semantics should be settled once, alongside motions and votes, not bolted onto 15.3.
-- **Trigger condition:** Sprint 15.4 (collective decision — motions/votes formalize multi-party endorsement) OR Sprint 15.5 (dispute), OR a reported case of an escalated counter-sign request being approved by a single endorser. Whichever sprint formalizes multi-party endorsement should add distinct-endorser enforcement to `decideStep` and/or same-level step-collapse at escalation time.
+- **Trigger condition:** Sprint 15.5 (dispute), OR a reported case of an escalated counter-sign request being approved by a single endorser. Whichever sprint formalizes multi-party endorsement should add distinct-endorser enforcement to `decideStep` and/or same-level step-collapse at escalation time. **Re-defer note (Sprint 15.4):** Sprint 15.4 (collective decision) was a named trigger here, but the user's CLARIFY Q2 decision kept 15.4 to the standalone motion primitive — 15.4 does **not** touch `requests.ts` / `decideStep`, so folding the distinct-endorser fix in would have re-opened the just-hardened (15.3.1) security surface for an unrelated reason. Re-deferred to **Sprint 15.5** (dispute — which also formalizes multi-party adjudication of a request route).
 - **Estimated size:** S–M — `decideStep` checks the request's already-decided `request_steps.decided_by` set and rejects a repeat endorser; optionally collapse adjacent same-`target_office` steps when the escalation sweep climbs a step; per-path tests.
 - **Priority:** LOW — post-timeout-only, fully auditable, the request still terminates correctly.
 - **Session deferred:** 2026-05-17
-- **Sessions open:** 1
+- **Sessions open:** 2
 - **Status:** OPEN
 - **Source:** Phase 15 Sprint 15.3 REVIEW-DESIGN round 2, Adversary finding W1 (`docs/audit/findings-sprint-15.3-design-r2.md`).
 

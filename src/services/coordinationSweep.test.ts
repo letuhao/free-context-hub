@@ -18,12 +18,14 @@
 
 import assert from 'node:assert/strict';
 import test, { before, after, beforeEach } from 'node:test';
-import { sweepAbandonedClaims, sweepStalledSteps } from './coordinationSweep.js';
+import { sweepAbandonedClaims, sweepStalledSteps, sweepExpiredMotions } from './coordinationSweep.js';
 import { postTask, claimTask } from './board.js';
 import { writeArtifact, baselineArtifact } from './artifacts.js';
 import { charterTopic, joinTopic, closeTopic } from './topics.js';
 import { replayEvents } from './coordinationEvents.js';
 import { submitRequest } from './requests.js';
+import { createBody, addBodyMember } from './decisionBodies.js';
+import { proposeMotion, secondMotion, castVote } from './motions.js';
 import { getDbPool } from '../db/client.js';
 
 const TEST_PROJECT = '__test_coordination_sweep__';
@@ -35,6 +37,10 @@ async function cleanup() {
     [TEST_PROJECT],
   );
   for (const { topic_id } of topicIds.rows) {
+    // Clean up votes + motions (added by Sprint 15.4)
+    await pool.query(`DELETE FROM votes WHERE motion_id IN
+      (SELECT motion_id FROM motions WHERE topic_id=$1)`, [topic_id]);
+    await pool.query(`DELETE FROM motions WHERE topic_id = $1`, [topic_id]);
     // Clean up request_steps + requests (added by Sprint 15.3)
     await pool.query(`DELETE FROM request_steps WHERE request_id IN
       (SELECT request_id FROM requests WHERE topic_id=$1)`, [topic_id]);
@@ -51,6 +57,15 @@ async function cleanup() {
   }
   await pool.query(`DELETE FROM topics WHERE project_id = $1`, [TEST_PROJECT]);
   await pool.query(`DELETE FROM actors WHERE project_id = $1`, [TEST_PROJECT]);
+  // decision bodies (project-scoped config — Sprint 15.4)
+  const bodyIds = await pool.query<{ body_id: string }>(
+    `SELECT body_id FROM decision_bodies WHERE project_id = $1`,
+    [TEST_PROJECT],
+  );
+  for (const { body_id } of bodyIds.rows) {
+    await pool.query(`DELETE FROM body_members WHERE body_id = $1`, [body_id]);
+  }
+  await pool.query(`DELETE FROM decision_bodies WHERE project_id = $1`, [TEST_PROJECT]);
 }
 
 before(cleanup);
@@ -570,4 +585,189 @@ test('T20: batch with one bad and one good stalled step → good one still escal
   assert.equal(escalatedEvents.length, 1, 'exactly 1 step_escalated event on the good topic');
   assert.equal(escalatedEvents[0].payload.from_office, 'coordination');
   assert.equal(escalatedEvents[0].payload.to_office, 'authority');
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// Sprint 15.4 — sweepExpiredMotions (T11)
+//
+// Covers:
+//   T11a a balloting motion past deadline → swept (auto-tally to the outcome)
+//   T11b a proposed motion past deadline → lapsed (reason:not_seconded)
+//   T11c a motion on a closed topic → skipped (no mutation, no event)
+//   T11d a batch with one bad + one good expired motion → the good one resolves
+//        (crash isolation — the 15.3 T20 pattern)
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Helper: create an active topic with N coordination-level participants, plus a
+ * decision body with the given weighted members + veto holders.
+ */
+async function mkMotionTopic(
+  slot: string,
+  actorIds: string[] = ['proposer', 'seconder', 'voterA'],
+  bodyOpts: { quorum?: number; threshold?: number; veto_holders?: string[]; members?: Array<[string, number]> } = {},
+) {
+  const t = await charterTopic({
+    project_id: TEST_PROJECT, name: `Motion Sweep ${slot}`,
+    charter: 'motion sweep test', created_by: actorIds[0],
+  });
+  const topicId = t.topic_id;
+  for (const a of actorIds) {
+    await joinTopic({ topic_id: topicId, actor_id: a, actor_type: 'ai', display_name: a, level: 'coordination' });
+  }
+  const body = await createBody({
+    project_id: TEST_PROJECT, name: `Body ${slot}`,
+    quorum: bodyOpts.quorum ?? 0, threshold: bodyOpts.threshold ?? 0.5,
+    veto_holders: bodyOpts.veto_holders ?? [], created_by: actorIds[0],
+  });
+  for (const [actor, weight] of bodyOpts.members ?? []) {
+    await addBodyMember({ body_id: body.body_id, actor_id: actor, vote_weight: weight });
+  }
+  return { topicId, bodyId: body.body_id };
+}
+
+/** Force a motion's deadline into the past. */
+async function expireMotionRow(motionId: string) {
+  const pool = getDbPool();
+  await pool.query(
+    `UPDATE motions SET deadline = now() - interval '10 minutes' WHERE motion_id = $1`,
+    [motionId],
+  );
+}
+
+// ── T11a: balloting motion past deadline → auto-tallied ──────────────────────
+
+test('T11a: a balloting motion past deadline → swept, auto-tallied to the correct outcome', async () => {
+  const { topicId, bodyId } = await mkMotionTopic('t11a', ['proposer', 'seconder', 'voterA'], {
+    quorum: 0, threshold: 0.5, members: [['proposer', 1], ['seconder', 1], ['voterA', 9]],
+  });
+  const p = await proposeMotion({ topic_id: topicId, body_id: bodyId, subject_ref: 'ref', proposed_by: 'proposer' });
+  if (p.status !== 'proposed') throw new Error('setup failed');
+  await secondMotion({ motion_id: p.motion_id, actor_id: 'seconder' });
+  await castVote({ motion_id: p.motion_id, actor_id: 'voterA', choice: 'for' }); // 9 for, base 9
+  await expireMotionRow(p.motion_id);
+
+  const result = await sweepExpiredMotions();
+  assert.equal(result.resolved, 1);
+
+  const pool = getDbPool();
+  const m = await pool.query<{ status: string; tally: any }>(
+    `SELECT status, tally FROM motions WHERE motion_id=$1`, [p.motion_id],
+  );
+  // for=9, base=9, 9 >= 0.5*9 → carried
+  assert.equal(m.rows[0].status, 'carried', 'sweep auto-tallied to carried');
+  assert.equal(Number(m.rows[0].tally.for), 9);
+
+  const ev = await replayEvents({ topic_id: topicId });
+  const tallied = ev.events.find((e) => e.type === 'motion.tallied');
+  assert.ok(tallied, 'motion.tallied emitted by the sweep');
+  assert.equal(tallied!.actor_id, 'system:sweep');
+  assert.equal(tallied!.payload.outcome, 'carried');
+  assert.equal(tallied!.payload.auto, true);
+});
+
+// ── T11b: proposed motion past deadline → lapsed ─────────────────────────────
+
+test('T11b: a proposed (never-seconded) motion past deadline → lapsed (reason not_seconded)', async () => {
+  const { topicId, bodyId } = await mkMotionTopic('t11b', ['proposer'], { members: [['proposer', 1]] });
+  const p = await proposeMotion({ topic_id: topicId, body_id: bodyId, subject_ref: 'ref', proposed_by: 'proposer' });
+  if (p.status !== 'proposed') throw new Error('setup failed');
+  // never seconded — stays 'proposed'
+  await expireMotionRow(p.motion_id);
+
+  const result = await sweepExpiredMotions();
+  assert.equal(result.resolved, 1);
+
+  const pool = getDbPool();
+  const m = await pool.query<{ status: string; tally: any }>(
+    `SELECT status, tally FROM motions WHERE motion_id=$1`, [p.motion_id],
+  );
+  assert.equal(m.rows[0].status, 'lapsed', 'never-seconded motion lapses');
+  assert.equal(m.rows[0].tally, null, 'lapsed-not-seconded carries no tally');
+
+  const ev = await replayEvents({ topic_id: topicId });
+  const tallied = ev.events.find((e) => e.type === 'motion.tallied');
+  assert.ok(tallied, 'motion.tallied emitted');
+  assert.equal(tallied!.payload.outcome, 'lapsed');
+  assert.equal(tallied!.payload.reason, 'not_seconded');
+});
+
+// ── T11c: motion on a closed topic → skipped ─────────────────────────────────
+
+test('T11c: an expired motion on a closed topic → skipped (no mutation, no event)', async () => {
+  const { topicId, bodyId } = await mkMotionTopic('t11c', ['proposer', 'seconder', 'voterA'], {
+    members: [['proposer', 1], ['seconder', 1], ['voterA', 1]],
+  });
+  const p = await proposeMotion({ topic_id: topicId, body_id: bodyId, subject_ref: 'ref', proposed_by: 'proposer' });
+  if (p.status !== 'proposed') throw new Error('setup failed');
+  await secondMotion({ motion_id: p.motion_id, actor_id: 'seconder' });
+  await expireMotionRow(p.motion_id);
+  await closeTopic({ topic_id: topicId, actor_id: 'proposer' });
+
+  const pool = getDbPool();
+  const evBefore = await replayEvents({ topic_id: topicId });
+  const evCountBefore = evBefore.events.length;
+
+  const result = await sweepExpiredMotions();
+  assert.equal(result.resolved, 0, 'closed-topic motion not counted as resolved');
+
+  const m = await pool.query<{ status: string }>(
+    `SELECT status FROM motions WHERE motion_id=$1`, [p.motion_id],
+  );
+  assert.equal(m.rows[0].status, 'balloting', 'motion unchanged — frozen mid-ballot');
+
+  const evAfter = await replayEvents({ topic_id: topicId });
+  assert.equal(evAfter.events.length, evCountBefore, 'no event emitted on the closed topic');
+});
+
+// ── T11d: batch with one bad + one good expired motion → good still resolves ─
+
+test('T11d: a batch with one bad and one good expired motion → the good one still resolves (crash isolation)', async () => {
+  const good = await mkMotionTopic('t11dg', ['proposer', 'seconder', 'voterA'], {
+    quorum: 0, threshold: 0.5, members: [['proposer', 1], ['seconder', 1], ['voterA', 5]],
+  });
+  const bad = await mkMotionTopic('t11db', ['proposer', 'seconder', 'voterA'], {
+    quorum: 0, threshold: 0.5, members: [['proposer', 1], ['seconder', 1], ['voterA', 5]],
+  });
+
+  // good motion — balloting, past deadline
+  const pGood = await proposeMotion({ topic_id: good.topicId, body_id: good.bodyId, subject_ref: 'ref', proposed_by: 'proposer' });
+  if (pGood.status !== 'proposed') throw new Error('setup failed');
+  await secondMotion({ motion_id: pGood.motion_id, actor_id: 'seconder' });
+  await castVote({ motion_id: pGood.motion_id, actor_id: 'voterA', choice: 'for' });
+  await expireMotionRow(pGood.motion_id);
+
+  // bad motion — balloting, past deadline; plant a 23505 PK collision on the bad
+  // topic's coordination_events so the sweep's appendEvent throws inside the
+  // per-motion transaction (the T17/T20 crash-isolation technique).
+  const pBad = await proposeMotion({ topic_id: bad.topicId, body_id: bad.bodyId, subject_ref: 'ref', proposed_by: 'proposer' });
+  if (pBad.status !== 'proposed') throw new Error('setup failed');
+  await secondMotion({ motion_id: pBad.motion_id, actor_id: 'seconder' });
+  await expireMotionRow(pBad.motion_id);
+
+  const pool = getDbPool();
+  const seqRow = await pool.query<{ next_seq: string }>(
+    `SELECT next_seq FROM topics WHERE topic_id=$1`, [bad.topicId],
+  );
+  const collidingSeq = Number(seqRow.rows[0].next_seq) + 1;
+  await pool.query(
+    `INSERT INTO coordination_events (topic_id, seq, actor_id, type, subject_type, subject_id, payload)
+     VALUES ($1, $2, 'test', 'motion.tallied', 'motion', $3, '{}')`,
+    [bad.topicId, collidingSeq, pBad.motion_id],
+  );
+
+  const result = await sweepExpiredMotions();
+  // the bad motion's transaction threw (23505) → §0.1-loop catch logged + rolled
+  // back + continued; only the good motion committed.
+  assert.equal(result.resolved, 1, 'exactly the good motion is counted resolved');
+
+  const mGood = await pool.query<{ status: string }>(
+    `SELECT status FROM motions WHERE motion_id=$1`, [pGood.motion_id],
+  );
+  assert.equal(mGood.rows[0].status, 'carried', 'good motion resolved despite the bad one');
+
+  const mBad = await pool.query<{ status: string }>(
+    `SELECT status FROM motions WHERE motion_id=$1`, [pBad.motion_id],
+  );
+  assert.equal(mBad.rows[0].status, 'balloting', 'bad motion unchanged (rolled back)');
 });

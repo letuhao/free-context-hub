@@ -94,6 +94,18 @@ import {
   listRequests,
   getRequest,
   decideStep,
+  // Phase 15 Sprint 15.4: Collective Decision
+  createBody,
+  addBodyMember,
+  getBody,
+  listBodies,
+  proposeMotion,
+  listMotions,
+  getMotion,
+  secondMotion,
+  castVote,
+  vetoMotion,
+  tallyMotion,
 } from '../core/index.js';
 import { LESSON_STATUS_ALL, LESSON_STATUS_WRITABLE } from '../constants/lessonStatus.js';
 import { formatToolResponse, OutputFormatSchema } from './formatters.js';
@@ -3555,6 +3567,325 @@ function createMcpToolsServer() {
       assertWorkspaceToken(workspace_token);
       const r = await decideStep({ request_id, step_index, actor_id, decision });
       const summary = `decide_request_step: request=${request_id} step=${step_index} status=${r.status}`;
+      return formatToolResponse(r, summary, output_format);
+    },
+  );
+
+  // ── Phase 15 Sprint 15.4: Collective Decision tools (11 tools) ──
+  // NOTE: avoiding z.discriminatedUnion per DEFERRED-007 (MCP SDK regression).
+  // Output shapes use flat z.object with optional fields for all business statuses.
+  //
+  // IDENTITY (§0.5): created_by / proposed_by / actor_id on these tools are
+  // workspace-trusted — the MCP transport authenticates a workspace (one shared
+  // workspace_token), not a per-caller identity. Authorization is coordinator-
+  // trusted; the residual is a deferred item (HARD trigger).
+
+  const bodyMemberShape = z.object({
+    actor_id: z.string(),
+    vote_weight: z.number(),
+    added_at: z.string(),
+  });
+
+  const bodyRecordShape = z.object({
+    body_id: z.string(),
+    project_id: z.string(),
+    name: z.string(),
+    quorum: z.number(),
+    threshold: z.number(),
+    veto_holders: z.array(z.string()),
+    created_by: z.string(),
+    created_at: z.string(),
+    members: z.array(bodyMemberShape),
+  });
+
+  const motionVoteShape = z.object({
+    actor_id: z.string(),
+    choice: z.string(),
+    weight: z.number(),
+    proxy_for: z.string().nullable(),
+    cast_at: z.string(),
+  });
+
+  const motionRecordShape = z.object({
+    motion_id: z.string(),
+    body_id: z.string(),
+    topic_id: z.string(),
+    subject_ref: z.string(),
+    status: z.string(),
+    proposed_by: z.string(),
+    seconded_by: z.string().nullable(),
+    deadline: z.string(),
+    tally: z.any().nullable(),
+    created_at: z.string(),
+    votes: z.array(motionVoteShape),
+  });
+
+  server.registerTool(
+    'create_decision_body',
+    {
+      description: 'Create a decision body — a project-scoped electorate governed by a voting rule (quorum + threshold + veto holders). Returns the body record.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        name: z.string().min(1).describe('The body name (≤256 chars).'),
+        quorum: z.number().describe('Absolute participating-weight floor (≥0).'),
+        threshold: z.number().describe('For-fraction of the for+against base required to carry, in (0,1].'),
+        veto_holders: z.array(z.string()).optional().describe('Actor ids that may veto a balloting motion.'),
+        created_by: z.string().min(1).describe('Actor id creating the body.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: bodyRecordShape,
+    },
+    async ({ workspace_token, project_id, name, quorum, threshold, veto_holders, created_by, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const r = await createBody({ project_id, name, quorum, threshold, veto_holders, created_by });
+      const summary = `create_decision_body: body_id=${r.body_id} name=${r.name}`;
+      return formatToolResponse(r, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'add_body_member',
+    {
+      description: 'Add (or re-weight) a member of a decision body. Idempotent — re-adding a member sets their vote weight. Returns status="ok" or "body_not_found".',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        body_id: z.string().min(1).describe('The decision body UUID.'),
+        actor_id: z.string().min(1).describe('The member actor id.'),
+        vote_weight: z.number().describe('The member’s vote weight (>0).'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.string(),
+        body_id: z.string().optional(),
+        actor_id: z.string().optional(),
+        vote_weight: z.number().optional(),
+      }),
+    },
+    async ({ workspace_token, body_id, actor_id, vote_weight, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const r = await addBodyMember({ body_id, actor_id, vote_weight });
+      const summary = `add_body_member: body=${body_id} actor=${actor_id} status=${r.status}`;
+      return formatToolResponse(r, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'get_decision_body',
+    {
+      description: 'Get a single decision body including its weighted members.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        body_id: z.string().min(1).describe('The decision body UUID.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.string(),
+        body: bodyRecordShape.optional(),
+      }),
+    },
+    async ({ workspace_token, body_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const body = await getBody({ body_id });
+      const result = body
+        ? { status: 'ok', body }
+        : { status: 'not_found', body: undefined };
+      const summary = `get_decision_body: id=${body_id} status=${result.status}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'list_decision_bodies',
+    {
+      description: 'List the decision bodies for a project, each with its members.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.literal('ok'),
+        bodies: z.array(bodyRecordShape),
+      }),
+    },
+    async ({ workspace_token, project_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const r = await listBodies({ project_id });
+      const result = { status: 'ok' as const, bodies: r.bodies };
+      const summary = `list_decision_bodies: count=${r.bodies.length}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'propose_motion',
+    {
+      description: 'Propose a motion — a topic-scoped proposition put to a decision body. Returns status="proposed" with the motion_id and deadline, or a business-failure status (topic_closed, body_not_found, not_participant).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        topic_id: z.string().min(1).describe('The topic the motion belongs to.'),
+        body_id: z.string().min(1).describe('The decision body voting on it. Must be in the topic’s project.'),
+        subject_ref: z.string().min(1).describe('The proposition reference (free text, ≤256 chars).'),
+        proposed_by: z.string().min(1).describe('Actor id proposing the motion (must be a topic participant).'),
+        deadline_minutes: z.number().int().optional().describe('Lifecycle deadline in minutes [5, 43200]. Default 1440 (24h).'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.string(),
+        motion_id: z.string().optional(),
+        deadline: z.string().optional(),
+      }),
+    },
+    async ({ workspace_token, topic_id, body_id, subject_ref, proposed_by, deadline_minutes, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const r = await proposeMotion({ topic_id, body_id, subject_ref, proposed_by, deadline_minutes });
+      const summary = `propose_motion: topic=${topic_id} status=${r.status}`;
+      return formatToolResponse(r, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'list_motions',
+    {
+      description: 'List the motions for a topic, each with its votes. Optionally filter by status (proposed, balloting, carried, failed, lapsed, vetoed).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        topic_id: z.string().min(1).describe('The topic UUID.'),
+        status: z.string().optional().describe('Optional status filter.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.literal('ok'),
+        motions: z.array(motionRecordShape),
+      }),
+    },
+    async ({ workspace_token, topic_id, status, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const r = await listMotions({ topic_id, status });
+      const result = { status: 'ok' as const, motions: r.motions };
+      const summary = `list_motions: topic=${topic_id} count=${r.motions.length}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'get_motion',
+    {
+      description: 'Get a single motion including its votes.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        motion_id: z.string().min(1).describe('The motion UUID.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.string(),
+        motion: motionRecordShape.optional(),
+      }),
+    },
+    async ({ workspace_token, motion_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const motion = await getMotion({ motion_id });
+      const result = motion
+        ? { status: 'ok', motion }
+        : { status: 'not_found', motion: undefined };
+      const summary = `get_motion: id=${motion_id} status=${result.status}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'second_motion',
+    {
+      description: 'Second a motion — transitions it proposed → balloting. The seconder must be a distinct body member (not the proposer). Returns status="seconded" or a business-failure status.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        motion_id: z.string().min(1).describe('The motion UUID.'),
+        actor_id: z.string().min(1).describe('The seconding body member (≠ the proposer).'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.string(),
+        motion_status: z.string().optional(),
+      }),
+    },
+    async ({ workspace_token, motion_id, actor_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const r = await secondMotion({ motion_id, actor_id });
+      const summary = `second_motion: motion=${motion_id} status=${r.status}`;
+      return formatToolResponse(r, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'cast_vote',
+    {
+      description: 'Cast a ballot on a balloting motion. actor_id is the principal whose vote it is; the principal must be a body member. Their vote weight is snapshotted at cast time. Pass proxy_for to record a proxy holder (must differ from actor_id). Returns status="vote_recorded" or a business-failure status.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        motion_id: z.string().min(1).describe('The motion UUID.'),
+        actor_id: z.string().min(1).describe('The principal whose vote it is (must be a body member).'),
+        choice: z.string().min(1).describe('"for" | "against" | "abstain".'),
+        proxy_for: z.string().optional().describe('The proxy holder casting the ballot, if proxied (≠ actor_id).'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.string(),
+      }),
+    },
+    async ({ workspace_token, motion_id, actor_id, choice, proxy_for, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const r = await castVote({
+        motion_id,
+        actor_id,
+        choice: choice as 'for' | 'against' | 'abstain',
+        proxy_for,
+      });
+      const summary = `cast_vote: motion=${motion_id} actor=${actor_id} status=${r.status}`;
+      return formatToolResponse(r, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'veto_motion',
+    {
+      description: 'Veto a balloting motion. The actor must be in the body’s veto_holders (a veto holder need not be a voting member). Returns status="vetoed" or a business-failure status.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        motion_id: z.string().min(1).describe('The motion UUID.'),
+        actor_id: z.string().min(1).describe('The vetoing actor (must be in the body’s veto_holders).'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.string(),
+      }),
+    },
+    async ({ workspace_token, motion_id, actor_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const r = await vetoMotion({ motion_id, actor_id });
+      const summary = `veto_motion: motion=${motion_id} actor=${actor_id} status=${r.status}`;
+      return formatToolResponse(r, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'tally_motion',
+    {
+      description: 'Tally a balloting motion. Allowed ONLY post-deadline — a pre-deadline call returns status="balloting_open". Computes quorum + threshold exactly and returns the outcome (carried, failed, lapsed) with the frozen tally, or a business-failure status.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        motion_id: z.string().min(1).describe('The motion UUID.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.string(),
+        tally: z.any().optional(),
+      }),
+    },
+    async ({ workspace_token, motion_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const r = await tallyMotion({ motion_id });
+      const summary = `tally_motion: motion=${motion_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
   );
