@@ -1,7 +1,8 @@
 # LONGRUN CHECKPOINT — Phase 15 autonomous longrun, session boundary (2026-05-17)
 
-**Status:** Sprint 15.2 (the Board) shipped. Paused at a clean sprint boundary (user choice);
-the next session resumes at Sprint 15.3.
+**Status:** Sprint 15.2 (the Board) shipped; then a **human-in-loop review** of the
+autonomous 15.1+15.2 runs ran; then the **Sprint 15.2.1 post-review fix-up** shipped. The
+next session resumes at Sprint 15.3, autonomous.
 
 ## Phase 15 longrun progress
 
@@ -9,11 +10,28 @@ the next session resumes at Sprint 15.3.
 |--------|-------|-----|
 | 15.1 — Coordination substrate | ✅ COMPLETE | PR #13 · branch `phase-15-sprint-15.1` · `e6e57d2`+`ee1394f` |
 | 15.2 — The Board | ✅ COMPLETE | PR #14 · branch `phase-15-sprint-15.2` · `307ba3c` |
+| 15.2.1 — post-review fix-up | ✅ COMPLETE | PR #14 · `275ee7c` · design rev 6 (`ea26ef6367e133ef`) |
 | 15.3 — Request-Approval | ⏳ NEXT | — |
 | 15.4–15.7 | pending | — |
 
 PR #13 and PR #14 are both open against `main` (stacked — #14's diff includes #13's commits
 until #13 merges).
+
+## The 2026-05-17 human-in-loop review — outcome
+
+The user reviewed the autonomous 15.1+15.2 runs (shipped code · process · design calls):
+- **Design calls ratified** — canonical lock order, claims plain-unique index, fencing
+  SEQUENCE, derived `artifact_id`.
+- **Item 2 → option B** — the closed-topic sweep keeps the artifact un-reverted (event-log
+  coherence) but moves the swept task to a new `abandoned` status (no zombie). Shipped in 15.2.1.
+- **DEFERRED-012** logged — the `closeTopic` `closing`-drain (trigger = Sprint 15.5);
+  **DEFERRED-011** trigger sharpened (topology enforcement before 15.6 / before self-serve).
+- **Code audit** — a cold-start `/review-impl` pass found 1 HIGH (claim hijack — `writeArtifact`
+  had no claim-ownership check) + 5 MED + 7 LOW + 3 COSMETIC; **all 16 fixed in 15.2.1**.
+- **Calibration** — the longrun plan now has a Calibration-notes section: front-load the
+  lock-order table in DESIGN; one REVIEW-CODE round must use the `/review-impl` framing.
+  **Apply both in 15.3.**
+- **Mode** — 15.3+ stays **autonomous**.
 
 ## Resume protocol for the next session (Sprint 15.3)
 
@@ -30,9 +48,9 @@ until #13 merges).
 ## Environment state
 
 - Docker stack UP — `db`/`mcp`/`worker`/`neo4j`/`rabbitmq`/`redis` running; migrations 0053 +
-  0054 applied; `mcp`/`worker` run the Sprint 15.2 code (the claims-sweep scheduler is live).
-- `npm test` 361/361 green on `phase-15-sprint-15.2`; `tsc` clean.
-- Deferred items OPEN: DEFERRED-009, 010, 011 — triggers not yet met.
+  0054 + 0055 applied; `mcp`/`worker` run the Sprint 15.2.1 code (the claims-sweep scheduler is live).
+- `npm test` 378/378 green on `phase-15-sprint-15.2`; `tsc` clean.
+- Deferred items OPEN: DEFERRED-009, 010, 011, 012 — triggers not yet met.
 - `jq` is NOT installed in the shell env — live smoke scripts must parse JSON via `node`/`tsx`.
 
 ## Execution-contract reminders (from the longrun plan)
