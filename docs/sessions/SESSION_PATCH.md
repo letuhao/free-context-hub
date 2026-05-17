@@ -3,8 +3,8 @@
 **Status:** Sprint 15.3 (Request-Approval) shipped, then the 2026-05-18 human-in-loop review
 found a CRITICAL authorization gap → **Sprint 15.3.1 security fix-up — now COMPLETE** (all 12
 AMAW phases, POST-REVIEW security Adversary CLEAR). The next session resumes at **Sprint 15.4**
-(collective decision). 15.3.1 is committed to `phase-15-sprint-15.3` → PR #15 (the 15.2.1
-same-branch pattern).
+(collective decision). 15.3.1 is committed as `50fb866` to `phase-15-sprint-15.3` → PR #15
+(the 15.2.1 same-branch pattern).
 
 ## Phase 15 longrun progress
 
@@ -13,7 +13,7 @@ same-branch pattern).
 | 15.1 — Coordination substrate | ✅ COMPLETE | PR #13 · branch `phase-15-sprint-15.1` |
 | 15.2 — The Board | ✅ COMPLETE | PR #14 · branch `phase-15-sprint-15.2` · `307ba3c` + `275ee7c` (15.2.1) |
 | 15.3 — Request-Approval | ✅ COMPLETE | branch `phase-15-sprint-15.3` · `8a27312` · PR #15 |
-| 15.3.1 — security fix-up | ✅ COMPLETE | `phase-15-sprint-15.3` · PR #15 · F1/F3a/F4/F5/F7 · design rev 3 (`e8b03d5b5f5b71d2`) |
+| 15.3.1 — security fix-up | ✅ COMPLETE | `phase-15-sprint-15.3` · `50fb866` · PR #15 · F1/F3a/F4/F5/F7 · design rev 3 (`e8b03d5b5f5b71d2`) |
 | 15.4 — Collective decision | ⏳ NEXT | full AMAW 12-phase cycle |
 | 15.5–15.7 | pending | — |
 
