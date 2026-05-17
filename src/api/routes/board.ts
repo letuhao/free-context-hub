@@ -55,6 +55,7 @@ function statusToHttp(status: string): number {
     case 'no_live_claim':
     case 'already_completed':
     case 'bad_artifact_state':
+    case 'topic_closed':
       return 409;
     default:
       // ok / claimed / released / completed
@@ -67,6 +68,18 @@ function asString(v: unknown): string {
   return typeof v === 'string' ? v : '';
 }
 
+/**
+ * Accept `raci` ONLY when it is a plain object — `typeof x === 'object'` alone
+ * passes a JSON array, which the MCP `z.record` schema rejects. [LOW-10] mirrors
+ * the MCP strictness so the REST and MCP surfaces agree (AC13). A non-object (or
+ * an array) defaults to `{}`.
+ */
+function asRaci(v: unknown): Record<string, unknown> | undefined {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+    ? (v as Record<string, unknown>)
+    : undefined;
+}
+
 // POST /api/topics/:id/tasks — post a task onto a topic's board
 router.post('/topics/:id/tasks', requireRole('writer'), async (req, res, next) => {
   try {
@@ -76,7 +89,7 @@ router.post('/topics/:id/tasks', requireRole('writer'), async (req, res, next) =
       title: asString(body.title),
       topology: asString(body.topology),
       depends_on: Array.isArray(body.depends_on) ? body.depends_on : undefined,
-      raci: body.raci && typeof body.raci === 'object' ? body.raci : undefined,
+      raci: asRaci(body.raci),
       slot: asString(body.slot),
       kind: asString(body.kind),
       created_by: asString(body.created_by),

@@ -2,7 +2,7 @@
  * Phase 15 Sprint 15.2 — abandoned-claim recovery sweep.
  *
  * Design ref: docs/specs/2026-05-16-phase-15-sprint-15.2-design.md §4
- * Spec hash:  737d0febc8e1c455
+ * Spec hash:  ea26ef6367e133ef
  *
  * A claim carries a real TTL. When it expires without release/complete, the
  * sweep retires it: drops the claim row, returns the task to the board, and
@@ -122,12 +122,20 @@ export async function sweepAbandonedClaims(params?: {
       );
 
       if (topicRes.rows[0]?.status === 'closed') {
-        // [r2-fix F2] closed-topic branch — drop the dangling claim ONLY. No
-        // revert, no task-status change, no events: a closed topic is a sealed
-        // self-consistent record (its tasks cannot be re-claimed — claimTask's
-        // appendEvent is rejected by the seal), so the recovery is moot and a
-        // revert would desync the artifact from the sealed log (CLARIFY AC11).
+        // [r2-fix F2 / item 2-B] closed-topic branch — drop the dangling claim
+        // and mark the task `abandoned`. No revert, no events: a closed topic is
+        // a sealed self-consistent record (its tasks cannot be re-claimed —
+        // claimTask's appendEvent is rejected by the seal), so a revert would
+        // desync the artifact from the sealed log (CLARIFY AC11). The task
+        // cannot return to the board, so `abandoned` is its terminal state —
+        // distinct from `posted` (the open-topic recovery target below). The
+        // status UPDATE is a plain write on the already-locked task row.
         await client.query(`DELETE FROM claims WHERE claim_id = $1`, [claim.claim_id]);
+        await client.query(
+          `UPDATE tasks SET status = 'abandoned'
+            WHERE task_id = $1 AND status IN ('claimed','in_progress')`,
+          [claim.task_id],
+        );
         await client.query('COMMIT');
         recovered++;
         continue;

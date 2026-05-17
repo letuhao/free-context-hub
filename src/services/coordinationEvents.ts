@@ -41,6 +41,12 @@ export type ReplayResult = {
   topic_id: string;
   events: CoordinationEvent[];
   next_cursor: number;
+  /**
+   * [MED-5] true when the page was capped at `limit` — more events may exist
+   * past `next_cursor`. A client treating `next_cursor` as "caught up" must
+   * keep replaying while `has_more` is true. false ⇒ this page is the tail.
+   */
+  has_more: boolean;
 };
 
 export type AppendResult = { seq: number; event_id: string; ts: string };
@@ -52,9 +58,11 @@ export type AppendResult = { seq: number; event_id: string; ts: string };
  *
  * Allocates `seq` and enforces the seal in one statement: the UPDATE carries
  * `WHERE status <> 'closed'`, so an append to a closed (or missing) topic is
- * rejected. That UPDATE also takes the topics-row lock — the per-topic append
- * serializer — held to the end of the caller's transaction, which makes per-topic
- * `seq` monotonic and (with the same-txn increment) gap-free.
+ * rejected. On a 0-row match a follow-up SELECT distinguishes the two — a
+ * missing topic → NOT_FOUND, a closed one → BAD_REQUEST ([LOW-12]). That UPDATE
+ * also takes the topics-row lock — the per-topic append serializer — held to the
+ * end of the caller's transaction, which makes per-topic `seq` monotonic and
+ * (with the same-txn increment) gap-free.
  */
 export async function appendEvent(
   client: PoolClient,
@@ -76,10 +84,17 @@ export async function appendEvent(
     [evt.topic_id],
   );
   if (seqRes.rowCount === 0) {
-    throw new ContextHubError(
-      'BAD_REQUEST',
-      `topic ${evt.topic_id} is closed or does not exist`,
+    // [LOW-12] the seal matched 0 rows — distinguish a CLOSED topic from a
+    // MISSING one. callers relying on the task-row FK assume the topic exists;
+    // a missing topic is a NOT_FOUND, a closed one is a BAD_REQUEST.
+    const topicRes = await client.query<{ status: string }>(
+      `SELECT status FROM topics WHERE topic_id = $1`,
+      [evt.topic_id],
     );
+    if (topicRes.rowCount === 0) {
+      throw new ContextHubError('NOT_FOUND', `topic ${evt.topic_id} does not exist`);
+    }
+    throw new ContextHubError('BAD_REQUEST', `topic ${evt.topic_id} is closed`);
   }
   const seq = Number(seqRes.rows[0].next_seq);
 
@@ -151,5 +166,8 @@ export async function replayEvents(
     payload: r.payload,
   }));
   const next_cursor = events.length > 0 ? events[events.length - 1].seq : sinceSeq;
-  return { topic_id: params.topic_id, events, next_cursor };
+  // [MED-5] a full page (exactly `limit` rows) signals possible truncation —
+  // the SQL `LIMIT $3` used `limit`, so this is the correct effective cap.
+  const has_more = events.length === limit;
+  return { topic_id: params.topic_id, events, next_cursor, has_more };
 }

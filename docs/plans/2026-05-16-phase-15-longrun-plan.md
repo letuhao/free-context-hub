@@ -55,8 +55,26 @@ protocol for the next session:
 
 Everything is files-as-truth — the handoff is lossless.
 
+## Calibration notes (updated 2026-05-17 — post Sprint 15.2 human-in-loop review)
+
+- **Front-load the lock-order table.** For any sprint with concurrent transactions, the
+  DESIGN phase must produce the per-transaction row-lock-sequence table (cf. Sprint 15.2
+  design §10) **up front** — not discover it across review rounds. Sprint 15.2's design
+  review spent ~2 avoidable rounds re-deriving one lock graph (round-1's fix created
+  round-2's ABBA, etc.). Sprint 15.3 has a step-deadline escalation sweep — derive its
+  lock table in DESIGN.
+- **Vary the cold-start adversary framing — avoid monoculture.** Sprint 15.2's four
+  cold-start rounds (3 design + 1 code) all aimed at concurrency and all missed a HIGH
+  authorization gap (`writeArtifact` had no claim-ownership check). A post-hoc
+  `/review-impl` pass (mental mode: coverage gaps, input trust, boundary drift) caught it
+  immediately. Going forward: at least one REVIEW-CODE round must use the `/review-impl`
+  framing — input-model fields, normalization, boundary contracts — not another
+  concurrency pass.
+
 ## State
 
-- **15.1** ✅ COMPLETE — PR #13; commits `e6e57d2` + `ee1394f`; branch `phase-15-sprint-15.1`.
-- **15.2** ⏳ IN PROGRESS — CLARIFY done; DESIGN next. This longrun begins here.
-- **15.3–15.7** — pending.
+- **15.1** ✅ COMPLETE — PR #13; branch `phase-15-sprint-15.1`.
+- **15.2** ✅ COMPLETE — PR #14; branch `phase-15-sprint-15.2`; commit `307ba3c`, plus the
+  2026-05-17 post-review fix-up (Sprint 15.2.1 — resolves the `/review-impl` audit's
+  1 HIGH + 5 MED + 7 LOW + 3 COSMETIC).
+- **15.3–15.7** — pending. Next: 15.3 (Request-Approval), autonomous mode.

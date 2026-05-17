@@ -2,7 +2,7 @@
  * Phase 15 Sprint 15.2 — The Board: tasks + the claim lifecycle.
  *
  * Design ref: docs/specs/2026-05-16-phase-15-sprint-15.2-design.md §2
- * Spec hash:  737d0febc8e1c455
+ * Spec hash:  ea26ef6367e133ef
  *
  * Tasks are posted onto a topic's board; each task carries exactly one output
  * artifact (created at post-time, §2.1 / D2). Actors claim a task to gain a
@@ -73,10 +73,19 @@ export type ClaimResult =
   | { status: 'conflict'; reason?: 'task_completed'; incumbent_actor_id?: string; expires_at?: string }
   | { status: 'not_found' };
 
-export type ReleaseResult = { status: 'released' | 'not_found' | 'claim_expired' | 'not_owner' };
+export type ReleaseResult = {
+  status: 'released' | 'not_found' | 'claim_expired' | 'not_owner' | 'topic_closed';
+};
 
 export type CompleteResult = {
-  status: 'completed' | 'not_found' | 'already_completed' | 'no_live_claim' | 'not_owner' | 'bad_artifact_state';
+  status:
+    | 'completed'
+    | 'not_found'
+    | 'already_completed'
+    | 'no_live_claim'
+    | 'not_owner'
+    | 'bad_artifact_state'
+    | 'topic_closed';
 };
 
 /** Clamp ttl_minutes to [1, MAX_TTL_MINUTES]; NaN / undefined → default. */
@@ -137,6 +146,14 @@ export async function postTask(params: {
       `slot must be a lowercase-kebab slug (^[a-z0-9][a-z0-9-]*$); got: ${slot}`,
     );
   }
+  // [LOW-8] bound slot length — the artifact_id PK/URL segment is derived
+  // `<topic_id>:<task_id>:<slot>`, so an unbounded slot is an unbounded PK.
+  if (slot.length > 64) {
+    throw new ContextHubError(
+      'BAD_REQUEST',
+      `slot must be at most 64 characters; got: ${slot.length}`,
+    );
+  }
   // [code-r1 F2] Validate depends_on elements up-front — the column is UUID[],
   // so a non-UUID string would raise a raw 22P02 inside the INSERT and surface
   // as an unclassified 500 (the same defect class [r2-fix F3] fixed for topics).
@@ -160,6 +177,24 @@ export async function postTask(params: {
     const topicRes = await client.query(`SELECT 1 FROM topics WHERE topic_id = $1`, [topicId]);
     if (topicRes.rowCount === 0) {
       throw new ContextHubError('NOT_FOUND', `topic ${topicId} not found`);
+    }
+
+    // [LOW-9] depends_on must reference EXISTING tasks in THE SAME topic — a
+    // dangling or cross-topic edge would be inherited unvalidated by 15.3+
+    // topology enforcement. A pre-BEGIN existence check (same TOCTOU-free
+    // rationale as the topic check — tasks are never deleted).
+    if (dependsOn.length > 0) {
+      const depRes = await client.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM tasks
+          WHERE task_id = ANY($1::uuid[]) AND topic_id = $2`,
+        [dependsOn, topicId],
+      );
+      if (depRes.rows[0].n !== dependsOn.length) {
+        throw new ContextHubError(
+          'BAD_REQUEST',
+          'depends_on references unknown or cross-topic tasks',
+        );
+      }
     }
 
     await client.query('BEGIN');
@@ -230,6 +265,13 @@ export async function listBoard(params: {
   if (!topicId) throw new ContextHubError('BAD_REQUEST', 'topic_id is required');
 
   const pool = getDbPool();
+  // [LOW-7] topic-existence check — a nonexistent topic is NOT_FOUND (consistent
+  // with getTopic / replayEvents), so a caller can tell "no tasks" from "no topic".
+  const topicRes = await pool.query(`SELECT 1 FROM topics WHERE topic_id = $1`, [topicId]);
+  if (topicRes.rowCount === 0) {
+    throw new ContextHubError('NOT_FOUND', `topic ${topicId} not found`);
+  }
+
   const args: unknown[] = [topicId];
   let statusFilter = '';
   if (params.status !== undefined && params.status !== '') {
@@ -365,13 +407,18 @@ export async function claimTask(params: {
     await client.query(`UPDATE tasks SET status = 'claimed' WHERE task_id = $1`, [taskId]);
 
     // (topics) — appendEvent locks the topics row, acquired last.
+    // [MED-4] The event log is append-only and fully replayable to every
+    // participant — claim_id + fencing_token are a live mutable capability and
+    // MUST NOT be embedded in it. Observers see WHO holds the claim; the
+    // capability itself is returned only in the synchronous ClaimResult below
+    // to the caller who legitimately needs it.
     await appendEvent(client, {
       topic_id: topicId,
       actor_id: actorId,
       type: 'claim.granted',
       subject_type: 'artifact',
       subject_id: artifactId,
-      payload: { task_id: taskId, claim_id: claimId, fencing_token: fencingToken },
+      payload: { task_id: taskId, actor_id: actorId },
     });
     await appendEvent(client, {
       topic_id: topicId,
@@ -379,7 +426,7 @@ export async function claimTask(params: {
       type: 'task.claimed',
       subject_type: 'task',
       subject_id: taskId,
-      payload: { claim_id: claimId, actor_id: actorId },
+      payload: { actor_id: actorId },
     });
     await client.query('COMMIT');
 
@@ -434,6 +481,20 @@ export async function releaseTask(params: {
       return { status: 'not_found' };
     }
     const topicId = taskRes.rows[0].topic_id;
+
+    // [MED-2] closed-topic check — closeTopic does not touch claims, so a topic
+    // can be `closed` with a live claim still on a task. A release on it must
+    // return a clean `topic_closed` status, NOT let appendEvent's seal throw a
+    // raw BAD_REQUEST. A plain SELECT (no FOR UPDATE) — does not change the
+    // task → claim → artifact → topics lock order.
+    const topicStatusRes = await client.query<{ status: string }>(
+      `SELECT status FROM topics WHERE topic_id = $1`,
+      [topicId],
+    );
+    if (topicStatusRes.rows[0]?.status === 'closed') {
+      await client.query('ROLLBACK');
+      return { status: 'topic_closed' };
+    }
 
     // plain read — the artifact_id.
     const artRes = await client.query<{ artifact_id: string }>(
@@ -516,6 +577,18 @@ export async function completeTask(params: {
     if (taskStatus === 'completed') {
       await client.query('ROLLBACK');
       return { status: 'already_completed' };
+    }
+
+    // [MED-2] closed-topic check — see releaseTask. A complete on a closed
+    // topic returns a clean `topic_closed` status rather than letting
+    // appendEvent's seal throw. Plain SELECT — preserves the lock order.
+    const topicStatusRes = await client.query<{ status: string }>(
+      `SELECT status FROM topics WHERE topic_id = $1`,
+      [topicId],
+    );
+    if (topicStatusRes.rows[0]?.status === 'closed') {
+      await client.query('ROLLBACK');
+      return { status: 'topic_closed' };
     }
 
     // plain read — the artifact_id.

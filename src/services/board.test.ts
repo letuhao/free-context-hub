@@ -21,7 +21,7 @@
 import assert from 'node:assert/strict';
 import test, { before, after, beforeEach } from 'node:test';
 import { postTask, listBoard, claimTask, releaseTask, completeTask } from './board.js';
-import { charterTopic, joinTopic } from './topics.js';
+import { charterTopic, joinTopic, closeTopic } from './topics.js';
 import { replayEvents } from './coordinationEvents.js';
 import { getDbPool } from '../db/client.js';
 
@@ -190,6 +190,16 @@ test('T3: claimTask → claimed + claim.granted/task.claimed; fencing token stri
   assert.ok(types.includes('claim.granted'), 'claim.granted emitted');
   assert.ok(types.includes('task.claimed'), 'task.claimed emitted');
 
+  // [MED-4] the event log must NOT carry the live capability (claim_id /
+  // fencing_token) — only WHO holds the claim.
+  const granted = ev.events.find((e) => e.type === 'claim.granted');
+  assert.ok(granted, 'claim.granted present');
+  assert.equal(granted?.payload.actor_id, 'worker-1', 'claim.granted carries the holder');
+  assert.equal(granted?.payload.claim_id, undefined, 'claim.granted does NOT carry claim_id');
+  assert.equal(granted?.payload.fencing_token, undefined, 'claim.granted does NOT carry fencing_token');
+  const claimedEv = ev.events.find((e) => e.type === 'task.claimed');
+  assert.equal(claimedEv?.payload.claim_id, undefined, 'task.claimed does NOT carry claim_id');
+
   // task A is now 'claimed'
   const pool = getDbPool();
   const t = await pool.query<{ status: string }>(
@@ -259,8 +269,6 @@ test('T5: concurrent claimTask on one task → exactly one claimed, rest conflic
   assert.equal(claimed.length, 1, 'exactly one claim wins');
   assert.equal(conflicts.length, 5, 'the rest are conflict');
   // every conflict names the (same) real incumbent
-  const winnerActor = claimed[0].status === 'claimed' ? null : null;
-  void winnerActor;
   for (const r of conflicts) {
     if (r.status === 'conflict') {
       assert.ok(r.incumbent_actor_id, 'conflict carries a real incumbent_actor_id');
@@ -397,4 +405,152 @@ test('T7: completeTask on an already-completed task → already_completed', asyn
   await completeTask({ task_id: task.task_id, actor_id: 'worker-1' });
   const r = await completeTask({ task_id: task.task_id, actor_id: 'worker-1' });
   assert.equal(r.status, 'already_completed');
+});
+
+// ── MED-2: release / complete on a closed topic → clean topic_closed status ──
+//
+// closeTopic does not touch claims, so a topic can be `closed` with a live
+// claim still on a task. release/complete must return a defined `topic_closed`
+// status — NOT let appendEvent's seal throw a raw BAD_REQUEST.
+
+test('MED-2: releaseTask on a closed topic → topic_closed (not a thrown error)', async () => {
+  const topicId = await mkActiveTopic();
+  const task = await postTask({
+    topic_id: topicId, title: 't', topology: 'parallel',
+    slot: 'mc-rel', kind: 'document', created_by: 'creator-1',
+  });
+  await claimTask({ task_id: task.task_id, actor_id: 'holder' });
+  await closeTopic({ topic_id: topicId, actor_id: 'creator-1' });
+
+  const r = await releaseTask({ task_id: task.task_id, actor_id: 'holder' });
+  assert.equal(r.status, 'topic_closed');
+
+  // the live claim was NOT dropped — release rolled back cleanly.
+  const pool = getDbPool();
+  const claims = await pool.query<{ n: number }>(
+    `SELECT COUNT(*)::int AS n FROM claims WHERE artifact_id = $1`,
+    [task.artifact_id],
+  );
+  assert.equal(claims.rows[0].n, 1, 'claim untouched — the txn rolled back');
+});
+
+test('MED-2: completeTask on a closed topic → topic_closed (not a thrown error)', async () => {
+  const topicId = await mkActiveTopic();
+  const task = await postTask({
+    topic_id: topicId, title: 't', topology: 'parallel',
+    slot: 'mc-cmp', kind: 'document', created_by: 'creator-1',
+  });
+  await claimTask({ task_id: task.task_id, actor_id: 'holder' });
+  await closeTopic({ topic_id: topicId, actor_id: 'creator-1' });
+
+  const r = await completeTask({ task_id: task.task_id, actor_id: 'holder' });
+  assert.equal(r.status, 'topic_closed');
+
+  // the task is NOT completed and the artifact NOT advanced — clean rollback.
+  const pool = getDbPool();
+  const t = await pool.query<{ status: string }>(
+    `SELECT status FROM tasks WHERE task_id = $1`, [task.task_id],
+  );
+  assert.equal(t.rows[0].status, 'claimed', 'task status untouched');
+  const art = await pool.query<{ state: string }>(
+    `SELECT state FROM artifacts WHERE artifact_id = $1`, [task.artifact_id],
+  );
+  assert.equal(art.rows[0].state, 'draft', 'artifact state untouched');
+});
+
+// ── LOW-7: listBoard on a nonexistent topic → NOT_FOUND ──────────────────────
+
+test('LOW-7: listBoard on a nonexistent topic → NOT_FOUND', async () => {
+  await assert.rejects(
+    listBoard({ topic_id: 'no-such-topic-low7' }),
+    /not found/,
+  );
+});
+
+// ── LOW-8: slot longer than 64 chars → BAD_REQUEST ───────────────────────────
+
+test('LOW-8: postTask with a 65-char slot → BAD_REQUEST', async () => {
+  const topicId = await mkActiveTopic();
+  const longSlot = 'a'.repeat(65); // valid kebab chars, but over the 64 bound
+  await assert.rejects(
+    postTask({
+      topic_id: topicId, title: 't', topology: 'parallel',
+      slot: longSlot, kind: 'document', created_by: 'creator-1',
+    }),
+    /slot must be at most 64 characters/,
+  );
+});
+
+// ── LOW-9: depends_on must reference existing same-topic tasks ───────────────
+
+test('LOW-9: postTask with depends_on pointing at a nonexistent task → BAD_REQUEST', async () => {
+  const topicId = await mkActiveTopic();
+  await assert.rejects(
+    postTask({
+      topic_id: topicId, title: 't', topology: 'sequential',
+      depends_on: ['00000000-0000-0000-0000-000000000000'],
+      slot: 'low9a', kind: 'document', created_by: 'creator-1',
+    }),
+    /depends_on references unknown or cross-topic tasks/,
+  );
+});
+
+test('LOW-9: postTask with depends_on pointing at a task in another topic → BAD_REQUEST', async () => {
+  const topicA = await mkActiveTopic();
+  const topicB = await mkActiveTopic();
+  // a real task, but in topic B
+  const taskInB = await postTask({
+    topic_id: topicB, title: 'in B', topology: 'parallel',
+    slot: 'low9b-dep', kind: 'document', created_by: 'creator-1',
+  });
+  // posting into topic A with a depends_on edge to topic B's task → rejected
+  await assert.rejects(
+    postTask({
+      topic_id: topicA, title: 't', topology: 'sequential',
+      depends_on: [taskInB.task_id],
+      slot: 'low9b', kind: 'document', created_by: 'creator-1',
+    }),
+    /depends_on references unknown or cross-topic tasks/,
+  );
+
+  // sanity: a same-topic depends_on edge is accepted.
+  const dep = await postTask({
+    topic_id: topicA, title: 'dep', topology: 'parallel',
+    slot: 'low9b-ok-dep', kind: 'document', created_by: 'creator-1',
+  });
+  const ok = await postTask({
+    topic_id: topicA, title: 'dependant', topology: 'sequential',
+    depends_on: [dep.task_id],
+    slot: 'low9b-ok', kind: 'document', created_by: 'creator-1',
+  });
+  assert.equal(ok.status, 'posted', 'a same-topic depends_on edge is accepted');
+});
+
+// ── LOW-11: fencing tokens are STRICTLY monotonic under concurrency ──────────
+
+test('LOW-11: concurrent claims yield distinct, strictly-increasing fencing tokens', async () => {
+  const topicId = await mkActiveTopic();
+  // 5 separate tasks, each claimed concurrently — every claim allocates a token.
+  const tasks = await Promise.all(
+    Array.from({ length: 5 }, (_, i) =>
+      postTask({
+        topic_id: topicId, title: `task ${i}`, topology: 'parallel',
+        slot: `mono-${i}`, kind: 'document', created_by: 'creator-1',
+      }),
+    ),
+  );
+  const results = await Promise.all(
+    tasks.map((t, i) => claimTask({ task_id: t.task_id, actor_id: `racer-${i}` })),
+  );
+  const tokens: number[] = [];
+  for (const r of results) {
+    assert.equal(r.status, 'claimed', 'every claim on its own task succeeds');
+    if (r.status === 'claimed') tokens.push(r.fencing_token);
+  }
+  assert.equal(tokens.length, 5);
+  assert.equal(new Set(tokens).size, 5, 'all 5 fencing tokens are distinct');
+  const sorted = [...tokens].sort((a, b) => a - b);
+  for (let i = 1; i < sorted.length; i++) {
+    assert.ok(sorted[i] > sorted[i - 1], 'sorted tokens are strictly increasing');
+  }
 });

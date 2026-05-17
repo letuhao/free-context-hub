@@ -281,3 +281,93 @@ test('T12: writeArtifact from a baselined artifact → working (baselined is wri
   assert.equal(w.status, 'ok');
   if (w.status === 'ok') assert.equal(w.state, 'working');
 });
+
+// ── HIGH-1: claim ownership — a non-holder cannot hijack a live claim ─────────
+//
+// The regression guard for the [HIGH] finding: claim_id + fencing_token are
+// broadcast in the event log, so a peer can copy a still-live pair. The guarded
+// UPDATE must additionally require c.actor_id = the caller — a non-owner gets
+// conflict/claim_not_owned, NOT a successful overwrite.
+
+test('HIGH-1: writeArtifact by a non-holder presenting a live claim → conflict (claim_not_owned)', async () => {
+  const topicId = await mkActiveTopic();
+  // worker-1 holds the live claim.
+  const s = await postAndClaim(topicId, 'owned', 'worker-1');
+
+  // an imposter copies the live claim_id + fencing_token (as if from the log)
+  // and tries to write under its OWN actor_id — must be rejected.
+  const r = await writeArtifact({
+    artifact_id: s.artifact_id, claim_id: s.claim_id, fencing_token: s.fencing_token,
+    content_ref: 'ref://hijack', actor_id: 'imposter',
+  });
+  assert.equal(r.status, 'conflict');
+  if (r.status === 'conflict') {
+    assert.equal(r.reason, 'claim_not_owned', 'a live claim owned by another actor');
+  }
+
+  // the artifact was NOT overwritten — still draft v1, no version row appended.
+  const pool = getDbPool();
+  const art = await pool.query<{ state: string; version: number; content_ref: string | null }>(
+    `SELECT state, version, content_ref FROM artifacts WHERE artifact_id = $1`,
+    [s.artifact_id],
+  );
+  assert.equal(art.rows[0].state, 'draft', 'state unchanged by the rejected write');
+  assert.equal(art.rows[0].version, 1, 'version not advanced');
+  assert.equal(art.rows[0].content_ref, null, 'content_ref not overwritten');
+  const ver = await pool.query<{ n: number }>(
+    `SELECT COUNT(*)::int AS n FROM artifact_versions WHERE artifact_id = $1`,
+    [s.artifact_id],
+  );
+  assert.equal(ver.rows[0].n, 1, 'no hijack version row appended');
+
+  // the legitimate holder can still write.
+  const ok = await writeArtifact({
+    artifact_id: s.artifact_id, claim_id: s.claim_id, fencing_token: s.fencing_token,
+    content_ref: 'ref://legit', actor_id: 'worker-1',
+  });
+  assert.equal(ok.status, 'ok', 'the real holder is unaffected');
+});
+
+test('HIGH-1: baselineArtifact by a non-holder presenting a live claim → conflict (claim_not_owned)', async () => {
+  const topicId = await mkActiveTopic();
+  const s = await postAndClaim(topicId, 'owned2', 'worker-1');
+
+  const r = await baselineArtifact({
+    artifact_id: s.artifact_id, claim_id: s.claim_id, fencing_token: s.fencing_token,
+    actor_id: 'imposter',
+  });
+  assert.equal(r.status, 'conflict');
+  if (r.status === 'conflict') {
+    assert.equal(r.reason, 'claim_not_owned', 'a live claim owned by another actor');
+  }
+
+  // the artifact was NOT baselined — still draft v1.
+  const pool = getDbPool();
+  const art = await pool.query<{ state: string; version: number }>(
+    `SELECT state, version FROM artifacts WHERE artifact_id = $1`,
+    [s.artifact_id],
+  );
+  assert.equal(art.rows[0].state, 'draft', 'state unchanged by the rejected baseline');
+  assert.equal(art.rows[0].version, 1, 'version not advanced');
+
+  // the legitimate holder can still baseline.
+  const ok = await baselineArtifact({
+    artifact_id: s.artifact_id, claim_id: s.claim_id, fencing_token: s.fencing_token,
+    actor_id: 'worker-1',
+  });
+  assert.equal(ok.status, 'ok', 'the real holder is unaffected');
+});
+
+// ── MED-6: writeArtifact rejects an empty content_ref ────────────────────────
+
+test('MED-6: writeArtifact with an empty content_ref → BAD_REQUEST', async () => {
+  const topicId = await mkActiveTopic();
+  const s = await postAndClaim(topicId, 'empty');
+  await assert.rejects(
+    writeArtifact({
+      artifact_id: s.artifact_id, claim_id: s.claim_id, fencing_token: s.fencing_token,
+      content_ref: '', actor_id: 'worker-1',
+    }),
+    /content_ref must be a non-empty string/,
+  );
+});

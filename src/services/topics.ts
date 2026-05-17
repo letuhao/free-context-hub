@@ -52,6 +52,11 @@ export type InductionPack = {
   roster: Participant[];
   events: CoordinationEvent[];
   your_cursor: number;
+  /**
+   * [MED-5] true when the induction-pack event list was capped — the joining
+   * actor must keep replaying from `your_cursor` to catch up fully.
+   */
+  has_more: boolean;
 };
 
 export type CloseResult = {
@@ -271,6 +276,7 @@ export async function joinTopic(params: {
       roster: tr.roster,
       events: ev.events,
       your_cursor: ev.next_cursor,
+      has_more: ev.has_more,
     };
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});

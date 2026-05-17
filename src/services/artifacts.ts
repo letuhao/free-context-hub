@@ -2,7 +2,7 @@
  * Phase 15 Sprint 15.2 — versioned artifact writes.
  *
  * Design ref: docs/specs/2026-05-16-phase-15-sprint-15.2-design.md §3
- * Spec hash:  737d0febc8e1c455
+ * Spec hash:  ea26ef6367e133ef
  *
  * `writeArtifact` / `baselineArtifact` are the stale-holder defense (design C.2,
  * CLARIFY R2). The claim-liveness AND fencing checks are fused into ONE atomic
@@ -33,7 +33,8 @@ export type ConflictReason =
   | 'artifact_not_found'
   | 'bad_artifact_state'
   | 'fencing_token_stale'
-  | 'claim_not_live';
+  | 'claim_not_live'
+  | 'claim_not_owned';
 
 export type WriteResult =
   | { status: 'ok'; version: number; state: string }
@@ -50,12 +51,18 @@ export type BaselineResult =
  * `writableStates` is the per-operation set the guard's `state IN (...)` clause
  * checked: `['draft','working','baselined']` for writeArtifact, `['draft','working']`
  * for baselineArtifact.
+ *
+ * `actorId` is the caller — the guarded UPDATE's `EXISTS` subquery additionally
+ * requires `c.actor_id = actorId` [HIGH-1], so a live claim NOT owned by the
+ * caller is classified `claim_not_owned` (distinct from a missing/expired claim
+ * → `claim_not_live`).
  */
 async function classifyGuardConflict(
   client: PoolClient,
   artifactId: string,
   claimId: string,
   fencingToken: number,
+  actorId: string,
   writableStates: readonly string[],
 ): Promise<ConflictReason> {
   const art = await client.query<{ state: string; accepted_fencing_token: string }>(
@@ -67,13 +74,17 @@ async function classifyGuardConflict(
   if (!writableStates.includes(state)) return 'bad_artifact_state';
   if (Number(accepted_fencing_token) > fencingToken) return 'fencing_token_stale';
   // state is writable and the token is not below accepted ⇒ the claim is the
-  // failing condition (missing, mismatched artifact, or expired).
-  const claim = await client.query(
-    `SELECT 1 FROM claims
+  // failing condition (missing, expired, mismatched artifact, or — [HIGH-1] —
+  // live but owned by a different actor).
+  const claim = await client.query<{ actor_id: string }>(
+    `SELECT actor_id FROM claims
       WHERE claim_id = $1 AND artifact_id = $2 AND expires_at > now()`,
     [claimId, artifactId],
   );
   if (claim.rowCount === 0) return 'claim_not_live';
+  // [HIGH-1] a live claim that the caller does not own — the guarded UPDATE's
+  // `c.actor_id = actorId` clause is what failed.
+  if (claim.rows[0].actor_id !== actorId) return 'claim_not_owned';
   // All individual conditions hold on re-read — a benign concurrent race
   // (e.g. the claim expired then a fresh one arrived). Report claim_not_live:
   // the caller's specific claim/token combination did not pass the guard.
@@ -116,6 +127,11 @@ export async function writeArtifact(params: {
   if (!Number.isFinite(fencingToken)) {
     throw new ContextHubError('BAD_REQUEST', 'fencing_token must be a finite number');
   }
+  // [MED-6] content_ref IS the write payload — a write versions the artifact, so
+  // an empty/missing ref must be a clean BAD_REQUEST, not a silent v++ to ''.
+  if (typeof contentRef !== 'string' || contentRef.trim() === '') {
+    throw new ContextHubError('BAD_REQUEST', 'content_ref must be a non-empty string');
+  }
 
   const pool = getDbPool();
   const client = await pool.connect();
@@ -137,7 +153,10 @@ export async function writeArtifact(params: {
     const prevState = pre.rows[0].state;
 
     // Guarded UPDATE on the locked row — writable-state + fencing + claim-liveness
-    // fused into ONE statement (splitting them reopens a TOCTOU). 0 rows → classify.
+    // + claim-ownership fused into ONE statement (splitting them reopens a TOCTOU).
+    // [HIGH-1] `c.actor_id = $5` — only the claim's OWNER may write; the fencing
+    // token alone cannot authorize a peer who copied a live token out of the log.
+    // 0 rows → classify.
     const upd = await client.query<{ version: number; state: string }>(
       `UPDATE artifacts
           SET version = version + 1,
@@ -150,14 +169,15 @@ export async function writeArtifact(params: {
           AND EXISTS (SELECT 1 FROM claims c
                        WHERE c.claim_id = $2
                          AND c.artifact_id = $1
+                         AND c.actor_id = $5
                          AND c.expires_at > now())
        RETURNING version, state`,
-      [artifactId, claimId, contentRef, fencingToken],
+      [artifactId, claimId, contentRef, fencingToken, actorId],
     );
 
     if (upd.rowCount === 0) {
       const reason = await classifyGuardConflict(
-        client, artifactId, claimId, fencingToken, WRITE_WRITABLE_STATES,
+        client, artifactId, claimId, fencingToken, actorId, WRITE_WRITABLE_STATES,
       );
       await client.query('ROLLBACK');
       return { status: 'conflict', reason };
@@ -248,7 +268,8 @@ export async function baselineArtifact(params: {
     const contentRef = pre.rows[0].content_ref;
 
     // Guarded UPDATE on the locked row — writable-state + fencing + claim-liveness
-    // fused into ONE statement. 0 rows → classify.
+    // + claim-ownership fused into ONE statement. [HIGH-1] `c.actor_id = $4` —
+    // only the claim's OWNER may baseline. 0 rows → classify.
     const upd = await client.query<{ version: number }>(
       `UPDATE artifacts
           SET state = 'baselined',
@@ -260,14 +281,15 @@ export async function baselineArtifact(params: {
           AND EXISTS (SELECT 1 FROM claims c
                        WHERE c.claim_id = $2
                          AND c.artifact_id = $1
+                         AND c.actor_id = $4
                          AND c.expires_at > now())
        RETURNING version`,
-      [artifactId, claimId, fencingToken],
+      [artifactId, claimId, fencingToken, actorId],
     );
 
     if (upd.rowCount === 0) {
       const reason = await classifyGuardConflict(
-        client, artifactId, claimId, fencingToken, BASELINE_WRITABLE_STATES,
+        client, artifactId, claimId, fencingToken, actorId, BASELINE_WRITABLE_STATES,
       );
       await client.query('ROLLBACK');
       return { status: 'conflict', reason };
@@ -320,6 +342,9 @@ export async function revertArtifact(
     [artifactId],
   );
   if (cur.rowCount === 0) {
+    // Unreachable by construction — the only caller (the sweep, §4.1 step 3) has
+    // already locked this artifact row with SELECT … FOR UPDATE, and artifacts
+    // are never deleted. The throw stands as a defensive invariant guard.
     throw new ContextHubError('NOT_FOUND', `artifact ${artifactId} not found`);
   }
   const fromState = cur.rows[0].state;

@@ -34,11 +34,15 @@ const CODE_TO_STATUS: Record<string, number> = {
   INTERNAL: 500,
 };
 
-/** Parse a `since` cursor from a query value or header (defends against array / NaN). */
+/**
+ * Parse a `since` cursor from a query value or header (defends against array /
+ * NaN). [LOW-10] clamped to `>= 0` — a seq is a non-negative high-water mark,
+ * mirroring the MCP `z.number().int().min(0)` schema so the surfaces agree.
+ */
 function parseCursor(raw: unknown): number {
   const v = Array.isArray(raw) ? raw[0] : raw;
   const n = Number(v ?? 0);
-  return Number.isFinite(n) ? n : 0;
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
 }
 
 // POST /api/topics — charter a topic
@@ -68,7 +72,8 @@ router.post('/:id/join', requireRole('writer'), async (req, res, next) => {
       actor_type: String(body.actor_type ?? ''),
       display_name: String(body.display_name ?? ''),
       level: String(body.level ?? ''),
-      since_seq: typeof body.since_seq === 'number' ? body.since_seq : undefined,
+      since_seq:
+        typeof body.since_seq === 'number' ? Math.max(0, body.since_seq) : undefined,
     });
     res.json({ status: 'ok', data: result });
   } catch (e) { next(e); }

@@ -220,6 +220,18 @@ test('T16: an expired claim on a closed topic → claim dropped, artifact NOT re
   const artBefore = await pool.query<{ state: string; version: number }>(
     `SELECT state, version FROM artifacts WHERE artifact_id = $1`, [s.artifact_id],
   );
+  // [item 2-B] the task is 'claimed' before the sweep (writeArtifact does not
+  // change task status — claimTask set it).
+  const taskBefore = await pool.query<{ status: string }>(
+    `SELECT status FROM tasks WHERE task_id = $1`, [s.task_id],
+  );
+  assert.equal(taskBefore.rows[0].status, 'claimed', 'task is claimed pre-sweep');
+  // [COSMETIC item 23] artifact_versions row count before the sweep — the most
+  // direct proof the closed-topic branch appends NO new version.
+  const verBefore = await pool.query<{ n: number }>(
+    `SELECT COUNT(*)::int AS n FROM artifact_versions WHERE artifact_id = $1`,
+    [s.artifact_id],
+  );
 
   const result = await sweepAbandonedClaims();
   assert.equal(result.recovered, 1, 'closed-topic claim is counted as recovered (the claim is dropped)');
@@ -234,6 +246,25 @@ test('T16: an expired claim on a closed topic → claim dropped, artifact NOT re
   );
   assert.equal(artAfter.rows[0].state, artBefore.rows[0].state, 'artifact state unchanged');
   assert.equal(artAfter.rows[0].version, artBefore.rows[0].version, 'artifact NOT reverted');
+
+  // [COSMETIC item 23] no artifact_versions row appended — the directest "no revert" proof.
+  const verAfter = await pool.query<{ n: number }>(
+    `SELECT COUNT(*)::int AS n FROM artifact_versions WHERE artifact_id = $1`,
+    [s.artifact_id],
+  );
+  assert.equal(
+    verAfter.rows[0].n, verBefore.rows[0].n,
+    'artifact_versions count unchanged — the closed-topic sweep appended nothing',
+  );
+
+  // [item 2-B] the task is marked 'abandoned' — it cannot return to the board.
+  const taskAfter = await pool.query<{ status: string }>(
+    `SELECT status FROM tasks WHERE task_id = $1`, [s.task_id],
+  );
+  assert.equal(
+    taskAfter.rows[0].status, 'abandoned',
+    'closed-topic sweep marks the task abandoned',
+  );
 
   const evAfter = await replayEvents({ topic_id: topicId });
   assert.equal(evAfter.events.length, evCountBefore, 'no event emitted on a closed topic');

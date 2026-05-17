@@ -3063,6 +3063,7 @@ function createMcpToolsServer() {
         roster: z.array(participantShape),
         events: z.array(eventShape),
         your_cursor: z.number(),
+        has_more: z.boolean(),
       }),
     },
     async ({ workspace_token, topic_id, actor_id, actor_type, display_name, level, since, output_format }) => {
@@ -3074,6 +3075,7 @@ function createMcpToolsServer() {
         roster: pack.roster,
         events: pack.events,
         your_cursor: pack.your_cursor,
+        has_more: pack.has_more,
       };
       const summary = `join_topic: topic=${topic_id} roster=${pack.roster.length} events=${pack.events.length} cursor=${pack.your_cursor}`;
       return formatToolResponse(result, summary, output_format);
@@ -3150,6 +3152,7 @@ function createMcpToolsServer() {
         topic_id: z.string(),
         events: z.array(eventShape),
         next_cursor: z.number(),
+        has_more: z.boolean(),
       }),
     },
     async ({ workspace_token, topic_id, since, output_format }) => {
@@ -3160,8 +3163,9 @@ function createMcpToolsServer() {
         topic_id: r.topic_id,
         events: r.events,
         next_cursor: r.next_cursor,
+        has_more: r.has_more,
       };
-      const summary = `replay_topic_events: topic=${topic_id} events=${r.events.length} next_cursor=${r.next_cursor}`;
+      const summary = `replay_topic_events: topic=${topic_id} events=${r.events.length} next_cursor=${r.next_cursor} has_more=${r.has_more}`;
       return formatToolResponse(result, summary, output_format);
     },
   );
@@ -3294,7 +3298,7 @@ function createMcpToolsServer() {
         output_format: OutputFormatSchema.default('auto_both'),
       }),
       outputSchema: z.object({
-        status: z.enum(['released', 'not_found', 'claim_expired', 'not_owner']),
+        status: z.enum(['released', 'not_found', 'claim_expired', 'not_owner', 'topic_closed']),
       }),
     },
     async ({ workspace_token, task_id, actor_id, output_format }) => {
@@ -3316,7 +3320,7 @@ function createMcpToolsServer() {
         output_format: OutputFormatSchema.default('auto_both'),
       }),
       outputSchema: z.object({
-        status: z.enum(['completed', 'not_found', 'already_completed', 'no_live_claim', 'not_owner', 'bad_artifact_state']),
+        status: z.enum(['completed', 'not_found', 'already_completed', 'no_live_claim', 'not_owner', 'bad_artifact_state', 'topic_closed']),
       }),
     },
     async ({ workspace_token, task_id, actor_id, output_format }) => {
