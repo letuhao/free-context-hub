@@ -1,77 +1,249 @@
-# LONGRUN CHECKPOINT — Phase 15 autonomous longrun, session boundary (2026-05-17)
+# LONGRUN CHECKPOINT — Phase 15 autonomous longrun, session boundary (2026-05-18)
 
-**Status:** Sprint 15.2 + the 15.2.1 post-review fix-up shipped; the 2026-05-17 human-in-loop
-review concluded; **Sprint 15.3 CLARIFY is done** (human-in-loop pre-flight — scope settled,
-spec written). The next session resumes at **Sprint 15.3 DESIGN**, autonomous.
+**Status:** Sprint 15.3 (Request-Approval) shipped, then the 2026-05-18 human-in-loop review
+found a CRITICAL authorization gap → **Sprint 15.3.1 security fix-up — now COMPLETE** (all 12
+AMAW phases, POST-REVIEW security Adversary CLEAR). The next session resumes at **Sprint 15.4**
+(collective decision). 15.3.1 is committed as `50fb866` to `phase-15-sprint-15.3` → PR #15
+(the 15.2.1 same-branch pattern).
 
 ## Phase 15 longrun progress
 
 | Sprint | State | Ref |
 |--------|-------|-----|
-| 15.1 — Coordination substrate | ✅ COMPLETE | PR #13 · branch `phase-15-sprint-15.1` · `e6e57d2`+`ee1394f` |
-| 15.2 — The Board | ✅ COMPLETE | PR #14 · branch `phase-15-sprint-15.2` · `307ba3c` |
-| 15.2.1 — post-review fix-up | ✅ COMPLETE | PR #14 · `275ee7c` · design rev 6 (`ea26ef6367e133ef`) |
-| 15.3 — Request-Approval | ⏳ CLARIFY done · DESIGN next | `docs/specs/2026-05-17-phase-15-sprint-15.3-clarify.md` (XL) |
-| 15.4–15.7 | pending | — |
+| 15.1 — Coordination substrate | ✅ COMPLETE | PR #13 · branch `phase-15-sprint-15.1` |
+| 15.2 — The Board | ✅ COMPLETE | PR #14 · branch `phase-15-sprint-15.2` · `307ba3c` + `275ee7c` (15.2.1) |
+| 15.3 — Request-Approval | ✅ COMPLETE | branch `phase-15-sprint-15.3` · `8a27312` · PR #15 |
+| 15.3.1 — security fix-up | ✅ COMPLETE | `phase-15-sprint-15.3` · `50fb866` · PR #15 · F1/F3a/F4/F5/F7 · design rev 3 (`e8b03d5b5f5b71d2`) |
+| 15.4 — Collective decision | ⏳ NEXT | full AMAW 12-phase cycle |
+| 15.5–15.7 | pending | — |
 
-PR #13 and PR #14 are both open against `main` (stacked — #14's diff includes #13's commits
-until #13 merges).
+PRs are stacked against `main` (each diff includes the prior sprint's commits until merge).
 
-## The 2026-05-17 human-in-loop review — outcome
+## Sprint 15.3.1 outcome
 
-The user reviewed the autonomous 15.1+15.2 runs (shipped code · process · design calls):
-- **Design calls ratified** — canonical lock order, claims plain-unique index, fencing
-  SEQUENCE, derived `artifact_id`.
-- **Item 2 → option B** — the closed-topic sweep keeps the artifact un-reverted (event-log
-  coherence) but moves the swept task to a new `abandoned` status (no zombie). Shipped in 15.2.1.
-- **DEFERRED-012** logged — the `closeTopic` `closing`-drain (trigger = Sprint 15.5);
-  **DEFERRED-011** trigger sharpened (topology enforcement before 15.6 / before self-serve).
-- **Code audit** — a cold-start `/review-impl` pass found 1 HIGH (claim hijack — `writeArtifact`
-  had no claim-ownership check) + 5 MED + 7 LOW + 3 COSMETIC; **all 16 fixed in 15.2.1**.
-- **Calibration** — the longrun plan now has a Calibration-notes section: front-load the
-  lock-order table in DESIGN; one REVIEW-CODE round must use the `/review-impl` framing.
-  **Apply both in 15.3.**
-- **Mode** — 15.3+ stays **autonomous**.
+The 2026-05-18 human-in-loop security audit of Sprint 15.3 found 2 CRITICAL + 1 HIGH + 2 MED
++ 2 LOW. Sprint 15.3.1 closed the in-scope half: **F1** (the REST acting identity is bound to
+the authenticated api key via `resolveActorIdentity`; a mismatching body value → 403),
+**F3a** (`submitRequest` requires `artifact.topic_id == request topic`; `resolveArtifact`
+derives the topic from the artifact), **F4** (`requireRole('reader')` on the 2 GET routes),
+**F5** (`step_index` non-negative-integer validation), **F7** (256-char cap on
+`kind`/`subject_id`). 4 files changed + an `mcp/index.ts` doc comment; no migration.
+REVIEW-DESIGN: 2 cold-start security Adversary rounds (r1 2 BLOCK + 1 WARN → rev 2; r2
+ACCEPTED + 2 WARN → rev 3, `DEFERRED-016` filed). REVIEW-CODE: one `/review-impl` round (0
+HIGH/MED, 5 LOW, 2 fixed inline). POST-REVIEW: cold-start security Adversary **CLEAR** —
+F1/F3a/F4/F5/F7 all traceably closed. 429/429 tests, live smoke 5/5.
 
-## Resume protocol for the next session (Sprint 15.3 — DESIGN onward)
+**F1 honest scope:** F1 closes the *identity-spoofing* half of the audit CRITICAL on the
+`MCP_AUTH_ENABLED=true` DB-key path. The full CRITICAL closes only with **F2 → DEFERRED-015**
+(self-declared participant `level`) and **DEFERRED-016** (api-key multiplicity — one human
+can mint N keys). Under `MCP_AUTH_ENABLED=false` the forgery stays reachable — accepted dev
+posture; DEFERRED-015/016 carry the HARD pre-production trigger.
 
-**CLARIFY is already done** — `docs/specs/2026-05-17-phase-15-sprint-15.3-clarify.md` was
-written in a human-in-loop pre-flight (2026-05-17): the scope, the 11 decided open-questions,
-the DoA-matrix shape, and the 14 ACs are all settled there. Resume at **DESIGN**:
+## Resume protocol — Sprint 15.4 (collective decision)
 
-1. Read `docs/plans/2026-05-16-phase-15-longrun-plan.md` (execution contract + the
-   **Calibration notes**), this CHECKPOINT, and the 15.3 CLARIFY spec.
-2. Read `docs/audit/AUDIT_LOG.jsonl` (tail) and `.workflow-state.json`.
-3. **Branch:** cut `phase-15-sprint-15.3` off `phase-15-sprint-15.2`; via
-   `./scripts/workflow-gate.sh` start the 15.3 task, mark CLARIFY complete (the spec exists),
-   enter DESIGN.
-4. **DESIGN** — produce `docs/specs/2026-05-17-phase-15-sprint-15.3-design.md`: migration 0056
-   DDL, the `doa_matrix` shape + the route-derivation algorithm, the request lifecycle + the
-   guarded artifact-advance, the escalation-sweep transaction, **and the §10 per-transaction
-   lock-order table derived up front** (calibration note — 15.3 adds a second concurrent
-   sweep). Then the full autonomous AMAW cycle: cold-start Adversary at REVIEW-DESIGN +
-   REVIEW-CODE (one REVIEW-CODE round in the `/review-impl` framing — calibration note),
-   Scope Guard at POST-REVIEW.
-5. 15.3 is **XL** — realistically its own session (or two). Master-design ref:
-   `docs/phase-15-design.md` (rev 4) — B.7, C.1, C.3, C.4, Part D, Part E row 15.3.
+Cut `phase-15-sprint-15.4` off `phase-15-sprint-15.3`. Full AMAW 12-phase cycle for the
+collective-decision primitive (motions, votes, tally, veto). Calibration: front-load the §10
+lock table; one `/review-impl` REVIEW-CODE round. **Guardrail (lesson `5c0b7b25`, now an
+enforced rule): a security-framed cold-start Adversary is mandatory at POST-REVIEW for 15.4
+and 15.5** — both are governance primitives, the exact case the 15.3 autonomous run missed.
+**DEFERRED-013** (counter-sign distinct-endorser) names 15.4/15.5 as its trigger — fold it in
+if 15.4 formalizes multi-party endorsement.
 
 ## Environment state
 
-- Docker stack UP — `db`/`mcp`/`worker`/`neo4j`/`rabbitmq`/`redis` running; migrations 0053 +
-  0054 + 0055 applied; `mcp`/`worker` run the Sprint 15.2.1 code (the claims-sweep scheduler is live).
-- `npm test` 378/378 green on `phase-15-sprint-15.2`; `tsc` clean.
-- Deferred items OPEN: DEFERRED-009, 010, 011, 012 — triggers not yet met.
+- Docker stack UP — `db`/`mcp`/`worker`/`neo4j`/`rabbitmq`/`redis` running; migrations
+  0053–**0056** applied; `mcp`/`worker` rebuilt + running the **Sprint 15.3.1** code.
+- `npm test` **429/429** green on `phase-15-sprint-15.3`; `tsc` clean.
+- Deferred items OPEN: DEFERRED-009, 010, 011, 012, 013, 014, **015**, **016** —
+  DEFERRED-015 + 016 (the auth-enabled-multi-actor authorization residuals) carry a HARD
+  pre-production trigger; the rest unmet.
 - `jq` is NOT installed in the shell env — live smoke scripts must parse JSON via `node`/`tsx`.
 
 ## Execution-contract reminders (from the longrun plan)
 
-- Autonomous within a sprint (no per-phase human gate); cold-start sub-agents only at
-  REVIEW-DESIGN / REVIEW-CODE / POST-REVIEW.
+- Autonomous within a sprint (no per-phase human gate); cold-start sub-agents at
+  REVIEW-DESIGN / REVIEW-CODE / POST-REVIEW; BUILD may be dispatched to one fresh agent.
 - Check in with the user only at: a sprint boundary, a genuine BLOCK needing a scope/design
   decision, or the 3-failed-fixes architecture stop.
 - Each sprint → its own branch + PR to `main`; `check_guardrails` before push.
-- Sub-agents have been unable to write files under `docs/audit/` this session — they return
-  the findings content in their final message and the main session persists it.
+- Sub-agents cannot write files under `docs/audit/` — they return findings in their final
+  message and the main session persists them.
+
+---
+
+# Session 2026-05-18 — Phase 15 Sprint 15.3.1: Security fix-up (AMAW, COMPLETE)
+
+**Task:** close the in-scope half of the Sprint 15.3 human-in-loop security audit — F1
+(token-bound acting identity), F3a (cross-topic artifact integrity), F4 (GET-route role
+gate), F5 (`step_index` validation), F7 (`kind`/`subject_id` length cap). Branch
+`phase-15-sprint-15.3` (commits update PR #15 — the 15.2.1 same-branch pattern). AMAW
+autonomous fix-up, full 12 phases, size M.
+
+**Outcome:** F1 — `routes/requests.ts` `resolveActorIdentity` binds `submitted_by`/`actor_id`
+to `req.apiKeyName` when a DB key is present (mismatch → 403 `IDENTITY_MISMATCH`); the body
+value stands for the env-token / auth-off single-trusted-operator posture. F3a —
+`submitRequest` `SELECT topic_id` + `== request topic` check (cross-topic → `NOT_FOUND`);
+`resolveArtifact` drops the caller-passed `topicId` and derives it from the write-locked
+`UPDATE … RETURNING topic_id`. F4 — `requireRole('reader')` on both GET routes. F5 —
+`Number.isInteger && >= 0` in `decideStep`. F7 — 256-char cap in `submitRequest`. MCP request
+tools got a doc comment recording that MCP identity is workspace-trusted (no per-caller
+principal). All 12 AMAW phases passed; POST-REVIEW security Adversary **CLEAR**.
+
+## Migration
+
+None — code-only fix-up. Migration 0056 (Sprint 15.3) already live.
+
+## Files (4 changed + 1 comment-only)
+
+- `src/services/requests.ts` — F7 cap, F5 validation, F3a (artifact-topic check +
+  `resolveArtifact` topic derivation).
+- `src/api/routes/requests.ts` — F1 `resolveActorIdentity` + 403 wiring, F4 GET role gates.
+- `src/services/requests.test.ts` — +6 tests (F7×2, F5×2, F3a×2).
+- `src/api/routes/requests.test.ts` — test-shim harness + F1/F4 tests (6 → 15).
+- `src/mcp/index.ts` — comment-only (the MCP identity scope note).
+
+## AMAW review summary
+
+- **REVIEW-DESIGN** — 2 cold-start security-framed Adversary rounds. r1: 2 BLOCK (F1
+  overstated — bound to the non-unique `apiKeyName`, the "distinct keys = distinct principals"
+  claim false; the auth-off branch left the forgery open while the design claimed "complete")
+  + 1 WARN (F3a's unstated `topic_id` immutability) → design rev 2 (honest §0.5 scope). r2:
+  ACCEPTED + 2 WARN (the multi-key residual had no deferred owner → **DEFERRED-016** filed;
+  F1's writer-gate precondition was unstated → added) → design rev 3, hash `e8b03d5b5f5b71d2`.
+- **REVIEW-CODE** — one `/review-impl` round: 0 HIGH, 0 MED, 5 LOW. LOW-1 (test-shim cast +
+  `tsconfig` excludes `**/*.test.ts`) and LOW-2 (no F1 decide-match test) fixed inline;
+  LOW-3/4/5 accepted + documented.
+- **QC** — Scope Guard CLEAR: fingerprint `e8b03d5b5f5b71d2` match, AC1–AC8 covered.
+- **POST-REVIEW** — cold-start security Adversary **CLEAR**: F1/F3a/F4/F5/F7 traceably closed
+  (F1's forgery collapses to `self_decision_forbidden` on the DB-key path); 2 WARN accepted —
+  W1 the auth-on e2e smoke was not run (F1/F4 verified via the route test-shim that
+  reproduces `bearerAuth`'s contract); W2 the REST decide route's `parseInt` truncates a
+  fractional `step_index` — cosmetic, fails safe.
+
+## Live verification
+
+- `tsc` exit 0; `npm test` **429/429** (414 prior + 15 new: 6 service + 9 route).
+- Live deployment smoke (rebuilt `mcp`+`worker` Docker images on the 15.3.1 code): **5/5** —
+  core submit→decide→approved (15.3 regression), F3a cross-topic 404, F5 negative
+  `step_index` 400, F7 257-char `kind` 400.
+
+## Deferred
+
+- **DEFERRED-016** (NEW) — api-key multiplicity / one-human = one-principal (REVIEW-DESIGN r2
+  Adversary NEW FINDING 1). HIGH, HARD trigger; also carries the POST-REVIEW W1 follow-up
+  (an auth-on e2e smoke of F1/F4 at the auth-enable milestone).
+- **DEFERRED-015** — F2 self-declared `level`, the audit's other CRITICAL half — unchanged.
+- **DEFERRED-014** — extended with (c) the route-layer `step_index` integer validation
+  (POST-REVIEW W2) and (d) a `submitted_by`/`actor_id` length cap (REVIEW-CODE LOW-5); its
+  trigger ("any sprint editing `requests.ts`") was nominally met by 15.3.1 but re-deferred —
+  15.3.1 was a deliberately-minimal security fix-up, not a feature touch of the surface.
+
+## What's next
+
+Sprint 15.4 — collective decision (motions, votes, tally, veto). Cut `phase-15-sprint-15.4`
+off `phase-15-sprint-15.3`, full AMAW 12-phase cycle. A security-framed cold-start Adversary
+is mandatory at POST-REVIEW (the enforced guardrail).
+
+---
+
+# Session 2026-05-18 — Phase 15 Sprint 15.3: Request-Approval (AMAW autonomous longrun, COMPLETE)
+
+**Task:** Phase 15 Sprint 15.3 — the Request-Approval primitive: an artifact-review request
+routed through a per-project Delegation-of-Authority matrix into a materialized multi-level
+approval sequence, decided step-by-step by officeholders, with a stalled-step escalation
+sweep. Branch `phase-15-sprint-15.3` (cut from `phase-15-sprint-15.2`). AMAW autonomous
+longrun, full 12 phases, size XL.
+
+**Outcome:** `submitRequest` resolves a `doa_matrix` row (precedence topic-override >
+project > `__default__`), derives a route (a `counter_sign` ladder or a single
+`escalate_to_authority` step), and freezes it as `request_steps` rows carrying a
+`doa_snapshot`. `decideStep` lets the officeholder at the active step's `target_office` level
+endorse / return / reject — the submitter may never decide their own request. The final
+endorsement approves the request and advances the `for_review` subject artifact → `final`
+(return → `working`; reject → untouched). A `pending` step past its 60-min deadline escalates
+one office-level per 5-min sweep tick, terminal at `authority` → `escalation_exhausted`. Over
+REST (`/api/*`) + 4 MCP tools. All 12 AMAW phases passed; POST-REVIEW Scope Guard **CLEAR**.
+
+## Migration
+
+- `migrations/0056_request_approval.sql` (NEW) — `doa_matrix` (per-project DoA matrix,
+  dual-indexed on `(project_id, kind, weight range)`, topic-overridable), `requests`,
+  `request_steps` (the materialized frozen route) + 3 indexes + 2 idempotent seed rows (the
+  `__default__` `artifact_review` matrix). No ALTER to any existing table — 15.1
+  pre-provisioned `subject_type='request'`, the `request.*` event types, and the artifact
+  states. Applied + idempotent.
+
+## New files (7)
+
+- `migrations/0056_request_approval.sql`
+- `src/services/doaMatrix.ts` — `resolveMatrixRow` (tier-ranked precedence) + `deriveRoute`
+  (both route shapes, the empty-ladder fallback) + level constants.
+- `src/services/doaMatrix.test.ts` — 7 tests.
+- `src/services/requests.ts` — `submitRequest` / `decideStep` / `getRequest` / `listRequests`
+  + internal `resolveArtifact` (the guarded `for_review → final|working` artifact advance).
+- `src/services/requests.test.ts` — 19 tests (incl. the REVIEW-CODE MED-1 0-row-path test).
+- `src/api/routes/requests.ts` — the 4-endpoint `requestsRouter`.
+- `src/api/routes/requests.test.ts` — 6 route tests.
+
+## Modified files (5)
+
+- `src/services/coordinationSweep.ts` — added `sweepStalledSteps` (the escalation sweep —
+  per-step §0.1-loop txn, crash-isolated) + generalized `startClaimsSweepScheduler` to run
+  both sweeps in one advisory-lock hold.
+- `src/services/coordinationSweep.test.ts` — +4 tests (T17–T20; T20 reworked at REVIEW-CODE
+  into a genuine `23505` crash-isolation test).
+- `src/mcp/index.ts` — 4 MCP tools (`submit_request` / `list_requests` / `get_request` /
+  `decide_request_step`); flat `z.object` outputs (DEFERRED-007-safe).
+- `src/core/index.ts` — Sprint 15.3 service exports + `sweepStalledSteps`.
+- `src/api/index.ts` — `app.use('/api', requestsRouter)` after the board mount.
+- `package.json` — registered `doaMatrix.test.ts`, `requests.test.ts`, `routes/requests.test.ts`.
+
+## Canonical lock order
+
+15.3 extended the global order to `task → claim → request → request_step → artifact →
+topics`. Every 15.3 transaction acquires its row locks as a prefix-consistent subsequence;
+the closed-topic pre-checks are plain non-locking reads. No cross-primitive ABBA — derived up
+front in design §10 (calibration note).
+
+## AMAW review summary
+
+- **REVIEW-DESIGN** — 3 cold-start Adversary rounds. r1: 3 BLOCK (a submitter could
+  self-approve; the `artifact_versions` INSERT omitted the NOT NULL `created_by`; no
+  closed-topic pre-check) → design rev 2. r2: 1 BLOCK (`weight` unbounded above the INT
+  domain → an unhandled `22003`/500) + 1 WARN (escalation collapses the counter-sign
+  distinct-endorser guarantee) → design rev 3 + DEFERRED-013. r3: ACCEPTED, 0 new. Findings
+  spanned authorization / schema / cross-sprint contract / input-trust — no concurrency
+  monoculture (the calibration-note risk).
+- **REVIEW-CODE** — one `/review-impl` round (calibration note): 0 HIGH, 2 MED, 3 LOW, 1
+  COSMETIC. Both MED were test-coverage gaps on claimed invariants (no test for the
+  `resolveArtifact` 0-row best-effort path; the T20 crash-isolation test was vacuous — a
+  `WHERE`-filter excluded the "bad" item) — fixed test-only, each RED-checked. LOW-3 +
+  COSMETIC-6 accepted; LOW-4 + LOW-5 → DEFERRED-014.
+- **QC** — Scope Guard CLEAR: spec fingerprint `6f79057f9e42e4fc` match, 14/14 ACs covered.
+- **POST-REVIEW** — Scope Guard CLEAR: all BLOCK/MED resolved + verified in code, independent
+  `npm run build` exit 0 + `npm test` 414/414.
+
+## Live verification
+
+- `npm run build` (tsc) exit 0; `npm test` **414/414** pass, 0 fail, 0 skipped.
+- Live deployment smoke (rebuilt `mcp` + `worker` Docker images; migration 0056 live) —
+  **14/14** pass: counter_sign submit → endorse ×2 → approved + artifact `final`;
+  `self_decision_forbidden` 403; `topic_closed` 409; weight 3e9 → 400; stalled-step
+  escalation `coordination → authority` + `request.step_escalated`.
+
+## Deferred
+
+- **DEFERRED-013** — counter-sign distinct-endorser enforcement / same-level step-collapse
+  (REVIEW-DESIGN r2 WARN; trigger Sprint 15.4/15.5).
+- **DEFERRED-014** — two LOW consistency residuals: `listRequests` topic-existence check;
+  `request.resolved` payload uniformity (REVIEW-CODE LOW-4/5; trigger Sprint 15.6 or any
+  `requests.ts` / event-schema edit).
+
+## What's next
+
+Sprint 15.4 — collective decision (motions, votes, tally, veto). Cut `phase-15-sprint-15.4`
+off `phase-15-sprint-15.3`, full AMAW 12-phase cycle. If 15.4 formalizes multi-party
+endorsement, fold in DEFERRED-013.
 
 ---
 

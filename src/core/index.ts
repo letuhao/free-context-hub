@@ -139,12 +139,26 @@ export type {
   BaselineResult,
   ConflictReason,
 } from '../services/artifacts.js';
-export { sweepAbandonedClaims, startClaimsSweepScheduler, CLAIMS_SWEEP_ADVISORY_KEY } from '../services/coordinationSweep.js';
+export { sweepAbandonedClaims, sweepStalledSteps, startClaimsSweepScheduler, CLAIMS_SWEEP_ADVISORY_KEY } from '../services/coordinationSweep.js';
 export type {
   SweepResult as ClaimsSweepResult,
+  StalledStepsSweepResult,
   ClaimsSweepHandle,
   StartClaimsSweepOptions,
 } from '../services/coordinationSweep.js';
+
+// ── Services: request approval (Phase 15 Sprint 15.3) ──
+export { submitRequest, decideStep, getRequest, listRequests } from '../services/requests.js';
+export type {
+  // aliased — SubmitResult already exported by reviewRequests above (different shape).
+  SubmitResult as RequestSubmitResult,
+  DecideResult,
+  RequestRecord,
+  RequestStep,
+  ListRequestsResult,
+} from '../services/requests.js';
+export { resolveMatrixRow, deriveRoute } from '../services/doaMatrix.js';
+export type { MatrixRow } from '../services/doaMatrix.js';
 
 // ── Services: distillation & snapshots ──
 export { getProjectSnapshotBody } from '../services/snapshot.js';

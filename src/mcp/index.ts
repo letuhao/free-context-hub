@@ -89,6 +89,11 @@ import {
   completeTask,
   writeArtifact,
   baselineArtifact,
+  // Phase 15 Sprint 15.3: Request-Approval
+  submitRequest,
+  listRequests,
+  getRequest,
+  decideStep,
 } from '../core/index.js';
 import { LESSON_STATUS_ALL, LESSON_STATUS_WRITABLE } from '../constants/lessonStatus.js';
 import { formatToolResponse, OutputFormatSchema } from './formatters.js';
@@ -3382,6 +3387,174 @@ function createMcpToolsServer() {
       assertWorkspaceToken(workspace_token);
       const r = await baselineArtifact({ artifact_id, claim_id, fencing_token, actor_id });
       const summary = `baseline_artifact: artifact=${artifact_id} status=${r.status}`;
+      return formatToolResponse(r, summary, output_format);
+    },
+  );
+
+  // ── Phase 15 Sprint 15.3: Request-Approval tools ──
+  // NOTE: avoiding z.discriminatedUnion per DEFERRED-007 (MCP SDK regression).
+  // Output shapes use flat z.object with optional fields for all business statuses.
+  //
+  // IDENTITY (Sprint 15.3.1 F1): submitted_by / actor_id on these tools are
+  // workspace-trusted — the MCP transport authenticates a workspace (one shared
+  // workspace_token), not a per-caller identity. The REST routes bind those fields
+  // to the api-key identity (routes/requests.ts resolveActorIdentity); MCP cannot,
+  // as there is no per-caller principal. A workspace-token holder is a single
+  // trusted principal. Real MCP per-caller identity = Phase 15 authz (DEFERRED-009/015).
+
+  server.registerTool(
+    'submit_request',
+    {
+      description: 'Submit an approval request for an artifact. Resolves the DoA matrix to derive a multi-level approval route. Returns status="submitted" with the route and request_id, or a business-failure status (topic_closed, not_participant, no_route).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        topic_id: z.string().min(1).describe('The topic the artifact belongs to.'),
+        subject_id: z.string().min(1).describe('The artifact_id being submitted for review.'),
+        kind: z.string().min(1).describe('Request kind, e.g. "artifact_review". Must match a doa_matrix row.'),
+        weight: z.number().int().describe('Request weight [0, 2147483647]. Selects the matrix row.'),
+        procedure: z.string().optional().describe('"unilateral" (default). "collective" is Sprint 15.4.'),
+        submitted_by: z.string().min(1).describe('Actor id submitting the request.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.string(),
+        request_id: z.string().optional(),
+        route: z.array(z.string()).optional(),
+        current_step: z.number().optional(),
+      }),
+    },
+    async ({ workspace_token, topic_id, subject_id, kind, weight, procedure, submitted_by, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const r = await submitRequest({
+        topic_id,
+        subject_type: 'artifact',
+        subject_id,
+        kind,
+        weight,
+        procedure: procedure ?? 'unilateral',
+        submitted_by,
+      });
+      const summary = `submit_request: topic=${topic_id} status=${r.status}`;
+      return formatToolResponse(r, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'list_requests',
+    {
+      description: "List approval requests for a topic. Optionally filter by status (e.g. 'open', 'approved', 'returned', 'rejected', 'escalation_exhausted').",
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        topic_id: z.string().min(1),
+        status: z.string().optional().describe('Optional status filter.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.literal('ok'),
+        requests: z.array(z.object({
+          request_id: z.string(),
+          topic_id: z.string(),
+          subject_type: z.string(),
+          subject_id: z.string(),
+          kind: z.string(),
+          weight: z.number(),
+          procedure: z.string(),
+          route_shape: z.string(),
+          status: z.string(),
+          current_step: z.number(),
+          submitted_by: z.string(),
+          created_at: z.string(),
+          steps: z.array(z.object({
+            step_index: z.number(),
+            target_office: z.string(),
+            doa_snapshot: z.string(),
+            procedure: z.string(),
+            deadline: z.string(),
+            status: z.string(),
+            decided_by: z.string().nullable(),
+            decided_at: z.string().nullable(),
+          })),
+        })),
+      }),
+    },
+    async ({ workspace_token, topic_id, status, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const r = await listRequests({ topic_id, status });
+      const result = { status: 'ok' as const, requests: r.requests };
+      const summary = `list_requests: topic=${topic_id} count=${r.requests.length}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'get_request',
+    {
+      description: 'Get a single approval request including its steps.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        request_id: z.string().min(1).describe('The UUID of the request.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.string(),
+        request: z.object({
+          request_id: z.string(),
+          topic_id: z.string(),
+          subject_type: z.string(),
+          subject_id: z.string(),
+          kind: z.string(),
+          weight: z.number(),
+          procedure: z.string(),
+          route_shape: z.string(),
+          status: z.string(),
+          current_step: z.number(),
+          submitted_by: z.string(),
+          created_at: z.string(),
+          steps: z.array(z.object({
+            step_index: z.number(),
+            target_office: z.string(),
+            doa_snapshot: z.string(),
+            procedure: z.string(),
+            deadline: z.string(),
+            status: z.string(),
+            decided_by: z.string().nullable(),
+            decided_at: z.string().nullable(),
+          })),
+        }).optional(),
+      }),
+    },
+    async ({ workspace_token, request_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const req = await getRequest({ request_id });
+      const result = req
+        ? { status: 'ok', request: req }
+        : { status: 'not_found', request: undefined };
+      const summary = `get_request: id=${request_id} status=${result.status}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'decide_request_step',
+    {
+      description: 'Decide a request step (endorse / return / reject). The actor must be a topic participant at the step\'s target_office level and must not be the request\'s submitter (no self-approval). Returns the request outcome or a business-failure status.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        request_id: z.string().min(1).describe('The UUID of the request.'),
+        step_index: z.number().int().describe('The step index (must be the current active step).'),
+        actor_id: z.string().min(1).describe('The deciding actor id.'),
+        decision: z.string().min(1).describe('"endorse" | "return" | "reject".'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.string(),
+        current_step: z.number().optional(),
+      }),
+    },
+    async ({ workspace_token, request_id, step_index, actor_id, decision, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const r = await decideStep({ request_id, step_index, actor_id, decision });
+      const summary = `decide_request_step: request=${request_id} step=${step_index} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
   );

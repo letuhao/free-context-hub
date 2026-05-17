@@ -198,3 +198,5 @@ backups/
 # .phase-gates/ retired 2026-05-15 — AMAW now uses docs/audit/AUDIT_LOG.jsonl
 # (which IS committed, durable history). Old gate file convention deprecated.
 .phase-gates/
+
+.VSCodeCounter/

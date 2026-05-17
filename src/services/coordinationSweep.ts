@@ -1,5 +1,10 @@
 /**
- * Phase 15 Sprint 15.2 — abandoned-claim recovery sweep.
+ * Phase 15 Sprint 15.2 + 15.3 — abandoned-claim recovery sweep + stalled-step
+ * escalation sweep.
+ *
+ * Sprint 15.3 adds `sweepStalledSteps` (§4) and generalizes
+ * `startClaimsSweepScheduler` (§4.2) to call both sweeps in sequence inside the
+ * one advisory-lock hold.
  *
  * Design ref: docs/specs/2026-05-16-phase-15-sprint-15.2-design.md §4
  * Spec hash:  ea26ef6367e133ef
@@ -26,6 +31,7 @@ import { getDbPool as defaultGetDbPool } from '../db/client.js';
 import { createModuleLogger } from '../utils/logger.js';
 import { appendEvent } from './coordinationEvents.js';
 import { revertArtifact } from './artifacts.js';
+import { LEVELS_ASC, LEVEL_RANK, STEP_DEADLINE_MINUTES } from './doaMatrix.js';
 
 const logger = createModuleLogger('coordination-sweep');
 
@@ -33,6 +39,8 @@ export const SWEEP_INTERVAL_MS = 5 * 60_000; // 5 minutes
 
 const DEFAULT_GRACE_MINUTES = 0;
 const MAX_GRACE_MINUTES = 1440;
+
+export type StalledStepsSweepResult = { escalated: number; swept_at: string };
 
 export type SweepResult = { recovered: number; swept_at: string };
 
@@ -208,12 +216,173 @@ export async function sweepAbandonedClaims(params?: {
   return result;
 }
 
+// ── §4.1 sweepStalledSteps ───────────────────────────────────────────────────
+
+/**
+ * Escalate all active stalled request steps (§4.1).
+ *
+ * "Active stalled" = a `pending` step whose deadline has passed, and whose
+ * request's `current_step` is this step (the `current_step` join ensures only
+ * the active step is swept, never a waiting non-current step).
+ *
+ * Each stalled step is processed in its own §0.1-loop transaction
+ * (catch → log → `continue`). Lock order: `request → request_step → topics`.
+ *
+ * Branch logic (D9):
+ *   - target_office < authority: climb one level in place (status stays 'pending',
+ *     deadline reset to now+60min), emit request.step_escalated.
+ *   - target_office = authority: mark step 'escalated', mark request
+ *     'escalation_exhausted', emit request.step_escalated + request.resolved.
+ *
+ * Closed-topic branch: skip (no mutation, no events) — a stalled step is not a
+ * lease; nothing leaks on close (§9 inv. 7 + §11.6).
+ */
+export async function sweepStalledSteps(params?: {
+  grace_minutes?: number;
+}): Promise<StalledStepsSweepResult> {
+  const grace = clampGrace(params?.grace_minutes);
+  const pool = getDbPool();
+
+  // Scan: find all active stalled steps.
+  const stalled = await pool.query<{
+    request_id: string;
+    step_index: number;
+    target_office: string;
+    topic_id: string;
+  }>(
+    `SELECT s.request_id, s.step_index, s.target_office, r.topic_id
+       FROM request_steps s
+       JOIN requests r ON r.request_id = s.request_id AND r.current_step = s.step_index
+      WHERE s.status = 'pending' AND r.status = 'open'
+        AND s.deadline < now() - make_interval(mins => $1)`,
+    [grace],
+  );
+
+  let escalated = 0;
+
+  for (const step of stalled.rows) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // ── (request) row lock ─────────────────────────────────────────────────
+      const reqRes = await client.query<{ status: string; current_step: number }>(
+        `SELECT status, current_step FROM requests WHERE request_id=$1 FOR UPDATE`,
+        [step.request_id],
+      );
+      if (reqRes.rowCount === 0 || reqRes.rows[0].status !== 'open' || reqRes.rows[0].current_step !== step.step_index) {
+        // Decided since the scan — skip.
+        await client.query('ROLLBACK');
+        continue;
+      }
+
+      // ── (request_step) row lock ────────────────────────────────────────────
+      const stepRes = await client.query<{ target_office: string; status: string; deadline: Date }>(
+        `SELECT target_office, status, deadline FROM request_steps
+           WHERE request_id=$1 AND step_index=$2 FOR UPDATE`,
+        [step.request_id, step.step_index],
+      );
+      if (
+        stepRes.rowCount === 0 ||
+        stepRes.rows[0].status !== 'pending' ||
+        stepRes.rows[0].deadline >= new Date()
+      ) {
+        // No longer stalled — skip.
+        await client.query('ROLLBACK');
+        continue;
+      }
+      const currentOffice = stepRes.rows[0].target_office;
+
+      // ── (topics) row lock — serializes with closeTopic ────────────────────
+      const topicRes = await client.query<{ status: string }>(
+        `SELECT status FROM topics WHERE topic_id=$1 FOR UPDATE`,
+        [step.topic_id],
+      );
+      if (topicRes.rows[0]?.status === 'closed') {
+        // Closed topic: skip — no mutation, no events (§9 inv. 7 + §11.6).
+        await client.query('ROLLBACK');
+        continue;
+      }
+
+      if (currentOffice !== 'authority') {
+        // Climb one level in place
+        const currentRank = LEVEL_RANK[currentOffice] ?? 0;
+        const nextOffice = LEVELS_ASC[currentRank + 1] ?? 'authority';
+
+        await client.query(
+          `UPDATE request_steps SET target_office=$1, deadline = now() + interval '${STEP_DEADLINE_MINUTES} minutes'
+             WHERE request_id=$2 AND step_index=$3`,
+          [nextOffice, step.request_id, step.step_index],
+        );
+
+        await appendEvent(client, {
+          topic_id: step.topic_id,
+          actor_id: 'system:sweep',
+          type: 'request.step_escalated',
+          subject_type: 'request',
+          subject_id: step.request_id,
+          payload: {
+            step_index: step.step_index,
+            from_office: currentOffice,
+            to_office: nextOffice,
+          },
+        });
+      } else {
+        // Already at authority — terminal
+        await client.query(
+          `UPDATE request_steps SET status='escalated', decided_by='system:sweep', decided_at=now()
+             WHERE request_id=$1 AND step_index=$2`,
+          [step.request_id, step.step_index],
+        );
+        await client.query(
+          `UPDATE requests SET status='escalation_exhausted' WHERE request_id=$1`,
+          [step.request_id],
+        );
+        await appendEvent(client, {
+          topic_id: step.topic_id,
+          actor_id: 'system:sweep',
+          type: 'request.step_escalated',
+          subject_type: 'request',
+          subject_id: step.request_id,
+          payload: { step_index: step.step_index, exhausted: true },
+        });
+        await appendEvent(client, {
+          topic_id: step.topic_id,
+          actor_id: 'system:sweep',
+          type: 'request.resolved',
+          subject_type: 'request',
+          subject_id: step.request_id,
+          payload: { outcome: 'escalation_exhausted' },
+        });
+      }
+
+      await client.query('COMMIT');
+      escalated++;
+    } catch (err) {
+      // §0.1-loop variant — log and CONTINUE; never re-throw.
+      await client.query('ROLLBACK').catch(() => {});
+      logger.error(
+        { err: String(err), request_id: step.request_id, step_index: step.step_index },
+        'sweep stalled-step escalation failed',
+      );
+      /* continue */
+    } finally {
+      client.release();
+    }
+  }
+
+  const result: StalledStepsSweepResult = { escalated, swept_at: new Date().toISOString() };
+  logger.info(result, 'steps.sweep complete');
+  return result;
+}
+
 // ── §4.2 in-process scheduler ────────────────────────────────────────────────
 
 // Test-injectable dependencies. Production uses the defaults; tests call
 // `__setSweepDependenciesForTest()` to swap mocks. NOT a public API.
 let _getDbPool: typeof defaultGetDbPool = defaultGetDbPool;
 let _sweepAbandonedClaims: typeof sweepAbandonedClaims = sweepAbandonedClaims;
+let _sweepStalledSteps: typeof sweepStalledSteps = sweepStalledSteps;
 
 function getDbPool(): ReturnType<typeof defaultGetDbPool> {
   return _getDbPool();
@@ -222,14 +391,17 @@ function getDbPool(): ReturnType<typeof defaultGetDbPool> {
 export function __setSweepDependenciesForTest(deps: {
   getDbPool?: typeof defaultGetDbPool;
   sweepAbandonedClaims?: typeof sweepAbandonedClaims;
+  sweepStalledSteps?: typeof sweepStalledSteps;
 }): void {
   if (deps.getDbPool) _getDbPool = deps.getDbPool;
   if (deps.sweepAbandonedClaims) _sweepAbandonedClaims = deps.sweepAbandonedClaims;
+  if (deps.sweepStalledSteps) _sweepStalledSteps = deps.sweepStalledSteps;
 }
 
 export function __resetSweepDependenciesForTest(): void {
   _getDbPool = defaultGetDbPool;
   _sweepAbandonedClaims = sweepAbandonedClaims;
+  _sweepStalledSteps = sweepStalledSteps;
 }
 
 /**
@@ -298,6 +470,9 @@ export function startClaimsSweepScheduler(opts: StartClaimsSweepOptions = {}): C
           grace !== undefined ? { grace_minutes: grace } : undefined,
         );
         logger.info({ event: 'claims_sweep_done', recovered: swept.recovered }, 'claims.sweep cycle complete');
+        // §4.2 — also run stalled-step escalation in the same advisory-lock hold
+        const stepsSwept = await _sweepStalledSteps();
+        logger.info({ event: 'steps_sweep_done', escalated: stepsSwept.escalated }, 'steps.sweep cycle complete');
       } catch (err) {
         logger.error(
           { event: 'claims_sweep_cycle_failed', err: err instanceof Error ? err.message : String(err) },
