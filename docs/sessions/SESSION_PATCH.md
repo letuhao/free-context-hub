@@ -176,14 +176,19 @@ outcome chaining — trigger was 15.6 closing drain, now met); **DEFERRED-011** 
 for stalled `closing` topics — also now unblocked by 15.6). **DEFERRED-017/015/016** carry the
 HARD pre-production authz trigger.
 
-## Environment state
+## Environment state (end of Sprint 15.6 session, 2026-05-18)
 
-- Docker stack UP — `db`/`mcp`/`worker`/`neo4j`/`rabbitmq`/`redis` running; migrations
-  0053–**0059** applied; `mcp`/`worker` rebuilt + running the **Sprint 15.5** code.
-- `npm test` **586/586** green on `phase-15-sprint-15.5`; `tsc` clean.
-- Deferred items OPEN: DEFERRED-009, 010, 011, 012, 013, 014, **015**, **016**, **017**,
-  018, 019 — DEFERRED-015 + 016 + **017** (the auth-enabled-multi-actor authorization
-  residuals) carry a HARD pre-production trigger; DEFERRED-012 + 013 trigger at Sprint 15.6.
+- Docker stack: unknown — not verified this session (MCP server was offline; API server not
+  responding to health check at session end). Migrations 0053–**0059** applied (no new
+  migration in 15.6). On next session start: `docker compose up -d`, verify `npm test`
+  passes, add MCP lessons from the AUDIT_LOG deferred-lessons note.
+- `npm test` **602/602** green on `phase-15-sprint-15.6`; `tsc` clean.
+- Branch: `phase-15-sprint-15.6` — pushed to remote. Last commit: `ebd12d2`.
+- Deferred items OPEN: DEFERRED-009, 010, 011, **015**, **016**, **017**, 018, 019, **020** —
+  DEFERRED-015 + 016 + **017** carry a HARD pre-production authorization trigger.
+  DEFERRED-012 + 013 + 014 **resolved** in Sprint 15.6.
+- Pending MCP lessons (4, noted in AUDIT_LOG `add_lesson_deferred` event): closing-drain
+  pattern, closing-window race workaround, scan-failure resilience, test-isolation pattern.
 - `jq` is NOT installed in the shell env — live smoke scripts must parse JSON via `node`/`tsx`.
 
 ## Execution-contract reminders (from the longrun plan)
