@@ -71,7 +71,8 @@ export type ListBoardResult = { tasks: TaskSummary[] };
 export type ClaimResult =
   | { status: 'claimed'; claim_id: string; fencing_token: number; expires_at: string; artifact_id: string }
   | { status: 'conflict'; reason?: 'task_completed'; incumbent_actor_id?: string; expires_at?: string }
-  | { status: 'not_found' };
+  | { status: 'not_found' }
+  | { status: 'topic_closed' };
 
 export type ReleaseResult = {
   status: 'released' | 'not_found' | 'claim_expired' | 'not_owner' | 'topic_closed';
@@ -103,11 +104,10 @@ function clampTtl(ttlMinutes?: number): number {
  * `task.posted` + `artifact.created` — all in one transaction (§2.1 / D2).
  *
  * The `artifact_id` is DERIVED `<topic_id>:<task_id>:<slot>` (D1) — never
- * actor-supplied. A MISSING topic is caught by an explicit plain-SELECT
- * existence check (→ NOT_FOUND / 404) so it never surfaces as a raw 23503 FK
- * violation; a CLOSED (existing) topic passes the check, the INSERTs succeed,
- * and the first `appendEvent`'s seal throws BAD_REQUEST (→ 400). The check has
- * no check-to-INSERT TOCTOU because of §0.3 — a `topics` row is permanent.
+ * actor-supplied. A MISSING topic → NOT_FOUND / 404. A CLOSED or CLOSING topic
+ * → BAD_REQUEST (Sprint 15.6 HIGH fix: a task posted during the drain window
+ * would survive Phase 3 as permanently 'active' on a sealed topic). The check
+ * has no check-to-INSERT TOCTOU because of §0.3 — a `topics` row is permanent.
  */
 export async function postTask(params: {
   topic_id: string;
@@ -172,11 +172,18 @@ export async function postTask(params: {
   const pool = getDbPool();
   const client = await pool.connect();
   try {
-    // [r2-fix F3] explicit existence check FIRST — a MISSING topic must be a
-    // clean 404, not the raw 23503 FK violation the tasks INSERT would raise.
-    const topicRes = await client.query(`SELECT 1 FROM topics WHERE topic_id = $1`, [topicId]);
+    // [r2-fix F3] explicit existence + status check — MISSING → 404; CLOSED or
+    // CLOSING → 400 (a task created in the drain window would survive as
+    // permanently 'active' on a sealed topic; Sprint 15.6 HIGH fix).
+    const topicRes = await client.query<{ status: string }>(
+      `SELECT status FROM topics WHERE topic_id = $1`,
+      [topicId],
+    );
     if (topicRes.rowCount === 0) {
       throw new ContextHubError('NOT_FOUND', `topic ${topicId} not found`);
+    }
+    if (topicRes.rows[0].status === 'closed' || topicRes.rows[0].status === 'closing') {
+      throw new ContextHubError('BAD_REQUEST', `topic ${topicId} is closing or closed`);
     }
 
     // [LOW-9] depends_on must reference EXISTING tasks in THE SAME topic — a
@@ -360,6 +367,18 @@ export async function claimTask(params: {
     if (taskStatus === 'completed') {
       await client.query('ROLLBACK');
       return { status: 'conflict', reason: 'task_completed' };
+    }
+
+    // Sprint 15.6 HIGH fix — a claim created during the drain window survives
+    // Phase 3 as an orphaned row (sweep skips closed topics). Plain SELECT;
+    // does not change the task → claim → artifact → topics lock order.
+    const topicStatusQ = await client.query<{ status: string }>(
+      `SELECT status FROM topics WHERE topic_id=$1`,
+      [topicId],
+    );
+    if (topicStatusQ.rows[0]?.status === 'closed' || topicStatusQ.rows[0]?.status === 'closing') {
+      await client.query('ROLLBACK');
+      return { status: 'topic_closed' };
     }
 
     // plain read — the artifact_id (NO lock; embeds task_id, one row per task).

@@ -232,7 +232,8 @@ test('T16: an expired claim on a closed topic → claim dropped, artifact NOT re
     content_ref: 'ref://working', actor_id: 'worker-1',
   });
   await expireClaims(s.artifact_id);
-  await closeTopic({ topic_id: topicId, actor_id: 'creator-1' });
+  // bypass drain — close via direct DB update so the expired claim survives
+  await getDbPool().query(`UPDATE topics SET status='closed' WHERE topic_id=$1`, [topicId]);
 
   const pool = getDbPool();
   const evBefore = await replayEvents({ topic_id: topicId });
@@ -479,8 +480,9 @@ test('T19: stalled step on a closed topic → skipped (no mutation, no events)',
   const { topicId, requestId } = await mkTopicWithStalledStep('t19', 'execution');
   const pool = getDbPool();
 
-  // Close the topic after submission (simulates a race or deliberate close)
-  await closeTopic({ topic_id: topicId, actor_id: `actor-auth-t19` });
+  // bypass drain — close via direct DB update so the step stays 'pending',
+  // testing the sweep's closed-topic skip-branch directly
+  await getDbPool().query(`UPDATE topics SET status='closed' WHERE topic_id=$1`, [topicId]);
 
   const evBefore = await replayEvents({ topic_id: topicId });
   const evCountBefore = evBefore.events.length;
@@ -702,7 +704,8 @@ test('T11c: an expired motion on a closed topic → skipped (no mutation, no eve
   if (p.status !== 'proposed') throw new Error('setup failed');
   await secondMotion({ motion_id: p.motion_id, actor_id: 'seconder' });
   await expireMotionRow(p.motion_id);
-  await closeTopic({ topic_id: topicId, actor_id: 'proposer' });
+  // bypass drain — close via direct DB update so the balloting motion survives
+  await getDbPool().query(`UPDATE topics SET status='closed' WHERE topic_id=$1`, [topicId]);
 
   const pool = getDbPool();
   const evBefore = await replayEvents({ topic_id: topicId });

@@ -65,7 +65,8 @@ export type DecideResult =
   | { status: 'conflict' }
   | { status: 'not_participant' }
   | { status: 'self_decision_forbidden' }
-  | { status: 'not_authorized' };
+  | { status: 'not_authorized' }
+  | { status: 'repeat_endorser' };
 
 export type RequestStep = {
   step_index: number;
@@ -133,10 +134,10 @@ export async function submitRequest(params: {
 
   // F7 — bound the free-text fields written verbatim to rows + the request.submitted event
   const MAX_FIELD_LEN = 256;
-  if (kind.length > MAX_FIELD_LEN || subjectId.length > MAX_FIELD_LEN) {
+  if (kind.length > MAX_FIELD_LEN || subjectId.length > MAX_FIELD_LEN || submittedBy.length > MAX_FIELD_LEN) {
     throw new ContextHubError(
       'BAD_REQUEST',
-      `kind and subject_id must each be at most ${MAX_FIELD_LEN} characters`,
+      `kind, subject_id, and submitted_by must each be at most ${MAX_FIELD_LEN} characters`,
     );
   }
 
@@ -175,7 +176,7 @@ export async function submitRequest(params: {
     throw new ContextHubError('NOT_FOUND', `topic ${topicId} not found`);
   }
   const { project_id: projectId, status: topicStatus } = topicRes.rows[0];
-  if (topicStatus === 'closed') {
+  if (topicStatus === 'closed' || topicStatus === 'closing') {
     return { status: 'topic_closed' };
   }
 
@@ -362,6 +363,9 @@ export async function decideStep(params: {
   if (!requestId || !actorId || !decision) {
     throw new ContextHubError('BAD_REQUEST', 'request_id, actor_id, decision are required');
   }
+  if (actorId.length > 256) {
+    throw new ContextHubError('BAD_REQUEST', 'actor_id must be at most 256 characters');
+  }
   if (!['endorse', 'return', 'reject'].includes(decision)) {
     throw new ContextHubError('BAD_REQUEST', `decision must be one of: endorse, return, reject`);
   }
@@ -382,8 +386,9 @@ export async function decideStep(params: {
       current_step: number;
       subject_id: string;
       submitted_by: string;
+      route_shape: string;
     }>(
-      `SELECT topic_id, status, current_step, subject_id, submitted_by
+      `SELECT topic_id, status, current_step, subject_id, submitted_by, route_shape
          FROM requests WHERE request_id=$1 FOR UPDATE`,
       [requestId],
     );
@@ -403,6 +408,7 @@ export async function decideStep(params: {
     const topicId = req.topic_id;
     const artifactId = req.subject_id;
     const submittedBy = req.submitted_by;
+    const routeShape = req.route_shape;
 
     // B3 — closed-topic plain read (no lock — preserves lock order; the seal in
     // appendEvent is the authoritative guard for a mid-transaction close race)
@@ -445,6 +451,20 @@ export async function decideStep(params: {
     if (actorLevel !== targetOffice) {
       await client.query('ROLLBACK');
       return { status: 'not_authorized' };
+    }
+
+    // Sprint 15.6 — distinct-endorser: for counter_sign routes, reject if actor already
+    // decided any prior step (DEFERRED-013).
+    if (routeShape === 'counter_sign') {
+      const prior = await client.query<{ decided_by: string }>(
+        `SELECT decided_by FROM request_steps
+           WHERE request_id=$1 AND step_index<$2 AND decided_by IS NOT NULL`,
+        [requestId, stepIndex],
+      );
+      if (prior.rows.some((r) => r.decided_by === actorId)) {
+        await client.query('ROLLBACK');
+        return { status: 'repeat_endorser' };
+      }
     }
 
     // ── Map decision → step status ───────────────────────────────────────────
@@ -556,7 +576,7 @@ export async function decideStep(params: {
         type: 'request.resolved',
         subject_type: 'request',
         subject_id: requestId,
-        payload: { outcome: 'rejected' },
+        payload: { outcome: 'rejected', artifact_advanced: false },
       });
       await client.query('COMMIT');
       return { status: 'rejected' };
@@ -651,6 +671,16 @@ export async function listRequests(params: {
   status?: string;
 }): Promise<ListRequestsResult> {
   const pool = getDbPool();
+
+  // DEFERRED-014 §3.1 — surface NOT_FOUND for unknown topic instead of silently returning []
+  const topicCheck = await pool.query<{ topic_id: string }>(
+    `SELECT topic_id FROM topics WHERE topic_id=$1`,
+    [params.topic_id],
+  );
+  if ((topicCheck.rowCount ?? 0) === 0) {
+    throw new ContextHubError('NOT_FOUND', `topic ${params.topic_id} not found`);
+  }
+
   const args: unknown[] = [params.topic_id];
   let statusFilter = '';
   if (params.status) {

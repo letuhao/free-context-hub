@@ -61,6 +61,7 @@ function statusToHttp(status: string): number {
     case 'already_resolved':
     case 'not_current_step':
     case 'topic_closed':
+    case 'repeat_endorser':
       return 409;
     case 'no_route':
     case 'not_participant':
@@ -163,11 +164,13 @@ router.get('/requests/:id', requireRole('reader'), async (req, res, next) => {
 router.post('/requests/:id/steps/:n/decide', requireRole('writer'), async (req, res, next) => {
   try {
     const body = req.body ?? {};
-    const stepIndex = parseInt(String(req.params.n), 10);
-    if (isNaN(stepIndex)) {
-      res.status(400).json({ status: 'error', error: 'step index must be a number', code: 'BAD_REQUEST' });
+    // Sprint 15.6 §3.3 — /^\d+$/ rejects fractional/negative strings before parseInt
+    const rawN = String(req.params.n);
+    if (!/^\d+$/.test(rawN)) {
+      res.status(400).json({ status: 'error', error: 'step index must be a non-negative integer', code: 'BAD_REQUEST' });
       return;
     }
+    const stepIndex = parseInt(rawN, 10);
     // F1 — bind actor_id to the authenticated key (Sprint 15.3.1)
     const id = resolveActorIdentity(req, asString(body.actor_id));
     if (!id.ok) {

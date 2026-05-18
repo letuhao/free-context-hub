@@ -59,10 +59,19 @@ export type InductionPack = {
   has_more: boolean;
 };
 
+export type ForceLapsedCounts = {
+  claims: number;
+  requests: number;
+  motions: number;
+  disputes: number;
+  intake_items: number;
+};
+
 export type CloseResult = {
   topic_id: string;
   status: 'closed';
   already_closed: boolean;
+  force_lapsed: ForceLapsedCounts;
 };
 
 /**
@@ -297,10 +306,16 @@ export async function getTopic(params: { topic_id: string }): Promise<TopicWithR
 }
 
 /**
- * Close a topic. Atomic `chartered|active → closed`: emits `topic.closed` as the
- * final event, then flips the status (the topics-row lock held through both
- * makes `topic.closed` provably the last event). Idempotent — closing an
- * already-closed topic returns `already_closed:true` and emits no event.
+ * Close a topic — three-phase drain (DEFERRED-012, Sprint 15.6).
+ *
+ * Phase 1: `active|chartered → closing` (freeze Board — no new items can be posted).
+ * Phase 2: force-lapse all in-flight items (claims, requests, motions, disputes,
+ *          intake_items) in individual short transactions (one per item). Optimistic
+ *          updates (no FOR UPDATE on item rows) avoid deadlock with concurrent
+ *          decideStep / appendEvent callers (see design §1.3).
+ * Phase 3: `closing → closed` — seals the event log (appendEvent rejects on 'closed').
+ *
+ * Idempotent: already-closed → already_closed:true; already-closing → re-runs Phase 2+3.
  */
 export async function closeTopic(params: {
   topic_id: string;
@@ -313,37 +328,227 @@ export async function closeTopic(params: {
   }
 
   const pool = getDbPool();
-  const client = await pool.connect();
+  const ZERO: ForceLapsedCounts = { claims: 0, requests: 0, motions: 0, disputes: 0, intake_items: 0 };
+
+  // ── Phase 1: freeze (active|chartered → closing) ──────────────────────────
+  {
+    const c1 = await pool.connect();
+    try {
+      await c1.query('BEGIN');
+      const res = await c1.query<{ status: string }>(
+        `SELECT status FROM topics WHERE topic_id=$1 FOR UPDATE`,
+        [topicId],
+      );
+      if (res.rowCount === 0) {
+        await c1.query('ROLLBACK');
+        throw new ContextHubError('NOT_FOUND', `topic ${topicId} not found`);
+      }
+      const currentStatus = res.rows[0].status;
+      if (currentStatus === 'closed') {
+        await c1.query('ROLLBACK');
+        return { topic_id: topicId, status: 'closed', already_closed: true, force_lapsed: ZERO };
+      }
+      if (currentStatus === 'active' || currentStatus === 'chartered') {
+        await c1.query(`UPDATE topics SET status='closing' WHERE topic_id=$1`, [topicId]);
+        await appendEvent(c1, {
+          topic_id: topicId, actor_id: actorId,
+          type: 'topic.closing', subject_type: 'topic', subject_id: topicId, payload: {},
+        });
+      }
+      // status='closing' → skip Phase 1 (recovery) — fall through to Phase 2
+      await c1.query('COMMIT');
+    } catch (err) {
+      await c1.query('ROLLBACK').catch(() => {});
+      if (err instanceof ContextHubError) throw err;
+      logger.error({ err: String(err) }, 'closeTopic Phase 1 failed');
+      throw err;
+    } finally {
+      c1.release();
+    }
+  }
+
+  // ── Phase 2: drain — force-lapse all in-flight items ─────────────────────
+  // MED-3: each scan+loop is wrapped in its own try/catch so a DB error on
+  // the scan query skips that pass and lets Phase 3 seal complete. A stuck
+  // scan is worse than a partial drain — the topic must reach 'closed'.
+  const counts: ForceLapsedCounts = { claims: 0, requests: 0, motions: 0, disputes: 0, intake_items: 0 };
+
+  // 2-A: claims (→ task.abandoned)
   try {
-    await client.query('BEGIN');
-    const res = await client.query<{ status: string }>(
-      `SELECT status FROM topics WHERE topic_id = $1 FOR UPDATE`,
+    const claimRows = await pool.query<{ claim_id: string; task_id: string; actor_id: string }>(
+      `SELECT claim_id, task_id, actor_id FROM claims WHERE topic_id=$1`,
       [topicId],
     );
-    if (res.rowCount === 0) {
-      throw new ContextHubError('NOT_FOUND', `topic ${topicId} not found`);
+    for (const claim of claimRows.rows) {
+      const c = await pool.connect();
+      try {
+        await c.query('BEGIN');
+        const del = await c.query(`DELETE FROM claims WHERE claim_id=$1 RETURNING 1`, [claim.claim_id]);
+        if ((del.rowCount ?? 0) === 0) { await c.query('ROLLBACK'); continue; }
+        await c.query(`UPDATE tasks SET status='abandoned' WHERE task_id=$1`, [claim.task_id]);
+        await appendEvent(c, {
+          topic_id: topicId, actor_id: actorId,
+          type: 'claim.force_lapsed', subject_type: 'task', subject_id: claim.task_id,
+          payload: { task_id: claim.task_id, actor_id: claim.actor_id },
+        });
+        await c.query('COMMIT');
+        counts.claims++;
+      } catch (err) {
+        await c.query('ROLLBACK').catch(() => {});
+        logger.error({ err: String(err), claim_id: claim.claim_id }, 'closeTopic: claim force-lapse failed');
+      } finally { c.release(); }
     }
-    if (res.rows[0].status === 'closed') {
-      // idempotent — ROLLBACK before the early return so finally releases a clean client
-      await client.query('ROLLBACK');
-      return { topic_id: topicId, status: 'closed', already_closed: true };
-    }
-    await appendEvent(client, {
-      topic_id: topicId,
-      actor_id: actorId,
-      type: 'topic.closed',
-      subject_type: 'topic',
-      subject_id: topicId,
-      payload: {},
-    });
-    await client.query(`UPDATE topics SET status = 'closed' WHERE topic_id = $1`, [topicId]);
-    await client.query('COMMIT');
-    return { topic_id: topicId, status: 'closed', already_closed: false };
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
-    logger.error({ err: String(err) }, 'closeTopic failed');
-    throw err;
-  } finally {
-    client.release();
+  } catch (scanErr) {
+    logger.error({ err: String(scanErr) }, 'closeTopic: claim-scan failed — drain pass skipped');
   }
+
+  // 2-B: requests (open → rejected; pending steps → rejected)
+  try {
+    const reqRows = await pool.query<{ request_id: string }>(
+      `SELECT request_id FROM requests WHERE topic_id=$1 AND status='open'`,
+      [topicId],
+    );
+    for (const req of reqRows.rows) {
+      const c = await pool.connect();
+      try {
+        await c.query('BEGIN');
+        const stepsRes = await c.query(
+          `UPDATE request_steps SET status='rejected' WHERE request_id=$1 AND status='pending' RETURNING 1`,
+          [req.request_id],
+        );
+        const upd = await c.query(
+          `UPDATE requests SET status='rejected' WHERE request_id=$1 AND status='open' RETURNING 1`,
+          [req.request_id],
+        );
+        if ((upd.rowCount ?? 0) === 0) { await c.query('ROLLBACK'); continue; }
+        await appendEvent(c, {
+          topic_id: topicId, actor_id: actorId,
+          type: 'request.force_closed', subject_type: 'request', subject_id: req.request_id,
+          payload: { request_id: req.request_id, steps_rejected: stepsRes.rowCount ?? 0 },
+        });
+        await c.query('COMMIT');
+        counts.requests++;
+      } catch (err) {
+        await c.query('ROLLBACK').catch(() => {});
+        logger.error({ err: String(err), request_id: req.request_id }, 'closeTopic: request force-lapse failed');
+      } finally { c.release(); }
+    }
+  } catch (scanErr) {
+    logger.error({ err: String(scanErr) }, 'closeTopic: request-scan failed — drain pass skipped');
+  }
+
+  // 2-C: motions (proposed|seconded|balloting → lapsed)
+  try {
+    const motionRows = await pool.query<{ motion_id: string; status: string }>(
+      `SELECT motion_id, status FROM motions WHERE topic_id=$1 AND status IN ('proposed','seconded','balloting')`,
+      [topicId],
+    );
+    for (const motion of motionRows.rows) {
+      const c = await pool.connect();
+      try {
+        await c.query('BEGIN');
+        const upd = await c.query(
+          `UPDATE motions SET status='lapsed' WHERE motion_id=$1 AND status IN ('proposed','seconded','balloting') RETURNING 1`,
+          [motion.motion_id],
+        );
+        if ((upd.rowCount ?? 0) === 0) { await c.query('ROLLBACK'); continue; }
+        await appendEvent(c, {
+          topic_id: topicId, actor_id: actorId,
+          type: 'motion.force_lapsed', subject_type: 'motion', subject_id: motion.motion_id,
+          payload: { motion_id: motion.motion_id, prior_status: motion.status },
+        });
+        await c.query('COMMIT');
+        counts.motions++;
+      } catch (err) {
+        await c.query('ROLLBACK').catch(() => {});
+        logger.error({ err: String(err), motion_id: motion.motion_id }, 'closeTopic: motion force-lapse failed');
+      } finally { c.release(); }
+    }
+  } catch (scanErr) {
+    logger.error({ err: String(scanErr) }, 'closeTopic: motion-scan failed — drain pass skipped');
+  }
+
+  // 2-D: disputes (open → resolved/forced)
+  try {
+    const disputeRows = await pool.query<{ dispute_id: string }>(
+      `SELECT dispute_id FROM disputes WHERE topic_id=$1 AND status='open'`,
+      [topicId],
+    );
+    for (const dispute of disputeRows.rows) {
+      const c = await pool.connect();
+      try {
+        await c.query('BEGIN');
+        const upd = await c.query(
+          `UPDATE disputes SET status='resolved' WHERE dispute_id=$1 AND status='open' RETURNING 1`,
+          [dispute.dispute_id],
+        );
+        if ((upd.rowCount ?? 0) === 0) { await c.query('ROLLBACK'); continue; }
+        await appendEvent(c, {
+          topic_id: topicId, actor_id: actorId,
+          type: 'dispute.force_closed', subject_type: 'dispute', subject_id: dispute.dispute_id,
+          payload: { dispute_id: dispute.dispute_id, force_closed: true },
+        });
+        await c.query('COMMIT');
+        counts.disputes++;
+      } catch (err) {
+        await c.query('ROLLBACK').catch(() => {});
+        logger.error({ err: String(err), dispute_id: dispute.dispute_id }, 'closeTopic: dispute force-lapse failed');
+      } finally { c.release(); }
+    }
+  } catch (scanErr) {
+    logger.error({ err: String(scanErr) }, 'closeTopic: dispute-scan failed — drain pass skipped');
+  }
+
+  // 2-E: intake items (received → dismissed)
+  try {
+    const intakeRows = await pool.query<{ intake_id: string }>(
+      `SELECT intake_id FROM intake_items WHERE topic_id=$1 AND status='received'`,
+      [topicId],
+    );
+    for (const item of intakeRows.rows) {
+      const c = await pool.connect();
+      try {
+        await c.query('BEGIN');
+        const upd = await c.query(
+          `UPDATE intake_items SET status='dismissed' WHERE intake_id=$1 AND status='received' RETURNING 1`,
+          [item.intake_id],
+        );
+        if ((upd.rowCount ?? 0) === 0) { await c.query('ROLLBACK'); continue; }
+        await appendEvent(c, {
+          topic_id: topicId, actor_id: actorId,
+          type: 'intake.force_dismissed', subject_type: 'intake', subject_id: item.intake_id,
+          payload: { intake_id: item.intake_id },
+        });
+        await c.query('COMMIT');
+        counts.intake_items++;
+      } catch (err) {
+        await c.query('ROLLBACK').catch(() => {});
+        logger.error({ err: String(err), intake_id: item.intake_id }, 'closeTopic: intake force-lapse failed');
+      } finally { c.release(); }
+    }
+  } catch (scanErr) {
+    logger.error({ err: String(scanErr) }, 'closeTopic: intake-scan failed — drain pass skipped');
+  }
+
+  // ── Phase 3: seal (closing → closed) ─────────────────────────────────────
+  {
+    const c3 = await pool.connect();
+    try {
+      await c3.query('BEGIN');
+      await appendEvent(c3, {
+        topic_id: topicId, actor_id: actorId,
+        type: 'topic.closed', subject_type: 'topic', subject_id: topicId, payload: {},
+      });
+      await c3.query(`UPDATE topics SET status='closed' WHERE topic_id=$1`, [topicId]);
+      await c3.query('COMMIT');
+    } catch (err) {
+      await c3.query('ROLLBACK').catch(() => {});
+      logger.error({ err: String(err) }, 'closeTopic Phase 3 (seal) failed');
+      throw err;
+    } finally {
+      c3.release();
+    }
+  }
+
+  return { topic_id: topicId, status: 'closed', already_closed: false, force_lapsed: counts };
 }

@@ -343,7 +343,8 @@ test('T6: secondMotion on a closed topic → topic_closed', async () => {
     topic_id: topicId, body_id: body.body_id, subject_ref: 'x', proposed_by: 'proposer',
   });
   if (p.status !== 'proposed') throw new Error('setup failed');
-  await closeTopic({ topic_id: topicId, actor_id: 'proposer' });
+  // bypass drain so the proposed motion survives; tests the closed-topic guard
+  await getDbPool().query(`UPDATE topics SET status='closed' WHERE topic_id=$1`, [topicId]);
   const res = await secondMotion({ motion_id: p.motion_id, actor_id: 'seconder' });
   assert.equal(res.status, 'topic_closed');
 });
@@ -471,7 +472,8 @@ test('T7: castVote on a closed topic → topic_closed', async () => {
   const { topicId } = await mkTopic();
   const body = await mkBody({ members: [['proposer', 1], ['seconder', 1], ['voterA', 1]] });
   const motionId = await mkBallotingMotion(topicId, body.body_id);
-  await closeTopic({ topic_id: topicId, actor_id: 'proposer' });
+  // bypass drain so the balloting motion survives; tests the closed-topic guard
+  await getDbPool().query(`UPDATE topics SET status='closed' WHERE topic_id=$1`, [topicId]);
   const res = await castVote({ motion_id: motionId, actor_id: 'voterA', choice: 'for' });
   assert.equal(res.status, 'topic_closed');
 });
@@ -573,6 +575,20 @@ test('T8: tallyMotion no votes at all, quorum=0 → failed', async () => {
   const res = await tallyMotion({ motion_id: motionId });
   // participating=0 >= 0 → quorum_met; base=0 → carried false → failed
   assert.equal(res.status, 'failed');
+});
+
+// ── Sprint 15.6 HIGH fix: proposeMotion must block on 'closing' ──────────────
+
+test('T5: proposeMotion on a closing topic → topic_closed', async () => {
+  const { topicId } = await mkTopic();
+  const body = await mkBody({});
+  // Simulate the drain window: topic is 'closing' but not yet 'closed'.
+  await getDbPool().query(`UPDATE topics SET status='closing' WHERE topic_id=$1`, [topicId]);
+
+  const res = await proposeMotion({
+    topic_id: topicId, body_id: body.body_id, subject_ref: 'x', proposed_by: 'proposer',
+  });
+  assert.equal(res.status, 'topic_closed');
 });
 
 test('T8: tallyMotion on a non-balloting motion → not_balloting', async () => {

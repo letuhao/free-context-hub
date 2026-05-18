@@ -37,6 +37,10 @@ export const EVENT_TYPES = [
   'motion.proposed', 'motion.seconded', 'vote.cast', 'motion.tallied', 'motion.vetoed',
   // Sprint 15.5 — intake & dispute
   'intake.received', 'intake.triaged', 'dispute.opened', 'dispute.resolved',
+  // Sprint 15.6 — topic closing drain
+  'topic.closing',
+  'claim.force_lapsed', 'request.force_closed', 'motion.force_lapsed',
+  'dispute.force_closed', 'intake.force_dismissed',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 

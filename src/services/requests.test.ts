@@ -686,8 +686,8 @@ test('decide on a closed topic → topic_closed', async () => {
   assert.equal(sub.status, 'submitted');
   if (sub.status !== 'submitted') throw new Error('setup failed');
 
-  // Close the topic
-  await closeTopic({ topic_id: topicId, actor_id: authorityActor });
+  // bypass drain so the open request survives; tests the closed-topic guard
+  await getDbPool().query(`UPDATE topics SET status='closed' WHERE topic_id=$1`, [topicId]);
 
   // decideStep should return topic_closed
   const decide = await decideStep({
@@ -695,6 +695,117 @@ test('decide on a closed topic → topic_closed', async () => {
     actor_id: coordinationActor, decision: 'endorse',
   });
   assert.equal(decide.status, 'topic_closed');
+});
+
+// ── Sprint 15.6 consistency fixes (AC13–AC18) ─────────────────────────────
+
+test('AC13: repeat_endorser — same actor cannot decide two steps in a counter_sign request', async () => {
+  const { topicId, executionActor, authorityActor } = await mkTopicWithParticipants();
+  const pool = getDbPool();
+
+  // Insert a synthetic counter_sign request where both steps target 'authority'.
+  // This tests the distinct-endorser invariant: the same actor must not sign more
+  // than one step in a counter_sign route (DEFERRED-013).
+  const { rows: [{ id: requestId }] } = await pool.query<{ id: string }>(
+    `SELECT gen_random_uuid()::text AS id`,
+  );
+  await pool.query(
+    `INSERT INTO requests
+       (request_id, topic_id, subject_type, subject_id, kind, weight,
+        procedure, route_shape, status, current_step, submitted_by)
+     VALUES ($1, $2, 'artifact', 'phantom-artifact', 'artifact_review', 10,
+       'unilateral', 'counter_sign', 'open', 0, $3)`,
+    [requestId, topicId, executionActor],
+  );
+  await pool.query(`
+    INSERT INTO request_steps
+      (request_id, step_index, target_office, doa_snapshot, procedure, deadline, status)
+    VALUES
+      ($1, 0, 'authority', 'test:t0', 'unilateral', now() + interval '60 minutes', 'pending'),
+      ($1, 1, 'authority', 'test:t0', 'unilateral', now() + interval '60 minutes', 'pending')`,
+    [requestId],
+  );
+
+  // authorityActor endorses step 0 → step_endorsed
+  const d1 = await decideStep({
+    request_id: requestId, step_index: 0,
+    actor_id: authorityActor, decision: 'endorse',
+  });
+  assert.equal(d1.status, 'step_endorsed');
+
+  // Same actor tries step 1 → repeat_endorser
+  const d2 = await decideStep({
+    request_id: requestId, step_index: 1,
+    actor_id: authorityActor, decision: 'endorse',
+  });
+  assert.equal(d2.status, 'repeat_endorser');
+});
+
+test('AC14: listRequests for an unknown topic_id → NOT_FOUND error', async () => {
+  await assert.rejects(
+    () => listRequests({ topic_id: 'no-such-topic-id-xyz' }),
+    (err: any) => {
+      assert.equal(err.code, 'NOT_FOUND');
+      assert.ok(err.message.includes('not found'), `message: ${err.message}`);
+      return true;
+    },
+  );
+});
+
+test('AC15: reject → request.resolved event carries artifact_advanced:false', async () => {
+  const { topicId, executionActor, coordinationActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-ac15', executionActor);
+
+  const sub = await submitRequest({
+    topic_id: topicId, subject_type: 'artifact', subject_id: artifactId,
+    kind: 'artifact_review', weight: 10, procedure: 'unilateral', submitted_by: executionActor,
+  });
+  assert.equal(sub.status, 'submitted');
+  if (sub.status !== 'submitted') throw new Error('setup failed');
+
+  await decideStep({
+    request_id: sub.request_id, step_index: 0,
+    actor_id: coordinationActor, decision: 'reject',
+  });
+
+  const { replayEvents } = await import('./coordinationEvents.js');
+  const ev = await replayEvents({ topic_id: topicId });
+  const resolved = ev.events.find((e) => e.type === 'request.resolved');
+  assert.ok(resolved, 'request.resolved event present');
+  assert.equal(resolved!.payload.outcome, 'rejected');
+  assert.equal(resolved!.payload.artifact_advanced, false, 'artifact_advanced:false on reject path');
+});
+
+test('AC17 (service F5): non-integer step_index → BAD_REQUEST', async () => {
+  await assert.rejects(
+    () => decideStep({ request_id: 'any', step_index: 1.5, actor_id: 'any', decision: 'endorse' }),
+    (err: any) => {
+      assert.equal(err.code, 'BAD_REQUEST');
+      assert.ok(err.message.toLowerCase().includes('step_index'), `message: ${err.message}`);
+      return true;
+    },
+  );
+});
+
+test('AC18: submitRequest with submitted_by exceeding 256 chars → BAD_REQUEST', async () => {
+  const { topicId } = await mkTopicWithParticipants();
+
+  await assert.rejects(
+    () => submitRequest({
+      topic_id: topicId,
+      subject_type: 'artifact',
+      subject_id: 'some-artifact',
+      kind: 'artifact_review',
+      weight: 10,
+      procedure: 'unilateral',
+      submitted_by: 'x'.repeat(257),
+    }),
+    (err: any) => {
+      assert.equal(err.code, 'BAD_REQUEST');
+      assert.ok(err.message.toLowerCase().includes('submitted_by'), `message: ${err.message}`);
+      return true;
+    },
+  );
 });
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -771,6 +882,69 @@ test('F3a: submitRequest rejects an artifact that belongs to another topic', asy
     }),
     (err: any) => { assert.equal(err.code, 'NOT_FOUND'); return true; },
   );
+});
+
+// ── Sprint 15.6 HIGH fix: submitRequest must block on 'closing' ──────────────
+
+test('AC19: submitRequest on a closing topic → topic_closed', async () => {
+  const { topicId, executionActor } = await mkTopicWithParticipants();
+  // Simulate the drain window: topic is 'closing' before Phase 3 seal.
+  await getDbPool().query(`UPDATE topics SET status='closing' WHERE topic_id=$1`, [topicId]);
+
+  const result = await submitRequest({
+    topic_id: topicId, subject_type: 'artifact', subject_id: 'phantom-artifact',
+    kind: 'artifact_review', weight: 10, procedure: 'unilateral', submitted_by: executionActor,
+  });
+  assert.equal(result.status, 'topic_closed');
+});
+
+// ── MED-4: counter_sign positive — distinct actor can endorse step 1 ─────────
+
+test('AC16: distinct actor can endorse step 1 of a counter_sign request (different actor is allowed)', async () => {
+  const { topicId, executionActor, coordinationActor, authorityActor } = await mkTopicWithParticipants();
+  const pool = getDbPool();
+
+  const { rows: [{ id: requestId }] } = await pool.query<{ id: string }>(
+    `SELECT gen_random_uuid()::text AS id`,
+  );
+  await pool.query(
+    `INSERT INTO requests
+       (request_id, topic_id, subject_type, subject_id, kind, weight,
+        procedure, route_shape, status, current_step, submitted_by)
+     VALUES ($1, $2, 'artifact', 'phantom-artifact', 'artifact_review', 10,
+       'unilateral', 'counter_sign', 'open', 0, $3)`,
+    [requestId, topicId, executionActor],
+  );
+  await pool.query(`
+    INSERT INTO request_steps
+      (request_id, step_index, target_office, doa_snapshot, procedure, deadline, status)
+    VALUES
+      ($1, 0, 'coordination', 'test:t0', 'unilateral', now() + interval '60 minutes', 'pending'),
+      ($1, 1, 'authority',    'test:t0', 'unilateral', now() + interval '60 minutes', 'pending')`,
+    [requestId],
+  );
+
+  const d1 = await decideStep({
+    request_id: requestId, step_index: 0,
+    actor_id: coordinationActor, decision: 'endorse',
+  });
+  assert.equal(d1.status, 'step_endorsed');
+
+  // Different actor endorses step 1 — must NOT return repeat_endorser
+  const d2 = await decideStep({
+    request_id: requestId, step_index: 1,
+    actor_id: authorityActor, decision: 'endorse',
+  });
+  assert.equal(d2.status, 'approved', 'distinct actor can endorse a different step in counter_sign');
+});
+
+// ── MED-6: valid topic with zero requests → [] (not NOT_FOUND) ───────────────
+
+test('AC20: listRequests for a valid topic with no requests → empty array', async () => {
+  const { topicId } = await mkTopicWithParticipants();
+  const result = await listRequests({ topic_id: topicId });
+  assert.ok(Array.isArray(result.requests), 'result.requests is an array');
+  assert.equal(result.requests.length, 0, 'no requests on a fresh topic');
 });
 
 // ── F3a: approved request emits artifact events on the artifact's topic (guard) ──

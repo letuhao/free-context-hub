@@ -280,7 +280,7 @@ export async function proposeMotion(params: {
     throw new ContextHubError('NOT_FOUND', `topic ${topicId} not found`);
   }
   const { project_id: topicProjectId, status: topicStatus } = topicRes.rows[0];
-  if (topicStatus === 'closed') {
+  if (topicStatus === 'closed' || topicStatus === 'closing') {
     return { status: 'topic_closed' };
   }
 

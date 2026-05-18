@@ -1,9 +1,8 @@
 # LONGRUN CHECKPOINT — Phase 15 autonomous longrun, session boundary (2026-05-18)
 
-**Status:** **Sprint 15.5 (Intake + Dispute) — COMPLETE** via the v2.2 human-in-loop
-12-phase workflow. All 12 phases passed; a user-invoked `/review-impl` at POST-REVIEW found
-1 HIGH + 2 MED + 1 LOW + 1 COSMETIC, all 5 fixed + re-verified before commit. 15.5 is committed
-on branch `phase-15-sprint-15.5` (cut from `phase-15-sprint-15.4`).
+**Status:** **Sprint 15.6 (Topic-closing drain + Request residuals) — COMPLETE** via the v2.2
+human-in-loop 12-phase workflow. A user-invoked `/review-impl` at POST-REVIEW found 1 HIGH + 3
+MED-resolved + 3 LOW-deferred; all HIGH/MED fixed, re-verified 602/602.
 
 ## Phase 15 longrun progress
 
@@ -15,7 +14,8 @@ on branch `phase-15-sprint-15.5` (cut from `phase-15-sprint-15.4`).
 | 15.3.1 — security fix-up | ✅ COMPLETE | `phase-15-sprint-15.3` · `50fb866` · PR #15 · F1/F3a/F4/F5/F7 |
 | 15.4 — Collective decision | ✅ COMPLETE | branch `phase-15-sprint-15.4` · `0b3b329` · PR #16 · v2.2 human-in-loop |
 | 15.5 — Intake + dispute | ✅ COMPLETE | branch `phase-15-sprint-15.5` · v2.2 human-in-loop + /review-impl |
-| 15.6–15.7 | pending | — |
+| 15.6 — Topic-closing drain + residuals | ✅ COMPLETE | branch `phase-15-sprint-15.6` · v2.2 human-in-loop + /review-impl |
+| 15.7 | pending | — |
 
 PRs are stacked against `main` (each diff includes the prior sprint's commits until merge).
 
@@ -104,14 +104,77 @@ tally is deterministic.
 coordinator-trusted under `MCP_AUTH_ENABLED=false`, the same self-declared-authority class as
 DEFERRED-015/016. **DEFERRED-017** owns the residual (HARD pre-production trigger).
 
-## Resume protocol — Sprint 15.6 (next sprint)
+## Sprint 15.6 outcome
 
-Sprint 15.6 resumes from `phase-15-sprint-15.5`. At 15.6 CLARIFY, evaluate: **DEFERRED-013**
-(counter-sign distinct-endorser — its trigger is 15.5 completion, now met); **DEFERRED-012**
-(topic `closing`-drain — full in-flight item set now exists with intake + disputes); **DEFERRED-019**
-(primitive-outcome chaining — interlocked with 012). **DEFERRED-017/015/016** carry the HARD
-pre-production authz trigger and must be resolved before any multi-actor non-trusted deployment.
-Master design section D (the full closing protocol) is the logical next scope for 15.6.
+Sprint 15.6 shipped the **topic-closing drain + request-consistency residuals** — resolving
+DEFERRED-012 (three-phase closeTopic drain), DEFERRED-013 (repeat-endorser guard), and
+DEFERRED-014 (request consistency fixes).
+
+**No migration.** All changes are pure TypeScript.
+
+**Core: `src/services/topics.ts` — three-phase `closeTopic` drain:**
+- Phase 1: `active`/`chartered` → `'closing'` (SELECT FOR UPDATE) + `topic.closing` event.
+  Idempotent: if already `'closing'`, falls through (no-op COMMIT).
+- Phase 2: per item type in individual short transactions (§0.1-loop: one bad item never aborts):
+  A=claims (DELETE+`task.abandoned`), B=requests (`status='rejected'` + `request.force_closed`),
+  C=motions (`status='lapsed'` + `motion.force_lapsed`), D=disputes (`status='resolved'` +
+  `dispute.force_closed`), E=intake_items (`status='dismissed'` + `intake.force_dismissed`).
+  Optimistic UPDATEs (no FOR UPDATE on item rows) to avoid deadlock with concurrent deciders.
+  **MED-3 fix (post-/review-impl):** each scan+loop wrapped in try/catch so a scan failure
+  skips that drain pass and lets Phase 3 seal proceed.
+- Phase 3: `topic.closed` event + `UPDATE topics SET status='closed'` in one transaction.
+- Returns `CloseResult` with `{ already_closed, force_lapsed: { claims, requests, motions,
+  disputes, intake_items } }`.
+
+**DEFERRED-013: repeat-endorser guard (`src/services/requests.ts`):**
+- `decideStep` for `counter_sign` routes checks all prior steps' `decided_by IS NOT NULL`;
+  same actor in any earlier step → `{ status: 'repeat_endorser' }` (→ HTTP 409).
+
+**DEFERRED-014: request consistency fixes (`src/services/requests.ts` + `src/api/routes/requests.ts`):**
+- `listRequests`: throws `NOT_FOUND` for unknown `topic_id` (was silently returning `[]`).
+- `reject` path: `payload.artifact_advanced: false` in `request.resolved` event.
+- `escalation_exhausted` path: `payload.artifact_advanced: false` in sweep event.
+- Route layer: `/^\d+$/` rejects fractional/negative `:n` before `parseInt`.
+- `submitted_by` length cap (`>256` → BAD_REQUEST) joins existing `kind`/`subject_id` caps.
+
+**Sweep updates (`src/services/coordinationSweep.ts`):**
+- All three sweeps now skip `'closing'` topics alongside `'closed'` (prevents partial
+  re-drain of items already queued for the closeTopic drain pass).
+
+**`/review-impl` HIGH fix (post-review):**
+- All writer paths that create new in-flight items (`submitRequest`, `proposeMotion`,
+  `claimTask`, `postTask`) now reject when `topicStatus === 'closing'` → `topic_closed` (or
+  `BAD_REQUEST` for `postTask`). Prevents a new item created in the Phase 1→3 window from
+  surviving the drain and becoming permanently stuck on a sealed topic.
+
+**Test coverage (602 total):**
+- `topics.test.ts`: AC1+AC7 (topic.closing before topic.closed), AC8 (zero counts), AC2+AC8
+  (claim drain), AC3+AC8 (request drain), AC10 (idempotent already-closed).
+- `requests.test.ts`: AC13 (repeat_endorser), AC14 (listRequests NOT_FOUND), AC15 (artifact_
+  advanced:false on reject), AC16 (distinct-actor counter_sign positive — MED-4), AC17 (non-
+  integer step_index BAD_REQUEST), AC18 (submitted_by length cap), AC19 (submitRequest on
+  closing → topic_closed — HIGH fix), AC20 (listRequests zero requests → [] — MED-6).
+- `motions.test.ts`: closing-topic test for proposeMotion (HIGH fix).
+- `board.test.ts`: closing-topic tests for claimTask + postTask (HIGH fix).
+- Fixed 8 pre-existing test isolation failures: `closeTopic()` calls replaced with direct
+  `UPDATE topics SET status='closed'` in tests that need a closed topic without draining
+  in-flight items (simulates the race window; tests the service closed-topic guard directly).
+
+**Deferred items (LOW, carried to 15.7):**
+- LOW-7: API-level test for fractional step-index route guard
+- LOW-8: `artifact_advanced:true` path test + escalation_exhausted sweep payload test
+- LOW-9: Event-ordering assertions in drain AC2/AC3 tests
+- MED-5 (accepted): orphan `pending` steps on `escalation_exhausted` requests survive drain
+  (these steps can't be decided after request closure; accepted and documented)
+
+**Verification:** `tsc` clean; `npm test` **602/602 green**.
+
+## Resume protocol — Sprint 15.7 (next sprint)
+
+Sprint 15.7 resumes from `phase-15-sprint-15.6`. Candidate scope: **DEFERRED-019** (primitive-
+outcome chaining — trigger was 15.6 closing drain, now met); **DEFERRED-011** (sweep recovery
+for stalled `closing` topics — also now unblocked by 15.6). **DEFERRED-017/015/016** carry the
+HARD pre-production authz trigger.
 
 ## Environment state
 

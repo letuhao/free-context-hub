@@ -17,7 +17,9 @@ export class ContextHubError extends Error {
       | 'ALREADY_RESOLVED'
       | 'RESOLUTION_PENDING'
       | 'INTAKE_ALREADY_TRIAGED'
-      | 'INTAKE_ALREADY_DISMISSED',
+      | 'INTAKE_ALREADY_DISMISSED'
+      // Phase 15 Sprint 15.6: closing drain + distinct-endorser
+      | 'REPEAT_ENDORSER',
     message: string,
   ) {
     super(message);

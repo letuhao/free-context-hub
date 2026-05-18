@@ -132,15 +132,10 @@ export async function sweepAbandonedClaims(params?: {
         [claim.topic_id],
       );
 
-      if (topicRes.rows[0]?.status === 'closed') {
-        // [r2-fix F2 / item 2-B] closed-topic branch — drop the dangling claim
-        // and mark the task `abandoned`. No revert, no events: a closed topic is
-        // a sealed self-consistent record (its tasks cannot be re-claimed —
-        // claimTask's appendEvent is rejected by the seal), so a revert would
-        // desync the artifact from the sealed log (CLARIFY AC11). The task
-        // cannot return to the board, so `abandoned` is its terminal state —
-        // distinct from `posted` (the open-topic recovery target below). The
-        // status UPDATE is a plain write on the already-locked task row.
+      if (topicRes.rows[0]?.status === 'closed' || topicRes.rows[0]?.status === 'closing') {
+        // closed-topic branch — drop the dangling claim and mark the task abandoned.
+        // closing topics are handled by closeTopic's drain; skip here to avoid racing
+        // with that drain (Sprint 15.6 DEFERRED-012). closed topics: same semantics as before.
         await client.query(`DELETE FROM claims WHERE claim_id = $1`, [claim.claim_id]);
         await client.query(
           `UPDATE tasks SET status = 'abandoned'
@@ -301,8 +296,8 @@ export async function sweepStalledSteps(params?: {
         `SELECT status FROM topics WHERE topic_id=$1 FOR UPDATE`,
         [step.topic_id],
       );
-      if (topicRes.rows[0]?.status === 'closed') {
-        // Closed topic: skip — no mutation, no events (§9 inv. 7 + §11.6).
+      if (topicRes.rows[0]?.status === 'closed' || topicRes.rows[0]?.status === 'closing') {
+        // closed/closing topic: skip — closeTopic drain handles in-flight items.
         await client.query('ROLLBACK');
         continue;
       }
@@ -355,7 +350,7 @@ export async function sweepStalledSteps(params?: {
           type: 'request.resolved',
           subject_type: 'request',
           subject_id: step.request_id,
-          payload: { outcome: 'escalation_exhausted' },
+          payload: { outcome: 'escalation_exhausted', artifact_advanced: false },
         });
       }
 
@@ -448,9 +443,8 @@ export async function sweepExpiredMotions(params?: {
         `SELECT status FROM topics WHERE topic_id=$1 FOR UPDATE`,
         [row.topic_id],
       );
-      if (topicRes.rows[0]?.status === 'closed') {
-        // Closed topic: skip — frozen mid-flight (DEFERRED-012). No mutation,
-        // no event.
+      if (topicRes.rows[0]?.status === 'closed' || topicRes.rows[0]?.status === 'closing') {
+        // closed/closing topic: skip — closeTopic drain handles in-flight motions.
         await client.query('ROLLBACK');
         continue;
       }

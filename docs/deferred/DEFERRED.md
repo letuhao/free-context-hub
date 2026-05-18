@@ -1,7 +1,34 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 020 -->
+<!-- Next ID: 021 -->
+
+## DEFERRED-020
+
+- **What:** Three LOW-severity test coverage gaps from the Sprint 15.6 `/review-impl` pass.
+  **(a)** LOW-7: No API-level test for the route-layer fractional step-index guard (`/^\d+$/`
+  in `routes/requests.ts:169`) — the existing service-layer test (`AC17`) hits `decideStep`
+  directly; the route guard adds a 400 before it. **(b)** LOW-8: No test for the
+  `artifact_advanced:true` path on the approved branch (AC15 covers `false`); no test that the
+  `escalation_exhausted` sweep event in `coordinationSweep.ts` carries `artifact_advanced:false`
+  (the field was added in 15.6 but only the `reject` path is test-asserted). **(c)** LOW-9: No
+  event-ordering assertions in the drain tests `AC2`/`AC3` — tests verify counts and final state
+  but do not assert `claim.force_lapsed` / `request.force_closed` precede `topic.closed` in the
+  event log.
+- **Why deferred:** All three are test coverage improvements, not production risks. Fixing them in
+  the Sprint 15.6 POST-REVIEW cycle would have been batching LOW items with a HIGH fix — against
+  the workflow's fix-HIGH-now, defer-LOW policy.
+- **Trigger condition:** Any sprint that edits the affected code paths, or a dedicated test-
+  coverage pass.
+- **Estimated size:** XS–S — one route test for (a); one service test each for (b); two
+  assert additions for (c).
+- **Priority:** LOW
+- **Session deferred:** 2026-05-18
+- **Sessions open:** 1
+- **Status:** OPEN
+- **Source:** Phase 15 Sprint 15.6 `/review-impl` LOW-7, LOW-8, LOW-9.
+
+---
 
 ## DEFERRED-019
 
@@ -173,7 +200,7 @@
 - **Priority:** LOW — (a) `topic_id` is a UUID (not guessable) and an empty list is functional; (b) a replay consumer can treat a missing `artifact_advanced` as `false`.
 - **Session deferred:** 2026-05-18
 - **Sessions open:** 2
-- **Status:** OPEN
+- **Status:** RESOLVED — Sprint 15.6 (2026-05-18): (a) `listRequests` NOT_FOUND check + AC14 test; (b) `artifact_advanced:false` on reject + escalation_exhausted paths + AC15; (c) route `parseInt` guard `/^\d+$/` + AC17; (d) `submitted_by` 256-char cap + AC18.
 - **Source:** Phase 15 Sprint 15.3 REVIEW-CODE `/review-impl` review, findings #4 + #5 (`docs/audit/findings-sprint-15.3-code-r1.md`); extended (c)+(d) by Sprint 15.3.1 POST-REVIEW WARN-2 + REVIEW-CODE LOW-5.
 
 ---
@@ -187,7 +214,7 @@
 - **Priority:** LOW — post-timeout-only, fully auditable, the request still terminates correctly.
 - **Session deferred:** 2026-05-17
 - **Sessions open:** 2
-- **Status:** OPEN
+- **Status:** RESOLVED — Sprint 15.6 (2026-05-18): `decideStep` for `counter_sign` routes queries prior `request_steps.decided_by IS NOT NULL`; same actor in any prior step → `repeat_endorser` (→ HTTP 409). AC13 (negative) + AC16 (positive/distinct-actor) tests added.
 - **Source:** Phase 15 Sprint 15.3 REVIEW-DESIGN round 2, Adversary finding W1 (`docs/audit/findings-sprint-15.3-design-r2.md`).
 
 ---
@@ -201,7 +228,7 @@
 - **Priority:** MED — until then, closed topics rely on each primitive's sweep closed-topic branch for after-the-fact cleanup (functional, but not a clean pre-seal drain).
 - **Session deferred:** 2026-05-17
 - **Sessions open:** 1
-- **Status:** OPEN
+- **Status:** RESOLVED — Sprint 15.6 (2026-05-18): three-phase `closeTopic` drain implemented in `src/services/topics.ts` — Phase 1 (`active → closing` + topic.closing), Phase 2 (drain claims/requests/motions/disputes/intake_items in individual short transactions), Phase 3 (`closing → closed` + topic.closed seal). All writer paths block on 'closing'. Sweeps skip 'closing' alongside 'closed'.
 - **Source:** Phase 15 Sprint 15.1 design decision D4; re-deferred by Sprint 15.2 design; ratified at the 2026-05-17 longrun human-in-loop review.
 
 ---
