@@ -197,6 +197,14 @@ export type {
 export { sweepExpiredMotions } from '../services/coordinationSweep.js';
 export type { ExpiredMotionsSweepResult } from '../services/coordinationSweep.js';
 
+// ── Services: intake mailbox (Phase 15 Sprint 15.5) ──
+export { submitIntake, triageIntake, dismissIntake, getIntake, listIntake } from '../services/intake.js';
+export type { IntakeKind, IntakeStatus, IntakeItem, TriageRoute, TriageResult } from '../services/intake.js';
+
+// ── Services: dispute resolution (Phase 15 Sprint 15.5) ──
+export { openDispute, resolveDispute, getDispute, listDisputes } from '../services/disputes.js';
+export type { DisputeStatus, Dispute, DisputeDetail } from '../services/disputes.js';
+
 // ── Services: distillation & snapshots ──
 export { getProjectSnapshotBody } from '../services/snapshot.js';
 export { compressText, reflectOnTopic } from '../services/distiller.js';

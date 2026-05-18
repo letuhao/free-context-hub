@@ -1,12 +1,9 @@
 # LONGRUN CHECKPOINT — Phase 15 autonomous longrun, session boundary (2026-05-18)
 
-**Status:** **Sprint 15.4 (Collective Decision) — COMPLETE** via the v2.2 human-in-loop
-12-phase workflow (the user chose human-in-loop for 15.4). All 12 phases passed; the
-guardrail-mandated POST-REVIEW security Adversary returned **CLEAR**; a user-invoked
-`/review-impl` at the POST-REVIEW checkpoint found 1 MED + 1 LOW + 2 COSMETIC, all fixed +
-re-verified. The next session resumes at **Sprint 15.5** (intake + dispute). 15.4 is committed
-(`0b3b329`) on branch `phase-15-sprint-15.4` (cut from `phase-15-sprint-15.3`) → **PR #16** to
-`main`.
+**Status:** **Sprint 15.5 (Intake + Dispute) — COMPLETE** via the v2.2 human-in-loop
+12-phase workflow. All 12 phases passed; a user-invoked `/review-impl` at POST-REVIEW found
+1 HIGH + 2 MED + 1 LOW + 1 COSMETIC, all 5 fixed + re-verified before commit. 15.5 is committed
+on branch `phase-15-sprint-15.5` (cut from `phase-15-sprint-15.4`).
 
 ## Phase 15 longrun progress
 
@@ -17,10 +14,72 @@ re-verified. The next session resumes at **Sprint 15.5** (intake + dispute). 15.
 | 15.3 — Request-Approval | ✅ COMPLETE | branch `phase-15-sprint-15.3` · `8a27312` · PR #15 |
 | 15.3.1 — security fix-up | ✅ COMPLETE | `phase-15-sprint-15.3` · `50fb866` · PR #15 · F1/F3a/F4/F5/F7 |
 | 15.4 — Collective decision | ✅ COMPLETE | branch `phase-15-sprint-15.4` · `0b3b329` · PR #16 · v2.2 human-in-loop |
-| 15.5 — Intake + dispute | ⏳ NEXT | full 12-phase cycle |
+| 15.5 — Intake + dispute | ✅ COMPLETE | branch `phase-15-sprint-15.5` · v2.2 human-in-loop + /review-impl |
 | 15.6–15.7 | pending | — |
 
 PRs are stacked against `main` (each diff includes the prior sprint's commits until merge).
+
+## Sprint 15.5 outcome
+
+Sprint 15.5 shipped the **intake mailbox + dispute resolution** primitives — the inbound-item
+handling and adjudication halves of the Phase 15 governance model.
+
+**Migrations:** `0058_intake_dispute.sql` (creates `intake_items` + `disputes` tables with CHECK
+constraints + indexes); `0059_seed_dispute_doa.sql` (seeds the `__default__` DoA matrix row for
+`dispute_resolution` kind — absence caused `submitRequest` to return `no_route`).
+
+**New service files:**
+- `src/services/intake.ts` — `submitIntake` / `triageIntake` / `dismissIntake` / `getIntake` /
+  `listIntake`. `triageIntake` uses `SELECT … FOR UPDATE` on the intake row (WARN-2 serialization
+  fix) and a dynamic `await import('./disputes.js')` inside the dispute-route branch to avoid a
+  circular-dependency module-load cycle.
+- `src/services/disputes.ts` — `openDispute` / `resolveDispute` / `getDispute` / `listDisputes`.
+  `openDispute` uses a **compensating-cleanup pattern** (added by /review-impl Fix 2): if the
+  Step-3 UPDATE fails after `submitRequest` has already committed, it DELETEs `request_steps` +
+  `requests` + `disputes` to prevent an irrecoverable orphan dispute.
+
+**New route files:**
+- `src/api/routes/intake.ts` — 5 routes (POST /api/intake, GET /api/intake/:id,
+  POST /api/intake/:id/triage, POST /api/intake/:id/dismiss, GET /api/projects/:id/intake).
+  `parties` array element-filtered to `string` only.
+- `src/api/routes/disputes.ts` — 4 routes (POST /api/topics/:id/disputes,
+  POST /api/disputes/:id/resolve, GET /api/disputes/:id, GET /api/topics/:id/disputes).
+
+**MCP tools added:** `submit_intake`, `triage_intake`, `dismiss_intake`, `get_intake`,
+`list_intake`, `open_dispute`, `resolve_dispute`, `get_dispute`, `list_disputes` (9 tools, all
+in `src/mcp/index.ts`).
+
+**Modified files:**
+- `src/core/errors.ts` — extended `ContextHubError.code` union with 5 new codes:
+  `TOPIC_NOT_ACTIVE`, `ALREADY_RESOLVED`, `RESOLUTION_PENDING`, `INTAKE_ALREADY_TRIAGED`,
+  `INTAKE_ALREADY_DISMISSED`.
+- `src/core/index.ts` — re-exports for all new service functions + types.
+- `src/services/requests.ts` — relaxed `subject_type` check to allow `'dispute'`; wrapped
+  artifact-lookup block in `if (subjectType === 'artifact')` guard.
+- `src/mcp/index.ts` — 9 new tool registrations.
+- `src/api/index.ts` — mounts `intakeRouter` + `disputesRouter`.
+- `package.json` — 4 new test files added to `npm test` script.
+
+**Test files (4 new files, 57 tests total):**
+- `src/services/intake.test.ts` — 18 tests; TEST_PROJECT='__test_intake__'
+- `src/services/disputes.test.ts` — 14 tests; TEST_PROJECT='__test_disputes__'
+- `src/api/routes/intake.test.ts` — 13 route tests
+- `src/api/routes/disputes.test.ts` — 12 route tests
+
+**Verification:** `tsc` clean; `npm test` **586/586 green** (all prior tests + 57 new pass).
+
+**`/review-impl` findings and fixes (all resolved before commit):**
+1. HIGH: `triageIntake` dispute route had 0 service-level tests → added 2 tests to `intake.test.ts`
+2. MED: `openDispute` Step 3 UPDATE failure left irrecoverable orphan → compensating cleanup added
+3. MED: `submitIntake` body length unbounded → `MAX_BODY_LEN = 16_384` check + test added
+4. LOW: `parties` cast without element validation → `.filter((p): p is string => ...)` added
+5. COSMETIC: `resolveDispute` event not fully asserted in test → added `actor_id` + `request_status` assertions
+
+**Deferred items:** DEFERRED-018 (collective dispute procedure → BAD_REQUEST) already existed and
+is referenced explicitly in the implementation. No new deferred items created this sprint. The
+`CONTEXT_HUB_TO_MCP_CODE` map gap for new error codes (LOW finding from RETRO) is accepted as
+consistent with all existing Phase 15 MCP tools — the SDK catch path returns `isError: true`
+transparently.
 
 ## Sprint 15.4 outcome
 
@@ -45,27 +104,23 @@ tally is deterministic.
 coordinator-trusted under `MCP_AUTH_ENABLED=false`, the same self-declared-authority class as
 DEFERRED-015/016. **DEFERRED-017** owns the residual (HARD pre-production trigger).
 
-## Resume protocol — Sprint 15.5 (intake + dispute)
+## Resume protocol — Sprint 15.6 (next sprint)
 
-Cut `phase-15-sprint-15.5` off `phase-15-sprint-15.4`. Full 12-phase cycle for the **intake
-mailbox + dispute resolution** primitives (master design B.8 / C.1 — `intake_items`,
-`disputes`; a dispute is a Request-Approval routed to an arbiter or a tribunal). Calibration:
-front-load the §10 lock table; one `/review-impl` REVIEW-CODE round. **Guardrail (lesson
-`5c0b7b25`, an enforced rule): a security-framed cold-start Adversary is mandatory at
-POST-REVIEW for 15.5** — a dispute is a governance/adjudication primitive. Triggered deferred
-items to fold in or evaluate at 15.5 CLARIFY: **DEFERRED-013** (counter-sign distinct-endorser
-— re-deferred from 15.4, its trigger is now 15.5); **DEFERRED-012** (the topic `closing`-drain
-— its trigger is Sprint 15.5, by which point the full in-flight item set exists).
-**DEFERRED-017/015/016** carry the HARD pre-production authz trigger.
+Sprint 15.6 resumes from `phase-15-sprint-15.5`. At 15.6 CLARIFY, evaluate: **DEFERRED-013**
+(counter-sign distinct-endorser — its trigger is 15.5 completion, now met); **DEFERRED-012**
+(topic `closing`-drain — full in-flight item set now exists with intake + disputes); **DEFERRED-019**
+(primitive-outcome chaining — interlocked with 012). **DEFERRED-017/015/016** carry the HARD
+pre-production authz trigger and must be resolved before any multi-actor non-trusted deployment.
+Master design section D (the full closing protocol) is the logical next scope for 15.6.
 
 ## Environment state
 
 - Docker stack UP — `db`/`mcp`/`worker`/`neo4j`/`rabbitmq`/`redis` running; migrations
-  0053–**0057** applied; `mcp`/`worker` rebuilt + running the **Sprint 15.4** code.
-- `npm test` **527/527** green on `phase-15-sprint-15.4`; `tsc` clean.
+  0053–**0059** applied; `mcp`/`worker` rebuilt + running the **Sprint 15.5** code.
+- `npm test` **586/586** green on `phase-15-sprint-15.5`; `tsc` clean.
 - Deferred items OPEN: DEFERRED-009, 010, 011, 012, 013, 014, **015**, **016**, **017**,
   018, 019 — DEFERRED-015 + 016 + **017** (the auth-enabled-multi-actor authorization
-  residuals) carry a HARD pre-production trigger; DEFERRED-012 + 013 trigger at Sprint 15.5.
+  residuals) carry a HARD pre-production trigger; DEFERRED-012 + 013 trigger at Sprint 15.6.
 - `jq` is NOT installed in the shell env — live smoke scripts must parse JSON via `node`/`tsx`.
 
 ## Execution-contract reminders (from the longrun plan)

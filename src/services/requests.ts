@@ -157,9 +157,9 @@ export async function submitRequest(params: {
     throw new ContextHubError('BAD_REQUEST', 'collective steps are Sprint 15.4');
   }
 
-  // D7 — only 'artifact' subject_type is supported
-  if (subjectType !== 'artifact') {
-    throw new ContextHubError('BAD_REQUEST', `subject_type must be 'artifact'; got: ${subjectType}`);
+  // D7 — subject_type must be 'artifact' or 'dispute' (Sprint 15.5 extends to 'dispute')
+  if (subjectType !== 'artifact' && subjectType !== 'dispute') {
+    throw new ContextHubError('BAD_REQUEST', `subject_type must be 'artifact' or 'dispute'; got: ${subjectType}`);
   }
 
   const pool = getDbPool();
@@ -179,15 +179,16 @@ export async function submitRequest(params: {
     return { status: 'topic_closed' };
   }
 
-  // Check the artifact exists AND belongs to this request's topic (F3a). One status
-  // for "missing" and "in another topic" — does not confirm the artifact exists under
-  // a different topic (id-probing defense).
-  const artRes = await pool.query<{ topic_id: string }>(
-    `SELECT topic_id FROM artifacts WHERE artifact_id=$1`,
-    [subjectId],
-  );
-  if (artRes.rowCount === 0 || artRes.rows[0].topic_id !== topicId) {
-    throw new ContextHubError('NOT_FOUND', `artifact ${subjectId} not found in topic ${topicId}`);
+  // For 'artifact' subject_type: check the artifact exists AND belongs to this topic (F3a).
+  // For 'dispute' subject_type: subject_id is a dispute UUID — no artifact lookup.
+  if (subjectType === 'artifact') {
+    const artRes = await pool.query<{ topic_id: string }>(
+      `SELECT topic_id FROM artifacts WHERE artifact_id=$1`,
+      [subjectId],
+    );
+    if (artRes.rowCount === 0 || artRes.rows[0].topic_id !== topicId) {
+      throw new ContextHubError('NOT_FOUND', `artifact ${subjectId} not found in topic ${topicId}`);
+    }
   }
 
   // Check submitter is a participant

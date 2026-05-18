@@ -106,6 +106,16 @@ import {
   castVote,
   vetoMotion,
   tallyMotion,
+  // Phase 15 Sprint 15.5: Intake mailbox + Dispute resolution
+  submitIntake,
+  triageIntake,
+  dismissIntake,
+  getIntake,
+  listIntake,
+  openDispute,
+  resolveDispute,
+  getDispute,
+  listDisputes,
 } from '../core/index.js';
 import { LESSON_STATUS_ALL, LESSON_STATUS_WRITABLE } from '../constants/lessonStatus.js';
 import { formatToolResponse, OutputFormatSchema } from './formatters.js';
@@ -3887,6 +3897,315 @@ function createMcpToolsServer() {
       const r = await tallyMotion({ motion_id });
       const summary = `tally_motion: motion=${motion_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
+    },
+  );
+
+  // ── Phase 15 Sprint 15.5: Intake mailbox + Dispute resolution tools ──
+  // NOTE: flat z.object outputs per DEFERRED-007 (MCP SDK discriminatedUnion regression).
+
+  server.registerTool(
+    'submit_intake',
+    {
+      description: 'Submit an intake item (violation_report, suggestion, or request) to a project mailbox. Optionally associate with a topic — if topic_id is provided the topic must be active and an intake.received event is emitted.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).describe('The project that owns this intake mailbox.'),
+        topic_id: z.string().optional().describe('Optional topic to associate the intake with.'),
+        kind: z.enum(['violation_report', 'suggestion', 'request']).describe('Category of the intake item.'),
+        body: z.string().min(1).describe('The full text of the intake submission.'),
+        submitted_by: z.string().min(1).describe('Actor id of the submitter.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        intake_id: z.string(),
+        project_id: z.string(),
+        topic_id: z.string().nullable(),
+        kind: z.string(),
+        status: z.string(),
+        created_at: z.string(),
+      }),
+    },
+    async ({ workspace_token, project_id, topic_id, kind, body, submitted_by, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const result = await submitIntake({ project_id, topic_id, kind, body, submitted_by });
+      const summary = `submit_intake: project=${project_id} kind=${kind} id=${result.intake_id}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'triage_intake',
+    {
+      description: 'Triage a received intake item by routing it to a task, request, motion, or dispute. The item must be in "received" status. Emits intake.triaged when topic_id is present.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        intake_id: z.string().min(1).describe('The intake item UUID.'),
+        route_kind: z.enum(['task', 'request', 'motion', 'dispute']).describe('Target route type.'),
+        actor_id: z.string().min(1).describe('Actor performing the triage.'),
+        topic_id: z.string().min(1).describe('Topic context for the triage action.'),
+        routed_to: z.string().optional().describe('ID of the task/request/motion to link to (for task/request/motion routes).'),
+        subject_ref: z.string().optional().describe('Artifact ref for dispute route.'),
+        parties: z.array(z.string()).optional().describe('Parties for dispute route (min 2).'),
+        procedure: z.string().optional().describe('Dispute procedure (unilateral or collective).'),
+        submitted_by: z.string().optional().describe('Submitter for dispute route (defaults to actor_id).'),
+        kind: z.string().optional().describe('Request kind for dispute route.'),
+        weight: z.number().optional().describe('Request weight for dispute route.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        intake_id: z.string(),
+        status: z.string(),
+        routed_to: z.string().nullable(),
+        dispute_id: z.string().nullable().optional(),
+        resolution_request_id: z.string().nullable().optional(),
+      }),
+    },
+    async ({ workspace_token, intake_id, route_kind, actor_id, topic_id, routed_to, subject_ref, parties, procedure, submitted_by, kind, weight, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      let route: Parameters<typeof triageIntake>[1];
+      if (route_kind === 'dispute') {
+        route = {
+          route_kind: 'dispute',
+          actor_id,
+          topic_id,
+          subject_ref: subject_ref ?? '',
+          parties: parties ?? [],
+          procedure: (procedure ?? 'unilateral') as 'unilateral' | 'collective',
+          submitted_by: submitted_by ?? actor_id,
+          kind,
+          weight,
+        };
+      } else {
+        route = {
+          route_kind: route_kind as 'task' | 'request' | 'motion',
+          actor_id,
+          topic_id,
+          routed_to: routed_to ?? '',
+        };
+      }
+      const result = await triageIntake(intake_id, route);
+      const summary = `triage_intake: id=${intake_id} route=${route_kind} status=${result.status}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'dismiss_intake',
+    {
+      description: 'Dismiss a received intake item (sets status to dismissed). Only received items can be dismissed; already-triaged or already-dismissed items return an error.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        intake_id: z.string().min(1).describe('The intake item UUID.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        intake_id: z.string(),
+        status: z.string(),
+      }),
+    },
+    async ({ workspace_token, intake_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const result = await dismissIntake(intake_id);
+      const summary = `dismiss_intake: id=${intake_id} status=${result.status}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'get_intake',
+    {
+      description: 'Get a single intake item by UUID.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        intake_id: z.string().min(1).describe('The intake item UUID.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        intake_id: z.string(),
+        project_id: z.string(),
+        topic_id: z.string().nullable(),
+        kind: z.string(),
+        body: z.string(),
+        submitted_by: z.string(),
+        status: z.string(),
+        routed_to: z.string().nullable(),
+        created_at: z.string(),
+      }),
+    },
+    async ({ workspace_token, intake_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const result = await getIntake(intake_id);
+      const summary = `get_intake: id=${intake_id} status=${result.status}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'list_intake',
+    {
+      description: 'List intake items for a project. Filter by kind (violation_report, suggestion, request) and/or status (received, triaged, dismissed). Returns items[] + total.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).describe('The project to list intake items for.'),
+        kind: z.string().optional().describe('Filter by kind (violation_report, suggestion, request).'),
+        status: z.string().optional().describe('Filter by status (received, triaged, dismissed).'),
+        limit: z.number().int().min(1).max(200).optional().describe('Max items to return (default 50).'),
+        offset: z.number().int().min(0).optional().describe('Pagination offset (default 0).'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        items: z.array(z.object({
+          intake_id: z.string(),
+          project_id: z.string(),
+          topic_id: z.string().nullable(),
+          kind: z.string(),
+          status: z.string(),
+          submitted_by: z.string(),
+          routed_to: z.string().nullable(),
+          created_at: z.string(),
+        })),
+        total: z.number(),
+      }),
+    },
+    async ({ workspace_token, project_id, kind, status, limit, offset, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const result = await listIntake(project_id, { kind, status, limit, offset });
+      const summary = `list_intake: project=${project_id} total=${result.total}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'open_dispute',
+    {
+      description: 'Open a dispute for an artifact within a topic. Creates the dispute row and submits a resolution request to the DoA arbiter. Only the unilateral procedure is supported in Sprint 15.5. Returns the dispute record + resolution_request_id.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        topic_id: z.string().min(1).describe('The topic the dispute belongs to (must be active).'),
+        subject_ref: z.string().min(1).describe('Artifact reference string being disputed.'),
+        parties: z.array(z.string()).min(2).describe('Actor ids of the disputing parties (minimum 2).'),
+        procedure: z.enum(['unilateral']).describe('Resolution procedure — only "unilateral" is supported in Sprint 15.5.'),
+        submitted_by: z.string().min(1).describe('Actor id opening the dispute (must be a topic participant).'),
+        kind: z.string().optional().describe('Request kind for DoA routing (default: dispute_resolution).'),
+        weight: z.number().optional().describe('Request weight for DoA routing (default: 1).'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        dispute: z.object({
+          dispute_id: z.string(),
+          topic_id: z.string(),
+          subject_ref: z.string(),
+          parties: z.array(z.string()),
+          status: z.string(),
+          resolution_request_id: z.string().nullable(),
+          created_at: z.string(),
+        }),
+        resolution_request_id: z.string(),
+      }),
+    },
+    async ({ workspace_token, topic_id, subject_ref, parties, procedure, submitted_by, kind, weight, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const result = await openDispute({ topic_id, subject_ref, parties, procedure, submitted_by, kind, weight });
+      const summary = `open_dispute: topic=${topic_id} id=${result.dispute.dispute_id}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'resolve_dispute',
+    {
+      description: 'Resolve a dispute once its resolution request has reached a terminal state (approved, returned, or rejected). Returns the updated dispute with status=resolved and emits a dispute.resolved event.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        dispute_id: z.string().min(1).describe('The dispute UUID.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        dispute_id: z.string(),
+        topic_id: z.string(),
+        subject_ref: z.string(),
+        parties: z.array(z.string()),
+        status: z.string(),
+        resolution_request_id: z.string().nullable(),
+        created_at: z.string(),
+      }),
+    },
+    async ({ workspace_token, dispute_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const result = await resolveDispute(dispute_id);
+      const summary = `resolve_dispute: id=${dispute_id} status=${result.status}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'get_dispute',
+    {
+      description: 'Get a single dispute by UUID, including its resolution request and steps.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        dispute_id: z.string().min(1).describe('The dispute UUID.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        dispute_id: z.string(),
+        topic_id: z.string(),
+        subject_ref: z.string(),
+        parties: z.array(z.string()),
+        status: z.string(),
+        resolution_request_id: z.string().nullable(),
+        created_at: z.string(),
+        resolution_request: z.object({
+          request_id: z.string(),
+          status: z.string(),
+          steps: z.array(z.object({
+            step_index: z.number(),
+            target_office: z.string(),
+            status: z.string(),
+            decided_by: z.string().nullable(),
+            decided_at: z.string().nullable(),
+          })),
+        }).nullable(),
+      }),
+    },
+    async ({ workspace_token, dispute_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const result = await getDispute(dispute_id);
+      const summary = `get_dispute: id=${dispute_id} status=${result.status}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'list_disputes',
+    {
+      description: 'List disputes for a topic. Optionally filter by status (open, under_resolution, resolved). Returns disputes[] + total.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        topic_id: z.string().min(1).describe('The topic to list disputes for.'),
+        status: z.string().optional().describe('Filter by status (open, under_resolution, resolved).'),
+        limit: z.number().int().min(1).max(200).optional().describe('Max disputes to return (default 50).'),
+        offset: z.number().int().min(0).optional().describe('Pagination offset (default 0).'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        disputes: z.array(z.object({
+          dispute_id: z.string(),
+          topic_id: z.string(),
+          subject_ref: z.string(),
+          parties: z.array(z.string()),
+          status: z.string(),
+          resolution_request_id: z.string().nullable(),
+          created_at: z.string(),
+        })),
+        total: z.number(),
+      }),
+    },
+    async ({ workspace_token, topic_id, status, limit, offset, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const result = await listDisputes(topic_id, { status, limit, offset });
+      const summary = `list_disputes: topic=${topic_id} total=${result.total}`;
+      return formatToolResponse(result, summary, output_format);
     },
   );
 

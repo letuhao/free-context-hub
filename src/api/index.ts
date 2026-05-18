@@ -33,6 +33,8 @@ import { topicsRouter } from './routes/topics.js';                  // Phase 15 
 import { boardRouter } from './routes/board.js';                    // Phase 15 Sprint 15.2
 import { requestsRouter } from './routes/requests.js';              // Phase 15 Sprint 15.3
 import { motionsRouter } from './routes/motions.js';                // Phase 15 Sprint 15.4
+import { intakeRouter } from './routes/intake.js';                  // Phase 15 Sprint 15.5
+import { disputesRouter } from './routes/disputes.js';              // Phase 15 Sprint 15.5
 
 /**
  * Creates the REST API Express app.
@@ -103,6 +105,10 @@ export function createApiApp() {
   // Phase 15 Sprint 15.4: Collective Decision — mounted at /api AFTER requestsRouter;
   // handles /decision-bodies/* + /topics/:id/motions + /motions/:id/*.
   app.use('/api', motionsRouter);
+  // Phase 15 Sprint 15.5: Intake + Dispute — mixed read/write gated inside each router;
+  // handles /intake/*, /projects/:id/intake, /disputes/*, /topics/:id/disputes.
+  app.use('/api', intakeRouter);
+  app.use('/api', disputesRouter);
   app.use('/api/projects', projectsRouter);       // mixed — write routes gated inside
   app.use('/api/analytics', analyticsRouter);
   app.use('/api/activity', activityRouter);
