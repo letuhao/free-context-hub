@@ -41,6 +41,7 @@ router.get('/', async (req, res, next) => {
         lesson_type: req.query.lesson_type as any,
         tags_any: req.query.tags_any ? (req.query.tags_any as string).split(',') : undefined,
         status: req.query.status as any,
+        include_all_statuses: req.query.include_all_statuses === 'true',
       },
     });
     res.json(result);
@@ -201,6 +202,10 @@ router.get('/:id/versions', async (req, res, next) => {
 /** PUT /api/lessons/:id — update lesson title, content, tags, source_refs */
 router.put('/:id', requireRole('writer'), async (req, res, next) => {
   try {
+    if (req.body.status !== undefined || req.body.superseded_by !== undefined) {
+      res.status(400).json({ error: 'Use PATCH /api/lessons/:id/status to change lesson status or superseded_by.' });
+      return;
+    }
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await updateLesson({
       projectId,
