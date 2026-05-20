@@ -29,8 +29,18 @@
 - **Priority:** LOW — single-step collective covers the most common "a single
   committee decides" pattern. Multi-tier collective is a governance enhancement.
 - **Session deferred:** 2026-05-20
-- **Sessions open:** 1
-- **Status:** OPEN
+- **Sessions open:** 2
+- **Status:** RESOLVED — Sprint 15.10 (2026-05-21): new `doa_matrix_levels (matrix_id,
+  level, body_id)` table for per-level body assignment + `requests.body_by_level JSONB`
+  snapshot column (honors B.7 snapshot-the-rules). submitRequest resolves per-step
+  body via Map (table preferred, single-body fallback for 15.8 compat); distinct-body
+  check on counter_sign+collective routes; missing_collective_body rejection.
+  applyMotionToStep lapsed path reads the snapshot → re-propose under next level's
+  collective body if configured, else fallback degrade-to-unilateral (Q2(a)).
+  Event payload unified on `escalated_to: 'collective' | 'unilateral'` field (F2 fix —
+  replaces 15.8's `degraded_to`). Backward compatible with 15.8 single-step collective
+  matrix rows. Per-actor cross-body collusion documented as out-of-scope (interlocks
+  with DEFERRED-015 — F3 accept-with-doc). 6 new tests + live smoke confirmed.
 - **Source:** Phase 15 Sprint 15.8 REVIEW-DESIGN r1 F3 + DESIGN §2.2.
 
 ---

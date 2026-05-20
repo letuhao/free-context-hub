@@ -254,26 +254,71 @@ export async function submitRequest(params: {
       ],
     );
 
-    // Sprint 15.8 — reject multi-step counter_sign+collective combinations: a single
-    // DoA matrix row carries one body_id, so a multi-step counter_sign collective route
-    // would collapse the distinct-endorser guarantee to a single body. Multi-tier
-    // collective is a future sprint (per-level body assignment).
-    if (matrixRow.procedure === 'collective' && route.length > 1) {
-      await client.query('ROLLBACK');
-      throw new ContextHubError(
-        'BAD_REQUEST',
-        'multi-step counter_sign+collective routes are not supported in 15.8 (would collapse the distinct-endorser guarantee); use escalate_to_authority or a single-step counter_sign matrix row',
-      );
+    // Sprint 15.10 — per-step body resolution for collective routes.
+    // Build a level→body Map: prefer matrix-table entries (doa_matrix_levels);
+    // fall back to the single-body column for the required_level (15.8 compat).
+    const bodyByLevel: Map<string, string> = matrixRow.body_by_level.size > 0
+      ? new Map(matrixRow.body_by_level)
+      : (matrixRow.procedure === 'collective' && matrixRow.body_id
+          ? new Map([[matrixRow.required_level, matrixRow.body_id]])
+          : new Map<string, string>());
+
+    const stepBodies: Array<string | null> = [];
+    for (let i = 0; i < route.length; i++) {
+      const stepLevel = route[i];
+      if (matrixRow.procedure === 'collective') {
+        const body = bodyByLevel.get(stepLevel);
+        if (!body) {
+          await client.query('ROLLBACK');
+          throw new ContextHubError(
+            'BAD_REQUEST',
+            `missing_collective_body: matrix has no body assigned for level '${stepLevel}' on this route`,
+          );
+        }
+        stepBodies.push(body);
+      } else {
+        stepBodies.push(null);
+      }
+    }
+
+    // Sprint 15.10 — distinct-body check for multi-step counter_sign+collective
+    // (preserves the distinct-endorser principle for collective routes).
+    if (matrixRow.procedure === 'collective'
+        && matrixRow.route_shape === 'counter_sign'
+        && route.length > 1) {
+      const seen = new Set<string>();
+      for (const b of stepBodies) {
+        if (b && seen.has(b)) {
+          await client.query('ROLLBACK');
+          throw new ContextHubError(
+            'BAD_REQUEST',
+            `distinct_body_required: counter_sign+collective routes require a distinct body per step (duplicate body assigned to multiple steps)`,
+          );
+        }
+        if (b) seen.add(b);
+      }
     }
 
     // Materialize the route as request_steps. Sprint 15.8: per-step procedure +
     // body_id snapshotted from the matrix row (frozen for the request lifetime).
+    // Sprint 15.10: per-step body_id from the body_by_level map (multi-tier).
     for (let i = 0; i < route.length; i++) {
       await client.query(
         `INSERT INTO request_steps
            (request_id, step_index, target_office, doa_snapshot, procedure, deadline, status, body_id)
          VALUES ($1, $2, $3, $4, $5, now() + $6::interval, 'pending', $7)`,
-        [requestId, i, route[i], snapshot, matrixRow.procedure, `${deadlineMs} milliseconds`, matrixRow.body_id],
+        [requestId, i, route[i], snapshot, matrixRow.procedure, `${deadlineMs} milliseconds`, stepBodies[i]],
+      );
+    }
+
+    // Sprint 15.10 — snapshot the body_by_level map onto the request so lapsed-
+    // escalation honors snapshot-the-rules (master design B.7).
+    if (matrixRow.procedure === 'collective' && bodyByLevel.size > 0) {
+      const snapshotObj: Record<string, string> = {};
+      for (const [lvl, bid] of bodyByLevel.entries()) snapshotObj[lvl] = bid;
+      await client.query(
+        `UPDATE requests SET body_by_level = $1 WHERE request_id = $2`,
+        [JSON.stringify(snapshotObj), requestId],
       );
     }
 
@@ -288,13 +333,13 @@ export async function submitRequest(params: {
     });
 
     // Sprint 15.8 — if step 0 is collective, auto-propose its motion in the same txn.
-    // matrixRow.procedure applies uniformly across the route in 15.8 (the multi-step
-    // counter_sign+collective combination was rejected above).
+    // Sprint 15.10 — step 0's body comes from stepBodies[0] (per-level resolution),
+    // not the legacy matrixRow.body_id single column.
     if (matrixRow.procedure === 'collective') {
       await proposeStepMotion(client, {
         request_id: requestId,
         step_index: 0,
-        body_id: matrixRow.body_id!,
+        body_id: stepBodies[0]!,
         topic_id: topicId,
         deadline_minutes: STEP_DEADLINE_MINUTES,
       });
@@ -941,6 +986,7 @@ export async function applyMotionToStep(
   const motionRef = `motion:${motion_id}`;
 
   // Load the request — kind, subject_id, execution_task, submitted_by, route_shape.
+  // Sprint 15.10 — also body_by_level for lapsed-escalation snapshot-read (F1 fix).
   const reqRes = await client.query<{
     status: string;
     kind: string;
@@ -948,8 +994,9 @@ export async function applyMotionToStep(
     submitted_by: string;
     route_shape: string;
     execution_task: ExecutionTaskBlob | null;
+    body_by_level: Record<string, string> | null;
   }>(
-    `SELECT status, kind, subject_id, submitted_by, route_shape, execution_task
+    `SELECT status, kind, subject_id, submitted_by, route_shape, execution_task, body_by_level
        FROM requests WHERE request_id=$1 FOR UPDATE`,
     [request_id],
   );
@@ -1100,11 +1147,13 @@ export async function applyMotionToStep(
     return;
   }
 
-  // outcome === 'lapsed' — F1 degrade-to-unilateral escalation
+  // outcome === 'lapsed' — Sprint 15.10 re-propose-or-degrade escalation
+  // (Sprint 15.8 F1 was degrade-only; 15.10 reads body_by_level snapshot
+  // and re-proposes under the next level's body when available.)
   const currentRank = LEVEL_RANK[target_office];
   if (currentRank === LEVEL_RANK.authority) {
-    // Already at top — escalation exhausted. REVIEW-CODE F1: payload shape
-    // matches 15.3 sweep `{ exhausted: true }` for consumer consistency.
+    // Already at top — escalation exhausted. Payload shape matches 15.3 sweep
+    // `{ exhausted: true }` for consumer consistency.
     await client.query(
       `UPDATE request_steps SET status='escalated', decided_by=$1, decided_at=now()
          WHERE request_id=$2 AND step_index=$3`,
@@ -1120,7 +1169,8 @@ export async function applyMotionToStep(
       type: 'request.step_escalated',
       subject_type: 'request',
       subject_id: request_id,
-      payload: { step_index, exhausted: true, reason: 'motion_lapsed', degraded_to: 'unilateral' },
+      // Sprint 15.10 — escalated_to replaces 15.8's degraded_to field (F2 unify).
+      payload: { step_index, exhausted: true, reason: 'motion_lapsed', escalated_to: 'unilateral' },
     });
     await appendEvent(client, {
       topic_id,
@@ -1134,19 +1184,48 @@ export async function applyMotionToStep(
   }
   // Non-top tier — degrade to unilateral at the next level.
   const newLevel = LEVELS_ASC[currentRank + 1];
-  await client.query(
-    `UPDATE request_steps SET status='pending', target_office=$1, procedure='unilateral',
-       body_id=NULL, motion_id=NULL, deadline=now() + interval '${STEP_DEADLINE_MINUTES} minutes',
-       decided_by=NULL, decided_at=NULL
-       WHERE request_id=$2 AND step_index=$3`,
-    [newLevel, request_id, step_index],
-  );
-  await appendEvent(client, {
-    topic_id,
-    actor_id: motionRef,
-    type: 'request.step_escalated',
-    subject_type: 'request',
-    subject_id: request_id,
-    payload: { step_index, from_office: target_office, to_office: newLevel, reason: 'motion_lapsed', degraded_to: 'unilateral' },
-  });
+  // Sprint 15.10 — read body_by_level snapshot to find next level's body.
+  const snapshotMap = req.body_by_level ?? null;
+  const nextBody = snapshotMap ? snapshotMap[newLevel] ?? null : null;
+
+  if (nextBody) {
+    // Q2 (a) — re-propose under next level's collective body.
+    await client.query(
+      `UPDATE request_steps SET status='motion_proposed', target_office=$1,
+         procedure='collective', body_id=$2, motion_id=NULL,
+         deadline=now() + interval '${STEP_DEADLINE_MINUTES} minutes',
+         decided_by=NULL, decided_at=NULL
+         WHERE request_id=$3 AND step_index=$4`,
+      [newLevel, nextBody, request_id, step_index],
+    );
+    await appendEvent(client, {
+      topic_id,
+      actor_id: motionRef,
+      type: 'request.step_escalated',
+      subject_type: 'request',
+      subject_id: request_id,
+      payload: { step_index, from_office: target_office, to_office: newLevel, reason: 'motion_lapsed', escalated_to: 'collective', body_id: nextBody },
+    });
+    await proposeStepMotion(client, {
+      request_id, step_index, body_id: nextBody, topic_id, deadline_minutes: STEP_DEADLINE_MINUTES,
+    });
+  } else {
+    // Q2 fallback — degrade to unilateral (15.8 behavior).
+    await client.query(
+      `UPDATE request_steps SET status='pending', target_office=$1, procedure='unilateral',
+         body_id=NULL, motion_id=NULL, deadline=now() + interval '${STEP_DEADLINE_MINUTES} minutes',
+         decided_by=NULL, decided_at=NULL
+         WHERE request_id=$2 AND step_index=$3`,
+      [newLevel, request_id, step_index],
+    );
+    await appendEvent(client, {
+      topic_id,
+      actor_id: motionRef,
+      type: 'request.step_escalated',
+      subject_type: 'request',
+      subject_id: request_id,
+      // Sprint 15.10 — escalated_to replaces 15.8's degraded_to field (F2 unify).
+      payload: { step_index, from_office: target_office, to_office: newLevel, reason: 'motion_lapsed', escalated_to: 'unilateral' },
+    });
+  }
 }

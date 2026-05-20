@@ -1,9 +1,10 @@
-# LONGRUN CHECKPOINT — Phase 15 autonomous longrun, session boundary (2026-05-20)
+# LONGRUN CHECKPOINT — Phase 15 autonomous longrun, session boundary (2026-05-21)
 
-**Status:** **Sprint 15.9 (Cleanup pass — DEFERRED-021 + 020) — COMPLETE** via the v2.2
-human-in-loop S-size workflow (PLAN skipped per CLAUDE.md). MCP outputSchemas declare
-optional chain field (flat-optional shape per DEFERRED-007); 3 LOW test coverage gaps
-from 15.6 closed. 651/651 green; live MCP smoke ✓; REVIEW-CODE 0 findings; QC CLEAR.
+**Status:** **Sprint 15.10 (Multi-tier collective routing — DEFERRED-022) — COMPLETE**
+via the v2.2 human-in-loop 12-phase workflow. REVIEW-DESIGN r1 found 1 BLOCK +
+2 WARN (lapsed re-resolve violates snapshot-the-rules; degraded_to vs escalated_to
+naming) → rev 2 fixes (requests.body_by_level snapshot column + escalated_to unified
+field). REVIEW-CODE 0 findings. 657/657 green; live multi-tier smoke ✓.
 
 ## Phase 15 longrun progress
 
@@ -19,7 +20,95 @@ from 15.6 closed. 651/651 green; live MCP smoke ✓; REVIEW-CODE 0 findings; QC 
 | 15.7 — Chaining + sweep recovery + topology | ✅ COMPLETE | branch `phase-15-sprint-15.7` · v2.2 human-in-loop |
 | 15.8 — Collective request-step wiring | ✅ COMPLETE | branch `phase-15-sprint-15.8` · v2.2 human-in-loop |
 | 15.9 — Cleanup (021+020) | ✅ COMPLETE | branch `phase-15-sprint-15.9` · S-size, skip PLAN |
-| 15.10 | pending | — |
+| 15.10 — Multi-tier collective (022) | ✅ COMPLETE | branch `phase-15-sprint-15.10` · v2.2 human-in-loop |
+| 15.11 | pending | — |
+
+## Sprint 15.10 outcome
+
+Closes DEFERRED-022 — multi-tier collective request routing. Enables the realistic
+governance pattern: "coordination committee endorses, then authority board endorses"
+with DIFFERENT bodies per level.
+
+**Migration 0062:**
+- `doa_matrix_levels (matrix_id UUID, level TEXT, body_id UUID, PK (matrix_id, level))`
+  with FK to doa_matrix (ON DELETE CASCADE) + FK to decision_bodies + CHECK level enum.
+- `requests.body_by_level JSONB NULL` — snapshot of the per-level body map captured
+  at submission (honors master design B.7 snapshot-the-rules per REVIEW-DESIGN F1 fix).
+
+**Service changes:**
+- `doaMatrix.ts:resolveMatrixRow` returns extended MatrixRow with `body_by_level:
+  Map<string, string>`. SQL gains LEFT JOIN doa_matrix_levels + jsonb_object_agg with
+  FILTER + COALESCE for empty-map case. Backward compat: empty map → fallback to
+  `{required_level → body_id}` (15.8 single-step).
+- `submitRequest`:
+  - Removed 15.8's multi-step counter_sign+collective hard-reject.
+  - Builds bodyByLevel Map from matrix (preferring table; falling back to
+    single body_id).
+  - Per-step body resolution loop; throws `missing_collective_body` if a step's
+    target_office is not in the map.
+  - Distinct-body check on multi-step counter_sign+collective → throws
+    `distinct_body_required` on duplicates.
+  - INSERTs request_steps with per-step body_id from map.
+  - Snapshots the full bodyByLevel onto `requests.body_by_level` via UPDATE (F1 fix).
+  - proposeStepMotion at step 0 uses `stepBodies[0]` (not legacy `matrixRow.body_id`).
+- `applyMotionToStep` lapsed branch:
+  - Adds `body_by_level` to the request SELECT.
+  - Reads `req.body_by_level[newLevel]` (snapshot) to find next level's body.
+  - If body present: re-propose under collective body (UPDATE step procedure=
+    'collective', body_id=<next>, status='motion_proposed', motion_id=NULL,
+    fresh deadline) + proposeStepMotion + appendEvent step_escalated with
+    `escalated_to: 'collective', body_id: <next>`.
+  - Else: degrade to unilateral (15.8 fallback behavior) + appendEvent
+    `escalated_to: 'unilateral'` (F2 unify — replaces 15.8's `degraded_to`).
+  - Top tier (authority lapsed): unchanged escalation_exhausted, payload includes
+    `escalated_to: 'unilateral'` (F2 forward consistency).
+
+**Event payload unification (F2 fix):** Sprint 15.10 emits `escalated_to:
+'collective' | 'unilateral'` field on `request.step_escalated` for both lapsed
+paths. Historic 15.8 events in DB retain `degraded_to: 'unilateral'`; replay
+consumers parse `escalated_to ?? (degraded_to ? 'unilateral' : null)`.
+
+**Backward compat:** 15.8 single-body collective matrix rows (procedure='collective',
+body_id=<X>, no doa_matrix_levels entries) → fallback rule maps required_level →
+body_id. Single-step routes continue to work unchanged. AC12 explicitly tests.
+
+**Test coverage (6 new, 657 total):**
+- requests.test.ts: AC2 distinct-body multi-tier submit, AC3 same-body reject,
+  AC4 missing-body reject, AC12 15.8 backward compat, AC6-re-propose lapsed→
+  collective at next level, AC6-degrade-fallback lapsed without next body.
+- requests.test.ts: 15.8 AC1-neg test UPDATED to assert `missing_collective_body`
+  error path (15.10 no longer auto-rejects; rejects only on missing-body or
+  duplicate-body).
+
+**Workflow:**
+- CLARIFY (Q1 new table, Q2 re-propose-or-degrade, Q3 skip security review).
+- DESIGN rev 1 → REVIEW-DESIGN r1 REJECTED 1 BLOCK (snapshot violation) + 2 WARN →
+  rev 2 fixes both BLOCKs + F3 doc → r2 CLEAR.
+- PLAN 9 tasks inline.
+- BUILD T1-T8, VERIFY 657/657 + live smoke ✓.
+- REVIEW-CODE r1 0 findings.
+- QC CLEAR 12/12 ACs.
+- POST-REVIEW human CLEAR.
+
+**Verification:** `tsc` clean; `npm test` **657/657** green; live smoke vs Docker
+confirmed multi-tier counter_sign+collective end-to-end: distinct bodies per level,
+step 0 motion carries → step 1 motion auto-proposed under different body → step 1
+carries → request approved + 1 chained task (no duplication).
+
+## Resume — Sprint 15.11
+
+Remaining OPEN: DEFERRED-009 (topic-scope authz), DEFERRED-010 (replayEvents
+pagination), DEFERRED-015/016/017 (HARD pre-prod authz triggers). 022 RESOLVED.
+
+## Environment state (end of Sprint 15.10 session, 2026-05-21)
+
+- Docker stack: 8/8 healthy. Migrations 0053–**0062** applied.
+- `npm test` **657/657** green; tsc clean.
+- Branch: `phase-15-sprint-15.10` — committed via Phase 11.
+- Deferred OPEN: 009, 010, **015**, **016**, **017** (HARD). All other Sprint 15
+  deferreds RESOLVED (018, 019, 011, 020, 021, 022).
+
+---
 
 ## Sprint 15.9 outcome
 
