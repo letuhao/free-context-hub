@@ -33,6 +33,12 @@ async function cleanup() {
     await pool.query(`DELETE FROM votes WHERE motion_id IN
       (SELECT motion_id FROM motions WHERE topic_id=$1)`, [topic_id]);
     await pool.query(`DELETE FROM motions WHERE topic_id = $1`, [topic_id]);
+    // Sprint 15.7 — chain may have created tasks/artifacts on carried tallies.
+    await pool.query(`DELETE FROM claims WHERE topic_id = $1`, [topic_id]);
+    await pool.query(`DELETE FROM artifact_versions WHERE artifact_id IN
+      (SELECT artifact_id FROM artifacts WHERE topic_id=$1)`, [topic_id]);
+    await pool.query(`DELETE FROM artifacts WHERE topic_id = $1`, [topic_id]);
+    await pool.query(`DELETE FROM tasks WHERE topic_id = $1`, [topic_id]);
     await pool.query(`DELETE FROM coordination_events WHERE topic_id = $1`, [topic_id]);
   }
   await pool.query(`DELETE FROM topics WHERE project_id = $1`, [TEST_PROJECT]);

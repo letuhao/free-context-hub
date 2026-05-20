@@ -3436,6 +3436,10 @@ function createMcpToolsServer() {
         weight: z.number().int().describe('Request weight [0, 2147483647]. Selects the matrix row.'),
         procedure: z.string().optional().describe('"unilateral" (default). "collective" is Sprint 15.4.'),
         submitted_by: z.string().min(1).describe('Actor id submitting the request.'),
+        // Sprint 15.7 — optional chained-task blob (DEFERRED-019).
+        execution_task: z.unknown().optional().describe(
+          'Optional execution_task blob describing the board task to post on approval. Shape: {title?, topology?, slot?, kind?, depends_on?, raci?}. Null/omitted = derived defaults.',
+        ),
         output_format: OutputFormatSchema.default('auto_both'),
       }),
       outputSchema: z.object({
@@ -3445,7 +3449,7 @@ function createMcpToolsServer() {
         current_step: z.number().optional(),
       }),
     },
-    async ({ workspace_token, topic_id, subject_id, kind, weight, procedure, submitted_by, output_format }) => {
+    async ({ workspace_token, topic_id, subject_id, kind, weight, procedure, submitted_by, execution_task, output_format }) => {
       assertWorkspaceToken(workspace_token);
       const r = await submitRequest({
         topic_id,
@@ -3455,6 +3459,7 @@ function createMcpToolsServer() {
         weight,
         procedure: procedure ?? 'unilateral',
         submitted_by,
+        execution_task,
       });
       const summary = `submit_request: topic=${topic_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
@@ -3739,6 +3744,10 @@ function createMcpToolsServer() {
         subject_ref: z.string().min(1).describe('The proposition reference (free text, ≤256 chars).'),
         proposed_by: z.string().min(1).describe('Actor id proposing the motion (must be a topic participant).'),
         deadline_minutes: z.number().int().optional().describe('Lifecycle deadline in minutes [5, 43200]. Default 1440 (24h).'),
+        // Sprint 15.7 — optional chained-task blob on carried (DEFERRED-019).
+        execution_task: z.unknown().optional().describe(
+          'Optional execution_task blob describing the board task to post on a carried motion. Shape: {title?, topology?, slot?, kind?, depends_on?, raci?}. Null/omitted = derived defaults.',
+        ),
         output_format: OutputFormatSchema.default('auto_both'),
       }),
       outputSchema: z.object({
@@ -3747,9 +3756,9 @@ function createMcpToolsServer() {
         deadline: z.string().optional(),
       }),
     },
-    async ({ workspace_token, topic_id, body_id, subject_ref, proposed_by, deadline_minutes, output_format }) => {
+    async ({ workspace_token, topic_id, body_id, subject_ref, proposed_by, deadline_minutes, execution_task, output_format }) => {
       assertWorkspaceToken(workspace_token);
-      const r = await proposeMotion({ topic_id, body_id, subject_ref, proposed_by, deadline_minutes });
+      const r = await proposeMotion({ topic_id, body_id, subject_ref, proposed_by, deadline_minutes, execution_task });
       const summary = `propose_motion: topic=${topic_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },

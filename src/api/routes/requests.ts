@@ -130,6 +130,7 @@ router.post('/topics/:id/requests', requireRole('writer'), async (req, res, next
       weight: asNumber(body.weight),
       procedure: asString(body.procedure) || 'unilateral',
       submitted_by: id.actor,
+      execution_task: body.execution_task, // Sprint 15.7 — optional chain blob
     });
     res.status(statusToHttp(result.status)).json({ status: 'ok', data: result });
   } catch (e) { next(e); }

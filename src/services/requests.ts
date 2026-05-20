@@ -41,6 +41,13 @@ import { ContextHubError } from '../core/errors.js';
 import { createModuleLogger } from '../utils/logger.js';
 import { appendEvent } from './coordinationEvents.js';
 import { resolveMatrixRow, deriveRoute, STEP_DEADLINE_MINUTES } from './doaMatrix.js';
+import {
+  validateExecutionTask,
+  buildChainedTaskParams,
+  emitChain,
+  type ChainResult,
+  type ExecutionTaskBlob,
+} from './chaining.js';
 
 const logger = createModuleLogger('requests');
 
@@ -55,7 +62,7 @@ export type SubmitResult =
 
 export type DecideResult =
   | { status: 'step_endorsed'; current_step: number }
-  | { status: 'approved' }
+  | { status: 'approved'; chain: ChainResult }
   | { status: 'returned' }
   | { status: 'rejected' }
   | { status: 'not_found' }
@@ -115,6 +122,8 @@ export async function submitRequest(params: {
   weight: number;
   procedure: string;
   submitted_by: string;
+  /** Sprint 15.7 — optional execution_task blob for chain handler. */
+  execution_task?: unknown;
 }): Promise<SubmitResult> {
   const topicId = (params.topic_id ?? '').trim();
   const subjectType = (params.subject_type ?? '').trim();
@@ -123,6 +132,10 @@ export async function submitRequest(params: {
   const weight = params.weight;
   const procedure = (params.procedure ?? '').trim();
   const submittedBy = (params.submitted_by ?? '').trim();
+
+  // Sprint 15.7 — validate execution_task structurally if provided. Chain-time
+  // depends_on existence is re-checked at chain emit (decideStep approve branch).
+  const executionTask = validateExecutionTask(params.execution_task);
 
   // Input validation
   if (!topicId || !subjectId || !kind || !submittedBy) {
@@ -226,13 +239,18 @@ export async function submitRequest(params: {
 
     await client.query('BEGIN');
 
-    // INSERT the request row
+    // INSERT the request row. Sprint 15.7 — execution_task column added; passes
+    // through as JSONB or NULL. (subject_type=artifact hardcoded predates 15.5
+    // 'dispute' support; not changed in 15.7 to preserve 15.5 behavior.)
     await client.query(
       `INSERT INTO requests
          (request_id, topic_id, subject_type, subject_id, kind, weight,
-          procedure, route_shape, status, current_step, submitted_by)
-       VALUES ($1, $2, 'artifact', $3, $4, $5, 'unilateral', $6, 'open', 0, $7)`,
-      [requestId, topicId, subjectId, kind, weight, matrixRow.route_shape, submittedBy],
+          procedure, route_shape, status, current_step, submitted_by, execution_task)
+       VALUES ($1, $2, 'artifact', $3, $4, $5, 'unilateral', $6, 'open', 0, $7, $8)`,
+      [
+        requestId, topicId, subjectId, kind, weight, matrixRow.route_shape, submittedBy,
+        executionTask === null ? null : JSON.stringify(executionTask),
+      ],
     );
 
     // Materialize the route as request_steps (all pending; only step 0 is active)
@@ -380,6 +398,7 @@ export async function decideStep(params: {
     await client.query('BEGIN');
 
     // ── (request) row lock ───────────────────────────────────────────────────
+    // Sprint 15.7 — also select kind + execution_task for chain handler.
     const reqRes = await client.query<{
       topic_id: string;
       status: string;
@@ -387,8 +406,10 @@ export async function decideStep(params: {
       subject_id: string;
       submitted_by: string;
       route_shape: string;
+      kind: string;
+      execution_task: ExecutionTaskBlob | null;
     }>(
-      `SELECT topic_id, status, current_step, subject_id, submitted_by, route_shape
+      `SELECT topic_id, status, current_step, subject_id, submitted_by, route_shape, kind, execution_task
          FROM requests WHERE request_id=$1 FOR UPDATE`,
       [requestId],
     );
@@ -409,6 +430,8 @@ export async function decideStep(params: {
     const artifactId = req.subject_id;
     const submittedBy = req.submitted_by;
     const routeShape = req.route_shape;
+    const requestKind = req.kind;
+    const executionTaskBlob: ExecutionTaskBlob | null = req.execution_task;
 
     // B3 — closed-topic plain read (no lock — preserves lock order; the seal in
     // appendEvent is the authoritative guard for a mid-transaction close race)
@@ -521,16 +544,38 @@ export async function decideStep(params: {
           subject_id: requestId,
           payload: { step_index: stepIndex, decision, decided_by: actorId },
         });
+        // Sprint 15.7 — primitive-outcome chaining (DEFERRED-019). Build params,
+        // emit chain (posted vs task.deferred), include result in request.resolved.
+        // CHAINED_TASK_DEPENDENCY_INVALID throws → outer try/catch ROLLBACKs the
+        // whole txn; the request remains 'open' (matches CLARIFY AC10).
+        const chainParams = buildChainedTaskParams({
+          source: 'request',
+          source_id: requestId,
+          topic_id: topicId,
+          kind: requestKind,
+          blob: executionTaskBlob,
+          acting_actor: actorId,
+        });
+        const chainResult = await emitChain(client, {
+          topic_id: topicId,
+          source_event: { type: 'request.resolved', source_id: requestId },
+          actor_id: actorId,
+          params: chainParams,
+        });
         await appendEvent(client, {
           topic_id: topicId,
           actor_id: actorId,
           type: 'request.resolved',
           subject_type: 'request',
           subject_id: requestId,
-          payload: { outcome: 'approved', artifact_advanced: artResult.artifact_advanced },
+          payload: {
+            outcome: 'approved',
+            artifact_advanced: artResult.artifact_advanced,
+            chain: chainResult,
+          },
         });
         await client.query('COMMIT');
-        return { status: 'approved' };
+        return { status: 'approved', chain: chainResult };
       }
     } else if (decision === 'return') {
       await client.query(

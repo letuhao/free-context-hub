@@ -1,8 +1,10 @@
-# LONGRUN CHECKPOINT — Phase 15 autonomous longrun, session boundary (2026-05-18)
+# LONGRUN CHECKPOINT — Phase 15 autonomous longrun, session boundary (2026-05-20)
 
-**Status:** **Sprint 15.6 (Topic-closing drain + Request residuals) — COMPLETE** via the v2.2
-human-in-loop 12-phase workflow. A user-invoked `/review-impl` at POST-REVIEW found 1 HIGH + 3
-MED-resolved + 3 LOW-deferred; all HIGH/MED fixed, re-verified 602/602.
+**Status:** **Sprint 15.7 (Primitive-outcome chaining + sweep recovery + topology enforcement)
+— COMPLETE** via the v2.2 human-in-loop 12-phase workflow. REVIEW-DESIGN r1 found 3 BLOCKs
+(dual-emit task.deferred, rollback-on-invalid-deps, statement_timeout cap) → rev 2 resolved
+all; r2 CLEAR + 2 inline WARN refinements. REVIEW-CODE r1 found 3 (1 MED fix-now, 1 MED
+accept-with-doc, 1 LOW defer to 15.8 as DEFERRED-021). 638/638 green; live smoke ✓.
 
 ## Phase 15 longrun progress
 
@@ -15,7 +17,147 @@ MED-resolved + 3 LOW-deferred; all HIGH/MED fixed, re-verified 602/602.
 | 15.4 — Collective decision | ✅ COMPLETE | branch `phase-15-sprint-15.4` · `0b3b329` · PR #16 · v2.2 human-in-loop |
 | 15.5 — Intake + dispute | ✅ COMPLETE | branch `phase-15-sprint-15.5` · v2.2 human-in-loop + /review-impl |
 | 15.6 — Topic-closing drain + residuals | ✅ COMPLETE | branch `phase-15-sprint-15.6` · v2.2 human-in-loop + /review-impl |
-| 15.7 | pending | — |
+| 15.7 — Chaining + sweep recovery + topology | ✅ COMPLETE | branch `phase-15-sprint-15.7` · v2.2 human-in-loop |
+| 15.8 | pending | — |
+
+## Sprint 15.7 outcome
+
+Sprint 15.7 shipped **primitive-outcome chaining** (DEFERRED-019) + **closing-topic
+stuck-recovery sweep** + **topology enforcement on `claimTask`** (DEFERRED-011 both
+halves) — the natural follow-on to Sprint 15.6's three-phase `closeTopic` drain.
+
+**Migration:** `0060_execution_task.sql` — `requests.execution_task JSONB NULL` +
+`motions.execution_task JSONB NULL`. Optional submitter-specified task blob.
+
+**New module:** `src/services/chaining.ts` (~280 lines).
+- `validateExecutionTask(blob)` — structural validation at submit time (title ≤512,
+  topology in enum, slot regex+≤64, kind non-empty+≤64, depends_on uuid[]+≤32,
+  raci ≤8 KB JSON).
+- `buildChainedTaskParams(args)` — pure merge: derived defaults (request=`Execute
+  approved request: <kind>` / motion=`Execute carried motion: <subject_ref>`; topology
+  parallel; slot `exec-<16hex>`; kind inherited; raci with `source_request|source_motion`
+  key) overridden by blob fields. System keys (created_by, source-link key) always win.
+- `emitChain(client, args)` — transactional helper:
+  1. `SELECT status FROM topics WHERE topic_id=$1 FOR UPDATE` (serializes with
+     closeTopic Phase 1/3)
+  2. If 'closing'/'closed': emit `task.deferred` (subject_type='topic', subject_id=
+     topic_id, payload includes source_event_type/source_id/reason/would_be_task) and
+     return `{kind:'deferred', reason, deferred_event_id}`.
+  3. If 'active': chain-time `depends_on` existence check; throw
+     `CHAINED_TASK_DEPENDENCY_INVALID` on bad blob (caller rolls back source event).
+     INSERT tasks + artifacts + artifact_versions + appendEvent task.posted + appendEvent
+     artifact.created. Return `{kind:'posted', task_id, artifact_id}`.
+
+**Chain integration at 3 sites:**
+- `requests.ts:decideStep` approve branch (last-step endorsed): builds chain params from
+  request's `kind` + `execution_task`, calls emitChain, embeds result in `request.resolved`
+  payload + return.
+- `motions.ts:tallyMotion` carried branch: builds chain from motion's `subject_ref` +
+  `execution_task`, emits, embeds in `motion.tallied` payload.
+- `coordinationSweep.ts:sweepExpiredMotions` auto-tally carried: same logic with
+  `acting_actor='system:sweep'`.
+
+**Negative outcomes** (returned/rejected/escalation_exhausted/failed/lapsed/vetoed): no
+chain, no `chain` field in source payload, no new task.
+
+**Stuck-closing sweep:** `sweepStuckClosingTopics()` joins `coordination_events` to find
+topics in 'closing' whose most recent `topic.closing` event is older than
+`SWEEP_STALE_CLOSING_MINUTES = 5`. Calls `closeTopic` with `statementTimeoutMs = 60_000`
+(REVIEW-DESIGN F3 fix). REVIEW-CODE F2 fix: `LIMIT $2` with
+`SWEEP_STUCK_CLOSING_MAX_PER_CYCLE = 10` so the per-cycle advisory-lock hold is bounded.
+Added 4th in `startClaimsSweepScheduler` cycle. Per-topic statement_timeout failures (pg
+57014) logged at WARN, other failures at ERROR; loop continues.
+
+**Topology enforcement on `claimTask`:** after topic-status check (15.6 closing-window
+guard), branch on `tasks.topology`:
+- `sequential` + non-empty `depends_on`: SELECT predecessor statuses; reject `unmet_
+  dependencies` (with `missing[]` + `incomplete[]`) if any not `completed`.
+- `rolling` + non-empty `depends_on`: SELECT upstream artifacts; reject `upstream_not_
+  baselined` (with `not_baselined[{task_id,state}]`) if any not `baselined`. (REVIEW-
+  CODE F1: relies on the postTask invariant that every task co-creates one artifact;
+  documented in code.)
+- `parallel`: no check.
+
+**New error codes:** `UNMET_DEPENDENCIES`, `UPSTREAM_NOT_BASELINED`,
+`CHAINED_TASK_DEPENDENCY_INVALID` (extended `ContextHubError.code` union).
+
+**`closeTopic` signature extension:** optional `statementTimeoutMs?: number`. When set,
+each internal `pool.connect()` (Phase 1, 5 Phase 2 per-item loops, Phase 3) runs
+`SET statement_timeout = '<ms>ms'` immediately after acquiring. Default: existing
+15.6 behavior (no timeout). Used by `sweepStuckClosingTopics` to bound recovery.
+
+**Routes + MCP:** `submit_request` and `propose_motion` (REST + MCP input schemas) gain
+an optional `execution_task: unknown` field. Service layer validates structurally; chain-
+time validation handles `depends_on` existence. (LOW: MCP `decide_step`+`tally_motion`
+outputSchemas do not declare the new `chain` field — deferred as DEFERRED-021.)
+
+**Test isolation pattern (15.6 lesson reused):** the closing-topic chain test uses
+`UPDATE topics SET status='closing'` directly instead of `closeTopic()` so the
+in-flight request isn't force-closed by Phase 2 drain before we approve it.
+
+**Test coverage (36 new, 638 total):**
+- `chaining.test.ts` (new) — 18 validate + build tests (AC1, AC2, AC9 indirect)
+- `requests.test.ts` — AC1 (decision + chain), AC3 (blob override), AC6 (reject → no
+  chain), AC7 (closing → deferred), AC10 (invalid_depends_on → rollback)
+- `motions.test.ts` — AC2 (carried + chain), AC4 (blob), AC5/AC6 (failed → no chain),
+  AC7 (closing → deferred)
+- `coordinationSweep.test.ts` — AC5 (auto-carried chain), AC11 (stuck-closing recovery),
+  AC12 (fresh closing not picked up)
+- `board.test.ts` — AC15/AC16 (sequential), AC17/AC17b (rolling), AC18 (parallel),
+  AC19 (empty depends_on)
+- Test cleanup helpers updated in `motions.test.ts` + `api/routes/motions.test.ts` to
+  delete chained tasks/artifacts before topics (chain creates them as a side effect of
+  carried tallies — same FK constraint pattern as requests.test.ts already handled).
+
+**Workflow execution:**
+- CLARIFY rev 2 approved by user with 4 design Q's (Q1 submitter-blob, Q2 event-log-based
+  staleness, Q3 skip security review, Q4 expand to include topology enforcement →
+  size M→L).
+- DESIGN rev 1 → REVIEW-DESIGN r1 REJECTED 3 BLOCKs (F1 single-event chain payload, F2
+  invalid_depends_on semantic contradiction, F3 unbounded advisory-lock hold) → rev 2
+  resolved all + 2 inline WARN refinements (subject_type='topic' for task.deferred,
+  closeTopic statementTimeoutMs vs borrowed client) → r2 CLEAR.
+- PLAN 19 tasks, inline execution. BUILD ran T1–T18 in order; T19 verify (638/638 green,
+  tsc clean, migration applied, live smoke ✓).
+- REVIEW-CODE r1: F1 MED accept-with-doc, F2 MED fix-now (LIMIT cap), F3 LOW defer →
+  DEFERRED-021.
+- QC CLEAR 17/19 explicit + 2 partial (AC13 sweep ordering + AC14 §0.1-loop isolation
+  — verified by reading, consistent with 15.6 precedent).
+- POST-REVIEW human gate CLEAR.
+
+**Verification:** `tsc` clean; `npm test` **638/638 green**; live smoke confirmed
+submitter blob → chained task with custom title on the docker stack.
+
+## Resume protocol — Sprint 15.8 (next sprint)
+
+Sprint 15.8 resumes from `phase-15-sprint-15.7`. Candidate scope: **DEFERRED-018**
+(procedure='collective' request-step wiring), **DEFERRED-021** (MCP outputSchemas
+declare `chain` field — interlocks with DEFERRED-007 discriminated-union SDK issue),
+**DEFERRED-020** (LOW test coverage cleanup from 15.6 — 3rd session). **DEFERRED-015/
+016/017** carry the HARD pre-production authz trigger.
+
+## Environment state (end of Sprint 15.7 session, 2026-05-20)
+
+- Docker stack: 8/8 containers healthy. Migrations 0053–**0060** applied. MCP + worker
+  rebuilt with 15.7 code, both responding.
+- `npm test` **638/638** green on `phase-15-sprint-15.7`; `tsc` clean.
+- Branch: `phase-15-sprint-15.7` — uncommitted at start of SESSION; will be committed
+  in Phase 11.
+- Deferred items OPEN: DEFERRED-009, 010, **015**, **016**, **017**, 018, 020, **021** —
+  DEFERRED-015 + 016 + **017** carry a HARD pre-production authorization trigger.
+  DEFERRED-019 + 011 **resolved** in Sprint 15.7. DEFERRED-021 NEW (MCP outputSchema gap).
+- Pending MCP lessons (4–6, to be added in RETRO Phase 12):
+  - decision: chaining contract (single-event chain field + dual-emit task.deferred on
+    deferral + ROLLBACK on chain-time invalid_depends_on)
+  - decision: topology enforcement on claimTask (sequential/rolling check, postTask-
+    invariant for rolling missing-artifact case)
+  - decision: per-call statementTimeoutMs on closeTopic for sweep recovery isolation
+  - workaround: per-cycle K=10 cap on stuck-closing recovery to bound advisory-lock hold
+  - workaround: cleanup helpers must delete chained tasks/artifacts before topics (FK
+    constraint pattern surfaces in carried-motion tests)
+- `jq` still not in shell — smoke scripts use node/tsx.
+
+---
 
 PRs are stacked against `main` (each diff includes the prior sprint's commits until merge).
 

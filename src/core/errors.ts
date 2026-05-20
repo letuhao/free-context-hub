@@ -19,7 +19,11 @@ export class ContextHubError extends Error {
       | 'INTAKE_ALREADY_TRIAGED'
       | 'INTAKE_ALREADY_DISMISSED'
       // Phase 15 Sprint 15.6: closing drain + distinct-endorser
-      | 'REPEAT_ENDORSER',
+      | 'REPEAT_ENDORSER'
+      // Phase 15 Sprint 15.7: chaining + topology enforcement
+      | 'UNMET_DEPENDENCIES'
+      | 'UPSTREAM_NOT_BASELINED'
+      | 'CHAINED_TASK_DEPENDENCY_INVALID',
     message: string,
   ) {
     super(message);

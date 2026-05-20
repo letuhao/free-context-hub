@@ -1,7 +1,32 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 021 -->
+<!-- Next ID: 022 -->
+
+## DEFERRED-021
+
+- **What:** MCP `decide_step` + `tally_motion` outputSchema does not declare the
+  Sprint 15.7 `chain: {kind:'posted'|'deferred', ...}` field. The chain result is
+  service-side correct (included in REST responses and the coordination_events log),
+  but MCP `structuredContent` silently drops it because the outputSchema lacks the
+  property. MCP clients reading `structuredContent.chain` see `undefined`.
+- **Why deferred:** Sprint 15.7 REVIEW-CODE F3 (LOW). Adding a clean discriminated-
+  union shape (`chain.kind='posted'` vs `'deferred'`) interlocks with DEFERRED-007
+  (MCP SDK known issue with discriminated-union outputSchemas — `tool/call` returns
+  `_zod` error). A flat-optional shape would work but is loose; defer the proper
+  design to 15.8.
+- **Trigger condition:** Sprint 15.8 OR the next sprint touching MCP outputSchemas,
+  OR a reported MCP-client regression where the caller depends on `structuredContent.chain`.
+- **Estimated size:** S — schema update + a regression test for `tool/call` end-to-end
+  asserting the chain field; interlocks with DEFERRED-007 resolution.
+- **Priority:** LOW — REST and event log carry the field; MCP callers can fall back to
+  text parsing or REST.
+- **Session deferred:** 2026-05-20
+- **Sessions open:** 1
+- **Status:** OPEN
+- **Source:** Phase 15 Sprint 15.7 REVIEW-CODE r1, F3 (`docs/audit/findings-sprint-15.7-code-r1.md`).
+
+---
 
 ## DEFERRED-020
 
@@ -56,8 +81,15 @@
   or a successor process acts on it from the log. Automatic chaining is an ergonomics
   enhancement.
 - **Session deferred:** 2026-05-18
-- **Sessions open:** 1
-- **Status:** OPEN
+- **Sessions open:** 2
+- **Status:** RESOLVED — Sprint 15.7 (2026-05-20): chain emits at 3 sites (decideStep approve,
+  tallyMotion carried, sweepExpiredMotions carried). Submitter-specified `execution_task` JSONB
+  blob on requests + motions (migration 0060); chain merges blob over derived defaults. Dual-
+  emit `task.deferred` (subject_type='topic') on closing/closed. Throws
+  CHAINED_TASK_DEPENDENCY_INVALID → source ROLLBACK on bad blob. Source event payload extended
+  with `chain: {kind, ...}` + `deferred_event_id` cross-ref on deferral. 5 tests cover AC1+
+  AC3 (decision + blob), AC6 (negative outcomes), AC7 (closing → deferred), AC10
+  (invalid_depends_on → rollback).
 - **Source:** Phase 15 Sprint 15.3 + 15.4 CLARIFY out-of-scope; master design
   `docs/phase-15-design.md` C.4.
 
@@ -241,8 +273,14 @@
 - **Estimated size:** M — `claimTask` checks the `depends_on` predecessors' status for a `sequential` task (reject or queue the claim until every predecessor is `completed`); a `rolling` consumer gates on the upstream output artifact being `baselined`; per-topology tests.
 - **Priority:** LOW — `parallel` (the common case) needs no enforcement; `sequential` / `rolling` producers currently rely on coordinator discipline, and the event log makes any out-of-order work auditable after the fact.
 - **Session deferred:** 2026-05-17
-- **Sessions open:** 1
-- **Status:** OPEN
+- **Sessions open:** 3
+- **Status:** RESOLVED — Sprint 15.7 (2026-05-20): claimTask topology enforcement on sequential
+  (all depends_on must be `completed`) + rolling (upstream artifact must be `baselined`); parallel
+  unchanged. Plus the closing-recovery half — sweepStuckClosingTopics scans topics in 'closing'
+  whose most recent `topic.closing` event is > 5 minutes old, calls closeTopic with a 60s
+  statement_timeout, capped at 10 topics per cycle (REVIEW-CODE F2). 6 topology tests
+  (AC15–AC19) + 2 recovery-sweep tests (AC11, AC12). New error statuses: `unmet_dependencies`,
+  `upstream_not_baselined`.
 - **Source:** Phase 15 Sprint 15.2 CLARIFY out-of-scope (`docs/specs/2026-05-16-phase-15-sprint-15.2-clarify.md`); re-flagged by QC (`docs/audit/sprint-15.2-qc-ac-coverage.md`) + POST-REVIEW Scope Guard (`docs/audit/findings-sprint-15.2-post-review.md`).
 
 ---

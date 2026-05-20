@@ -584,3 +584,81 @@ test('LOW-11: concurrent claims yield distinct, strictly-increasing fencing toke
     assert.ok(sorted[i] > sorted[i - 1], 'sorted tokens are strictly increasing');
   }
 });
+
+// ── Sprint 15.7 — claimTask topology enforcement (DEFERRED-011b) ──────────
+
+/** Setup helper — create a topic + 2 actors. */
+async function mkTopo() {
+  const t = await charterTopic({
+    project_id: TEST_PROJECT, name: 'Topology Topic', charter: 'topology', created_by: 'alice',
+  });
+  await joinTopic({ topic_id: t.topic_id, actor_id: 'alice', actor_type: 'human', display_name: 'A', level: 'coordination' });
+  await joinTopic({ topic_id: t.topic_id, actor_id: 'bob', actor_type: 'human', display_name: 'B', level: 'coordination' });
+  return t.topic_id;
+}
+
+test('15.7 AC15: claimTask sequential w/ incomplete predecessor → unmet_dependencies', async () => {
+  const topicId = await mkTopo();
+  const t1 = await postTask({ topic_id: topicId, title: 'predecessor', topology: 'parallel', slot: 'p1', kind: 'doc', created_by: 'alice' });
+  const t2 = await postTask({ topic_id: topicId, title: 'dependent', topology: 'sequential', depends_on: [t1.task_id], slot: 'p2', kind: 'doc', created_by: 'alice' });
+  // t1 is still 'posted' (not completed)
+  const claim = await claimTask({ task_id: t2.task_id, actor_id: 'bob' });
+  assert.equal(claim.status, 'unmet_dependencies');
+  if (claim.status !== 'unmet_dependencies') throw new Error('status');
+  assert.equal(claim.incomplete.length, 1);
+  assert.equal(claim.incomplete[0].task_id, t1.task_id);
+  assert.equal(claim.incomplete[0].status, 'posted');
+});
+
+test('15.7 AC16: claimTask sequential w/ all predecessors completed → claimed', async () => {
+  const topicId = await mkTopo();
+  const t1 = await postTask({ topic_id: topicId, title: 'pred', topology: 'parallel', slot: 'q1', kind: 'doc', created_by: 'alice' });
+  // Complete t1
+  const c1 = await claimTask({ task_id: t1.task_id, actor_id: 'alice' });
+  assert.equal(c1.status, 'claimed');
+  await completeTask({ task_id: t1.task_id, actor_id: 'alice' });
+
+  const t2 = await postTask({ topic_id: topicId, title: 'dep', topology: 'sequential', depends_on: [t1.task_id], slot: 'q2', kind: 'doc', created_by: 'alice' });
+  const claim = await claimTask({ task_id: t2.task_id, actor_id: 'bob' });
+  assert.equal(claim.status, 'claimed');
+});
+
+test('15.7 AC17: claimTask rolling w/ upstream not baselined → upstream_not_baselined', async () => {
+  const topicId = await mkTopo();
+  const t1 = await postTask({ topic_id: topicId, title: 'producer', topology: 'parallel', slot: 'r1', kind: 'doc', created_by: 'alice' });
+  // t1's artifact is in state='draft' (initial) — not baselined
+  const t2 = await postTask({ topic_id: topicId, title: 'consumer', topology: 'rolling', depends_on: [t1.task_id], slot: 'r2', kind: 'doc', created_by: 'alice' });
+  const claim = await claimTask({ task_id: t2.task_id, actor_id: 'bob' });
+  assert.equal(claim.status, 'upstream_not_baselined');
+  if (claim.status !== 'upstream_not_baselined') throw new Error('status');
+  assert.equal(claim.not_baselined[0].task_id, t1.task_id);
+  assert.equal(claim.not_baselined[0].state, 'draft');
+});
+
+test('15.7 AC17b: claimTask rolling w/ baselined upstream → claimed', async () => {
+  const topicId = await mkTopo();
+  const t1 = await postTask({ topic_id: topicId, title: 'producer', topology: 'parallel', slot: 's1', kind: 'doc', created_by: 'alice' });
+  // Manually set t1's artifact to 'baselined'
+  const pool = getDbPool();
+  await pool.query(`UPDATE artifacts SET state='baselined' WHERE task_id=$1`, [t1.task_id]);
+
+  const t2 = await postTask({ topic_id: topicId, title: 'consumer', topology: 'rolling', depends_on: [t1.task_id], slot: 's2', kind: 'doc', created_by: 'alice' });
+  const claim = await claimTask({ task_id: t2.task_id, actor_id: 'bob' });
+  assert.equal(claim.status, 'claimed');
+});
+
+test('15.7 AC18: claimTask parallel w/ non-completed predecessor → claimed (no check)', async () => {
+  const topicId = await mkTopo();
+  const t1 = await postTask({ topic_id: topicId, title: 'pred', topology: 'parallel', slot: 'u1', kind: 'doc', created_by: 'alice' });
+  // t1 not completed
+  const t2 = await postTask({ topic_id: topicId, title: 'par', topology: 'parallel', depends_on: [t1.task_id], slot: 'u2', kind: 'doc', created_by: 'alice' });
+  const claim = await claimTask({ task_id: t2.task_id, actor_id: 'bob' });
+  assert.equal(claim.status, 'claimed', 'parallel does not check predecessors');
+});
+
+test('15.7 AC19: claimTask sequential w/ empty depends_on → claimed', async () => {
+  const topicId = await mkTopo();
+  const t = await postTask({ topic_id: topicId, title: 'lone', topology: 'sequential', slot: 'v1', kind: 'doc', created_by: 'alice' });
+  const claim = await claimTask({ task_id: t.task_id, actor_id: 'bob' });
+  assert.equal(claim.status, 'claimed', 'empty depends_on bypasses the check');
+});

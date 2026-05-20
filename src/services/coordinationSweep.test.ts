@@ -774,3 +774,103 @@ test('T11d: a batch with one bad and one good expired motion → the good one st
   );
   assert.equal(mBad.rows[0].status, 'balloting', 'bad motion unchanged (rolled back)');
 });
+
+// ── Sprint 15.7 — sweep chain on carried + stuck-closing recovery sweep ────
+
+test('15.7 AC5: sweepExpiredMotions auto-carried → chain emits task.posted', async () => {
+  const t = await charterTopic({
+    project_id: TEST_PROJECT, name: 'sweep-chain-topic', charter: 'x', created_by: 'a',
+  });
+  for (const a of ['a', 'b', 'sec']) {
+    await joinTopic({ topic_id: t.topic_id, actor_id: a, actor_type: 'human', display_name: a, level: 'coordination' });
+  }
+  const body = await createBody({
+    project_id: TEST_PROJECT, name: 'B', quorum: 0, threshold: 0.5, veto_holders: [], created_by: 'a',
+  });
+  await addBodyMember({ body_id: body.body_id, actor_id: 'a', vote_weight: 1 });
+  await addBodyMember({ body_id: body.body_id, actor_id: 'sec', vote_weight: 1 });
+  const p = await proposeMotion({ topic_id: t.topic_id, body_id: body.body_id, subject_ref: 'sweep-ref', proposed_by: 'a' });
+  if (p.status !== 'proposed') throw new Error('propose');
+  await secondMotion({ motion_id: p.motion_id, actor_id: 'sec' });
+  await castVote({ motion_id: p.motion_id, actor_id: 'a', choice: 'for' });
+
+  // expire it
+  const pool = getDbPool();
+  await pool.query(`UPDATE motions SET deadline = now() - interval '10 minutes' WHERE motion_id=$1`, [p.motion_id]);
+
+  const result = await sweepExpiredMotions();
+  assert.equal(result.resolved, 1);
+
+  // chained task created
+  const tasks = await pool.query(`SELECT title, raci FROM tasks WHERE topic_id=$1`, [t.topic_id]);
+  assert.equal(tasks.rows.length, 1, 'one chained task posted by sweep');
+  assert.equal(tasks.rows[0].title, 'Execute carried motion: sweep-ref');
+  assert.equal(tasks.rows[0].raci.source_motion, p.motion_id);
+
+  // motion.tallied event has chain.kind=posted
+  const ev = await replayEvents({ topic_id: t.topic_id });
+  const tallied = ev.events.find((e) => e.type === 'motion.tallied');
+  assert.ok(tallied);
+  assert.equal((tallied!.payload as { chain?: { kind: string } }).chain?.kind, 'posted');
+});
+
+test('15.7 AC11: sweepStuckClosingTopics picks up >5min old closing topic + recovers', async () => {
+  const { sweepStuckClosingTopics } = await import('./coordinationSweep.js');
+  const t = await charterTopic({
+    project_id: TEST_PROJECT, name: 'stuck-topic', charter: 'x', created_by: 'a',
+  });
+  await joinTopic({ topic_id: t.topic_id, actor_id: 'a', actor_type: 'human', display_name: 'a', level: 'coordination' });
+
+  // Force into 'closing' state with old topic.closing event
+  const pool = getDbPool();
+  await pool.query(`UPDATE topics SET status='closing' WHERE topic_id=$1`, [t.topic_id]);
+  // Allocate next seq then INSERT backdated topic.closing event — mirrors appendEvent.
+  const seqRes = await pool.query<{ next_seq: string }>(
+    `UPDATE topics SET next_seq = next_seq + 1 WHERE topic_id=$1 RETURNING next_seq`,
+    [t.topic_id],
+  );
+  await pool.query(
+    `INSERT INTO coordination_events (topic_id, seq, actor_id, type, subject_type, subject_id, payload, ts)
+     VALUES ($1, $2, 'a', 'topic.closing', 'topic', $1, '{}', now() - interval '10 minutes')`,
+    [t.topic_id, seqRes.rows[0].next_seq],
+  );
+
+  const result = await sweepStuckClosingTopics();
+  assert.equal(result.recovered, 1);
+
+  // Topic now sealed
+  const after = await pool.query<{ status: string }>(
+    `SELECT status FROM topics WHERE topic_id=$1`, [t.topic_id],
+  );
+  assert.equal(after.rows[0].status, 'closed');
+});
+
+test('15.7 AC12: sweepStuckClosingTopics ignores <5min old closing topic', async () => {
+  const { sweepStuckClosingTopics } = await import('./coordinationSweep.js');
+  const t = await charterTopic({
+    project_id: TEST_PROJECT, name: 'fresh-closing', charter: 'x', created_by: 'a',
+  });
+  await joinTopic({ topic_id: t.topic_id, actor_id: 'a', actor_type: 'human', display_name: 'a', level: 'coordination' });
+
+  const pool = getDbPool();
+  await pool.query(`UPDATE topics SET status='closing' WHERE topic_id=$1`, [t.topic_id]);
+  // Allocate seq then INSERT recent topic.closing event (default ts=now())
+  const seqRes2 = await pool.query<{ next_seq: string }>(
+    `UPDATE topics SET next_seq = next_seq + 1 WHERE topic_id=$1 RETURNING next_seq`,
+    [t.topic_id],
+  );
+  await pool.query(
+    `INSERT INTO coordination_events (topic_id, seq, actor_id, type, subject_type, subject_id, payload)
+     VALUES ($1, $2, 'a', 'topic.closing', 'topic', $1, '{}')`,
+    [t.topic_id, seqRes2.rows[0].next_seq],
+  );
+
+  const result = await sweepStuckClosingTopics();
+  assert.equal(result.recovered, 0, 'fresh closing topic not swept');
+
+  // Topic still 'closing'
+  const after = await pool.query<{ status: string }>(
+    `SELECT status FROM topics WHERE topic_id=$1`, [t.topic_id],
+  );
+  assert.equal(after.rows[0].status, 'closing');
+});

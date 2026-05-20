@@ -320,9 +320,18 @@ export async function getTopic(params: { topic_id: string }): Promise<TopicWithR
 export async function closeTopic(params: {
   topic_id: string;
   actor_id: string;
+  /**
+   * Sprint 15.7 — optional per-call statement timeout. When set, every internal
+   * pool.connect() inside closeTopic runs `SET statement_timeout = '<ms>ms'`
+   * immediately after acquiring the connection. Used by sweepStuckClosingTopics
+   * to bound the advisory-lock hold time during recovery sweeps. NULL/undefined
+   * leaves the default (15.6 behavior).
+   */
+  statementTimeoutMs?: number;
 }): Promise<CloseResult> {
   const topicId = (params.topic_id ?? '').trim();
   const actorId = (params.actor_id ?? '').trim();
+  const stmtTimeoutMs = params.statementTimeoutMs;
   if (!topicId || !actorId) {
     throw new ContextHubError('BAD_REQUEST', 'topic_id and actor_id are required');
   }
@@ -330,10 +339,21 @@ export async function closeTopic(params: {
   const pool = getDbPool();
   const ZERO: ForceLapsedCounts = { claims: 0, requests: 0, motions: 0, disputes: 0, intake_items: 0 };
 
+  // Sprint 15.7 helper — apply statement_timeout to a freshly-acquired client.
+  // SET (not SET LOCAL) so subsequent BEGIN/COMMIT cycles on the same connection
+  // inherit it. Each phase / per-item loop allocates its own client, so this is
+  // run repeatedly throughout closeTopic.
+  const applyStmtTimeout = async (c: import('pg').PoolClient): Promise<void> => {
+    if (stmtTimeoutMs !== undefined && stmtTimeoutMs > 0) {
+      await c.query(`SET statement_timeout = ${Number(stmtTimeoutMs)}`);
+    }
+  };
+
   // ── Phase 1: freeze (active|chartered → closing) ──────────────────────────
   {
     const c1 = await pool.connect();
     try {
+      await applyStmtTimeout(c1);
       await c1.query('BEGIN');
       const res = await c1.query<{ status: string }>(
         `SELECT status FROM topics WHERE topic_id=$1 FOR UPDATE`,
@@ -382,6 +402,7 @@ export async function closeTopic(params: {
     for (const claim of claimRows.rows) {
       const c = await pool.connect();
       try {
+        await applyStmtTimeout(c);
         await c.query('BEGIN');
         const del = await c.query(`DELETE FROM claims WHERE claim_id=$1 RETURNING 1`, [claim.claim_id]);
         if ((del.rowCount ?? 0) === 0) { await c.query('ROLLBACK'); continue; }
@@ -411,6 +432,7 @@ export async function closeTopic(params: {
     for (const req of reqRows.rows) {
       const c = await pool.connect();
       try {
+        await applyStmtTimeout(c);
         await c.query('BEGIN');
         const stepsRes = await c.query(
           `UPDATE request_steps SET status='rejected' WHERE request_id=$1 AND status='pending' RETURNING 1`,
@@ -446,6 +468,7 @@ export async function closeTopic(params: {
     for (const motion of motionRows.rows) {
       const c = await pool.connect();
       try {
+        await applyStmtTimeout(c);
         await c.query('BEGIN');
         const upd = await c.query(
           `UPDATE motions SET status='lapsed' WHERE motion_id=$1 AND status IN ('proposed','seconded','balloting') RETURNING 1`,
@@ -477,6 +500,7 @@ export async function closeTopic(params: {
     for (const dispute of disputeRows.rows) {
       const c = await pool.connect();
       try {
+        await applyStmtTimeout(c);
         await c.query('BEGIN');
         const upd = await c.query(
           `UPDATE disputes SET status='resolved' WHERE dispute_id=$1 AND status='open' RETURNING 1`,
@@ -508,6 +532,7 @@ export async function closeTopic(params: {
     for (const item of intakeRows.rows) {
       const c = await pool.connect();
       try {
+        await applyStmtTimeout(c);
         await c.query('BEGIN');
         const upd = await c.query(
           `UPDATE intake_items SET status='dismissed' WHERE intake_id=$1 AND status='received' RETURNING 1`,
@@ -534,6 +559,7 @@ export async function closeTopic(params: {
   {
     const c3 = await pool.connect();
     try {
+      await applyStmtTimeout(c3);
       await c3.query('BEGIN');
       await appendEvent(c3, {
         topic_id: topicId, actor_id: actorId,

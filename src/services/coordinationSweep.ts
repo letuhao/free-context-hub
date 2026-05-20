@@ -33,6 +33,13 @@ import { appendEvent } from './coordinationEvents.js';
 import { revertArtifact } from './artifacts.js';
 import { LEVELS_ASC, LEVEL_RANK, STEP_DEADLINE_MINUTES } from './doaMatrix.js';
 import { computeMotionTally } from './motions.js';
+import {
+  buildChainedTaskParams,
+  emitChain,
+  type ChainResult,
+  type ExecutionTaskBlob,
+} from './chaining.js';
+import { closeTopic } from './topics.js';
 
 const logger = createModuleLogger('coordination-sweep');
 
@@ -46,6 +53,19 @@ export type StalledStepsSweepResult = { escalated: number; swept_at: string };
 export type ExpiredMotionsSweepResult = { resolved: number; swept_at: string };
 
 export type SweepResult = { recovered: number; swept_at: string };
+
+// Sprint 15.7 — stuck-closing recovery sweep constants.
+export const SWEEP_STALE_CLOSING_MINUTES = 5;
+export const SWEEP_STUCK_CLOSING_STATEMENT_TIMEOUT_MS = 60_000;
+/**
+ * REVIEW-CODE F2 fix — cap per-cycle work so the advisory-lock hold scales with
+ * the cap, not the stuck-topic count. With K=10 and the per-call statement_timeout
+ * of 60s, worst-case hold is bounded at K*60s = 10 min. Remaining stuck topics
+ * are picked up on subsequent cycles.
+ */
+export const SWEEP_STUCK_CLOSING_MAX_PER_CYCLE = 10;
+
+export type StuckClosingSweepResult = { recovered: number; swept_at: string };
 
 /** Clamp grace_minutes to [0, MAX_GRACE_MINUTES]; NaN / undefined → default. */
 function clampGrace(graceMinutes?: number): number {
@@ -420,10 +440,13 @@ export async function sweepExpiredMotions(params?: {
       await client.query('BEGIN');
 
       // ── (motion) row lock ──────────────────────────────────────────────────
+      // Sprint 15.7 — also select subject_ref + execution_task for chain handler.
       const motionRes = await client.query<{
         body_id: string; status: string; expired: boolean;
+        subject_ref: string; execution_task: ExecutionTaskBlob | null;
       }>(
-        `SELECT body_id, status, (deadline < now()) AS expired
+        `SELECT body_id, status, (deadline < now()) AS expired,
+                subject_ref, execution_task
            FROM motions WHERE motion_id=$1 FOR UPDATE`,
         [row.motion_id],
       );
@@ -476,13 +499,35 @@ export async function sweepExpiredMotions(params?: {
           `UPDATE motions SET status=$1, tally=$2 WHERE motion_id=$3`,
           [outcome, JSON.stringify(tally), row.motion_id],
         );
+        // Sprint 15.7 — chain on carried only (DEFERRED-019, auto-tally path).
+        // CHAINED_TASK_DEPENDENCY_INVALID throws → outer §0.1-loop catch logs
+        // and continues; the motion stays balloting, retried next cycle.
+        let chainResult: ChainResult | undefined;
+        if (outcome === 'carried') {
+          const chainParams = buildChainedTaskParams({
+            source: 'motion',
+            source_id: row.motion_id,
+            topic_id: row.topic_id,
+            kind: motion.subject_ref,
+            blob: motion.execution_task,
+            acting_actor: 'system:sweep',
+          });
+          chainResult = await emitChain(client, {
+            topic_id: row.topic_id,
+            source_event: { type: 'motion.tallied', source_id: row.motion_id },
+            actor_id: 'system:sweep',
+            params: chainParams,
+          });
+        }
         await appendEvent(client, {
           topic_id: row.topic_id,
           actor_id: 'system:sweep',
           type: 'motion.tallied',
           subject_type: 'motion',
           subject_id: row.motion_id,
-          payload: { outcome, auto: true, ...tally },
+          payload: chainResult
+            ? { outcome, auto: true, ...tally, chain: chainResult }
+            : { outcome, auto: true, ...tally },
         });
       }
 
@@ -506,6 +551,81 @@ export async function sweepExpiredMotions(params?: {
   return result;
 }
 
+// ── §5.2 stuck-closing recovery sweep (Sprint 15.7, DEFERRED-011a) ──────────
+
+/**
+ * Recover topics stuck in `closing` state past the threshold. A topic enters
+ * `closing` when closeTopic Phase 1 commits; it stays there until Phase 3 seals.
+ * In normal operation Phase 2 + Phase 3 run in the same call and the topic
+ * reaches `closed` within seconds. If the process crashes mid-Phase-2 or
+ * Phase-3 fails, the topic is stranded in `closing` — sweeps skip it, and
+ * appendEvent accepts on `closing` (it only rejects 'closed'), so new
+ * coordination events keep landing on a topic that should be sealed.
+ *
+ * This sweep picks up such stranded topics (most recent `topic.closing`
+ * event > SWEEP_STALE_CLOSING_MINUTES old) and calls closeTopic again.
+ * closeTopic is idempotent on `closing` re-entry — it skips Phase 1 (falls
+ * through) and re-runs Phase 2+3. The per-call statement_timeout bounds the
+ * advisory-lock hold so a pathologically-slow recovery does not block the
+ * other 3 sweeps.
+ *
+ * §0.1-loop pattern — per-topic try/catch; one failure logs and continues.
+ * statement_timeout failure (pg code '57014') is logged at WARN level and the
+ * topic is retried on the next sweep cycle.
+ */
+export async function sweepStuckClosingTopics(): Promise<StuckClosingSweepResult> {
+  const pool = getDbPool();
+
+  // Scan — topics in `closing` whose most-recent `topic.closing` event is older
+  // than the staleness threshold. The LATERAL join is an indexed lookup against
+  // coordination_events(topic_id, seq); the timestamp column is `ts` (not
+  // created_at — see 15.1 schema).
+  const stale = await pool.query<{ topic_id: string }>(
+    `SELECT t.topic_id
+       FROM topics t
+       JOIN LATERAL (
+         SELECT max(ts) AS most_recent
+           FROM coordination_events
+          WHERE topic_id = t.topic_id AND type = 'topic.closing'
+       ) ce ON true
+      WHERE t.status = 'closing'
+        AND ce.most_recent < now() - make_interval(mins => $1)
+      LIMIT $2`,
+    [SWEEP_STALE_CLOSING_MINUTES, SWEEP_STUCK_CLOSING_MAX_PER_CYCLE],
+  );
+
+  let recovered = 0;
+  for (const row of stale.rows) {
+    try {
+      await closeTopic({
+        topic_id: row.topic_id,
+        actor_id: 'system:closing-recovery',
+        statementTimeoutMs: SWEEP_STUCK_CLOSING_STATEMENT_TIMEOUT_MS,
+      });
+      recovered++;
+    } catch (err) {
+      // pg 57014 = statement_timeout (per docs); err.code carries the SQLSTATE.
+      const code = (err as { code?: string })?.code;
+      if (code === '57014') {
+        logger.warn(
+          { event: 'stuck_closing_timeout', topic_id: row.topic_id },
+          'closeTopic recovery exceeded timeout; will retry next cycle',
+        );
+      } else {
+        logger.error(
+          { event: 'stuck_closing_failed', topic_id: row.topic_id, err: String(err) },
+          'sweepStuckClosingTopics per-topic recovery failed',
+        );
+      }
+      // §0.1-loop — continue
+    }
+  }
+
+  const result: StuckClosingSweepResult = { recovered, swept_at: new Date().toISOString() };
+  logger.info(result, 'stuck-closing.sweep complete');
+  return result;
+}
+
 // ── §4.2 in-process scheduler ────────────────────────────────────────────────
 
 // Test-injectable dependencies. Production uses the defaults; tests call
@@ -514,6 +634,7 @@ let _getDbPool: typeof defaultGetDbPool = defaultGetDbPool;
 let _sweepAbandonedClaims: typeof sweepAbandonedClaims = sweepAbandonedClaims;
 let _sweepStalledSteps: typeof sweepStalledSteps = sweepStalledSteps;
 let _sweepExpiredMotions: typeof sweepExpiredMotions = sweepExpiredMotions;
+let _sweepStuckClosingTopics: typeof sweepStuckClosingTopics = sweepStuckClosingTopics;
 
 function getDbPool(): ReturnType<typeof defaultGetDbPool> {
   return _getDbPool();
@@ -524,11 +645,13 @@ export function __setSweepDependenciesForTest(deps: {
   sweepAbandonedClaims?: typeof sweepAbandonedClaims;
   sweepStalledSteps?: typeof sweepStalledSteps;
   sweepExpiredMotions?: typeof sweepExpiredMotions;
+  sweepStuckClosingTopics?: typeof sweepStuckClosingTopics;
 }): void {
   if (deps.getDbPool) _getDbPool = deps.getDbPool;
   if (deps.sweepAbandonedClaims) _sweepAbandonedClaims = deps.sweepAbandonedClaims;
   if (deps.sweepStalledSteps) _sweepStalledSteps = deps.sweepStalledSteps;
   if (deps.sweepExpiredMotions) _sweepExpiredMotions = deps.sweepExpiredMotions;
+  if (deps.sweepStuckClosingTopics) _sweepStuckClosingTopics = deps.sweepStuckClosingTopics;
 }
 
 export function __resetSweepDependenciesForTest(): void {
@@ -536,6 +659,7 @@ export function __resetSweepDependenciesForTest(): void {
   _sweepAbandonedClaims = sweepAbandonedClaims;
   _sweepStalledSteps = sweepStalledSteps;
   _sweepExpiredMotions = sweepExpiredMotions;
+  _sweepStuckClosingTopics = sweepStuckClosingTopics;
 }
 
 /**
@@ -611,6 +735,9 @@ export function startClaimsSweepScheduler(opts: StartClaimsSweepOptions = {}): C
         // same advisory-lock hold.
         const motionsSwept = await _sweepExpiredMotions();
         logger.info({ event: 'motions_sweep_done', resolved: motionsSwept.resolved }, 'motions.sweep cycle complete');
+        // §5.2 — Sprint 15.7 — stuck-closing recovery (4th sweep).
+        const stuckSwept = await _sweepStuckClosingTopics();
+        logger.info({ event: 'stuck_closing_sweep_done', recovered: stuckSwept.recovered }, 'stuck-closing.sweep cycle complete');
       } catch (err) {
         logger.error(
           { event: 'claims_sweep_cycle_failed', err: err instanceof Error ? err.message : String(err) },

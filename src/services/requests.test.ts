@@ -978,3 +978,203 @@ test('F3a: an approved request emits artifact events on the artifact topic', asy
     'artifact.state_changed present in the artifact topic event log',
   );
 });
+
+// ── Sprint 15.7 — primitive-outcome chaining tests (DEFERRED-019) ──────────
+
+test('15.7 AC1: approve last step → chain emits task.posted + request.resolved.chain.kind=posted', async () => {
+  const { topicId, executionActor, coordinationActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-15-7-ac1', executionActor);
+  const submit = await submitRequest({
+    topic_id: topicId,
+    subject_type: 'artifact',
+    subject_id: artifactId,
+    kind: 'artifact_review',
+    weight: 10, // → __default__: coordination/counter_sign → 1 step
+    procedure: 'unilateral',
+    submitted_by: executionActor,
+  });
+  assert.equal(submit.status, 'submitted');
+  if (submit.status !== 'submitted') throw new Error('setup');
+
+  const decide = await decideStep({
+    request_id: submit.request_id!,
+    step_index: 0,
+    actor_id: coordinationActor,
+    decision: 'endorse',
+  });
+  assert.equal(decide.status, 'approved');
+  if (decide.status !== 'approved') throw new Error('approve failed');
+  assert.equal(decide.chain.kind, 'posted');
+  if (decide.chain.kind !== 'posted') throw new Error('chain kind wrong');
+  assert.ok(decide.chain.task_id, 'task_id present');
+  assert.ok(decide.chain.artifact_id, 'artifact_id present');
+
+  // Verify task exists with derived default title
+  const pool = getDbPool();
+  const t = await pool.query(`SELECT title, topology, raci FROM tasks WHERE task_id=$1`, [decide.chain.task_id]);
+  assert.equal(t.rows[0].title, 'Execute approved request: artifact_review');
+  assert.equal(t.rows[0].topology, 'parallel');
+  assert.equal(t.rows[0].raci.source_request, submit.request_id);
+
+  // Verify request.resolved event has chain field
+  const { replayEvents } = await import('./coordinationEvents.js');
+  const ev = await replayEvents({ topic_id: topicId });
+  const resolved = ev.events.find((e) => e.type === 'request.resolved');
+  assert.ok(resolved, 'request.resolved emitted');
+  assert.equal((resolved!.payload as { chain?: { kind: string } }).chain?.kind, 'posted');
+});
+
+test('15.7 AC3: approve with execution_task blob → chained task uses blob params', async () => {
+  const { topicId, executionActor, coordinationActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-15-7-ac3', executionActor);
+  const submit = await submitRequest({
+    topic_id: topicId,
+    subject_type: 'artifact',
+    subject_id: artifactId,
+    kind: 'artifact_review',
+    weight: 10,
+    procedure: 'unilateral',
+    submitted_by: executionActor,
+    execution_task: {
+      title: 'Custom chained title',
+      slot: 'custom-exec',
+      kind: 'custom-kind',
+    },
+  });
+  assert.equal(submit.status, 'submitted');
+  if (submit.status !== 'submitted') throw new Error('setup');
+
+  const decide = await decideStep({
+    request_id: submit.request_id!,
+    step_index: 0,
+    actor_id: coordinationActor,
+    decision: 'endorse',
+  });
+  assert.equal(decide.status, 'approved');
+  if (decide.status !== 'approved') throw new Error('approve failed');
+  if (decide.chain.kind !== 'posted') throw new Error('chain kind wrong');
+
+  const pool = getDbPool();
+  const t = await pool.query(`SELECT title, depends_on FROM tasks WHERE task_id=$1`, [decide.chain.task_id]);
+  assert.equal(t.rows[0].title, 'Custom chained title');
+  const a = await pool.query(`SELECT slot, kind FROM artifacts WHERE artifact_id=$1`, [decide.chain.artifact_id]);
+  assert.equal(a.rows[0].slot, 'custom-exec');
+  assert.equal(a.rows[0].kind, 'custom-kind');
+});
+
+test('15.7 AC6: reject decision → no chain, no new task created', async () => {
+  const { topicId, executionActor, coordinationActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-15-7-ac6r', executionActor);
+  const submit = await submitRequest({
+    topic_id: topicId,
+    subject_type: 'artifact',
+    subject_id: artifactId,
+    kind: 'artifact_review',
+    weight: 10,
+    procedure: 'unilateral',
+    submitted_by: executionActor,
+  });
+  assert.equal(submit.status, 'submitted');
+
+  const decide = await decideStep({
+    request_id: (submit as { request_id: string }).request_id,
+    step_index: 0,
+    actor_id: coordinationActor,
+    decision: 'reject',
+  });
+  assert.equal(decide.status, 'rejected');
+
+  // No chained task: only the original mkForReviewArtifact task exists.
+  const pool = getDbPool();
+  const tasks = await pool.query(`SELECT task_id FROM tasks WHERE topic_id=$1`, [topicId]);
+  assert.equal(tasks.rows.length, 1, 'no chained task on reject');
+});
+
+test('15.7 AC7: approve on a closing topic → chain emits task.deferred (subject_type=topic), request.resolved.chain.kind=deferred', async () => {
+  const { topicId, executionActor, coordinationActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-15-7-ac7', executionActor);
+  const submit = await submitRequest({
+    topic_id: topicId,
+    subject_type: 'artifact',
+    subject_id: artifactId,
+    kind: 'artifact_review',
+    weight: 10,
+    procedure: 'unilateral',
+    submitted_by: executionActor,
+  });
+  assert.equal(submit.status, 'submitted');
+
+  // 15.6 test isolation pattern — direct UPDATE to 'closing' to bypass closeTopic
+  // Phase 2 drain (which would force-close our open request before we can approve).
+  const pool = getDbPool();
+  await pool.query(`UPDATE topics SET status='closing' WHERE topic_id=$1`, [topicId]);
+
+  const decide = await decideStep({
+    request_id: (submit as { request_id: string }).request_id,
+    step_index: 0,
+    actor_id: coordinationActor,
+    decision: 'endorse',
+  });
+  // Note: in 15.6, decideStep blocks on closing ONLY for new writer paths (submitRequest etc.),
+  // NOT for decideStep itself. So the approval succeeds, but the chain hits 'closing' and defers.
+  assert.equal(decide.status, 'approved', `expected approved, got ${decide.status}`);
+  if (decide.status !== 'approved') throw new Error('expected approved');
+  assert.equal(decide.chain.kind, 'deferred');
+  if (decide.chain.kind !== 'deferred') throw new Error('chain not deferred');
+  assert.equal(decide.chain.reason, 'topic_closing');
+  assert.ok(decide.chain.deferred_event_id, 'deferred_event_id present');
+
+  // No task created
+  const tasks = await pool.query(`SELECT task_id FROM tasks WHERE topic_id=$1`, [topicId]);
+  assert.equal(tasks.rows.length, 1, 'no chained task on closing');
+
+  // task.deferred event with subject_type='topic' was emitted
+  const { replayEvents } = await import('./coordinationEvents.js');
+  const ev = await replayEvents({ topic_id: topicId });
+  const deferred = ev.events.find((e) => e.type === 'task.deferred');
+  assert.ok(deferred, 'task.deferred event emitted');
+  assert.equal(deferred!.subject_type, 'topic');
+  assert.equal(deferred!.subject_id, topicId);
+  assert.equal((deferred!.payload as { reason: string }).reason, 'topic_closing');
+});
+
+test('15.7 AC10: approve with execution_task.depends_on referencing nonexistent task → CHAINED_TASK_DEPENDENCY_INVALID + request stays open', async () => {
+  const { topicId, executionActor, coordinationActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-15-7-ac10', executionActor);
+  const fakeTaskId = '11111111-2222-3333-4444-555555555555'; // does not exist
+
+  const submit = await submitRequest({
+    topic_id: topicId,
+    subject_type: 'artifact',
+    subject_id: artifactId,
+    kind: 'artifact_review',
+    weight: 10,
+    procedure: 'unilateral',
+    submitted_by: executionActor,
+    execution_task: { depends_on: [fakeTaskId] },
+  });
+  assert.equal(submit.status, 'submitted');
+
+  let caught: unknown = null;
+  try {
+    await decideStep({
+      request_id: (submit as { request_id: string }).request_id,
+      step_index: 0,
+      actor_id: coordinationActor,
+      decision: 'endorse',
+    });
+  } catch (err) {
+    caught = err;
+  }
+  assert.ok(caught, 'should throw');
+  assert.equal((caught as { code: string }).code, 'CHAINED_TASK_DEPENDENCY_INVALID');
+
+  // Request still 'open' (rollback)
+  const pool = getDbPool();
+  const r = await pool.query(`SELECT status FROM requests WHERE request_id=$1`, [(submit as { request_id: string }).request_id]);
+  assert.equal(r.rows[0].status, 'open');
+
+  // No chained task
+  const tasks = await pool.query(`SELECT task_id FROM tasks WHERE topic_id=$1`, [topicId]);
+  assert.equal(tasks.rows.length, 1, 'no chained task on dep-invalid');
+});

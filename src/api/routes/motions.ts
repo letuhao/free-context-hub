@@ -171,6 +171,7 @@ router.post('/topics/:id/motions', requireRole('writer'), async (req, res, next)
       subject_ref: asString(body.subject_ref),
       proposed_by: asString(body.proposed_by),
       deadline_minutes: typeof deadlineMinutes === 'number' ? deadlineMinutes : undefined,
+      execution_task: body.execution_task, // Sprint 15.7 — optional chain blob
     });
     res.status(statusToHttp(result.status)).json({ status: 'ok', data: result });
   } catch (e) { next(e); }

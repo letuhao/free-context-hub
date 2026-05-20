@@ -53,6 +53,12 @@ async function cleanup() {
     await pool.query(`DELETE FROM votes WHERE motion_id IN
       (SELECT motion_id FROM motions WHERE topic_id=$1)`, [topic_id]);
     await pool.query(`DELETE FROM motions WHERE topic_id = $1`, [topic_id]);
+    // Sprint 15.7 — chain may have created tasks/artifacts on carried tallies.
+    await pool.query(`DELETE FROM claims WHERE topic_id = $1`, [topic_id]);
+    await pool.query(`DELETE FROM artifact_versions WHERE artifact_id IN
+      (SELECT artifact_id FROM artifacts WHERE topic_id=$1)`, [topic_id]);
+    await pool.query(`DELETE FROM artifacts WHERE topic_id = $1`, [topic_id]);
+    await pool.query(`DELETE FROM tasks WHERE topic_id = $1`, [topic_id]);
     await pool.query(`DELETE FROM coordination_events WHERE topic_id = $1`, [topic_id]);
   }
   await pool.query(`DELETE FROM topics WHERE project_id = $1`, [TEST_PROJECT]);
@@ -833,4 +839,108 @@ test('T10: getMotion on a tallied motion returns the populated tally (review-imp
   assert.equal(m!.status, 'carried');
   assert.ok(m!.tally, 'tally is populated after a tally');
   assert.equal(Number(m!.tally!.for), 3, 'getMotion round-trips the tally JSONB column');
+});
+
+// ── Sprint 15.7 — primitive-outcome chaining tests (DEFERRED-019) ──────────
+
+test('15.7 AC2: tallyMotion carried → chain emits task.posted + motion.tallied.chain.kind=posted', async () => {
+  const { topicId } = await mkTopic();
+  const body = await mkBody({
+    quorum: 0,
+    threshold: 0.5,
+    members: [['voterA', 1], ['voterB', 1], ['seconder', 1]],
+  });
+  const motionId = await mkBallotingMotion(topicId, body.body_id);
+  await castVote({ motion_id: motionId, actor_id: 'voterA', choice: 'for' });
+  await castVote({ motion_id: motionId, actor_id: 'voterB', choice: 'for' });
+  await expireMotion(motionId);
+
+  const t = await tallyMotion({ motion_id: motionId });
+  assert.equal(t.status, 'carried');
+  if (t.status !== 'carried') throw new Error('expected carried');
+  assert.ok(t.chain, 'chain present on carried');
+  assert.equal(t.chain!.kind, 'posted');
+  if (t.chain!.kind !== 'posted') throw new Error('chain not posted');
+
+  const pool = getDbPool();
+  const taskRow = await pool.query(`SELECT title, raci FROM tasks WHERE task_id=$1`, [t.chain!.task_id]);
+  assert.equal(taskRow.rows[0].title, 'Execute carried motion: ref-1');
+  assert.equal(taskRow.rows[0].raci.source_motion, motionId);
+
+  // motion.tallied event payload
+  const ev = await replayEvents({ topic_id: topicId });
+  const tallied = ev.events.find((e) => e.type === 'motion.tallied');
+  assert.ok(tallied);
+  assert.equal((tallied!.payload as { chain?: { kind: string } }).chain?.kind, 'posted');
+});
+
+test('15.7 AC4: tallyMotion carried with execution_task blob → chained task uses blob', async () => {
+  const { topicId } = await mkTopic();
+  const body = await mkBody({ quorum: 0, threshold: 0.5, members: [['voterA', 1], ['seconder', 1]] });
+  const p = await proposeMotion({
+    topic_id: topicId,
+    body_id: body.body_id,
+    subject_ref: 'topic-ref',
+    proposed_by: 'proposer',
+    execution_task: { title: 'Motion exec title', slot: 'mexec' },
+  });
+  assert.equal(p.status, 'proposed');
+  if (p.status !== 'proposed') throw new Error('propose failed');
+  await secondMotion({ motion_id: p.motion_id, actor_id: 'seconder' });
+  await castVote({ motion_id: p.motion_id, actor_id: 'voterA', choice: 'for' });
+  await expireMotion(p.motion_id);
+  const t = await tallyMotion({ motion_id: p.motion_id });
+  assert.equal(t.status, 'carried');
+  if (t.status !== 'carried' || t.chain?.kind !== 'posted') throw new Error('expected carried+posted');
+
+  const pool = getDbPool();
+  const taskRow = await pool.query(`SELECT title FROM tasks WHERE task_id=$1`, [t.chain.task_id]);
+  assert.equal(taskRow.rows[0].title, 'Motion exec title');
+});
+
+test('15.7 AC5/AC6: tallyMotion failed/lapsed/vetoed → no chain field', async () => {
+  const { topicId } = await mkTopic();
+  // threshold=0.99 (impossible to carry with 1 against vote)
+  const body = await mkBody({ quorum: 0, threshold: 0.99, members: [['voterA', 1], ['seconder', 1]] });
+  const motionId = await mkBallotingMotion(topicId, body.body_id);
+  await castVote({ motion_id: motionId, actor_id: 'voterA', choice: 'against' });
+  await expireMotion(motionId);
+  const t = await tallyMotion({ motion_id: motionId });
+  assert.equal(t.status, 'failed');
+  if (t.status !== 'failed') throw new Error('expected failed');
+  // @ts-expect-error — chain is optional, absent on failed
+  assert.equal(t.chain, undefined, 'no chain on failed');
+
+  const pool = getDbPool();
+  const tasks = await pool.query(`SELECT task_id FROM tasks WHERE topic_id=$1`, [topicId]);
+  assert.equal(tasks.rows.length, 0, 'no chained task on failed');
+});
+
+test('15.7 AC7: tallyMotion on closing topic → chain deferred', async () => {
+  const { topicId } = await mkTopic();
+  const body = await mkBody({ quorum: 0, threshold: 0.5, members: [['voterA', 1], ['seconder', 1]] });
+  const motionId = await mkBallotingMotion(topicId, body.body_id);
+  await castVote({ motion_id: motionId, actor_id: 'voterA', choice: 'for' });
+  await expireMotion(motionId);
+
+  // 15.6 test isolation pattern — direct UPDATE to 'closing'
+  const pool = getDbPool();
+  await pool.query(`UPDATE topics SET status='closing' WHERE topic_id=$1`, [topicId]);
+
+  const t = await tallyMotion({ motion_id: motionId });
+  // tallyMotion's existing topic_closed check rejects 'closed' only — so on 'closing' it
+  // proceeds, and chain handler defers.
+  assert.equal(t.status, 'carried');
+  if (t.status !== 'carried' || t.chain?.kind !== 'deferred') {
+    throw new Error('expected carried+deferred');
+  }
+  assert.equal(t.chain.reason, 'topic_closing');
+
+  const tasks = await pool.query(`SELECT task_id FROM tasks WHERE topic_id=$1`, [topicId]);
+  assert.equal(tasks.rows.length, 0, 'no chained task on closing');
+
+  const ev = await replayEvents({ topic_id: topicId });
+  const deferred = ev.events.find((e) => e.type === 'task.deferred');
+  assert.ok(deferred);
+  assert.equal(deferred!.subject_type, 'topic');
 });

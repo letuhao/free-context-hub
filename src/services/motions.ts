@@ -30,6 +30,13 @@ import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
 import { createModuleLogger } from '../utils/logger.js';
 import { appendEvent } from './coordinationEvents.js';
+import {
+  validateExecutionTask,
+  buildChainedTaskParams,
+  emitChain,
+  type ChainResult,
+  type ExecutionTaskBlob,
+} from './chaining.js';
 
 const logger = createModuleLogger('motions');
 
@@ -111,7 +118,7 @@ export type VetoResult =
 export type TallyOutcome = 'carried' | 'failed' | 'lapsed';
 
 export type TallyResult =
-  | { status: TallyOutcome; tally: MotionTally }
+  | { status: TallyOutcome; tally: MotionTally; chain?: ChainResult }
   | { status: 'not_found' }
   | { status: 'not_balloting' }
   | { status: 'balloting_open' }
@@ -237,11 +244,14 @@ export async function proposeMotion(params: {
   subject_ref: string;
   proposed_by: string;
   deadline_minutes?: number;
+  /** Sprint 15.7 — optional execution_task blob for chain handler on carried. */
+  execution_task?: unknown;
 }): Promise<ProposeResult> {
   const topicId = (params.topic_id ?? '').trim();
   const bodyId = (params.body_id ?? '').trim();
   const subjectRef = (params.subject_ref ?? '').trim();
   const proposedBy = (params.proposed_by ?? '').trim();
+  const executionTask = validateExecutionTask(params.execution_task);
 
   if (!topicId || !bodyId || !subjectRef || !proposedBy) {
     throw new ContextHubError(
@@ -307,10 +317,13 @@ export async function proposeMotion(params: {
     await client.query('BEGIN');
 
     const ins = await client.query<{ motion_id: string; deadline: Date }>(
-      `INSERT INTO motions (body_id, topic_id, subject_ref, status, proposed_by, deadline)
-       VALUES ($1, $2, $3, 'proposed', $4, now() + ($5 * interval '1 minute'))
+      `INSERT INTO motions (body_id, topic_id, subject_ref, status, proposed_by, deadline, execution_task)
+       VALUES ($1, $2, $3, 'proposed', $4, now() + ($5 * interval '1 minute'), $6)
        RETURNING motion_id, deadline`,
-      [bodyId, topicId, subjectRef, proposedBy, deadlineMinutes],
+      [
+        bodyId, topicId, subjectRef, proposedBy, deadlineMinutes,
+        executionTask === null ? null : JSON.stringify(executionTask),
+      ],
     );
     const motionId = ins.rows[0].motion_id;
     const deadline = ins.rows[0].deadline.toISOString();
@@ -655,10 +668,13 @@ export async function tallyMotion(params: { motion_id: string }): Promise<TallyR
     await client.query('BEGIN');
 
     // ── (motion) row lock ───────────────────────────────────────────────────
+    // Sprint 15.7 — also select subject_ref + execution_task for chain handler.
     const motionRes = await client.query<{
       body_id: string; topic_id: string; status: string; expired: boolean;
+      subject_ref: string; execution_task: ExecutionTaskBlob | null;
     }>(
-      `SELECT body_id, topic_id, status, (now() >= deadline) AS expired
+      `SELECT body_id, topic_id, status, (now() >= deadline) AS expired,
+              subject_ref, execution_task
          FROM motions WHERE motion_id=$1 FOR UPDATE`,
       [motionId],
     );
@@ -700,17 +716,40 @@ export async function tallyMotion(params: { motion_id: string }): Promise<TallyR
       [outcome, JSON.stringify(tally), motionId],
     );
 
+    // Sprint 15.7 — primitive-outcome chaining (DEFERRED-019) on carried only.
+    // For other outcomes (failed/lapsed/vetoed), no chain — motion.tallied
+    // payload has no `chain` field. carried path may throw
+    // CHAINED_TASK_DEPENDENCY_INVALID → outer try/catch ROLLBACKs the whole txn
+    // (motion stays balloting; matches CLARIFY AC10 for motions).
+    let chainResult: ChainResult | undefined;
+    if (outcome === 'carried') {
+      const chainParams = buildChainedTaskParams({
+        source: 'motion',
+        source_id: motionId,
+        topic_id: motion.topic_id,
+        kind: motion.subject_ref,
+        blob: motion.execution_task,
+        acting_actor: 'system:tally',
+      });
+      chainResult = await emitChain(client, {
+        topic_id: motion.topic_id,
+        source_event: { type: 'motion.tallied', source_id: motionId },
+        actor_id: 'system:tally',
+        params: chainParams,
+      });
+    }
+
     await appendEvent(client, {
       topic_id: motion.topic_id,
       actor_id: 'system:tally',
       type: 'motion.tallied',
       subject_type: 'motion',
       subject_id: motionId,
-      payload: { outcome, ...tally },
+      payload: chainResult ? { outcome, ...tally, chain: chainResult } : { outcome, ...tally },
     });
 
     await client.query('COMMIT');
-    return { status: outcome, tally };
+    return chainResult ? { status: outcome, tally, chain: chainResult } : { status: outcome, tally };
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     logger.error({ err: String(err) }, 'tallyMotion failed');
