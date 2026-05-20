@@ -301,6 +301,13 @@ test('AC2+AC8: closeTopic drains open claim → claim.force_lapsed event, task a
   const forceLapsed = ev.events.find((e) => e.type === 'claim.force_lapsed');
   assert.ok(forceLapsed, 'claim.force_lapsed event emitted');
 
+  // Sprint 15.9 (DEFERRED-020 LOW-9) — event-ordering: claim.force_lapsed must
+  // precede topic.closed in the event log (drain happens before seal).
+  const topicClosed = ev.events.find((e) => e.type === 'topic.closed');
+  assert.ok(topicClosed, 'topic.closed event emitted');
+  assert.ok(forceLapsed!.seq < topicClosed!.seq,
+    `claim.force_lapsed (seq=${forceLapsed!.seq}) must precede topic.closed (seq=${topicClosed!.seq})`);
+
   const pool = getDbPool();
   const claimQ = await pool.query(`SELECT 1 FROM claims WHERE task_id = $1`, [task.task_id]);
   assert.equal(claimQ.rowCount, 0, 'claim row deleted');
@@ -345,6 +352,13 @@ test('AC3+AC8: closeTopic drains open request → request.force_closed event, fo
   const ev = await replayEvents({ topic_id: topicId });
   const forceClose = ev.events.find((e) => e.type === 'request.force_closed');
   assert.ok(forceClose, 'request.force_closed event emitted');
+
+  // Sprint 15.9 (DEFERRED-020 LOW-9) — event-ordering: request.force_closed must
+  // precede topic.closed in the event log (drain happens before seal).
+  const topicClosed = ev.events.find((e) => e.type === 'topic.closed');
+  assert.ok(topicClosed, 'topic.closed event emitted');
+  assert.ok(forceClose!.seq < topicClosed!.seq,
+    `request.force_closed (seq=${forceClose!.seq}) must precede topic.closed (seq=${topicClosed!.seq})`);
 
   const reqQ = await pool.query<{ status: string }>(
     `SELECT status FROM requests WHERE topic_id = $1`, [topicId]);

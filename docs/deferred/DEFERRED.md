@@ -54,8 +54,12 @@
 - **Priority:** LOW — REST and event log carry the field; MCP callers can fall back to
   text parsing or REST.
 - **Session deferred:** 2026-05-20
-- **Sessions open:** 1
-- **Status:** OPEN
+- **Sessions open:** 2
+- **Status:** RESOLVED — Sprint 15.9 (2026-05-20): MCP `decide_request_step` and
+  `tally_motion` outputSchemas declare optional `chain` field with FLAT-OPTIONAL shape
+  (kind: required string, task_id/artifact_id/reason/deferred_event_id: optional strings)
+  to avoid DEFERRED-007 discriminated-union SDK issue. Live `tools/list` smoke confirmed
+  both schemas include the chain object property.
 - **Source:** Phase 15 Sprint 15.7 REVIEW-CODE r1, F3 (`docs/audit/findings-sprint-15.7-code-r1.md`).
 
 ---
@@ -81,8 +85,18 @@
   assert additions for (c).
 - **Priority:** LOW
 - **Session deferred:** 2026-05-18
-- **Sessions open:** 1
-- **Status:** OPEN
+- **Sessions open:** 3
+- **Status:** RESOLVED — Sprint 15.9 (2026-05-20):
+  (a) LOW-7 — 2 route-level tests added in `src/api/routes/requests.test.ts` covering
+      fractional (`1.5`) + negative (`-1`) step-index inputs; assert 400 + BAD_REQUEST
+      code from the route layer (not the service);
+  (b) LOW-8 — positive `artifact_advanced:true` test in `requests.test.ts` (approve
+      branch, cross-checked with artifact state→'final'); added assertion to T18 sweep
+      test in `coordinationSweep.test.ts` that `escalation_exhausted` payload carries
+      `artifact_advanced:false`;
+  (c) LOW-9 — added event-ordering assertions to topics drain AC2+AC3 in `topics.test.ts`
+      asserting `claim.force_lapsed` / `request.force_closed` events precede `topic.closed`
+      by `seq` ordering.
 - **Source:** Phase 15 Sprint 15.6 `/review-impl` LOW-7, LOW-8, LOW-9.
 
 ---

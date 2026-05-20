@@ -478,6 +478,10 @@ test('T18: stalled authority step → escalation_exhausted', async () => {
   const resolvedEvents = ev.events.filter((e) => e.type === 'request.resolved');
   assert.equal(resolvedEvents.length, 1);
   assert.equal(resolvedEvents[0].payload.outcome, 'escalation_exhausted');
+  // Sprint 15.9 (DEFERRED-020 LOW-8b) — escalation_exhausted carries
+  // artifact_advanced:false (artifact untouched on exhausted escalation).
+  assert.equal(resolvedEvents[0].payload.artifact_advanced, false,
+    'escalation_exhausted payload must carry artifact_advanced:false');
 });
 
 // ── T19: stalled step on a closed topic → skipped ────────────────────────

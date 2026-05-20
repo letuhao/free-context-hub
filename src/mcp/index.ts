@@ -3576,6 +3576,17 @@ function createMcpToolsServer() {
       outputSchema: z.object({
         status: z.string(),
         current_step: z.number().optional(),
+        // Sprint 15.9 (DEFERRED-021) — primitive-outcome chaining (15.7) chain
+        // result is service-side present on outcome='approved'; declared here as
+        // FLAT-OPTIONAL fields (NOT a discriminated union) to avoid the MCP SDK
+        // _zod error on discriminated-union outputSchemas (DEFERRED-007).
+        chain: z.object({
+          kind: z.string(), // 'posted' | 'deferred'
+          task_id: z.string().optional(),
+          artifact_id: z.string().optional(),
+          reason: z.string().optional(),
+          deferred_event_id: z.string().optional(),
+        }).optional(),
       }),
     },
     async ({ workspace_token, request_id, step_index, actor_id, decision, output_format }) => {
@@ -3899,6 +3910,15 @@ function createMcpToolsServer() {
       outputSchema: z.object({
         status: z.string(),
         tally: z.any().optional(),
+        // Sprint 15.9 (DEFERRED-021) — chain present on outcome='carried' only.
+        // Flat-optional shape to avoid DEFERRED-007 discriminated-union SDK issue.
+        chain: z.object({
+          kind: z.string(), // 'posted' | 'deferred'
+          task_id: z.string().optional(),
+          artifact_id: z.string().optional(),
+          reason: z.string().optional(),
+          deferred_event_id: z.string().optional(),
+        }).optional(),
       }),
     },
     async ({ workspace_token, motion_id, output_format }) => {

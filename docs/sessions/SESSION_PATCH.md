@@ -1,10 +1,9 @@
 # LONGRUN CHECKPOINT — Phase 15 autonomous longrun, session boundary (2026-05-20)
 
-**Status:** **Sprint 15.8 (Collective request-step wiring) — COMPLETE** via the v2.2
-human-in-loop 12-phase workflow. REVIEW-DESIGN r1 found 2 BLOCKs (lapsed-escalation
-ambiguity, AC8 vs §2.2 contradiction) → rev 2 resolved; r2 CLEAR. REVIEW-CODE r1
-found 3 (F1 WARN payload-shape inconsistency fix-now, F2 LOW test cleanup gaps
-fix-now, F3 LOW subject_ref dedup accept-with-doc). 648/648 green; live smoke ✓.
+**Status:** **Sprint 15.9 (Cleanup pass — DEFERRED-021 + 020) — COMPLETE** via the v2.2
+human-in-loop S-size workflow (PLAN skipped per CLAUDE.md). MCP outputSchemas declare
+optional chain field (flat-optional shape per DEFERRED-007); 3 LOW test coverage gaps
+from 15.6 closed. 651/651 green; live MCP smoke ✓; REVIEW-CODE 0 findings; QC CLEAR.
 
 ## Phase 15 longrun progress
 
@@ -19,7 +18,45 @@ fix-now, F3 LOW subject_ref dedup accept-with-doc). 648/648 green; live smoke �
 | 15.6 — Topic-closing drain + residuals | ✅ COMPLETE | branch `phase-15-sprint-15.6` · v2.2 human-in-loop + /review-impl |
 | 15.7 — Chaining + sweep recovery + topology | ✅ COMPLETE | branch `phase-15-sprint-15.7` · v2.2 human-in-loop |
 | 15.8 — Collective request-step wiring | ✅ COMPLETE | branch `phase-15-sprint-15.8` · v2.2 human-in-loop |
-| 15.9 | pending | — |
+| 15.9 — Cleanup (021+020) | ✅ COMPLETE | branch `phase-15-sprint-15.9` · S-size, skip PLAN |
+| 15.10 | pending | — |
+
+## Sprint 15.9 outcome
+
+Cleanup S-sprint resolving two LOW debts:
+
+- **DEFERRED-021 RESOLVED** — MCP `decide_request_step` + `tally_motion` outputSchemas
+  declare optional `chain` field. Flat-optional shape: `{kind: required string,
+  task_id/artifact_id/reason/deferred_event_id: optional strings}`. Sidesteps
+  DEFERRED-007's discriminated-union SDK issue. Verified by live MCP `tools/list`.
+- **DEFERRED-020 RESOLVED** — 3 LOW test coverage gaps from 15.6 closed:
+  - LOW-7: 2 route tests for fractional + negative step-index → 400 from route layer.
+  - LOW-8a: positive `artifact_advanced:true` test on approve (cross-checks artifact→final).
+  - LOW-8b: assertion in T18 sweep test that `escalation_exhausted` payload carries
+    `artifact_advanced:false`.
+  - LOW-9: event-ordering assertions in topics drain AC2+AC3 (force-lapse events precede
+    `topic.closed` by seq).
+
+Workflow: CLARIFY (brief, size=S) → BUILD T1-T5 → VERIFY → REVIEW-CODE (0 findings) →
+QC CLEAR → POST-REVIEW human gate. No DESIGN, no REVIEW-DESIGN, no PLAN (S allows skip).
+651/651 green; tsc clean; live MCP smoke confirmed schema; +3 new tests over 15.8 base.
+
+## Resume — Sprint 15.10
+
+Remaining candidates: DEFERRED-022 (multi-tier collective per-level body), DEFERRED-015/
+016/017 (Phase 15 authz model — HARD pre-prod triggers), DEFERRED-009/010 (smaller
+governance gaps).
+
+## Environment state (end of Sprint 15.9 session, 2026-05-20)
+
+- Docker stack: 8/8 healthy. Migrations 0053–0061 applied (15.9 added no migration).
+- `npm test` **651/651** green on `phase-15-sprint-15.9`; `tsc` clean.
+- Branch: `phase-15-sprint-15.9` — committed in Phase 11.
+- Deferred OPEN: 009, 010, **015**, **016**, **017**, 022. DEFERRED-018/019/011/020/021
+  all RESOLVED in 15.7+15.8+15.9.
+- 4 MCP lessons added at end of 15.9 RETRO.
+
+---
 
 ## Sprint 15.8 outcome
 

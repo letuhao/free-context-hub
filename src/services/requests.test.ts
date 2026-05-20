@@ -774,6 +774,39 @@ test('AC14: listRequests for an unknown topic_id → NOT_FOUND error', async () 
   );
 });
 
+test('15.9 LOW-8a: approve → request.resolved event carries artifact_advanced:true', async () => {
+  // Positive companion to AC15 — covers the approve path that actually advances
+  // the artifact from for_review → final, so artifact_advanced should be true.
+  const { topicId, executionActor, coordinationActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-low8a', executionActor);
+
+  const sub = await submitRequest({
+    topic_id: topicId, subject_type: 'artifact', subject_id: artifactId,
+    kind: 'artifact_review', weight: 10, procedure: 'unilateral', submitted_by: executionActor,
+  });
+  if (sub.status !== 'submitted') throw new Error('setup failed');
+
+  const dec = await decideStep({
+    request_id: sub.request_id, step_index: 0,
+    actor_id: coordinationActor, decision: 'endorse',
+  });
+  assert.equal(dec.status, 'approved');
+
+  const { replayEvents } = await import('./coordinationEvents.js');
+  const ev = await replayEvents({ topic_id: topicId });
+  const resolved = ev.events.find((e) => e.type === 'request.resolved');
+  assert.ok(resolved, 'request.resolved event present');
+  assert.equal(resolved!.payload.outcome, 'approved');
+  assert.equal(resolved!.payload.artifact_advanced, true, 'artifact_advanced:true on approve path');
+
+  // Cross-check: artifact actually advanced to 'final'
+  const pool = getDbPool();
+  const art = await pool.query<{ state: string }>(
+    `SELECT state FROM artifacts WHERE artifact_id=$1`, [artifactId],
+  );
+  assert.equal(art.rows[0].state, 'final');
+});
+
 test('AC15: reject → request.resolved event carries artifact_advanced:false', async () => {
   const { topicId, executionActor, coordinationActor } = await mkTopicWithParticipants();
   const artifactId = await mkForReviewArtifact(topicId, 'doc-ac15', executionActor);
