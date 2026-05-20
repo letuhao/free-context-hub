@@ -40,6 +40,10 @@ export type MatrixRow = {
   route_shape: string;
   /** Frozen snapshot string: `<matrix_id>:t<tier>` (D4). */
   doa_snapshot: string;
+  /** Sprint 15.8 — per-row decision procedure. */
+  procedure: 'unilateral' | 'collective';
+  /** Sprint 15.8 — decision body for collective procedure (NULL on unilateral). */
+  body_id: string | null;
 };
 
 // ── §2.1 resolveMatrixRow ─────────────────────────────────────────────────────
@@ -75,9 +79,11 @@ export async function resolveMatrixRow(
     matrix_id: string;
     required_level: string;
     route_shape: string;
+    procedure: 'unilateral' | 'collective';
+    body_id: string | null;
     tier: string;
   }>(
-    `SELECT matrix_id, required_level, route_shape,
+    `SELECT matrix_id, required_level, route_shape, procedure, body_id,
             (weight_max - weight_min) AS span,
             CASE WHEN topic_id = $1                              THEN 0
                  WHEN topic_id IS NULL AND project_id = $2      THEN 1
@@ -103,6 +109,8 @@ export async function resolveMatrixRow(
     required_level: row.required_level,
     route_shape: row.route_shape,
     doa_snapshot: `${row.matrix_id}:t${tier}`,
+    procedure: row.procedure,
+    body_id: row.body_id,
   };
 }
 

@@ -1,7 +1,39 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 022 -->
+<!-- Next ID: 023 -->
+
+## DEFERRED-022
+
+- **What:** Multi-tier collective request-step routing. Sprint 15.8 supports collective
+  steps ONLY on single-step routes (`escalate_to_authority` OR single-step `counter_sign`).
+  The DoA matrix carries one `body_id` per row; a multi-step `counter_sign` collective
+  route would inherit ONE body across all steps, collapsing the "distinct endorser at
+  each level" guarantee to a single body. 15.8 hard-rejects multi-step counter_sign+
+  collective at `submitRequest` with `BAD_REQUEST`. The realistic governance pattern
+  ("coordination committee endorses, then authority board endorses" — two different
+  bodies, one per level) is therefore unsupported.
+- **Why deferred:** Sprint 15.8 REVIEW-DESIGN r1 F3 (WARN) — accepted-with-doc. The
+  feature requires either (a) per-level body assignment in the DoA matrix (a new
+  `doa_matrix_levels` table or a JSON column mapping level→body_id) or (b) a per-
+  submission `collective_bodies` blob. Both are substantial design surface in their
+  own right; 15.8 shipped the single-step common case to close DEFERRED-018 in a
+  contained M sprint.
+- **Trigger condition:** a Phase 15 sprint that implements per-level body assignment,
+  OR a user-reported case where single-step collective insufficiency surfaces in
+  practice.
+- **Estimated size:** M — schema design + matrix lookup changes + submitRequest
+  per-step body resolution + tests + the lapsed-escalation handling at each level
+  (currently degrades to unilateral; with per-level bodies, could re-propose under
+  the new level's body).
+- **Priority:** LOW — single-step collective covers the most common "a single
+  committee decides" pattern. Multi-tier collective is a governance enhancement.
+- **Session deferred:** 2026-05-20
+- **Sessions open:** 1
+- **Status:** OPEN
+- **Source:** Phase 15 Sprint 15.8 REVIEW-DESIGN r1 F3 + DESIGN §2.2.
+
+---
 
 ## DEFERRED-021
 
@@ -118,8 +150,17 @@
 - **Priority:** LOW — `unilateral` (the only shipped request procedure) covers the current
   need; `collective` request steps are an enhancement.
 - **Session deferred:** 2026-05-18
-- **Sessions open:** 1
-- **Status:** OPEN
+- **Sessions open:** 2
+- **Status:** RESOLVED — Sprint 15.8 (2026-05-20): collective request-step wiring shipped.
+  Migration 0061 added `doa_matrix.procedure+body_id` + `request_steps.body_id+motion_id` +
+  status='motion_proposed'. submitRequest accepts collective; `proposeStepMotion` auto-proposes
+  a motion at step 0; `decideStep` early-rejects collective with 'procedure_is_collective';
+  `applyMotionToStep` (called from tallyMotion + vetoMotion + sweepExpiredMotions) handles
+  4 outcomes (carried→step.endorsed advance, failed→returned, lapsed→degrade-to-unilateral
+  escalation, vetoed→rejected). 15.7 chain fires on collective-carried-final via the same
+  emitChain path; motion-chain suppressed on step-proposal motions to avoid duplicate tasks.
+  Limitation: only single-step routes supported (multi-step counter_sign+collective rejected
+  → DEFERRED-022).
 - **Source:** Phase 15 Sprint 15.4 CLARIFY Q1 / out-of-scope
   (`docs/specs/2026-05-18-phase-15-sprint-15.4-clarify.md`); the Sprint 15.3 design decision D6.
 

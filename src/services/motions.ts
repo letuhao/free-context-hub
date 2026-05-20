@@ -37,6 +37,7 @@ import {
   type ChainResult,
   type ExecutionTaskBlob,
 } from './chaining.js';
+import { applyMotionToStep } from './requests.js';
 
 const logger = createModuleLogger('motions');
 
@@ -635,6 +636,26 @@ export async function vetoMotion(params: {
       payload: { vetoed_by: actorId },
     });
 
+    // Sprint 15.8 — if this motion was auto-proposed for a request step, mark the
+    // step rejected (vetoed motion → step rejected → request rejected).
+    const stepLinkV = await client.query<{
+      request_id: string; step_index: number; target_office: string;
+    }>(
+      `SELECT request_id, step_index, target_office FROM request_steps
+         WHERE motion_id=$1 FOR UPDATE`,
+      [motionId],
+    );
+    if (stepLinkV.rowCount === 1) {
+      await applyMotionToStep(client, {
+        motion_id: motionId,
+        request_id: stepLinkV.rows[0].request_id,
+        step_index: stepLinkV.rows[0].step_index,
+        target_office: stepLinkV.rows[0].target_office,
+        outcome: 'vetoed',
+        topic_id: motion.topic_id,
+      });
+    }
+
     await client.query('COMMIT');
     return { status: 'vetoed' };
   } catch (err) {
@@ -718,11 +739,14 @@ export async function tallyMotion(params: { motion_id: string }): Promise<TallyR
 
     // Sprint 15.7 — primitive-outcome chaining (DEFERRED-019) on carried only.
     // For other outcomes (failed/lapsed/vetoed), no chain — motion.tallied
-    // payload has no `chain` field. carried path may throw
-    // CHAINED_TASK_DEPENDENCY_INVALID → outer try/catch ROLLBACKs the whole txn
-    // (motion stays balloting; matches CLARIFY AC10 for motions).
+    // payload has no `chain` field.
+    // Sprint 15.8 — when this motion is the auto-proposed motion for a request
+    // step (subject_ref starts with 'request_step:'), the request's chain handler
+    // in applyMotionToStep handles the chained task; the motion-level chain is
+    // suppressed (avoids two duplicate execution tasks per collective approval).
     let chainResult: ChainResult | undefined;
-    if (outcome === 'carried') {
+    const isStepMotion = typeof motion.subject_ref === 'string' && motion.subject_ref.startsWith('request_step:');
+    if (outcome === 'carried' && !isStepMotion) {
       const chainParams = buildChainedTaskParams({
         source: 'motion',
         source_id: motionId,
@@ -747,6 +771,27 @@ export async function tallyMotion(params: { motion_id: string }): Promise<TallyR
       subject_id: motionId,
       payload: chainResult ? { outcome, ...tally, chain: chainResult } : { outcome, ...tally },
     });
+
+    // Sprint 15.8 — if this motion was auto-proposed for a request step, apply the
+    // outcome to the step (extends step lifecycle through motion tally). The motion
+    // is FOR UPDATE so we serialize against any concurrent tally/sweep path.
+    const stepLink = await client.query<{
+      request_id: string; step_index: number; target_office: string;
+    }>(
+      `SELECT request_id, step_index, target_office FROM request_steps
+         WHERE motion_id=$1 FOR UPDATE`,
+      [motionId],
+    );
+    if (stepLink.rowCount === 1) {
+      await applyMotionToStep(client, {
+        motion_id: motionId,
+        request_id: stepLink.rows[0].request_id,
+        step_index: stepLink.rows[0].step_index,
+        target_office: stepLink.rows[0].target_office,
+        outcome,
+        topic_id: motion.topic_id,
+      });
+    }
 
     await client.query('COMMIT');
     return chainResult ? { status: outcome, tally, chain: chainResult } : { status: outcome, tally };

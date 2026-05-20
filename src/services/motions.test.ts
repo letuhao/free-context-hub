@@ -50,9 +50,16 @@ async function cleanup() {
     [TEST_PROJECT],
   );
   for (const { topic_id } of topicIds.rows) {
+    // Sprint 15.8 — request_steps may link to motions; null out first.
+    await pool.query(`UPDATE request_steps SET motion_id=NULL WHERE request_id IN
+      (SELECT request_id FROM requests WHERE topic_id=$1)`, [topic_id]);
     await pool.query(`DELETE FROM votes WHERE motion_id IN
       (SELECT motion_id FROM motions WHERE topic_id=$1)`, [topic_id]);
     await pool.query(`DELETE FROM motions WHERE topic_id = $1`, [topic_id]);
+    // Sprint 15.8 — collective tests create requests + request_steps for the topic.
+    await pool.query(`DELETE FROM request_steps WHERE request_id IN
+      (SELECT request_id FROM requests WHERE topic_id=$1)`, [topic_id]);
+    await pool.query(`DELETE FROM requests WHERE topic_id = $1`, [topic_id]);
     // Sprint 15.7 — chain may have created tasks/artifacts on carried tallies.
     await pool.query(`DELETE FROM claims WHERE topic_id = $1`, [topic_id]);
     await pool.query(`DELETE FROM artifact_versions WHERE artifact_id IN
@@ -61,6 +68,8 @@ async function cleanup() {
     await pool.query(`DELETE FROM tasks WHERE topic_id = $1`, [topic_id]);
     await pool.query(`DELETE FROM coordination_events WHERE topic_id = $1`, [topic_id]);
   }
+  // Sprint 15.8 — doa_matrix must be dropped BEFORE decision_bodies (FK).
+  await pool.query(`DELETE FROM doa_matrix WHERE project_id = $1`, [TEST_PROJECT]);
   await pool.query(`DELETE FROM topics WHERE project_id = $1`, [TEST_PROJECT]);
   await pool.query(`DELETE FROM actors WHERE project_id = $1`, [TEST_PROJECT]);
   // bodies (project-scoped config; including the cross-project body in T5)
@@ -943,4 +952,145 @@ test('15.7 AC7: tallyMotion on closing topic → chain deferred', async () => {
   const deferred = ev.events.find((e) => e.type === 'task.deferred');
   assert.ok(deferred);
   assert.equal(deferred!.subject_type, 'topic');
+});
+
+// ── Sprint 15.8 — collective request-step wiring (DEFERRED-018) ──────────
+
+/**
+ * Integration: full collective request flow via tallyMotion (not direct
+ * applyMotionToStep). Verifies the motions.ts T7 wire-up routes outcomes to
+ * applyMotionToStep correctly.
+ */
+test('15.8 motions.T7: tallyMotion on a motion linked to a request step → step endorsed', async () => {
+  const { submitRequest } = await import('./requests.js');
+  const { charterTopic: ct, joinTopic: jt } = await import('./topics.js');
+  const { postTask, claimTask, completeTask } = await import('./board.js');
+
+  // Setup topic + actors
+  const t = await ct({ project_id: TEST_PROJECT, name: '15.8 m-int', charter: 'c', created_by: 'authority' });
+  for (const [a, level] of [
+    ['execution', 'execution'], ['authority', 'authority'],
+  ] as const) {
+    await jt({ topic_id: t.topic_id, actor_id: a, actor_type: 'human', display_name: a, level });
+  }
+  // Body + members
+  const body = await createBody({ project_id: TEST_PROJECT, name: 'B', quorum: 0, threshold: 0.5, veto_holders: [], created_by: 'authority' });
+  await addBodyMember({ body_id: body.body_id, actor_id: 'voter-a', vote_weight: 1 });
+  await addBodyMember({ body_id: body.body_id, actor_id: 'seconder', vote_weight: 1 });
+  // Collective matrix row
+  const pool = getDbPool();
+  await pool.query(
+    `INSERT INTO doa_matrix (project_id, topic_id, kind, weight_min, weight_max, required_level, route_shape, procedure, body_id)
+     VALUES ($1, NULL, 'm_int', 0, 49, 'authority', 'escalate_to_authority', 'collective', $2)`,
+    [TEST_PROJECT, body.body_id],
+  );
+
+  // Bring an artifact to for_review
+  const task = await postTask({ topic_id: t.topic_id, title: 'T', topology: 'parallel', slot: 'doc-mint', kind: 'doc', created_by: 'execution' });
+  await claimTask({ task_id: task.task_id, actor_id: 'execution' });
+  await completeTask({ task_id: task.task_id, actor_id: 'execution' });
+
+  // Submit collective request — system auto-proposes motion
+  const submit = await submitRequest({
+    topic_id: t.topic_id, subject_type: 'artifact', subject_id: task.artifact_id,
+    kind: 'm_int', weight: 10, procedure: 'unilateral', submitted_by: 'execution',
+  });
+  if (submit.status !== 'submitted') throw new Error('submit');
+
+  // Find motion + second + vote + expire + tally
+  const step = await pool.query<{ motion_id: string }>(
+    `SELECT motion_id FROM request_steps WHERE request_id=$1 AND step_index=0`,
+    [submit.request_id],
+  );
+  const motionId = step.rows[0].motion_id;
+  await secondMotion({ motion_id: motionId, actor_id: 'seconder' });
+  await castVote({ motion_id: motionId, actor_id: 'voter-a', choice: 'for' });
+  await pool.query(`UPDATE motions SET deadline = now() - interval '10 minutes' WHERE motion_id=$1`, [motionId]);
+
+  const t1 = await tallyMotion({ motion_id: motionId });
+  assert.equal(t1.status, 'carried');
+
+  // Step + request advanced (via applyMotionToStep called from tallyMotion)
+  const after = await pool.query<{ status: string }>(
+    `SELECT status FROM requests WHERE request_id=$1`, [submit.request_id],
+  );
+  assert.equal(after.rows[0].status, 'approved', 'request approved via collective tally');
+  const stepAfter = await pool.query<{ status: string }>(
+    `SELECT status FROM request_steps WHERE request_id=$1 AND step_index=0`,
+    [submit.request_id],
+  );
+  assert.equal(stepAfter.rows[0].status, 'endorsed');
+  // 15.7 chain fired
+  const chainedTasks = await pool.query(
+    `SELECT title FROM tasks WHERE topic_id=$1 AND title LIKE 'Execute approved%'`,
+    [t.topic_id],
+  );
+  assert.equal(chainedTasks.rows.length, 1);
+
+  // Cleanup motions test artifacts (the 15.7 chain + collective tests left request_steps with motion_id which the cleanup needs to clear).
+  // The motions.test.ts cleanup doesn't handle requests/request_steps — handled inline.
+  await pool.query(`UPDATE request_steps SET motion_id=NULL WHERE request_id=$1`, [submit.request_id]);
+  await pool.query(`DELETE FROM request_steps WHERE request_id=$1`, [submit.request_id]);
+  await pool.query(`DELETE FROM requests WHERE request_id=$1`, [submit.request_id]);
+  await pool.query(`DELETE FROM doa_matrix WHERE project_id=$1`, [TEST_PROJECT]);
+});
+
+test('15.8 motions.T7-vetoed: vetoMotion on a motion linked to a request step → step rejected', async () => {
+  const { submitRequest } = await import('./requests.js');
+  const { charterTopic: ct, joinTopic: jt } = await import('./topics.js');
+  const { postTask, claimTask, completeTask } = await import('./board.js');
+
+  const t = await ct({ project_id: TEST_PROJECT, name: '15.8 m-veto', charter: 'c', created_by: 'authority' });
+  for (const a of ['execution', 'authority', 'veto-holder']) {
+    await jt({ topic_id: t.topic_id, actor_id: a, actor_type: 'human', display_name: a, level: 'coordination' });
+  }
+  const body = await createBody({
+    project_id: TEST_PROJECT, name: 'B-veto', quorum: 0, threshold: 0.5,
+    veto_holders: ['veto-holder'], created_by: 'authority',
+  });
+  await addBodyMember({ body_id: body.body_id, actor_id: 'voter-a', vote_weight: 1 });
+  await addBodyMember({ body_id: body.body_id, actor_id: 'veto-holder', vote_weight: 1 });
+  await addBodyMember({ body_id: body.body_id, actor_id: 'seconder', vote_weight: 1 });
+
+  const pool = getDbPool();
+  await pool.query(
+    `INSERT INTO doa_matrix (project_id, topic_id, kind, weight_min, weight_max, required_level, route_shape, procedure, body_id)
+     VALUES ($1, NULL, 'm_veto', 0, 49, 'authority', 'escalate_to_authority', 'collective', $2)`,
+    [TEST_PROJECT, body.body_id],
+  );
+
+  const task = await postTask({ topic_id: t.topic_id, title: 'T', topology: 'parallel', slot: 'doc-mveto', kind: 'doc', created_by: 'execution' });
+  await claimTask({ task_id: task.task_id, actor_id: 'execution' });
+  await completeTask({ task_id: task.task_id, actor_id: 'execution' });
+
+  const submit = await submitRequest({
+    topic_id: t.topic_id, subject_type: 'artifact', subject_id: task.artifact_id,
+    kind: 'm_veto', weight: 10, procedure: 'unilateral', submitted_by: 'execution',
+  });
+  if (submit.status !== 'submitted') throw new Error('submit');
+
+  const step = await pool.query<{ motion_id: string }>(
+    `SELECT motion_id FROM request_steps WHERE request_id=$1 AND step_index=0`,
+    [submit.request_id],
+  );
+  const motionId = step.rows[0].motion_id;
+
+  // Bring motion to balloting (second it) so veto is valid
+  await secondMotion({ motion_id: motionId, actor_id: 'seconder' });
+
+  // Veto
+  const v = await vetoMotion({ motion_id: motionId, actor_id: 'veto-holder' });
+  assert.equal(v.status, 'vetoed');
+
+  // Step + request rejected
+  const after = await pool.query<{ status: string }>(
+    `SELECT status FROM requests WHERE request_id=$1`, [submit.request_id],
+  );
+  assert.equal(after.rows[0].status, 'rejected', 'request rejected via veto');
+
+  // Cleanup
+  await pool.query(`UPDATE request_steps SET motion_id=NULL WHERE request_id=$1`, [submit.request_id]);
+  await pool.query(`DELETE FROM request_steps WHERE request_id=$1`, [submit.request_id]);
+  await pool.query(`DELETE FROM requests WHERE request_id=$1`, [submit.request_id]);
+  await pool.query(`DELETE FROM doa_matrix WHERE project_id=$1`, [TEST_PROJECT]);
 });

@@ -37,6 +37,9 @@ async function cleanup() {
     [TEST_PROJECT],
   );
   for (const { topic_id } of topicIds.rows) {
+    // Sprint 15.8 — request_steps may link to motions; null out first.
+    await pool.query(`UPDATE request_steps SET motion_id=NULL WHERE request_id IN
+      (SELECT request_id FROM requests WHERE topic_id=$1)`, [topic_id]);
     // Clean up votes + motions (added by Sprint 15.4)
     await pool.query(`DELETE FROM votes WHERE motion_id IN
       (SELECT motion_id FROM motions WHERE topic_id=$1)`, [topic_id]);
@@ -57,6 +60,9 @@ async function cleanup() {
   }
   await pool.query(`DELETE FROM topics WHERE project_id = $1`, [TEST_PROJECT]);
   await pool.query(`DELETE FROM actors WHERE project_id = $1`, [TEST_PROJECT]);
+  // Sprint 15.8 — doa_matrix references decision_bodies via body_id (FK), so
+  // matrix must be deleted before bodies.
+  await pool.query(`DELETE FROM doa_matrix WHERE project_id = $1`, [TEST_PROJECT]);
   // decision bodies (project-scoped config — Sprint 15.4)
   const bodyIds = await pool.query<{ body_id: string }>(
     `SELECT body_id FROM decision_bodies WHERE project_id = $1`,
@@ -873,4 +879,65 @@ test('15.7 AC12: sweepStuckClosingTopics ignores <5min old closing topic', async
     `SELECT status FROM topics WHERE topic_id=$1`, [t.topic_id],
   );
   assert.equal(after.rows[0].status, 'closing');
+});
+
+// ── Sprint 15.8 — sweep applies lapsed motion to request step ──────────────
+
+test('15.8 sweep-lapsed: sweepExpiredMotions on a motion linked to a request step → step degrades to unilateral', async () => {
+  const { submitRequest } = await import('./requests.js');
+  const { postTask, claimTask, completeTask } = await import('./board.js');
+
+  const t = await charterTopic({
+    project_id: TEST_PROJECT, name: '15.8 sweep-lapsed', charter: 'c', created_by: 'authority',
+  });
+  for (const a of ['execution', 'authority']) {
+    await joinTopic({ topic_id: t.topic_id, actor_id: a, actor_type: 'human', display_name: a, level: a === 'authority' ? 'authority' : 'execution' });
+  }
+  const body = await createBody({
+    project_id: TEST_PROJECT, name: 'B-sweep', quorum: 100, threshold: 0.5,
+    veto_holders: [], created_by: 'authority',
+  });
+  // No members — quorum=100 unreachable; ensures lapsed outcome.
+  const pool = getDbPool();
+  await pool.query(
+    `INSERT INTO doa_matrix (project_id, topic_id, kind, weight_min, weight_max, required_level, route_shape, procedure, body_id)
+     VALUES ($1, NULL, 'm_sweep', 0, 49, 'coordination', 'escalate_to_authority', 'collective', $2)`,
+    [TEST_PROJECT, body.body_id],
+  );
+
+  const task = await postTask({ topic_id: t.topic_id, title: 'T', topology: 'parallel', slot: 'doc-msw', kind: 'doc', created_by: 'execution' });
+  await claimTask({ task_id: task.task_id, actor_id: 'execution' });
+  await completeTask({ task_id: task.task_id, actor_id: 'execution' });
+
+  const submit = await submitRequest({
+    topic_id: t.topic_id, subject_type: 'artifact', subject_id: task.artifact_id,
+    kind: 'm_sweep', weight: 10, procedure: 'unilateral', submitted_by: 'execution',
+  });
+  if (submit.status !== 'submitted') throw new Error('submit');
+
+  // Expire the motion (still in 'proposed' state — not_seconded → lapsed)
+  await pool.query(
+    `UPDATE motions SET deadline = now() - interval '10 minutes' WHERE motion_id =
+     (SELECT motion_id FROM request_steps WHERE request_id=$1 AND step_index=0)`,
+    [submit.request_id],
+  );
+
+  const result = await sweepExpiredMotions();
+  assert.equal(result.resolved, 1, 'sweep lapsed the motion');
+
+  // Step degraded to unilateral at next level (coordination → authority)
+  const stepAfter = await pool.query<{ status: string; target_office: string; procedure: string; motion_id: string | null }>(
+    `SELECT status, target_office, procedure, motion_id FROM request_steps WHERE request_id=$1 AND step_index=0`,
+    [submit.request_id],
+  );
+  assert.equal(stepAfter.rows[0].status, 'pending');
+  assert.equal(stepAfter.rows[0].target_office, 'authority');
+  assert.equal(stepAfter.rows[0].procedure, 'unilateral');
+  assert.equal(stepAfter.rows[0].motion_id, null);
+
+  // Cleanup
+  await pool.query(`UPDATE request_steps SET motion_id=NULL WHERE request_id=$1`, [submit.request_id]);
+  await pool.query(`DELETE FROM request_steps WHERE request_id=$1`, [submit.request_id]);
+  await pool.query(`DELETE FROM requests WHERE request_id=$1`, [submit.request_id]);
+  await pool.query(`DELETE FROM doa_matrix WHERE project_id=$1`, [TEST_PROJECT]);
 });

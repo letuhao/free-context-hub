@@ -1,10 +1,10 @@
 # LONGRUN CHECKPOINT — Phase 15 autonomous longrun, session boundary (2026-05-20)
 
-**Status:** **Sprint 15.7 (Primitive-outcome chaining + sweep recovery + topology enforcement)
-— COMPLETE** via the v2.2 human-in-loop 12-phase workflow. REVIEW-DESIGN r1 found 3 BLOCKs
-(dual-emit task.deferred, rollback-on-invalid-deps, statement_timeout cap) → rev 2 resolved
-all; r2 CLEAR + 2 inline WARN refinements. REVIEW-CODE r1 found 3 (1 MED fix-now, 1 MED
-accept-with-doc, 1 LOW defer to 15.8 as DEFERRED-021). 638/638 green; live smoke ✓.
+**Status:** **Sprint 15.8 (Collective request-step wiring) — COMPLETE** via the v2.2
+human-in-loop 12-phase workflow. REVIEW-DESIGN r1 found 2 BLOCKs (lapsed-escalation
+ambiguity, AC8 vs §2.2 contradiction) → rev 2 resolved; r2 CLEAR. REVIEW-CODE r1
+found 3 (F1 WARN payload-shape inconsistency fix-now, F2 LOW test cleanup gaps
+fix-now, F3 LOW subject_ref dedup accept-with-doc). 648/648 green; live smoke ✓.
 
 ## Phase 15 longrun progress
 
@@ -18,7 +18,121 @@ accept-with-doc, 1 LOW defer to 15.8 as DEFERRED-021). 638/638 green; live smoke
 | 15.5 — Intake + dispute | ✅ COMPLETE | branch `phase-15-sprint-15.5` · v2.2 human-in-loop + /review-impl |
 | 15.6 — Topic-closing drain + residuals | ✅ COMPLETE | branch `phase-15-sprint-15.6` · v2.2 human-in-loop + /review-impl |
 | 15.7 — Chaining + sweep recovery + topology | ✅ COMPLETE | branch `phase-15-sprint-15.7` · v2.2 human-in-loop |
-| 15.8 | pending | — |
+| 15.8 — Collective request-step wiring | ✅ COMPLETE | branch `phase-15-sprint-15.8` · v2.2 human-in-loop |
+| 15.9 | pending | — |
+
+## Sprint 15.8 outcome
+
+Sprint 15.8 shipped **DEFERRED-018** — wires `procedure='collective'` into the Request-
+Approval lifecycle. A request step now may be decided by a motion's tally (15.4
+collective-decision primitive) instead of by a single officeholder's `decideStep`.
+
+**Migration:** `0061_collective_step.sql`:
+- `doa_matrix.procedure TEXT NOT NULL DEFAULT 'unilateral'` + `doa_matrix.body_id UUID NULL`
+  with `CHECK (procedure='unilateral' OR body_id IS NOT NULL)`.
+- `request_steps.body_id` + `request_steps.motion_id` (frozen snapshots, per the
+  target_office + doa_snapshot discipline).
+- `request_steps.status` enum extended to allow `'motion_proposed'`.
+- Sparse partial index `request_steps_motion_lookup_idx ON (motion_id) WHERE motion_id IS NOT NULL`
+  for O(1) tally→step lookup.
+
+**Service changes (DESIGN §2):**
+- `doaMatrix.ts:resolveMatrixRow` returns `procedure + body_id` (extended MatrixRow type).
+- `requests.ts:submitRequest` — removed `procedure='collective'` hard-reject. Per-step
+  procedure + body_id sourced from matrix row (frozen at submission). Rejects multi-step
+  `counter_sign+collective` (would collapse distinct-endorser to a single body — see
+  DEFERRED-022). On step 0 collective, calls `proposeStepMotion` inline.
+- `requests.ts:proposeStepMotion` (new internal helper) — INSERTs motions row + emits
+  `motion.proposed` event with `source: 'request_step'` payload + UPDATE request_steps
+  SET status='motion_proposed', motion_id=<new id>. Uses `proposed_by='system:request-
+  step-proposer'`.
+- `requests.ts:decideStep` — early-rejects `procedure='collective'` with
+  `{status: 'procedure_is_collective'}` (check BEFORE status filter so the user gets
+  the clearer error vs `conflict`).
+- `requests.ts:applyMotionToStep` (new exported helper) — handles 4 motion outcomes:
+  - `carried` → step.endorsed + advance to next step (auto-propose its motion if
+    collective) OR finalize approved (with 15.7 chain emission).
+  - `failed` → step.returned + request.returned + resolveArtifact('return').
+  - `lapsed` → degrade-to-unilateral escalation (REVIEW-DESIGN F1 fix): UPDATE step
+    `procedure='unilateral', body_id=NULL, motion_id=NULL, target_office=<next level>`
+    with fresh deadline. At authority tier → escalation_exhausted (payload
+    `{exhausted: true, reason: 'motion_lapsed', degraded_to: 'unilateral'}` matching
+    15.3 sweep shape — REVIEW-CODE F1 fix).
+  - `vetoed` → step.rejected + request.rejected + artifact untouched (no chain).
+- `motions.ts:tallyMotion` + `motions.ts:vetoMotion` + `coordinationSweep.ts:sweepExpiredMotions`
+  — all 3 paths now call `applyMotionToStep` if the motion has a linked request_step
+  (FOR UPDATE lookup; existing motion-row FOR UPDATE serializes the 3 paths against
+  each other).
+
+**Chain deduplication (post-smoke fix):** live smoke revealed a behavioral gap —
+collective approval was emitting TWO chained tasks per outcome (motion chain handler
+on motion.tallied + request chain handler in applyMotionToStep on request.resolved).
+Fixed at BUILD-end: motions.ts:tallyMotion and coordinationSweep.ts:sweepExpiredMotions
+now suppress the motion chain when `motion.subject_ref.startsWith('request_step:')` —
+the request's chain handler in `applyMotionToStep` is the sole emitter. Verified
+1 task post-fix.
+
+**Tests (10 new, 648 total):**
+- `requests.test.ts` — `15.8 AC1+AC4` (collective accepted + auto-propose motion),
+  `AC1-neg` (multi-step counter_sign+collective rejected), `AC5` (decideStep →
+  procedure_is_collective), `AC6-carried`/`-failed`/`-lapsed`/`-lapsed-at-top` (4
+  outcome paths via direct applyMotionToStep).
+- `motions.test.ts` — `15.8 motions.T7` (full collective flow via tallyMotion), `T7-vetoed`
+  (vetoMotion → step rejected).
+- `coordinationSweep.test.ts` — `15.8 sweep-lapsed` (sweep auto-lapses motion → step
+  degrades to unilateral).
+- Existing 15.3 `T5: collective procedure → BAD_REQUEST` test updated to confirm 15.8
+  now accepts the input (informational only; matrix decides).
+- All cleanup() helpers extended: motions.test.ts + coordinationSweep.test.ts now also
+  delete request_steps + requests + doa_matrix for the test project (REVIEW-CODE F2 fix).
+
+**Workflow execution:**
+- CLARIFY rev 2 (post-design F2 reconciliation, AC8 removed): user-approved Q1
+  auto-propose, Q2 lapsed→escalate, Q3 skip security review.
+- DESIGN r1 REJECTED 2 BLOCKs → rev 2 (lapsed degrade-to-unilateral, drop AC8) →
+  r2 CLEAR + 1 WARN accept-with-doc.
+- PLAN 12 tasks T1-T12, inline.
+- BUILD ran T1-T11; T12 verify + live smoke confirmed full end-to-end flow including
+  chain dedup fix.
+- REVIEW-CODE r1: F1 WARN payload-shape (fix-now), F2 LOW test cleanup (fix-now),
+  F3 LOW subject_ref string-prefix dedup (accept-with-doc).
+- QC CLEAR 12/12 ACs; no spec drift.
+- POST-REVIEW human gate CLEAR.
+
+**Verification:** `tsc` clean; `npm test` **648/648 green**; live smoke against Docker
+stack: submit collective request → motion auto-proposed → second + vote `for` → tally
+carried → request approved → 1 chained task posted (correct dedup).
+
+## Resume protocol — Sprint 15.9 (next sprint)
+
+Sprint 15.9 resumes from `phase-15-sprint-15.8`. Candidate scope: **DEFERRED-022**
+(multi-tier collective per-level body assignment — NEW from 15.8), **DEFERRED-021**
+(MCP outputSchema for chain field — interlocks DEFERRED-007), **DEFERRED-020** (LOW
+test coverage cleanup from 15.6). **DEFERRED-015/016/017** still HARD pre-prod
+authorization triggers.
+
+## Environment state (end of Sprint 15.8 session, 2026-05-20)
+
+- Docker stack: 8/8 containers healthy. Migrations 0053–**0061** applied. MCP + worker
+  rebuilt with 15.8 code, both responding.
+- `npm test` **648/648** green on `phase-15-sprint-15.8`; `tsc` clean.
+- Branch: `phase-15-sprint-15.8` — uncommitted at start of SESSION; commits via
+  Phase 11.
+- Deferred items OPEN: DEFERRED-009, 010, **015**, **016**, **017**, 020, **021**,
+  **022 NEW** — 015/016/017 HARD pre-prod authz; 022 NEW (multi-tier collective).
+  DEFERRED-018 **resolved** in Sprint 15.8.
+- Pending MCP lessons (4-6, to be added in RETRO):
+  - decision: collective request-step wiring contract (matrix-driven, auto-propose,
+    4-outcome handler, chain dedup via subject_ref prefix)
+  - decision: lapsed-degrade-to-unilateral escalation (vs re-resolve matrix)
+  - workaround: chain dedup using subject_ref string-prefix check (load-bearing
+    convention)
+  - workaround: test cleanup must include doa_matrix BEFORE decision_bodies (FK)
+  - workaround: decideStep collective check must precede status check (motion_proposed
+    is not pending; otherwise returns 'conflict' instead of 'procedure_is_collective')
+
+---
+
 
 ## Sprint 15.7 outcome
 

@@ -40,6 +40,7 @@ import {
   type ExecutionTaskBlob,
 } from './chaining.js';
 import { closeTopic } from './topics.js';
+import { applyMotionToStep } from './requests.js';
 
 const logger = createModuleLogger('coordination-sweep');
 
@@ -472,6 +473,7 @@ export async function sweepExpiredMotions(params?: {
         continue;
       }
 
+      let appliedOutcome: 'carried' | 'failed' | 'lapsed' | 'vetoed' | null = null;
       if (motion.status === 'proposed') {
         // Never seconded — lapse it (D9).
         await client.query(
@@ -486,6 +488,7 @@ export async function sweepExpiredMotions(params?: {
           subject_id: row.motion_id,
           payload: { outcome: 'lapsed', reason: 'not_seconded' },
         });
+        appliedOutcome = 'lapsed';
       } else {
         // 'balloting' — run the §4 tally.
         const bodyRes = await client.query<{ quorum: string; threshold: string }>(
@@ -502,8 +505,11 @@ export async function sweepExpiredMotions(params?: {
         // Sprint 15.7 — chain on carried only (DEFERRED-019, auto-tally path).
         // CHAINED_TASK_DEPENDENCY_INVALID throws → outer §0.1-loop catch logs
         // and continues; the motion stays balloting, retried next cycle.
+        // Sprint 15.8 — suppress motion chain for step-proposal motions; the
+        // request chain handler in applyMotionToStep handles the chained task.
         let chainResult: ChainResult | undefined;
-        if (outcome === 'carried') {
+        const isStepMotion = typeof motion.subject_ref === 'string' && motion.subject_ref.startsWith('request_step:');
+        if (outcome === 'carried' && !isStepMotion) {
           const chainParams = buildChainedTaskParams({
             source: 'motion',
             source_id: row.motion_id,
@@ -529,6 +535,30 @@ export async function sweepExpiredMotions(params?: {
             ? { outcome, auto: true, ...tally, chain: chainResult }
             : { outcome, auto: true, ...tally },
         });
+        appliedOutcome = outcome;
+      }
+
+      // Sprint 15.8 — if this motion was auto-proposed for a request step, apply
+      // the outcome to the step. Lapsed (most common via sweep) → degrade-to-
+      // unilateral escalation; carried/failed handled in their respective branches.
+      if (appliedOutcome) {
+        const stepLink = await client.query<{
+          request_id: string; step_index: number; target_office: string;
+        }>(
+          `SELECT request_id, step_index, target_office FROM request_steps
+             WHERE motion_id=$1 FOR UPDATE`,
+          [row.motion_id],
+        );
+        if (stepLink.rowCount === 1) {
+          await applyMotionToStep(client, {
+            motion_id: row.motion_id,
+            request_id: stepLink.rows[0].request_id,
+            step_index: stepLink.rows[0].step_index,
+            target_office: stepLink.rows[0].target_office,
+            outcome: appliedOutcome,
+            topic_id: row.topic_id,
+          });
+        }
       }
 
       await client.query('COMMIT');
