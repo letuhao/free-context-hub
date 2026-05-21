@@ -1,5 +1,64 @@
 # LONGRUN CHECKPOINT — Phase 15 autonomous longrun, session boundary (2026-05-21)
 
+**Status:** **Sprint 15.12 (tenant-scope authz + induction-pack tail —
+DEFERRED-009 + 010) — COMPLETE.** Closes the ENTIRE Phase 15 deferred backlog.
+v2.2 human-in-loop. REVIEW-DESIGN r1 1 BLOCK (body-project omission → DEFAULT_PROJECT_ID
+scope-escape) + 2 WARN → rev 2 CLEAR. 697/697 green; live smoke ✓; light tenant-isolation
+security checklist CLEAR.
+
+## Sprint 15.12 outcome
+
+**DEFERRED-009 (tenant-scope authz):** new `src/api/middleware/requireResourceScope.ts`:
+- `requireResourceScope(entity, param)` — 8 resolvers (topic/request/motion/dispute/intake/
+  body/task/artifact); loads the owning `project_id`, compares to `req.apiKeyScope`;
+  cross-tenant + unknown → 404 NOT_FOUND (no existence oracle / id-probing).
+- `requireBodyProjectScope` — create routes with project_id in body (createBody,
+  submitIntake); injects the key's scope on omission (REVIEW-DESIGN F1 fix — no
+  DEFAULT_PROJECT_ID scope-escape); explicit cross-project → 404.
+- `requireBodyTopicScope` — openDispute's `body.topic_id`.
+- Applied across topics/board/requests/motions/disputes/intake (40+ routes, complete
+  coverage per CLARIFY Q1 incl. indirect entity-derived scope). Auth-off / global-scope →
+  unrestricted (dev posture). MCP path (unscoped workspace token) out of scope.
+
+**DEFERRED-010 (induction-pack tail):** `replayEvents` gains `tail: true` (most-recent N
+events, DESC+reverse, `has_more` via `EXISTS(seq<min)` — no COUNT). `joinTopic` fresh-join
+(since_seq=0) uses tail so the pack carries recent context incl. the joiner's own
+`topic.actor_joined`; cursor primed to HEAD. Re-prime (since_seq>0) unchanged.
+
+**Tests (17 new, 697 total):** requireResourceScope.test.ts (12 — per-entity scope +
+body-project inject + body-topic), coordinationEvents.test.ts (3 tail), topics route test
+(2 — guard-wiring proof + fresh-join tail pack). requireResourceScope.test.ts registered
+in npm test. No migration.
+
+**Workflow:** CLARIFY Q1 EXPANDED to complete coverage; Q2 404; Q3 reuse 1000 tail; Q4
+light security review. DESIGN r1 1 BLOCK + 2 WARN → rev 2. BUILD T1-T12. VERIFY 697/697 +
+smoke. REVIEW-CODE 0. QC 12/12. Light security checklist CLEAR.
+
+## 🎉 Phase 15 deferred backlog — FULLY CLOSED
+
+All Phase 15 deferred items resolved: 009, 010, 011, 015, 016, 017, 018, 019, 020, 021,
+022. (007 resolved in Phase 13; 008 is a Phase 11 exchange item, still open but not Phase
+15.) The Multi-Actor Coordination Protocol (topics, board, requests, motions, disputes,
+intake, collective decision, chaining, closing-drain, authorization model, tenant-scope)
+is complete with no open Phase-15 debt.
+
+## Resume — next
+
+No Phase 15 deferred items remain. Options: a Phase 15 closeout/retro, GUI work for the
+coordination surface, or a new phase. DEFERRED-008 (Phase 11 knowledge-bundle scope
+column) remains the only open non-Phase-15 deferred item.
+
+## Environment state (end of Sprint 15.12 session, 2026-05-21)
+
+- Docker stack: 8/8 healthy. Migrations 0053–0063 applied (15.12 added NO migration).
+- `npm test` **697/697** green; tsc clean.
+- Branch: `phase-15-sprint-15.12` — committed in Phase 11.
+- Deferred OPEN: only DEFERRED-008 (non-Phase-15). All Phase 15 items RESOLVED.
+
+---
+
+## Sprint 15.11 outcome
+
 **Status:** **Sprint 15.11 (Phase 15 authorization model — DEFERRED-015/016/017) —
 COMPLETE** via the v2.2 human-in-loop 12-phase workflow + mandatory security-framed
 adversarial review (guardrail 5c0b7b25). XL sprint. REVIEW-DESIGN r1 found 1 BLOCK +

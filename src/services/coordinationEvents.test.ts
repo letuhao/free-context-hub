@@ -226,3 +226,33 @@ test('replayEvents: has_more is true on a truncated page, false on the tail [MED
   assert.equal(full.events.length, 3);
   assert.equal(full.has_more, false, 'a non-truncated call has has_more false');
 });
+
+// ── Sprint 15.12 — tail mode (DEFERRED-010) ────────────────────────────────
+
+test('15.12 tail: returns the most-recent N events, seq-ASC', async () => {
+  await makeTopic('ce-tail');
+  for (let i = 0; i < 5; i++) await appendInTxn(evt('ce-tail'));
+  // tail with limit 2 → the LAST 2 events (seq 4,5), ascending
+  const tail = await replayEvents({ topic_id: 'ce-tail', tail: true, limit: 2 });
+  assert.equal(tail.events.length, 2);
+  assert.deepEqual(tail.events.map((e) => e.seq), [4, 5], 'most-recent 2, seq-ASC');
+  assert.equal(tail.next_cursor, 5, 'cursor = max seq (primed to HEAD)');
+  assert.equal(tail.has_more, true, 'older events exist before the tail window');
+});
+
+test('15.12 tail: small topic (events < limit) → all events, has_more false', async () => {
+  await makeTopic('ce-tail-small');
+  await appendInTxn(evt('ce-tail-small'));
+  await appendInTxn(evt('ce-tail-small'));
+  const tail = await replayEvents({ topic_id: 'ce-tail-small', tail: true });
+  assert.equal(tail.events.length, 2, 'tail == full for a small topic');
+  assert.deepEqual(tail.events.map((e) => e.seq), [1, 2]);
+  assert.equal(tail.has_more, false, 'no older events beyond the window');
+});
+
+test('15.12 tail: forward (non-tail) replay is unchanged', async () => {
+  await makeTopic('ce-tail-fwd');
+  for (let i = 0; i < 3; i++) await appendInTxn(evt('ce-tail-fwd'));
+  const fwd = await replayEvents({ topic_id: 'ce-tail-fwd', since_seq: 1 });
+  assert.deepEqual(fwd.events.map((e) => e.seq), [2, 3], 'forward from cursor unchanged');
+});

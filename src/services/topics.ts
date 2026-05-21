@@ -297,9 +297,15 @@ export async function joinTopic(params: {
     await client.query('COMMIT');
 
     // ── txn 2: coherent induction-pack read — snapshot isolation, no write lock ──
+    // Sprint 15.12 (DEFERRED-010) — a FRESH join (since_seq=0) uses TAIL mode so the
+    // pack carries the most-recent events (incl. the joiner's own topic.actor_joined)
+    // rather than the oldest 1000 on a large topic. A re-prime (since_seq>0) keeps the
+    // forward cursor-continuation contract.
     await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
     const tr = await fetchTopicWithRoster(client, topicId);
-    const ev = await replayEvents({ topic_id: topicId, since_seq: sinceSeq }, client);
+    const ev = sinceSeq === 0
+      ? await replayEvents({ topic_id: topicId, tail: true }, client)
+      : await replayEvents({ topic_id: topicId, since_seq: sinceSeq }, client);
     await client.query('COMMIT');
     if (!tr) {
       // Unreachable: the topic existed under FOR UPDATE in txn 1 and is never deleted.

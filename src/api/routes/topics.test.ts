@@ -121,3 +121,43 @@ test('SSE stream runs cleanup exactly once on client disconnect', async () => {
     'cleanup ran on disconnect — live-stream count is back to baseline',
   );
 });
+
+// ── Sprint 15.12 — tenant-scope wiring (DEFERRED-009) + induction tail (010) ─
+
+test('15.12: requireResourceScope is wired on GET /api/topics/:id — cross-tenant → 404', async () => {
+  // A fresh app with a scope shim, mounting the SAME topicsRouter, proves the
+  // guard is actually mounted on the route (not just unit-tested in isolation).
+  const scopedApp = express();
+  scopedApp.use(express.json());
+  scopedApp.use((req, _res, next) => {
+    const h = req.headers['x-test-key-scope'];
+    if (typeof h === 'string') (req as { apiKeyScope?: string | null }).apiKeyScope = h;
+    next();
+  });
+  scopedApp.use('/api/topics', topicsRouter);
+  const srv = http.createServer(scopedApp);
+  await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r()));
+  const addr = srv.address();
+  const url = `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`;
+
+  const t = await charterTopic({ project_id: TEST_PROJECT, name: 'Scoped', charter: 'c', created_by: 'o' });
+  const status = await new Promise<number>((resolve, reject) => {
+    const r = http.request(`${url}/api/topics/${t.topic_id}`, { headers: { 'x-test-key-scope': '__other_project__' } },
+      (res) => { res.resume(); res.on('end', () => resolve(res.statusCode ?? 0)); });
+    r.on('error', reject); r.end();
+  });
+  await new Promise<void>((r) => srv.close(() => r()));
+  assert.equal(status, 404, 'a key scoped to another project gets 404 on this topic');
+});
+
+test('15.12 AC10/AC11: fresh joinTopic induction pack uses tail mode — includes the joiner own actor_joined', async () => {
+  const t = await charterTopic({ project_id: TEST_PROJECT, name: 'Tail Join', charter: 'c', created_by: 'owner-tj' });
+  const pack = await joinTopic({
+    topic_id: t.topic_id, actor_id: 'owner-tj', actor_type: 'human', display_name: 'O', level: 'authority',
+  });
+  // small topic → tail == full; the joiner's own topic.actor_joined is present + cursor at HEAD.
+  const joined = pack.events.find((e) => e.type === 'topic.actor_joined' && e.actor_id === 'owner-tj');
+  assert.ok(joined, 'induction pack includes the joiner own actor_joined event');
+  assert.equal(pack.your_cursor, pack.events[pack.events.length - 1].seq, 'cursor primed to HEAD');
+  assert.equal(pack.has_more, false, 'small topic → no older events beyond the tail window');
+});

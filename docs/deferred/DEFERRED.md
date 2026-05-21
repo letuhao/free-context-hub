@@ -382,7 +382,13 @@
 - **Priority:** LOW
 - **Session deferred:** 2026-05-16
 - **Sessions open:** 1
-- **Status:** OPEN
+- **Status:** RESOLVED — Sprint 15.12 (2026-05-21): `replayEvents` gains a `tail` mode
+  (most-recent N events, `ORDER BY seq DESC LIMIT N` re-sorted ASC; `has_more` via
+  `EXISTS(seq < min)` — no full COUNT). `joinTopic`'s FRESH-join (since_seq=0) induction
+  pack uses tail mode so a joiner on a >N-event topic gets recent context incl. their own
+  `topic.actor_joined`, with `your_cursor` = max seq (primed to HEAD). A re-prime
+  (since_seq>0) keeps the forward cursor-continuation contract. 3 tail tests + a fresh-join
+  induction-pack test.
 - **Source:** Phase 15 Sprint 15.1 REVIEW-CODE r1, finding 1 (`docs/audit/findings-sprint-15.1-code-r1.md`).
 
 ---
@@ -396,7 +402,16 @@
 - **Priority:** MED — exploitable only with `MCP_AUTH_ENABLED=true` plus a leaked or logged `topic_id`.
 - **Session deferred:** 2026-05-16
 - **Sessions open:** 1
-- **Status:** OPEN
+- **Status:** RESOLVED — Sprint 15.12 (2026-05-21): tenant-scope enforcement.
+  New `requireResourceScope(entity)` middleware (8 resolvers — topic/request/motion/dispute/
+  intake/body/task/artifact — each loads the owning `project_id` and compares to
+  `req.apiKeyScope`; cross-tenant + unknown → 404 NOT_FOUND, no existence oracle) +
+  `requireBodyProjectScope` (create routes with project_id in body — injects the key's scope
+  on omission, no DEFAULT_PROJECT_ID escape) + `requireBodyTopicScope` (openDispute's
+  body.topic_id). Applied across topics/board/requests/motions/disputes/intake routes
+  (complete coverage per CLARIFY Q1, incl. indirect entity-derived scope). Auth-off /
+  global-scope → unrestricted (dev posture preserved). Light tenant-isolation security
+  checklist CLEAR. MCP path (unscoped workspace token, single operator) out of scope.
 - **Source:** Phase 15 Sprint 15.1 REVIEW-CODE r1, finding 2 (`docs/audit/findings-sprint-15.1-code-r1.md`).
 
 ---

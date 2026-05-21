@@ -36,6 +36,7 @@ import {
   decideStep,
 } from '../../core/index.js';
 import { requireRole } from '../middleware/requireRole.js';
+import { requireResourceScope } from '../middleware/requireResourceScope.js';
 
 const router = Router();
 
@@ -109,7 +110,7 @@ function resolveActorIdentity(
 }
 
 // POST /api/topics/:id/requests — submit a new approval request
-router.post('/topics/:id/requests', requireRole('writer'), async (req, res, next) => {
+router.post('/topics/:id/requests', requireRole('writer'), requireResourceScope('topic'), async (req, res, next) => {
   try {
     const body = req.body ?? {};
     // F1 — bind submitted_by to the authenticated key (Sprint 15.3.1)
@@ -137,7 +138,7 @@ router.post('/topics/:id/requests', requireRole('writer'), async (req, res, next
 });
 
 // GET /api/topics/:id/requests — list requests for a topic
-router.get('/topics/:id/requests', requireRole('reader'), async (req, res, next) => {
+router.get('/topics/:id/requests', requireRole('reader'), requireResourceScope('topic'), async (req, res, next) => {
   try {
     const statusQ = req.query.status;
     const statusFilter = typeof statusQ === 'string' && statusQ ? statusQ : undefined;
@@ -150,7 +151,7 @@ router.get('/topics/:id/requests', requireRole('reader'), async (req, res, next)
 });
 
 // GET /api/requests/:id — get a single request + its steps
-router.get('/requests/:id', requireRole('reader'), async (req, res, next) => {
+router.get('/requests/:id', requireRole('reader'), requireResourceScope('request'), async (req, res, next) => {
   try {
     const req2 = await getRequest({ request_id: String(req.params.id) });
     if (req2 === null) {
@@ -162,7 +163,7 @@ router.get('/requests/:id', requireRole('reader'), async (req, res, next) => {
 });
 
 // POST /api/requests/:id/steps/:n/decide — decide a step
-router.post('/requests/:id/steps/:n/decide', requireRole('writer'), async (req, res, next) => {
+router.post('/requests/:id/steps/:n/decide', requireRole('writer'), requireResourceScope('request'), async (req, res, next) => {
   try {
     const body = req.body ?? {};
     // Sprint 15.6 §3.3 — /^\d+$/ rejects fractional/negative strings before parseInt
