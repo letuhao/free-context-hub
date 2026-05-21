@@ -38,6 +38,7 @@ import {
   type ExecutionTaskBlob,
 } from './chaining.js';
 import { applyMotionToStep } from './requests.js';
+import { getEnv } from '../env.js';
 
 const logger = createModuleLogger('motions');
 
@@ -107,6 +108,7 @@ export type VoteResult =
   | { status: 'balloting_closed' }
   | { status: 'topic_closed' }
   | { status: 'not_member' }
+  | { status: 'proxy_not_granted' }
   | { status: 'already_voted' };
 
 export type VetoResult =
@@ -528,6 +530,20 @@ export async function castVote(params: {
       return { status: 'not_member' };
     }
     const voteWeight = memberRes.rows[0].vote_weight;
+
+    // Sprint 15.11 (DEFERRED-017 Q3) — verify the proxy grant when proxy_for is set.
+    // Gated behind MCP_AUTH_ENABLED per Q2 (body authz activates with auth-on);
+    // auth-off preserves the 15.4 behavior (proxy_for recorded unverified).
+    if (proxyFor && getEnv().MCP_AUTH_ENABLED) {
+      const grant = await client.query(
+        `SELECT 1 FROM proxies WHERE body_id=$1 AND principal=$2 AND proxy=$3`,
+        [motion.body_id, actorId, proxyFor],
+      );
+      if (grant.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return { status: 'proxy_not_granted' };
+      }
+    }
 
     // ── (vote) row insert — one immutable ballot per principal (Q12) ─────────
     const ins = await client.query(

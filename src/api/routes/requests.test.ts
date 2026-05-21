@@ -20,7 +20,7 @@ import test, { before, after } from 'node:test';
 import http from 'node:http';
 import express from 'express';
 import { requestsRouter } from './requests.js';
-import { charterTopic, joinTopic, closeTopic, postTask, claimTask, completeTask } from '../../core/index.js';
+import { charterTopic, joinTopic, grantLevel, closeTopic, postTask, claimTask, completeTask } from '../../core/index.js';
 import { getDbPool } from '../../db/client.js';
 
 const TEST_PROJECT = '__test_requests_routes__';
@@ -126,9 +126,12 @@ async function mkTopicWithParticipants() {
     charter: 'route test', created_by: 'authority-actor',
   });
   const topicId = t.topic_id;
-  await joinTopic({ topic_id: topicId, actor_id: 'execution-actor', actor_type: 'human', display_name: 'Exec', level: 'execution' });
-  await joinTopic({ topic_id: topicId, actor_id: 'coordination-actor', actor_type: 'human', display_name: 'Coord', level: 'coordination' });
+  // Sprint 15.11 — owner (authority-actor = created_by) joins first as authority,
+  // others join at execution, then the owner grants the coordinator its level.
   await joinTopic({ topic_id: topicId, actor_id: 'authority-actor', actor_type: 'human', display_name: 'Auth', level: 'authority' });
+  await joinTopic({ topic_id: topicId, actor_id: 'execution-actor', actor_type: 'human', display_name: 'Exec', level: 'execution' });
+  await joinTopic({ topic_id: topicId, actor_id: 'coordination-actor', actor_type: 'human', display_name: 'Coord', level: 'execution' });
+  await grantLevel({ topic_id: topicId, actor_id: 'coordination-actor', level: 'coordination', granted_by: 'authority-actor' });
   return topicId;
 }
 

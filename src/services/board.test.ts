@@ -21,7 +21,7 @@
 import assert from 'node:assert/strict';
 import test, { before, after, beforeEach } from 'node:test';
 import { postTask, listBoard, claimTask, releaseTask, completeTask } from './board.js';
-import { charterTopic, joinTopic } from './topics.js';
+import { charterTopic, joinTopic, grantLevel } from './topics.js';
 import { replayEvents } from './coordinationEvents.js';
 import { getDbPool } from '../db/client.js';
 
@@ -592,8 +592,11 @@ async function mkTopo() {
   const t = await charterTopic({
     project_id: TEST_PROJECT, name: 'Topology Topic', charter: 'topology', created_by: 'alice',
   });
+  // Sprint 15.11 — owner 'alice' (created_by) bootstraps at coordination; non-owner
+  // 'bob' joins at execution then alice grants it coordination.
   await joinTopic({ topic_id: t.topic_id, actor_id: 'alice', actor_type: 'human', display_name: 'A', level: 'coordination' });
-  await joinTopic({ topic_id: t.topic_id, actor_id: 'bob', actor_type: 'human', display_name: 'B', level: 'coordination' });
+  await joinTopic({ topic_id: t.topic_id, actor_id: 'bob', actor_type: 'human', display_name: 'B', level: 'execution' });
+  await grantLevel({ topic_id: t.topic_id, actor_id: 'bob', level: 'coordination', granted_by: 'alice' });
   return t.topic_id;
 }
 

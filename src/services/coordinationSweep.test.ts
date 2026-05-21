@@ -21,7 +21,7 @@ import test, { before, after, beforeEach } from 'node:test';
 import { sweepAbandonedClaims, sweepStalledSteps, sweepExpiredMotions } from './coordinationSweep.js';
 import { postTask, claimTask } from './board.js';
 import { writeArtifact, baselineArtifact } from './artifacts.js';
-import { charterTopic, joinTopic, closeTopic } from './topics.js';
+import { charterTopic, joinTopic, grantLevel, closeTopic } from './topics.js';
 import { replayEvents } from './coordinationEvents.js';
 import { submitRequest } from './requests.js';
 import { createBody, addBodyMember } from './decisionBodies.js';
@@ -357,9 +357,12 @@ async function mkTopicWithStalledStep(slot: string, submitterLevel: 'execution' 
     charter: 'stalled step sweep test', created_by: `actor-auth-${slot}`,
   });
   const topicId = t.topic_id;
-  await joinTopic({ topic_id: topicId, actor_id: `actor-exec-${slot}`, actor_type: 'ai', display_name: 'Exec', level: 'execution' });
-  await joinTopic({ topic_id: topicId, actor_id: `actor-coord-${slot}`, actor_type: 'ai', display_name: 'Coord', level: 'coordination' });
+  // Sprint 15.11 — owner (actor-auth = created_by) joins first as authority, then
+  // others join at execution and the owner grants the coordinator its level.
   await joinTopic({ topic_id: topicId, actor_id: `actor-auth-${slot}`, actor_type: 'ai', display_name: 'Auth', level: 'authority' });
+  await joinTopic({ topic_id: topicId, actor_id: `actor-exec-${slot}`, actor_type: 'ai', display_name: 'Exec', level: 'execution' });
+  await joinTopic({ topic_id: topicId, actor_id: `actor-coord-${slot}`, actor_type: 'ai', display_name: 'Coord', level: 'execution' });
+  await grantLevel({ topic_id: topicId, actor_id: `actor-coord-${slot}`, level: 'coordination', granted_by: `actor-auth-${slot}` });
 
   // Create a for_review artifact
   const task = await postTask({
@@ -624,8 +627,13 @@ async function mkMotionTopic(
     charter: 'motion sweep test', created_by: actorIds[0],
   });
   const topicId = t.topic_id;
-  for (const a of actorIds) {
-    await joinTopic({ topic_id: topicId, actor_id: a, actor_type: 'ai', display_name: a, level: 'coordination' });
+  // Sprint 15.11 — owner (actorIds[0] = created_by) bootstraps at coordination;
+  // non-owners join at execution then the owner grants them coordination.
+  const owner = actorIds[0];
+  await joinTopic({ topic_id: topicId, actor_id: owner, actor_type: 'ai', display_name: owner, level: 'coordination' });
+  for (const a of actorIds.slice(1)) {
+    await joinTopic({ topic_id: topicId, actor_id: a, actor_type: 'ai', display_name: a, level: 'execution' });
+    await grantLevel({ topic_id: topicId, actor_id: a, level: 'coordination', granted_by: owner });
   }
   const body = await createBody({
     project_id: TEST_PROJECT, name: `Body ${slot}`,
@@ -791,8 +799,12 @@ test('15.7 AC5: sweepExpiredMotions auto-carried → chain emits task.posted', a
   const t = await charterTopic({
     project_id: TEST_PROJECT, name: 'sweep-chain-topic', charter: 'x', created_by: 'a',
   });
-  for (const a of ['a', 'b', 'sec']) {
-    await joinTopic({ topic_id: t.topic_id, actor_id: a, actor_type: 'human', display_name: a, level: 'coordination' });
+  // Sprint 15.11 — owner 'a' (created_by) bootstraps at coordination; non-owners
+  // join at execution then 'a' grants them coordination.
+  await joinTopic({ topic_id: t.topic_id, actor_id: 'a', actor_type: 'human', display_name: 'a', level: 'coordination' });
+  for (const a of ['b', 'sec']) {
+    await joinTopic({ topic_id: t.topic_id, actor_id: a, actor_type: 'human', display_name: a, level: 'execution' });
+    await grantLevel({ topic_id: t.topic_id, actor_id: a, level: 'coordination', granted_by: 'a' });
   }
   const body = await createBody({
     project_id: TEST_PROJECT, name: 'B', quorum: 0, threshold: 0.5, veto_holders: [], created_by: 'a',
@@ -894,9 +906,10 @@ test('15.8 sweep-lapsed: sweepExpiredMotions on a motion linked to a request ste
   const t = await charterTopic({
     project_id: TEST_PROJECT, name: '15.8 sweep-lapsed', charter: 'c', created_by: 'authority',
   });
-  for (const a of ['execution', 'authority']) {
-    await joinTopic({ topic_id: t.topic_id, actor_id: a, actor_type: 'human', display_name: a, level: a === 'authority' ? 'authority' : 'execution' });
-  }
+  // Sprint 15.11 — owner 'authority' (created_by) joins first at authority; the
+  // execution actor is a non-owner and stays at execution.
+  await joinTopic({ topic_id: t.topic_id, actor_id: 'authority', actor_type: 'human', display_name: 'authority', level: 'authority' });
+  await joinTopic({ topic_id: t.topic_id, actor_id: 'execution', actor_type: 'human', display_name: 'execution', level: 'execution' });
   const body = await createBody({
     project_id: TEST_PROJECT, name: 'B-sweep', quorum: 100, threshold: 0.5,
     veto_holders: [], created_by: 'authority',

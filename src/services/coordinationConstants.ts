@@ -41,6 +41,8 @@ export const EVENT_TYPES = [
   'topic.closing',
   'claim.force_lapsed', 'request.force_closed', 'motion.force_lapsed',
   'dispute.force_closed', 'intake.force_dismissed',
+  // Sprint 15.11 — authorization model (level-grant chain)
+  'topic.level_granted',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 

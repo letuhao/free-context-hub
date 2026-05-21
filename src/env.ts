@@ -116,6 +116,9 @@ const EnvSchema = z.object({
   // Vector dimension must match the embedding model configured above.
   EMBEDDINGS_DIM: z.coerce.number().int().positive().optional().default(1024),
 
+  /** Sprint 15.11 (DEFERRED-016 Q4) — max active api keys a single operator (created_by) may mint. */
+  MAX_KEYS_PER_CREATOR: z.coerce.number().int().positive().optional().default(50),
+
   // Chunking: number of lines per chunk for MVP.
   CHUNK_LINES: z.coerce.number().int().positive().optional().default(120),
   /** Skip workspace files larger than this when indexing (bytes). Logged via getEnv / indexer. */

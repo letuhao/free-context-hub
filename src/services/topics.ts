@@ -74,6 +74,14 @@ export type CloseResult = {
   force_lapsed: ForceLapsedCounts;
 };
 
+export type GrantLevelResult =
+  | { status: 'granted'; level: string; prior_level: string }
+  | { status: 'topic_not_found' }
+  | { status: 'topic_closed' }
+  | { status: 'self_grant_forbidden' }
+  | { status: 'not_authorized' }
+  | { status: 'target_not_participant' };
+
 /**
  * Internal — topic record + participant roster in ONE query (one snapshot).
  * `executor` is the pool (getTopic) or a txn client (joinTopic's REPEATABLE READ
@@ -220,8 +228,8 @@ export async function joinTopic(params: {
   try {
     // ── txn 1: the join writes ──
     await client.query('BEGIN');
-    const topicRes = await client.query<{ project_id: string; status: string }>(
-      `SELECT project_id, status FROM topics WHERE topic_id = $1 FOR UPDATE`,
+    const topicRes = await client.query<{ project_id: string; status: string; created_by: string }>(
+      `SELECT project_id, status, created_by FROM topics WHERE topic_id = $1 FOR UPDATE`,
       [topicId],
     );
     if (topicRes.rowCount === 0) {
@@ -231,6 +239,21 @@ export async function joinTopic(params: {
     if (topicRes.rows[0].status === 'closed') {
       throw new ContextHubError('BAD_REQUEST', `topic ${topicId} is closed`);
     }
+
+    // Sprint 15.11 (DEFERRED-015) — level is no longer self-asserted. The topic
+    // OWNER (created_by) bootstraps the grant chain: their first join may set any
+    // level (typically 'authority'). Every OTHER joiner is seated at 'execution'
+    // and must be raised by the owner / an authority via grantLevel — a non-owner
+    // requesting a higher level is an honest BAD_REQUEST (not a silent downgrade).
+    // Enforced ALWAYS (auth-on and auth-off) — keyed on actor_id (Q2 posture A).
+    const isOwner = actorId === topicRes.rows[0].created_by;
+    if (!isOwner && level !== 'execution') {
+      throw new ContextHubError(
+        'BAD_REQUEST',
+        `level_grant_required: non-owner joiners are seated at 'execution'; request a grant from the topic owner or an authority (grantLevel)`,
+      );
+    }
+    const grantedBy = isOwner ? actorId : null;
 
     // upsert the project-scoped actor; RETURNING type is atomic (no TOCTOU)
     const actorRes = await client.query<{ type: string }>(
@@ -247,13 +270,15 @@ export async function joinTopic(params: {
       );
     }
 
-    // idempotent participant insert — re-join adds no row and emits no event
+    // idempotent participant insert — re-join adds no row and emits no event.
+    // Sprint 15.11 — owner seats at their requested level + granted_by=self;
+    // everyone else at 'execution' (granted_by NULL until raised via grantLevel).
     const partRes = await client.query(
-      `INSERT INTO topic_participants (topic_id, actor_id, level)
-       VALUES ($1, $2, $3)
+      `INSERT INTO topic_participants (topic_id, actor_id, level, granted_by)
+       VALUES ($1, $2, $3, $4)
        ON CONFLICT (topic_id, actor_id) DO NOTHING
        RETURNING actor_id`,
-      [topicId, actorId, level],
+      [topicId, actorId, isOwner ? level : 'execution', grantedBy],
     );
     if ((partRes.rowCount ?? 0) > 0) {
       await client.query(
@@ -266,7 +291,7 @@ export async function joinTopic(params: {
         type: 'topic.actor_joined',
         subject_type: 'topic',
         subject_id: topicId,
-        payload: { level, actor_type: actorType },
+        payload: { level: isOwner ? level : 'execution', actor_type: actorType },
       });
     }
     await client.query('COMMIT');
@@ -290,6 +315,112 @@ export async function joinTopic(params: {
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     logger.error({ err: String(err) }, 'joinTopic failed');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Sprint 15.11 (DEFERRED-015) — grant/raise/lower a participant's level. The
+ * level-grant chain that makes `topic_participants.level` authoritative (no longer
+ * self-asserted). Enforced ALWAYS (auth-on and auth-off) — keyed on actor_id.
+ *
+ * Authorization: the grantor must be the topic OWNER (created_by — a permanent
+ * grant root, immune to demotion) OR an existing `authority` participant. Self-grant
+ * (grantor raising own level) is forbidden — the owner is authority by charter and
+ * needs no self-grant. `authority` is a mutually-trusted role: an authority may
+ * demote a peer; the owner is the recovery tiebreaker (DESIGN §2.2).
+ *
+ * Lock order: topic row (FOR UPDATE) → participant rows. No motion/request locks.
+ */
+export async function grantLevel(params: {
+  topic_id: string;
+  actor_id: string;
+  level: string;
+  granted_by: string;
+}): Promise<GrantLevelResult> {
+  const topicId = (params.topic_id ?? '').trim();
+  const targetActor = (params.actor_id ?? '').trim();
+  const level = params.level;
+  const grantedBy = (params.granted_by ?? '').trim();
+
+  if (!topicId || !targetActor || !grantedBy) {
+    throw new ContextHubError('BAD_REQUEST', 'topic_id, actor_id, granted_by are all required');
+  }
+  if (!LEVEL_SET.has(level)) {
+    throw new ContextHubError('BAD_REQUEST', `level must be one of: ${LEVELS.join(', ')}`);
+  }
+
+  const pool = getDbPool();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // ── topic row lock ──
+    const topicRes = await client.query<{ created_by: string; status: string }>(
+      `SELECT created_by, status FROM topics WHERE topic_id=$1 FOR UPDATE`,
+      [topicId],
+    );
+    if (topicRes.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return { status: 'topic_not_found' };
+    }
+    const { created_by: ownerId, status } = topicRes.rows[0];
+    if (status === 'closed' || status === 'closing') {
+      await client.query('ROLLBACK');
+      return { status: 'topic_closed' };
+    }
+
+    // self-grant guard — an actor may not raise their own level
+    if (grantedBy === targetActor) {
+      await client.query('ROLLBACK');
+      return { status: 'self_grant_forbidden' };
+    }
+
+    // authorize the grantor: owner (by created_by, level-independent) OR an
+    // existing 'authority' participant.
+    let authorized = grantedBy === ownerId;
+    if (!authorized) {
+      const grantorRes = await client.query<{ level: string }>(
+        `SELECT level FROM topic_participants WHERE topic_id=$1 AND actor_id=$2`,
+        [topicId, grantedBy],
+      );
+      authorized = grantorRes.rowCount === 1 && grantorRes.rows[0].level === 'authority';
+    }
+    if (!authorized) {
+      await client.query('ROLLBACK');
+      return { status: 'not_authorized' };
+    }
+
+    // target must be an existing participant
+    const targetRes = await client.query<{ level: string }>(
+      `SELECT level FROM topic_participants WHERE topic_id=$1 AND actor_id=$2 FOR UPDATE`,
+      [topicId, targetActor],
+    );
+    if (targetRes.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return { status: 'target_not_participant' };
+    }
+    const priorLevel = targetRes.rows[0].level;
+
+    await client.query(
+      `UPDATE topic_participants SET level=$1, granted_by=$2 WHERE topic_id=$3 AND actor_id=$4`,
+      [level, grantedBy, topicId, targetActor],
+    );
+    await appendEvent(client, {
+      topic_id: topicId,
+      actor_id: grantedBy,
+      type: 'topic.level_granted',
+      subject_type: 'topic',
+      subject_id: topicId,
+      payload: { actor_id: targetActor, level, granted_by: grantedBy, prior_level: priorLevel },
+    });
+    await client.query('COMMIT');
+    return { status: 'granted', level, prior_level: priorLevel };
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    logger.error({ err: String(err) }, 'grantLevel failed');
     throw err;
   } finally {
     client.release();

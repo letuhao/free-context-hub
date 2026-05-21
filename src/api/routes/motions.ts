@@ -52,6 +52,9 @@ import {
   castVote,
   vetoMotion,
   tallyMotion,
+  grantProxy,
+  revokeProxy,
+  listProxies,
 } from '../../core/index.js';
 import { requireRole } from '../middleware/requireRole.js';
 
@@ -88,9 +91,11 @@ function statusToHttp(status: string): number {
     case 'body_not_found':
     case 'not_member':
     case 'not_participant':
+    case 'principal_not_member':
       return 422;
     case 'not_veto_holder':
     case 'self_second_forbidden':
+    case 'not_authorized':
       return 403;
     case 'not_found':
       return 404;
@@ -108,7 +113,10 @@ function asNumber(v: unknown): number {
 }
 
 // ── POST /api/decision-bodies — create a decision body ───────────────────────
-router.post('/decision-bodies', requireRole('writer'), async (req, res, next) => {
+// Sprint 15.11 (DEFERRED-017) — raised to admin: body config is a project-admin
+// operation (like doa_matrix); a writer should not be able to mint a body it
+// rubber-stamps its own requests with.
+router.post('/decision-bodies', requireRole('admin'), async (req, res, next) => {
   try {
     const body = req.body ?? {};
     const result = await createBody({
@@ -125,7 +133,8 @@ router.post('/decision-bodies', requireRole('writer'), async (req, res, next) =>
 });
 
 // ── POST /api/decision-bodies/:id/members — add (or re-weight) a member ───────
-router.post('/decision-bodies/:id/members', requireRole('writer'), async (req, res, next) => {
+// Sprint 15.11 (DEFERRED-017) — raised to admin (body membership is project-config).
+router.post('/decision-bodies/:id/members', requireRole('admin'), async (req, res, next) => {
   try {
     const body = req.body ?? {};
     const result = await addBodyMember({
@@ -134,6 +143,44 @@ router.post('/decision-bodies/:id/members', requireRole('writer'), async (req, r
       vote_weight: asNumber(body.vote_weight),
     });
     res.status(statusToHttp(result.status)).json({ status: 'ok', data: result });
+  } catch (e) { next(e); }
+});
+
+// ── Sprint 15.11 (DEFERRED-017 Q3) — proxy grants ────────────────────────────
+// POST /api/decision-bodies/:id/proxies — principal delegates their vote.
+// requireRole('writer') outer gate; the principal-binding (granted_by===principal)
+// is the real authz (service-enforced).
+router.post('/decision-bodies/:id/proxies', requireRole('writer'), async (req, res, next) => {
+  try {
+    const body = req.body ?? {};
+    const result = await grantProxy({
+      body_id: String(req.params.id),
+      principal: asString(body.principal),
+      proxy: asString(body.proxy),
+      granted_by: asString(body.granted_by),
+    });
+    res.status(statusToHttp(result.status)).json({ status: 'ok', data: result });
+  } catch (e) { next(e); }
+});
+
+// DELETE /api/decision-bodies/:id/proxies — revoke a proxy grant.
+router.delete('/decision-bodies/:id/proxies', requireRole('writer'), async (req, res, next) => {
+  try {
+    const body = req.body ?? {};
+    const result = await revokeProxy({
+      body_id: String(req.params.id),
+      principal: asString(body.principal),
+      proxy: asString(body.proxy),
+    });
+    res.status(statusToHttp(result.status)).json({ status: 'ok', data: result });
+  } catch (e) { next(e); }
+});
+
+// GET /api/decision-bodies/:id/proxies — list proxy grants for a body.
+router.get('/decision-bodies/:id/proxies', requireRole('reader'), async (req, res, next) => {
+  try {
+    const result = await listProxies({ body_id: String(req.params.id) });
+    res.json({ status: 'ok', data: result });
   } catch (e) { next(e); }
 });
 

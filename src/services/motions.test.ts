@@ -37,7 +37,7 @@ import {
   listMotions,
 } from './motions.js';
 import { createBody, addBodyMember } from './decisionBodies.js';
-import { charterTopic, joinTopic, closeTopic } from './topics.js';
+import { charterTopic, joinTopic, grantLevel, closeTopic } from './topics.js';
 import { replayEvents } from './coordinationEvents.js';
 import { getDbPool } from '../db/client.js';
 
@@ -96,8 +96,13 @@ async function mkTopic(actorIds: string[] = ['proposer', 'seconder', 'voterA', '
     project_id: TEST_PROJECT, name: 'Motion Test Topic',
     charter: 'collective decision', created_by: actorIds[0],
   });
-  for (const a of actorIds) {
-    await joinTopic({ topic_id: t.topic_id, actor_id: a, actor_type: 'human', display_name: a, level: 'coordination' });
+  // Sprint 15.11 — owner (actorIds[0] = created_by) bootstraps at coordination;
+  // non-owners join at execution then the owner grants them coordination.
+  const owner = actorIds[0];
+  await joinTopic({ topic_id: t.topic_id, actor_id: owner, actor_type: 'human', display_name: owner, level: 'coordination' });
+  for (const a of actorIds.slice(1)) {
+    await joinTopic({ topic_id: t.topic_id, actor_id: a, actor_type: 'human', display_name: a, level: 'execution' });
+    await grantLevel({ topic_id: t.topic_id, actor_id: a, level: 'coordination', granted_by: owner });
   }
   return { topicId: t.topic_id, actors: actorIds };
 }
@@ -968,8 +973,10 @@ test('15.8 motions.T7: tallyMotion on a motion linked to a request step → step
 
   // Setup topic + actors
   const t = await ct({ project_id: TEST_PROJECT, name: '15.8 m-int', charter: 'c', created_by: 'authority' });
+  // Sprint 15.11 — owner 'authority' (created_by) joins first at authority; the
+  // execution actor is a non-owner and stays at execution.
   for (const [a, level] of [
-    ['execution', 'execution'], ['authority', 'authority'],
+    ['authority', 'authority'], ['execution', 'execution'],
   ] as const) {
     await jt({ topic_id: t.topic_id, actor_id: a, actor_type: 'human', display_name: a, level });
   }
@@ -1041,8 +1048,12 @@ test('15.8 motions.T7-vetoed: vetoMotion on a motion linked to a request step �
   const { postTask, claimTask, completeTask } = await import('./board.js');
 
   const t = await ct({ project_id: TEST_PROJECT, name: '15.8 m-veto', charter: 'c', created_by: 'authority' });
-  for (const a of ['execution', 'authority', 'veto-holder']) {
-    await jt({ topic_id: t.topic_id, actor_id: a, actor_type: 'human', display_name: a, level: 'coordination' });
+  // Sprint 15.11 — owner 'authority' (created_by) bootstraps at coordination; the
+  // non-owners join at execution then 'authority' grants them coordination.
+  await jt({ topic_id: t.topic_id, actor_id: 'authority', actor_type: 'human', display_name: 'authority', level: 'coordination' });
+  for (const a of ['execution', 'veto-holder']) {
+    await jt({ topic_id: t.topic_id, actor_id: a, actor_type: 'human', display_name: a, level: 'execution' });
+    await grantLevel({ topic_id: t.topic_id, actor_id: a, level: 'coordination', granted_by: 'authority' });
   }
   const body = await createBody({
     project_id: TEST_PROJECT, name: 'B-veto', quorum: 0, threshold: 0.5,

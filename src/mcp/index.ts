@@ -78,6 +78,7 @@ import {
   // Phase 15 Sprint 15.1: coordination substrate
   charterTopic,
   joinTopic,
+  grantLevel,
   getTopic,
   closeTopic,
   replayEvents,
@@ -99,6 +100,9 @@ import {
   addBodyMember,
   getBody,
   listBodies,
+  grantProxy,
+  revokeProxy,
+  listProxies,
   proposeMotion,
   listMotions,
   getMotion,
@@ -3164,6 +3168,34 @@ function createMcpToolsServer() {
     },
   );
 
+  // Sprint 15.11 (DEFERRED-015) — grant a participant a level. Grantor must be the
+  // topic owner (created_by) or an existing authority participant. Self-grant forbidden.
+  server.registerTool(
+    'grant_level',
+    {
+      description: 'Grant (raise or lower) a topic participant\'s level. The grantor must be the topic owner (created_by) or an existing authority participant; an actor cannot grant their own level. Makes topic_participants.level authoritative rather than self-asserted.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        topic_id: z.string().min(1),
+        actor_id: z.string().min(1).describe('The target participant whose level changes.'),
+        level: z.string().min(1).describe('"execution" | "coordination" | "authority".'),
+        granted_by: z.string().min(1).describe('The grantor actor id (owner or an authority).'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.string(),
+        level: z.string().optional(),
+        prior_level: z.string().optional(),
+      }),
+    },
+    async ({ workspace_token, topic_id, actor_id, level, granted_by, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const r = await grantLevel({ topic_id, actor_id, level, granted_by });
+      const summary = `grant_level: topic=${topic_id} target=${actor_id} level=${level} status=${r.status}`;
+      return formatToolResponse(r, summary, output_format);
+    },
+  );
+
   server.registerTool(
     'replay_topic_events',
     {
@@ -3692,6 +3724,81 @@ function createMcpToolsServer() {
       assertWorkspaceToken(workspace_token);
       const r = await addBodyMember({ body_id, actor_id, vote_weight });
       const summary = `add_body_member: body=${body_id} actor=${actor_id} status=${r.status}`;
+      return formatToolResponse(r, summary, output_format);
+    },
+  );
+
+  // Sprint 15.11 (DEFERRED-017 Q3) — proxy voting grants.
+  server.registerTool(
+    'grant_proxy',
+    {
+      description: 'Grant a proxy: the principal authorizes a proxy actor to cast their ballot in a decision body. Only the principal may grant their own vote (granted_by must equal principal). The principal must be a body member. Idempotent.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        body_id: z.string().min(1).describe('The decision body UUID.'),
+        principal: z.string().min(1).describe('The member delegating their vote.'),
+        proxy: z.string().min(1).describe('The actor authorized to cast on the principal\'s behalf.'),
+        granted_by: z.string().min(1).describe('Must equal principal (only the principal may delegate).'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.string(),
+        body_id: z.string().optional(),
+        principal: z.string().optional(),
+        proxy: z.string().optional(),
+      }),
+    },
+    async ({ workspace_token, body_id, principal, proxy, granted_by, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const r = await grantProxy({ body_id, principal, proxy, granted_by });
+      const summary = `grant_proxy: body=${body_id} principal=${principal} proxy=${proxy} status=${r.status}`;
+      return formatToolResponse(r, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'revoke_proxy',
+    {
+      description: 'Revoke a proxy voting grant in a decision body.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        body_id: z.string().min(1).describe('The decision body UUID.'),
+        principal: z.string().min(1),
+        proxy: z.string().min(1),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({ status: z.string() }),
+    },
+    async ({ workspace_token, body_id, principal, proxy, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const r = await revokeProxy({ body_id, principal, proxy });
+      const summary = `revoke_proxy: body=${body_id} principal=${principal} proxy=${proxy} status=${r.status}`;
+      return formatToolResponse(r, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'list_proxies',
+    {
+      description: 'List all proxy voting grants for a decision body.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        body_id: z.string().min(1).describe('The decision body UUID.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        proxies: z.array(z.object({
+          principal: z.string(),
+          proxy: z.string(),
+          granted_by: z.string(),
+          granted_at: z.string(),
+        })),
+      }),
+    },
+    async ({ workspace_token, body_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const r = await listProxies({ body_id });
+      const summary = `list_proxies: body=${body_id} count=${r.proxies.length}`;
       return formatToolResponse(r, summary, output_format);
     },
   );

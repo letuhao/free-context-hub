@@ -225,7 +225,13 @@
   single-operator dev posture keeps it non-exploitable now (the same posture as 015/016).
 - **Session deferred:** 2026-05-18
 - **Sessions open:** 1
-- **Status:** OPEN
+- **Status:** RESOLVED — Sprint 15.11 (2026-05-21): decision-body authorization shipped.
+  `createBody` + `addBodyMember` routes raised to `requireRole('admin')` (project-config
+  operation). `veto_holders` length cap (≤64 entries, ≤256 chars each). `castVote.proxy_for`
+  verification: new `proxies` table (migration 0063) + `grantProxy`/`revokeProxy`/`listProxies`
+  (principal-only grant — granted_by must equal principal); `castVote` verifies the grant when
+  auth-on (`proxy_not_granted`), preserves 15.4 unverified behavior auth-off (Q2 posture).
+  Security review CLEAR. (DEFERRED-017 was the decision-body half of the Phase 15 authz model.)
 - **Source:** Phase 15 Sprint 15.4 DESIGN §0.5; POST-REVIEW security Adversary WARN-1
   (`docs/audit/findings-sprint-15.4-post-review.md`); REVIEW-CODE LOW-3
   (`docs/audit/findings-sprint-15.4-code-r1.md`).
@@ -268,7 +274,15 @@
   single-operator dev posture keeps it non-exploitable now (same as DEFERRED-015).
 - **Session deferred:** 2026-05-18
 - **Sessions open:** 1
-- **Status:** OPEN
+- **Status:** RESOLVED — Sprint 15.11 (2026-05-21): api-key provisioning hardened.
+  (a) Actor-identity uniqueness — partial unique index `api_keys_active_name_uniq (name)
+  WHERE revoked=false` (migration 0063); `createApiKey` catches 23505 → `duplicate_active_
+  key_name`. (b) Per-operator key-count limit — `api_keys.created_by` column + env
+  `MAX_KEYS_PER_CREATOR` (default 50); `createApiKey` counts active keys by creator and
+  rejects `key_limit_exceeded`. The api-keys route passes `created_by` from `req.apiKeyName`.
+  The one-human-two-keys residual is documented + bounded (security review §8 / probe P5):
+  capped by the key limit + the level-grant audit chain (a key still can't self-grant
+  authority). Security review CLEAR.
 - **Source:** Phase 15 Sprint 15.3.1 REVIEW-DESIGN round 2, Adversary NEW FINDING 1
   (`docs/audit/findings-sprint-15.3.1-design-r2.md`).
 
@@ -283,7 +297,16 @@
 - **Priority:** HIGH — the residual half of a CRITICAL finding; only the `MCP_AUTH_ENABLED=false` single-operator dev posture keeps it non-exploitable now.
 - **Session deferred:** 2026-05-18
 - **Sessions open:** 1
-- **Status:** OPEN
+- **Status:** RESOLVED — Sprint 15.11 (2026-05-21): level-grant chain shipped. `joinTopic`
+  no longer self-asserts level — the topic OWNER (`created_by`, a permanent grant root) may
+  set their own level at first join (bootstrap); every other joiner is forced to `execution`
+  (non-owner non-execution → `BAD_REQUEST level_grant_required`). New `grantLevel(topic_id,
+  actor_id, level, granted_by)` op: only the owner or an existing `authority` may grant;
+  self-grant forbidden; emits `topic.level_granted` (migration 0063 adds
+  `topic_participants.granted_by`). Enforced ALWAYS (auth-on + auth-off, keyed on actor_id).
+  `decideStep`'s `level === target_office` check is now authoritative. Owner-permanence: a
+  demoted owner retains grant power (tested). Security review CLEAR — HARD pre-prod authz
+  trigger satisfied for the coordination-role surface. (Tenant-scope authz remains DEFERRED-009.)
 - **Source:** Phase 15 Sprint 15.3 human-in-loop review, security audit Finding F2 (`docs/audit/findings-sprint-15.3-human-review-security.md`).
 
 ---

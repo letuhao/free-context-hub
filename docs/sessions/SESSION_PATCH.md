@@ -1,5 +1,78 @@
 # LONGRUN CHECKPOINT — Phase 15 autonomous longrun, session boundary (2026-05-21)
 
+**Status:** **Sprint 15.11 (Phase 15 authorization model — DEFERRED-015/016/017) —
+COMPLETE** via the v2.2 human-in-loop 12-phase workflow + mandatory security-framed
+adversarial review (guardrail 5c0b7b25). XL sprint. REVIEW-DESIGN r1 found 1 BLOCK +
+2 WARN (proxy verification posture vs Q2; migration atomicity; owner-permanence under-
+documented) → rev 2 fixes. Test-helper migration (8 files) dispatched to a subagent.
+680/680 green; live level-grant smoke ✓; security review CLEAR (8 checklist + 5 probes).
+
+## Sprint 15.11 outcome
+
+Closes the Phase 15 authorization model — the three interlocking HARD pre-prod triggers:
+
+**Migration 0063:** `topic_participants.granted_by`; `proxies` table (body_id, principal,
+proxy, granted_by); `api_keys.created_by`; `api_keys_active_name_uniq` partial unique index.
+New event type `topic.level_granted`.
+
+**A — Level-grant chain (DEFERRED-015):** `joinTopic` no longer self-asserts level — the
+topic owner (`created_by`, permanent grant root) sets their own level at first join
+(bootstrap); non-owners forced to `execution` (non-execution → `level_grant_required`).
+New `grantLevel` op (owner/authority gate, self-grant forbidden, `topic.level_granted`
+event) + REST `POST /topics/:id/grant-level` + MCP `grant_level`. Enforced ALWAYS
+(auth-on + auth-off). Owner-permanence: a demoted owner keeps grant power.
+
+**B — Body authz + proxies (DEFERRED-017):** `createBody`/`addBodyMember` routes raised to
+`requireRole('admin')`; `veto_holders` cap (≤64/≤256). New `proxies.ts` (grantProxy
+principal-only / revokeProxy / listProxies) + REST + MCP. `castVote` verifies the proxy
+grant when auth-on (`proxy_not_granted`); auth-off preserves 15.4 unverified behavior (Q2).
+
+**C — Key provisioning (DEFERRED-016):** actor-identity uniqueness (one active key per name,
+DB partial unique index → `duplicate_active_key_name`) + per-operator key-count limit
+(`api_keys.created_by` + `MAX_KEYS_PER_CREATOR` env, default 50 → `key_limit_exceeded`).
+
+**Enforcement posture (Q2):** level-grant always-on (keyed on actor_id); body authz + key
+rules activate with `MCP_AUTH_ENABLED=true`.
+
+**Security review (mandatory):** `docs/audit/findings-sprint-15.11-security-review.md` —
+8 §10 checklist items + 5 adversarial probes (owner-lockout, proxy-forgery, closed-topic-
+grant, deadlock, index-race) all DEFENDED. The one-human-two-keys residual is ACCEPTED-
+BOUNDED (documented trust boundary; capped by key-limit + level-grant audit chain). HARD
+pre-prod authz trigger satisfied for the coordination-role surface. **Note:** DEFERRED-009
+(tenant-scope authz — a key for project A acting on project B's topic) is a SEPARATE
+concern, still OPEN — 15.11 closed coordination-*role* authz, not *tenant-scope* authz.
+
+**Test-helper migration:** dispatched to a subagent — 8 test files where non-owner
+participants self-asserted levels now use the owner's `grantLevel` (end-state levels
+preserved). Verified 657→680 green.
+
+**Tests (23 new, 680 total):** topics.test.ts (9: AC1-AC6 + non-participant + owner-
+permanence), proxies.test.ts (8: grant/revoke/list authz + castVote gated verification),
+apiKeys.test.ts (6: uniqueness + per-operator limit + created_by). Both new test files
+registered in the npm test script.
+
+**Workflow:** CLARIFY (Q1 owner-only level; Q2 level-grant always-on; Q3 EXPANDED proxies
+table; Q4 EXPANDED key limit; Q5 ship all three — XL). DESIGN r1→r2 (1 BLOCK + 2 WARN
+fixed). PLAN 19 tasks. BUILD T1-T16 (T13 test migration via subagent). VERIFY 680/680 +
+smoke. REVIEW-CODE 0 findings. QC 13/13 ACs. Security review CLEAR. POST-REVIEW human CLEAR.
+
+## Resume — Sprint 15.12
+
+Remaining OPEN: DEFERRED-009 (tenant-scope authz — topic ops by topic_id ignore caller's
+project scope), DEFERRED-010 (replayEvents/induction-pack pagination > 1000 events). Both
+are the last Phase 15 deferred items. 015/016/017/018/019/011/020/021/022 all RESOLVED.
+
+## Environment state (end of Sprint 15.11 session, 2026-05-21)
+
+- Docker stack: 8/8 healthy. Migrations 0053–**0063** applied.
+- `npm test` **680/680** green; tsc clean.
+- Branch: `phase-15-sprint-15.11` — committed in Phase 11.
+- Deferred OPEN: **009**, **010** only. All authz triggers (015/016/017) RESOLVED.
+
+---
+
+## Sprint 15.10 outcome
+
 **Status:** **Sprint 15.10 (Multi-tier collective routing — DEFERRED-022) — COMPLETE**
 via the v2.2 human-in-loop 12-phase workflow. REVIEW-DESIGN r1 found 1 BLOCK +
 2 WARN (lapsed re-resolve violates snapshot-the-rules; degraded_to vs escalated_to

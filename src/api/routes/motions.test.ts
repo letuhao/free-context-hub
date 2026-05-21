@@ -18,7 +18,7 @@ import test, { before, after } from 'node:test';
 import http from 'node:http';
 import express from 'express';
 import { motionsRouter } from './motions.js';
-import { charterTopic, joinTopic, createBody, addBodyMember } from '../../core/index.js';
+import { charterTopic, joinTopic, grantLevel, createBody, addBodyMember } from '../../core/index.js';
 import { getDbPool } from '../../db/client.js';
 
 const TEST_PROJECT = '__test_motions_routes__';
@@ -127,8 +127,12 @@ async function mkTopic() {
     project_id: TEST_PROJECT, name: 'Motion Route Test',
     charter: 'route test', created_by: 'proposer',
   });
-  for (const a of ['proposer', 'seconder', 'voterA', 'governor']) {
-    await joinTopic({ topic_id: t.topic_id, actor_id: a, actor_type: 'human', display_name: a, level: 'coordination' });
+  // Sprint 15.11 — owner 'proposer' (created_by) bootstraps at coordination; the
+  // non-owners join at execution then 'proposer' grants them coordination.
+  await joinTopic({ topic_id: t.topic_id, actor_id: 'proposer', actor_type: 'human', display_name: 'proposer', level: 'coordination' });
+  for (const a of ['seconder', 'voterA', 'governor']) {
+    await joinTopic({ topic_id: t.topic_id, actor_id: a, actor_type: 'human', display_name: a, level: 'execution' });
+    await grantLevel({ topic_id: t.topic_id, actor_id: a, level: 'coordination', granted_by: 'proposer' });
   }
   return t.topic_id;
 }

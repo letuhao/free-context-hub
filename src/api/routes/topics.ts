@@ -16,6 +16,7 @@ import type { Request, Response, NextFunction } from 'express';
 import {
   charterTopic,
   joinTopic,
+  grantLevel,
   getTopic,
   closeTopic,
   replayEvents,
@@ -74,6 +75,21 @@ router.post('/:id/join', requireRole('writer'), async (req, res, next) => {
       level: String(body.level ?? ''),
       since_seq:
         typeof body.since_seq === 'number' ? Math.max(0, body.since_seq) : undefined,
+    });
+    res.json({ status: 'ok', data: result });
+  } catch (e) { next(e); }
+});
+
+// POST /api/topics/:id/grant-level — Sprint 15.11 (DEFERRED-015) grant a participant
+// a level. The grantor must be the owner or an existing authority (service-enforced).
+router.post('/:id/grant-level', requireRole('writer'), async (req, res, next) => {
+  try {
+    const body = req.body ?? {};
+    const result = await grantLevel({
+      topic_id: String(req.params.id),
+      actor_id: String(body.actor_id ?? ''),
+      level: String(body.level ?? ''),
+      granted_by: String(body.granted_by ?? ''),
     });
     res.json({ status: 'ok', data: result });
   } catch (e) { next(e); }

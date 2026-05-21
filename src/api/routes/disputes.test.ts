@@ -23,7 +23,7 @@ import test, { before, after } from 'node:test';
 import http from 'node:http';
 import express from 'express';
 import { disputesRouter } from './disputes.js';
-import { charterTopic, joinTopic } from '../../core/index.js';
+import { charterTopic, joinTopic, grantLevel } from '../../core/index.js';
 import { getDbPool } from '../../db/client.js';
 
 const TEST_PROJECT = '__test_disputes_routes__';
@@ -132,8 +132,11 @@ async function makeTopic(): Promise<string> {
     charter: 'test',
     created_by: ACTOR_A,
   });
+  // Sprint 15.11 — owner ACTOR_A (created_by) bootstraps at authority; non-owner
+  // ACTOR_B joins at execution then ACTOR_A grants it coordination.
   await joinTopic({ topic_id: result.topic_id, actor_id: ACTOR_A, level: 'authority', actor_type: 'human', display_name: 'Actor A' });
-  await joinTopic({ topic_id: result.topic_id, actor_id: ACTOR_B, level: 'coordination', actor_type: 'human', display_name: 'Actor B' });
+  await joinTopic({ topic_id: result.topic_id, actor_id: ACTOR_B, level: 'execution', actor_type: 'human', display_name: 'Actor B' });
+  await grantLevel({ topic_id: result.topic_id, actor_id: ACTOR_B, level: 'coordination', granted_by: ACTOR_A });
   return result.topic_id;
 }
 
