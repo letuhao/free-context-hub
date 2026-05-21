@@ -26,7 +26,7 @@ import assert from 'node:assert/strict';
 import test, { before, after, beforeEach } from 'node:test';
 import { submitRequest, getRequest, listRequests, decideStep, applyMotionToStep } from './requests.js';
 import { createBody, addBodyMember } from './decisionBodies.js';
-import { charterTopic, joinTopic, closeTopic } from './topics.js';
+import { charterTopic, joinTopic, grantLevel, closeTopic } from './topics.js';
 import { postTask, claimTask, completeTask } from './board.js';
 import { getDbPool } from '../db/client.js';
 
@@ -86,9 +86,12 @@ async function mkTopicWithParticipants() {
     created_by: 'authority-actor',
   });
   const topicId = t.topic_id;
-  await joinTopic({ topic_id: topicId, actor_id: 'execution-actor', actor_type: 'human', display_name: 'Exec', level: 'execution' });
-  await joinTopic({ topic_id: topicId, actor_id: 'coordination-actor', actor_type: 'human', display_name: 'Coord', level: 'coordination' });
+  // Sprint 15.11 — owner (authority-actor = created_by) bootstraps as authority;
+  // others join at execution then the owner grants their level (level-grant chain).
   await joinTopic({ topic_id: topicId, actor_id: 'authority-actor', actor_type: 'human', display_name: 'Auth', level: 'authority' });
+  await joinTopic({ topic_id: topicId, actor_id: 'execution-actor', actor_type: 'human', display_name: 'Exec', level: 'execution' });
+  await joinTopic({ topic_id: topicId, actor_id: 'coordination-actor', actor_type: 'human', display_name: 'Coord', level: 'execution' });
+  await grantLevel({ topic_id: topicId, actor_id: 'coordination-actor', level: 'coordination', granted_by: 'authority-actor' });
   return { topicId, executionActor: 'execution-actor', coordinationActor: 'coordination-actor', authorityActor: 'authority-actor' };
 }
 
