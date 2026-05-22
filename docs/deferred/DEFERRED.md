@@ -542,7 +542,8 @@
 ## DEFERRED-004
 
 - **What:** Backend tenant-scope enforcement on admin-role endpoints.
-- **Status:** PARTIAL — significantly advanced through Phase 13.
+- **Status:** RESOLVED 2026-05-21 (see full closure note at the end of this entry). The
+  PARTIAL → RESOLVED history is preserved below for context.
 - **Phase 13 progress:**
   - Sprint 13.2 (commit 416e48b): created `requireScope` middleware + applied to `DELETE /api/projects/:id/artifact-leases/:leaseId/force`.
   - Sprint 13.5 (commit 47954d1): applied `requireScope('id')` to `POST /api/projects/:id/taxonomy-profile/activate` and `DELETE /api/projects/:id/taxonomy-profile`; added inline body.owner_project_id scope-check on `POST /api/taxonomy-profiles`.
