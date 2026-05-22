@@ -33,7 +33,10 @@ router.get('/', requireProjectScope('query', { multi: true }), async (req, res, 
 /** POST /api/jobs/run-next — run one queued job immediately */
 router.post('/run-next', async (req, res, next) => {
   try {
-    const result = await runNextJob(req.body.queue_name);
+    // DEFERRED-024 — a scoped api key drains only its own project's queue; auth-off /
+    // global scope (apiKeyScope undefined/null) → all projects (no behavior change).
+    const scope = (req as { apiKeyScope?: string | null }).apiKeyScope;
+    const result = await runNextJob(req.body.queue_name, scope);
     res.json(result);
   } catch (e) { next(e); }
 });

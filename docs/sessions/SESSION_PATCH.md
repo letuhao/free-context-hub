@@ -1,8 +1,26 @@
 # LONGRUN CHECKPOINT — Phase 15 autonomous longrun, session boundary (2026-05-21)
 
-**Status:** **DEFERRED-004 (writer-route tenant-scope audit) — RESOLVED** on branch
-`tenant-scope-audit-deferred-004`. 711/711 green; tsc clean; no migration. (Prior this
-session: DEFERRED-008 exchange scope-leak; Sprint 15.12 closed the Phase 15 backlog.)
+**Status:** **DEFERRED-024 (run-next cross-project pop filter) — RESOLVED** on branch
+`run-next-scope-deferred-024`. 716/716 green; tsc clean; no migration. This closes the
+LAST tenant-scope hole — the tenant-isolation story is now complete end-to-end.
+
+## DEFERRED-024 outcome (run-next scope filter)
+`claimNextQueuedJob(queue, projectScope?)` adds `AND project_id = $2` to the pop CTE when
+a non-empty `projectScope` is supplied; `runNextJob(queue, projectScope?)` threads it;
+`POST /api/jobs/run-next` passes `req.apiKeyScope`. A project-scoped api key drains ONLY
+its own project's queue (and skips null-project/global jobs). The background worker /
+auth-off / global-scope keys pop across all projects unchanged. 5 tests in
+`jobQueueScope.test.ts`. v2.2 size-S (skip DESIGN/PLAN). REVIEW-CODE 0 findings.
+
+**Open deferred now (all LOW, no security/correctness debt):**
+- DEFERRED-003 — `race_exhausted` test coverage (near-unhittable path)
+- DEFERRED-023 — `taxonomy_profiles` bundle round-trip (feature completeness)
+
+---
+
+## (prior this session) DEFERRED-004 — writer-route tenant-scope audit — RESOLVED
+Branch `tenant-scope-audit-deferred-004`. 711/711 green; tsc clean; no migration. (Also
+this session: DEFERRED-008 exchange scope-leak; Sprint 15.12 closed the Phase 15 backlog.)
 
 ## DEFERRED-004 outcome (writer-route tenant-scope audit)
 

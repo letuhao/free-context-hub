@@ -97,7 +97,10 @@ export async function enqueueJob(input: QueuePayload): Promise<{ status: 'queued
   return { status: 'queued', job_id: jobId, backend: 'postgres' };
 }
 
-export async function claimNextQueuedJob(queueName = 'default'): Promise<{
+export async function claimNextQueuedJob(
+  queueName = 'default',
+  projectScope?: string | null,
+): Promise<{
   job_id: string;
   project_id: string | null;
   job_type: JobType;
@@ -107,11 +110,17 @@ export async function claimNextQueuedJob(queueName = 'default'): Promise<{
   correlation_id: string | null;
 } | null> {
   const pool = getDbPool();
+  // DEFERRED-024 — when a non-empty projectScope is supplied (a project-scoped api
+  // key calling /run-next), the pop is restricted to that project's queue so a scoped
+  // worker drains only its own jobs. undefined/null → pop across all projects (the
+  // background worker + auth-off + global-scope keys are unchanged).
+  const scoped = typeof projectScope === 'string' && projectScope.length > 0;
   const res = await pool.query(
     `WITH next_job AS (
        SELECT job_id
        FROM async_jobs
        WHERE status='queued' AND queue_name=$1 AND available_at <= now()
+         ${scoped ? 'AND project_id = $2' : ''}
        ORDER BY queued_at ASC
        LIMIT 1
        FOR UPDATE SKIP LOCKED
@@ -121,7 +130,7 @@ export async function claimNextQueuedJob(queueName = 'default'): Promise<{
      FROM next_job
      WHERE j.job_id = next_job.job_id
      RETURNING j.job_id, j.project_id, j.job_type, j.payload, j.attempts, j.max_attempts, j.correlation_id`,
-    [queueName],
+    scoped ? [queueName, projectScope] : [queueName],
   );
   if (!res.rowCount) return null;
   const row = res.rows[0] as any;

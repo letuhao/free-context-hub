@@ -25,7 +25,14 @@
   key deliberately draining another project's queue.
 - **Session deferred:** 2026-05-21
 - **Sessions open:** 1
-- **Status:** OPEN
+- **Status:** RESOLVED — 2026-05-21 (`run-next-scope-deferred-024`):
+  `claimNextQueuedJob(queue, projectScope?)` adds `AND project_id = $2` to the pop CTE
+  when a non-empty `projectScope` is supplied; `runNextJob(queue, projectScope?)` threads
+  it; `POST /api/jobs/run-next` passes `req.apiKeyScope`. A project-scoped api key drains
+  ONLY its own project's queue (and correctly skips null-project/global jobs). The
+  background worker, auth-off, and global-scope keys pop across all projects unchanged
+  (undefined/null scope → no filter). 5 tests in `jobQueueScope.test.ts`. Closes the last
+  tenant-scope hole (Tier-2 of DEFERRED-004).
 - **Source:** DEFERRED-004 CLARIFY Q3 / DESIGN §4 (`docs/specs/2026-05-21-deferred-004-tenant-scope-design.md`).
 
 ---

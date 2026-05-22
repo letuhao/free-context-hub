@@ -504,14 +504,19 @@ async function executeByType(
   }
 }
 
-export async function runNextJob(queueName = 'default'): Promise<{
+export async function runNextJob(
+  queueName = 'default',
+  projectScope?: string | null,
+): Promise<{
   status: 'idle' | 'ok' | 'error';
   job_id?: string;
   job_type?: JobType;
   result?: Record<string, unknown>;
   error?: string;
 }> {
-  const job = await claimNextQueuedJob(queueName);
+  // DEFERRED-024 — a project-scoped caller (/run-next with a scoped api key) drains
+  // only its own project's queue; undefined/null → all projects (worker unchanged).
+  const job = await claimNextQueuedJob(queueName, projectScope);
   if (!job) return { status: 'idle' };
   try {
     const started = Date.now();
