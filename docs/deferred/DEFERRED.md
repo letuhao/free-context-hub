@@ -1,7 +1,37 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 029 -->
+<!-- Next ID: 030 -->
+
+## DEFERRED-029
+
+- **What:** Tenant isolation is asymmetric across transports. The tenant-scope work
+  (DEFERRED-004, Sprint 15.12) is **Express middleware** (`requireScope`/`requireProjectScope`/
+  `requireResourceScope`) and the service layer does not re-check caller scope. The **MCP
+  transport does not run that middleware** and has no per-project scope concept — MCP auth is a
+  single shared `workspace_token` (binary gate); `project_id` is a free parameter defaulting to
+  `DEFAULT_PROJECT_ID`. So with `MCP_AUTH_ENABLED=true`, any token-holder can reach any project's
+  lessons + coordination state via the MCP path. (15.11 authorization *levels* live in the
+  service layer, so they DO apply to MCP; only tenant-scope is REST-only.)
+- **Why deferred:** found during WS3 of the milestone review
+  (`docs/qc/ws3-seam-bughunt-findings.md` S3). A cross-phase architectural gap, not a single bug;
+  needs a product decision before implementation.
+- **Decision needed:** is the MCP surface single-tenant-per-instance (then document it and close),
+  or must it enforce per-project isolation on a shared instance (then move scope enforcement into
+  the service layer so both REST and MCP inherit it, and add scoped MCP tokens)?
+- **Trigger condition:** any plan to run a shared multi-tenant instance with `MCP_AUTH_ENABLED`,
+  OR a security review of the MCP surface.
+- **Estimated size:** L — service-layer scope enforcement (so both transports inherit it) +
+  scoped MCP token model + tests on the MCP path.
+- **Priority:** MED — exploitable only with `MCP_AUTH_ENABLED=true` on a shared multi-tenant
+  instance; the dev posture (auth-off, single tenant) is unaffected. But MCP is the primary client
+  surface, so isolation gaps there matter more than on REST.
+- **Session deferred:** 2026-05-23
+- **Sessions open:** 1
+- **Status:** OPEN
+- **Source:** WS3 seam bug-hunt, milestone review (S3). Related: [[DEFERRED-004]] (REST tenant-scope), reinforces WS0-F5 (auth-ON E2E slice must cover MCP).
+
+---
 
 ## DEFERRED-028
 
