@@ -90,7 +90,9 @@
 - **Priority:** MED — global search silently returns incomplete results (no commits).
 - **Session deferred:** 2026-05-23
 - **Sessions open:** 1
-- **Status:** OPEN
+- **Status:** RESOLVED 2026-05-23 (`milestone-review-phase-15`) — `globalSearch.ts:80` now selects
+  `author_name AS author` (preserves the API contract). Regression test
+  `src/services/globalSearch.test.ts` seeds a commit and asserts it surfaces with author populated.
 - **Source:** WS0 regression run, milestone review (F3).
 
 ---
@@ -107,7 +109,10 @@
 - **Priority:** LOW–MED — leaks DB internals and returns 500 for what should be a 400; not a data-integrity risk.
 - **Session deferred:** 2026-05-23
 - **Sessions open:** 1
-- **Status:** OPEN
+- **Status:** RESOLVED 2026-05-23 (`milestone-review-phase-15`) — added `assertUuid()` guard in
+  `lessons.ts`, called at the top of `updateLessonStatus` (lessonId + superseded_by) and
+  `updateLesson` (lessonId); throws `ContextHubError('BAD_REQUEST')` → 400 via errorHandler.
+  Service-layer guard so REST + MCP + import all inherit it. 3 tests in `lessons.test.ts`.
 - **Source:** WS0 regression run, milestone review (F4).
 
 ---

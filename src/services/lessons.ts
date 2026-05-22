@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { getEnv } from '../env.js';
+import { ContextHubError } from '../core/index.js';
 import { getDbPool } from '../db/client.js';
 import { linkLessonToSymbols, upsertLessonNode } from '../kg/linker.js';
 import { deleteProjectGraph } from '../kg/projectGraph.js';
@@ -1346,6 +1347,18 @@ export async function searchLessonsMulti(params: SearchLessonsMultiParams): Prom
   return { matches, explanations };
 }
 
+// DEFERRED-027: validate uuid inputs at the service boundary so a malformed id
+// (e.g. the literal "undefined" interpolated into a URL) returns BAD_REQUEST (400)
+// instead of leaking a raw Postgres "invalid input syntax for type uuid" 500.
+// Single source of truth for REST + MCP + import callers.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function assertUuid(value: string | null | undefined, field: string): void {
+  if (value === null || value === undefined) return; // optional fields handled by callers
+  if (!UUID_RE.test(value)) {
+    throw new ContextHubError('BAD_REQUEST', `${field} must be a valid UUID; got: ${String(value)}`);
+  }
+}
+
 export async function updateLesson(params: {
   projectId: string;
   lessonId: string;
@@ -1357,6 +1370,9 @@ export async function updateLesson(params: {
   changeSummary?: string;
 }): Promise<{ status: 'ok' | 'error'; error?: string; re_embedded?: boolean; version_number?: number }> {
   const pool = getDbPool();
+
+  // DEFERRED-027: reject malformed ids before they reach the uuid-typed query.
+  assertUuid(params.lessonId, 'lessonId');
 
   const existing = await pool.query(
     `SELECT lesson_id, title, content, lesson_type, tags, source_refs FROM lessons WHERE project_id=$1 AND lesson_id=$2`,
@@ -1529,6 +1545,10 @@ export async function updateLessonStatus(params: {
   supersededBy?: string | null;
 }): Promise<{ status: 'ok' | 'error'; error?: string }> {
   const pool = getDbPool();
+
+  // DEFERRED-027: reject malformed ids before they reach the uuid-typed query.
+  assertUuid(params.lessonId, 'lessonId');
+  assertUuid(params.supersededBy, 'superseded_by');
 
   // Phase 13 Sprint 13.7 r3 F1 fix: read current status as part of the existence check
   // so we can enforce the master design L275-281 ✗ transition table at the service
