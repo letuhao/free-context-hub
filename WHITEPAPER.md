@@ -1,7 +1,7 @@
 # ContextHub (Self-Hosted) White Paper
 
 ## Status
-Draft v0.5 (Phase 12 complete — 2026-04-19 · Phase 13 in progress — 2026-05-14)
+Draft v0.6 (Phases 1–15 complete — 2026-05-23 · entire deferred backlog cleared)
 
 ## Abstract
 ContextHub is a self-hosted, team-friendly system that gives MCP-enabled AI coding agents **persistent memory and guardrails across sessions**. It is designed for small teams that want the essential productivity benefits of [ContextStream](https://contextstream.io/)-like workflows, without requiring a hosted SaaS dependency.
@@ -356,7 +356,7 @@ Phases 1–5 are primarily **passive learning**: index source, build vectors, op
 - **Phase 7:** GUI makes it easier to review drafts and inspect knowledge before promotion.
 - **Phase 8–9:** Human-in-the-loop editing and multi-format ingestion widen the surface of facts the deep loop can safely absorb.
 
-### Phase 7: Interactive GUI & Human-in-the-Loop (In Progress)
+### Phase 7: Interactive GUI & Human-in-the-Loop — ✅ Complete
 
 Phase 7 represents a major shift: ContextHub evolves from an **agent-only backend** to an **AI-Human collaboration platform**. The web GUI (Next.js 16 + React 19 + Tailwind CSS) serves as the bridge where humans review, approve, and refine AI-generated knowledge.
 
@@ -430,7 +430,7 @@ Phases 1–11 optimized for feature completeness. Phase 12 adds **measurement in
 
 7 sprints. Embedding model benchmark (8 models) and reranker benchmark (8 models) documented and reproducible.
 
-### Phase 13: Multi-Agent Coordination Protocol — 🔄 In Progress
+### Phase 13: Multi-Agent Coordination Protocol — ✅ Complete
 
 **Motivation**
 
@@ -511,7 +511,41 @@ Additional profiles can be defined per-project without code changes. The DLF pro
 - Dead Light Framework taxonomy profile bundled and loadable via project settings
 - E2E tests covering: concurrent claim conflict, TTL expiry and auto-release, review-request → human-approval flow, taxonomy profile activation and type-filtered search
 
-### What's deferred beyond Phase 11
+**Delivered:** all acceptance criteria met across 7 sprints. Artifact leasing ships with TTL enforcement, lazy + background expiry sweep, and fencing tokens; `pending-review` and the Review Request queue are live; the DLF taxonomy profile is bundled and the `taxonomy_profiles` table was later unified with Phase 8's `lesson_types`. A 19-bug post-hoc review was fully cleared.
+
+### Phase 14: Global Embedding/Distillation Model Swap — ✅ Complete
+
+A focused infrastructure phase: swap the default models the whole instance runs on, rather than wiring per-project routing.
+
+- **Embeddings:** `mxbai-large` → `bge-m3`. **Distillation/chat:** `qwen-coder` → `nemotron-3-nano`.
+- **Re-embed in place:** all projects re-embedded against the new model so retrieval stays coherent across the corpus.
+- **DEFERRED-002 RESOLVED:** `bge-m3` removes the `mxbai` 512-token truncation that had been silently clipping longer lessons/chunks.
+- **DEFERRED-001 (per-project model routing) ABANDONED:** the global swap made per-project model selection unnecessary for the current single-instance deployment model; it can be revived if multi-tenant model isolation is ever required.
+- Executed through the AMAW workflow — 8 review findings caught (5 BLOCK) before the swap landed.
+
+### Phase 15: Multi-Actor Coordination Protocol — ✅ Complete
+
+Where Phase 13 gave agents *signaling* primitives so parallel work wouldn't silently collide, Phase 15 makes **multiple actors coordinate through durable, governed state**. Coordination still remains human-driven; Phase 15 supplies the substrate, the audit trail, and the authorization model that make multi-actor governance safe and inspectable.
+
+The organizing invariant: **every state change is an append-only event on a topic, and identity/authority is derived from participation, never asserted by the caller.**
+
+Primitives shipped (12 sprints, 15.1–15.12; migrations 0050–0063):
+
+- **Coordination substrate** — a durable append-only event log plus the Topic / Actor / participant model every later primitive builds on.
+- **The Board** — `tasks` posted to a topic, derived-identity `artifacts` with versioning, `claims` (evolving Phase 13 leasing) with fencing tokens, and an abandoned-claim sweep.
+- **Request-Approval** — `requests` + `request_steps` with multi-level routing; a request can route through a chain of approvers.
+- **Collective Decision** — motions, votes, tally, and veto: the voting half of governance.
+- **Intake mailbox + dispute resolution** — the inbound-item and adjudication halves of the model.
+- **Topic-closing drain** — a 3-phase `closing → drain → closed` lifecycle; in-flight claims/requests are force-lapsed cleanly and writer paths reject a `closing` topic.
+- **Primitive-outcome chaining** — the outcome of one primitive (e.g. an approved request step) can chain into the next.
+- **Multi-tier collective routing** — escalation across tiers, emitting `escalated_to` events.
+- **Authorization model** — three interlocking HARD pre-production triggers, non-owner level-grant flow, and owner-permanence (a demoted owner retains grant power).
+- **End-to-end tenant-scope enforcement** — derive-on-id resource scoping and strict-reject collection scoping so a project-scoped key cannot read or mutate another tenant's coordination state.
+
+**Acceptance criteria (met):** all 12 sprints shipped through the v2.2 12-phase workflow (AMAW opt-in on the highest-stakes sprints); 723/723 tests green and `tsc` clean at close; the entire cross-phase deferred backlog cleared (0 OPEN). Full retro: `docs/phase-15-closeout.md`.
+
+### Future / non-MVP ideas (not yet built)
+These are knowledge-exchange and storage enhancements considered but intentionally out of scope through Phase 15; none are required for current deployments.
 - Merge conflict policy (beyond skip/overwrite/fail)
 - Bundle caching for repeat cross-instance pulls
 - Webhook / scheduled pulls
