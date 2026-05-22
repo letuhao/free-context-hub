@@ -132,6 +132,19 @@ export async function exportProject(
         [],
         batchSize,
       ),
+      // DEFERRED-023: project-OWNED taxonomy profiles round-trip. Built-in profiles
+      // (is_builtin, owner_project_id IS NULL) re-seed from config on a fresh instance,
+      // so exporting them would collide with the seed — only project-owned profiles are
+      // bundled. owner_project_id is rebound to the target project on import.
+      taxonomy_profiles: cursorIterable(
+        client,
+        `SELECT slug, name, description, version, lesson_types, is_builtin, created_at, updated_at
+         FROM taxonomy_profiles
+         WHERE owner_project_id = $1
+         ORDER BY slug`,
+        [projectId],
+        batchSize,
+      ),
     };
 
     if (includeChunks) {

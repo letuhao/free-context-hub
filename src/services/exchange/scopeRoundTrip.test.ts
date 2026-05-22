@@ -18,6 +18,7 @@ import { encodeBundle, openBundle, type BundleData } from './bundleFormat.js';
 import { getDbPool } from '../../db/client.js';
 
 const PROJ = '__test_d008__';
+const PROJ_TARGET = '__test_d008_target__'; // DEFERRED-023 import target
 const PROFILE_TYPE = '__test_d008_profile_type';
 const GLOBAL_TYPE = '__test_d008_global_type';
 const NOSCOPE_TYPE = '__test_d008_noscope_type';
@@ -28,9 +29,12 @@ async function cleanup() {
   const pool = getDbPool();
   await pool.query(`DELETE FROM lesson_types WHERE type_key = ANY($1::text[])`,
     [[PROFILE_TYPE, GLOBAL_TYPE, NOSCOPE_TYPE]]);
-  await pool.query(`DELETE FROM lessons WHERE project_id = $1`, [PROJ]);
-  await pool.query(`DELETE FROM guardrails WHERE project_id = $1`, [PROJ]);
-  await pool.query(`DELETE FROM projects WHERE project_id = $1`, [PROJ]);
+  for (const p of [PROJ, PROJ_TARGET]) {
+    await pool.query(`DELETE FROM taxonomy_profiles WHERE owner_project_id = $1`, [p]);
+    await pool.query(`DELETE FROM lessons WHERE project_id = $1`, [p]);
+    await pool.query(`DELETE FROM guardrails WHERE project_id = $1`, [p]);
+    await pool.query(`DELETE FROM projects WHERE project_id = $1`, [p]);
+  }
 }
 
 before(() => { tmpDir = mkdtempSync(path.join(os.tmpdir(), 'd008-')); });
@@ -124,4 +128,84 @@ test('DEFERRED-008 AC5: a pre-fix bundle row (no scope field) defaults to global
   await importProject({ targetProjectId: PROJ, bundlePath: bundle, policy: 'overwrite' });
   const r = await pool.query<{ scope: string }>(`SELECT scope FROM lesson_types WHERE type_key=$1`, [NOSCOPE_TYPE]);
   assert.equal(r.rows[0].scope, 'global', 'pre-fix bundle defaults to global (no regression, no CHECK violation)');
+});
+
+// ── DEFERRED-023: taxonomy_profiles bundle round-trip ───────────────────────
+
+test('DEFERRED-023: a project-owned taxonomy profile is exported in the bundle', async () => {
+  const pool = getDbPool();
+  await pool.query(`INSERT INTO projects (project_id, name) VALUES ($1,'D008') ON CONFLICT DO NOTHING`, [PROJ]);
+  await pool.query(
+    `INSERT INTO taxonomy_profiles (slug, name, description, version, lesson_types, is_builtin, owner_project_id)
+     VALUES ('custom-prof','Custom','d','2.0','[{"type_key":"rfc"}]'::jsonb, false, $1)`,
+    [PROJ],
+  );
+
+  const file = await exportToFile();
+  const reader = await openBundle(file);
+  try {
+    const rows: any[] = [];
+    for await (const p of reader.taxonomy_profiles()) rows.push(p);
+    const prof = rows.find((r) => r.slug === 'custom-prof');
+    assert.ok(prof, 'exported bundle includes the project-owned profile');
+    assert.equal(prof.version, '2.0');
+    assert.equal(prof.is_builtin, false);
+    // owner_project_id is NOT carried in the row (rebound on import) — but lesson_types are
+    assert.deepEqual(prof.lesson_types, [{ type_key: 'rfc' }]);
+  } finally {
+    await reader.close();
+  }
+});
+
+test('DEFERRED-023: a taxonomy profile round-trips into a fresh target, owner rebound', async () => {
+  const pool = getDbPool();
+  const bundle = await encodeToFile({
+    project: { project_id: PROJ, name: 'D008', description: null },
+    lessons: [], guardrails: [],
+    taxonomy_profiles: [
+      { slug: 'imported-prof', name: 'Imported', description: null, version: '1.5', lesson_types: [{ type_key: 'decision' }], is_builtin: false, created_at: null, updated_at: null },
+    ],
+  });
+  const res = await importProject({ targetProjectId: PROJ_TARGET, bundlePath: bundle, policy: 'overwrite' });
+  assert.equal(res.counts.taxonomy_profiles.created, 1);
+
+  const r = await pool.query<{ owner_project_id: string; version: string; is_builtin: boolean }>(
+    `SELECT owner_project_id, version, is_builtin FROM taxonomy_profiles WHERE slug='imported-prof' AND owner_project_id=$1`,
+    [PROJ_TARGET],
+  );
+  assert.equal(r.rowCount, 1, 'profile imported under the TARGET project (owner rebound)');
+  assert.equal(r.rows[0].version, '1.5');
+  assert.equal(r.rows[0].is_builtin, false);
+});
+
+test('DEFERRED-023: importing a built-in profile over an existing built-in is refused (overwrite)', async () => {
+  const pool = getDbPool();
+  // seed a built-in profile in the target
+  await pool.query(`INSERT INTO projects (project_id, name) VALUES ($1,'T') ON CONFLICT DO NOTHING`, [PROJ_TARGET]);
+  await pool.query(
+    `INSERT INTO taxonomy_profiles (slug, name, lesson_types, is_builtin, owner_project_id)
+     VALUES ('builtin-prof','B','[]'::jsonb, true, $1)`,
+    [PROJ_TARGET],
+  );
+  const bundle = await encodeToFile({
+    project: { project_id: PROJ, name: 'D008', description: null },
+    lessons: [], guardrails: [],
+    taxonomy_profiles: [
+      { slug: 'builtin-prof', name: 'Hacked', description: null, version: '9', lesson_types: [], is_builtin: false, created_at: null, updated_at: null },
+    ],
+  });
+  const res = await importProject({ targetProjectId: PROJ_TARGET, bundlePath: bundle, policy: 'overwrite' });
+  assert.equal(res.counts.taxonomy_profiles.skipped, 1, 'built-in overwrite refused');
+  const r = await pool.query<{ name: string }>(`SELECT name FROM taxonomy_profiles WHERE slug='builtin-prof' AND owner_project_id=$1`, [PROJ_TARGET]);
+  assert.equal(r.rows[0].name, 'B', 'built-in profile untouched');
+});
+
+test('DEFERRED-023: a pre-fix bundle without taxonomy_profiles imports cleanly (backward compat)', async () => {
+  const bundle = await encodeToFile({
+    project: { project_id: PROJ, name: 'D008', description: null },
+    lessons: [], guardrails: [],
+    // no taxonomy_profiles entry at all
+  });
+  const res = await importProject({ targetProjectId: PROJ_TARGET, bundlePath: bundle, policy: 'overwrite' });
+  assert.equal(res.counts.taxonomy_profiles.total, 0, 'missing entry → 0 profiles, no error');
 });

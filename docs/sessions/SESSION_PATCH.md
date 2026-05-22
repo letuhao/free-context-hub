@@ -1,7 +1,30 @@
-# LONGRUN CHECKPOINT — Phase 15 autonomous longrun, session boundary (2026-05-21)
+# LONGRUN CHECKPOINT — Phase 15 autonomous longrun, session boundary (2026-05-23)
 
-**Status:** **DEFERRED-024 (run-next cross-project pop filter) — RESOLVED** on branch
-`run-next-scope-deferred-024`. 716/716 green; tsc clean; no migration. This closes the
+**Status:** **DEFERRED-023 (taxonomy_profiles bundle round-trip) — RESOLVED** on branch
+`taxonomy-profiles-bundle-deferred-023`. 720/720 green; tsc clean; no migration. Only
+DEFERRED-003 (LOW test coverage) now remains in the backlog.
+
+## DEFERRED-023 outcome (taxonomy_profiles bundle round-trip)
+`taxonomy_profiles` is now a knowledge-bundle entity. `bundleFormat.ts` gains the
+`taxonomy_profiles.jsonl` ENTRY_NAME + BundleData field + `BundleReader.taxonomy_profiles()`
++ encode/iterate plumbing. `exportProject.ts` adds an owner-project cursor
+(`WHERE owner_project_id=$1`; owner_project_id is NOT carried in the row — rebound on import).
+`importProject.ts` adds the conflict-entity union member, counts, a `processBatched` block
+keyed on `(slug, targetProjectId)`, and `applyTaxonomyProfile` — which rebinds owner to the
+TARGET project on create and refuses to overwrite a destination built-in. Because export
+filters on `owner_project_id=$1` and built-ins are owner-NULL, a bundle can never carry or
+inject a system built-in. 4 round-trip tests added to `scopeRoundTrip.test.ts` (profile
+exported sans owner; round-trips into fresh target with owner rebound; built-in overwrite
+refused; pre-fix bundle without taxonomy_profiles imports cleanly). v2.2 size-S/M.
+REVIEW-CODE 0 findings; human POST-REVIEW CLEAR.
+
+**Open deferred now (all LOW, no security/correctness debt):**
+- DEFERRED-003 — `race_exhausted` test coverage (near-unhittable path)
+
+---
+
+## (prior this session) DEFERRED-024 (run-next cross-project pop filter) — RESOLVED
+Branch `run-next-scope-deferred-024`. 716/716 green; tsc clean; no migration. This closed the
 LAST tenant-scope hole — the tenant-isolation story is now complete end-to-end.
 
 ## DEFERRED-024 outcome (run-next scope filter)

@@ -60,7 +60,13 @@
   remaining round-trip-completeness enhancement.
 - **Session deferred:** 2026-05-21
 - **Sessions open:** 1
-- **Status:** OPEN
+- **Status:** RESOLVED 2026-05-23 — `taxonomy_profiles` is now a bundle entity. `bundleFormat.ts`
+  (ENTRY_NAMES + BundleData + BundleReader.taxonomy_profiles + encode/iterate), `exportProject.ts`
+  (owner-project cursor; owner_project_id NOT carried), `importProject.ts` (counts/conflict union +
+  processBatched + `applyTaxonomyProfile` — owner rebound to target, built-in overwrite refused).
+  Export's `WHERE owner_project_id=$1` filter + built-ins being owner-NULL means a bundle can never
+  carry/inject a system built-in. 4 round-trip tests in `scopeRoundTrip.test.ts`; 720/720 green; no
+  migration. Branch=taxonomy-profiles-bundle-deferred-023.
 - **Source:** DEFERRED-008 CLARIFY Q1 (`docs/specs/2026-05-21-deferred-008-exchange-scope-clarify.md`); the original DEFERRED-008 "related" note.
 
 ---

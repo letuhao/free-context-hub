@@ -81,7 +81,7 @@ export interface EntityCounts {
 }
 
 export interface ImportConflict {
-  entity: 'lessons' | 'guardrails' | 'lesson_types' | 'documents' | 'chunks' | 'document_lessons';
+  entity: 'lessons' | 'guardrails' | 'lesson_types' | 'taxonomy_profiles' | 'documents' | 'chunks' | 'document_lessons';
   /** Primary key of the conflicting row. Composite PKs are joined with "::". */
   id: string;
   reason: string;
@@ -100,6 +100,7 @@ export interface ImportResult {
     lessons: EntityCounts;
     guardrails: EntityCounts;
     lesson_types: EntityCounts;
+    taxonomy_profiles: EntityCounts;
     documents: EntityCounts;
     chunks: EntityCounts;
     document_lessons: EntityCounts;
@@ -209,6 +210,7 @@ export async function importProject(opts: ImportProjectOptions): Promise<ImportR
       lessons: EMPTY_COUNTS(),
       guardrails: EMPTY_COUNTS(),
       lesson_types: EMPTY_COUNTS(),
+      taxonomy_profiles: EMPTY_COUNTS(),
       documents: EMPTY_COUNTS(),
       chunks: EMPTY_COUNTS(),
       document_lessons: EMPTY_COUNTS(),
@@ -267,6 +269,26 @@ export async function importProject(opts: ImportProjectOptions): Promise<ImportR
       for (const row of rows) {
         result.counts.lesson_types.total += 1;
         await applyLessonType(client, row, policy, dryRun, result.counts.lesson_types, recordConflict, existing);
+      }
+    });
+
+    // ---- 1b. taxonomy_profiles (DEFERRED-023) ----
+    // Identified by (slug, owner_project_id). owner_project_id is REBOUND to the
+    // TARGET project on import (a profile from source project A's slug 's' lands as
+    // target B's slug 's'). Conflict check is on (slug, targetProjectId).
+    await processBatched(reader.taxonomy_profiles() as AsyncIterable<any>, APPLY_BATCH_SIZE, async (rows) => {
+      const slugs = rows.map((r) => r.slug as string);
+      assertUniqueBatchIds(slugs, 'taxonomy_profiles');
+      const existingR = await client.query<{ slug: string; is_builtin: boolean }>(
+        `SELECT slug, is_builtin FROM taxonomy_profiles WHERE owner_project_id = $1 AND slug = ANY($2::text[])`,
+        [targetProjectId, slugs],
+      );
+      const existing = new Map<string, boolean>(
+        existingR.rows.map((r) => [r.slug, r.is_builtin === true]),
+      );
+      for (const row of rows) {
+        result.counts.taxonomy_profiles.total += 1;
+        await applyTaxonomyProfile(client, row, targetProjectId, policy, dryRun, result.counts.taxonomy_profiles, recordConflict, existing);
       }
     });
 
@@ -489,6 +511,61 @@ async function applyLessonType(
  */
 function normalizeScope(scope: unknown): 'global' | 'profile' {
   return scope === 'profile' ? 'profile' : 'global';
+}
+
+/**
+ * DEFERRED-023 — apply one taxonomy_profiles row, rebinding owner_project_id to the
+ * TARGET project. Conflict on (slug, targetProjectId). Refuses to clobber a built-in
+ * profile on overwrite (system records), mirroring applyLessonType.
+ */
+async function applyTaxonomyProfile(
+  client: PoolClient,
+  row: any,
+  targetProjectId: string,
+  policy: ConflictPolicy,
+  dryRun: boolean,
+  counts: EntityCounts,
+  recordConflict: (c: ImportConflict) => void,
+  existing: Map<string, boolean>,
+): Promise<void> {
+  const slug: string = row.slug;
+  const lessonTypes = typeof row.lesson_types === 'string' ? row.lesson_types : JSON.stringify(row.lesson_types ?? []);
+  const destBuiltin = existing.get(slug);
+  if (destBuiltin !== undefined) {
+    if (policy === 'skip') {
+      counts.skipped += 1;
+      recordConflict({ entity: 'taxonomy_profiles', id: slug, reason: 'slug already exists, skipped' });
+      return;
+    }
+    if (policy === 'fail') {
+      throw new ImportError('conflict_fail', `taxonomy_profile "${slug}" already exists`);
+    }
+    // overwrite — refuse to clobber a built-in profile (system record)
+    if (destBuiltin) {
+      counts.skipped += 1;
+      recordConflict({ entity: 'taxonomy_profiles', id: slug, reason: 'destination is a built-in profile, overwrite refused' });
+      return;
+    }
+    if (!dryRun) {
+      await client.query(
+        `UPDATE taxonomy_profiles
+            SET name=$3, description=$4, version=$5, lesson_types=$6::jsonb, is_builtin=$7, updated_at=now()
+          WHERE owner_project_id=$1 AND slug=$2`,
+        [targetProjectId, slug, row.name, row.description, row.version ?? '1.0', lessonTypes, row.is_builtin === true],
+      );
+    }
+    counts.updated += 1;
+    return;
+  }
+  // create — new profile_id; owner rebound to the target project
+  if (!dryRun) {
+    await client.query(
+      `INSERT INTO taxonomy_profiles (slug, name, description, version, lesson_types, is_builtin, owner_project_id, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, COALESCE($8, now()), now())`,
+      [slug, row.name, row.description, row.version ?? '1.0', lessonTypes, row.is_builtin === true, targetProjectId, row.created_at],
+    );
+  }
+  counts.created += 1;
 }
 
 async function applyDocument(

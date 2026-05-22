@@ -52,6 +52,7 @@ export const ENTRY_NAMES = {
   lessons: 'lessons.jsonl',
   guardrails: 'guardrails.jsonl',
   lesson_types: 'lesson_types.jsonl',
+  taxonomy_profiles: 'taxonomy_profiles.jsonl',
   chunks: 'chunks.jsonl',
   documents: 'documents.jsonl',
   document_lessons: 'document_lessons.jsonl',
@@ -127,6 +128,8 @@ export interface BundleData {
   lessons?: AsyncIterable<unknown> | Iterable<unknown>;
   guardrails?: AsyncIterable<unknown> | Iterable<unknown>;
   lesson_types?: AsyncIterable<unknown> | Iterable<unknown>;
+  /** DEFERRED-023: project-owned taxonomy profiles (slug + lesson_types jsonb). */
+  taxonomy_profiles?: AsyncIterable<unknown> | Iterable<unknown>;
   documents?: AsyncIterable<BundleDocument> | Iterable<BundleDocument>;
   chunks?: AsyncIterable<unknown> | Iterable<unknown>;
   /** Phase 11.3: links between documents and lessons. Composite key
@@ -158,6 +161,7 @@ export interface BundleReader {
   lessons(): AsyncGenerator<unknown>;
   guardrails(): AsyncGenerator<unknown>;
   lesson_types(): AsyncGenerator<unknown>;
+  taxonomy_profiles(): AsyncGenerator<unknown>;
   documents(): AsyncGenerator<BundleDocumentRead>;
   chunks(): AsyncGenerator<unknown>;
   /** Phase 11.3: links between documents and lessons. Empty iterator
@@ -280,6 +284,7 @@ export async function encodeBundle(
   await appendJsonlEntry(archive, entries, ENTRY_NAMES.lessons, data.lessons);
   await appendJsonlEntry(archive, entries, ENTRY_NAMES.guardrails, data.guardrails);
   await appendJsonlEntry(archive, entries, ENTRY_NAMES.lesson_types, data.lesson_types);
+  await appendJsonlEntry(archive, entries, ENTRY_NAMES.taxonomy_profiles, data.taxonomy_profiles);
   await appendJsonlEntry(archive, entries, ENTRY_NAMES.chunks, data.chunks);
   await appendJsonlEntry(archive, entries, ENTRY_NAMES.document_lessons, data.document_lessons);
 
@@ -702,6 +707,7 @@ export async function openBundle(input: string | Buffer): Promise<BundleReader> 
     lessons: () => iterateJsonl<unknown>(ENTRY_NAMES.lessons),
     guardrails: () => iterateJsonl<unknown>(ENTRY_NAMES.guardrails),
     lesson_types: () => iterateJsonl<unknown>(ENTRY_NAMES.lesson_types),
+    taxonomy_profiles: () => iterateJsonl<unknown>(ENTRY_NAMES.taxonomy_profiles),
     documents: () => iterateDocuments(),
     chunks: () => iterateJsonl<unknown>(ENTRY_NAMES.chunks),
     document_lessons: () => iterateJsonl<unknown>(ENTRY_NAMES.document_lessons),
