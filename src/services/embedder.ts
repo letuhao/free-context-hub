@@ -1,4 +1,5 @@
 import { getEnv } from '../env.js';
+import { ContextHubError } from '../core/errors.js';
 
 type EmbeddingResponse = {
   data: Array<{ embedding: number[]; index?: number }>;
@@ -28,7 +29,10 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    throw new Error(`[embedTexts] HTTP ${res.status}: ${text}`);
+    // DEFERRED-025: the embeddings server being down / model unloaded is an upstream
+    // dependency failure, not an internal bug. Throw a typed SERVICE_UNAVAILABLE so
+    // write paths surface a clean 503 (and read paths can catch + fall back to FTS).
+    throw new ContextHubError('SERVICE_UNAVAILABLE', `[embedTexts] embeddings unavailable (HTTP ${res.status}): ${text}`);
   }
 
   const json = (await res.json()) as EmbeddingResponse;

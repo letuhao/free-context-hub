@@ -76,7 +76,15 @@
 - **Priority:** MED — degrades core search/write whenever the embedding server hiccups.
 - **Session deferred:** 2026-05-23
 - **Sessions open:** 1
-- **Status:** OPEN
+- **Status:** RESOLVED 2026-05-23 (`milestone-review-phase-15`). **Read paths:** `searchLessons`
+  and `searchLessonsMulti` now catch an embed failure, log a WARN, and degrade to FTS-only ranking
+  (sem_score → `0`, require an actual FTS match so we don't return the whole table; empty result
+  when there are also no FTS tokens). **Write paths (fail-loud, cleanly):** `embedder.embedTexts`
+  now throws `ContextHubError('SERVICE_UNAVAILABLE')` on an embeddings HTTP error → mapped to **503**
+  (new code in `errorHandler`), instead of leaking a raw "HTTP 400" as a generic 500. Tests:
+  `embedder.test.ts` (typed SERVICE_UNAVAILABLE) + live-verified the FTS fallback end-to-end against
+  the rebuilt stack with embeddings unreachable (matches returned, no throw). 728 unit green; tsc
+  clean; semantic happy-path E2E 105/105 on the rebuilt container.
 - **Source:** WS0 regression run, milestone review (F2).
 
 ---
