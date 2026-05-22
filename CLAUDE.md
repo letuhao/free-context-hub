@@ -489,6 +489,16 @@ Cross-project   PDF, DOCX,      Bundle format,
 views, project  Images, URL,    export+import,
 selector V2,    Vision + hybrid cross-instance
 "All Projects"  chunk search    pull, GUI
+    │               │               │
+    ▼               ▼               ▼
+Phase 12 ✅     Phase 13 ✅     Phase 14 ✅     Phase 15 ✅
+RAG Quality &   Multi-Agent     Global Model    Multi-Actor
+Rerank Optim.   Coordination    Swap            Coordination
+Golden-set,     Artifact leases bge-m3 +        Event log, Board,
+recall@k/MRR,   pending-review, nemotron-nano,  Requests, Collective
+8+8 model       taxonomy        re-embed        Decision, Disputes,
+benchmarks      profiles        in-place        Authz model, tenant
+                                                scope (15.1–15.12)
 ```
 
 | Phase | Status | Key Deliverables |
@@ -505,6 +515,10 @@ selector V2,    Vision + hybrid cross-instance
 | **9** | ✅ Complete | Multi-project UX redesign — "All Projects" mode, project selector V2, ProjectBadge, cross-project views on all pages, per-project guards (11 sprints, 26 commits, 41 files) |
 | **10** | ✅ Complete | Multi-format extraction (fast/quality/vision), chunking + embeddings, chunk edit/delete with optimistic lock, hybrid semantic+FTS chunk search (REST/Cmd+K/chat tool/MCP tool), vision async jobs with progress+cancel, mermaid rendering, image upload UX, SSRF-hardened URL ingestion, 47-test E2E suite (7 sprints, 7 migrations) |
 | **11** | ✅ Complete | Knowledge portability — zip+JSONL bundle format with manifest+sha256, full project export streaming via pg-cursor, full project import with conflict policies + dry-run + cross-tenant guard, GUI Knowledge Exchange panel, cross-instance pull endpoint with DNS-rebinding pinning + slow-loris defense, streaming JSONL decode + streaming base64 encode, batched SELECT import (~99% query reduction), 61 API e2e + 1 GUI Playwright + 39 unit tests (9 sub-sprints, 6 commits, all through v2.2 workflow with /review-impl). |
+| **12** | ✅ Complete | RAG quality measurement & rerank optimization — golden-set harness (recall@k, MRR), p50/p95 latency budgets, 8-model embedding benchmark + 8-model reranker benchmark (qwen3-4b-instruct-ranker 85% pass @1.8s recommended; no-rerank baseline 76% @99ms), reranker slot in tiered search with graceful fallback, reproducible reports in `docs/benchmarks/` (7 sprints). |
+| **13** | ✅ Complete | Multi-agent coordination protocol — artifact ownership/leasing (`artifact_leases`, TTL + lazy/background sweep, fencing), `pending-review` lesson state + Review-Request queue, taxonomy profiles (unified with `lesson_types`), agent-attributed claims; 19-bug post-hoc review fully cleared (7 sprints). |
+| **14** | ✅ Complete | Global embedding/distillation model swap — mxbai-large→bge-m3 + qwen-coder→nemotron-3-nano, all projects re-embedded in-place. DEFERRED-002 (mxbai 512-token truncation) RESOLVED; per-project model routing (DEFERRED-001) ABANDONED as unneeded. |
+| **15** | ✅ Complete | Multi-actor coordination protocol — durable append-only event log + Topic/Actor model, the Board (tasks/artifacts/claims + fencing + abandoned-claim sweep), Request-Approval (multi-level routing), Collective Decision (motions/votes/tally/veto), intake mailbox + dispute resolution, topic-closing 3-phase drain, primitive-outcome chaining, multi-tier collective routing, authorization model (3 HARD pre-prod triggers), end-to-end tenant-scope enforcement. 12 sprints (15.1–15.12), migrations 0050–0063. Closeout: `docs/phase-15-closeout.md`. |
 
 ## Phase 7 — Complete
 

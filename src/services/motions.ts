@@ -30,6 +30,15 @@ import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
 import { createModuleLogger } from '../utils/logger.js';
 import { appendEvent } from './coordinationEvents.js';
+import {
+  validateExecutionTask,
+  buildChainedTaskParams,
+  emitChain,
+  type ChainResult,
+  type ExecutionTaskBlob,
+} from './chaining.js';
+import { applyMotionToStep } from './requests.js';
+import { getEnv } from '../env.js';
 
 const logger = createModuleLogger('motions');
 
@@ -99,6 +108,7 @@ export type VoteResult =
   | { status: 'balloting_closed' }
   | { status: 'topic_closed' }
   | { status: 'not_member' }
+  | { status: 'proxy_not_granted' }
   | { status: 'already_voted' };
 
 export type VetoResult =
@@ -111,7 +121,7 @@ export type VetoResult =
 export type TallyOutcome = 'carried' | 'failed' | 'lapsed';
 
 export type TallyResult =
-  | { status: TallyOutcome; tally: MotionTally }
+  | { status: TallyOutcome; tally: MotionTally; chain?: ChainResult }
   | { status: 'not_found' }
   | { status: 'not_balloting' }
   | { status: 'balloting_open' }
@@ -237,11 +247,14 @@ export async function proposeMotion(params: {
   subject_ref: string;
   proposed_by: string;
   deadline_minutes?: number;
+  /** Sprint 15.7 — optional execution_task blob for chain handler on carried. */
+  execution_task?: unknown;
 }): Promise<ProposeResult> {
   const topicId = (params.topic_id ?? '').trim();
   const bodyId = (params.body_id ?? '').trim();
   const subjectRef = (params.subject_ref ?? '').trim();
   const proposedBy = (params.proposed_by ?? '').trim();
+  const executionTask = validateExecutionTask(params.execution_task);
 
   if (!topicId || !bodyId || !subjectRef || !proposedBy) {
     throw new ContextHubError(
@@ -280,7 +293,7 @@ export async function proposeMotion(params: {
     throw new ContextHubError('NOT_FOUND', `topic ${topicId} not found`);
   }
   const { project_id: topicProjectId, status: topicStatus } = topicRes.rows[0];
-  if (topicStatus === 'closed') {
+  if (topicStatus === 'closed' || topicStatus === 'closing') {
     return { status: 'topic_closed' };
   }
 
@@ -307,10 +320,13 @@ export async function proposeMotion(params: {
     await client.query('BEGIN');
 
     const ins = await client.query<{ motion_id: string; deadline: Date }>(
-      `INSERT INTO motions (body_id, topic_id, subject_ref, status, proposed_by, deadline)
-       VALUES ($1, $2, $3, 'proposed', $4, now() + ($5 * interval '1 minute'))
+      `INSERT INTO motions (body_id, topic_id, subject_ref, status, proposed_by, deadline, execution_task)
+       VALUES ($1, $2, $3, 'proposed', $4, now() + ($5 * interval '1 minute'), $6)
        RETURNING motion_id, deadline`,
-      [bodyId, topicId, subjectRef, proposedBy, deadlineMinutes],
+      [
+        bodyId, topicId, subjectRef, proposedBy, deadlineMinutes,
+        executionTask === null ? null : JSON.stringify(executionTask),
+      ],
     );
     const motionId = ins.rows[0].motion_id;
     const deadline = ins.rows[0].deadline.toISOString();
@@ -515,6 +531,20 @@ export async function castVote(params: {
     }
     const voteWeight = memberRes.rows[0].vote_weight;
 
+    // Sprint 15.11 (DEFERRED-017 Q3) — verify the proxy grant when proxy_for is set.
+    // Gated behind MCP_AUTH_ENABLED per Q2 (body authz activates with auth-on);
+    // auth-off preserves the 15.4 behavior (proxy_for recorded unverified).
+    if (proxyFor && getEnv().MCP_AUTH_ENABLED) {
+      const grant = await client.query(
+        `SELECT 1 FROM proxies WHERE body_id=$1 AND principal=$2 AND proxy=$3`,
+        [motion.body_id, actorId, proxyFor],
+      );
+      if (grant.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return { status: 'proxy_not_granted' };
+      }
+    }
+
     // ── (vote) row insert — one immutable ballot per principal (Q12) ─────────
     const ins = await client.query(
       `INSERT INTO votes (motion_id, actor_id, choice, weight, proxy_for)
@@ -622,6 +652,26 @@ export async function vetoMotion(params: {
       payload: { vetoed_by: actorId },
     });
 
+    // Sprint 15.8 — if this motion was auto-proposed for a request step, mark the
+    // step rejected (vetoed motion → step rejected → request rejected).
+    const stepLinkV = await client.query<{
+      request_id: string; step_index: number; target_office: string;
+    }>(
+      `SELECT request_id, step_index, target_office FROM request_steps
+         WHERE motion_id=$1 FOR UPDATE`,
+      [motionId],
+    );
+    if (stepLinkV.rowCount === 1) {
+      await applyMotionToStep(client, {
+        motion_id: motionId,
+        request_id: stepLinkV.rows[0].request_id,
+        step_index: stepLinkV.rows[0].step_index,
+        target_office: stepLinkV.rows[0].target_office,
+        outcome: 'vetoed',
+        topic_id: motion.topic_id,
+      });
+    }
+
     await client.query('COMMIT');
     return { status: 'vetoed' };
   } catch (err) {
@@ -655,10 +705,13 @@ export async function tallyMotion(params: { motion_id: string }): Promise<TallyR
     await client.query('BEGIN');
 
     // ── (motion) row lock ───────────────────────────────────────────────────
+    // Sprint 15.7 — also select subject_ref + execution_task for chain handler.
     const motionRes = await client.query<{
       body_id: string; topic_id: string; status: string; expired: boolean;
+      subject_ref: string; execution_task: ExecutionTaskBlob | null;
     }>(
-      `SELECT body_id, topic_id, status, (now() >= deadline) AS expired
+      `SELECT body_id, topic_id, status, (now() >= deadline) AS expired,
+              subject_ref, execution_task
          FROM motions WHERE motion_id=$1 FOR UPDATE`,
       [motionId],
     );
@@ -700,17 +753,64 @@ export async function tallyMotion(params: { motion_id: string }): Promise<TallyR
       [outcome, JSON.stringify(tally), motionId],
     );
 
+    // Sprint 15.7 — primitive-outcome chaining (DEFERRED-019) on carried only.
+    // For other outcomes (failed/lapsed/vetoed), no chain — motion.tallied
+    // payload has no `chain` field.
+    // Sprint 15.8 — when this motion is the auto-proposed motion for a request
+    // step (subject_ref starts with 'request_step:'), the request's chain handler
+    // in applyMotionToStep handles the chained task; the motion-level chain is
+    // suppressed (avoids two duplicate execution tasks per collective approval).
+    let chainResult: ChainResult | undefined;
+    const isStepMotion = typeof motion.subject_ref === 'string' && motion.subject_ref.startsWith('request_step:');
+    if (outcome === 'carried' && !isStepMotion) {
+      const chainParams = buildChainedTaskParams({
+        source: 'motion',
+        source_id: motionId,
+        topic_id: motion.topic_id,
+        kind: motion.subject_ref,
+        blob: motion.execution_task,
+        acting_actor: 'system:tally',
+      });
+      chainResult = await emitChain(client, {
+        topic_id: motion.topic_id,
+        source_event: { type: 'motion.tallied', source_id: motionId },
+        actor_id: 'system:tally',
+        params: chainParams,
+      });
+    }
+
     await appendEvent(client, {
       topic_id: motion.topic_id,
       actor_id: 'system:tally',
       type: 'motion.tallied',
       subject_type: 'motion',
       subject_id: motionId,
-      payload: { outcome, ...tally },
+      payload: chainResult ? { outcome, ...tally, chain: chainResult } : { outcome, ...tally },
     });
 
+    // Sprint 15.8 — if this motion was auto-proposed for a request step, apply the
+    // outcome to the step (extends step lifecycle through motion tally). The motion
+    // is FOR UPDATE so we serialize against any concurrent tally/sweep path.
+    const stepLink = await client.query<{
+      request_id: string; step_index: number; target_office: string;
+    }>(
+      `SELECT request_id, step_index, target_office FROM request_steps
+         WHERE motion_id=$1 FOR UPDATE`,
+      [motionId],
+    );
+    if (stepLink.rowCount === 1) {
+      await applyMotionToStep(client, {
+        motion_id: motionId,
+        request_id: stepLink.rows[0].request_id,
+        step_index: stepLink.rows[0].step_index,
+        target_office: stepLink.rows[0].target_office,
+        outcome,
+        topic_id: motion.topic_id,
+      });
+    }
+
     await client.query('COMMIT');
-    return { status: outcome, tally };
+    return chainResult ? { status: outcome, tally, chain: chainResult } : { status: outcome, tally };
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     logger.error({ err: String(err) }, 'tallyMotion failed');

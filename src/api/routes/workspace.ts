@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { requireProjectScope } from '../middleware/requireResourceScope.js';
 import {
   registerWorkspaceRoot,
   listWorkspaceRoots,
@@ -12,7 +13,7 @@ import {
 const router = Router();
 
 /** POST /api/workspace/register — register a workspace root */
-router.post('/register', async (req, res, next) => {
+router.post('/register', requireProjectScope('body'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await registerWorkspaceRoot({ projectId, rootPath: req.body.root_path });
@@ -21,7 +22,7 @@ router.post('/register', async (req, res, next) => {
 });
 
 /** GET /api/workspace/roots — list workspace roots */
-router.get('/roots', async (req, res, next) => {
+router.get('/roots', requireProjectScope('query'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
     const result = await listWorkspaceRoots(projectId);
@@ -30,7 +31,7 @@ router.get('/roots', async (req, res, next) => {
 });
 
 /** POST /api/workspace/scan — scan workspace for changes */
-router.post('/scan', async (req, res, next) => {
+router.post('/scan', requireProjectScope('body'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await scanWorkspaceChanges({ projectId, rootPath: req.body.root_path });
@@ -39,7 +40,7 @@ router.post('/scan', async (req, res, next) => {
 });
 
 /** POST /api/sources/configure — configure project source */
-router.post('/sources/configure', async (req, res, next) => {
+router.post('/sources/configure', requireProjectScope('body'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await configureProjectSource({
@@ -54,7 +55,7 @@ router.post('/sources/configure', async (req, res, next) => {
 });
 
 /** GET /api/sources — get project source config */
-router.get('/sources', async (req, res, next) => {
+router.get('/sources', requireProjectScope('query'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
     const result = await getProjectSource(projectId, (req.query.source_type as any) ?? 'local_workspace');
@@ -63,7 +64,7 @@ router.get('/sources', async (req, res, next) => {
 });
 
 /** POST /api/sources/prepare — prepare (clone) a remote repo */
-router.post('/sources/prepare', async (req, res, next) => {
+router.post('/sources/prepare', requireProjectScope('body'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await prepareRepo({

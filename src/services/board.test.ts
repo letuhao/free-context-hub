@@ -21,7 +21,7 @@
 import assert from 'node:assert/strict';
 import test, { before, after, beforeEach } from 'node:test';
 import { postTask, listBoard, claimTask, releaseTask, completeTask } from './board.js';
-import { charterTopic, joinTopic, closeTopic } from './topics.js';
+import { charterTopic, joinTopic, grantLevel } from './topics.js';
 import { replayEvents } from './coordinationEvents.js';
 import { getDbPool } from '../db/client.js';
 
@@ -409,9 +409,9 @@ test('T7: completeTask on an already-completed task → already_completed', asyn
 
 // ── MED-2: release / complete on a closed topic → clean topic_closed status ──
 //
-// closeTopic does not touch claims, so a topic can be `closed` with a live
-// claim still on a task. release/complete must return a defined `topic_closed`
-// status — NOT let appendEvent's seal throw a raw BAD_REQUEST.
+// Sprint 15.6 drain removes claims before the topic seals, so we bypass it
+// with a direct DB update — simulating the race window where close races with
+// release/complete. The services must return a clean `topic_closed` status.
 
 test('MED-2: releaseTask on a closed topic → topic_closed (not a thrown error)', async () => {
   const topicId = await mkActiveTopic();
@@ -420,7 +420,8 @@ test('MED-2: releaseTask on a closed topic → topic_closed (not a thrown error)
     slot: 'mc-rel', kind: 'document', created_by: 'creator-1',
   });
   await claimTask({ task_id: task.task_id, actor_id: 'holder' });
-  await closeTopic({ topic_id: topicId, actor_id: 'creator-1' });
+  // bypass drain — close via direct DB update so the live claim survives
+  await getDbPool().query(`UPDATE topics SET status='closed' WHERE topic_id=$1`, [topicId]);
 
   const r = await releaseTask({ task_id: task.task_id, actor_id: 'holder' });
   assert.equal(r.status, 'topic_closed');
@@ -441,7 +442,8 @@ test('MED-2: completeTask on a closed topic → topic_closed (not a thrown error
     slot: 'mc-cmp', kind: 'document', created_by: 'creator-1',
   });
   await claimTask({ task_id: task.task_id, actor_id: 'holder' });
-  await closeTopic({ topic_id: topicId, actor_id: 'creator-1' });
+  // bypass drain — close via direct DB update so the live claim survives
+  await getDbPool().query(`UPDATE topics SET status='closed' WHERE topic_id=$1`, [topicId]);
 
   const r = await completeTask({ task_id: task.task_id, actor_id: 'holder' });
   assert.equal(r.status, 'topic_closed');
@@ -492,6 +494,34 @@ test('LOW-9: postTask with depends_on pointing at a nonexistent task → BAD_REQ
       slot: 'low9a', kind: 'document', created_by: 'creator-1',
     }),
     /depends_on references unknown or cross-topic tasks/,
+  );
+});
+
+// ── Sprint 15.6 HIGH fix: writer paths must block on 'closing' ───────────────
+
+test('HIGH: claimTask on a closing topic → topic_closed', async () => {
+  const topicId = await mkActiveTopic();
+  const task = await postTask({
+    topic_id: topicId, title: 'claim-closing', topology: 'parallel',
+    slot: 'claim-cls', kind: 'document', created_by: 'creator-1',
+  });
+  // Simulate the drain window: topic is 'closing' before Phase 3 seal.
+  await getDbPool().query(`UPDATE topics SET status='closing' WHERE topic_id=$1`, [topicId]);
+
+  const result = await claimTask({ task_id: task.task_id, actor_id: 'actor-1' });
+  assert.equal(result.status, 'topic_closed');
+});
+
+test('HIGH: postTask on a closing topic → BAD_REQUEST', async () => {
+  const topicId = await mkActiveTopic();
+  await getDbPool().query(`UPDATE topics SET status='closing' WHERE topic_id=$1`, [topicId]);
+
+  await assert.rejects(
+    postTask({
+      topic_id: topicId, title: 'blocked', topology: 'parallel',
+      slot: 'blocked-slot', kind: 'document', created_by: 'creator-1',
+    }),
+    /closing or closed/,
   );
 });
 
@@ -553,4 +583,85 @@ test('LOW-11: concurrent claims yield distinct, strictly-increasing fencing toke
   for (let i = 1; i < sorted.length; i++) {
     assert.ok(sorted[i] > sorted[i - 1], 'sorted tokens are strictly increasing');
   }
+});
+
+// ── Sprint 15.7 — claimTask topology enforcement (DEFERRED-011b) ──────────
+
+/** Setup helper — create a topic + 2 actors. */
+async function mkTopo() {
+  const t = await charterTopic({
+    project_id: TEST_PROJECT, name: 'Topology Topic', charter: 'topology', created_by: 'alice',
+  });
+  // Sprint 15.11 — owner 'alice' (created_by) bootstraps at coordination; non-owner
+  // 'bob' joins at execution then alice grants it coordination.
+  await joinTopic({ topic_id: t.topic_id, actor_id: 'alice', actor_type: 'human', display_name: 'A', level: 'coordination' });
+  await joinTopic({ topic_id: t.topic_id, actor_id: 'bob', actor_type: 'human', display_name: 'B', level: 'execution' });
+  await grantLevel({ topic_id: t.topic_id, actor_id: 'bob', level: 'coordination', granted_by: 'alice' });
+  return t.topic_id;
+}
+
+test('15.7 AC15: claimTask sequential w/ incomplete predecessor → unmet_dependencies', async () => {
+  const topicId = await mkTopo();
+  const t1 = await postTask({ topic_id: topicId, title: 'predecessor', topology: 'parallel', slot: 'p1', kind: 'doc', created_by: 'alice' });
+  const t2 = await postTask({ topic_id: topicId, title: 'dependent', topology: 'sequential', depends_on: [t1.task_id], slot: 'p2', kind: 'doc', created_by: 'alice' });
+  // t1 is still 'posted' (not completed)
+  const claim = await claimTask({ task_id: t2.task_id, actor_id: 'bob' });
+  assert.equal(claim.status, 'unmet_dependencies');
+  if (claim.status !== 'unmet_dependencies') throw new Error('status');
+  assert.equal(claim.incomplete.length, 1);
+  assert.equal(claim.incomplete[0].task_id, t1.task_id);
+  assert.equal(claim.incomplete[0].status, 'posted');
+});
+
+test('15.7 AC16: claimTask sequential w/ all predecessors completed → claimed', async () => {
+  const topicId = await mkTopo();
+  const t1 = await postTask({ topic_id: topicId, title: 'pred', topology: 'parallel', slot: 'q1', kind: 'doc', created_by: 'alice' });
+  // Complete t1
+  const c1 = await claimTask({ task_id: t1.task_id, actor_id: 'alice' });
+  assert.equal(c1.status, 'claimed');
+  await completeTask({ task_id: t1.task_id, actor_id: 'alice' });
+
+  const t2 = await postTask({ topic_id: topicId, title: 'dep', topology: 'sequential', depends_on: [t1.task_id], slot: 'q2', kind: 'doc', created_by: 'alice' });
+  const claim = await claimTask({ task_id: t2.task_id, actor_id: 'bob' });
+  assert.equal(claim.status, 'claimed');
+});
+
+test('15.7 AC17: claimTask rolling w/ upstream not baselined → upstream_not_baselined', async () => {
+  const topicId = await mkTopo();
+  const t1 = await postTask({ topic_id: topicId, title: 'producer', topology: 'parallel', slot: 'r1', kind: 'doc', created_by: 'alice' });
+  // t1's artifact is in state='draft' (initial) — not baselined
+  const t2 = await postTask({ topic_id: topicId, title: 'consumer', topology: 'rolling', depends_on: [t1.task_id], slot: 'r2', kind: 'doc', created_by: 'alice' });
+  const claim = await claimTask({ task_id: t2.task_id, actor_id: 'bob' });
+  assert.equal(claim.status, 'upstream_not_baselined');
+  if (claim.status !== 'upstream_not_baselined') throw new Error('status');
+  assert.equal(claim.not_baselined[0].task_id, t1.task_id);
+  assert.equal(claim.not_baselined[0].state, 'draft');
+});
+
+test('15.7 AC17b: claimTask rolling w/ baselined upstream → claimed', async () => {
+  const topicId = await mkTopo();
+  const t1 = await postTask({ topic_id: topicId, title: 'producer', topology: 'parallel', slot: 's1', kind: 'doc', created_by: 'alice' });
+  // Manually set t1's artifact to 'baselined'
+  const pool = getDbPool();
+  await pool.query(`UPDATE artifacts SET state='baselined' WHERE task_id=$1`, [t1.task_id]);
+
+  const t2 = await postTask({ topic_id: topicId, title: 'consumer', topology: 'rolling', depends_on: [t1.task_id], slot: 's2', kind: 'doc', created_by: 'alice' });
+  const claim = await claimTask({ task_id: t2.task_id, actor_id: 'bob' });
+  assert.equal(claim.status, 'claimed');
+});
+
+test('15.7 AC18: claimTask parallel w/ non-completed predecessor → claimed (no check)', async () => {
+  const topicId = await mkTopo();
+  const t1 = await postTask({ topic_id: topicId, title: 'pred', topology: 'parallel', slot: 'u1', kind: 'doc', created_by: 'alice' });
+  // t1 not completed
+  const t2 = await postTask({ topic_id: topicId, title: 'par', topology: 'parallel', depends_on: [t1.task_id], slot: 'u2', kind: 'doc', created_by: 'alice' });
+  const claim = await claimTask({ task_id: t2.task_id, actor_id: 'bob' });
+  assert.equal(claim.status, 'claimed', 'parallel does not check predecessors');
+});
+
+test('15.7 AC19: claimTask sequential w/ empty depends_on → claimed', async () => {
+  const topicId = await mkTopo();
+  const t = await postTask({ topic_id: topicId, title: 'lone', topology: 'sequential', slot: 'v1', kind: 'doc', created_by: 'alice' });
+  const claim = await claimTask({ task_id: t.task_id, actor_id: 'bob' });
+  assert.equal(claim.status, 'claimed', 'empty depends_on bypasses the check');
 });

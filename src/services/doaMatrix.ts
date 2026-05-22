@@ -40,6 +40,17 @@ export type MatrixRow = {
   route_shape: string;
   /** Frozen snapshot string: `<matrix_id>:t<tier>` (D4). */
   doa_snapshot: string;
+  /** Sprint 15.8 — per-row decision procedure. */
+  procedure: 'unilateral' | 'collective';
+  /** Sprint 15.8 — decision body for collective procedure (NULL on unilateral). */
+  body_id: string | null;
+  /**
+   * Sprint 15.10 — per-level body map for multi-tier collective routes
+   * (DEFERRED-022). Empty Map when no doa_matrix_levels entries exist;
+   * caller falls back to {required_level → body_id} from the single-body
+   * column (15.8 backward compat).
+   */
+  body_by_level: Map<string, string>;
 };
 
 // ── §2.1 resolveMatrixRow ─────────────────────────────────────────────────────
@@ -75,21 +86,31 @@ export async function resolveMatrixRow(
     matrix_id: string;
     required_level: string;
     route_shape: string;
+    procedure: 'unilateral' | 'collective';
+    body_id: string | null;
+    body_by_level_json: Record<string, string>;
     tier: string;
   }>(
-    `SELECT matrix_id, required_level, route_shape,
-            (weight_max - weight_min) AS span,
-            CASE WHEN topic_id = $1                              THEN 0
-                 WHEN topic_id IS NULL AND project_id = $2      THEN 1
+    `SELECT m.matrix_id, m.required_level, m.route_shape, m.procedure, m.body_id,
+            COALESCE(
+              jsonb_object_agg(ml.level, ml.body_id) FILTER (WHERE ml.level IS NOT NULL),
+              '{}'::jsonb
+            ) AS body_by_level_json,
+            (m.weight_max - m.weight_min) AS span,
+            CASE WHEN m.topic_id = $1                              THEN 0
+                 WHEN m.topic_id IS NULL AND m.project_id = $2      THEN 1
                  ELSE 2 END AS tier
-       FROM doa_matrix
-      WHERE kind = $3
-        AND weight_min <= $4
-        AND weight_max >= $4
-        AND ( topic_id = $1
-           OR (topic_id IS NULL AND project_id = $2)
-           OR (topic_id IS NULL AND project_id = '__default__') )
-      ORDER BY tier ASC, span ASC, matrix_id ASC
+       FROM doa_matrix m
+       LEFT JOIN doa_matrix_levels ml ON ml.matrix_id = m.matrix_id
+      WHERE m.kind = $3
+        AND m.weight_min <= $4
+        AND m.weight_max >= $4
+        AND ( m.topic_id = $1
+           OR (m.topic_id IS NULL AND m.project_id = $2)
+           OR (m.topic_id IS NULL AND m.project_id = '__default__') )
+      GROUP BY m.matrix_id, m.required_level, m.route_shape, m.procedure,
+               m.body_id, m.weight_max, m.weight_min, m.topic_id, m.project_id
+      ORDER BY tier ASC, span ASC, m.matrix_id ASC
       LIMIT 1`,
     [topic_id, project_id, kind, weight],
   );
@@ -98,11 +119,19 @@ export async function resolveMatrixRow(
 
   const row = res.rows[0];
   const tier = Number(row.tier);
+  // pg returns JSONB columns as parsed objects; convert to Map.
+  const bbl = new Map<string, string>();
+  for (const [lvl, bid] of Object.entries(row.body_by_level_json ?? {})) {
+    if (typeof bid === 'string') bbl.set(lvl, bid);
+  }
   return {
     matrix_id: row.matrix_id,
     required_level: row.required_level,
     route_shape: row.route_shape,
     doa_snapshot: `${row.matrix_id}:t${tier}`,
+    procedure: row.procedure,
+    body_id: row.body_id,
+    body_by_level: bbl,
   };
 }
 

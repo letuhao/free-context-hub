@@ -1,12 +1,294 @@
-# LONGRUN CHECKPOINT — Phase 15 autonomous longrun, session boundary (2026-05-18)
+# LONGRUN CHECKPOINT — Phase 15 autonomous longrun, session boundary (2026-05-23)
 
-**Status:** **Sprint 15.4 (Collective Decision) — COMPLETE** via the v2.2 human-in-loop
-12-phase workflow (the user chose human-in-loop for 15.4). All 12 phases passed; the
-guardrail-mandated POST-REVIEW security Adversary returned **CLEAR**; a user-invoked
-`/review-impl` at the POST-REVIEW checkpoint found 1 MED + 1 LOW + 2 COSMETIC, all fixed +
-re-verified. The next session resumes at **Sprint 15.5** (intake + dispute). 15.4 is committed
-(`0b3b329`) on branch `phase-15-sprint-15.4` (cut from `phase-15-sprint-15.3`) → **PR #16** to
-`main`.
+**Status:** **DEFERRED-003 (race_exhausted coverage) — RESOLVED** on branch
+`race-exhausted-coverage-deferred-003`. 723/723 green; tsc clean; no migration.
+**The entire DEFERRED backlog is now CLEARED** — no OPEN items remain (003 was the last).
+
+## DEFERRED-003 outcome (race_exhausted retry-loop coverage)
+The retry loop in `claimArtifact` was extracted into an exported, injectable seam
+`_claimWithRetry(p, once=_claimArtifactOnce)`. Production behavior is unchanged — the default
+`once` is the real `_claimArtifactOnce`, and the loop/`setImmediate` backoff/`race_exhausted`
+return are byte-identical. The real-DB integration race is genuinely non-deterministic (the
+step-1 lazy DELETE cleans the expired incumbent before any retry can re-observe it, and forcing
+the race with a competing connection deadlocks on the claim's own uncommitted DELETE), so a
+deterministic unit test of the loop is the resolution the original defer note anticipated. 3
+DB-free tests in `artifactLeases.test.ts` cover all-retry → `race_exhausted` (asserts exactly 2
+`once` calls, pinned to `MAX_INTERNAL_RACE_RETRIES=1`), retry-then-claim → `claimed`, and
+terminal-first → no retry. v2.2 size-S (skip DESIGN/PLAN). REVIEW-CODE 0 findings; human
+POST-REVIEW CLEAR.
+
+**Backlog: CLEARED.** No OPEN deferred items remain (DEFERRED-001 ABANDONED; all others RESOLVED).
+
+---
+
+## (prior this session) DEFERRED-023 (taxonomy_profiles bundle round-trip) — RESOLVED
+Branch `taxonomy-profiles-bundle-deferred-023`. 720/720 green; tsc clean; no migration. Only
+DEFERRED-003 remained after this (now also closed, above).
+
+## DEFERRED-023 outcome (taxonomy_profiles bundle round-trip)
+`taxonomy_profiles` is now a knowledge-bundle entity. `bundleFormat.ts` gains the
+`taxonomy_profiles.jsonl` ENTRY_NAME + BundleData field + `BundleReader.taxonomy_profiles()`
++ encode/iterate plumbing. `exportProject.ts` adds an owner-project cursor
+(`WHERE owner_project_id=$1`; owner_project_id is NOT carried in the row — rebound on import).
+`importProject.ts` adds the conflict-entity union member, counts, a `processBatched` block
+keyed on `(slug, targetProjectId)`, and `applyTaxonomyProfile` — which rebinds owner to the
+TARGET project on create and refuses to overwrite a destination built-in. Because export
+filters on `owner_project_id=$1` and built-ins are owner-NULL, a bundle can never carry or
+inject a system built-in. 4 round-trip tests added to `scopeRoundTrip.test.ts` (profile
+exported sans owner; round-trips into fresh target with owner rebound; built-in overwrite
+refused; pre-fix bundle without taxonomy_profiles imports cleanly). v2.2 size-S/M.
+REVIEW-CODE 0 findings; human POST-REVIEW CLEAR.
+
+**Open deferred now (all LOW, no security/correctness debt):**
+- DEFERRED-003 — `race_exhausted` test coverage (near-unhittable path)
+
+---
+
+## (prior this session) DEFERRED-024 (run-next cross-project pop filter) — RESOLVED
+Branch `run-next-scope-deferred-024`. 716/716 green; tsc clean; no migration. This closed the
+LAST tenant-scope hole — the tenant-isolation story is now complete end-to-end.
+
+## DEFERRED-024 outcome (run-next scope filter)
+`claimNextQueuedJob(queue, projectScope?)` adds `AND project_id = $2` to the pop CTE when
+a non-empty `projectScope` is supplied; `runNextJob(queue, projectScope?)` threads it;
+`POST /api/jobs/run-next` passes `req.apiKeyScope`. A project-scoped api key drains ONLY
+its own project's queue (and skips null-project/global jobs). The background worker /
+auth-off / global-scope keys pop across all projects unchanged. 5 tests in
+`jobQueueScope.test.ts`. v2.2 size-S (skip DESIGN/PLAN). REVIEW-CODE 0 findings.
+
+**Open deferred now (all LOW, no security/correctness debt):**
+- DEFERRED-003 — `race_exhausted` test coverage (near-unhittable path)
+- DEFERRED-023 — `taxonomy_profiles` bundle round-trip (feature completeness)
+
+---
+
+## (prior this session) DEFERRED-004 — writer-route tenant-scope audit — RESOLVED
+Branch `tenant-scope-audit-deferred-004`. 711/711 green; tsc clean; no migration. (Also
+this session: DEFERRED-008 exchange scope-leak; Sprint 15.12 closed the Phase 15 backlog.)
+
+## DEFERRED-004 outcome (writer-route tenant-scope audit)
+
+The writer-role routers (git/jobs/workspace/chat/chatHistory/documents/learning-paths/
+groups) read `project_id` from body/query (or a resource id) with no `req.apiKeyScope`
+check — a key scoped to project A could act on project B. This is the service-handler
+complement to Sprint 15.12's `/api/topics/:id/*` route-param scope work.
+
+**New guard (`src/api/middleware/requireResourceScope.ts`):**
+- `requireProjectScope(source, {multi})` — strict-reject (CLARIFY Q1/Q2): a scoped key
+  MUST declare a project equal to its scope. Absent → 400 `project_scope_required`;
+  present cross-tenant → 404; multi `project_ids[]` any out-of-scope → 404; absent → 400.
+  For COLLECTION routes (no resource :id).
+- `requireResourceScope` extended with `document`/`learning_path`/`conversation`
+  resolvers — for RESOURCE-`:id` routes, DERIVE the owning project from the id.
+  **REVIEW-DESIGN F1 (BLOCK):** a declared `project_id` is bypassable by a cross-tenant
+  resource id (own project_id + another tenant's id); so resource routes must derive,
+  not trust. The matrix splits accordingly.
+
+**Application (~45 routes across 8 routers):** collection routes →
+`requireProjectScope('body'|'query'|{multi})`; resource-`:id` routes →
+`requireResourceScope('document'|'learning_path'|'conversation', param)`. groups'
+`:projectId` URL-param routes → existing `requireScope('projectId')`; group-container
+ops (group_id ≠ project) left unguarded by design.
+
+**Posture:** auth-off (`apiKeyScope` undefined) / global (`null`) → unrestricted (dev
+posture; 711-test baseline preserved — existing route tests run auth-off → guards no-op).
+
+**TS note:** adding a middleware shifts Express's handler overload so `req.params.X`
+widens to `string | string[]`; `String()`-wrapped 30 param sites across the touched
+files (correct — params are strings at runtime).
+
+**Deferred (Tier-2):** `POST /api/jobs/run-next` cross-project pop → **DEFERRED-024**
+(needs a `runNextJob(queue, projectScope?)` scheduling-semantics change; no request-time
+project to guard).
+
+**Tests:** 10 new D004 cases in `requireResourceScope.test.ts` (collection match/cross-
+tenant 404/absent 400/multi/global; resource own/cross-tenant 404/unknown 404). 711/711
+green; tsc clean. No live auth-on smoke (dev stack is auth-off; covered by the test-DB
+suite via the `x-test-key-scope` shim).
+
+**Workflow:** v2.2 size-L. REVIEW-DESIGN r1 1 BLOCK (derive-on-id) + 2 WARN → rev 2 CLEAR.
+REVIEW-CODE 0 findings. QC CLEAR. Light tenant-isolation security checklist CLEAR.
+
+**Open deferred now:** DEFERRED-003 (LOW, race_exhausted test), DEFERRED-023 (LOW,
+taxonomy_profiles bundle round-trip), DEFERRED-024 (LOW, run-next cross-project pop).
+No MED/HIGH items remain.
+
+---
+
+## (prior this session) DEFERRED-008 — exchange scope-leak — RESOLVED
+Branch `fix-exchange-scope-deferred-008`. 701/701 green; tsc clean; no migration.
+(Sprint 15.12 closed the entire Phase 15 deferred backlog before that.)
+
+## DEFERRED-008 outcome (exchange scope-leak fix)
+
+The Phase 11 knowledge-bundle export/import path dropped `lesson_types.scope`
+(migration 0052), so a source `scope='profile'` type silently became `scope='global'`
+on import — polluting the destination's global registry. Fix (size S, scope-only per
+CLARIFY Q1):
+- `exportProject.ts` lesson_types SELECT adds `scope`.
+- `importProject.ts` INSERT (create) + UPDATE (overwrite) persist `scope` via a
+  `normalizeScope(row.scope)` helper → defaults a pre-fix bundle (no `scope` field) or
+  a malformed value to `'global'` (prior behavior + no CHECK-constraint violation).
+- 4 round-trip tests in `src/services/exchange/scopeRoundTrip.test.ts` (registered in
+  npm test): AC1 export carries scope (via openBundle); AC4 profile + global round-trip
+  (via encodeBundle→importProject→DB read); AC5 pre-fix bundle defaults global.
+
+The `taxonomy_profiles`-as-bundle-entity round-trip (the deferred's "related" gap) was
+split to **DEFERRED-023** (LOW; profiles re-seed from config on fresh instances, so the
+scope-leak — the actual data-integrity bug — is closed without it).
+
+Workflow: v2.2 size-S (CLARIFY + BUILD + VERIFY + REVIEW-CODE + POST-REVIEW; DESIGN +
+PLAN skipped per S-rules). REVIEW-CODE 0 findings. No live smoke (the dev stack was down
+on resume + MCP disconnected; the round-trip is fully covered by the test-DB integration
+tests). Open deferred now: DEFERRED-003 (race_exhausted test, LOW), DEFERRED-004 (PARTIAL,
+tenant-scope service-handler audit, MED), DEFERRED-023 (taxonomy_profiles round-trip, LOW).
+
+## Environment note (2026-05-21 resume)
+Docker stack was DOWN on session resume + the MCP server disconnected (93 mcp__contexthub__
+tools unavailable). Brought the stack back up (`docker compose up -d`). REST API (3001)
+used for any live ops; MCP lessons deferred to the next MCP-online session (noted below).
+
+---
+
+## (prior) Sprint 15.12 — Phase 15 backlog closed
+
+**Status:** **Sprint 15.12 (tenant-scope authz + induction-pack tail —
+DEFERRED-009 + 010) — COMPLETE.** Closes the ENTIRE Phase 15 deferred backlog.
+v2.2 human-in-loop. REVIEW-DESIGN r1 1 BLOCK (body-project omission → DEFAULT_PROJECT_ID
+scope-escape) + 2 WARN → rev 2 CLEAR. 697/697 green; live smoke ✓; light tenant-isolation
+security checklist CLEAR.
+
+## Sprint 15.12 outcome
+
+**DEFERRED-009 (tenant-scope authz):** new `src/api/middleware/requireResourceScope.ts`:
+- `requireResourceScope(entity, param)` — 8 resolvers (topic/request/motion/dispute/intake/
+  body/task/artifact); loads the owning `project_id`, compares to `req.apiKeyScope`;
+  cross-tenant + unknown → 404 NOT_FOUND (no existence oracle / id-probing).
+- `requireBodyProjectScope` — create routes with project_id in body (createBody,
+  submitIntake); injects the key's scope on omission (REVIEW-DESIGN F1 fix — no
+  DEFAULT_PROJECT_ID scope-escape); explicit cross-project → 404.
+- `requireBodyTopicScope` — openDispute's `body.topic_id`.
+- Applied across topics/board/requests/motions/disputes/intake (40+ routes, complete
+  coverage per CLARIFY Q1 incl. indirect entity-derived scope). Auth-off / global-scope →
+  unrestricted (dev posture). MCP path (unscoped workspace token) out of scope.
+
+**DEFERRED-010 (induction-pack tail):** `replayEvents` gains `tail: true` (most-recent N
+events, DESC+reverse, `has_more` via `EXISTS(seq<min)` — no COUNT). `joinTopic` fresh-join
+(since_seq=0) uses tail so the pack carries recent context incl. the joiner's own
+`topic.actor_joined`; cursor primed to HEAD. Re-prime (since_seq>0) unchanged.
+
+**Tests (17 new, 697 total):** requireResourceScope.test.ts (12 — per-entity scope +
+body-project inject + body-topic), coordinationEvents.test.ts (3 tail), topics route test
+(2 — guard-wiring proof + fresh-join tail pack). requireResourceScope.test.ts registered
+in npm test. No migration.
+
+**Workflow:** CLARIFY Q1 EXPANDED to complete coverage; Q2 404; Q3 reuse 1000 tail; Q4
+light security review. DESIGN r1 1 BLOCK + 2 WARN → rev 2. BUILD T1-T12. VERIFY 697/697 +
+smoke. REVIEW-CODE 0. QC 12/12. Light security checklist CLEAR.
+
+## 🎉 Phase 15 deferred backlog — FULLY CLOSED
+
+All Phase 15 deferred items resolved: 009, 010, 011, 015, 016, 017, 018, 019, 020, 021,
+022. (007 resolved in Phase 13; 008 is a Phase 11 exchange item, still open but not Phase
+15.) The Multi-Actor Coordination Protocol (topics, board, requests, motions, disputes,
+intake, collective decision, chaining, closing-drain, authorization model, tenant-scope)
+is complete with no open Phase-15 debt.
+
+## Resume — next
+
+No Phase 15 deferred items remain. Options: a Phase 15 closeout/retro, GUI work for the
+coordination surface, or a new phase. DEFERRED-008 (Phase 11 knowledge-bundle scope
+column) remains the only open non-Phase-15 deferred item.
+
+## Environment state (end of Sprint 15.12 session, 2026-05-21)
+
+- Docker stack: 8/8 healthy. Migrations 0053–0063 applied (15.12 added NO migration).
+- `npm test` **697/697** green; tsc clean.
+- Branch: `phase-15-sprint-15.12` — committed in Phase 11.
+- Deferred OPEN: only DEFERRED-008 (non-Phase-15). All Phase 15 items RESOLVED.
+
+---
+
+## Sprint 15.11 outcome
+
+**Status:** **Sprint 15.11 (Phase 15 authorization model — DEFERRED-015/016/017) —
+COMPLETE** via the v2.2 human-in-loop 12-phase workflow + mandatory security-framed
+adversarial review (guardrail 5c0b7b25). XL sprint. REVIEW-DESIGN r1 found 1 BLOCK +
+2 WARN (proxy verification posture vs Q2; migration atomicity; owner-permanence under-
+documented) → rev 2 fixes. Test-helper migration (8 files) dispatched to a subagent.
+680/680 green; live level-grant smoke ✓; security review CLEAR (8 checklist + 5 probes).
+
+## Sprint 15.11 outcome
+
+Closes the Phase 15 authorization model — the three interlocking HARD pre-prod triggers:
+
+**Migration 0063:** `topic_participants.granted_by`; `proxies` table (body_id, principal,
+proxy, granted_by); `api_keys.created_by`; `api_keys_active_name_uniq` partial unique index.
+New event type `topic.level_granted`.
+
+**A — Level-grant chain (DEFERRED-015):** `joinTopic` no longer self-asserts level — the
+topic owner (`created_by`, permanent grant root) sets their own level at first join
+(bootstrap); non-owners forced to `execution` (non-execution → `level_grant_required`).
+New `grantLevel` op (owner/authority gate, self-grant forbidden, `topic.level_granted`
+event) + REST `POST /topics/:id/grant-level` + MCP `grant_level`. Enforced ALWAYS
+(auth-on + auth-off). Owner-permanence: a demoted owner keeps grant power.
+
+**B — Body authz + proxies (DEFERRED-017):** `createBody`/`addBodyMember` routes raised to
+`requireRole('admin')`; `veto_holders` cap (≤64/≤256). New `proxies.ts` (grantProxy
+principal-only / revokeProxy / listProxies) + REST + MCP. `castVote` verifies the proxy
+grant when auth-on (`proxy_not_granted`); auth-off preserves 15.4 unverified behavior (Q2).
+
+**C — Key provisioning (DEFERRED-016):** actor-identity uniqueness (one active key per name,
+DB partial unique index → `duplicate_active_key_name`) + per-operator key-count limit
+(`api_keys.created_by` + `MAX_KEYS_PER_CREATOR` env, default 50 → `key_limit_exceeded`).
+
+**Enforcement posture (Q2):** level-grant always-on (keyed on actor_id); body authz + key
+rules activate with `MCP_AUTH_ENABLED=true`.
+
+**Security review (mandatory):** `docs/audit/findings-sprint-15.11-security-review.md` —
+8 §10 checklist items + 5 adversarial probes (owner-lockout, proxy-forgery, closed-topic-
+grant, deadlock, index-race) all DEFENDED. The one-human-two-keys residual is ACCEPTED-
+BOUNDED (documented trust boundary; capped by key-limit + level-grant audit chain). HARD
+pre-prod authz trigger satisfied for the coordination-role surface. **Note:** DEFERRED-009
+(tenant-scope authz — a key for project A acting on project B's topic) is a SEPARATE
+concern, still OPEN — 15.11 closed coordination-*role* authz, not *tenant-scope* authz.
+
+**Test-helper migration:** dispatched to a subagent — 8 test files where non-owner
+participants self-asserted levels now use the owner's `grantLevel` (end-state levels
+preserved). Verified 657→680 green.
+
+**Tests (23 new, 680 total):** topics.test.ts (9: AC1-AC6 + non-participant + owner-
+permanence), proxies.test.ts (8: grant/revoke/list authz + castVote gated verification),
+apiKeys.test.ts (6: uniqueness + per-operator limit + created_by). Both new test files
+registered in the npm test script.
+
+**Workflow:** CLARIFY (Q1 owner-only level; Q2 level-grant always-on; Q3 EXPANDED proxies
+table; Q4 EXPANDED key limit; Q5 ship all three — XL). DESIGN r1→r2 (1 BLOCK + 2 WARN
+fixed). PLAN 19 tasks. BUILD T1-T16 (T13 test migration via subagent). VERIFY 680/680 +
+smoke. REVIEW-CODE 0 findings. QC 13/13 ACs. Security review CLEAR. POST-REVIEW human CLEAR.
+
+## Resume — Sprint 15.12
+
+Remaining OPEN: DEFERRED-009 (tenant-scope authz — topic ops by topic_id ignore caller's
+project scope), DEFERRED-010 (replayEvents/induction-pack pagination > 1000 events). Both
+are the last Phase 15 deferred items. 015/016/017/018/019/011/020/021/022 all RESOLVED.
+
+## Environment state (end of Sprint 15.11 session, 2026-05-21)
+
+- Docker stack: 8/8 healthy. Migrations 0053–**0063** applied.
+- `npm test` **680/680** green; tsc clean.
+- Branch: `phase-15-sprint-15.11` — committed in Phase 11.
+- Deferred OPEN: **009**, **010** only. All authz triggers (015/016/017) RESOLVED.
+
+---
+
+## Sprint 15.10 outcome
+
+**Status:** **Sprint 15.10 (Multi-tier collective routing — DEFERRED-022) — COMPLETE**
+via the v2.2 human-in-loop 12-phase workflow. REVIEW-DESIGN r1 found 1 BLOCK +
+2 WARN (lapsed re-resolve violates snapshot-the-rules; degraded_to vs escalated_to
+naming) → rev 2 fixes (requests.body_by_level snapshot column + escalated_to unified
+field). REVIEW-CODE 0 findings. 657/657 green; live multi-tier smoke ✓.
 
 ## Phase 15 longrun progress
 
@@ -17,10 +299,453 @@ re-verified. The next session resumes at **Sprint 15.5** (intake + dispute). 15.
 | 15.3 — Request-Approval | ✅ COMPLETE | branch `phase-15-sprint-15.3` · `8a27312` · PR #15 |
 | 15.3.1 — security fix-up | ✅ COMPLETE | `phase-15-sprint-15.3` · `50fb866` · PR #15 · F1/F3a/F4/F5/F7 |
 | 15.4 — Collective decision | ✅ COMPLETE | branch `phase-15-sprint-15.4` · `0b3b329` · PR #16 · v2.2 human-in-loop |
-| 15.5 — Intake + dispute | ⏳ NEXT | full 12-phase cycle |
-| 15.6–15.7 | pending | — |
+| 15.5 — Intake + dispute | ✅ COMPLETE | branch `phase-15-sprint-15.5` · v2.2 human-in-loop + /review-impl |
+| 15.6 — Topic-closing drain + residuals | ✅ COMPLETE | branch `phase-15-sprint-15.6` · v2.2 human-in-loop + /review-impl |
+| 15.7 — Chaining + sweep recovery + topology | ✅ COMPLETE | branch `phase-15-sprint-15.7` · v2.2 human-in-loop |
+| 15.8 — Collective request-step wiring | ✅ COMPLETE | branch `phase-15-sprint-15.8` · v2.2 human-in-loop |
+| 15.9 — Cleanup (021+020) | ✅ COMPLETE | branch `phase-15-sprint-15.9` · S-size, skip PLAN |
+| 15.10 — Multi-tier collective (022) | ✅ COMPLETE | branch `phase-15-sprint-15.10` · v2.2 human-in-loop |
+| 15.11 | pending | — |
+
+## Sprint 15.10 outcome
+
+Closes DEFERRED-022 — multi-tier collective request routing. Enables the realistic
+governance pattern: "coordination committee endorses, then authority board endorses"
+with DIFFERENT bodies per level.
+
+**Migration 0062:**
+- `doa_matrix_levels (matrix_id UUID, level TEXT, body_id UUID, PK (matrix_id, level))`
+  with FK to doa_matrix (ON DELETE CASCADE) + FK to decision_bodies + CHECK level enum.
+- `requests.body_by_level JSONB NULL` — snapshot of the per-level body map captured
+  at submission (honors master design B.7 snapshot-the-rules per REVIEW-DESIGN F1 fix).
+
+**Service changes:**
+- `doaMatrix.ts:resolveMatrixRow` returns extended MatrixRow with `body_by_level:
+  Map<string, string>`. SQL gains LEFT JOIN doa_matrix_levels + jsonb_object_agg with
+  FILTER + COALESCE for empty-map case. Backward compat: empty map → fallback to
+  `{required_level → body_id}` (15.8 single-step).
+- `submitRequest`:
+  - Removed 15.8's multi-step counter_sign+collective hard-reject.
+  - Builds bodyByLevel Map from matrix (preferring table; falling back to
+    single body_id).
+  - Per-step body resolution loop; throws `missing_collective_body` if a step's
+    target_office is not in the map.
+  - Distinct-body check on multi-step counter_sign+collective → throws
+    `distinct_body_required` on duplicates.
+  - INSERTs request_steps with per-step body_id from map.
+  - Snapshots the full bodyByLevel onto `requests.body_by_level` via UPDATE (F1 fix).
+  - proposeStepMotion at step 0 uses `stepBodies[0]` (not legacy `matrixRow.body_id`).
+- `applyMotionToStep` lapsed branch:
+  - Adds `body_by_level` to the request SELECT.
+  - Reads `req.body_by_level[newLevel]` (snapshot) to find next level's body.
+  - If body present: re-propose under collective body (UPDATE step procedure=
+    'collective', body_id=<next>, status='motion_proposed', motion_id=NULL,
+    fresh deadline) + proposeStepMotion + appendEvent step_escalated with
+    `escalated_to: 'collective', body_id: <next>`.
+  - Else: degrade to unilateral (15.8 fallback behavior) + appendEvent
+    `escalated_to: 'unilateral'` (F2 unify — replaces 15.8's `degraded_to`).
+  - Top tier (authority lapsed): unchanged escalation_exhausted, payload includes
+    `escalated_to: 'unilateral'` (F2 forward consistency).
+
+**Event payload unification (F2 fix):** Sprint 15.10 emits `escalated_to:
+'collective' | 'unilateral'` field on `request.step_escalated` for both lapsed
+paths. Historic 15.8 events in DB retain `degraded_to: 'unilateral'`; replay
+consumers parse `escalated_to ?? (degraded_to ? 'unilateral' : null)`.
+
+**Backward compat:** 15.8 single-body collective matrix rows (procedure='collective',
+body_id=<X>, no doa_matrix_levels entries) → fallback rule maps required_level →
+body_id. Single-step routes continue to work unchanged. AC12 explicitly tests.
+
+**Test coverage (6 new, 657 total):**
+- requests.test.ts: AC2 distinct-body multi-tier submit, AC3 same-body reject,
+  AC4 missing-body reject, AC12 15.8 backward compat, AC6-re-propose lapsed→
+  collective at next level, AC6-degrade-fallback lapsed without next body.
+- requests.test.ts: 15.8 AC1-neg test UPDATED to assert `missing_collective_body`
+  error path (15.10 no longer auto-rejects; rejects only on missing-body or
+  duplicate-body).
+
+**Workflow:**
+- CLARIFY (Q1 new table, Q2 re-propose-or-degrade, Q3 skip security review).
+- DESIGN rev 1 → REVIEW-DESIGN r1 REJECTED 1 BLOCK (snapshot violation) + 2 WARN →
+  rev 2 fixes both BLOCKs + F3 doc → r2 CLEAR.
+- PLAN 9 tasks inline.
+- BUILD T1-T8, VERIFY 657/657 + live smoke ✓.
+- REVIEW-CODE r1 0 findings.
+- QC CLEAR 12/12 ACs.
+- POST-REVIEW human CLEAR.
+
+**Verification:** `tsc` clean; `npm test` **657/657** green; live smoke vs Docker
+confirmed multi-tier counter_sign+collective end-to-end: distinct bodies per level,
+step 0 motion carries → step 1 motion auto-proposed under different body → step 1
+carries → request approved + 1 chained task (no duplication).
+
+## Resume — Sprint 15.11
+
+Remaining OPEN: DEFERRED-009 (topic-scope authz), DEFERRED-010 (replayEvents
+pagination), DEFERRED-015/016/017 (HARD pre-prod authz triggers). 022 RESOLVED.
+
+## Environment state (end of Sprint 15.10 session, 2026-05-21)
+
+- Docker stack: 8/8 healthy. Migrations 0053–**0062** applied.
+- `npm test` **657/657** green; tsc clean.
+- Branch: `phase-15-sprint-15.10` — committed via Phase 11.
+- Deferred OPEN: 009, 010, **015**, **016**, **017** (HARD). All other Sprint 15
+  deferreds RESOLVED (018, 019, 011, 020, 021, 022).
+
+---
+
+## Sprint 15.9 outcome
+
+Cleanup S-sprint resolving two LOW debts:
+
+- **DEFERRED-021 RESOLVED** — MCP `decide_request_step` + `tally_motion` outputSchemas
+  declare optional `chain` field. Flat-optional shape: `{kind: required string,
+  task_id/artifact_id/reason/deferred_event_id: optional strings}`. Sidesteps
+  DEFERRED-007's discriminated-union SDK issue. Verified by live MCP `tools/list`.
+- **DEFERRED-020 RESOLVED** — 3 LOW test coverage gaps from 15.6 closed:
+  - LOW-7: 2 route tests for fractional + negative step-index → 400 from route layer.
+  - LOW-8a: positive `artifact_advanced:true` test on approve (cross-checks artifact→final).
+  - LOW-8b: assertion in T18 sweep test that `escalation_exhausted` payload carries
+    `artifact_advanced:false`.
+  - LOW-9: event-ordering assertions in topics drain AC2+AC3 (force-lapse events precede
+    `topic.closed` by seq).
+
+Workflow: CLARIFY (brief, size=S) → BUILD T1-T5 → VERIFY → REVIEW-CODE (0 findings) →
+QC CLEAR → POST-REVIEW human gate. No DESIGN, no REVIEW-DESIGN, no PLAN (S allows skip).
+651/651 green; tsc clean; live MCP smoke confirmed schema; +3 new tests over 15.8 base.
+
+## Resume — Sprint 15.10
+
+Remaining candidates: DEFERRED-022 (multi-tier collective per-level body), DEFERRED-015/
+016/017 (Phase 15 authz model — HARD pre-prod triggers), DEFERRED-009/010 (smaller
+governance gaps).
+
+## Environment state (end of Sprint 15.9 session, 2026-05-20)
+
+- Docker stack: 8/8 healthy. Migrations 0053–0061 applied (15.9 added no migration).
+- `npm test` **651/651** green on `phase-15-sprint-15.9`; `tsc` clean.
+- Branch: `phase-15-sprint-15.9` — committed in Phase 11.
+- Deferred OPEN: 009, 010, **015**, **016**, **017**, 022. DEFERRED-018/019/011/020/021
+  all RESOLVED in 15.7+15.8+15.9.
+- 4 MCP lessons added at end of 15.9 RETRO.
+
+---
+
+## Sprint 15.8 outcome
+
+Sprint 15.8 shipped **DEFERRED-018** — wires `procedure='collective'` into the Request-
+Approval lifecycle. A request step now may be decided by a motion's tally (15.4
+collective-decision primitive) instead of by a single officeholder's `decideStep`.
+
+**Migration:** `0061_collective_step.sql`:
+- `doa_matrix.procedure TEXT NOT NULL DEFAULT 'unilateral'` + `doa_matrix.body_id UUID NULL`
+  with `CHECK (procedure='unilateral' OR body_id IS NOT NULL)`.
+- `request_steps.body_id` + `request_steps.motion_id` (frozen snapshots, per the
+  target_office + doa_snapshot discipline).
+- `request_steps.status` enum extended to allow `'motion_proposed'`.
+- Sparse partial index `request_steps_motion_lookup_idx ON (motion_id) WHERE motion_id IS NOT NULL`
+  for O(1) tally→step lookup.
+
+**Service changes (DESIGN §2):**
+- `doaMatrix.ts:resolveMatrixRow` returns `procedure + body_id` (extended MatrixRow type).
+- `requests.ts:submitRequest` — removed `procedure='collective'` hard-reject. Per-step
+  procedure + body_id sourced from matrix row (frozen at submission). Rejects multi-step
+  `counter_sign+collective` (would collapse distinct-endorser to a single body — see
+  DEFERRED-022). On step 0 collective, calls `proposeStepMotion` inline.
+- `requests.ts:proposeStepMotion` (new internal helper) — INSERTs motions row + emits
+  `motion.proposed` event with `source: 'request_step'` payload + UPDATE request_steps
+  SET status='motion_proposed', motion_id=<new id>. Uses `proposed_by='system:request-
+  step-proposer'`.
+- `requests.ts:decideStep` — early-rejects `procedure='collective'` with
+  `{status: 'procedure_is_collective'}` (check BEFORE status filter so the user gets
+  the clearer error vs `conflict`).
+- `requests.ts:applyMotionToStep` (new exported helper) — handles 4 motion outcomes:
+  - `carried` → step.endorsed + advance to next step (auto-propose its motion if
+    collective) OR finalize approved (with 15.7 chain emission).
+  - `failed` → step.returned + request.returned + resolveArtifact('return').
+  - `lapsed` → degrade-to-unilateral escalation (REVIEW-DESIGN F1 fix): UPDATE step
+    `procedure='unilateral', body_id=NULL, motion_id=NULL, target_office=<next level>`
+    with fresh deadline. At authority tier → escalation_exhausted (payload
+    `{exhausted: true, reason: 'motion_lapsed', degraded_to: 'unilateral'}` matching
+    15.3 sweep shape — REVIEW-CODE F1 fix).
+  - `vetoed` → step.rejected + request.rejected + artifact untouched (no chain).
+- `motions.ts:tallyMotion` + `motions.ts:vetoMotion` + `coordinationSweep.ts:sweepExpiredMotions`
+  — all 3 paths now call `applyMotionToStep` if the motion has a linked request_step
+  (FOR UPDATE lookup; existing motion-row FOR UPDATE serializes the 3 paths against
+  each other).
+
+**Chain deduplication (post-smoke fix):** live smoke revealed a behavioral gap —
+collective approval was emitting TWO chained tasks per outcome (motion chain handler
+on motion.tallied + request chain handler in applyMotionToStep on request.resolved).
+Fixed at BUILD-end: motions.ts:tallyMotion and coordinationSweep.ts:sweepExpiredMotions
+now suppress the motion chain when `motion.subject_ref.startsWith('request_step:')` —
+the request's chain handler in `applyMotionToStep` is the sole emitter. Verified
+1 task post-fix.
+
+**Tests (10 new, 648 total):**
+- `requests.test.ts` — `15.8 AC1+AC4` (collective accepted + auto-propose motion),
+  `AC1-neg` (multi-step counter_sign+collective rejected), `AC5` (decideStep →
+  procedure_is_collective), `AC6-carried`/`-failed`/`-lapsed`/`-lapsed-at-top` (4
+  outcome paths via direct applyMotionToStep).
+- `motions.test.ts` — `15.8 motions.T7` (full collective flow via tallyMotion), `T7-vetoed`
+  (vetoMotion → step rejected).
+- `coordinationSweep.test.ts` — `15.8 sweep-lapsed` (sweep auto-lapses motion → step
+  degrades to unilateral).
+- Existing 15.3 `T5: collective procedure → BAD_REQUEST` test updated to confirm 15.8
+  now accepts the input (informational only; matrix decides).
+- All cleanup() helpers extended: motions.test.ts + coordinationSweep.test.ts now also
+  delete request_steps + requests + doa_matrix for the test project (REVIEW-CODE F2 fix).
+
+**Workflow execution:**
+- CLARIFY rev 2 (post-design F2 reconciliation, AC8 removed): user-approved Q1
+  auto-propose, Q2 lapsed→escalate, Q3 skip security review.
+- DESIGN r1 REJECTED 2 BLOCKs → rev 2 (lapsed degrade-to-unilateral, drop AC8) →
+  r2 CLEAR + 1 WARN accept-with-doc.
+- PLAN 12 tasks T1-T12, inline.
+- BUILD ran T1-T11; T12 verify + live smoke confirmed full end-to-end flow including
+  chain dedup fix.
+- REVIEW-CODE r1: F1 WARN payload-shape (fix-now), F2 LOW test cleanup (fix-now),
+  F3 LOW subject_ref string-prefix dedup (accept-with-doc).
+- QC CLEAR 12/12 ACs; no spec drift.
+- POST-REVIEW human gate CLEAR.
+
+**Verification:** `tsc` clean; `npm test` **648/648 green**; live smoke against Docker
+stack: submit collective request → motion auto-proposed → second + vote `for` → tally
+carried → request approved → 1 chained task posted (correct dedup).
+
+## Resume protocol — Sprint 15.9 (next sprint)
+
+Sprint 15.9 resumes from `phase-15-sprint-15.8`. Candidate scope: **DEFERRED-022**
+(multi-tier collective per-level body assignment — NEW from 15.8), **DEFERRED-021**
+(MCP outputSchema for chain field — interlocks DEFERRED-007), **DEFERRED-020** (LOW
+test coverage cleanup from 15.6). **DEFERRED-015/016/017** still HARD pre-prod
+authorization triggers.
+
+## Environment state (end of Sprint 15.8 session, 2026-05-20)
+
+- Docker stack: 8/8 containers healthy. Migrations 0053–**0061** applied. MCP + worker
+  rebuilt with 15.8 code, both responding.
+- `npm test` **648/648** green on `phase-15-sprint-15.8`; `tsc` clean.
+- Branch: `phase-15-sprint-15.8` — uncommitted at start of SESSION; commits via
+  Phase 11.
+- Deferred items OPEN: DEFERRED-009, 010, **015**, **016**, **017**, 020, **021**,
+  **022 NEW** — 015/016/017 HARD pre-prod authz; 022 NEW (multi-tier collective).
+  DEFERRED-018 **resolved** in Sprint 15.8.
+- Pending MCP lessons (4-6, to be added in RETRO):
+  - decision: collective request-step wiring contract (matrix-driven, auto-propose,
+    4-outcome handler, chain dedup via subject_ref prefix)
+  - decision: lapsed-degrade-to-unilateral escalation (vs re-resolve matrix)
+  - workaround: chain dedup using subject_ref string-prefix check (load-bearing
+    convention)
+  - workaround: test cleanup must include doa_matrix BEFORE decision_bodies (FK)
+  - workaround: decideStep collective check must precede status check (motion_proposed
+    is not pending; otherwise returns 'conflict' instead of 'procedure_is_collective')
+
+---
+
+
+## Sprint 15.7 outcome
+
+Sprint 15.7 shipped **primitive-outcome chaining** (DEFERRED-019) + **closing-topic
+stuck-recovery sweep** + **topology enforcement on `claimTask`** (DEFERRED-011 both
+halves) — the natural follow-on to Sprint 15.6's three-phase `closeTopic` drain.
+
+**Migration:** `0060_execution_task.sql` — `requests.execution_task JSONB NULL` +
+`motions.execution_task JSONB NULL`. Optional submitter-specified task blob.
+
+**New module:** `src/services/chaining.ts` (~280 lines).
+- `validateExecutionTask(blob)` — structural validation at submit time (title ≤512,
+  topology in enum, slot regex+≤64, kind non-empty+≤64, depends_on uuid[]+≤32,
+  raci ≤8 KB JSON).
+- `buildChainedTaskParams(args)` — pure merge: derived defaults (request=`Execute
+  approved request: <kind>` / motion=`Execute carried motion: <subject_ref>`; topology
+  parallel; slot `exec-<16hex>`; kind inherited; raci with `source_request|source_motion`
+  key) overridden by blob fields. System keys (created_by, source-link key) always win.
+- `emitChain(client, args)` — transactional helper:
+  1. `SELECT status FROM topics WHERE topic_id=$1 FOR UPDATE` (serializes with
+     closeTopic Phase 1/3)
+  2. If 'closing'/'closed': emit `task.deferred` (subject_type='topic', subject_id=
+     topic_id, payload includes source_event_type/source_id/reason/would_be_task) and
+     return `{kind:'deferred', reason, deferred_event_id}`.
+  3. If 'active': chain-time `depends_on` existence check; throw
+     `CHAINED_TASK_DEPENDENCY_INVALID` on bad blob (caller rolls back source event).
+     INSERT tasks + artifacts + artifact_versions + appendEvent task.posted + appendEvent
+     artifact.created. Return `{kind:'posted', task_id, artifact_id}`.
+
+**Chain integration at 3 sites:**
+- `requests.ts:decideStep` approve branch (last-step endorsed): builds chain params from
+  request's `kind` + `execution_task`, calls emitChain, embeds result in `request.resolved`
+  payload + return.
+- `motions.ts:tallyMotion` carried branch: builds chain from motion's `subject_ref` +
+  `execution_task`, emits, embeds in `motion.tallied` payload.
+- `coordinationSweep.ts:sweepExpiredMotions` auto-tally carried: same logic with
+  `acting_actor='system:sweep'`.
+
+**Negative outcomes** (returned/rejected/escalation_exhausted/failed/lapsed/vetoed): no
+chain, no `chain` field in source payload, no new task.
+
+**Stuck-closing sweep:** `sweepStuckClosingTopics()` joins `coordination_events` to find
+topics in 'closing' whose most recent `topic.closing` event is older than
+`SWEEP_STALE_CLOSING_MINUTES = 5`. Calls `closeTopic` with `statementTimeoutMs = 60_000`
+(REVIEW-DESIGN F3 fix). REVIEW-CODE F2 fix: `LIMIT $2` with
+`SWEEP_STUCK_CLOSING_MAX_PER_CYCLE = 10` so the per-cycle advisory-lock hold is bounded.
+Added 4th in `startClaimsSweepScheduler` cycle. Per-topic statement_timeout failures (pg
+57014) logged at WARN, other failures at ERROR; loop continues.
+
+**Topology enforcement on `claimTask`:** after topic-status check (15.6 closing-window
+guard), branch on `tasks.topology`:
+- `sequential` + non-empty `depends_on`: SELECT predecessor statuses; reject `unmet_
+  dependencies` (with `missing[]` + `incomplete[]`) if any not `completed`.
+- `rolling` + non-empty `depends_on`: SELECT upstream artifacts; reject `upstream_not_
+  baselined` (with `not_baselined[{task_id,state}]`) if any not `baselined`. (REVIEW-
+  CODE F1: relies on the postTask invariant that every task co-creates one artifact;
+  documented in code.)
+- `parallel`: no check.
+
+**New error codes:** `UNMET_DEPENDENCIES`, `UPSTREAM_NOT_BASELINED`,
+`CHAINED_TASK_DEPENDENCY_INVALID` (extended `ContextHubError.code` union).
+
+**`closeTopic` signature extension:** optional `statementTimeoutMs?: number`. When set,
+each internal `pool.connect()` (Phase 1, 5 Phase 2 per-item loops, Phase 3) runs
+`SET statement_timeout = '<ms>ms'` immediately after acquiring. Default: existing
+15.6 behavior (no timeout). Used by `sweepStuckClosingTopics` to bound recovery.
+
+**Routes + MCP:** `submit_request` and `propose_motion` (REST + MCP input schemas) gain
+an optional `execution_task: unknown` field. Service layer validates structurally; chain-
+time validation handles `depends_on` existence. (LOW: MCP `decide_step`+`tally_motion`
+outputSchemas do not declare the new `chain` field — deferred as DEFERRED-021.)
+
+**Test isolation pattern (15.6 lesson reused):** the closing-topic chain test uses
+`UPDATE topics SET status='closing'` directly instead of `closeTopic()` so the
+in-flight request isn't force-closed by Phase 2 drain before we approve it.
+
+**Test coverage (36 new, 638 total):**
+- `chaining.test.ts` (new) — 18 validate + build tests (AC1, AC2, AC9 indirect)
+- `requests.test.ts` — AC1 (decision + chain), AC3 (blob override), AC6 (reject → no
+  chain), AC7 (closing → deferred), AC10 (invalid_depends_on → rollback)
+- `motions.test.ts` — AC2 (carried + chain), AC4 (blob), AC5/AC6 (failed → no chain),
+  AC7 (closing → deferred)
+- `coordinationSweep.test.ts` — AC5 (auto-carried chain), AC11 (stuck-closing recovery),
+  AC12 (fresh closing not picked up)
+- `board.test.ts` — AC15/AC16 (sequential), AC17/AC17b (rolling), AC18 (parallel),
+  AC19 (empty depends_on)
+- Test cleanup helpers updated in `motions.test.ts` + `api/routes/motions.test.ts` to
+  delete chained tasks/artifacts before topics (chain creates them as a side effect of
+  carried tallies — same FK constraint pattern as requests.test.ts already handled).
+
+**Workflow execution:**
+- CLARIFY rev 2 approved by user with 4 design Q's (Q1 submitter-blob, Q2 event-log-based
+  staleness, Q3 skip security review, Q4 expand to include topology enforcement →
+  size M→L).
+- DESIGN rev 1 → REVIEW-DESIGN r1 REJECTED 3 BLOCKs (F1 single-event chain payload, F2
+  invalid_depends_on semantic contradiction, F3 unbounded advisory-lock hold) → rev 2
+  resolved all + 2 inline WARN refinements (subject_type='topic' for task.deferred,
+  closeTopic statementTimeoutMs vs borrowed client) → r2 CLEAR.
+- PLAN 19 tasks, inline execution. BUILD ran T1–T18 in order; T19 verify (638/638 green,
+  tsc clean, migration applied, live smoke ✓).
+- REVIEW-CODE r1: F1 MED accept-with-doc, F2 MED fix-now (LIMIT cap), F3 LOW defer →
+  DEFERRED-021.
+- QC CLEAR 17/19 explicit + 2 partial (AC13 sweep ordering + AC14 §0.1-loop isolation
+  — verified by reading, consistent with 15.6 precedent).
+- POST-REVIEW human gate CLEAR.
+
+**Verification:** `tsc` clean; `npm test` **638/638 green**; live smoke confirmed
+submitter blob → chained task with custom title on the docker stack.
+
+## Resume protocol — Sprint 15.8 (next sprint)
+
+Sprint 15.8 resumes from `phase-15-sprint-15.7`. Candidate scope: **DEFERRED-018**
+(procedure='collective' request-step wiring), **DEFERRED-021** (MCP outputSchemas
+declare `chain` field — interlocks with DEFERRED-007 discriminated-union SDK issue),
+**DEFERRED-020** (LOW test coverage cleanup from 15.6 — 3rd session). **DEFERRED-015/
+016/017** carry the HARD pre-production authz trigger.
+
+## Environment state (end of Sprint 15.7 session, 2026-05-20)
+
+- Docker stack: 8/8 containers healthy. Migrations 0053–**0060** applied. MCP + worker
+  rebuilt with 15.7 code, both responding.
+- `npm test` **638/638** green on `phase-15-sprint-15.7`; `tsc` clean.
+- Branch: `phase-15-sprint-15.7` — uncommitted at start of SESSION; will be committed
+  in Phase 11.
+- Deferred items OPEN: DEFERRED-009, 010, **015**, **016**, **017**, 018, 020, **021** —
+  DEFERRED-015 + 016 + **017** carry a HARD pre-production authorization trigger.
+  DEFERRED-019 + 011 **resolved** in Sprint 15.7. DEFERRED-021 NEW (MCP outputSchema gap).
+- Pending MCP lessons (4–6, to be added in RETRO Phase 12):
+  - decision: chaining contract (single-event chain field + dual-emit task.deferred on
+    deferral + ROLLBACK on chain-time invalid_depends_on)
+  - decision: topology enforcement on claimTask (sequential/rolling check, postTask-
+    invariant for rolling missing-artifact case)
+  - decision: per-call statementTimeoutMs on closeTopic for sweep recovery isolation
+  - workaround: per-cycle K=10 cap on stuck-closing recovery to bound advisory-lock hold
+  - workaround: cleanup helpers must delete chained tasks/artifacts before topics (FK
+    constraint pattern surfaces in carried-motion tests)
+- `jq` still not in shell — smoke scripts use node/tsx.
+
+---
 
 PRs are stacked against `main` (each diff includes the prior sprint's commits until merge).
+
+## Sprint 15.5 outcome
+
+Sprint 15.5 shipped the **intake mailbox + dispute resolution** primitives — the inbound-item
+handling and adjudication halves of the Phase 15 governance model.
+
+**Migrations:** `0058_intake_dispute.sql` (creates `intake_items` + `disputes` tables with CHECK
+constraints + indexes); `0059_seed_dispute_doa.sql` (seeds the `__default__` DoA matrix row for
+`dispute_resolution` kind — absence caused `submitRequest` to return `no_route`).
+
+**New service files:**
+- `src/services/intake.ts` — `submitIntake` / `triageIntake` / `dismissIntake` / `getIntake` /
+  `listIntake`. `triageIntake` uses `SELECT … FOR UPDATE` on the intake row (WARN-2 serialization
+  fix) and a dynamic `await import('./disputes.js')` inside the dispute-route branch to avoid a
+  circular-dependency module-load cycle.
+- `src/services/disputes.ts` — `openDispute` / `resolveDispute` / `getDispute` / `listDisputes`.
+  `openDispute` uses a **compensating-cleanup pattern** (added by /review-impl Fix 2): if the
+  Step-3 UPDATE fails after `submitRequest` has already committed, it DELETEs `request_steps` +
+  `requests` + `disputes` to prevent an irrecoverable orphan dispute.
+
+**New route files:**
+- `src/api/routes/intake.ts` — 5 routes (POST /api/intake, GET /api/intake/:id,
+  POST /api/intake/:id/triage, POST /api/intake/:id/dismiss, GET /api/projects/:id/intake).
+  `parties` array element-filtered to `string` only.
+- `src/api/routes/disputes.ts` — 4 routes (POST /api/topics/:id/disputes,
+  POST /api/disputes/:id/resolve, GET /api/disputes/:id, GET /api/topics/:id/disputes).
+
+**MCP tools added:** `submit_intake`, `triage_intake`, `dismiss_intake`, `get_intake`,
+`list_intake`, `open_dispute`, `resolve_dispute`, `get_dispute`, `list_disputes` (9 tools, all
+in `src/mcp/index.ts`).
+
+**Modified files:**
+- `src/core/errors.ts` — extended `ContextHubError.code` union with 5 new codes:
+  `TOPIC_NOT_ACTIVE`, `ALREADY_RESOLVED`, `RESOLUTION_PENDING`, `INTAKE_ALREADY_TRIAGED`,
+  `INTAKE_ALREADY_DISMISSED`.
+- `src/core/index.ts` — re-exports for all new service functions + types.
+- `src/services/requests.ts` — relaxed `subject_type` check to allow `'dispute'`; wrapped
+  artifact-lookup block in `if (subjectType === 'artifact')` guard.
+- `src/mcp/index.ts` — 9 new tool registrations.
+- `src/api/index.ts` — mounts `intakeRouter` + `disputesRouter`.
+- `package.json` — 4 new test files added to `npm test` script.
+
+**Test files (4 new files, 57 tests total):**
+- `src/services/intake.test.ts` — 18 tests; TEST_PROJECT='__test_intake__'
+- `src/services/disputes.test.ts` — 14 tests; TEST_PROJECT='__test_disputes__'
+- `src/api/routes/intake.test.ts` — 13 route tests
+- `src/api/routes/disputes.test.ts` — 12 route tests
+
+**Verification:** `tsc` clean; `npm test` **586/586 green** (all prior tests + 57 new pass).
+
+**`/review-impl` findings and fixes (all resolved before commit):**
+1. HIGH: `triageIntake` dispute route had 0 service-level tests → added 2 tests to `intake.test.ts`
+2. MED: `openDispute` Step 3 UPDATE failure left irrecoverable orphan → compensating cleanup added
+3. MED: `submitIntake` body length unbounded → `MAX_BODY_LEN = 16_384` check + test added
+4. LOW: `parties` cast without element validation → `.filter((p): p is string => ...)` added
+5. COSMETIC: `resolveDispute` event not fully asserted in test → added `actor_id` + `request_status` assertions
+
+**Deferred items:** DEFERRED-018 (collective dispute procedure → BAD_REQUEST) already existed and
+is referenced explicitly in the implementation. No new deferred items created this sprint. The
+`CONTEXT_HUB_TO_MCP_CODE` map gap for new error codes (LOW finding from RETRO) is accepted as
+consistent with all existing Phase 15 MCP tools — the SDK catch path returns `isError: true`
+transparently.
 
 ## Sprint 15.4 outcome
 
@@ -45,27 +770,91 @@ tally is deterministic.
 coordinator-trusted under `MCP_AUTH_ENABLED=false`, the same self-declared-authority class as
 DEFERRED-015/016. **DEFERRED-017** owns the residual (HARD pre-production trigger).
 
-## Resume protocol — Sprint 15.5 (intake + dispute)
+## Sprint 15.6 outcome
 
-Cut `phase-15-sprint-15.5` off `phase-15-sprint-15.4`. Full 12-phase cycle for the **intake
-mailbox + dispute resolution** primitives (master design B.8 / C.1 — `intake_items`,
-`disputes`; a dispute is a Request-Approval routed to an arbiter or a tribunal). Calibration:
-front-load the §10 lock table; one `/review-impl` REVIEW-CODE round. **Guardrail (lesson
-`5c0b7b25`, an enforced rule): a security-framed cold-start Adversary is mandatory at
-POST-REVIEW for 15.5** — a dispute is a governance/adjudication primitive. Triggered deferred
-items to fold in or evaluate at 15.5 CLARIFY: **DEFERRED-013** (counter-sign distinct-endorser
-— re-deferred from 15.4, its trigger is now 15.5); **DEFERRED-012** (the topic `closing`-drain
-— its trigger is Sprint 15.5, by which point the full in-flight item set exists).
-**DEFERRED-017/015/016** carry the HARD pre-production authz trigger.
+Sprint 15.6 shipped the **topic-closing drain + request-consistency residuals** — resolving
+DEFERRED-012 (three-phase closeTopic drain), DEFERRED-013 (repeat-endorser guard), and
+DEFERRED-014 (request consistency fixes).
 
-## Environment state
+**No migration.** All changes are pure TypeScript.
 
-- Docker stack UP — `db`/`mcp`/`worker`/`neo4j`/`rabbitmq`/`redis` running; migrations
-  0053–**0057** applied; `mcp`/`worker` rebuilt + running the **Sprint 15.4** code.
-- `npm test` **527/527** green on `phase-15-sprint-15.4`; `tsc` clean.
-- Deferred items OPEN: DEFERRED-009, 010, 011, 012, 013, 014, **015**, **016**, **017**,
-  018, 019 — DEFERRED-015 + 016 + **017** (the auth-enabled-multi-actor authorization
-  residuals) carry a HARD pre-production trigger; DEFERRED-012 + 013 trigger at Sprint 15.5.
+**Core: `src/services/topics.ts` — three-phase `closeTopic` drain:**
+- Phase 1: `active`/`chartered` → `'closing'` (SELECT FOR UPDATE) + `topic.closing` event.
+  Idempotent: if already `'closing'`, falls through (no-op COMMIT).
+- Phase 2: per item type in individual short transactions (§0.1-loop: one bad item never aborts):
+  A=claims (DELETE+`task.abandoned`), B=requests (`status='rejected'` + `request.force_closed`),
+  C=motions (`status='lapsed'` + `motion.force_lapsed`), D=disputes (`status='resolved'` +
+  `dispute.force_closed`), E=intake_items (`status='dismissed'` + `intake.force_dismissed`).
+  Optimistic UPDATEs (no FOR UPDATE on item rows) to avoid deadlock with concurrent deciders.
+  **MED-3 fix (post-/review-impl):** each scan+loop wrapped in try/catch so a scan failure
+  skips that drain pass and lets Phase 3 seal proceed.
+- Phase 3: `topic.closed` event + `UPDATE topics SET status='closed'` in one transaction.
+- Returns `CloseResult` with `{ already_closed, force_lapsed: { claims, requests, motions,
+  disputes, intake_items } }`.
+
+**DEFERRED-013: repeat-endorser guard (`src/services/requests.ts`):**
+- `decideStep` for `counter_sign` routes checks all prior steps' `decided_by IS NOT NULL`;
+  same actor in any earlier step → `{ status: 'repeat_endorser' }` (→ HTTP 409).
+
+**DEFERRED-014: request consistency fixes (`src/services/requests.ts` + `src/api/routes/requests.ts`):**
+- `listRequests`: throws `NOT_FOUND` for unknown `topic_id` (was silently returning `[]`).
+- `reject` path: `payload.artifact_advanced: false` in `request.resolved` event.
+- `escalation_exhausted` path: `payload.artifact_advanced: false` in sweep event.
+- Route layer: `/^\d+$/` rejects fractional/negative `:n` before `parseInt`.
+- `submitted_by` length cap (`>256` → BAD_REQUEST) joins existing `kind`/`subject_id` caps.
+
+**Sweep updates (`src/services/coordinationSweep.ts`):**
+- All three sweeps now skip `'closing'` topics alongside `'closed'` (prevents partial
+  re-drain of items already queued for the closeTopic drain pass).
+
+**`/review-impl` HIGH fix (post-review):**
+- All writer paths that create new in-flight items (`submitRequest`, `proposeMotion`,
+  `claimTask`, `postTask`) now reject when `topicStatus === 'closing'` → `topic_closed` (or
+  `BAD_REQUEST` for `postTask`). Prevents a new item created in the Phase 1→3 window from
+  surviving the drain and becoming permanently stuck on a sealed topic.
+
+**Test coverage (602 total):**
+- `topics.test.ts`: AC1+AC7 (topic.closing before topic.closed), AC8 (zero counts), AC2+AC8
+  (claim drain), AC3+AC8 (request drain), AC10 (idempotent already-closed).
+- `requests.test.ts`: AC13 (repeat_endorser), AC14 (listRequests NOT_FOUND), AC15 (artifact_
+  advanced:false on reject), AC16 (distinct-actor counter_sign positive — MED-4), AC17 (non-
+  integer step_index BAD_REQUEST), AC18 (submitted_by length cap), AC19 (submitRequest on
+  closing → topic_closed — HIGH fix), AC20 (listRequests zero requests → [] — MED-6).
+- `motions.test.ts`: closing-topic test for proposeMotion (HIGH fix).
+- `board.test.ts`: closing-topic tests for claimTask + postTask (HIGH fix).
+- Fixed 8 pre-existing test isolation failures: `closeTopic()` calls replaced with direct
+  `UPDATE topics SET status='closed'` in tests that need a closed topic without draining
+  in-flight items (simulates the race window; tests the service closed-topic guard directly).
+
+**Deferred items (LOW, carried to 15.7):**
+- LOW-7: API-level test for fractional step-index route guard
+- LOW-8: `artifact_advanced:true` path test + escalation_exhausted sweep payload test
+- LOW-9: Event-ordering assertions in drain AC2/AC3 tests
+- MED-5 (accepted): orphan `pending` steps on `escalation_exhausted` requests survive drain
+  (these steps can't be decided after request closure; accepted and documented)
+
+**Verification:** `tsc` clean; `npm test` **602/602 green**.
+
+## Resume protocol — Sprint 15.7 (next sprint)
+
+Sprint 15.7 resumes from `phase-15-sprint-15.6`. Candidate scope: **DEFERRED-019** (primitive-
+outcome chaining — trigger was 15.6 closing drain, now met); **DEFERRED-011** (sweep recovery
+for stalled `closing` topics — also now unblocked by 15.6). **DEFERRED-017/015/016** carry the
+HARD pre-production authz trigger.
+
+## Environment state (end of Sprint 15.6 session, 2026-05-18)
+
+- Docker stack: unknown — not verified this session (MCP server was offline; API server not
+  responding to health check at session end). Migrations 0053–**0059** applied (no new
+  migration in 15.6). On next session start: `docker compose up -d`, verify `npm test`
+  passes, add MCP lessons from the AUDIT_LOG deferred-lessons note.
+- `npm test` **602/602** green on `phase-15-sprint-15.6`; `tsc` clean.
+- Branch: `phase-15-sprint-15.6` — pushed to remote. Last commit: `ebd12d2`.
+- Deferred items OPEN: DEFERRED-009, 010, 011, **015**, **016**, **017**, 018, 019, **020** —
+  DEFERRED-015 + 016 + **017** carry a HARD pre-production authorization trigger.
+  DEFERRED-012 + 013 + 014 **resolved** in Sprint 15.6.
+- Pending MCP lessons (4, noted in AUDIT_LOG `add_lesson_deferred` event): closing-drain
+  pattern, closing-window race workaround, scan-failure resilience, test-isolation pattern.
 - `jq` is NOT installed in the shell env — live smoke scripts must parse JSON via `node`/`tsx`.
 
 ## Execution-contract reminders (from the longrun plan)

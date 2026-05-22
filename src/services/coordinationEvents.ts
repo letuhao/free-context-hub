@@ -120,9 +120,16 @@ export async function appendEvent(
  *
  * The cursor is a high-water mark: returns events with `seq > since_seq`,
  * ordered by `seq` — it never waits for a missing seq.
+ *
+ * Sprint 15.12 (DEFERRED-010) — `tail: true` returns the most-recent N events
+ * (the TAIL of the log) instead of the oldest N from the cursor. Used by
+ * joinTopic's fresh-join induction pack so a joiner on a >N-event topic gets
+ * recent context (incl. their own topic.actor_joined) rather than the oldest
+ * prefix. `your_cursor`/`next_cursor` = max seq (primed to HEAD); `has_more`
+ * = older events exist before the window.
  */
 export async function replayEvents(
-  params: { topic_id: string; since_seq?: number; limit?: number },
+  params: { topic_id: string; since_seq?: number; limit?: number; tail?: boolean },
   executor: Pool | PoolClient = getDbPool(),
 ): Promise<ReplayResult> {
   const sinceSeq = params.since_seq ?? 0;
@@ -136,25 +143,36 @@ export async function replayEvents(
     throw new ContextHubError('NOT_FOUND', `topic ${params.topic_id} not found`);
   }
 
-  const evRes = await executor.query<{
-    seq: string;
-    event_id: string;
-    ts: Date;
-    actor_id: string;
-    type: string;
-    subject_type: string;
-    subject_id: string;
+  const cols = `seq, event_id, ts, actor_id, type, subject_type, subject_id, payload`;
+  type Row = {
+    seq: string; event_id: string; ts: Date; actor_id: string;
+    type: string; subject_type: string; subject_id: string;
     payload: Record<string, unknown>;
-  }>(
-    `SELECT seq, event_id, ts, actor_id, type, subject_type, subject_id, payload
-     FROM coordination_events
-     WHERE topic_id = $1 AND seq > $2
-     ORDER BY seq ASC
-     LIMIT $3`,
-    [params.topic_id, sinceSeq, limit],
-  );
+  };
 
-  const events: CoordinationEvent[] = evRes.rows.map((r) => ({
+  let rows: Row[];
+  if (params.tail) {
+    // TAIL mode — most-recent N events, fetched DESC then re-sorted ASC.
+    const evRes = await executor.query<Row>(
+      `SELECT ${cols} FROM coordination_events
+       WHERE topic_id = $1
+       ORDER BY seq DESC
+       LIMIT $2`,
+      [params.topic_id, limit],
+    );
+    rows = evRes.rows.reverse(); // DESC → ASC
+  } else {
+    const evRes = await executor.query<Row>(
+      `SELECT ${cols} FROM coordination_events
+       WHERE topic_id = $1 AND seq > $2
+       ORDER BY seq ASC
+       LIMIT $3`,
+      [params.topic_id, sinceSeq, limit],
+    );
+    rows = evRes.rows;
+  }
+
+  const events: CoordinationEvent[] = rows.map((r) => ({
     topic_id: params.topic_id,
     seq: Number(r.seq),
     event_id: r.event_id,
@@ -165,6 +183,24 @@ export async function replayEvents(
     subject_id: r.subject_id,
     payload: r.payload,
   }));
+
+  if (params.tail) {
+    // next_cursor = max seq (primed to HEAD). has_more: older events exist before
+    // the window only when we filled the page; otherwise the window covers all.
+    // rev 2 (F3) — EXISTS(seq < min), no full COUNT.
+    const next_cursor = events.length > 0 ? events[events.length - 1].seq : sinceSeq;
+    let has_more = false;
+    if (events.length === limit) {
+      const minSeq = events[0].seq;
+      const moreRes = await executor.query(
+        `SELECT 1 FROM coordination_events WHERE topic_id = $1 AND seq < $2 LIMIT 1`,
+        [params.topic_id, minSeq],
+      );
+      has_more = (moreRes.rowCount ?? 0) > 0;
+    }
+    return { topic_id: params.topic_id, events, next_cursor, has_more };
+  }
+
   const next_cursor = events.length > 0 ? events[events.length - 1].seq : sinceSeq;
   // [MED-5] a full page (exactly `limit` rows) signals possible truncation —
   // the SQL `LIMIT $3` used `limit`, so this is the correct effective cap.

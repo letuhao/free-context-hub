@@ -36,6 +36,7 @@ import {
   decideStep,
 } from '../../core/index.js';
 import { requireRole } from '../middleware/requireRole.js';
+import { requireResourceScope } from '../middleware/requireResourceScope.js';
 
 const router = Router();
 
@@ -61,6 +62,7 @@ function statusToHttp(status: string): number {
     case 'already_resolved':
     case 'not_current_step':
     case 'topic_closed':
+    case 'repeat_endorser':
       return 409;
     case 'no_route':
     case 'not_participant':
@@ -108,7 +110,7 @@ function resolveActorIdentity(
 }
 
 // POST /api/topics/:id/requests — submit a new approval request
-router.post('/topics/:id/requests', requireRole('writer'), async (req, res, next) => {
+router.post('/topics/:id/requests', requireRole('writer'), requireResourceScope('topic'), async (req, res, next) => {
   try {
     const body = req.body ?? {};
     // F1 — bind submitted_by to the authenticated key (Sprint 15.3.1)
@@ -129,13 +131,14 @@ router.post('/topics/:id/requests', requireRole('writer'), async (req, res, next
       weight: asNumber(body.weight),
       procedure: asString(body.procedure) || 'unilateral',
       submitted_by: id.actor,
+      execution_task: body.execution_task, // Sprint 15.7 — optional chain blob
     });
     res.status(statusToHttp(result.status)).json({ status: 'ok', data: result });
   } catch (e) { next(e); }
 });
 
 // GET /api/topics/:id/requests — list requests for a topic
-router.get('/topics/:id/requests', requireRole('reader'), async (req, res, next) => {
+router.get('/topics/:id/requests', requireRole('reader'), requireResourceScope('topic'), async (req, res, next) => {
   try {
     const statusQ = req.query.status;
     const statusFilter = typeof statusQ === 'string' && statusQ ? statusQ : undefined;
@@ -148,7 +151,7 @@ router.get('/topics/:id/requests', requireRole('reader'), async (req, res, next)
 });
 
 // GET /api/requests/:id — get a single request + its steps
-router.get('/requests/:id', requireRole('reader'), async (req, res, next) => {
+router.get('/requests/:id', requireRole('reader'), requireResourceScope('request'), async (req, res, next) => {
   try {
     const req2 = await getRequest({ request_id: String(req.params.id) });
     if (req2 === null) {
@@ -160,14 +163,16 @@ router.get('/requests/:id', requireRole('reader'), async (req, res, next) => {
 });
 
 // POST /api/requests/:id/steps/:n/decide — decide a step
-router.post('/requests/:id/steps/:n/decide', requireRole('writer'), async (req, res, next) => {
+router.post('/requests/:id/steps/:n/decide', requireRole('writer'), requireResourceScope('request'), async (req, res, next) => {
   try {
     const body = req.body ?? {};
-    const stepIndex = parseInt(String(req.params.n), 10);
-    if (isNaN(stepIndex)) {
-      res.status(400).json({ status: 'error', error: 'step index must be a number', code: 'BAD_REQUEST' });
+    // Sprint 15.6 §3.3 — /^\d+$/ rejects fractional/negative strings before parseInt
+    const rawN = String(req.params.n);
+    if (!/^\d+$/.test(rawN)) {
+      res.status(400).json({ status: 'error', error: 'step index must be a non-negative integer', code: 'BAD_REQUEST' });
       return;
     }
+    const stepIndex = parseInt(rawN, 10);
     // F1 — bind actor_id to the authenticated key (Sprint 15.3.1)
     const id = resolveActorIdentity(req, asString(body.actor_id));
     if (!id.ok) {

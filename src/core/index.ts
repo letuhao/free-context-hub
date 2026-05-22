@@ -99,13 +99,14 @@ export type {
   ReplayResult,
   AppendResult,
 } from '../services/coordinationEvents.js';
-export { charterTopic, joinTopic, getTopic, closeTopic } from '../services/topics.js';
+export { charterTopic, joinTopic, grantLevel, getTopic, closeTopic } from '../services/topics.js';
 export type {
   TopicRecord,
   Participant,
   TopicWithRoster,
   InductionPack,
   CloseResult,
+  GrantLevelResult,
 } from '../services/topics.js';
 export {
   LEVELS,
@@ -168,6 +169,8 @@ export type {
   AddMemberResult,
   ListBodiesResult,
 } from '../services/decisionBodies.js';
+export { grantProxy, revokeProxy, listProxies } from '../services/proxies.js';
+export type { GrantProxyResult, RevokeProxyResult, ProxyRecord } from '../services/proxies.js';
 export {
   proposeMotion,
   secondMotion,
@@ -196,6 +199,14 @@ export type {
 } from '../services/motions.js';
 export { sweepExpiredMotions } from '../services/coordinationSweep.js';
 export type { ExpiredMotionsSweepResult } from '../services/coordinationSweep.js';
+
+// ── Services: intake mailbox (Phase 15 Sprint 15.5) ──
+export { submitIntake, triageIntake, dismissIntake, getIntake, listIntake } from '../services/intake.js';
+export type { IntakeKind, IntakeStatus, IntakeItem, TriageRoute, TriageResult } from '../services/intake.js';
+
+// ── Services: dispute resolution (Phase 15 Sprint 15.5) ──
+export { openDispute, resolveDispute, getDispute, listDisputes } from '../services/disputes.js';
+export type { DisputeStatus, Dispute, DisputeDetail } from '../services/disputes.js';
 
 // ── Services: distillation & snapshots ──
 export { getProjectSnapshotBody } from '../services/snapshot.js';

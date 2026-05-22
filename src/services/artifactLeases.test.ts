@@ -24,6 +24,9 @@ import {
   checkArtifactAvailability,
   forceReleaseArtifact,
   _resetAttemptLogForTest,
+  _claimWithRetry,
+  type ClaimParams,
+  type ClaimResult,
 } from './artifactLeases.js';
 import { getDbPool } from '../db/client.js';
 
@@ -354,6 +357,63 @@ test('invalid artifact_type (typo or case) throws on claim', async () => {
     }),
     /artifact_type must be one of/,
   );
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// DEFERRED-003 — race_exhausted retry-loop coverage
+//
+// race_exhausted fires only when _claimArtifactOnce returns { __retry: true } on
+// EVERY attempt (INSERT hits 23505 but the conflicting incumbent is already
+// expired by re-SELECT time). The lazy step-1 DELETE cleans that expired row
+// before any retry can re-observe it via the real DB, so the branch is a
+// microsecond-wide concurrency race — untestable deterministically through the
+// public claim path. _claimWithRetry exposes the loop with an injectable `once`
+// so the exhaustion + retry-then-succeed branches can be driven directly.
+// ──────────────────────────────────────────────────────────────────────────
+
+const RACE_PARAMS: ClaimParams = {
+  project_id: TEST_PROJECT, agent_id: 'race-agent',
+  artifact_type: 'custom', artifact_id: 'race-loop', task_description: 't',
+};
+
+test('DEFERRED-003: every attempt retrying → race_exhausted', async () => {
+  let calls = 0;
+  const alwaysRetry = async (): Promise<ClaimResult | { __retry: true }> => {
+    calls += 1;
+    return { __retry: true };
+  };
+  const r = await _claimWithRetry(RACE_PARAMS, alwaysRetry);
+  assert.equal(r.status, 'rate_limited');
+  if (r.status === 'rate_limited') {
+    assert.equal(r.reason, 'race_exhausted');
+    assert.equal(r.retry_after_seconds, 1);
+  }
+  // MAX_INTERNAL_RACE_RETRIES=1 → attempts 0 and 1 → exactly 2 invocations.
+  assert.equal(calls, 2, 'loop should attempt initial + one retry, then exhaust');
+});
+
+test('DEFERRED-003: retry then success returns the eventual claimed result', async () => {
+  let calls = 0;
+  const retryThenClaim = async (): Promise<ClaimResult | { __retry: true }> => {
+    calls += 1;
+    if (calls === 1) return { __retry: true };
+    return { status: 'claimed', lease_id: 'lease-xyz', expires_at: new Date(Date.now() + 60_000).toISOString() };
+  };
+  const r = await _claimWithRetry(RACE_PARAMS, retryThenClaim);
+  assert.equal(r.status, 'claimed');
+  if (r.status === 'claimed') assert.equal(r.lease_id, 'lease-xyz');
+  assert.equal(calls, 2, 'first attempt retries, second succeeds — no exhaustion');
+});
+
+test('DEFERRED-003: a first-attempt terminal result returns immediately (no retry)', async () => {
+  let calls = 0;
+  const immediateConflict = async (): Promise<ClaimResult | { __retry: true }> => {
+    calls += 1;
+    return { status: 'conflict', incumbent_agent_id: 'other', incumbent_task: 'x', expires_at: new Date(Date.now() + 60_000).toISOString(), seconds_remaining: 60 };
+  };
+  const r = await _claimWithRetry(RACE_PARAMS, immediateConflict);
+  assert.equal(r.status, 'conflict');
+  assert.equal(calls, 1, 'terminal result on first attempt must not trigger a retry');
 });
 
 // ──────────────────────────────────────────────────────────────────────────

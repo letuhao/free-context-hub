@@ -357,6 +357,7 @@ export type ListLessonsParams = {
     lesson_type?: LessonType;
     tags_any?: string[];
     status?: LessonStatus;
+    include_all_statuses?: boolean;
   };
 };
 
@@ -383,6 +384,7 @@ export async function listLessons(params: ListLessonsParams): Promise<ListLesson
   const lessonType = params.filters?.lesson_type;
   const tagsAny = (params.filters?.tags_any ?? []).filter(Boolean);
   const status = params.filters?.status;
+  const includeAll = Boolean(params.filters?.include_all_statuses);
   const sortField = VALID_SORT_FIELDS.has(params.sort ?? '') ? params.sort! : 'created_at';
   const sortOrder = params.order === 'asc' ? 'ASC' : 'DESC';
 
@@ -410,6 +412,9 @@ export async function listLessons(params: ListLessonsParams): Promise<ListLesson
     whereParams.push(status);
     whereParts.push(`status = $${whereParams.length}`);
     wherePartsL.push(`l.status = $${whereParams.length}`);
+  } else if (!includeAll) {
+    whereParts.push(`status NOT IN ('superseded', 'archived')`);
+    wherePartsL.push(`l.status NOT IN ('superseded', 'archived')`);
   }
 
   if (params.q && params.q.trim().length > 0) {

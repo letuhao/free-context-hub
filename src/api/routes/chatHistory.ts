@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { requireProjectScope, requireResourceScope } from '../middleware/requireResourceScope.js';
 import {
   createConversation,
   listConversations,
@@ -12,7 +13,7 @@ import { resolveProjectIdOrThrow } from '../../core/index.js';
 const router = Router();
 
 /** POST /api/chat/conversations — create a new conversation */
-router.post('/', async (req, res, next) => {
+router.post('/', requireProjectScope('body'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await createConversation({
@@ -24,7 +25,7 @@ router.post('/', async (req, res, next) => {
 });
 
 /** GET /api/chat/conversations — list conversations for a project */
-router.get('/', async (req, res, next) => {
+router.get('/', requireProjectScope('query'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
     const result = await listConversations({
@@ -36,11 +37,11 @@ router.get('/', async (req, res, next) => {
 });
 
 /** GET /api/chat/conversations/:id — get conversation with messages */
-router.get('/:id', async (req, res, next) => {
+router.get('/:id', requireResourceScope('conversation', 'id'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
     const result = await getConversation({
-      conversationId: req.params.id,
+      conversationId: String(req.params.id),
       projectId,
     });
     if (!result) {
@@ -52,11 +53,11 @@ router.get('/:id', async (req, res, next) => {
 });
 
 /** POST /api/chat/conversations/:id/messages — add a message */
-router.post('/:id/messages', async (req, res, next) => {
+router.post('/:id/messages', requireResourceScope('conversation', 'id'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await addMessage({
-      conversationId: req.params.id,
+      conversationId: String(req.params.id),
       projectId,
       role: req.body.role,
       content: req.body.content,
@@ -71,11 +72,11 @@ router.post('/:id/messages', async (req, res, next) => {
 });
 
 /** PATCH /api/chat/conversations/:id/messages/:msgId/pin — toggle pin */
-router.patch('/:id/messages/:msgId/pin', async (req, res, next) => {
+router.patch('/:id/messages/:msgId/pin', requireResourceScope('conversation', 'id'), async (req, res, next) => {
   try {
     const result = await toggleMessagePin({
-      conversationId: req.params.id,
-      messageId: req.params.msgId,
+      conversationId: String(req.params.id),
+      messageId: String(req.params.msgId),
     });
     if (!result) {
       res.status(404).json({ status: 'error', error: 'message not found' });
@@ -86,11 +87,11 @@ router.patch('/:id/messages/:msgId/pin', async (req, res, next) => {
 });
 
 /** DELETE /api/chat/conversations/:id — delete conversation + messages */
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', requireResourceScope('conversation', 'id'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow((req.query.project_id as string | undefined) ?? req.body?.project_id);
     const deleted = await deleteConversation({
-      conversationId: req.params.id,
+      conversationId: String(req.params.id),
       projectId,
     });
     if (!deleted) {

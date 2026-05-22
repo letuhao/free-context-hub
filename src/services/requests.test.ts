@@ -24,8 +24,9 @@
 
 import assert from 'node:assert/strict';
 import test, { before, after, beforeEach } from 'node:test';
-import { submitRequest, getRequest, listRequests, decideStep } from './requests.js';
-import { charterTopic, joinTopic, closeTopic } from './topics.js';
+import { submitRequest, getRequest, listRequests, decideStep, applyMotionToStep } from './requests.js';
+import { createBody, addBodyMember } from './decisionBodies.js';
+import { charterTopic, joinTopic, grantLevel, closeTopic } from './topics.js';
 import { postTask, claimTask, completeTask } from './board.js';
 import { getDbPool } from '../db/client.js';
 
@@ -38,6 +39,13 @@ async function cleanup() {
     [TEST_PROJECT],
   );
   for (const { topic_id } of topicIds.rows) {
+    // Sprint 15.8 — request_steps may link to motions; null those out before the
+    // motions delete so the FK doesn't block.
+    await pool.query(`UPDATE request_steps SET motion_id=NULL WHERE request_id IN
+      (SELECT request_id FROM requests WHERE topic_id=$1)`, [topic_id]);
+    await pool.query(`DELETE FROM votes WHERE motion_id IN
+      (SELECT motion_id FROM motions WHERE topic_id=$1)`, [topic_id]);
+    await pool.query(`DELETE FROM motions WHERE topic_id = $1`, [topic_id]);
     await pool.query(`DELETE FROM request_steps WHERE request_id IN
       (SELECT request_id FROM requests WHERE topic_id=$1)`, [topic_id]);
     await pool.query(`DELETE FROM requests WHERE topic_id = $1`, [topic_id]);
@@ -53,7 +61,13 @@ async function cleanup() {
   }
   await pool.query(`DELETE FROM topics WHERE project_id = $1`, [TEST_PROJECT]);
   await pool.query(`DELETE FROM actors WHERE project_id = $1`, [TEST_PROJECT]);
+  // Sprint 15.8 — doa_matrix references decision_bodies via body_id (FK), so the
+  // matrix must be deleted before bodies. Order: doa_matrix → body_members →
+  // decision_bodies.
   await pool.query(`DELETE FROM doa_matrix WHERE project_id = $1`, [TEST_PROJECT]);
+  await pool.query(`DELETE FROM body_members WHERE body_id IN
+    (SELECT body_id FROM decision_bodies WHERE project_id=$1)`, [TEST_PROJECT]);
+  await pool.query(`DELETE FROM decision_bodies WHERE project_id = $1`, [TEST_PROJECT]);
 }
 
 before(cleanup);
@@ -72,9 +86,12 @@ async function mkTopicWithParticipants() {
     created_by: 'authority-actor',
   });
   const topicId = t.topic_id;
-  await joinTopic({ topic_id: topicId, actor_id: 'execution-actor', actor_type: 'human', display_name: 'Exec', level: 'execution' });
-  await joinTopic({ topic_id: topicId, actor_id: 'coordination-actor', actor_type: 'human', display_name: 'Coord', level: 'coordination' });
+  // Sprint 15.11 — owner (authority-actor = created_by) bootstraps as authority;
+  // others join at execution then the owner grants their level (level-grant chain).
   await joinTopic({ topic_id: topicId, actor_id: 'authority-actor', actor_type: 'human', display_name: 'Auth', level: 'authority' });
+  await joinTopic({ topic_id: topicId, actor_id: 'execution-actor', actor_type: 'human', display_name: 'Exec', level: 'execution' });
+  await joinTopic({ topic_id: topicId, actor_id: 'coordination-actor', actor_type: 'human', display_name: 'Coord', level: 'execution' });
+  await grantLevel({ topic_id: topicId, actor_id: 'coordination-actor', level: 'coordination', granted_by: 'authority-actor' });
   return { topicId, executionActor: 'execution-actor', coordinationActor: 'coordination-actor', authorityActor: 'authority-actor' };
 }
 
@@ -226,28 +243,36 @@ test('T4: no_route for unmatched (kind, weight)', async () => {
   assert.equal(result.status, 'no_route');
 });
 
-// ── T5: collective rejected ────────────────────────────────────────────────
+// ── T5: collective procedure (Sprint 15.8 — accepted, no longer rejected) ───
+// Sprint 15.3 originally rejected procedure='collective' (D6). Sprint 15.8
+// (DEFERRED-018) wires collective into the lifecycle via the DoA matrix's
+// per-row procedure column. The per-request `procedure` input is now
+// informational only — actual routing is matrix-driven. So the unilateral
+// __default__ matrix row produces a unilateral step regardless of the input.
 
-test('T5: collective procedure → BAD_REQUEST', async () => {
+test('T5 (15.8): collective procedure input no longer rejected; matrix-driven routing wins', async () => {
   const { topicId, executionActor } = await mkTopicWithParticipants();
   const artifactId = await mkForReviewArtifact(topicId, 'doc-t5', executionActor);
 
-  await assert.rejects(
-    () => submitRequest({
-      topic_id: topicId,
-      subject_type: 'artifact',
-      subject_id: artifactId,
-      kind: 'artifact_review',
-      weight: 10,
-      procedure: 'collective',
-      submitted_by: executionActor,
-    }),
-    (err: any) => {
-      assert.equal(err.code, 'BAD_REQUEST');
-      assert.ok(err.message.includes('collective'));
-      return true;
-    },
+  const result = await submitRequest({
+    topic_id: topicId,
+    subject_type: 'artifact',
+    subject_id: artifactId,
+    kind: 'artifact_review',
+    weight: 10,
+    procedure: 'collective', // informational; matrix __default__ is unilateral
+    submitted_by: executionActor,
+  });
+  assert.equal(result.status, 'submitted');
+
+  // The resulting step is unilateral (matrix __default__).
+  const pool = getDbPool();
+  if (result.status !== 'submitted') throw new Error('setup');
+  const step = await pool.query<{ procedure: string }>(
+    `SELECT procedure FROM request_steps WHERE request_id=$1 AND step_index=0`,
+    [result.request_id],
   );
+  assert.equal(step.rows[0].procedure, 'unilateral');
 });
 
 // ── T6: non-artifact subject_type ─────────────────────────────────────────
@@ -686,8 +711,8 @@ test('decide on a closed topic → topic_closed', async () => {
   assert.equal(sub.status, 'submitted');
   if (sub.status !== 'submitted') throw new Error('setup failed');
 
-  // Close the topic
-  await closeTopic({ topic_id: topicId, actor_id: authorityActor });
+  // bypass drain so the open request survives; tests the closed-topic guard
+  await getDbPool().query(`UPDATE topics SET status='closed' WHERE topic_id=$1`, [topicId]);
 
   // decideStep should return topic_closed
   const decide = await decideStep({
@@ -695,6 +720,150 @@ test('decide on a closed topic → topic_closed', async () => {
     actor_id: coordinationActor, decision: 'endorse',
   });
   assert.equal(decide.status, 'topic_closed');
+});
+
+// ── Sprint 15.6 consistency fixes (AC13–AC18) ─────────────────────────────
+
+test('AC13: repeat_endorser — same actor cannot decide two steps in a counter_sign request', async () => {
+  const { topicId, executionActor, authorityActor } = await mkTopicWithParticipants();
+  const pool = getDbPool();
+
+  // Insert a synthetic counter_sign request where both steps target 'authority'.
+  // This tests the distinct-endorser invariant: the same actor must not sign more
+  // than one step in a counter_sign route (DEFERRED-013).
+  const { rows: [{ id: requestId }] } = await pool.query<{ id: string }>(
+    `SELECT gen_random_uuid()::text AS id`,
+  );
+  await pool.query(
+    `INSERT INTO requests
+       (request_id, topic_id, subject_type, subject_id, kind, weight,
+        procedure, route_shape, status, current_step, submitted_by)
+     VALUES ($1, $2, 'artifact', 'phantom-artifact', 'artifact_review', 10,
+       'unilateral', 'counter_sign', 'open', 0, $3)`,
+    [requestId, topicId, executionActor],
+  );
+  await pool.query(`
+    INSERT INTO request_steps
+      (request_id, step_index, target_office, doa_snapshot, procedure, deadline, status)
+    VALUES
+      ($1, 0, 'authority', 'test:t0', 'unilateral', now() + interval '60 minutes', 'pending'),
+      ($1, 1, 'authority', 'test:t0', 'unilateral', now() + interval '60 minutes', 'pending')`,
+    [requestId],
+  );
+
+  // authorityActor endorses step 0 → step_endorsed
+  const d1 = await decideStep({
+    request_id: requestId, step_index: 0,
+    actor_id: authorityActor, decision: 'endorse',
+  });
+  assert.equal(d1.status, 'step_endorsed');
+
+  // Same actor tries step 1 → repeat_endorser
+  const d2 = await decideStep({
+    request_id: requestId, step_index: 1,
+    actor_id: authorityActor, decision: 'endorse',
+  });
+  assert.equal(d2.status, 'repeat_endorser');
+});
+
+test('AC14: listRequests for an unknown topic_id → NOT_FOUND error', async () => {
+  await assert.rejects(
+    () => listRequests({ topic_id: 'no-such-topic-id-xyz' }),
+    (err: any) => {
+      assert.equal(err.code, 'NOT_FOUND');
+      assert.ok(err.message.includes('not found'), `message: ${err.message}`);
+      return true;
+    },
+  );
+});
+
+test('15.9 LOW-8a: approve → request.resolved event carries artifact_advanced:true', async () => {
+  // Positive companion to AC15 — covers the approve path that actually advances
+  // the artifact from for_review → final, so artifact_advanced should be true.
+  const { topicId, executionActor, coordinationActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-low8a', executionActor);
+
+  const sub = await submitRequest({
+    topic_id: topicId, subject_type: 'artifact', subject_id: artifactId,
+    kind: 'artifact_review', weight: 10, procedure: 'unilateral', submitted_by: executionActor,
+  });
+  if (sub.status !== 'submitted') throw new Error('setup failed');
+
+  const dec = await decideStep({
+    request_id: sub.request_id, step_index: 0,
+    actor_id: coordinationActor, decision: 'endorse',
+  });
+  assert.equal(dec.status, 'approved');
+
+  const { replayEvents } = await import('./coordinationEvents.js');
+  const ev = await replayEvents({ topic_id: topicId });
+  const resolved = ev.events.find((e) => e.type === 'request.resolved');
+  assert.ok(resolved, 'request.resolved event present');
+  assert.equal(resolved!.payload.outcome, 'approved');
+  assert.equal(resolved!.payload.artifact_advanced, true, 'artifact_advanced:true on approve path');
+
+  // Cross-check: artifact actually advanced to 'final'
+  const pool = getDbPool();
+  const art = await pool.query<{ state: string }>(
+    `SELECT state FROM artifacts WHERE artifact_id=$1`, [artifactId],
+  );
+  assert.equal(art.rows[0].state, 'final');
+});
+
+test('AC15: reject → request.resolved event carries artifact_advanced:false', async () => {
+  const { topicId, executionActor, coordinationActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-ac15', executionActor);
+
+  const sub = await submitRequest({
+    topic_id: topicId, subject_type: 'artifact', subject_id: artifactId,
+    kind: 'artifact_review', weight: 10, procedure: 'unilateral', submitted_by: executionActor,
+  });
+  assert.equal(sub.status, 'submitted');
+  if (sub.status !== 'submitted') throw new Error('setup failed');
+
+  await decideStep({
+    request_id: sub.request_id, step_index: 0,
+    actor_id: coordinationActor, decision: 'reject',
+  });
+
+  const { replayEvents } = await import('./coordinationEvents.js');
+  const ev = await replayEvents({ topic_id: topicId });
+  const resolved = ev.events.find((e) => e.type === 'request.resolved');
+  assert.ok(resolved, 'request.resolved event present');
+  assert.equal(resolved!.payload.outcome, 'rejected');
+  assert.equal(resolved!.payload.artifact_advanced, false, 'artifact_advanced:false on reject path');
+});
+
+test('AC17 (service F5): non-integer step_index → BAD_REQUEST', async () => {
+  await assert.rejects(
+    () => decideStep({ request_id: 'any', step_index: 1.5, actor_id: 'any', decision: 'endorse' }),
+    (err: any) => {
+      assert.equal(err.code, 'BAD_REQUEST');
+      assert.ok(err.message.toLowerCase().includes('step_index'), `message: ${err.message}`);
+      return true;
+    },
+  );
+});
+
+test('AC18: submitRequest with submitted_by exceeding 256 chars → BAD_REQUEST', async () => {
+  const { topicId } = await mkTopicWithParticipants();
+
+  await assert.rejects(
+    () => submitRequest({
+      topic_id: topicId,
+      subject_type: 'artifact',
+      subject_id: 'some-artifact',
+      kind: 'artifact_review',
+      weight: 10,
+      procedure: 'unilateral',
+      submitted_by: 'x'.repeat(257),
+    }),
+    (err: any) => {
+      assert.equal(err.code, 'BAD_REQUEST');
+      assert.ok(err.message.toLowerCase().includes('submitted_by'), `message: ${err.message}`);
+      return true;
+    },
+  );
 });
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -773,6 +942,69 @@ test('F3a: submitRequest rejects an artifact that belongs to another topic', asy
   );
 });
 
+// ── Sprint 15.6 HIGH fix: submitRequest must block on 'closing' ──────────────
+
+test('AC19: submitRequest on a closing topic → topic_closed', async () => {
+  const { topicId, executionActor } = await mkTopicWithParticipants();
+  // Simulate the drain window: topic is 'closing' before Phase 3 seal.
+  await getDbPool().query(`UPDATE topics SET status='closing' WHERE topic_id=$1`, [topicId]);
+
+  const result = await submitRequest({
+    topic_id: topicId, subject_type: 'artifact', subject_id: 'phantom-artifact',
+    kind: 'artifact_review', weight: 10, procedure: 'unilateral', submitted_by: executionActor,
+  });
+  assert.equal(result.status, 'topic_closed');
+});
+
+// ── MED-4: counter_sign positive — distinct actor can endorse step 1 ─────────
+
+test('AC16: distinct actor can endorse step 1 of a counter_sign request (different actor is allowed)', async () => {
+  const { topicId, executionActor, coordinationActor, authorityActor } = await mkTopicWithParticipants();
+  const pool = getDbPool();
+
+  const { rows: [{ id: requestId }] } = await pool.query<{ id: string }>(
+    `SELECT gen_random_uuid()::text AS id`,
+  );
+  await pool.query(
+    `INSERT INTO requests
+       (request_id, topic_id, subject_type, subject_id, kind, weight,
+        procedure, route_shape, status, current_step, submitted_by)
+     VALUES ($1, $2, 'artifact', 'phantom-artifact', 'artifact_review', 10,
+       'unilateral', 'counter_sign', 'open', 0, $3)`,
+    [requestId, topicId, executionActor],
+  );
+  await pool.query(`
+    INSERT INTO request_steps
+      (request_id, step_index, target_office, doa_snapshot, procedure, deadline, status)
+    VALUES
+      ($1, 0, 'coordination', 'test:t0', 'unilateral', now() + interval '60 minutes', 'pending'),
+      ($1, 1, 'authority',    'test:t0', 'unilateral', now() + interval '60 minutes', 'pending')`,
+    [requestId],
+  );
+
+  const d1 = await decideStep({
+    request_id: requestId, step_index: 0,
+    actor_id: coordinationActor, decision: 'endorse',
+  });
+  assert.equal(d1.status, 'step_endorsed');
+
+  // Different actor endorses step 1 — must NOT return repeat_endorser
+  const d2 = await decideStep({
+    request_id: requestId, step_index: 1,
+    actor_id: authorityActor, decision: 'endorse',
+  });
+  assert.equal(d2.status, 'approved', 'distinct actor can endorse a different step in counter_sign');
+});
+
+// ── MED-6: valid topic with zero requests → [] (not NOT_FOUND) ───────────────
+
+test('AC20: listRequests for a valid topic with no requests → empty array', async () => {
+  const { topicId } = await mkTopicWithParticipants();
+  const result = await listRequests({ topic_id: topicId });
+  assert.ok(Array.isArray(result.requests), 'result.requests is an array');
+  assert.equal(result.requests.length, 0, 'no requests on a fresh topic');
+});
+
 // ── F3a: approved request emits artifact events on the artifact's topic (guard) ──
 
 test('F3a: an approved request emits artifact events on the artifact topic', async () => {
@@ -803,4 +1035,834 @@ test('F3a: an approved request emits artifact events on the artifact topic', asy
     ev.events.some((e) => e.type === 'artifact.state_changed'),
     'artifact.state_changed present in the artifact topic event log',
   );
+});
+
+// ── Sprint 15.7 — primitive-outcome chaining tests (DEFERRED-019) ──────────
+
+test('15.7 AC1: approve last step → chain emits task.posted + request.resolved.chain.kind=posted', async () => {
+  const { topicId, executionActor, coordinationActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-15-7-ac1', executionActor);
+  const submit = await submitRequest({
+    topic_id: topicId,
+    subject_type: 'artifact',
+    subject_id: artifactId,
+    kind: 'artifact_review',
+    weight: 10, // → __default__: coordination/counter_sign → 1 step
+    procedure: 'unilateral',
+    submitted_by: executionActor,
+  });
+  assert.equal(submit.status, 'submitted');
+  if (submit.status !== 'submitted') throw new Error('setup');
+
+  const decide = await decideStep({
+    request_id: submit.request_id!,
+    step_index: 0,
+    actor_id: coordinationActor,
+    decision: 'endorse',
+  });
+  assert.equal(decide.status, 'approved');
+  if (decide.status !== 'approved') throw new Error('approve failed');
+  assert.equal(decide.chain.kind, 'posted');
+  if (decide.chain.kind !== 'posted') throw new Error('chain kind wrong');
+  assert.ok(decide.chain.task_id, 'task_id present');
+  assert.ok(decide.chain.artifact_id, 'artifact_id present');
+
+  // Verify task exists with derived default title
+  const pool = getDbPool();
+  const t = await pool.query(`SELECT title, topology, raci FROM tasks WHERE task_id=$1`, [decide.chain.task_id]);
+  assert.equal(t.rows[0].title, 'Execute approved request: artifact_review');
+  assert.equal(t.rows[0].topology, 'parallel');
+  assert.equal(t.rows[0].raci.source_request, submit.request_id);
+
+  // Verify request.resolved event has chain field
+  const { replayEvents } = await import('./coordinationEvents.js');
+  const ev = await replayEvents({ topic_id: topicId });
+  const resolved = ev.events.find((e) => e.type === 'request.resolved');
+  assert.ok(resolved, 'request.resolved emitted');
+  assert.equal((resolved!.payload as { chain?: { kind: string } }).chain?.kind, 'posted');
+});
+
+test('15.7 AC3: approve with execution_task blob → chained task uses blob params', async () => {
+  const { topicId, executionActor, coordinationActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-15-7-ac3', executionActor);
+  const submit = await submitRequest({
+    topic_id: topicId,
+    subject_type: 'artifact',
+    subject_id: artifactId,
+    kind: 'artifact_review',
+    weight: 10,
+    procedure: 'unilateral',
+    submitted_by: executionActor,
+    execution_task: {
+      title: 'Custom chained title',
+      slot: 'custom-exec',
+      kind: 'custom-kind',
+    },
+  });
+  assert.equal(submit.status, 'submitted');
+  if (submit.status !== 'submitted') throw new Error('setup');
+
+  const decide = await decideStep({
+    request_id: submit.request_id!,
+    step_index: 0,
+    actor_id: coordinationActor,
+    decision: 'endorse',
+  });
+  assert.equal(decide.status, 'approved');
+  if (decide.status !== 'approved') throw new Error('approve failed');
+  if (decide.chain.kind !== 'posted') throw new Error('chain kind wrong');
+
+  const pool = getDbPool();
+  const t = await pool.query(`SELECT title, depends_on FROM tasks WHERE task_id=$1`, [decide.chain.task_id]);
+  assert.equal(t.rows[0].title, 'Custom chained title');
+  const a = await pool.query(`SELECT slot, kind FROM artifacts WHERE artifact_id=$1`, [decide.chain.artifact_id]);
+  assert.equal(a.rows[0].slot, 'custom-exec');
+  assert.equal(a.rows[0].kind, 'custom-kind');
+});
+
+test('15.7 AC6: reject decision → no chain, no new task created', async () => {
+  const { topicId, executionActor, coordinationActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-15-7-ac6r', executionActor);
+  const submit = await submitRequest({
+    topic_id: topicId,
+    subject_type: 'artifact',
+    subject_id: artifactId,
+    kind: 'artifact_review',
+    weight: 10,
+    procedure: 'unilateral',
+    submitted_by: executionActor,
+  });
+  assert.equal(submit.status, 'submitted');
+
+  const decide = await decideStep({
+    request_id: (submit as { request_id: string }).request_id,
+    step_index: 0,
+    actor_id: coordinationActor,
+    decision: 'reject',
+  });
+  assert.equal(decide.status, 'rejected');
+
+  // No chained task: only the original mkForReviewArtifact task exists.
+  const pool = getDbPool();
+  const tasks = await pool.query(`SELECT task_id FROM tasks WHERE topic_id=$1`, [topicId]);
+  assert.equal(tasks.rows.length, 1, 'no chained task on reject');
+});
+
+test('15.7 AC7: approve on a closing topic → chain emits task.deferred (subject_type=topic), request.resolved.chain.kind=deferred', async () => {
+  const { topicId, executionActor, coordinationActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-15-7-ac7', executionActor);
+  const submit = await submitRequest({
+    topic_id: topicId,
+    subject_type: 'artifact',
+    subject_id: artifactId,
+    kind: 'artifact_review',
+    weight: 10,
+    procedure: 'unilateral',
+    submitted_by: executionActor,
+  });
+  assert.equal(submit.status, 'submitted');
+
+  // 15.6 test isolation pattern — direct UPDATE to 'closing' to bypass closeTopic
+  // Phase 2 drain (which would force-close our open request before we can approve).
+  const pool = getDbPool();
+  await pool.query(`UPDATE topics SET status='closing' WHERE topic_id=$1`, [topicId]);
+
+  const decide = await decideStep({
+    request_id: (submit as { request_id: string }).request_id,
+    step_index: 0,
+    actor_id: coordinationActor,
+    decision: 'endorse',
+  });
+  // Note: in 15.6, decideStep blocks on closing ONLY for new writer paths (submitRequest etc.),
+  // NOT for decideStep itself. So the approval succeeds, but the chain hits 'closing' and defers.
+  assert.equal(decide.status, 'approved', `expected approved, got ${decide.status}`);
+  if (decide.status !== 'approved') throw new Error('expected approved');
+  assert.equal(decide.chain.kind, 'deferred');
+  if (decide.chain.kind !== 'deferred') throw new Error('chain not deferred');
+  assert.equal(decide.chain.reason, 'topic_closing');
+  assert.ok(decide.chain.deferred_event_id, 'deferred_event_id present');
+
+  // No task created
+  const tasks = await pool.query(`SELECT task_id FROM tasks WHERE topic_id=$1`, [topicId]);
+  assert.equal(tasks.rows.length, 1, 'no chained task on closing');
+
+  // task.deferred event with subject_type='topic' was emitted
+  const { replayEvents } = await import('./coordinationEvents.js');
+  const ev = await replayEvents({ topic_id: topicId });
+  const deferred = ev.events.find((e) => e.type === 'task.deferred');
+  assert.ok(deferred, 'task.deferred event emitted');
+  assert.equal(deferred!.subject_type, 'topic');
+  assert.equal(deferred!.subject_id, topicId);
+  assert.equal((deferred!.payload as { reason: string }).reason, 'topic_closing');
+});
+
+test('15.7 AC10: approve with execution_task.depends_on referencing nonexistent task → CHAINED_TASK_DEPENDENCY_INVALID + request stays open', async () => {
+  const { topicId, executionActor, coordinationActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-15-7-ac10', executionActor);
+  const fakeTaskId = '11111111-2222-3333-4444-555555555555'; // does not exist
+
+  const submit = await submitRequest({
+    topic_id: topicId,
+    subject_type: 'artifact',
+    subject_id: artifactId,
+    kind: 'artifact_review',
+    weight: 10,
+    procedure: 'unilateral',
+    submitted_by: executionActor,
+    execution_task: { depends_on: [fakeTaskId] },
+  });
+  assert.equal(submit.status, 'submitted');
+
+  let caught: unknown = null;
+  try {
+    await decideStep({
+      request_id: (submit as { request_id: string }).request_id,
+      step_index: 0,
+      actor_id: coordinationActor,
+      decision: 'endorse',
+    });
+  } catch (err) {
+    caught = err;
+  }
+  assert.ok(caught, 'should throw');
+  assert.equal((caught as { code: string }).code, 'CHAINED_TASK_DEPENDENCY_INVALID');
+
+  // Request still 'open' (rollback)
+  const pool = getDbPool();
+  const r = await pool.query(`SELECT status FROM requests WHERE request_id=$1`, [(submit as { request_id: string }).request_id]);
+  assert.equal(r.rows[0].status, 'open');
+
+  // No chained task
+  const tasks = await pool.query(`SELECT task_id FROM tasks WHERE topic_id=$1`, [topicId]);
+  assert.equal(tasks.rows.length, 1, 'no chained task on dep-invalid');
+});
+
+// ── Sprint 15.8 — collective request-step wiring (DEFERRED-018) ───────────
+
+/**
+ * Setup helper — adds a project-scoped decision body + a matrix row that routes
+ * `kind='collective_test'` weight 0-49 to that body via escalate_to_authority
+ * (single step at coordination level).
+ */
+async function mkCollectiveSetup(): Promise<{ bodyId: string }> {
+  const body = await createBody({
+    project_id: TEST_PROJECT, name: '15.8 Body',
+    quorum: 0, threshold: 0.5, veto_holders: [],
+    created_by: 'authority-actor',
+  });
+  // Members — voters who will vote on the auto-proposed motion.
+  await addBodyMember({ body_id: body.body_id, actor_id: 'voter-a', vote_weight: 1 });
+  await addBodyMember({ body_id: body.body_id, actor_id: 'voter-b', vote_weight: 1 });
+  await addBodyMember({ body_id: body.body_id, actor_id: 'seconder-actor', vote_weight: 1 });
+  // DoA matrix row — project scope, collective, single-step (escalate_to_authority).
+  const pool = getDbPool();
+  await pool.query(
+    `INSERT INTO doa_matrix (project_id, topic_id, kind, weight_min, weight_max, required_level, route_shape, procedure, body_id)
+     VALUES ($1, NULL, 'collective_test', 0, 49, 'coordination', 'escalate_to_authority', 'collective', $2)`,
+    [TEST_PROJECT, body.body_id],
+  );
+  return { bodyId: body.body_id };
+}
+
+test('15.8 AC1 + AC4: submitRequest collective → step persists procedure+body_id, motion auto-proposed at step 0', async () => {
+  const { topicId, executionActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-15-8-ac1', executionActor);
+  const { bodyId } = await mkCollectiveSetup();
+
+  const result = await submitRequest({
+    topic_id: topicId,
+    subject_type: 'artifact',
+    subject_id: artifactId,
+    kind: 'collective_test',
+    weight: 10,
+    procedure: 'unilateral', // informational; matrix wins
+    submitted_by: executionActor,
+  });
+  assert.equal(result.status, 'submitted');
+  if (result.status !== 'submitted') throw new Error('setup');
+
+  const pool = getDbPool();
+  const step = await pool.query<{ procedure: string; body_id: string | null; status: string; motion_id: string | null }>(
+    `SELECT procedure, body_id, status, motion_id FROM request_steps WHERE request_id=$1 AND step_index=0`,
+    [result.request_id],
+  );
+  assert.equal(step.rows[0].procedure, 'collective');
+  assert.equal(step.rows[0].body_id, bodyId);
+  assert.equal(step.rows[0].status, 'motion_proposed', 'step transitioned to motion_proposed');
+  assert.ok(step.rows[0].motion_id, 'motion_id linked');
+
+  // Motion exists in 'proposed' state
+  const m = await pool.query<{ status: string; subject_ref: string }>(
+    `SELECT status, subject_ref FROM motions WHERE motion_id=$1`,
+    [step.rows[0].motion_id],
+  );
+  assert.equal(m.rows[0].status, 'proposed');
+  assert.equal(m.rows[0].subject_ref, `request_step:${result.request_id}:0`);
+});
+
+test('15.8 AC1-neg (15.10 update): legacy single-body matrix → multi-step route → missing_collective_body for the lower step', async () => {
+  // Sprint 15.10 supports multi-step counter_sign+collective if doa_matrix_levels
+  // provides bodies for every level on the route. With ONLY the legacy single
+  // body_id (covering required_level=authority), the coordination step has no
+  // body → submit rejects with missing_collective_body.
+  const { topicId, executionActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-15-8-ac1n', executionActor);
+  const body = await createBody({
+    project_id: TEST_PROJECT, name: '15.8 Body M', quorum: 0, threshold: 0.5,
+    veto_holders: [], created_by: 'authority-actor',
+  });
+  await addBodyMember({ body_id: body.body_id, actor_id: 'voter-a', vote_weight: 1 });
+  const pool = getDbPool();
+  await pool.query(
+    `INSERT INTO doa_matrix (project_id, topic_id, kind, weight_min, weight_max, required_level, route_shape, procedure, body_id)
+     VALUES ($1, NULL, 'collective_multi', 0, 49, 'authority', 'counter_sign', 'collective', $2)`,
+    [TEST_PROJECT, body.body_id],
+  );
+
+  await assert.rejects(
+    () => submitRequest({
+      topic_id: topicId,
+      subject_type: 'artifact',
+      subject_id: artifactId,
+      kind: 'collective_multi',
+      weight: 10,
+      procedure: 'unilateral',
+      submitted_by: executionActor,
+    }),
+    (err: any) => {
+      assert.equal(err.code, 'BAD_REQUEST');
+      assert.ok(err.message.includes('missing_collective_body'),
+        `expected missing_collective_body, got: ${err.message}`);
+      return true;
+    },
+  );
+});
+
+test('15.8 AC5: decideStep on a collective step → procedure_is_collective', async () => {
+  const { topicId, executionActor, coordinationActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-15-8-ac5', executionActor);
+  await mkCollectiveSetup();
+
+  const result = await submitRequest({
+    topic_id: topicId,
+    subject_type: 'artifact',
+    subject_id: artifactId,
+    kind: 'collective_test',
+    weight: 10,
+    procedure: 'unilateral',
+    submitted_by: executionActor,
+  });
+  if (result.status !== 'submitted') throw new Error('setup');
+
+  // decideStep should reject because step is collective
+  const decide = await decideStep({
+    request_id: result.request_id,
+    step_index: 0,
+    actor_id: coordinationActor,
+    decision: 'endorse',
+  });
+  assert.equal(decide.status, 'procedure_is_collective');
+});
+
+test('15.8 AC6-carried: applyMotionToStep carried on collective step → request approved + 15.7 chain', async () => {
+  const { topicId, executionActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-15-8-ac6c', executionActor);
+  await mkCollectiveSetup();
+
+  const result = await submitRequest({
+    topic_id: topicId,
+    subject_type: 'artifact',
+    subject_id: artifactId,
+    kind: 'collective_test',
+    weight: 10,
+    procedure: 'unilateral',
+    submitted_by: executionActor,
+  });
+  if (result.status !== 'submitted') throw new Error('setup');
+
+  const pool = getDbPool();
+  const stepBefore = await pool.query<{ motion_id: string; target_office: string }>(
+    `SELECT motion_id, target_office FROM request_steps WHERE request_id=$1 AND step_index=0`,
+    [result.request_id],
+  );
+  const motionId = stepBefore.rows[0].motion_id;
+  const targetOffice = stepBefore.rows[0].target_office;
+
+  // Simulate the motion-tally flow — call applyMotionToStep directly inside a txn.
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await applyMotionToStep(client, {
+      motion_id: motionId,
+      request_id: result.request_id,
+      step_index: 0,
+      target_office: targetOffice,
+      outcome: 'carried',
+      topic_id: topicId,
+    });
+    await client.query('COMMIT');
+  } finally {
+    client.release();
+  }
+
+  // Step endorsed, request approved
+  const stepAfter = await pool.query<{ status: string; decided_by: string }>(
+    `SELECT status, decided_by FROM request_steps WHERE request_id=$1 AND step_index=0`,
+    [result.request_id],
+  );
+  assert.equal(stepAfter.rows[0].status, 'endorsed');
+  assert.equal(stepAfter.rows[0].decided_by, `motion:${motionId}`);
+  const reqAfter = await pool.query<{ status: string }>(
+    `SELECT status FROM requests WHERE request_id=$1`, [result.request_id],
+  );
+  assert.equal(reqAfter.rows[0].status, 'approved');
+
+  // 15.7 chain fired — chained task exists on the topic
+  const chainedTasks = await pool.query(`SELECT title FROM tasks WHERE topic_id=$1 AND title LIKE 'Execute approved request%'`, [topicId]);
+  assert.equal(chainedTasks.rows.length, 1, 'chain task posted');
+});
+
+test('15.8 AC6-failed: applyMotionToStep failed → step returned, request returned, artifact reverted', async () => {
+  const { topicId, executionActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-15-8-ac6f', executionActor);
+  await mkCollectiveSetup();
+
+  const result = await submitRequest({
+    topic_id: topicId,
+    subject_type: 'artifact',
+    subject_id: artifactId,
+    kind: 'collective_test',
+    weight: 10,
+    procedure: 'unilateral',
+    submitted_by: executionActor,
+  });
+  if (result.status !== 'submitted') throw new Error('setup');
+
+  const pool = getDbPool();
+  const stepBefore = await pool.query<{ motion_id: string; target_office: string }>(
+    `SELECT motion_id, target_office FROM request_steps WHERE request_id=$1 AND step_index=0`,
+    [result.request_id],
+  );
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await applyMotionToStep(client, {
+      motion_id: stepBefore.rows[0].motion_id,
+      request_id: result.request_id,
+      step_index: 0,
+      target_office: stepBefore.rows[0].target_office,
+      outcome: 'failed',
+      topic_id: topicId,
+    });
+    await client.query('COMMIT');
+  } finally {
+    client.release();
+  }
+
+  const reqAfter = await pool.query<{ status: string }>(
+    `SELECT status FROM requests WHERE request_id=$1`, [result.request_id],
+  );
+  assert.equal(reqAfter.rows[0].status, 'returned');
+  // Artifact reverted from for_review → working
+  const artAfter = await pool.query<{ state: string }>(
+    `SELECT state FROM artifacts WHERE artifact_id=$1`, [artifactId],
+  );
+  assert.equal(artAfter.rows[0].state, 'working');
+});
+
+test('15.8 AC6-lapsed: applyMotionToStep lapsed at non-top tier → degrade to unilateral at next level', async () => {
+  const { topicId, executionActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-15-8-ac6l', executionActor);
+  await mkCollectiveSetup(); // routes to coordination level
+
+  const result = await submitRequest({
+    topic_id: topicId,
+    subject_type: 'artifact',
+    subject_id: artifactId,
+    kind: 'collective_test',
+    weight: 10,
+    procedure: 'unilateral',
+    submitted_by: executionActor,
+  });
+  if (result.status !== 'submitted') throw new Error('setup');
+
+  const pool = getDbPool();
+  const stepBefore = await pool.query<{ motion_id: string; target_office: string }>(
+    `SELECT motion_id, target_office FROM request_steps WHERE request_id=$1 AND step_index=0`,
+    [result.request_id],
+  );
+  assert.equal(stepBefore.rows[0].target_office, 'coordination');
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await applyMotionToStep(client, {
+      motion_id: stepBefore.rows[0].motion_id,
+      request_id: result.request_id,
+      step_index: 0,
+      target_office: 'coordination',
+      outcome: 'lapsed',
+      topic_id: topicId,
+    });
+    await client.query('COMMIT');
+  } finally {
+    client.release();
+  }
+
+  // Step degraded to unilateral at authority level, fresh deadline, motion_id null
+  const stepAfter = await pool.query<{ status: string; target_office: string; procedure: string; body_id: string | null; motion_id: string | null }>(
+    `SELECT status, target_office, procedure, body_id, motion_id FROM request_steps WHERE request_id=$1 AND step_index=0`,
+    [result.request_id],
+  );
+  assert.equal(stepAfter.rows[0].status, 'pending');
+  assert.equal(stepAfter.rows[0].target_office, 'authority');
+  assert.equal(stepAfter.rows[0].procedure, 'unilateral');
+  assert.equal(stepAfter.rows[0].body_id, null);
+  assert.equal(stepAfter.rows[0].motion_id, null);
+
+  // Request still open
+  const reqAfter = await pool.query<{ status: string }>(
+    `SELECT status FROM requests WHERE request_id=$1`, [result.request_id],
+  );
+  assert.equal(reqAfter.rows[0].status, 'open');
+});
+
+test('15.8 AC6-lapsed-at-top: applyMotionToStep lapsed at authority tier → escalation_exhausted', async () => {
+  const { topicId, executionActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-15-8-ac6lt', executionActor);
+  // Setup with required_level=authority (top tier)
+  const body = await createBody({
+    project_id: TEST_PROJECT, name: '15.8 Body Top', quorum: 0, threshold: 0.5,
+    veto_holders: [], created_by: 'authority-actor',
+  });
+  await addBodyMember({ body_id: body.body_id, actor_id: 'voter-a', vote_weight: 1 });
+  const pool = getDbPool();
+  await pool.query(
+    `INSERT INTO doa_matrix (project_id, topic_id, kind, weight_min, weight_max, required_level, route_shape, procedure, body_id)
+     VALUES ($1, NULL, 'collective_top', 0, 49, 'authority', 'escalate_to_authority', 'collective', $2)`,
+    [TEST_PROJECT, body.body_id],
+  );
+
+  const result = await submitRequest({
+    topic_id: topicId,
+    subject_type: 'artifact',
+    subject_id: artifactId,
+    kind: 'collective_top',
+    weight: 10,
+    procedure: 'unilateral',
+    submitted_by: executionActor,
+  });
+  if (result.status !== 'submitted') throw new Error('setup');
+
+  const stepBefore = await pool.query<{ motion_id: string }>(
+    `SELECT motion_id FROM request_steps WHERE request_id=$1 AND step_index=0`,
+    [result.request_id],
+  );
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await applyMotionToStep(client, {
+      motion_id: stepBefore.rows[0].motion_id,
+      request_id: result.request_id,
+      step_index: 0,
+      target_office: 'authority',
+      outcome: 'lapsed',
+      topic_id: topicId,
+    });
+    await client.query('COMMIT');
+  } finally {
+    client.release();
+  }
+
+  const reqAfter = await pool.query<{ status: string }>(
+    `SELECT status FROM requests WHERE request_id=$1`, [result.request_id],
+  );
+  assert.equal(reqAfter.rows[0].status, 'escalation_exhausted');
+});
+
+// ── Sprint 15.10 — multi-tier collective routing (DEFERRED-022) ────────────
+
+/** Helper — create 2 bodies + matrix row with per-level body assignments. */
+async function mkMultiTierSetup(opts?: { distinctBodies?: boolean; missingLevel?: boolean }): Promise<{
+  coordBodyId: string;
+  authBodyId: string;
+  matrixId: string;
+}> {
+  const distinct = opts?.distinctBodies ?? true;
+  const missing = opts?.missingLevel ?? false;
+  const coordBody = await createBody({
+    project_id: TEST_PROJECT, name: 'Coord Body',
+    quorum: 0, threshold: 0.5, veto_holders: [],
+    created_by: 'authority-actor',
+  });
+  await addBodyMember({ body_id: coordBody.body_id, actor_id: 'voter-c1', vote_weight: 1 });
+  await addBodyMember({ body_id: coordBody.body_id, actor_id: 'voter-c2', vote_weight: 1 });
+  await addBodyMember({ body_id: coordBody.body_id, actor_id: 'seconder-c', vote_weight: 1 });
+
+  const authBody = distinct ? await createBody({
+    project_id: TEST_PROJECT, name: 'Auth Body',
+    quorum: 0, threshold: 0.5, veto_holders: [],
+    created_by: 'authority-actor',
+  }) : coordBody;
+  if (distinct) {
+    await addBodyMember({ body_id: authBody.body_id, actor_id: 'voter-a1', vote_weight: 1 });
+    await addBodyMember({ body_id: authBody.body_id, actor_id: 'seconder-a', vote_weight: 1 });
+  }
+
+  // Matrix row: 2-step counter_sign (required_level=authority) + collective.
+  const pool = getDbPool();
+  const ins = await pool.query<{ matrix_id: string }>(
+    `INSERT INTO doa_matrix (project_id, topic_id, kind, weight_min, weight_max, required_level, route_shape, procedure, body_id)
+     VALUES ($1, NULL, '15_10_collective', 0, 49, 'authority', 'counter_sign', 'collective', $2)
+     RETURNING matrix_id`,
+    [TEST_PROJECT, authBody.body_id], // legacy body_id (back-compat fallback)
+  );
+  const matrixId = ins.rows[0].matrix_id;
+  // Per-level entries
+  await pool.query(
+    `INSERT INTO doa_matrix_levels (matrix_id, level, body_id) VALUES ($1, 'coordination', $2)`,
+    [matrixId, coordBody.body_id],
+  );
+  if (!missing) {
+    await pool.query(
+      `INSERT INTO doa_matrix_levels (matrix_id, level, body_id) VALUES ($1, 'authority', $2)`,
+      [matrixId, authBody.body_id],
+    );
+  }
+  return { coordBodyId: coordBody.body_id, authBodyId: authBody.body_id, matrixId };
+}
+
+test('15.10 AC2: multi-step counter_sign+collective with distinct bodies → submit succeeds, step 0 and step 1 have different body_ids', async () => {
+  const { topicId, executionActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-15-10-ac2', executionActor);
+  const { coordBodyId, authBodyId } = await mkMultiTierSetup();
+
+  const result = await submitRequest({
+    topic_id: topicId, subject_type: 'artifact', subject_id: artifactId,
+    kind: '15_10_collective', weight: 10, procedure: 'unilateral',
+    submitted_by: executionActor,
+  });
+  assert.equal(result.status, 'submitted');
+  if (result.status !== 'submitted') throw new Error('setup');
+
+  const pool = getDbPool();
+  const steps = await pool.query<{ step_index: number; target_office: string; procedure: string; body_id: string; status: string; motion_id: string | null }>(
+    `SELECT step_index, target_office, procedure, body_id, status, motion_id
+       FROM request_steps WHERE request_id=$1 ORDER BY step_index`,
+    [result.request_id],
+  );
+  assert.equal(steps.rows.length, 2);
+  assert.equal(steps.rows[0].target_office, 'coordination');
+  assert.equal(steps.rows[0].body_id, coordBodyId);
+  assert.equal(steps.rows[0].procedure, 'collective');
+  assert.equal(steps.rows[0].status, 'motion_proposed');
+  assert.ok(steps.rows[0].motion_id, 'step 0 motion auto-proposed');
+  assert.equal(steps.rows[1].target_office, 'authority');
+  assert.equal(steps.rows[1].body_id, authBodyId);
+  assert.equal(steps.rows[1].procedure, 'collective');
+  assert.equal(steps.rows[1].status, 'pending');
+  assert.notEqual(coordBodyId, authBodyId, 'distinct bodies per step');
+
+  // body_by_level snapshot persisted on the request
+  const reqRow = await pool.query<{ body_by_level: Record<string, string> }>(
+    `SELECT body_by_level FROM requests WHERE request_id=$1`, [result.request_id],
+  );
+  assert.equal(reqRow.rows[0].body_by_level['coordination'], coordBodyId);
+  assert.equal(reqRow.rows[0].body_by_level['authority'], authBodyId);
+});
+
+test('15.10 AC3: multi-step counter_sign+collective with SAME body for both steps → distinct_body_required', async () => {
+  const { topicId, executionActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-15-10-ac3', executionActor);
+  await mkMultiTierSetup({ distinctBodies: false }); // both coord+auth use the SAME body
+
+  await assert.rejects(
+    () => submitRequest({
+      topic_id: topicId, subject_type: 'artifact', subject_id: artifactId,
+      kind: '15_10_collective', weight: 10, procedure: 'unilateral',
+      submitted_by: executionActor,
+    }),
+    (err: any) => {
+      assert.equal(err.code, 'BAD_REQUEST');
+      assert.ok(err.message.includes('distinct_body_required'),
+        `expected distinct_body_required, got: ${err.message}`);
+      return true;
+    },
+  );
+});
+
+test('15.10 AC4: multi-step collective with missing body for a level → missing_collective_body', async () => {
+  const { topicId, executionActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-15-10-ac4', executionActor);
+  await mkMultiTierSetup({ missingLevel: true }); // only coordination level configured
+
+  await assert.rejects(
+    () => submitRequest({
+      topic_id: topicId, subject_type: 'artifact', subject_id: artifactId,
+      kind: '15_10_collective', weight: 10, procedure: 'unilateral',
+      submitted_by: executionActor,
+    }),
+    (err: any) => {
+      assert.equal(err.code, 'BAD_REQUEST');
+      assert.ok(err.message.includes('missing_collective_body') && err.message.includes('authority'),
+        `expected missing_collective_body for authority level, got: ${err.message}`);
+      return true;
+    },
+  );
+});
+
+test('15.10 AC12 (backward compat): 15.8 single-step collective matrix (no doa_matrix_levels) still works', async () => {
+  const { topicId, executionActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-15-10-ac12', executionActor);
+  // 15.8-style matrix: single body_id, no level entries — required_level=coordination
+  // (so the route is single-step, avoiding the multi-step missing-body trap)
+  const body = await createBody({
+    project_id: TEST_PROJECT, name: '15.8 compat Body', quorum: 0, threshold: 0.5,
+    veto_holders: [], created_by: 'authority-actor',
+  });
+  await addBodyMember({ body_id: body.body_id, actor_id: 'voter-x', vote_weight: 1 });
+  const pool = getDbPool();
+  await pool.query(
+    `INSERT INTO doa_matrix (project_id, topic_id, kind, weight_min, weight_max, required_level, route_shape, procedure, body_id)
+     VALUES ($1, NULL, '15_8_compat', 0, 49, 'coordination', 'escalate_to_authority', 'collective', $2)`,
+    [TEST_PROJECT, body.body_id],
+  );
+
+  const result = await submitRequest({
+    topic_id: topicId, subject_type: 'artifact', subject_id: artifactId,
+    kind: '15_8_compat', weight: 10, procedure: 'unilateral',
+    submitted_by: executionActor,
+  });
+  assert.equal(result.status, 'submitted');
+  if (result.status !== 'submitted') throw new Error('setup');
+
+  const step = await pool.query<{ body_id: string; status: string }>(
+    `SELECT body_id, status FROM request_steps WHERE request_id=$1 AND step_index=0`,
+    [result.request_id],
+  );
+  assert.equal(step.rows[0].body_id, body.body_id, 'fallback to single body_id worked');
+  assert.equal(step.rows[0].status, 'motion_proposed');
+});
+
+test('15.10 AC6-re-propose: lapsed motion at intermediate collective level → re-propose under next level body (NOT degrade)', async () => {
+  const { topicId, executionActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-15-10-ac6r', executionActor);
+  const { coordBodyId, authBodyId } = await mkMultiTierSetup();
+
+  const result = await submitRequest({
+    topic_id: topicId, subject_type: 'artifact', subject_id: artifactId,
+    kind: '15_10_collective', weight: 10, procedure: 'unilateral',
+    submitted_by: executionActor,
+  });
+  if (result.status !== 'submitted') throw new Error('setup');
+
+  const pool = getDbPool();
+  const step = await pool.query<{ motion_id: string }>(
+    `SELECT motion_id FROM request_steps WHERE request_id=$1 AND step_index=0`,
+    [result.request_id],
+  );
+  const motionId = step.rows[0].motion_id;
+
+  // Simulate lapsed at coordination level — applyMotionToStep with lapsed outcome.
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await applyMotionToStep(client, {
+      motion_id: motionId,
+      request_id: result.request_id,
+      step_index: 0,
+      target_office: 'coordination',
+      outcome: 'lapsed',
+      topic_id: topicId,
+    });
+    await client.query('COMMIT');
+  } finally { client.release(); }
+
+  // Step now at authority + collective + auth body + new motion proposed
+  const after = await pool.query<{ status: string; target_office: string; procedure: string; body_id: string; motion_id: string | null }>(
+    `SELECT status, target_office, procedure, body_id, motion_id FROM request_steps WHERE request_id=$1 AND step_index=0`,
+    [result.request_id],
+  );
+  assert.equal(after.rows[0].status, 'motion_proposed', 'new motion proposed under collective');
+  assert.equal(after.rows[0].target_office, 'authority');
+  assert.equal(after.rows[0].procedure, 'collective');
+  assert.equal(after.rows[0].body_id, authBodyId, 'next level body from snapshot');
+  assert.ok(after.rows[0].motion_id);
+  assert.notEqual(after.rows[0].motion_id, motionId, 'new motion_id, not the lapsed one');
+});
+
+test('15.10 AC6-degrade-fallback: lapsed motion with no next-level body in snapshot → degrade to unilateral, escalated_to:unilateral', async () => {
+  const { topicId, executionActor } = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-15-10-ac6d', executionActor);
+  // Setup with only coordination body assigned — no authority body
+  await mkMultiTierSetup({ missingLevel: true });
+
+  // Cannot submit through normal submitRequest (would reject missing_collective_body
+  // for the multi-step route). Instead use a single-step required_level=coordination
+  // matrix row so step 0 succeeds, then test lapsed at coordination.
+  const pool = getDbPool();
+  await pool.query(`DELETE FROM doa_matrix WHERE project_id=$1`, [TEST_PROJECT]);
+  await pool.query(`DELETE FROM doa_matrix_levels`); // cleanup leftovers from helper
+  const body = await createBody({
+    project_id: TEST_PROJECT, name: 'Coord Only', quorum: 0, threshold: 0.5,
+    veto_holders: [], created_by: 'authority-actor',
+  });
+  await addBodyMember({ body_id: body.body_id, actor_id: 'voter-d1', vote_weight: 1 });
+  const ins = await pool.query<{ matrix_id: string }>(
+    `INSERT INTO doa_matrix (project_id, topic_id, kind, weight_min, weight_max, required_level, route_shape, procedure, body_id)
+     VALUES ($1, NULL, '15_10_degrade', 0, 49, 'coordination', 'escalate_to_authority', 'collective', $2)
+     RETURNING matrix_id`,
+    [TEST_PROJECT, body.body_id],
+  );
+  await pool.query(
+    `INSERT INTO doa_matrix_levels (matrix_id, level, body_id) VALUES ($1, 'coordination', $2)`,
+    [ins.rows[0].matrix_id, body.body_id],
+  );
+
+  const result = await submitRequest({
+    topic_id: topicId, subject_type: 'artifact', subject_id: artifactId,
+    kind: '15_10_degrade', weight: 10, procedure: 'unilateral',
+    submitted_by: executionActor,
+  });
+  if (result.status !== 'submitted') throw new Error('setup');
+
+  const step = await pool.query<{ motion_id: string }>(
+    `SELECT motion_id FROM request_steps WHERE request_id=$1 AND step_index=0`,
+    [result.request_id],
+  );
+  const motionId = step.rows[0].motion_id;
+
+  // Lapsed at coordination — no authority body in snapshot → degrade to unilateral
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await applyMotionToStep(client, {
+      motion_id: motionId,
+      request_id: result.request_id,
+      step_index: 0,
+      target_office: 'coordination',
+      outcome: 'lapsed',
+      topic_id: topicId,
+    });
+    await client.query('COMMIT');
+  } finally { client.release(); }
+
+  const after = await pool.query<{ status: string; target_office: string; procedure: string; body_id: string | null; motion_id: string | null }>(
+    `SELECT status, target_office, procedure, body_id, motion_id FROM request_steps WHERE request_id=$1 AND step_index=0`,
+    [result.request_id],
+  );
+  assert.equal(after.rows[0].status, 'pending', 'degraded → pending (unilateral)');
+  assert.equal(after.rows[0].target_office, 'authority');
+  assert.equal(after.rows[0].procedure, 'unilateral');
+  assert.equal(after.rows[0].body_id, null);
+  assert.equal(after.rows[0].motion_id, null);
+
+  // Event payload uses new unified `escalated_to` field
+  const { replayEvents } = await import('./coordinationEvents.js');
+  const ev = await replayEvents({ topic_id: topicId });
+  const escalated = ev.events.find((e) => e.type === 'request.step_escalated');
+  assert.ok(escalated);
+  assert.equal((escalated!.payload as { escalated_to: string }).escalated_to, 'unilateral');
 });

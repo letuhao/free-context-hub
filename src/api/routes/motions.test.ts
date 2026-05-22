@@ -18,7 +18,7 @@ import test, { before, after } from 'node:test';
 import http from 'node:http';
 import express from 'express';
 import { motionsRouter } from './motions.js';
-import { charterTopic, joinTopic, createBody, addBodyMember } from '../../core/index.js';
+import { charterTopic, joinTopic, grantLevel, createBody, addBodyMember } from '../../core/index.js';
 import { getDbPool } from '../../db/client.js';
 
 const TEST_PROJECT = '__test_motions_routes__';
@@ -33,6 +33,12 @@ async function cleanup() {
     await pool.query(`DELETE FROM votes WHERE motion_id IN
       (SELECT motion_id FROM motions WHERE topic_id=$1)`, [topic_id]);
     await pool.query(`DELETE FROM motions WHERE topic_id = $1`, [topic_id]);
+    // Sprint 15.7 — chain may have created tasks/artifacts on carried tallies.
+    await pool.query(`DELETE FROM claims WHERE topic_id = $1`, [topic_id]);
+    await pool.query(`DELETE FROM artifact_versions WHERE artifact_id IN
+      (SELECT artifact_id FROM artifacts WHERE topic_id=$1)`, [topic_id]);
+    await pool.query(`DELETE FROM artifacts WHERE topic_id = $1`, [topic_id]);
+    await pool.query(`DELETE FROM tasks WHERE topic_id = $1`, [topic_id]);
     await pool.query(`DELETE FROM coordination_events WHERE topic_id = $1`, [topic_id]);
   }
   await pool.query(`DELETE FROM topics WHERE project_id = $1`, [TEST_PROJECT]);
@@ -121,8 +127,12 @@ async function mkTopic() {
     project_id: TEST_PROJECT, name: 'Motion Route Test',
     charter: 'route test', created_by: 'proposer',
   });
-  for (const a of ['proposer', 'seconder', 'voterA', 'governor']) {
-    await joinTopic({ topic_id: t.topic_id, actor_id: a, actor_type: 'human', display_name: a, level: 'coordination' });
+  // Sprint 15.11 — owner 'proposer' (created_by) bootstraps at coordination; the
+  // non-owners join at execution then 'proposer' grants them coordination.
+  await joinTopic({ topic_id: t.topic_id, actor_id: 'proposer', actor_type: 'human', display_name: 'proposer', level: 'coordination' });
+  for (const a of ['seconder', 'voterA', 'governor']) {
+    await joinTopic({ topic_id: t.topic_id, actor_id: a, actor_type: 'human', display_name: a, level: 'execution' });
+    await grantLevel({ topic_id: t.topic_id, actor_id: a, level: 'coordination', granted_by: 'proposer' });
   }
   return t.topic_id;
 }

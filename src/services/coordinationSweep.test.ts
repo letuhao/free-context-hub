@@ -21,7 +21,7 @@ import test, { before, after, beforeEach } from 'node:test';
 import { sweepAbandonedClaims, sweepStalledSteps, sweepExpiredMotions } from './coordinationSweep.js';
 import { postTask, claimTask } from './board.js';
 import { writeArtifact, baselineArtifact } from './artifacts.js';
-import { charterTopic, joinTopic, closeTopic } from './topics.js';
+import { charterTopic, joinTopic, grantLevel, closeTopic } from './topics.js';
 import { replayEvents } from './coordinationEvents.js';
 import { submitRequest } from './requests.js';
 import { createBody, addBodyMember } from './decisionBodies.js';
@@ -37,6 +37,9 @@ async function cleanup() {
     [TEST_PROJECT],
   );
   for (const { topic_id } of topicIds.rows) {
+    // Sprint 15.8 — request_steps may link to motions; null out first.
+    await pool.query(`UPDATE request_steps SET motion_id=NULL WHERE request_id IN
+      (SELECT request_id FROM requests WHERE topic_id=$1)`, [topic_id]);
     // Clean up votes + motions (added by Sprint 15.4)
     await pool.query(`DELETE FROM votes WHERE motion_id IN
       (SELECT motion_id FROM motions WHERE topic_id=$1)`, [topic_id]);
@@ -57,6 +60,9 @@ async function cleanup() {
   }
   await pool.query(`DELETE FROM topics WHERE project_id = $1`, [TEST_PROJECT]);
   await pool.query(`DELETE FROM actors WHERE project_id = $1`, [TEST_PROJECT]);
+  // Sprint 15.8 — doa_matrix references decision_bodies via body_id (FK), so
+  // matrix must be deleted before bodies.
+  await pool.query(`DELETE FROM doa_matrix WHERE project_id = $1`, [TEST_PROJECT]);
   // decision bodies (project-scoped config — Sprint 15.4)
   const bodyIds = await pool.query<{ body_id: string }>(
     `SELECT body_id FROM decision_bodies WHERE project_id = $1`,
@@ -232,7 +238,8 @@ test('T16: an expired claim on a closed topic → claim dropped, artifact NOT re
     content_ref: 'ref://working', actor_id: 'worker-1',
   });
   await expireClaims(s.artifact_id);
-  await closeTopic({ topic_id: topicId, actor_id: 'creator-1' });
+  // bypass drain — close via direct DB update so the expired claim survives
+  await getDbPool().query(`UPDATE topics SET status='closed' WHERE topic_id=$1`, [topicId]);
 
   const pool = getDbPool();
   const evBefore = await replayEvents({ topic_id: topicId });
@@ -350,9 +357,12 @@ async function mkTopicWithStalledStep(slot: string, submitterLevel: 'execution' 
     charter: 'stalled step sweep test', created_by: `actor-auth-${slot}`,
   });
   const topicId = t.topic_id;
-  await joinTopic({ topic_id: topicId, actor_id: `actor-exec-${slot}`, actor_type: 'ai', display_name: 'Exec', level: 'execution' });
-  await joinTopic({ topic_id: topicId, actor_id: `actor-coord-${slot}`, actor_type: 'ai', display_name: 'Coord', level: 'coordination' });
+  // Sprint 15.11 — owner (actor-auth = created_by) joins first as authority, then
+  // others join at execution and the owner grants the coordinator its level.
   await joinTopic({ topic_id: topicId, actor_id: `actor-auth-${slot}`, actor_type: 'ai', display_name: 'Auth', level: 'authority' });
+  await joinTopic({ topic_id: topicId, actor_id: `actor-exec-${slot}`, actor_type: 'ai', display_name: 'Exec', level: 'execution' });
+  await joinTopic({ topic_id: topicId, actor_id: `actor-coord-${slot}`, actor_type: 'ai', display_name: 'Coord', level: 'execution' });
+  await grantLevel({ topic_id: topicId, actor_id: `actor-coord-${slot}`, level: 'coordination', granted_by: `actor-auth-${slot}` });
 
   // Create a for_review artifact
   const task = await postTask({
@@ -471,6 +481,10 @@ test('T18: stalled authority step → escalation_exhausted', async () => {
   const resolvedEvents = ev.events.filter((e) => e.type === 'request.resolved');
   assert.equal(resolvedEvents.length, 1);
   assert.equal(resolvedEvents[0].payload.outcome, 'escalation_exhausted');
+  // Sprint 15.9 (DEFERRED-020 LOW-8b) — escalation_exhausted carries
+  // artifact_advanced:false (artifact untouched on exhausted escalation).
+  assert.equal(resolvedEvents[0].payload.artifact_advanced, false,
+    'escalation_exhausted payload must carry artifact_advanced:false');
 });
 
 // ── T19: stalled step on a closed topic → skipped ────────────────────────
@@ -479,8 +493,9 @@ test('T19: stalled step on a closed topic → skipped (no mutation, no events)',
   const { topicId, requestId } = await mkTopicWithStalledStep('t19', 'execution');
   const pool = getDbPool();
 
-  // Close the topic after submission (simulates a race or deliberate close)
-  await closeTopic({ topic_id: topicId, actor_id: `actor-auth-t19` });
+  // bypass drain — close via direct DB update so the step stays 'pending',
+  // testing the sweep's closed-topic skip-branch directly
+  await getDbPool().query(`UPDATE topics SET status='closed' WHERE topic_id=$1`, [topicId]);
 
   const evBefore = await replayEvents({ topic_id: topicId });
   const evCountBefore = evBefore.events.length;
@@ -612,8 +627,13 @@ async function mkMotionTopic(
     charter: 'motion sweep test', created_by: actorIds[0],
   });
   const topicId = t.topic_id;
-  for (const a of actorIds) {
-    await joinTopic({ topic_id: topicId, actor_id: a, actor_type: 'ai', display_name: a, level: 'coordination' });
+  // Sprint 15.11 — owner (actorIds[0] = created_by) bootstraps at coordination;
+  // non-owners join at execution then the owner grants them coordination.
+  const owner = actorIds[0];
+  await joinTopic({ topic_id: topicId, actor_id: owner, actor_type: 'ai', display_name: owner, level: 'coordination' });
+  for (const a of actorIds.slice(1)) {
+    await joinTopic({ topic_id: topicId, actor_id: a, actor_type: 'ai', display_name: a, level: 'execution' });
+    await grantLevel({ topic_id: topicId, actor_id: a, level: 'coordination', granted_by: owner });
   }
   const body = await createBody({
     project_id: TEST_PROJECT, name: `Body ${slot}`,
@@ -702,7 +722,8 @@ test('T11c: an expired motion on a closed topic → skipped (no mutation, no eve
   if (p.status !== 'proposed') throw new Error('setup failed');
   await secondMotion({ motion_id: p.motion_id, actor_id: 'seconder' });
   await expireMotionRow(p.motion_id);
-  await closeTopic({ topic_id: topicId, actor_id: 'proposer' });
+  // bypass drain — close via direct DB update so the balloting motion survives
+  await getDbPool().query(`UPDATE topics SET status='closed' WHERE topic_id=$1`, [topicId]);
 
   const pool = getDbPool();
   const evBefore = await replayEvents({ topic_id: topicId });
@@ -770,4 +791,170 @@ test('T11d: a batch with one bad and one good expired motion → the good one st
     `SELECT status FROM motions WHERE motion_id=$1`, [pBad.motion_id],
   );
   assert.equal(mBad.rows[0].status, 'balloting', 'bad motion unchanged (rolled back)');
+});
+
+// ── Sprint 15.7 — sweep chain on carried + stuck-closing recovery sweep ────
+
+test('15.7 AC5: sweepExpiredMotions auto-carried → chain emits task.posted', async () => {
+  const t = await charterTopic({
+    project_id: TEST_PROJECT, name: 'sweep-chain-topic', charter: 'x', created_by: 'a',
+  });
+  // Sprint 15.11 — owner 'a' (created_by) bootstraps at coordination; non-owners
+  // join at execution then 'a' grants them coordination.
+  await joinTopic({ topic_id: t.topic_id, actor_id: 'a', actor_type: 'human', display_name: 'a', level: 'coordination' });
+  for (const a of ['b', 'sec']) {
+    await joinTopic({ topic_id: t.topic_id, actor_id: a, actor_type: 'human', display_name: a, level: 'execution' });
+    await grantLevel({ topic_id: t.topic_id, actor_id: a, level: 'coordination', granted_by: 'a' });
+  }
+  const body = await createBody({
+    project_id: TEST_PROJECT, name: 'B', quorum: 0, threshold: 0.5, veto_holders: [], created_by: 'a',
+  });
+  await addBodyMember({ body_id: body.body_id, actor_id: 'a', vote_weight: 1 });
+  await addBodyMember({ body_id: body.body_id, actor_id: 'sec', vote_weight: 1 });
+  const p = await proposeMotion({ topic_id: t.topic_id, body_id: body.body_id, subject_ref: 'sweep-ref', proposed_by: 'a' });
+  if (p.status !== 'proposed') throw new Error('propose');
+  await secondMotion({ motion_id: p.motion_id, actor_id: 'sec' });
+  await castVote({ motion_id: p.motion_id, actor_id: 'a', choice: 'for' });
+
+  // expire it
+  const pool = getDbPool();
+  await pool.query(`UPDATE motions SET deadline = now() - interval '10 minutes' WHERE motion_id=$1`, [p.motion_id]);
+
+  const result = await sweepExpiredMotions();
+  assert.equal(result.resolved, 1);
+
+  // chained task created
+  const tasks = await pool.query(`SELECT title, raci FROM tasks WHERE topic_id=$1`, [t.topic_id]);
+  assert.equal(tasks.rows.length, 1, 'one chained task posted by sweep');
+  assert.equal(tasks.rows[0].title, 'Execute carried motion: sweep-ref');
+  assert.equal(tasks.rows[0].raci.source_motion, p.motion_id);
+
+  // motion.tallied event has chain.kind=posted
+  const ev = await replayEvents({ topic_id: t.topic_id });
+  const tallied = ev.events.find((e) => e.type === 'motion.tallied');
+  assert.ok(tallied);
+  assert.equal((tallied!.payload as { chain?: { kind: string } }).chain?.kind, 'posted');
+});
+
+test('15.7 AC11: sweepStuckClosingTopics picks up >5min old closing topic + recovers', async () => {
+  const { sweepStuckClosingTopics } = await import('./coordinationSweep.js');
+  const t = await charterTopic({
+    project_id: TEST_PROJECT, name: 'stuck-topic', charter: 'x', created_by: 'a',
+  });
+  await joinTopic({ topic_id: t.topic_id, actor_id: 'a', actor_type: 'human', display_name: 'a', level: 'coordination' });
+
+  // Force into 'closing' state with old topic.closing event
+  const pool = getDbPool();
+  await pool.query(`UPDATE topics SET status='closing' WHERE topic_id=$1`, [t.topic_id]);
+  // Allocate next seq then INSERT backdated topic.closing event — mirrors appendEvent.
+  const seqRes = await pool.query<{ next_seq: string }>(
+    `UPDATE topics SET next_seq = next_seq + 1 WHERE topic_id=$1 RETURNING next_seq`,
+    [t.topic_id],
+  );
+  await pool.query(
+    `INSERT INTO coordination_events (topic_id, seq, actor_id, type, subject_type, subject_id, payload, ts)
+     VALUES ($1, $2, 'a', 'topic.closing', 'topic', $1, '{}', now() - interval '10 minutes')`,
+    [t.topic_id, seqRes.rows[0].next_seq],
+  );
+
+  const result = await sweepStuckClosingTopics();
+  assert.equal(result.recovered, 1);
+
+  // Topic now sealed
+  const after = await pool.query<{ status: string }>(
+    `SELECT status FROM topics WHERE topic_id=$1`, [t.topic_id],
+  );
+  assert.equal(after.rows[0].status, 'closed');
+});
+
+test('15.7 AC12: sweepStuckClosingTopics ignores <5min old closing topic', async () => {
+  const { sweepStuckClosingTopics } = await import('./coordinationSweep.js');
+  const t = await charterTopic({
+    project_id: TEST_PROJECT, name: 'fresh-closing', charter: 'x', created_by: 'a',
+  });
+  await joinTopic({ topic_id: t.topic_id, actor_id: 'a', actor_type: 'human', display_name: 'a', level: 'coordination' });
+
+  const pool = getDbPool();
+  await pool.query(`UPDATE topics SET status='closing' WHERE topic_id=$1`, [t.topic_id]);
+  // Allocate seq then INSERT recent topic.closing event (default ts=now())
+  const seqRes2 = await pool.query<{ next_seq: string }>(
+    `UPDATE topics SET next_seq = next_seq + 1 WHERE topic_id=$1 RETURNING next_seq`,
+    [t.topic_id],
+  );
+  await pool.query(
+    `INSERT INTO coordination_events (topic_id, seq, actor_id, type, subject_type, subject_id, payload)
+     VALUES ($1, $2, 'a', 'topic.closing', 'topic', $1, '{}')`,
+    [t.topic_id, seqRes2.rows[0].next_seq],
+  );
+
+  const result = await sweepStuckClosingTopics();
+  assert.equal(result.recovered, 0, 'fresh closing topic not swept');
+
+  // Topic still 'closing'
+  const after = await pool.query<{ status: string }>(
+    `SELECT status FROM topics WHERE topic_id=$1`, [t.topic_id],
+  );
+  assert.equal(after.rows[0].status, 'closing');
+});
+
+// ── Sprint 15.8 — sweep applies lapsed motion to request step ──────────────
+
+test('15.8 sweep-lapsed: sweepExpiredMotions on a motion linked to a request step → step degrades to unilateral', async () => {
+  const { submitRequest } = await import('./requests.js');
+  const { postTask, claimTask, completeTask } = await import('./board.js');
+
+  const t = await charterTopic({
+    project_id: TEST_PROJECT, name: '15.8 sweep-lapsed', charter: 'c', created_by: 'authority',
+  });
+  // Sprint 15.11 — owner 'authority' (created_by) joins first at authority; the
+  // execution actor is a non-owner and stays at execution.
+  await joinTopic({ topic_id: t.topic_id, actor_id: 'authority', actor_type: 'human', display_name: 'authority', level: 'authority' });
+  await joinTopic({ topic_id: t.topic_id, actor_id: 'execution', actor_type: 'human', display_name: 'execution', level: 'execution' });
+  const body = await createBody({
+    project_id: TEST_PROJECT, name: 'B-sweep', quorum: 100, threshold: 0.5,
+    veto_holders: [], created_by: 'authority',
+  });
+  // No members — quorum=100 unreachable; ensures lapsed outcome.
+  const pool = getDbPool();
+  await pool.query(
+    `INSERT INTO doa_matrix (project_id, topic_id, kind, weight_min, weight_max, required_level, route_shape, procedure, body_id)
+     VALUES ($1, NULL, 'm_sweep', 0, 49, 'coordination', 'escalate_to_authority', 'collective', $2)`,
+    [TEST_PROJECT, body.body_id],
+  );
+
+  const task = await postTask({ topic_id: t.topic_id, title: 'T', topology: 'parallel', slot: 'doc-msw', kind: 'doc', created_by: 'execution' });
+  await claimTask({ task_id: task.task_id, actor_id: 'execution' });
+  await completeTask({ task_id: task.task_id, actor_id: 'execution' });
+
+  const submit = await submitRequest({
+    topic_id: t.topic_id, subject_type: 'artifact', subject_id: task.artifact_id,
+    kind: 'm_sweep', weight: 10, procedure: 'unilateral', submitted_by: 'execution',
+  });
+  if (submit.status !== 'submitted') throw new Error('submit');
+
+  // Expire the motion (still in 'proposed' state — not_seconded → lapsed)
+  await pool.query(
+    `UPDATE motions SET deadline = now() - interval '10 minutes' WHERE motion_id =
+     (SELECT motion_id FROM request_steps WHERE request_id=$1 AND step_index=0)`,
+    [submit.request_id],
+  );
+
+  const result = await sweepExpiredMotions();
+  assert.equal(result.resolved, 1, 'sweep lapsed the motion');
+
+  // Step degraded to unilateral at next level (coordination → authority)
+  const stepAfter = await pool.query<{ status: string; target_office: string; procedure: string; motion_id: string | null }>(
+    `SELECT status, target_office, procedure, motion_id FROM request_steps WHERE request_id=$1 AND step_index=0`,
+    [submit.request_id],
+  );
+  assert.equal(stepAfter.rows[0].status, 'pending');
+  assert.equal(stepAfter.rows[0].target_office, 'authority');
+  assert.equal(stepAfter.rows[0].procedure, 'unilateral');
+  assert.equal(stepAfter.rows[0].motion_id, null);
+
+  // Cleanup
+  await pool.query(`UPDATE request_steps SET motion_id=NULL WHERE request_id=$1`, [submit.request_id]);
+  await pool.query(`DELETE FROM request_steps WHERE request_id=$1`, [submit.request_id]);
+  await pool.query(`DELETE FROM requests WHERE request_id=$1`, [submit.request_id]);
+  await pool.query(`DELETE FROM doa_matrix WHERE project_id=$1`, [TEST_PROJECT]);
 });

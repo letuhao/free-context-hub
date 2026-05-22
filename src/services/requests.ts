@@ -40,7 +40,14 @@ import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
 import { createModuleLogger } from '../utils/logger.js';
 import { appendEvent } from './coordinationEvents.js';
-import { resolveMatrixRow, deriveRoute, STEP_DEADLINE_MINUTES } from './doaMatrix.js';
+import { resolveMatrixRow, deriveRoute, STEP_DEADLINE_MINUTES, LEVELS_ASC, LEVEL_RANK } from './doaMatrix.js';
+import {
+  validateExecutionTask,
+  buildChainedTaskParams,
+  emitChain,
+  type ChainResult,
+  type ExecutionTaskBlob,
+} from './chaining.js';
 
 const logger = createModuleLogger('requests');
 
@@ -55,7 +62,7 @@ export type SubmitResult =
 
 export type DecideResult =
   | { status: 'step_endorsed'; current_step: number }
-  | { status: 'approved' }
+  | { status: 'approved'; chain: ChainResult }
   | { status: 'returned' }
   | { status: 'rejected' }
   | { status: 'not_found' }
@@ -65,7 +72,9 @@ export type DecideResult =
   | { status: 'conflict' }
   | { status: 'not_participant' }
   | { status: 'self_decision_forbidden' }
-  | { status: 'not_authorized' };
+  | { status: 'not_authorized' }
+  | { status: 'repeat_endorser' }
+  | { status: 'procedure_is_collective' };
 
 export type RequestStep = {
   step_index: number;
@@ -114,6 +123,8 @@ export async function submitRequest(params: {
   weight: number;
   procedure: string;
   submitted_by: string;
+  /** Sprint 15.7 — optional execution_task blob for chain handler. */
+  execution_task?: unknown;
 }): Promise<SubmitResult> {
   const topicId = (params.topic_id ?? '').trim();
   const subjectType = (params.subject_type ?? '').trim();
@@ -122,6 +133,10 @@ export async function submitRequest(params: {
   const weight = params.weight;
   const procedure = (params.procedure ?? '').trim();
   const submittedBy = (params.submitted_by ?? '').trim();
+
+  // Sprint 15.7 — validate execution_task structurally if provided. Chain-time
+  // depends_on existence is re-checked at chain emit (decideStep approve branch).
+  const executionTask = validateExecutionTask(params.execution_task);
 
   // Input validation
   if (!topicId || !subjectId || !kind || !submittedBy) {
@@ -133,10 +148,10 @@ export async function submitRequest(params: {
 
   // F7 — bound the free-text fields written verbatim to rows + the request.submitted event
   const MAX_FIELD_LEN = 256;
-  if (kind.length > MAX_FIELD_LEN || subjectId.length > MAX_FIELD_LEN) {
+  if (kind.length > MAX_FIELD_LEN || subjectId.length > MAX_FIELD_LEN || submittedBy.length > MAX_FIELD_LEN) {
     throw new ContextHubError(
       'BAD_REQUEST',
-      `kind and subject_id must each be at most ${MAX_FIELD_LEN} characters`,
+      `kind, subject_id, and submitted_by must each be at most ${MAX_FIELD_LEN} characters`,
     );
   }
 
@@ -152,14 +167,14 @@ export async function submitRequest(params: {
     throw new ContextHubError('BAD_REQUEST', `procedure must be 'unilateral' or 'collective'`);
   }
 
-  // D6 — collective steps are not implemented yet
-  if (procedure === 'collective') {
-    throw new ContextHubError('BAD_REQUEST', 'collective steps are Sprint 15.4');
-  }
+  // Sprint 15.8: per-request 'procedure' input is now informational only — the
+  // authoritative per-step procedure is sourced from the DoA matrix. We keep the
+  // input field for API back-compat; the value is not used for routing decisions.
+  // (Collective-step support is wired through the matrix; see §2.2 of the design.)
 
-  // D7 — only 'artifact' subject_type is supported
-  if (subjectType !== 'artifact') {
-    throw new ContextHubError('BAD_REQUEST', `subject_type must be 'artifact'; got: ${subjectType}`);
+  // D7 — subject_type must be 'artifact' or 'dispute' (Sprint 15.5 extends to 'dispute')
+  if (subjectType !== 'artifact' && subjectType !== 'dispute') {
+    throw new ContextHubError('BAD_REQUEST', `subject_type must be 'artifact' or 'dispute'; got: ${subjectType}`);
   }
 
   const pool = getDbPool();
@@ -175,19 +190,20 @@ export async function submitRequest(params: {
     throw new ContextHubError('NOT_FOUND', `topic ${topicId} not found`);
   }
   const { project_id: projectId, status: topicStatus } = topicRes.rows[0];
-  if (topicStatus === 'closed') {
+  if (topicStatus === 'closed' || topicStatus === 'closing') {
     return { status: 'topic_closed' };
   }
 
-  // Check the artifact exists AND belongs to this request's topic (F3a). One status
-  // for "missing" and "in another topic" — does not confirm the artifact exists under
-  // a different topic (id-probing defense).
-  const artRes = await pool.query<{ topic_id: string }>(
-    `SELECT topic_id FROM artifacts WHERE artifact_id=$1`,
-    [subjectId],
-  );
-  if (artRes.rowCount === 0 || artRes.rows[0].topic_id !== topicId) {
-    throw new ContextHubError('NOT_FOUND', `artifact ${subjectId} not found in topic ${topicId}`);
+  // For 'artifact' subject_type: check the artifact exists AND belongs to this topic (F3a).
+  // For 'dispute' subject_type: subject_id is a dispute UUID — no artifact lookup.
+  if (subjectType === 'artifact') {
+    const artRes = await pool.query<{ topic_id: string }>(
+      `SELECT topic_id FROM artifacts WHERE artifact_id=$1`,
+      [subjectId],
+    );
+    if (artRes.rowCount === 0 || artRes.rows[0].topic_id !== topicId) {
+      throw new ContextHubError('NOT_FOUND', `artifact ${subjectId} not found in topic ${topicId}`);
+    }
   }
 
   // Check submitter is a participant
@@ -224,22 +240,85 @@ export async function submitRequest(params: {
 
     await client.query('BEGIN');
 
-    // INSERT the request row
+    // INSERT the request row. Sprint 15.7 — execution_task column added; passes
+    // through as JSONB or NULL. (subject_type=artifact hardcoded predates 15.5
+    // 'dispute' support; not changed in 15.7 to preserve 15.5 behavior.)
     await client.query(
       `INSERT INTO requests
          (request_id, topic_id, subject_type, subject_id, kind, weight,
-          procedure, route_shape, status, current_step, submitted_by)
-       VALUES ($1, $2, 'artifact', $3, $4, $5, 'unilateral', $6, 'open', 0, $7)`,
-      [requestId, topicId, subjectId, kind, weight, matrixRow.route_shape, submittedBy],
+          procedure, route_shape, status, current_step, submitted_by, execution_task)
+       VALUES ($1, $2, 'artifact', $3, $4, $5, 'unilateral', $6, 'open', 0, $7, $8)`,
+      [
+        requestId, topicId, subjectId, kind, weight, matrixRow.route_shape, submittedBy,
+        executionTask === null ? null : JSON.stringify(executionTask),
+      ],
     );
 
-    // Materialize the route as request_steps (all pending; only step 0 is active)
+    // Sprint 15.10 — per-step body resolution for collective routes.
+    // Build a level→body Map: prefer matrix-table entries (doa_matrix_levels);
+    // fall back to the single-body column for the required_level (15.8 compat).
+    const bodyByLevel: Map<string, string> = matrixRow.body_by_level.size > 0
+      ? new Map(matrixRow.body_by_level)
+      : (matrixRow.procedure === 'collective' && matrixRow.body_id
+          ? new Map([[matrixRow.required_level, matrixRow.body_id]])
+          : new Map<string, string>());
+
+    const stepBodies: Array<string | null> = [];
+    for (let i = 0; i < route.length; i++) {
+      const stepLevel = route[i];
+      if (matrixRow.procedure === 'collective') {
+        const body = bodyByLevel.get(stepLevel);
+        if (!body) {
+          await client.query('ROLLBACK');
+          throw new ContextHubError(
+            'BAD_REQUEST',
+            `missing_collective_body: matrix has no body assigned for level '${stepLevel}' on this route`,
+          );
+        }
+        stepBodies.push(body);
+      } else {
+        stepBodies.push(null);
+      }
+    }
+
+    // Sprint 15.10 — distinct-body check for multi-step counter_sign+collective
+    // (preserves the distinct-endorser principle for collective routes).
+    if (matrixRow.procedure === 'collective'
+        && matrixRow.route_shape === 'counter_sign'
+        && route.length > 1) {
+      const seen = new Set<string>();
+      for (const b of stepBodies) {
+        if (b && seen.has(b)) {
+          await client.query('ROLLBACK');
+          throw new ContextHubError(
+            'BAD_REQUEST',
+            `distinct_body_required: counter_sign+collective routes require a distinct body per step (duplicate body assigned to multiple steps)`,
+          );
+        }
+        if (b) seen.add(b);
+      }
+    }
+
+    // Materialize the route as request_steps. Sprint 15.8: per-step procedure +
+    // body_id snapshotted from the matrix row (frozen for the request lifetime).
+    // Sprint 15.10: per-step body_id from the body_by_level map (multi-tier).
     for (let i = 0; i < route.length; i++) {
       await client.query(
         `INSERT INTO request_steps
-           (request_id, step_index, target_office, doa_snapshot, procedure, deadline, status)
-         VALUES ($1, $2, $3, $4, 'unilateral', now() + $5::interval, 'pending')`,
-        [requestId, i, route[i], snapshot, `${deadlineMs} milliseconds`],
+           (request_id, step_index, target_office, doa_snapshot, procedure, deadline, status, body_id)
+         VALUES ($1, $2, $3, $4, $5, now() + $6::interval, 'pending', $7)`,
+        [requestId, i, route[i], snapshot, matrixRow.procedure, `${deadlineMs} milliseconds`, stepBodies[i]],
+      );
+    }
+
+    // Sprint 15.10 — snapshot the body_by_level map onto the request so lapsed-
+    // escalation honors snapshot-the-rules (master design B.7).
+    if (matrixRow.procedure === 'collective' && bodyByLevel.size > 0) {
+      const snapshotObj: Record<string, string> = {};
+      for (const [lvl, bid] of bodyByLevel.entries()) snapshotObj[lvl] = bid;
+      await client.query(
+        `UPDATE requests SET body_by_level = $1 WHERE request_id = $2`,
+        [JSON.stringify(snapshotObj), requestId],
       );
     }
 
@@ -253,6 +332,19 @@ export async function submitRequest(params: {
       payload: { subject_id: subjectId, kind, weight, route_shape: matrixRow.route_shape, route },
     });
 
+    // Sprint 15.8 — if step 0 is collective, auto-propose its motion in the same txn.
+    // Sprint 15.10 — step 0's body comes from stepBodies[0] (per-level resolution),
+    // not the legacy matrixRow.body_id single column.
+    if (matrixRow.procedure === 'collective') {
+      await proposeStepMotion(client, {
+        request_id: requestId,
+        step_index: 0,
+        body_id: stepBodies[0]!,
+        topic_id: topicId,
+        deadline_minutes: STEP_DEADLINE_MINUTES,
+      });
+    }
+
     await client.query('COMMIT');
 
     return { status: 'submitted', request_id: requestId, route, current_step: 0 };
@@ -263,6 +355,65 @@ export async function submitRequest(params: {
   } finally {
     client.release();
   }
+}
+
+// ── §3.2.1 proposeStepMotion (internal, Sprint 15.8) ───────────────────────
+
+/**
+ * Auto-propose a motion for a collective request step. Runs inside the caller's
+ * transaction. Inserts a motions row + appendEvent motion.proposed + UPDATE
+ * request_steps SET status='motion_proposed', motion_id=<new id>.
+ *
+ * The proposer is the reserved system actor 'system:request-step-proposer'. Body
+ * members second + vote per existing 15.4 rules. Motion deadline is independent
+ * of the step deadline (typically equal in 15.8 — both default to
+ * STEP_DEADLINE_MINUTES from now).
+ *
+ * Lock order: caller already holds request lock; this fn does not lock additional
+ * rows besides the motions INSERT + request_steps UPDATE (both via row-level locks
+ * implicitly).
+ */
+async function proposeStepMotion(
+  client: PoolClient,
+  args: {
+    request_id: string;
+    step_index: number;
+    body_id: string;
+    topic_id: string;
+    deadline_minutes: number;
+  },
+): Promise<{ motion_id: string }> {
+  const subjectRef = `request_step:${args.request_id}:${args.step_index}`;
+  const proposerId = 'system:request-step-proposer';
+  const ins = await client.query<{ motion_id: string; deadline: Date }>(
+    `INSERT INTO motions (body_id, topic_id, subject_ref, status, proposed_by, deadline)
+     VALUES ($1, $2, $3, 'proposed', $4, now() + ($5 * interval '1 minute'))
+     RETURNING motion_id, deadline`,
+    [args.body_id, args.topic_id, subjectRef, proposerId, args.deadline_minutes],
+  );
+  const motionId = ins.rows[0].motion_id;
+  const deadline = ins.rows[0].deadline.toISOString();
+  await appendEvent(client, {
+    topic_id: args.topic_id,
+    actor_id: proposerId,
+    type: 'motion.proposed',
+    subject_type: 'motion',
+    subject_id: motionId,
+    payload: {
+      body_id: args.body_id,
+      subject_ref: subjectRef,
+      deadline,
+      source: 'request_step',
+      request_id: args.request_id,
+      step_index: args.step_index,
+    },
+  });
+  await client.query(
+    `UPDATE request_steps SET status='motion_proposed', motion_id=$1
+       WHERE request_id=$2 AND step_index=$3`,
+    [motionId, args.request_id, args.step_index],
+  );
+  return { motion_id: motionId };
 }
 
 // ── §3.3 resolveArtifact (internal) ──────────────────────────────────────────
@@ -361,6 +512,9 @@ export async function decideStep(params: {
   if (!requestId || !actorId || !decision) {
     throw new ContextHubError('BAD_REQUEST', 'request_id, actor_id, decision are required');
   }
+  if (actorId.length > 256) {
+    throw new ContextHubError('BAD_REQUEST', 'actor_id must be at most 256 characters');
+  }
   if (!['endorse', 'return', 'reject'].includes(decision)) {
     throw new ContextHubError('BAD_REQUEST', `decision must be one of: endorse, return, reject`);
   }
@@ -375,14 +529,18 @@ export async function decideStep(params: {
     await client.query('BEGIN');
 
     // ── (request) row lock ───────────────────────────────────────────────────
+    // Sprint 15.7 — also select kind + execution_task for chain handler.
     const reqRes = await client.query<{
       topic_id: string;
       status: string;
       current_step: number;
       subject_id: string;
       submitted_by: string;
+      route_shape: string;
+      kind: string;
+      execution_task: ExecutionTaskBlob | null;
     }>(
-      `SELECT topic_id, status, current_step, subject_id, submitted_by
+      `SELECT topic_id, status, current_step, subject_id, submitted_by, route_shape, kind, execution_task
          FROM requests WHERE request_id=$1 FOR UPDATE`,
       [requestId],
     );
@@ -402,6 +560,9 @@ export async function decideStep(params: {
     const topicId = req.topic_id;
     const artifactId = req.subject_id;
     const submittedBy = req.submitted_by;
+    const routeShape = req.route_shape;
+    const requestKind = req.kind;
+    const executionTaskBlob: ExecutionTaskBlob | null = req.execution_task;
 
     // B3 — closed-topic plain read (no lock — preserves lock order; the seal in
     // appendEvent is the authoritative guard for a mid-transaction close race)
@@ -415,12 +576,24 @@ export async function decideStep(params: {
     }
 
     // ── (request_step) row lock ──────────────────────────────────────────────
-    const stepRes = await client.query<{ target_office: string; status: string }>(
-      `SELECT target_office, status FROM request_steps
+    // Sprint 15.8 — also select `procedure` so we can early-reject collective.
+    const stepRes = await client.query<{ target_office: string; status: string; procedure: string }>(
+      `SELECT target_office, status, procedure FROM request_steps
          WHERE request_id=$1 AND step_index=$2 FOR UPDATE`,
       [requestId, stepIndex],
     );
-    if (stepRes.rowCount === 0 || stepRes.rows[0].status !== 'pending') {
+    if (stepRes.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return { status: 'conflict' };
+    }
+    // Sprint 15.8 — collective steps are decided by motion tally, not decideStep.
+    // This check fires BEFORE the status check because a collective step's status
+    // is 'motion_proposed' (not 'pending'), and the user needs the clearer error.
+    if (stepRes.rows[0].procedure === 'collective') {
+      await client.query('ROLLBACK');
+      return { status: 'procedure_is_collective' };
+    }
+    if (stepRes.rows[0].status !== 'pending') {
       await client.query('ROLLBACK');
       return { status: 'conflict' };
     }
@@ -444,6 +617,20 @@ export async function decideStep(params: {
     if (actorLevel !== targetOffice) {
       await client.query('ROLLBACK');
       return { status: 'not_authorized' };
+    }
+
+    // Sprint 15.6 — distinct-endorser: for counter_sign routes, reject if actor already
+    // decided any prior step (DEFERRED-013).
+    if (routeShape === 'counter_sign') {
+      const prior = await client.query<{ decided_by: string }>(
+        `SELECT decided_by FROM request_steps
+           WHERE request_id=$1 AND step_index<$2 AND decided_by IS NOT NULL`,
+        [requestId, stepIndex],
+      );
+      if (prior.rows.some((r) => r.decided_by === actorId)) {
+        await client.query('ROLLBACK');
+        return { status: 'repeat_endorser' };
+      }
     }
 
     // ── Map decision → step status ───────────────────────────────────────────
@@ -500,16 +687,38 @@ export async function decideStep(params: {
           subject_id: requestId,
           payload: { step_index: stepIndex, decision, decided_by: actorId },
         });
+        // Sprint 15.7 — primitive-outcome chaining (DEFERRED-019). Build params,
+        // emit chain (posted vs task.deferred), include result in request.resolved.
+        // CHAINED_TASK_DEPENDENCY_INVALID throws → outer try/catch ROLLBACKs the
+        // whole txn; the request remains 'open' (matches CLARIFY AC10).
+        const chainParams = buildChainedTaskParams({
+          source: 'request',
+          source_id: requestId,
+          topic_id: topicId,
+          kind: requestKind,
+          blob: executionTaskBlob,
+          acting_actor: actorId,
+        });
+        const chainResult = await emitChain(client, {
+          topic_id: topicId,
+          source_event: { type: 'request.resolved', source_id: requestId },
+          actor_id: actorId,
+          params: chainParams,
+        });
         await appendEvent(client, {
           topic_id: topicId,
           actor_id: actorId,
           type: 'request.resolved',
           subject_type: 'request',
           subject_id: requestId,
-          payload: { outcome: 'approved', artifact_advanced: artResult.artifact_advanced },
+          payload: {
+            outcome: 'approved',
+            artifact_advanced: artResult.artifact_advanced,
+            chain: chainResult,
+          },
         });
         await client.query('COMMIT');
-        return { status: 'approved' };
+        return { status: 'approved', chain: chainResult };
       }
     } else if (decision === 'return') {
       await client.query(
@@ -555,7 +764,7 @@ export async function decideStep(params: {
         type: 'request.resolved',
         subject_type: 'request',
         subject_id: requestId,
-        payload: { outcome: 'rejected' },
+        payload: { outcome: 'rejected', artifact_advanced: false },
       });
       await client.query('COMMIT');
       return { status: 'rejected' };
@@ -650,6 +859,16 @@ export async function listRequests(params: {
   status?: string;
 }): Promise<ListRequestsResult> {
   const pool = getDbPool();
+
+  // DEFERRED-014 §3.1 — surface NOT_FOUND for unknown topic instead of silently returning []
+  const topicCheck = await pool.query<{ topic_id: string }>(
+    `SELECT topic_id FROM topics WHERE topic_id=$1`,
+    [params.topic_id],
+  );
+  if ((topicCheck.rowCount ?? 0) === 0) {
+    throw new ContextHubError('NOT_FOUND', `topic ${params.topic_id} not found`);
+  }
+
   const args: unknown[] = [params.topic_id];
   let statusFilter = '';
   if (params.status) {
@@ -732,4 +951,281 @@ export async function listRequests(params: {
       steps: stepsByRequest.get(r.request_id) ?? [],
     })),
   };
+}
+
+// ── §3.7 applyMotionToStep — Sprint 15.8 collective wiring (DEFERRED-018) ───
+
+/**
+ * Apply a motion's tally outcome to its linked request step. Called by
+ * tallyMotion (user-driven) AND sweepExpiredMotions (auto-tally) AFTER they
+ * emit `motion.tallied` — both hold the motion FOR UPDATE so we serialize.
+ *
+ * Outcome → step transition (DESIGN §2.8):
+ *   carried → step.endorsed, advance to next step OR finalize approved (with 15.7 chain)
+ *   failed  → step.returned, request.returned, resolveArtifact(return)
+ *   lapsed  → DEGRADE-TO-UNILATERAL escalation (F1 fix): re-target step up one
+ *             level, procedure='unilateral', body_id=NULL, fresh deadline.
+ *             At authority tier → request.escalation_exhausted.
+ *   vetoed  → step.rejected, request.rejected, artifact untouched
+ *
+ * Lock order: motion → request → request_step → artifact → topics (linear).
+ * All inside the caller's transaction.
+ */
+export async function applyMotionToStep(
+  client: PoolClient,
+  args: {
+    motion_id: string;
+    request_id: string;
+    step_index: number;
+    target_office: string;
+    outcome: 'carried' | 'failed' | 'lapsed' | 'vetoed';
+    topic_id: string;
+  },
+): Promise<void> {
+  const { motion_id, request_id, step_index, target_office, outcome, topic_id } = args;
+  const motionRef = `motion:${motion_id}`;
+
+  // Load the request — kind, subject_id, execution_task, submitted_by, route_shape.
+  // Sprint 15.10 — also body_by_level for lapsed-escalation snapshot-read (F1 fix).
+  const reqRes = await client.query<{
+    status: string;
+    kind: string;
+    subject_id: string;
+    submitted_by: string;
+    route_shape: string;
+    execution_task: ExecutionTaskBlob | null;
+    body_by_level: Record<string, string> | null;
+  }>(
+    `SELECT status, kind, subject_id, submitted_by, route_shape, execution_task, body_by_level
+       FROM requests WHERE request_id=$1 FOR UPDATE`,
+    [request_id],
+  );
+  if (reqRes.rowCount === 0 || reqRes.rows[0].status !== 'open') {
+    // Request already resolved by some other path (or vanished). Nothing to do.
+    return;
+  }
+  const req = reqRes.rows[0];
+
+  if (outcome === 'carried') {
+    // step.endorsed
+    await client.query(
+      `UPDATE request_steps SET status='endorsed', decided_by=$1, decided_at=now()
+         WHERE request_id=$2 AND step_index=$3`,
+      [motionRef, request_id, step_index],
+    );
+
+    // Is there a next step?
+    const nextRes = await client.query<{ procedure: string; body_id: string | null }>(
+      `SELECT procedure, body_id FROM request_steps WHERE request_id=$1 AND step_index=$2`,
+      [request_id, step_index + 1],
+    );
+
+    if ((nextRes.rowCount ?? 0) > 0) {
+      // Activate next step with fresh deadline.
+      await client.query(
+        `UPDATE request_steps SET deadline = now() + interval '${STEP_DEADLINE_MINUTES} minutes'
+           WHERE request_id=$1 AND step_index=$2`,
+        [request_id, step_index + 1],
+      );
+      await client.query(
+        `UPDATE requests SET current_step=$1 WHERE request_id=$2`,
+        [step_index + 1, request_id],
+      );
+      await appendEvent(client, {
+        topic_id,
+        actor_id: motionRef,
+        type: 'request.step_decided',
+        subject_type: 'request',
+        subject_id: request_id,
+        payload: { step_index, decision: 'endorse', decided_by: motionRef },
+      });
+      // If next step is collective, propose its motion in the same txn.
+      if (nextRes.rows[0].procedure === 'collective' && nextRes.rows[0].body_id) {
+        await proposeStepMotion(client, {
+          request_id,
+          step_index: step_index + 1,
+          body_id: nextRes.rows[0].body_id,
+          topic_id,
+          deadline_minutes: STEP_DEADLINE_MINUTES,
+        });
+      }
+      return;
+    }
+
+    // Last step endorsed → approved + 15.7 chain.
+    await client.query(`UPDATE requests SET status='approved' WHERE request_id=$1`, [request_id]);
+    const artResult = await resolveArtifact(client, 'approve', req.subject_id, motionRef);
+    await appendEvent(client, {
+      topic_id,
+      actor_id: motionRef,
+      type: 'request.step_decided',
+      subject_type: 'request',
+      subject_id: request_id,
+      payload: { step_index, decision: 'endorse', decided_by: motionRef },
+    });
+    // 15.7 chain
+    const chainParams = buildChainedTaskParams({
+      source: 'request',
+      source_id: request_id,
+      topic_id,
+      kind: req.kind,
+      blob: req.execution_task,
+      acting_actor: motionRef,
+    });
+    const chainResult = await emitChain(client, {
+      topic_id,
+      source_event: { type: 'request.resolved', source_id: request_id },
+      actor_id: motionRef,
+      params: chainParams,
+    });
+    await appendEvent(client, {
+      topic_id,
+      actor_id: motionRef,
+      type: 'request.resolved',
+      subject_type: 'request',
+      subject_id: request_id,
+      payload: {
+        outcome: 'approved',
+        artifact_advanced: artResult.artifact_advanced,
+        chain: chainResult,
+      },
+    });
+    return;
+  }
+
+  if (outcome === 'failed') {
+    await client.query(
+      `UPDATE request_steps SET status='returned', decided_by=$1, decided_at=now()
+         WHERE request_id=$2 AND step_index=$3`,
+      [motionRef, request_id, step_index],
+    );
+    await client.query(`UPDATE requests SET status='returned' WHERE request_id=$1`, [request_id]);
+    const artResult = await resolveArtifact(client, 'return', req.subject_id, motionRef);
+    await appendEvent(client, {
+      topic_id,
+      actor_id: motionRef,
+      type: 'request.step_decided',
+      subject_type: 'request',
+      subject_id: request_id,
+      payload: { step_index, decision: 'return', decided_by: motionRef },
+    });
+    await appendEvent(client, {
+      topic_id,
+      actor_id: motionRef,
+      type: 'request.resolved',
+      subject_type: 'request',
+      subject_id: request_id,
+      payload: { outcome: 'returned', artifact_advanced: artResult.artifact_advanced },
+    });
+    return;
+  }
+
+  if (outcome === 'vetoed') {
+    await client.query(
+      `UPDATE request_steps SET status='rejected', decided_by=$1, decided_at=now()
+         WHERE request_id=$2 AND step_index=$3`,
+      [motionRef, request_id, step_index],
+    );
+    await client.query(`UPDATE requests SET status='rejected' WHERE request_id=$1`, [request_id]);
+    // Artifact untouched (reject semantics).
+    await appendEvent(client, {
+      topic_id,
+      actor_id: motionRef,
+      type: 'request.step_decided',
+      subject_type: 'request',
+      subject_id: request_id,
+      payload: { step_index, decision: 'reject', decided_by: motionRef, reason: 'vetoed' },
+    });
+    await appendEvent(client, {
+      topic_id,
+      actor_id: motionRef,
+      type: 'request.resolved',
+      subject_type: 'request',
+      subject_id: request_id,
+      payload: { outcome: 'rejected', artifact_advanced: false },
+    });
+    return;
+  }
+
+  // outcome === 'lapsed' — Sprint 15.10 re-propose-or-degrade escalation
+  // (Sprint 15.8 F1 was degrade-only; 15.10 reads body_by_level snapshot
+  // and re-proposes under the next level's body when available.)
+  const currentRank = LEVEL_RANK[target_office];
+  if (currentRank === LEVEL_RANK.authority) {
+    // Already at top — escalation exhausted. Payload shape matches 15.3 sweep
+    // `{ exhausted: true }` for consumer consistency.
+    await client.query(
+      `UPDATE request_steps SET status='escalated', decided_by=$1, decided_at=now()
+         WHERE request_id=$2 AND step_index=$3`,
+      [motionRef, request_id, step_index],
+    );
+    await client.query(
+      `UPDATE requests SET status='escalation_exhausted' WHERE request_id=$1`,
+      [request_id],
+    );
+    await appendEvent(client, {
+      topic_id,
+      actor_id: motionRef,
+      type: 'request.step_escalated',
+      subject_type: 'request',
+      subject_id: request_id,
+      // Sprint 15.10 — escalated_to replaces 15.8's degraded_to field (F2 unify).
+      payload: { step_index, exhausted: true, reason: 'motion_lapsed', escalated_to: 'unilateral' },
+    });
+    await appendEvent(client, {
+      topic_id,
+      actor_id: motionRef,
+      type: 'request.resolved',
+      subject_type: 'request',
+      subject_id: request_id,
+      payload: { outcome: 'escalation_exhausted', artifact_advanced: false },
+    });
+    return;
+  }
+  // Non-top tier — degrade to unilateral at the next level.
+  const newLevel = LEVELS_ASC[currentRank + 1];
+  // Sprint 15.10 — read body_by_level snapshot to find next level's body.
+  const snapshotMap = req.body_by_level ?? null;
+  const nextBody = snapshotMap ? snapshotMap[newLevel] ?? null : null;
+
+  if (nextBody) {
+    // Q2 (a) — re-propose under next level's collective body.
+    await client.query(
+      `UPDATE request_steps SET status='motion_proposed', target_office=$1,
+         procedure='collective', body_id=$2, motion_id=NULL,
+         deadline=now() + interval '${STEP_DEADLINE_MINUTES} minutes',
+         decided_by=NULL, decided_at=NULL
+         WHERE request_id=$3 AND step_index=$4`,
+      [newLevel, nextBody, request_id, step_index],
+    );
+    await appendEvent(client, {
+      topic_id,
+      actor_id: motionRef,
+      type: 'request.step_escalated',
+      subject_type: 'request',
+      subject_id: request_id,
+      payload: { step_index, from_office: target_office, to_office: newLevel, reason: 'motion_lapsed', escalated_to: 'collective', body_id: nextBody },
+    });
+    await proposeStepMotion(client, {
+      request_id, step_index, body_id: nextBody, topic_id, deadline_minutes: STEP_DEADLINE_MINUTES,
+    });
+  } else {
+    // Q2 fallback — degrade to unilateral (15.8 behavior).
+    await client.query(
+      `UPDATE request_steps SET status='pending', target_office=$1, procedure='unilateral',
+         body_id=NULL, motion_id=NULL, deadline=now() + interval '${STEP_DEADLINE_MINUTES} minutes',
+         decided_by=NULL, decided_at=NULL
+         WHERE request_id=$2 AND step_index=$3`,
+      [newLevel, request_id, step_index],
+    );
+    await appendEvent(client, {
+      topic_id,
+      actor_id: motionRef,
+      type: 'request.step_escalated',
+      subject_type: 'request',
+      subject_id: request_id,
+      // Sprint 15.10 — escalated_to replaces 15.8's degraded_to field (F2 unify).
+      payload: { step_index, from_office: target_office, to_office: newLevel, reason: 'motion_lapsed', escalated_to: 'unilateral' },
+    });
+  }
 }

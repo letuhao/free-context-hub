@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { requireProjectScope } from '../middleware/requireResourceScope.js';
 import { streamText, tool, stepCountIs, convertToModelMessages } from 'ai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import * as z from 'zod/v4';
@@ -16,7 +17,7 @@ const logger = createModuleLogger('chat');
 const router = Router();
 
 /** POST /api/chat — AI chat with streaming + tool calling */
-router.post('/', async (req, res, next) => {
+router.post('/', requireProjectScope('body'), async (req, res, next) => {
   try {
     const env = getEnv();
 

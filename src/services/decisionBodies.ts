@@ -89,6 +89,14 @@ export async function createBody(params: {
   if (!Array.isArray(vetoHolders) || vetoHolders.some((v) => typeof v !== 'string' || v.trim().length === 0)) {
     throw new ContextHubError('BAD_REQUEST', 'veto_holders must be an array of non-empty strings');
   }
+  // Sprint 15.11 (DEFERRED-017 / 15.4 REVIEW-CODE LOW-3) — bound veto_holders array
+  // length + element length (input hygiene on the body-creation surface).
+  if (vetoHolders.length > 64) {
+    throw new ContextHubError('BAD_REQUEST', 'veto_holders must contain at most 64 entries');
+  }
+  if (vetoHolders.some((v) => v.length > MAX_FIELD_LEN)) {
+    throw new ContextHubError('BAD_REQUEST', `each veto_holder must be at most ${MAX_FIELD_LEN} characters`);
+  }
   // review-impl MED-1 — trim each veto-holder id before storage so it matches a
   // trimmed actor_id at vetoMotion time. Every other actor field in the sprint
   // (created_by, body_members.actor_id, proposed_by, castVote/vetoMotion actor_id)

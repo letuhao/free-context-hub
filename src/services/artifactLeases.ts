@@ -124,8 +124,22 @@ export async function claimArtifact(p: ClaimParams): Promise<ClaimResult> {
       retry_after_seconds: attemptCheck.retry_after_seconds,
     };
   }
+  return _claimWithRetry(p);
+}
+
+/**
+ * Retry loop around `_claimArtifactOnce`. Extracted so the otherwise-unreachable
+ * `race_exhausted` branch is testable: the 23505-race + expired-incumbent path
+ * that yields `{ __retry: true }` is a microsecond-wide DB race the lazy step-1
+ * DELETE cleans before any retry can re-observe it. Tests inject `once` to drive
+ * exhaustion deterministically; the default keeps production behavior identical.
+ */
+export async function _claimWithRetry(
+  p: ClaimParams,
+  once: (p: ClaimParams) => Promise<ClaimResult | { __retry: true }> = _claimArtifactOnce,
+): Promise<ClaimResult> {
   for (let attempt = 0; attempt <= MAX_INTERNAL_RACE_RETRIES; attempt++) {
-    const result = await _claimArtifactOnce(p);
+    const result = await once(p);
     if (!('__retry' in result)) return result;
     await new Promise((r) => setImmediate(r));
   }

@@ -59,11 +59,28 @@ export type InductionPack = {
   has_more: boolean;
 };
 
+export type ForceLapsedCounts = {
+  claims: number;
+  requests: number;
+  motions: number;
+  disputes: number;
+  intake_items: number;
+};
+
 export type CloseResult = {
   topic_id: string;
   status: 'closed';
   already_closed: boolean;
+  force_lapsed: ForceLapsedCounts;
 };
+
+export type GrantLevelResult =
+  | { status: 'granted'; level: string; prior_level: string }
+  | { status: 'topic_not_found' }
+  | { status: 'topic_closed' }
+  | { status: 'self_grant_forbidden' }
+  | { status: 'not_authorized' }
+  | { status: 'target_not_participant' };
 
 /**
  * Internal — topic record + participant roster in ONE query (one snapshot).
@@ -211,8 +228,8 @@ export async function joinTopic(params: {
   try {
     // ── txn 1: the join writes ──
     await client.query('BEGIN');
-    const topicRes = await client.query<{ project_id: string; status: string }>(
-      `SELECT project_id, status FROM topics WHERE topic_id = $1 FOR UPDATE`,
+    const topicRes = await client.query<{ project_id: string; status: string; created_by: string }>(
+      `SELECT project_id, status, created_by FROM topics WHERE topic_id = $1 FOR UPDATE`,
       [topicId],
     );
     if (topicRes.rowCount === 0) {
@@ -222,6 +239,21 @@ export async function joinTopic(params: {
     if (topicRes.rows[0].status === 'closed') {
       throw new ContextHubError('BAD_REQUEST', `topic ${topicId} is closed`);
     }
+
+    // Sprint 15.11 (DEFERRED-015) — level is no longer self-asserted. The topic
+    // OWNER (created_by) bootstraps the grant chain: their first join may set any
+    // level (typically 'authority'). Every OTHER joiner is seated at 'execution'
+    // and must be raised by the owner / an authority via grantLevel — a non-owner
+    // requesting a higher level is an honest BAD_REQUEST (not a silent downgrade).
+    // Enforced ALWAYS (auth-on and auth-off) — keyed on actor_id (Q2 posture A).
+    const isOwner = actorId === topicRes.rows[0].created_by;
+    if (!isOwner && level !== 'execution') {
+      throw new ContextHubError(
+        'BAD_REQUEST',
+        `level_grant_required: non-owner joiners are seated at 'execution'; request a grant from the topic owner or an authority (grantLevel)`,
+      );
+    }
+    const grantedBy = isOwner ? actorId : null;
 
     // upsert the project-scoped actor; RETURNING type is atomic (no TOCTOU)
     const actorRes = await client.query<{ type: string }>(
@@ -238,13 +270,15 @@ export async function joinTopic(params: {
       );
     }
 
-    // idempotent participant insert — re-join adds no row and emits no event
+    // idempotent participant insert — re-join adds no row and emits no event.
+    // Sprint 15.11 — owner seats at their requested level + granted_by=self;
+    // everyone else at 'execution' (granted_by NULL until raised via grantLevel).
     const partRes = await client.query(
-      `INSERT INTO topic_participants (topic_id, actor_id, level)
-       VALUES ($1, $2, $3)
+      `INSERT INTO topic_participants (topic_id, actor_id, level, granted_by)
+       VALUES ($1, $2, $3, $4)
        ON CONFLICT (topic_id, actor_id) DO NOTHING
        RETURNING actor_id`,
-      [topicId, actorId, level],
+      [topicId, actorId, isOwner ? level : 'execution', grantedBy],
     );
     if ((partRes.rowCount ?? 0) > 0) {
       await client.query(
@@ -257,15 +291,21 @@ export async function joinTopic(params: {
         type: 'topic.actor_joined',
         subject_type: 'topic',
         subject_id: topicId,
-        payload: { level, actor_type: actorType },
+        payload: { level: isOwner ? level : 'execution', actor_type: actorType },
       });
     }
     await client.query('COMMIT');
 
     // ── txn 2: coherent induction-pack read — snapshot isolation, no write lock ──
+    // Sprint 15.12 (DEFERRED-010) — a FRESH join (since_seq=0) uses TAIL mode so the
+    // pack carries the most-recent events (incl. the joiner's own topic.actor_joined)
+    // rather than the oldest 1000 on a large topic. A re-prime (since_seq>0) keeps the
+    // forward cursor-continuation contract.
     await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
     const tr = await fetchTopicWithRoster(client, topicId);
-    const ev = await replayEvents({ topic_id: topicId, since_seq: sinceSeq }, client);
+    const ev = sinceSeq === 0
+      ? await replayEvents({ topic_id: topicId, tail: true }, client)
+      : await replayEvents({ topic_id: topicId, since_seq: sinceSeq }, client);
     await client.query('COMMIT');
     if (!tr) {
       // Unreachable: the topic existed under FOR UPDATE in txn 1 and is never deleted.
@@ -287,6 +327,112 @@ export async function joinTopic(params: {
   }
 }
 
+/**
+ * Sprint 15.11 (DEFERRED-015) — grant/raise/lower a participant's level. The
+ * level-grant chain that makes `topic_participants.level` authoritative (no longer
+ * self-asserted). Enforced ALWAYS (auth-on and auth-off) — keyed on actor_id.
+ *
+ * Authorization: the grantor must be the topic OWNER (created_by — a permanent
+ * grant root, immune to demotion) OR an existing `authority` participant. Self-grant
+ * (grantor raising own level) is forbidden — the owner is authority by charter and
+ * needs no self-grant. `authority` is a mutually-trusted role: an authority may
+ * demote a peer; the owner is the recovery tiebreaker (DESIGN §2.2).
+ *
+ * Lock order: topic row (FOR UPDATE) → participant rows. No motion/request locks.
+ */
+export async function grantLevel(params: {
+  topic_id: string;
+  actor_id: string;
+  level: string;
+  granted_by: string;
+}): Promise<GrantLevelResult> {
+  const topicId = (params.topic_id ?? '').trim();
+  const targetActor = (params.actor_id ?? '').trim();
+  const level = params.level;
+  const grantedBy = (params.granted_by ?? '').trim();
+
+  if (!topicId || !targetActor || !grantedBy) {
+    throw new ContextHubError('BAD_REQUEST', 'topic_id, actor_id, granted_by are all required');
+  }
+  if (!LEVEL_SET.has(level)) {
+    throw new ContextHubError('BAD_REQUEST', `level must be one of: ${LEVELS.join(', ')}`);
+  }
+
+  const pool = getDbPool();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // ── topic row lock ──
+    const topicRes = await client.query<{ created_by: string; status: string }>(
+      `SELECT created_by, status FROM topics WHERE topic_id=$1 FOR UPDATE`,
+      [topicId],
+    );
+    if (topicRes.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return { status: 'topic_not_found' };
+    }
+    const { created_by: ownerId, status } = topicRes.rows[0];
+    if (status === 'closed' || status === 'closing') {
+      await client.query('ROLLBACK');
+      return { status: 'topic_closed' };
+    }
+
+    // self-grant guard — an actor may not raise their own level
+    if (grantedBy === targetActor) {
+      await client.query('ROLLBACK');
+      return { status: 'self_grant_forbidden' };
+    }
+
+    // authorize the grantor: owner (by created_by, level-independent) OR an
+    // existing 'authority' participant.
+    let authorized = grantedBy === ownerId;
+    if (!authorized) {
+      const grantorRes = await client.query<{ level: string }>(
+        `SELECT level FROM topic_participants WHERE topic_id=$1 AND actor_id=$2`,
+        [topicId, grantedBy],
+      );
+      authorized = grantorRes.rowCount === 1 && grantorRes.rows[0].level === 'authority';
+    }
+    if (!authorized) {
+      await client.query('ROLLBACK');
+      return { status: 'not_authorized' };
+    }
+
+    // target must be an existing participant
+    const targetRes = await client.query<{ level: string }>(
+      `SELECT level FROM topic_participants WHERE topic_id=$1 AND actor_id=$2 FOR UPDATE`,
+      [topicId, targetActor],
+    );
+    if (targetRes.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return { status: 'target_not_participant' };
+    }
+    const priorLevel = targetRes.rows[0].level;
+
+    await client.query(
+      `UPDATE topic_participants SET level=$1, granted_by=$2 WHERE topic_id=$3 AND actor_id=$4`,
+      [level, grantedBy, topicId, targetActor],
+    );
+    await appendEvent(client, {
+      topic_id: topicId,
+      actor_id: grantedBy,
+      type: 'topic.level_granted',
+      subject_type: 'topic',
+      subject_id: topicId,
+      payload: { actor_id: targetActor, level, granted_by: grantedBy, prior_level: priorLevel },
+    });
+    await client.query('COMMIT');
+    return { status: 'granted', level, prior_level: priorLevel };
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    logger.error({ err: String(err) }, 'grantLevel failed');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 /** Get a topic's record + full participant roster (one-query snapshot). */
 export async function getTopic(params: { topic_id: string }): Promise<TopicWithRoster> {
   const topicId = (params.topic_id ?? '').trim();
@@ -297,53 +443,275 @@ export async function getTopic(params: { topic_id: string }): Promise<TopicWithR
 }
 
 /**
- * Close a topic. Atomic `chartered|active → closed`: emits `topic.closed` as the
- * final event, then flips the status (the topics-row lock held through both
- * makes `topic.closed` provably the last event). Idempotent — closing an
- * already-closed topic returns `already_closed:true` and emits no event.
+ * Close a topic — three-phase drain (DEFERRED-012, Sprint 15.6).
+ *
+ * Phase 1: `active|chartered → closing` (freeze Board — no new items can be posted).
+ * Phase 2: force-lapse all in-flight items (claims, requests, motions, disputes,
+ *          intake_items) in individual short transactions (one per item). Optimistic
+ *          updates (no FOR UPDATE on item rows) avoid deadlock with concurrent
+ *          decideStep / appendEvent callers (see design §1.3).
+ * Phase 3: `closing → closed` — seals the event log (appendEvent rejects on 'closed').
+ *
+ * Idempotent: already-closed → already_closed:true; already-closing → re-runs Phase 2+3.
  */
 export async function closeTopic(params: {
   topic_id: string;
   actor_id: string;
+  /**
+   * Sprint 15.7 — optional per-call statement timeout. When set, every internal
+   * pool.connect() inside closeTopic runs `SET statement_timeout = '<ms>ms'`
+   * immediately after acquiring the connection. Used by sweepStuckClosingTopics
+   * to bound the advisory-lock hold time during recovery sweeps. NULL/undefined
+   * leaves the default (15.6 behavior).
+   */
+  statementTimeoutMs?: number;
 }): Promise<CloseResult> {
   const topicId = (params.topic_id ?? '').trim();
   const actorId = (params.actor_id ?? '').trim();
+  const stmtTimeoutMs = params.statementTimeoutMs;
   if (!topicId || !actorId) {
     throw new ContextHubError('BAD_REQUEST', 'topic_id and actor_id are required');
   }
 
   const pool = getDbPool();
-  const client = await pool.connect();
+  const ZERO: ForceLapsedCounts = { claims: 0, requests: 0, motions: 0, disputes: 0, intake_items: 0 };
+
+  // Sprint 15.7 helper — apply statement_timeout to a freshly-acquired client.
+  // SET (not SET LOCAL) so subsequent BEGIN/COMMIT cycles on the same connection
+  // inherit it. Each phase / per-item loop allocates its own client, so this is
+  // run repeatedly throughout closeTopic.
+  const applyStmtTimeout = async (c: import('pg').PoolClient): Promise<void> => {
+    if (stmtTimeoutMs !== undefined && stmtTimeoutMs > 0) {
+      await c.query(`SET statement_timeout = ${Number(stmtTimeoutMs)}`);
+    }
+  };
+
+  // ── Phase 1: freeze (active|chartered → closing) ──────────────────────────
+  {
+    const c1 = await pool.connect();
+    try {
+      await applyStmtTimeout(c1);
+      await c1.query('BEGIN');
+      const res = await c1.query<{ status: string }>(
+        `SELECT status FROM topics WHERE topic_id=$1 FOR UPDATE`,
+        [topicId],
+      );
+      if (res.rowCount === 0) {
+        await c1.query('ROLLBACK');
+        throw new ContextHubError('NOT_FOUND', `topic ${topicId} not found`);
+      }
+      const currentStatus = res.rows[0].status;
+      if (currentStatus === 'closed') {
+        await c1.query('ROLLBACK');
+        return { topic_id: topicId, status: 'closed', already_closed: true, force_lapsed: ZERO };
+      }
+      if (currentStatus === 'active' || currentStatus === 'chartered') {
+        await c1.query(`UPDATE topics SET status='closing' WHERE topic_id=$1`, [topicId]);
+        await appendEvent(c1, {
+          topic_id: topicId, actor_id: actorId,
+          type: 'topic.closing', subject_type: 'topic', subject_id: topicId, payload: {},
+        });
+      }
+      // status='closing' → skip Phase 1 (recovery) — fall through to Phase 2
+      await c1.query('COMMIT');
+    } catch (err) {
+      await c1.query('ROLLBACK').catch(() => {});
+      if (err instanceof ContextHubError) throw err;
+      logger.error({ err: String(err) }, 'closeTopic Phase 1 failed');
+      throw err;
+    } finally {
+      c1.release();
+    }
+  }
+
+  // ── Phase 2: drain — force-lapse all in-flight items ─────────────────────
+  // MED-3: each scan+loop is wrapped in its own try/catch so a DB error on
+  // the scan query skips that pass and lets Phase 3 seal complete. A stuck
+  // scan is worse than a partial drain — the topic must reach 'closed'.
+  const counts: ForceLapsedCounts = { claims: 0, requests: 0, motions: 0, disputes: 0, intake_items: 0 };
+
+  // 2-A: claims (→ task.abandoned)
   try {
-    await client.query('BEGIN');
-    const res = await client.query<{ status: string }>(
-      `SELECT status FROM topics WHERE topic_id = $1 FOR UPDATE`,
+    const claimRows = await pool.query<{ claim_id: string; task_id: string; actor_id: string }>(
+      `SELECT claim_id, task_id, actor_id FROM claims WHERE topic_id=$1`,
       [topicId],
     );
-    if (res.rowCount === 0) {
-      throw new ContextHubError('NOT_FOUND', `topic ${topicId} not found`);
+    for (const claim of claimRows.rows) {
+      const c = await pool.connect();
+      try {
+        await applyStmtTimeout(c);
+        await c.query('BEGIN');
+        const del = await c.query(`DELETE FROM claims WHERE claim_id=$1 RETURNING 1`, [claim.claim_id]);
+        if ((del.rowCount ?? 0) === 0) { await c.query('ROLLBACK'); continue; }
+        await c.query(`UPDATE tasks SET status='abandoned' WHERE task_id=$1`, [claim.task_id]);
+        await appendEvent(c, {
+          topic_id: topicId, actor_id: actorId,
+          type: 'claim.force_lapsed', subject_type: 'task', subject_id: claim.task_id,
+          payload: { task_id: claim.task_id, actor_id: claim.actor_id },
+        });
+        await c.query('COMMIT');
+        counts.claims++;
+      } catch (err) {
+        await c.query('ROLLBACK').catch(() => {});
+        logger.error({ err: String(err), claim_id: claim.claim_id }, 'closeTopic: claim force-lapse failed');
+      } finally { c.release(); }
     }
-    if (res.rows[0].status === 'closed') {
-      // idempotent — ROLLBACK before the early return so finally releases a clean client
-      await client.query('ROLLBACK');
-      return { topic_id: topicId, status: 'closed', already_closed: true };
-    }
-    await appendEvent(client, {
-      topic_id: topicId,
-      actor_id: actorId,
-      type: 'topic.closed',
-      subject_type: 'topic',
-      subject_id: topicId,
-      payload: {},
-    });
-    await client.query(`UPDATE topics SET status = 'closed' WHERE topic_id = $1`, [topicId]);
-    await client.query('COMMIT');
-    return { topic_id: topicId, status: 'closed', already_closed: false };
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
-    logger.error({ err: String(err) }, 'closeTopic failed');
-    throw err;
-  } finally {
-    client.release();
+  } catch (scanErr) {
+    logger.error({ err: String(scanErr) }, 'closeTopic: claim-scan failed — drain pass skipped');
   }
+
+  // 2-B: requests (open → rejected; pending steps → rejected)
+  try {
+    const reqRows = await pool.query<{ request_id: string }>(
+      `SELECT request_id FROM requests WHERE topic_id=$1 AND status='open'`,
+      [topicId],
+    );
+    for (const req of reqRows.rows) {
+      const c = await pool.connect();
+      try {
+        await applyStmtTimeout(c);
+        await c.query('BEGIN');
+        const stepsRes = await c.query(
+          `UPDATE request_steps SET status='rejected' WHERE request_id=$1 AND status='pending' RETURNING 1`,
+          [req.request_id],
+        );
+        const upd = await c.query(
+          `UPDATE requests SET status='rejected' WHERE request_id=$1 AND status='open' RETURNING 1`,
+          [req.request_id],
+        );
+        if ((upd.rowCount ?? 0) === 0) { await c.query('ROLLBACK'); continue; }
+        await appendEvent(c, {
+          topic_id: topicId, actor_id: actorId,
+          type: 'request.force_closed', subject_type: 'request', subject_id: req.request_id,
+          payload: { request_id: req.request_id, steps_rejected: stepsRes.rowCount ?? 0 },
+        });
+        await c.query('COMMIT');
+        counts.requests++;
+      } catch (err) {
+        await c.query('ROLLBACK').catch(() => {});
+        logger.error({ err: String(err), request_id: req.request_id }, 'closeTopic: request force-lapse failed');
+      } finally { c.release(); }
+    }
+  } catch (scanErr) {
+    logger.error({ err: String(scanErr) }, 'closeTopic: request-scan failed — drain pass skipped');
+  }
+
+  // 2-C: motions (proposed|seconded|balloting → lapsed)
+  try {
+    const motionRows = await pool.query<{ motion_id: string; status: string }>(
+      `SELECT motion_id, status FROM motions WHERE topic_id=$1 AND status IN ('proposed','seconded','balloting')`,
+      [topicId],
+    );
+    for (const motion of motionRows.rows) {
+      const c = await pool.connect();
+      try {
+        await applyStmtTimeout(c);
+        await c.query('BEGIN');
+        const upd = await c.query(
+          `UPDATE motions SET status='lapsed' WHERE motion_id=$1 AND status IN ('proposed','seconded','balloting') RETURNING 1`,
+          [motion.motion_id],
+        );
+        if ((upd.rowCount ?? 0) === 0) { await c.query('ROLLBACK'); continue; }
+        await appendEvent(c, {
+          topic_id: topicId, actor_id: actorId,
+          type: 'motion.force_lapsed', subject_type: 'motion', subject_id: motion.motion_id,
+          payload: { motion_id: motion.motion_id, prior_status: motion.status },
+        });
+        await c.query('COMMIT');
+        counts.motions++;
+      } catch (err) {
+        await c.query('ROLLBACK').catch(() => {});
+        logger.error({ err: String(err), motion_id: motion.motion_id }, 'closeTopic: motion force-lapse failed');
+      } finally { c.release(); }
+    }
+  } catch (scanErr) {
+    logger.error({ err: String(scanErr) }, 'closeTopic: motion-scan failed — drain pass skipped');
+  }
+
+  // 2-D: disputes (open → resolved/forced)
+  try {
+    const disputeRows = await pool.query<{ dispute_id: string }>(
+      `SELECT dispute_id FROM disputes WHERE topic_id=$1 AND status='open'`,
+      [topicId],
+    );
+    for (const dispute of disputeRows.rows) {
+      const c = await pool.connect();
+      try {
+        await applyStmtTimeout(c);
+        await c.query('BEGIN');
+        const upd = await c.query(
+          `UPDATE disputes SET status='resolved' WHERE dispute_id=$1 AND status='open' RETURNING 1`,
+          [dispute.dispute_id],
+        );
+        if ((upd.rowCount ?? 0) === 0) { await c.query('ROLLBACK'); continue; }
+        await appendEvent(c, {
+          topic_id: topicId, actor_id: actorId,
+          type: 'dispute.force_closed', subject_type: 'dispute', subject_id: dispute.dispute_id,
+          payload: { dispute_id: dispute.dispute_id, force_closed: true },
+        });
+        await c.query('COMMIT');
+        counts.disputes++;
+      } catch (err) {
+        await c.query('ROLLBACK').catch(() => {});
+        logger.error({ err: String(err), dispute_id: dispute.dispute_id }, 'closeTopic: dispute force-lapse failed');
+      } finally { c.release(); }
+    }
+  } catch (scanErr) {
+    logger.error({ err: String(scanErr) }, 'closeTopic: dispute-scan failed — drain pass skipped');
+  }
+
+  // 2-E: intake items (received → dismissed)
+  try {
+    const intakeRows = await pool.query<{ intake_id: string }>(
+      `SELECT intake_id FROM intake_items WHERE topic_id=$1 AND status='received'`,
+      [topicId],
+    );
+    for (const item of intakeRows.rows) {
+      const c = await pool.connect();
+      try {
+        await applyStmtTimeout(c);
+        await c.query('BEGIN');
+        const upd = await c.query(
+          `UPDATE intake_items SET status='dismissed' WHERE intake_id=$1 AND status='received' RETURNING 1`,
+          [item.intake_id],
+        );
+        if ((upd.rowCount ?? 0) === 0) { await c.query('ROLLBACK'); continue; }
+        await appendEvent(c, {
+          topic_id: topicId, actor_id: actorId,
+          type: 'intake.force_dismissed', subject_type: 'intake', subject_id: item.intake_id,
+          payload: { intake_id: item.intake_id },
+        });
+        await c.query('COMMIT');
+        counts.intake_items++;
+      } catch (err) {
+        await c.query('ROLLBACK').catch(() => {});
+        logger.error({ err: String(err), intake_id: item.intake_id }, 'closeTopic: intake force-lapse failed');
+      } finally { c.release(); }
+    }
+  } catch (scanErr) {
+    logger.error({ err: String(scanErr) }, 'closeTopic: intake-scan failed — drain pass skipped');
+  }
+
+  // ── Phase 3: seal (closing → closed) ─────────────────────────────────────
+  {
+    const c3 = await pool.connect();
+    try {
+      await applyStmtTimeout(c3);
+      await c3.query('BEGIN');
+      await appendEvent(c3, {
+        topic_id: topicId, actor_id: actorId,
+        type: 'topic.closed', subject_type: 'topic', subject_id: topicId, payload: {},
+      });
+      await c3.query(`UPDATE topics SET status='closed' WHERE topic_id=$1`, [topicId]);
+      await c3.query('COMMIT');
+    } catch (err) {
+      await c3.query('ROLLBACK').catch(() => {});
+      logger.error({ err: String(err) }, 'closeTopic Phase 3 (seal) failed');
+      throw err;
+    } finally {
+      c3.release();
+    }
+  }
+
+  return { topic_id: topicId, status: 'closed', already_closed: false, force_lapsed: counts };
 }

@@ -78,6 +78,7 @@ import {
   // Phase 15 Sprint 15.1: coordination substrate
   charterTopic,
   joinTopic,
+  grantLevel,
   getTopic,
   closeTopic,
   replayEvents,
@@ -99,6 +100,9 @@ import {
   addBodyMember,
   getBody,
   listBodies,
+  grantProxy,
+  revokeProxy,
+  listProxies,
   proposeMotion,
   listMotions,
   getMotion,
@@ -106,6 +110,16 @@ import {
   castVote,
   vetoMotion,
   tallyMotion,
+  // Phase 15 Sprint 15.5: Intake mailbox + Dispute resolution
+  submitIntake,
+  triageIntake,
+  dismissIntake,
+  getIntake,
+  listIntake,
+  openDispute,
+  resolveDispute,
+  getDispute,
+  listDisputes,
 } from '../core/index.js';
 import { LESSON_STATUS_ALL, LESSON_STATUS_WRITABLE } from '../constants/lessonStatus.js';
 import { formatToolResponse, OutputFormatSchema } from './formatters.js';
@@ -3154,6 +3168,34 @@ function createMcpToolsServer() {
     },
   );
 
+  // Sprint 15.11 (DEFERRED-015) — grant a participant a level. Grantor must be the
+  // topic owner (created_by) or an existing authority participant. Self-grant forbidden.
+  server.registerTool(
+    'grant_level',
+    {
+      description: 'Grant (raise or lower) a topic participant\'s level. The grantor must be the topic owner (created_by) or an existing authority participant; an actor cannot grant their own level. Makes topic_participants.level authoritative rather than self-asserted.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        topic_id: z.string().min(1),
+        actor_id: z.string().min(1).describe('The target participant whose level changes.'),
+        level: z.string().min(1).describe('"execution" | "coordination" | "authority".'),
+        granted_by: z.string().min(1).describe('The grantor actor id (owner or an authority).'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.string(),
+        level: z.string().optional(),
+        prior_level: z.string().optional(),
+      }),
+    },
+    async ({ workspace_token, topic_id, actor_id, level, granted_by, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const r = await grantLevel({ topic_id, actor_id, level, granted_by });
+      const summary = `grant_level: topic=${topic_id} target=${actor_id} level=${level} status=${r.status}`;
+      return formatToolResponse(r, summary, output_format);
+    },
+  );
+
   server.registerTool(
     'replay_topic_events',
     {
@@ -3426,6 +3468,10 @@ function createMcpToolsServer() {
         weight: z.number().int().describe('Request weight [0, 2147483647]. Selects the matrix row.'),
         procedure: z.string().optional().describe('"unilateral" (default). "collective" is Sprint 15.4.'),
         submitted_by: z.string().min(1).describe('Actor id submitting the request.'),
+        // Sprint 15.7 — optional chained-task blob (DEFERRED-019).
+        execution_task: z.unknown().optional().describe(
+          'Optional execution_task blob describing the board task to post on approval. Shape: {title?, topology?, slot?, kind?, depends_on?, raci?}. Null/omitted = derived defaults.',
+        ),
         output_format: OutputFormatSchema.default('auto_both'),
       }),
       outputSchema: z.object({
@@ -3435,7 +3481,7 @@ function createMcpToolsServer() {
         current_step: z.number().optional(),
       }),
     },
-    async ({ workspace_token, topic_id, subject_id, kind, weight, procedure, submitted_by, output_format }) => {
+    async ({ workspace_token, topic_id, subject_id, kind, weight, procedure, submitted_by, execution_task, output_format }) => {
       assertWorkspaceToken(workspace_token);
       const r = await submitRequest({
         topic_id,
@@ -3445,6 +3491,7 @@ function createMcpToolsServer() {
         weight,
         procedure: procedure ?? 'unilateral',
         submitted_by,
+        execution_task,
       });
       const summary = `submit_request: topic=${topic_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
@@ -3561,6 +3608,17 @@ function createMcpToolsServer() {
       outputSchema: z.object({
         status: z.string(),
         current_step: z.number().optional(),
+        // Sprint 15.9 (DEFERRED-021) — primitive-outcome chaining (15.7) chain
+        // result is service-side present on outcome='approved'; declared here as
+        // FLAT-OPTIONAL fields (NOT a discriminated union) to avoid the MCP SDK
+        // _zod error on discriminated-union outputSchemas (DEFERRED-007).
+        chain: z.object({
+          kind: z.string(), // 'posted' | 'deferred'
+          task_id: z.string().optional(),
+          artifact_id: z.string().optional(),
+          reason: z.string().optional(),
+          deferred_event_id: z.string().optional(),
+        }).optional(),
       }),
     },
     async ({ workspace_token, request_id, step_index, actor_id, decision, output_format }) => {
@@ -3670,6 +3728,81 @@ function createMcpToolsServer() {
     },
   );
 
+  // Sprint 15.11 (DEFERRED-017 Q3) — proxy voting grants.
+  server.registerTool(
+    'grant_proxy',
+    {
+      description: 'Grant a proxy: the principal authorizes a proxy actor to cast their ballot in a decision body. Only the principal may grant their own vote (granted_by must equal principal). The principal must be a body member. Idempotent.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        body_id: z.string().min(1).describe('The decision body UUID.'),
+        principal: z.string().min(1).describe('The member delegating their vote.'),
+        proxy: z.string().min(1).describe('The actor authorized to cast on the principal\'s behalf.'),
+        granted_by: z.string().min(1).describe('Must equal principal (only the principal may delegate).'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        status: z.string(),
+        body_id: z.string().optional(),
+        principal: z.string().optional(),
+        proxy: z.string().optional(),
+      }),
+    },
+    async ({ workspace_token, body_id, principal, proxy, granted_by, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const r = await grantProxy({ body_id, principal, proxy, granted_by });
+      const summary = `grant_proxy: body=${body_id} principal=${principal} proxy=${proxy} status=${r.status}`;
+      return formatToolResponse(r, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'revoke_proxy',
+    {
+      description: 'Revoke a proxy voting grant in a decision body.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        body_id: z.string().min(1).describe('The decision body UUID.'),
+        principal: z.string().min(1),
+        proxy: z.string().min(1),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({ status: z.string() }),
+    },
+    async ({ workspace_token, body_id, principal, proxy, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const r = await revokeProxy({ body_id, principal, proxy });
+      const summary = `revoke_proxy: body=${body_id} principal=${principal} proxy=${proxy} status=${r.status}`;
+      return formatToolResponse(r, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'list_proxies',
+    {
+      description: 'List all proxy voting grants for a decision body.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        body_id: z.string().min(1).describe('The decision body UUID.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        proxies: z.array(z.object({
+          principal: z.string(),
+          proxy: z.string(),
+          granted_by: z.string(),
+          granted_at: z.string(),
+        })),
+      }),
+    },
+    async ({ workspace_token, body_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const r = await listProxies({ body_id });
+      const summary = `list_proxies: body=${body_id} count=${r.proxies.length}`;
+      return formatToolResponse(r, summary, output_format);
+    },
+  );
+
   server.registerTool(
     'get_decision_body',
     {
@@ -3729,6 +3862,10 @@ function createMcpToolsServer() {
         subject_ref: z.string().min(1).describe('The proposition reference (free text, ≤256 chars).'),
         proposed_by: z.string().min(1).describe('Actor id proposing the motion (must be a topic participant).'),
         deadline_minutes: z.number().int().optional().describe('Lifecycle deadline in minutes [5, 43200]. Default 1440 (24h).'),
+        // Sprint 15.7 — optional chained-task blob on carried (DEFERRED-019).
+        execution_task: z.unknown().optional().describe(
+          'Optional execution_task blob describing the board task to post on a carried motion. Shape: {title?, topology?, slot?, kind?, depends_on?, raci?}. Null/omitted = derived defaults.',
+        ),
         output_format: OutputFormatSchema.default('auto_both'),
       }),
       outputSchema: z.object({
@@ -3737,9 +3874,9 @@ function createMcpToolsServer() {
         deadline: z.string().optional(),
       }),
     },
-    async ({ workspace_token, topic_id, body_id, subject_ref, proposed_by, deadline_minutes, output_format }) => {
+    async ({ workspace_token, topic_id, body_id, subject_ref, proposed_by, deadline_minutes, execution_task, output_format }) => {
       assertWorkspaceToken(workspace_token);
-      const r = await proposeMotion({ topic_id, body_id, subject_ref, proposed_by, deadline_minutes });
+      const r = await proposeMotion({ topic_id, body_id, subject_ref, proposed_by, deadline_minutes, execution_task });
       const summary = `propose_motion: topic=${topic_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3880,6 +4017,15 @@ function createMcpToolsServer() {
       outputSchema: z.object({
         status: z.string(),
         tally: z.any().optional(),
+        // Sprint 15.9 (DEFERRED-021) — chain present on outcome='carried' only.
+        // Flat-optional shape to avoid DEFERRED-007 discriminated-union SDK issue.
+        chain: z.object({
+          kind: z.string(), // 'posted' | 'deferred'
+          task_id: z.string().optional(),
+          artifact_id: z.string().optional(),
+          reason: z.string().optional(),
+          deferred_event_id: z.string().optional(),
+        }).optional(),
       }),
     },
     async ({ workspace_token, motion_id, output_format }) => {
@@ -3887,6 +4033,315 @@ function createMcpToolsServer() {
       const r = await tallyMotion({ motion_id });
       const summary = `tally_motion: motion=${motion_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
+    },
+  );
+
+  // ── Phase 15 Sprint 15.5: Intake mailbox + Dispute resolution tools ──
+  // NOTE: flat z.object outputs per DEFERRED-007 (MCP SDK discriminatedUnion regression).
+
+  server.registerTool(
+    'submit_intake',
+    {
+      description: 'Submit an intake item (violation_report, suggestion, or request) to a project mailbox. Optionally associate with a topic — if topic_id is provided the topic must be active and an intake.received event is emitted.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).describe('The project that owns this intake mailbox.'),
+        topic_id: z.string().optional().describe('Optional topic to associate the intake with.'),
+        kind: z.enum(['violation_report', 'suggestion', 'request']).describe('Category of the intake item.'),
+        body: z.string().min(1).describe('The full text of the intake submission.'),
+        submitted_by: z.string().min(1).describe('Actor id of the submitter.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        intake_id: z.string(),
+        project_id: z.string(),
+        topic_id: z.string().nullable(),
+        kind: z.string(),
+        status: z.string(),
+        created_at: z.string(),
+      }),
+    },
+    async ({ workspace_token, project_id, topic_id, kind, body, submitted_by, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const result = await submitIntake({ project_id, topic_id, kind, body, submitted_by });
+      const summary = `submit_intake: project=${project_id} kind=${kind} id=${result.intake_id}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'triage_intake',
+    {
+      description: 'Triage a received intake item by routing it to a task, request, motion, or dispute. The item must be in "received" status. Emits intake.triaged when topic_id is present.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        intake_id: z.string().min(1).describe('The intake item UUID.'),
+        route_kind: z.enum(['task', 'request', 'motion', 'dispute']).describe('Target route type.'),
+        actor_id: z.string().min(1).describe('Actor performing the triage.'),
+        topic_id: z.string().min(1).describe('Topic context for the triage action.'),
+        routed_to: z.string().optional().describe('ID of the task/request/motion to link to (for task/request/motion routes).'),
+        subject_ref: z.string().optional().describe('Artifact ref for dispute route.'),
+        parties: z.array(z.string()).optional().describe('Parties for dispute route (min 2).'),
+        procedure: z.string().optional().describe('Dispute procedure (unilateral or collective).'),
+        submitted_by: z.string().optional().describe('Submitter for dispute route (defaults to actor_id).'),
+        kind: z.string().optional().describe('Request kind for dispute route.'),
+        weight: z.number().optional().describe('Request weight for dispute route.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        intake_id: z.string(),
+        status: z.string(),
+        routed_to: z.string().nullable(),
+        dispute_id: z.string().nullable().optional(),
+        resolution_request_id: z.string().nullable().optional(),
+      }),
+    },
+    async ({ workspace_token, intake_id, route_kind, actor_id, topic_id, routed_to, subject_ref, parties, procedure, submitted_by, kind, weight, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      let route: Parameters<typeof triageIntake>[1];
+      if (route_kind === 'dispute') {
+        route = {
+          route_kind: 'dispute',
+          actor_id,
+          topic_id,
+          subject_ref: subject_ref ?? '',
+          parties: parties ?? [],
+          procedure: (procedure ?? 'unilateral') as 'unilateral' | 'collective',
+          submitted_by: submitted_by ?? actor_id,
+          kind,
+          weight,
+        };
+      } else {
+        route = {
+          route_kind: route_kind as 'task' | 'request' | 'motion',
+          actor_id,
+          topic_id,
+          routed_to: routed_to ?? '',
+        };
+      }
+      const result = await triageIntake(intake_id, route);
+      const summary = `triage_intake: id=${intake_id} route=${route_kind} status=${result.status}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'dismiss_intake',
+    {
+      description: 'Dismiss a received intake item (sets status to dismissed). Only received items can be dismissed; already-triaged or already-dismissed items return an error.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        intake_id: z.string().min(1).describe('The intake item UUID.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        intake_id: z.string(),
+        status: z.string(),
+      }),
+    },
+    async ({ workspace_token, intake_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const result = await dismissIntake(intake_id);
+      const summary = `dismiss_intake: id=${intake_id} status=${result.status}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'get_intake',
+    {
+      description: 'Get a single intake item by UUID.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        intake_id: z.string().min(1).describe('The intake item UUID.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        intake_id: z.string(),
+        project_id: z.string(),
+        topic_id: z.string().nullable(),
+        kind: z.string(),
+        body: z.string(),
+        submitted_by: z.string(),
+        status: z.string(),
+        routed_to: z.string().nullable(),
+        created_at: z.string(),
+      }),
+    },
+    async ({ workspace_token, intake_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const result = await getIntake(intake_id);
+      const summary = `get_intake: id=${intake_id} status=${result.status}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'list_intake',
+    {
+      description: 'List intake items for a project. Filter by kind (violation_report, suggestion, request) and/or status (received, triaged, dismissed). Returns items[] + total.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        project_id: z.string().min(1).describe('The project to list intake items for.'),
+        kind: z.string().optional().describe('Filter by kind (violation_report, suggestion, request).'),
+        status: z.string().optional().describe('Filter by status (received, triaged, dismissed).'),
+        limit: z.number().int().min(1).max(200).optional().describe('Max items to return (default 50).'),
+        offset: z.number().int().min(0).optional().describe('Pagination offset (default 0).'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        items: z.array(z.object({
+          intake_id: z.string(),
+          project_id: z.string(),
+          topic_id: z.string().nullable(),
+          kind: z.string(),
+          status: z.string(),
+          submitted_by: z.string(),
+          routed_to: z.string().nullable(),
+          created_at: z.string(),
+        })),
+        total: z.number(),
+      }),
+    },
+    async ({ workspace_token, project_id, kind, status, limit, offset, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const result = await listIntake(project_id, { kind, status, limit, offset });
+      const summary = `list_intake: project=${project_id} total=${result.total}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'open_dispute',
+    {
+      description: 'Open a dispute for an artifact within a topic. Creates the dispute row and submits a resolution request to the DoA arbiter. Only the unilateral procedure is supported in Sprint 15.5. Returns the dispute record + resolution_request_id.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        topic_id: z.string().min(1).describe('The topic the dispute belongs to (must be active).'),
+        subject_ref: z.string().min(1).describe('Artifact reference string being disputed.'),
+        parties: z.array(z.string()).min(2).describe('Actor ids of the disputing parties (minimum 2).'),
+        procedure: z.enum(['unilateral']).describe('Resolution procedure — only "unilateral" is supported in Sprint 15.5.'),
+        submitted_by: z.string().min(1).describe('Actor id opening the dispute (must be a topic participant).'),
+        kind: z.string().optional().describe('Request kind for DoA routing (default: dispute_resolution).'),
+        weight: z.number().optional().describe('Request weight for DoA routing (default: 1).'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        dispute: z.object({
+          dispute_id: z.string(),
+          topic_id: z.string(),
+          subject_ref: z.string(),
+          parties: z.array(z.string()),
+          status: z.string(),
+          resolution_request_id: z.string().nullable(),
+          created_at: z.string(),
+        }),
+        resolution_request_id: z.string(),
+      }),
+    },
+    async ({ workspace_token, topic_id, subject_ref, parties, procedure, submitted_by, kind, weight, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const result = await openDispute({ topic_id, subject_ref, parties, procedure, submitted_by, kind, weight });
+      const summary = `open_dispute: topic=${topic_id} id=${result.dispute.dispute_id}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'resolve_dispute',
+    {
+      description: 'Resolve a dispute once its resolution request has reached a terminal state (approved, returned, or rejected). Returns the updated dispute with status=resolved and emits a dispute.resolved event.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        dispute_id: z.string().min(1).describe('The dispute UUID.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        dispute_id: z.string(),
+        topic_id: z.string(),
+        subject_ref: z.string(),
+        parties: z.array(z.string()),
+        status: z.string(),
+        resolution_request_id: z.string().nullable(),
+        created_at: z.string(),
+      }),
+    },
+    async ({ workspace_token, dispute_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const result = await resolveDispute(dispute_id);
+      const summary = `resolve_dispute: id=${dispute_id} status=${result.status}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'get_dispute',
+    {
+      description: 'Get a single dispute by UUID, including its resolution request and steps.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        dispute_id: z.string().min(1).describe('The dispute UUID.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        dispute_id: z.string(),
+        topic_id: z.string(),
+        subject_ref: z.string(),
+        parties: z.array(z.string()),
+        status: z.string(),
+        resolution_request_id: z.string().nullable(),
+        created_at: z.string(),
+        resolution_request: z.object({
+          request_id: z.string(),
+          status: z.string(),
+          steps: z.array(z.object({
+            step_index: z.number(),
+            target_office: z.string(),
+            status: z.string(),
+            decided_by: z.string().nullable(),
+            decided_at: z.string().nullable(),
+          })),
+        }).nullable(),
+      }),
+    },
+    async ({ workspace_token, dispute_id, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const result = await getDispute(dispute_id);
+      const summary = `get_dispute: id=${dispute_id} status=${result.status}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'list_disputes',
+    {
+      description: 'List disputes for a topic. Optionally filter by status (open, under_resolution, resolved). Returns disputes[] + total.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        topic_id: z.string().min(1).describe('The topic to list disputes for.'),
+        status: z.string().optional().describe('Filter by status (open, under_resolution, resolved).'),
+        limit: z.number().int().min(1).max(200).optional().describe('Max disputes to return (default 50).'),
+        offset: z.number().int().min(0).optional().describe('Pagination offset (default 0).'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        disputes: z.array(z.object({
+          dispute_id: z.string(),
+          topic_id: z.string(),
+          subject_ref: z.string(),
+          parties: z.array(z.string()),
+          status: z.string(),
+          resolution_request_id: z.string().nullable(),
+          created_at: z.string(),
+        })),
+        total: z.number(),
+      }),
+    },
+    async ({ workspace_token, topic_id, status, limit, offset, output_format }) => {
+      assertWorkspaceToken(workspace_token);
+      const result = await listDisputes(topic_id, { status, limit, offset });
+      const summary = `list_disputes: topic=${topic_id} total=${result.total}`;
+      return formatToolResponse(result, summary, output_format);
     },
   );
 

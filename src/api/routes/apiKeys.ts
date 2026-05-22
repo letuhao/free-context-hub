@@ -24,6 +24,10 @@ router.post('/', async (req, res, next) => {
       role,
       project_scope: typeof project_scope === 'string' ? project_scope : undefined,
       expires_at: typeof expires_at === 'string' ? expires_at : undefined,
+      // Sprint 15.11 — the minting operator's identity (apiKeyName, auth-on) for the
+      // per-operator key limit. 'env-token' when minted via the env-var fast-path;
+      // undefined → NULL when auth-off.
+      created_by: (req as { apiKeyName?: string }).apiKeyName ?? undefined,
     });
     res.status(201).json({ status: 'created', key: result.key, ...result.entry });
   } catch (e) { next(e); }

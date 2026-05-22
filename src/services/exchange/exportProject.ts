@@ -122,12 +122,27 @@ export async function exportProject(
         batchSize,
       ),
       // lesson_types is global (no project_id column) — export all of them.
+      // DEFERRED-008: `scope` (migration 0052) is carried so a profile-scoped type
+      // does not silently import as 'global' on the destination instance.
       lesson_types: cursorIterable(
         client,
-        `SELECT type_key, display_name, description, color, template, is_builtin, created_at
+        `SELECT type_key, display_name, description, color, template, is_builtin, scope, created_at
          FROM lesson_types
          ORDER BY type_key`,
         [],
+        batchSize,
+      ),
+      // DEFERRED-023: project-OWNED taxonomy profiles round-trip. Built-in profiles
+      // (is_builtin, owner_project_id IS NULL) re-seed from config on a fresh instance,
+      // so exporting them would collide with the seed — only project-owned profiles are
+      // bundled. owner_project_id is rebound to the target project on import.
+      taxonomy_profiles: cursorIterable(
+        client,
+        `SELECT slug, name, description, version, lesson_types, is_builtin, created_at, updated_at
+         FROM taxonomy_profiles
+         WHERE owner_project_id = $1
+         ORDER BY slug`,
+        [projectId],
         batchSize,
       ),
     };

@@ -20,7 +20,7 @@ import test, { before, after } from 'node:test';
 import http from 'node:http';
 import express from 'express';
 import { requestsRouter } from './requests.js';
-import { charterTopic, joinTopic, closeTopic, postTask, claimTask, completeTask } from '../../core/index.js';
+import { charterTopic, joinTopic, grantLevel, closeTopic, postTask, claimTask, completeTask } from '../../core/index.js';
 import { getDbPool } from '../../db/client.js';
 
 const TEST_PROJECT = '__test_requests_routes__';
@@ -126,9 +126,12 @@ async function mkTopicWithParticipants() {
     charter: 'route test', created_by: 'authority-actor',
   });
   const topicId = t.topic_id;
-  await joinTopic({ topic_id: topicId, actor_id: 'execution-actor', actor_type: 'human', display_name: 'Exec', level: 'execution' });
-  await joinTopic({ topic_id: topicId, actor_id: 'coordination-actor', actor_type: 'human', display_name: 'Coord', level: 'coordination' });
+  // Sprint 15.11 — owner (authority-actor = created_by) joins first as authority,
+  // others join at execution, then the owner grants the coordinator its level.
   await joinTopic({ topic_id: topicId, actor_id: 'authority-actor', actor_type: 'human', display_name: 'Auth', level: 'authority' });
+  await joinTopic({ topic_id: topicId, actor_id: 'execution-actor', actor_type: 'human', display_name: 'Exec', level: 'execution' });
+  await joinTopic({ topic_id: topicId, actor_id: 'coordination-actor', actor_type: 'human', display_name: 'Coord', level: 'execution' });
+  await grantLevel({ topic_id: topicId, actor_id: 'coordination-actor', level: 'coordination', granted_by: 'authority-actor' });
   return topicId;
 }
 
@@ -353,4 +356,42 @@ test('F4: GET /api/topics/:id/requests with role reader → not 403 (reader admi
   const res = await request('GET', `/api/topics/${topicId}/requests`, undefined,
     { 'x-test-key-role': 'reader' });
   assert.notEqual(res.status, 403, `reader must pass the gate; got ${res.status}`);
+});
+
+// ── Sprint 15.9 (DEFERRED-020 LOW-7) — route-layer fractional step-index guard ──
+
+test('15.9 LOW-7: POST decide with fractional step-index → 400 from route layer (not service)', async () => {
+  const topicId = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-low7', 'execution-actor');
+  const sub = await request('POST', `/api/topics/${topicId}/requests`, {
+    subject_id: artifactId, kind: 'artifact_review', weight: 10,
+    procedure: 'unilateral', submitted_by: 'execution-actor',
+  });
+  assert.equal(sub.status, 201);
+  const requestId = sub.json.data.request_id;
+  // Fractional step segment '1.5' — route layer's /^\d+$/ guard catches it BEFORE
+  // parseInt would truncate to 1. Asserts 400 + BAD_REQUEST code from the route.
+  const res = await request('POST', `/api/requests/${requestId}/steps/1.5/decide`, {
+    actor_id: 'coordination-actor', decision: 'endorse',
+  });
+  assert.equal(res.status, 400, `expected 400, got ${res.status}: ${JSON.stringify(res.json)}`);
+  assert.equal(res.json.code, 'BAD_REQUEST');
+  assert.ok(res.json.error.includes('non-negative integer'),
+    `error message should mention non-negative integer; got: ${res.json.error}`);
+});
+
+test('15.9 LOW-7: POST decide with negative step-index → 400 from route layer', async () => {
+  const topicId = await mkTopicWithParticipants();
+  const artifactId = await mkForReviewArtifact(topicId, 'doc-low7n', 'execution-actor');
+  const sub = await request('POST', `/api/topics/${topicId}/requests`, {
+    subject_id: artifactId, kind: 'artifact_review', weight: 10,
+    procedure: 'unilateral', submitted_by: 'execution-actor',
+  });
+  assert.equal(sub.status, 201);
+  const requestId = sub.json.data.request_id;
+  const res = await request('POST', `/api/requests/${requestId}/steps/-1/decide`, {
+    actor_id: 'coordination-actor', decision: 'endorse',
+  });
+  assert.equal(res.status, 400);
+  assert.equal(res.json.code, 'BAD_REQUEST');
 });
