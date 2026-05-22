@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { requireProjectScope } from '../middleware/requireResourceScope.js';
 import {
   ingestGitHistory,
   listCommits,
@@ -12,7 +13,7 @@ import {
 const router = Router();
 
 /** POST /api/git/ingest — ingest git history for a project */
-router.post('/ingest', async (req, res, next) => {
+router.post('/ingest', requireProjectScope('body'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const root = await resolveProjectRoot(projectId, req.body.root);
@@ -27,7 +28,7 @@ router.post('/ingest', async (req, res, next) => {
 });
 
 /** GET /api/git/commits — list commits for a project */
-router.get('/commits', async (req, res, next) => {
+router.get('/commits', requireProjectScope('query'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
     const result = await listCommits({
@@ -40,16 +41,16 @@ router.get('/commits', async (req, res, next) => {
 });
 
 /** GET /api/git/commits/:sha — get a single commit */
-router.get('/commits/:sha', async (req, res, next) => {
+router.get('/commits/:sha', requireProjectScope('query'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
-    const result = await getCommit({ projectId, sha: req.params.sha });
+    const result = await getCommit({ projectId, sha: String(req.params.sha) });
     res.json(result);
   } catch (e) { next(e); }
 });
 
 /** POST /api/git/suggest-lessons — suggest lessons from recent commits */
-router.post('/suggest-lessons', async (req, res, next) => {
+router.post('/suggest-lessons', requireProjectScope('body'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await suggestLessonsFromCommits({
@@ -62,7 +63,7 @@ router.post('/suggest-lessons', async (req, res, next) => {
 });
 
 /** POST /api/git/analyze-impact — analyze impact of a commit */
-router.post('/analyze-impact', async (req, res, next) => {
+router.post('/analyze-impact', requireProjectScope('body'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await analyzeCommitImpact({

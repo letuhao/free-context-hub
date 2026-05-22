@@ -1,4 +1,4 @@
-import type { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction, RequestHandler } from 'express';
 import { getDbPool } from '../../db/client.js';
 
 /**
@@ -19,7 +19,9 @@ import { getDbPool } from '../../db/client.js';
  */
 
 export type ScopeEntity =
-  | 'topic' | 'request' | 'motion' | 'dispute' | 'intake' | 'body' | 'task' | 'artifact';
+  | 'topic' | 'request' | 'motion' | 'dispute' | 'intake' | 'body' | 'task' | 'artifact'
+  // Sprint DEFERRED-004 — writer-surface resources keyed by a global PK.
+  | 'document' | 'learning_path' | 'conversation';
 
 const RESOLVERS: Record<ScopeEntity, string> = {
   topic:    `SELECT project_id FROM topics WHERE topic_id = $1`,
@@ -30,13 +32,73 @@ const RESOLVERS: Record<ScopeEntity, string> = {
   body:     `SELECT project_id FROM decision_bodies WHERE body_id = $1`,
   task:     `SELECT t.project_id FROM tasks tk JOIN topics t ON t.topic_id = tk.topic_id WHERE tk.task_id = $1`,
   artifact: `SELECT t.project_id FROM artifacts a JOIN tasks tk ON tk.task_id = a.task_id JOIN topics t ON t.topic_id = tk.topic_id WHERE a.artifact_id = $1`,
+  // DEFERRED-004 — derive the owning project from the resource id (never trust a
+  // caller-declared project_id, which a cross-tenant id would bypass).
+  document:      `SELECT project_id FROM documents WHERE doc_id = $1`,
+  learning_path: `SELECT project_id FROM learning_paths WHERE path_id = $1`,
+  conversation:  `SELECT project_id FROM chat_conversations WHERE conversation_id = $1`,
 };
 
 function notFound(res: Response, entity: ScopeEntity) {
   res.status(404).json({ status: 'error', error: `${entity} not found`, code: 'NOT_FOUND' });
 }
 
-export function requireResourceScope(entity: ScopeEntity, paramName = 'id') {
+/**
+ * DEFERRED-004 — tenant-scope for COLLECTION routes (no project-owned `:id`): the
+ * project comes from `req.body.project_id` and/or `req.query.project_id` (or the
+ * multi `project_ids[]`). Strict-reject (CLARIFY Q1/Q2): a scoped key MUST declare a
+ * project equal to its scope.
+ *   - absent          → 400 BAD_REQUEST `project_scope_required`
+ *   - present, ≠ scope → 404 NOT_FOUND (no cross-tenant existence oracle)
+ *   - multi: any id ≠ scope → 404; absent → 400
+ * auth-off (undefined) / global (null) → unrestricted.
+ *
+ * NOTE: use this ONLY for routes WITHOUT a project-owned resource `:id`. Resource
+ * routes must use `requireResourceScope` (derive from the id) — a declared project_id
+ * is bypassable by a cross-tenant resource id (REVIEW-DESIGN F1).
+ */
+export type ProjectSource = 'body' | 'query' | 'query-or-body';
+
+function strOrUndef(v: unknown): string | undefined {
+  return typeof v === 'string' && v ? v : undefined;
+}
+
+export function requireProjectScope(source: ProjectSource, opts: { multi?: boolean } = {}): RequestHandler {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const scope = (req as { apiKeyScope?: string | null }).apiKeyScope;
+    if (scope === undefined || scope === null) return next();
+
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const query = req.query as Record<string, unknown>;
+    const reject400 = () => res.status(400).json({ status: 'error', code: 'BAD_REQUEST', error: 'project_scope_required: a scoped key must declare project_id' });
+    const notFound404 = () => res.status(404).json({ status: 'error', code: 'NOT_FOUND', error: 'project not found' });
+
+    if (opts.multi) {
+      const raw = query.project_ids;
+      if (raw !== undefined) {
+        const ids = Array.isArray(raw)
+          ? raw.map(String).filter(Boolean)
+          : String(raw).split(',').map((s) => s.trim()).filter(Boolean);
+        if (ids.length === 0) { reject400(); return; }
+        for (const id of ids) if (id !== scope) { notFound404(); return; }
+        next();
+        return;
+      }
+      // no project_ids → fall through to single project_id
+    }
+
+    let declared: string | undefined;
+    if (source === 'body') declared = strOrUndef(body.project_id);
+    else if (source === 'query') declared = strOrUndef(query.project_id);
+    else declared = strOrUndef(query.project_id) ?? strOrUndef(body.project_id);
+
+    if (declared === undefined) { reject400(); return; }
+    if (declared !== scope) { notFound404(); return; }
+    next();
+  };
+}
+
+export function requireResourceScope(entity: ScopeEntity, paramName = 'id'): RequestHandler {
   return async (req: Request, res: Response, next: NextFunction) => {
     const attachedScope = (req as { apiKeyScope?: string | null }).apiKeyScope;
     if (attachedScope === undefined) return next(); // auth-off / env-var token
@@ -68,7 +130,7 @@ export function requireResourceScope(entity: ScopeEntity, paramName = 'id') {
  * fall through to DEFAULT_PROJECT_ID at the service (that would escape its scope).
  * Inject the key's own scope on omission; reject an explicit cross-project value.
  */
-export function requireBodyProjectScope(bodyField = 'project_id') {
+export function requireBodyProjectScope(bodyField = 'project_id'): RequestHandler {
   return (req: Request, res: Response, next: NextFunction) => {
     const scope = (req as { apiKeyScope?: string | null }).apiKeyScope;
     if (scope === undefined || scope === null) return next(); // auth-off / global
@@ -93,7 +155,7 @@ export function requireBodyProjectScope(bodyField = 'project_id') {
  * to the caller's scope. A cross-tenant or unknown topic_id → 404. When the body
  * omits topic_id, defers to the handler's own validation (next()).
  */
-export function requireBodyTopicScope(bodyField = 'topic_id') {
+export function requireBodyTopicScope(bodyField = 'topic_id'): RequestHandler {
   return async (req: Request, res: Response, next: NextFunction) => {
     const scope = (req as { apiKeyScope?: string | null }).apiKeyScope;
     if (scope === undefined || scope === null) return next(); // auth-off / global

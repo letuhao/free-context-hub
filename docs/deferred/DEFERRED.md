@@ -1,7 +1,34 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 024 -->
+<!-- Next ID: 025 -->
+
+## DEFERRED-024
+
+- **What:** `POST /api/jobs/run-next` pops the next queued job across ALL projects
+  (`runNextJob(queue_name)` has no project filter). A project-scoped api key calling it
+  could run another project's queued job. DEFERRED-004 (the writer-route tenant-scope
+  audit) guarded every body/query/resource route but could NOT close this one with a
+  request-time guard — there is no project in the request; the cross-project reach is in
+  the SERVICE's pop semantics.
+- **Why deferred:** DEFERRED-004 CLARIFY Q3 — Tier-2. Closing it needs a
+  `runNextJob(queue, projectScope?)` signature change so the pop filters by the caller's
+  scope (and the route passes `req.apiKeyScope`). That is a scheduling-semantics change
+  (a scoped worker only drains its own project's queue) with its own design + test
+  surface, distinct from the request-time guard work.
+- **Trigger condition:** a sprint that touches the job queue / worker, OR enabling
+  `MCP_AUTH_ENABLED=true` with project-scoped keys that call `run-next`.
+- **Estimated size:** S–M — `runNextJob` gains an optional project filter; the route
+  passes the scope; tests for scoped vs global pop.
+- **Priority:** LOW — `run-next` is a worker/operator endpoint; in the dev posture
+  (`MCP_AUTH_ENABLED=false`) there is no scope. Exploitable only auth-on with a scoped
+  key deliberately draining another project's queue.
+- **Session deferred:** 2026-05-21
+- **Sessions open:** 1
+- **Status:** OPEN
+- **Source:** DEFERRED-004 CLARIFY Q3 / DESIGN §4 (`docs/specs/2026-05-21-deferred-004-tenant-scope-design.md`).
+
+---
 
 ## DEFERRED-023
 
@@ -514,6 +541,19 @@
 - **Trigger condition:** Dedicated security-audit sprint OR external pen-test report.
 - **Priority:** MED — exploitable but only by misconfigured project-scoped admin keys.
 - **Sprint 13.7 closure decision:** mark as PARTIAL with explicit decisions for each top-level admin mount documented above. The remaining service-handler audit is acceptable as a follow-up because (a) the most exploitable routes (force-release, taxonomy activation) are already closed, (b) the global admin routes are global-by-design, (c) the writer-role routes require explicit per-handler audit that doesn't fit a single sprint.
+- **Status:** RESOLVED — 2026-05-21 (`tenant-scope-audit-deferred-004`): the writer-role
+  service-handler audit shipped. New `requireProjectScope(source, {multi})` middleware
+  (strict-reject: a scoped key must declare a project equal to its scope; absent → 400
+  `project_scope_required`, cross-tenant → 404, multi out-of-scope → 404) for COLLECTION
+  routes; `requireResourceScope` extended with `document`/`learning_path`/`conversation`
+  resolvers for RESOURCE-`:id` routes (DERIVE the project from the id — REVIEW-DESIGN F1:
+  a declared project_id is bypassable by a cross-tenant resource id). Applied across
+  git/jobs/workspace/chat/chatHistory/documents/learningPaths/projectGroups (~45 routes).
+  Auth-off / global-scope → unrestricted (dev posture; 711-test baseline preserved). 10
+  new D004 middleware tests. The global admin routes (lesson-types, api-keys) remain
+  global-by-design (13.7 decisions). `POST /api/jobs/run-next` cross-project pop is split
+  to a new Tier-2 deferred (scheduling-semantics service change). Light tenant-isolation
+  security checklist CLEAR.
 
 ---
 

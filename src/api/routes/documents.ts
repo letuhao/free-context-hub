@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { requireProjectScope, requireResourceScope } from '../middleware/requireResourceScope.js';
 import multer from 'multer';
 import { createHash } from 'node:crypto';
 import {
@@ -39,7 +40,7 @@ function sanitizeFilename(name: string): string {
 }
 
 /** POST /api/documents/upload — multipart file upload */
-router.post('/upload', upload.single('file'), async (req, res, next) => {
+router.post('/upload', upload.single('file'), requireProjectScope('body'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const file = req.file;
@@ -150,7 +151,7 @@ router.post('/upload', upload.single('file'), async (req, res, next) => {
  *  Returns 201 with the created document, 409 on content_hash duplicate,
  *  or 400/403/413/415/502/504 on fetch-specific errors.
  */
-router.post('/ingest-url', async (req, res, next) => {
+router.post('/ingest-url', requireProjectScope('body'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const sourceUrl = typeof req.body.source_url === 'string' ? req.body.source_url.trim() : '';
@@ -247,7 +248,7 @@ router.post('/ingest-url', async (req, res, next) => {
 });
 
 /** POST /api/documents — create a document (JSON body) */
-router.post('/', async (req, res, next) => {
+router.post('/', requireProjectScope('body'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await createDocument({
@@ -265,7 +266,7 @@ router.post('/', async (req, res, next) => {
 });
 
 /** GET /api/documents — list documents for a project */
-router.get('/', async (req, res, next) => {
+router.get('/', requireProjectScope('query'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
     const result = await listDocuments({
@@ -281,10 +282,10 @@ router.get('/', async (req, res, next) => {
 });
 
 /** GET /api/documents/:id — get a document */
-router.get('/:id', async (req, res, next) => {
+router.get('/:id', requireResourceScope('document', 'id'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
-    const result = await getDocument({ docId: req.params.id, projectId });
+    const result = await getDocument({ docId: String(req.params.id), projectId });
     if (!result) {
       res.status(404).json({ status: 'error', error: 'document not found' });
       return;
@@ -294,10 +295,10 @@ router.get('/:id', async (req, res, next) => {
 });
 
 /** POST /api/documents/:id/generate-lessons — AI-extract lesson suggestions from doc content */
-router.post('/:id/generate-lessons', async (req, res, next) => {
+router.post('/:id/generate-lessons', requireResourceScope('document', 'id'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
-    const doc = await getDocument({ docId: req.params.id, projectId });
+    const doc = await getDocument({ docId: String(req.params.id), projectId });
     if (!doc) {
       res.status(404).json({ status: 'error', error: 'document not found' });
       return;
@@ -321,10 +322,10 @@ router.post('/:id/generate-lessons', async (req, res, next) => {
 });
 
 /** DELETE /api/documents/:id — delete a document */
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', requireResourceScope('document', 'id'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow((req.query.project_id as string | undefined) ?? req.body?.project_id);
-    const deleted = await deleteDocument({ docId: req.params.id, projectId });
+    const deleted = await deleteDocument({ docId: String(req.params.id), projectId });
     if (!deleted) {
       res.status(404).json({ status: 'error', error: 'document not found' });
       return;
@@ -334,11 +335,11 @@ router.delete('/:id', async (req, res, next) => {
 });
 
 /** POST /api/documents/:id/lessons/:lessonId — link document to lesson */
-router.post('/:id/lessons/:lessonId', async (req, res, next) => {
+router.post('/:id/lessons/:lessonId', requireResourceScope('document', 'id'), async (req, res, next) => {
   try {
     const result = await linkDocumentToLesson({
-      docId: req.params.id,
-      lessonId: req.params.lessonId,
+      docId: String(req.params.id),
+      lessonId: String(req.params.lessonId),
     });
     if (result.status === 'error') {
       res.status(400).json(result);
@@ -349,11 +350,11 @@ router.post('/:id/lessons/:lessonId', async (req, res, next) => {
 });
 
 /** DELETE /api/documents/:id/lessons/:lessonId — unlink document from lesson */
-router.delete('/:id/lessons/:lessonId', async (req, res, next) => {
+router.delete('/:id/lessons/:lessonId', requireResourceScope('document', 'id'), async (req, res, next) => {
   try {
     const deleted = await unlinkDocumentFromLesson({
-      docId: req.params.id,
-      lessonId: req.params.lessonId,
+      docId: String(req.params.id),
+      lessonId: String(req.params.lessonId),
     });
     if (!deleted) {
       res.status(404).json({ status: 'error', error: 'link not found' });
@@ -364,9 +365,9 @@ router.delete('/:id/lessons/:lessonId', async (req, res, next) => {
 });
 
 /** GET /api/documents/:id/lessons — list lessons linked to a document */
-router.get('/:id/lessons', async (req, res, next) => {
+router.get('/:id/lessons', requireResourceScope('document', 'id'), async (req, res, next) => {
   try {
-    const result = await listDocumentLessons({ docId: req.params.id });
+    const result = await listDocumentLessons({ docId: String(req.params.id) });
     res.json(result);
   } catch (e) { next(e); }
 });
@@ -375,7 +376,7 @@ router.get('/:id/lessons', async (req, res, next) => {
  *  - fast/quality: synchronous, returns chunks immediately
  *  - vision: enqueues an async job, returns { status: 'queued', job_id }
  */
-router.post('/:id/extract', async (req, res, next) => {
+router.post('/:id/extract', requireResourceScope('document', 'id'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const mode = (req.body.mode ?? 'fast') as ExtractionMode;
@@ -401,7 +402,7 @@ router.post('/:id/extract', async (req, res, next) => {
       const pool = getDbPool();
       const docRes = await pool.query(
         `SELECT doc_type FROM documents WHERE doc_id = $1 AND project_id = $2`,
-        [req.params.id, projectId],
+        [String(req.params.id), projectId],
       );
       if (docRes.rowCount === 0) {
         res.status(404).json({ status: 'error', error: 'Document not found' });
@@ -421,14 +422,14 @@ router.post('/:id/extract', async (req, res, next) => {
       // Mark document as processing
       await pool.query(
         `UPDATE documents SET extraction_status = 'processing' WHERE doc_id = $1`,
-        [req.params.id],
+        [String(req.params.id)],
       );
 
       const job = await enqueueJob({
         project_id: projectId,
         job_type: 'document.extract.vision' as any,
         payload: {
-          doc_id: req.params.id,
+          doc_id: String(req.params.id),
           template: template ?? 'auto',
           prompt_template: promptTemplate,
         },
@@ -445,7 +446,7 @@ router.post('/:id/extract', async (req, res, next) => {
 
     // Sync path for fast/quality
     const result = await runExtraction({
-      docId: req.params.id,
+      docId: String(req.params.id),
       projectId,
       mode,
       template,
@@ -470,7 +471,7 @@ router.post('/:id/extract', async (req, res, next) => {
 });
 
 /** POST /api/documents/:id/extract/estimate — Phase 10: cost/time estimate before extraction */
-router.post('/:id/extract/estimate', async (req, res, next) => {
+router.post('/:id/extract/estimate', requireResourceScope('document', 'id'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const mode = (req.body.mode ?? 'vision') as ExtractionMode;
@@ -479,7 +480,7 @@ router.post('/:id/extract/estimate', async (req, res, next) => {
     const docRes = await pool.query(
       `SELECT doc_id, doc_type, content, file_size_bytes FROM documents
        WHERE doc_id = $1 AND project_id = $2`,
-      [req.params.id, projectId],
+      [String(req.params.id), projectId],
     );
     if (docRes.rowCount === 0) {
       res.status(404).json({ status: 'error', error: 'Document not found' });
@@ -537,7 +538,7 @@ router.post('/:id/extract/estimate', async (req, res, next) => {
 });
 
 /** GET /api/documents/:id/extraction-status — Phase 10: poll for vision job status */
-router.get('/:id/extraction-status', async (req, res, next) => {
+router.get('/:id/extraction-status', requireResourceScope('document', 'id'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
     const pool = getDbPool();
@@ -546,7 +547,7 @@ router.get('/:id/extraction-status', async (req, res, next) => {
     const docRes = await pool.query(
       `SELECT doc_id, extraction_status, extraction_mode, extracted_at FROM documents
        WHERE doc_id = $1 AND project_id = $2`,
-      [req.params.id, projectId],
+      [String(req.params.id), projectId],
     );
     if (docRes.rowCount === 0) {
       res.status(404).json({ status: 'error', error: 'Document not found' });
@@ -564,7 +565,7 @@ router.get('/:id/extraction-status', async (req, res, next) => {
          AND job_type = 'document.extract.vision'
        ORDER BY queued_at DESC
        LIMIT 1`,
-      [projectId, req.params.id],
+      [projectId, String(req.params.id)],
     );
     const job = jobRes.rows[0] ?? null;
 
@@ -573,7 +574,7 @@ router.get('/:id/extraction-status', async (req, res, next) => {
     if (doc.extraction_status === 'complete') {
       const chunkRes = await pool.query(
         `SELECT COUNT(*) AS cnt FROM document_chunks WHERE doc_id = $1`,
-        [req.params.id],
+        [String(req.params.id)],
       );
       chunkCount = parseInt(chunkRes.rows[0]?.cnt ?? '0', 10);
     }
@@ -602,11 +603,11 @@ router.get('/:id/extraction-status', async (req, res, next) => {
 });
 
 /** GET /api/documents/:id/chunks — Phase 10: list extracted chunks */
-router.get('/:id/chunks', async (req, res, next) => {
+router.get('/:id/chunks', requireResourceScope('document', 'id'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
     const result = await listDocumentChunks({
-      docId: req.params.id,
+      docId: String(req.params.id),
       projectId,
     });
     res.json(result);
@@ -614,7 +615,7 @@ router.get('/:id/chunks', async (req, res, next) => {
 });
 
 /** PUT /api/documents/:id/chunks/:chunkId — Phase 10.4: edit a single chunk's content. */
-router.put('/:id/chunks/:chunkId', async (req, res, next) => {
+router.put('/:id/chunks/:chunkId', requireResourceScope('document', 'id'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const content = String(req.body.content ?? '').trim();
@@ -625,8 +626,8 @@ router.put('/:id/chunks/:chunkId', async (req, res, next) => {
     const expectedUpdatedAt: string | undefined = req.body.expected_updated_at;
 
     const result = await updateChunk({
-      docId: req.params.id,
-      chunkId: req.params.chunkId,
+      docId: String(req.params.id),
+      chunkId: String(req.params.chunkId),
       projectId,
       content,
       expectedUpdatedAt,
@@ -649,14 +650,14 @@ router.put('/:id/chunks/:chunkId', async (req, res, next) => {
 });
 
 /** DELETE /api/documents/:id/chunks/:chunkId — Phase 10.4: remove a chunk (skip). */
-router.delete('/:id/chunks/:chunkId', async (req, res, next) => {
+router.delete('/:id/chunks/:chunkId', requireResourceScope('document', 'id'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(
       (req.query.project_id as string | undefined) ?? req.body?.project_id,
     );
     const deleted = await deleteChunk({
-      docId: req.params.id,
-      chunkId: req.params.chunkId,
+      docId: String(req.params.id),
+      chunkId: String(req.params.chunkId),
       projectId,
     });
     if (!deleted) {
@@ -673,10 +674,10 @@ router.delete('/:id/chunks/:chunkId', async (req, res, next) => {
  * cancelled across projects. The document status reset is additionally
  * scoped to (doc_id, project_id) to prevent touching another tenant's row.
  */
-router.post('/:id/jobs/:jobId/cancel', async (req, res, next) => {
+router.post('/:id/jobs/:jobId/cancel', requireResourceScope('document', 'id'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
-    const cancelled = await cancelJob(req.params.jobId, projectId);
+    const cancelled = await cancelJob(String(req.params.jobId), projectId);
     if (!cancelled) {
       res.status(409).json({
         status: 'error',
@@ -692,7 +693,7 @@ router.post('/:id/jobs/:jobId/cancel', async (req, res, next) => {
       `UPDATE documents
        SET extraction_status = 'failed'
        WHERE doc_id = $1 AND project_id = $2 AND extraction_status = 'processing'`,
-      [req.params.id, projectId],
+      [String(req.params.id), projectId],
     );
     res.json({ status: 'ok' });
   } catch (e) { next(e); }
@@ -702,7 +703,7 @@ router.post('/:id/jobs/:jobId/cancel', async (req, res, next) => {
  * for every PDF/image document in a project. Returns the list of queued
  * job IDs so the GUI can poll progress. Non-supported doc types are skipped.
  */
-router.post('/bulk-extract', async (req, res, next) => {
+router.post('/bulk-extract', requireProjectScope('body'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     // Currently vision-only — the worker job queue only handles the vision
@@ -765,13 +766,13 @@ router.post('/bulk-extract', async (req, res, next) => {
  * image document so the list view can <img src=…> without embedding the full
  * base64 content in the JSON response. Returns 404 if doc is not an image.
  */
-router.get('/:id/thumbnail', async (req, res, next) => {
+router.get('/:id/thumbnail', requireResourceScope('document', 'id'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
     const pool = getDbPool();
     const r = await pool.query(
       `SELECT doc_type, content, name FROM documents WHERE doc_id = $1 AND project_id = $2`,
-      [req.params.id, projectId],
+      [String(req.params.id), projectId],
     );
     if (r.rowCount === 0) { res.status(404).end(); return; }
     const doc = r.rows[0];
@@ -804,7 +805,7 @@ router.get('/:id/thumbnail', async (req, res, next) => {
  */
 const VALID_CHUNK_TYPES: readonly ChunkTypeFilter[] = ['text', 'table', 'code', 'diagram_description', 'mermaid'] as const;
 
-router.post('/chunks/search', async (req, res, next) => {
+router.post('/chunks/search', requireProjectScope('body'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const query = typeof req.body.query === 'string' ? req.body.query.trim() : '';

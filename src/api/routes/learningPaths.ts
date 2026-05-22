@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { requireProjectScope, requireResourceScope } from '../middleware/requireResourceScope.js';
 import {
   addToLearningPath, removeFromLearningPath,
   getLearningPath, markCompleted, unmarkCompleted,
@@ -8,7 +9,7 @@ import { resolveProjectIdOrThrow } from '../../core/index.js';
 const router = Router();
 
 /** GET /api/learning-paths — get learning path with progress */
-router.get('/', async (req, res, next) => {
+router.get('/', requireProjectScope('query'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
     const userId = req.query.user_id as string;
@@ -19,7 +20,7 @@ router.get('/', async (req, res, next) => {
 });
 
 /** POST /api/learning-paths — add lesson to path */
-router.post('/', async (req, res, next) => {
+router.post('/', requireProjectScope('body'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await addToLearningPath({
@@ -33,28 +34,28 @@ router.post('/', async (req, res, next) => {
 });
 
 /** DELETE /api/learning-paths/:pathId — remove from path */
-router.delete('/:pathId', async (req, res, next) => {
+router.delete('/:pathId', requireResourceScope('learning_path', 'pathId'), async (req, res, next) => {
   try {
-    const deleted = await removeFromLearningPath({ pathId: req.params.pathId });
+    const deleted = await removeFromLearningPath({ pathId: String(req.params.pathId) });
     if (!deleted) { res.status(404).json({ status: 'error', error: 'not found' }); return; }
     res.json({ status: 'ok' });
   } catch (e) { next(e); }
 });
 
 /** POST /api/learning-paths/:pathId/complete — mark as completed */
-router.post('/:pathId/complete', async (req, res, next) => {
+router.post('/:pathId/complete', requireResourceScope('learning_path', 'pathId'), async (req, res, next) => {
   try {
-    const result = await markCompleted({ userId: req.body.user_id, pathId: req.params.pathId });
+    const result = await markCompleted({ userId: req.body.user_id, pathId: String(req.params.pathId) });
     res.json(result);
   } catch (e) { next(e); }
 });
 
 /** DELETE /api/learning-paths/:pathId/complete — unmark */
-router.delete('/:pathId/complete', async (req, res, next) => {
+router.delete('/:pathId/complete', requireResourceScope('learning_path', 'pathId'), async (req, res, next) => {
   try {
     const deleted = await unmarkCompleted({
       userId: (req.query.user_id as string) ?? req.body?.user_id,
-      pathId: req.params.pathId,
+      pathId: String(req.params.pathId),
     });
     if (!deleted) { res.status(404).json({ status: 'error', error: 'not found' }); return; }
     res.json({ status: 'ok' });

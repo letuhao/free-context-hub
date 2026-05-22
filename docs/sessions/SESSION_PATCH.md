@@ -1,8 +1,61 @@
 # LONGRUN CHECKPOINT — Phase 15 autonomous longrun, session boundary (2026-05-21)
 
-**Status:** **DEFERRED-008 (exchange scope-leak) — RESOLVED** on branch
-`fix-exchange-scope-deferred-008`. 701/701 green; tsc clean; no migration.
-(Prior: Sprint 15.12 closed the entire Phase 15 deferred backlog.)
+**Status:** **DEFERRED-004 (writer-route tenant-scope audit) — RESOLVED** on branch
+`tenant-scope-audit-deferred-004`. 711/711 green; tsc clean; no migration. (Prior this
+session: DEFERRED-008 exchange scope-leak; Sprint 15.12 closed the Phase 15 backlog.)
+
+## DEFERRED-004 outcome (writer-route tenant-scope audit)
+
+The writer-role routers (git/jobs/workspace/chat/chatHistory/documents/learning-paths/
+groups) read `project_id` from body/query (or a resource id) with no `req.apiKeyScope`
+check — a key scoped to project A could act on project B. This is the service-handler
+complement to Sprint 15.12's `/api/topics/:id/*` route-param scope work.
+
+**New guard (`src/api/middleware/requireResourceScope.ts`):**
+- `requireProjectScope(source, {multi})` — strict-reject (CLARIFY Q1/Q2): a scoped key
+  MUST declare a project equal to its scope. Absent → 400 `project_scope_required`;
+  present cross-tenant → 404; multi `project_ids[]` any out-of-scope → 404; absent → 400.
+  For COLLECTION routes (no resource :id).
+- `requireResourceScope` extended with `document`/`learning_path`/`conversation`
+  resolvers — for RESOURCE-`:id` routes, DERIVE the owning project from the id.
+  **REVIEW-DESIGN F1 (BLOCK):** a declared `project_id` is bypassable by a cross-tenant
+  resource id (own project_id + another tenant's id); so resource routes must derive,
+  not trust. The matrix splits accordingly.
+
+**Application (~45 routes across 8 routers):** collection routes →
+`requireProjectScope('body'|'query'|{multi})`; resource-`:id` routes →
+`requireResourceScope('document'|'learning_path'|'conversation', param)`. groups'
+`:projectId` URL-param routes → existing `requireScope('projectId')`; group-container
+ops (group_id ≠ project) left unguarded by design.
+
+**Posture:** auth-off (`apiKeyScope` undefined) / global (`null`) → unrestricted (dev
+posture; 711-test baseline preserved — existing route tests run auth-off → guards no-op).
+
+**TS note:** adding a middleware shifts Express's handler overload so `req.params.X`
+widens to `string | string[]`; `String()`-wrapped 30 param sites across the touched
+files (correct — params are strings at runtime).
+
+**Deferred (Tier-2):** `POST /api/jobs/run-next` cross-project pop → **DEFERRED-024**
+(needs a `runNextJob(queue, projectScope?)` scheduling-semantics change; no request-time
+project to guard).
+
+**Tests:** 10 new D004 cases in `requireResourceScope.test.ts` (collection match/cross-
+tenant 404/absent 400/multi/global; resource own/cross-tenant 404/unknown 404). 711/711
+green; tsc clean. No live auth-on smoke (dev stack is auth-off; covered by the test-DB
+suite via the `x-test-key-scope` shim).
+
+**Workflow:** v2.2 size-L. REVIEW-DESIGN r1 1 BLOCK (derive-on-id) + 2 WARN → rev 2 CLEAR.
+REVIEW-CODE 0 findings. QC CLEAR. Light tenant-isolation security checklist CLEAR.
+
+**Open deferred now:** DEFERRED-003 (LOW, race_exhausted test), DEFERRED-023 (LOW,
+taxonomy_profiles bundle round-trip), DEFERRED-024 (LOW, run-next cross-project pop).
+No MED/HIGH items remain.
+
+---
+
+## (prior this session) DEFERRED-008 — exchange scope-leak — RESOLVED
+Branch `fix-exchange-scope-deferred-008`. 701/701 green; tsc clean; no migration.
+(Sprint 15.12 closed the entire Phase 15 deferred backlog before that.)
 
 ## DEFERRED-008 outcome (exchange scope-leak fix)
 

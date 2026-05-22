@@ -1,11 +1,12 @@
 import { Router } from 'express';
+import { requireProjectScope } from '../middleware/requireResourceScope.js';
 import { enqueueJob, listJobs, runNextJob } from '../../core/index.js';
 import { resolveProjectParams } from '../middleware/resolveProjectParams.js';
 
 const router = Router();
 
 /** POST /api/jobs — enqueue a job */
-router.post('/', async (req, res, next) => {
+router.post('/', requireProjectScope('body'), async (req, res, next) => {
   try {
     const result = await enqueueJob(req.body);
     res.status(201).json(result);
@@ -13,7 +14,7 @@ router.post('/', async (req, res, next) => {
 });
 
 /** GET /api/jobs — list jobs (supports project_ids[] for multi-project) */
-router.get('/', async (req, res, next) => {
+router.get('/', requireProjectScope('query', { multi: true }), async (req, res, next) => {
   try {
     // Jobs list is special: project_id is optional (shows all if omitted).
     // Use resolveProjectParams only if project_id or project_ids is present.

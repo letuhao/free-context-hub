@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { requireProjectScope } from '../middleware/requireResourceScope.js';
+import { requireScope } from '../middleware/requireScope.js';
 import {
   createGroup,
   deleteGroup,
@@ -35,7 +37,7 @@ router.post('/', async (req, res, next) => {
 /** DELETE /api/groups/:id — delete a group (members cascade) */
 router.delete('/:id', async (req, res, next) => {
   try {
-    const result = await deleteGroup(req.params.id);
+    const result = await deleteGroup(String(req.params.id));
     res.json(result);
   } catch (e) { next(e); }
 });
@@ -43,37 +45,37 @@ router.delete('/:id', async (req, res, next) => {
 /** GET /api/groups/:id/members — list project members of a group */
 router.get('/:id/members', async (req, res, next) => {
   try {
-    const members = await listGroupMembers(req.params.id);
-    res.json({ group_id: req.params.id, members });
+    const members = await listGroupMembers(String(req.params.id));
+    res.json({ group_id: String(req.params.id), members });
   } catch (e) { next(e); }
 });
 
 /** POST /api/groups/:id/members — add a project to a group */
-router.post('/:id/members', async (req, res, next) => {
+router.post('/:id/members', requireProjectScope('body'), async (req, res, next) => {
   try {
     const { project_id } = req.body;
     if (!project_id) {
       res.status(400).json({ error: 'project_id is required' });
       return;
     }
-    const result = await addProjectToGroup(req.params.id, String(project_id));
+    const result = await addProjectToGroup(String(req.params.id), String(project_id));
     res.status(result.added ? 201 : 200).json(result);
   } catch (e) { next(e); }
 });
 
 /** DELETE /api/groups/:id/members/:projectId — remove a project from a group */
-router.delete('/:id/members/:projectId', async (req, res, next) => {
+router.delete('/:id/members/:projectId', requireScope('projectId'), async (req, res, next) => {
   try {
-    const result = await removeProjectFromGroup(req.params.id, req.params.projectId);
+    const result = await removeProjectFromGroup(String(req.params.id), String(req.params.projectId));
     res.json(result);
   } catch (e) { next(e); }
 });
 
 /** GET /api/projects/:projectId/groups — list groups a project belongs to */
-router.get('/by-project/:projectId', async (req, res, next) => {
+router.get('/by-project/:projectId', requireScope('projectId'), async (req, res, next) => {
   try {
-    const groups = await listGroupsForProject(req.params.projectId);
-    res.json({ project_id: req.params.projectId, groups });
+    const groups = await listGroupsForProject(String(req.params.projectId));
+    res.json({ project_id: String(req.params.projectId), groups });
   } catch (e) { next(e); }
 });
 
