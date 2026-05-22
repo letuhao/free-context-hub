@@ -21,14 +21,24 @@
   the service layer so both REST and MCP inherit it, and add scoped MCP tokens)?
 - **Trigger condition:** any plan to run a shared multi-tenant instance with `MCP_AUTH_ENABLED`,
   OR a security review of the MCP surface.
-- **Estimated size:** L — service-layer scope enforcement (so both transports inherit it) +
+- **Estimated size:** L–XL — service-layer scope enforcement (so both transports inherit it) +
   scoped MCP token model + tests on the MCP path.
 - **Priority:** MED — exploitable only with `MCP_AUTH_ENABLED=true` on a shared multi-tenant
   instance; the dev posture (auth-off, single tenant) is unaffected. But MCP is the primary client
   surface, so isolation gaps there matter more than on REST.
 - **Session deferred:** 2026-05-23
 - **Sessions open:** 1
-- **Status:** OPEN
+- **Status:** OPEN — **scoped + scheduled** (decided 2026-05-23 during the milestone review):
+  - **Direction:** confirmed multi-tenant isolation IS a goal → implement for real (not document-and-close).
+  - **Mechanism (chosen): Option B — explicit `callerScope` parameter** threaded through every
+    service fn that takes a `project_id`, with enforcement in the service layer so REST + MCP both
+    inherit it. Chosen over AsyncLocalStorage (ambient state, harder to test) and MCP-handler-only
+    guards (would duplicate enforcement and re-create the asymmetry). Trade-off accepted: a large
+    mechanical change across hundreds of call sites — explicit + testable wins.
+  - **Plus:** a scoped MCP token model (per-project tokens; likely reuse `api_keys.project_scope`)
+    replacing the single shared `workspace_token` binary gate.
+  - **Timing:** its own dedicated phase AFTER the Phase 9–15 milestone review, with a full DESIGN
+    doc + security-framed review (safety-sensitive: tenant isolation). NOT bundled into the review.
 - **Source:** WS3 seam bug-hunt, milestone review (S3). Related: [[DEFERRED-004]] (REST tenant-scope), reinforces WS0-F5 (auth-ON E2E slice must cover MCP).
 
 ---
