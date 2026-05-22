@@ -1,7 +1,31 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 028 -->
+<!-- Next ID: 029 -->
+
+## DEFERRED-028
+
+- **What:** The coordination layer (Phase 15 Board) became a **light task orchestrator**, which
+  contradicts the WHITEPAPER Phase 13 non-goal: *"Not a task orchestrator… does not assign work
+  to agents, schedule agent runs, or manage dependencies between tasks."* Concretely:
+  `tasks.depends_on` + `claimTask` blocking a claim with `unmet_dependencies`
+  ([board.ts:392](src/services/board.ts#L392)) = dependency-sequenced work; `tasks.raci` =
+  assignment; `chaining.ts` auto-materializes approved decisions into (dependency-gated) tasks.
+- **Why deferred:** found during WS1 of the milestone review (`docs/qc/ws1-drift-audit-findings.md`
+  D1/D2). This is not a bug — it is a doc-vs-implementation contradiction that needs a **product
+  decision**, not a code fix in the review PR.
+- **Decision needed:** either (a) update the non-goal/whitepaper to acknowledge the system now
+  does dependency-sequenced task coordination (likely the right call — the feature is deliberate
+  and shipped), or (b) reconsider hard-gating vs advisory `depends_on`.
+- **Trigger condition:** next WHITEPAPER revision OR a product-owner review of coordination scope.
+- **Estimated size:** XS (doc) if (a); M if (b) revisits gating semantics.
+- **Priority:** LOW — behavior is intentional and tested; the gap is documentation/intent, not correctness.
+- **Session deferred:** 2026-05-23
+- **Sessions open:** 1
+- **Status:** OPEN
+- **Source:** WS1 drift audit, milestone review (D1/D2).
+
+---
 
 ## DEFERRED-025
 
