@@ -579,7 +579,16 @@
 - **Priority:** LOW
 - **Session deferred:** 2026-05-15
 - **Sessions open:** 1
-- **Status:** OPEN
+- **Status:** RESOLVED 2026-05-23 — the retry loop was extracted from `claimArtifact` into an
+  exported, injectable seam `_claimWithRetry(p, once=_claimArtifactOnce)`. Production behavior is
+  unchanged (default `once` = the real `_claimArtifactOnce`); the loop, `setImmediate` backoff, and
+  `race_exhausted` return are identical. The full real-DB integration race is genuinely
+  non-deterministic (step-1 lazy DELETE cleans the expired incumbent before any retry can re-observe
+  it; forcing it with a competing connection deadlocks on the claim's uncommitted DELETE), so a
+  deterministic unit test of the loop is the pragmatic resolution the original defer note anticipated.
+  3 DB-free tests in `artifactLeases.test.ts`: all-retry → `race_exhausted` (asserts exactly 2 `once`
+  invocations, pinned to `MAX_INTERNAL_RACE_RETRIES=1`); retry-then-claim → `claimed`; terminal-first
+  → no retry. 723/723 green; no migration. Branch=race-exhausted-coverage-deferred-003.
 - **Source:** Sprint 13.1 post-audit (`docs/audit/sprint-13.1-residuals.md` R5); design review r2 acknowledged "exceedingly rare" but didn't write a deferred entry.
 
 ---

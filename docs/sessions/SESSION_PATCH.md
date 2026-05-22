@@ -1,8 +1,29 @@
 # LONGRUN CHECKPOINT — Phase 15 autonomous longrun, session boundary (2026-05-23)
 
-**Status:** **DEFERRED-023 (taxonomy_profiles bundle round-trip) — RESOLVED** on branch
-`taxonomy-profiles-bundle-deferred-023`. 720/720 green; tsc clean; no migration. Only
-DEFERRED-003 (LOW test coverage) now remains in the backlog.
+**Status:** **DEFERRED-003 (race_exhausted coverage) — RESOLVED** on branch
+`race-exhausted-coverage-deferred-003`. 723/723 green; tsc clean; no migration.
+**The entire DEFERRED backlog is now CLEARED** — no OPEN items remain (003 was the last).
+
+## DEFERRED-003 outcome (race_exhausted retry-loop coverage)
+The retry loop in `claimArtifact` was extracted into an exported, injectable seam
+`_claimWithRetry(p, once=_claimArtifactOnce)`. Production behavior is unchanged — the default
+`once` is the real `_claimArtifactOnce`, and the loop/`setImmediate` backoff/`race_exhausted`
+return are byte-identical. The real-DB integration race is genuinely non-deterministic (the
+step-1 lazy DELETE cleans the expired incumbent before any retry can re-observe it, and forcing
+the race with a competing connection deadlocks on the claim's own uncommitted DELETE), so a
+deterministic unit test of the loop is the resolution the original defer note anticipated. 3
+DB-free tests in `artifactLeases.test.ts` cover all-retry → `race_exhausted` (asserts exactly 2
+`once` calls, pinned to `MAX_INTERNAL_RACE_RETRIES=1`), retry-then-claim → `claimed`, and
+terminal-first → no retry. v2.2 size-S (skip DESIGN/PLAN). REVIEW-CODE 0 findings; human
+POST-REVIEW CLEAR.
+
+**Backlog: CLEARED.** No OPEN deferred items remain (DEFERRED-001 ABANDONED; all others RESOLVED).
+
+---
+
+## (prior this session) DEFERRED-023 (taxonomy_profiles bundle round-trip) — RESOLVED
+Branch `taxonomy-profiles-bundle-deferred-023`. 720/720 green; tsc clean; no migration. Only
+DEFERRED-003 remained after this (now also closed, above).
 
 ## DEFERRED-023 outcome (taxonomy_profiles bundle round-trip)
 `taxonomy_profiles` is now a knowledge-bundle entity. `bundleFormat.ts` gains the
