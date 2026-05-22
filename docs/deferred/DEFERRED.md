@@ -1,7 +1,62 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 025 -->
+<!-- Next ID: 028 -->
+
+## DEFERRED-025
+
+- **What:** Hard 500 when the embedding model is unavailable. `searchLessons`, `updateLesson`
+  (`src/services/lessons.ts`), and `runExtraction` (`src/services/extraction/pipeline.ts`)
+  propagate `embedTexts` HTTP 400 ("model unloaded") as an unhandled 500 to the client.
+- **Why deferred:** found during WS0 of the Phase 9–15 milestone review (`docs/qc/ws0-regression-findings.md` F2); a real-bug fix that needs its own debugging task, not bundled into the review test PR.
+- **Drift:** Phase 6 design promised graceful fallback when the model is unavailable (tiered
+  search → FTS). Search should degrade to FTS; write paths (update/extract) should enqueue
+  re-embed as a job rather than failing the write.
+- **Trigger condition:** any embeddings-availability hardening pass, OR a user report of 500s
+  during model load/unload.
+- **Estimated size:** M — fallback in search path + async re-embed on write paths + tests.
+- **Priority:** MED — degrades core search/write whenever the embedding server hiccups.
+- **Session deferred:** 2026-05-23
+- **Sessions open:** 1
+- **Status:** OPEN
+- **Source:** WS0 regression run, milestone review (F2).
+
+---
+
+## DEFERRED-026
+
+- **What:** Global search references a non-existent column. `src/services/globalSearch.ts:80`
+  runs `SELECT sha, message, author, committed_at AS date` against `git_commits`, but that
+  table has `author_name`/`author_email` (migration 0005), no `author`. The per-source error
+  is swallowed, so the **commits section is silently dropped** from global-search results
+  while smoke tests stay green.
+- **Why deferred:** found during WS0 of the milestone review (`docs/qc/ws0-regression-findings.md` F3); real-bug fix with its own (small) task.
+- **Trigger condition:** immediate — small, safe fix (`author` → `author_name`, or alias).
+- **Estimated size:** XS — one column reference + a global-search test asserting commit hits.
+- **Priority:** MED — global search silently returns incomplete results (no commits).
+- **Session deferred:** 2026-05-23
+- **Sessions open:** 1
+- **Status:** OPEN
+- **Source:** WS0 regression run, milestone review (F3).
+
+---
+
+## DEFERRED-027
+
+- **What:** `updateLessonStatus` (`src/services/lessons.ts`, the `PATCH /api/lessons/:id/status`
+  path) leaks a raw DB error as a 500 on a malformed uuid: `invalid input syntax for type
+  uuid: "undefined"`. A missing/invalid id or `superseded_by` should be validated and returned
+  as 400, not surfaced as an unhandled Postgres error.
+- **Why deferred:** found during WS0 of the milestone review (`docs/qc/ws0-regression-findings.md` F4); real-bug fix with its own task (root-cause whether the undefined comes from a caller or a missing guard).
+- **Trigger condition:** immediate — input-validation hardening.
+- **Estimated size:** S — uuid validation at the route/service boundary + a 400 test.
+- **Priority:** LOW–MED — leaks DB internals and returns 500 for what should be a 400; not a data-integrity risk.
+- **Session deferred:** 2026-05-23
+- **Sessions open:** 1
+- **Status:** OPEN
+- **Source:** WS0 regression run, milestone review (F4).
+
+---
 
 ## DEFERRED-024
 
