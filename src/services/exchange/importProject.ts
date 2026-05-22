@@ -447,12 +447,14 @@ async function applyLessonType(
       return;
     }
     if (!dryRun) {
+      // DEFERRED-008: carry `scope`. A pre-fix bundle has no `scope` field →
+      // default 'global' (the migration-0052 default; prior behavior preserved).
       await client.query(
         `UPDATE lesson_types
             SET display_name = $2, description = $3, color = $4,
-                template = $5, is_builtin = $6
+                template = $5, is_builtin = $6, scope = $7
           WHERE type_key = $1`,
-        [typeKey, row.display_name, row.description, row.color, row.template, row.is_builtin],
+        [typeKey, row.display_name, row.description, row.color, row.template, row.is_builtin, normalizeScope(row.scope)],
       );
     }
     counts.updated += 1;
@@ -460,9 +462,10 @@ async function applyLessonType(
   }
   // create
   if (!dryRun) {
+    // DEFERRED-008: carry `scope` (default 'global' for pre-fix bundles).
     await client.query(
-      `INSERT INTO lesson_types (type_key, display_name, description, color, template, is_builtin, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, now()))`,
+      `INSERT INTO lesson_types (type_key, display_name, description, color, template, is_builtin, scope, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, now()))`,
       [
         typeKey,
         row.display_name,
@@ -470,11 +473,22 @@ async function applyLessonType(
         row.color,
         row.template,
         row.is_builtin,
+        normalizeScope(row.scope),
         row.created_at,
       ],
     );
   }
   counts.created += 1;
+}
+
+/**
+ * DEFERRED-008 — normalize a bundle row's `scope` to the lesson_types CHECK domain.
+ * A pre-fix bundle omits `scope` (→ 'global', the migration-0052 default + prior
+ * behavior); a malformed value falls back to 'global' rather than violating the
+ * CHECK constraint and aborting the batch transaction.
+ */
+function normalizeScope(scope: unknown): 'global' | 'profile' {
+  return scope === 'profile' ? 'profile' : 'global';
 }
 
 async function applyDocument(

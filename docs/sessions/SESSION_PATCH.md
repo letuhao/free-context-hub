@@ -1,5 +1,42 @@
 # LONGRUN CHECKPOINT — Phase 15 autonomous longrun, session boundary (2026-05-21)
 
+**Status:** **DEFERRED-008 (exchange scope-leak) — RESOLVED** on branch
+`fix-exchange-scope-deferred-008`. 701/701 green; tsc clean; no migration.
+(Prior: Sprint 15.12 closed the entire Phase 15 deferred backlog.)
+
+## DEFERRED-008 outcome (exchange scope-leak fix)
+
+The Phase 11 knowledge-bundle export/import path dropped `lesson_types.scope`
+(migration 0052), so a source `scope='profile'` type silently became `scope='global'`
+on import — polluting the destination's global registry. Fix (size S, scope-only per
+CLARIFY Q1):
+- `exportProject.ts` lesson_types SELECT adds `scope`.
+- `importProject.ts` INSERT (create) + UPDATE (overwrite) persist `scope` via a
+  `normalizeScope(row.scope)` helper → defaults a pre-fix bundle (no `scope` field) or
+  a malformed value to `'global'` (prior behavior + no CHECK-constraint violation).
+- 4 round-trip tests in `src/services/exchange/scopeRoundTrip.test.ts` (registered in
+  npm test): AC1 export carries scope (via openBundle); AC4 profile + global round-trip
+  (via encodeBundle→importProject→DB read); AC5 pre-fix bundle defaults global.
+
+The `taxonomy_profiles`-as-bundle-entity round-trip (the deferred's "related" gap) was
+split to **DEFERRED-023** (LOW; profiles re-seed from config on fresh instances, so the
+scope-leak — the actual data-integrity bug — is closed without it).
+
+Workflow: v2.2 size-S (CLARIFY + BUILD + VERIFY + REVIEW-CODE + POST-REVIEW; DESIGN +
+PLAN skipped per S-rules). REVIEW-CODE 0 findings. No live smoke (the dev stack was down
+on resume + MCP disconnected; the round-trip is fully covered by the test-DB integration
+tests). Open deferred now: DEFERRED-003 (race_exhausted test, LOW), DEFERRED-004 (PARTIAL,
+tenant-scope service-handler audit, MED), DEFERRED-023 (taxonomy_profiles round-trip, LOW).
+
+## Environment note (2026-05-21 resume)
+Docker stack was DOWN on session resume + the MCP server disconnected (93 mcp__contexthub__
+tools unavailable). Brought the stack back up (`docker compose up -d`). REST API (3001)
+used for any live ops; MCP lessons deferred to the next MCP-online session (noted below).
+
+---
+
+## (prior) Sprint 15.12 — Phase 15 backlog closed
+
 **Status:** **Sprint 15.12 (tenant-scope authz + induction-pack tail —
 DEFERRED-009 + 010) — COMPLETE.** Closes the ENTIRE Phase 15 deferred backlog.
 v2.2 human-in-loop. REVIEW-DESIGN r1 1 BLOCK (body-project omission → DEFAULT_PROJECT_ID

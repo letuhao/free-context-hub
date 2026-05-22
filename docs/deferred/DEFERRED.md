@@ -1,7 +1,35 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 023 -->
+<!-- Next ID: 024 -->
+
+## DEFERRED-023
+
+- **What:** `taxonomy_profiles` is not a knowledge-bundle entity. The Phase 11 export/
+  import path carries `lesson_types` (incl. `scope` as of DEFERRED-008), but the
+  `taxonomy_profiles` table itself does not round-trip. A `scope='profile'` lesson type
+  imported with correct scope (post-DEFERRED-008) attaches to a profile of the same key
+  ONLY if that profile exists on the destination — which today happens only via the
+  config-seed (`config/taxonomy-profiles/*.json`) on a fresh instance, not via the bundle.
+- **Why deferred:** DEFERRED-008 (2026-05-21) CLARIFY Q1 — the user chose the scope-only
+  fix (close the data-integrity leak) and deferred the profiles round-trip as a separate
+  feature. Adding `taxonomy_profiles` as a bundle entity is a new ENTRY_NAME + export
+  iterable + import handler + manifest + conflict policy + tests (its own S–M scope).
+- **Trigger condition:** a sprint that touches `src/services/exchange/*` for a feature
+  reason, OR a user report that a cross-instance import lost taxonomy-profile definitions
+  (not just type classification — DEFERRED-008 fixed the classification).
+- **Estimated size:** S–M — new bundle entity `taxonomy_profiles.jsonl` (ENTRY_NAMES,
+  encode iterable, BundleReader method), export SELECT, import apply handler with a
+  conflict policy, manifest count, `bundleFormat.test.ts` + import e2e coverage.
+- **Priority:** LOW — profiles re-seed from config on a fresh instance; the
+  DEFERRED-008 fix already stops the scope-LEAK (the data-integrity issue). This is the
+  remaining round-trip-completeness enhancement.
+- **Session deferred:** 2026-05-21
+- **Sessions open:** 1
+- **Status:** OPEN
+- **Source:** DEFERRED-008 CLARIFY Q1 (`docs/specs/2026-05-21-deferred-008-exchange-scope-clarify.md`); the original DEFERRED-008 "related" note.
+
+---
 
 ## DEFERRED-022
 
@@ -425,7 +453,15 @@
 - **Priority:** LOW
 - **Session deferred:** 2026-05-15
 - **Sessions open:** 1
-- **Status:** OPEN
+- **Status:** RESOLVED — 2026-05-21 (`fix-exchange-scope-deferred-008`): the scope-LEAK
+  fixed. `exportProject` lesson_types SELECT now includes `scope`; `importProject`
+  INSERT (create) + UPDATE (overwrite) persist `scope` via a `normalizeScope` helper
+  that defaults a pre-fix bundle (no `scope` field) or a malformed value to `'global'`
+  (prior behavior + no CHECK violation). A `scope='profile'` type now round-trips as
+  'profile' instead of silently becoming 'global' on the destination's global registry.
+  4 round-trip tests (AC1 export carries scope; AC4 profile + global round-trip; AC5
+  pre-fix bundle defaults global). The `taxonomy_profiles`-as-bundle-entity round-trip
+  (the "related" gap) is split out to DEFERRED-023.
 - **Source:** phase-13 bug-fix `/review-impl` review (commit 00acfa4), Finding 3.
 
 ---
