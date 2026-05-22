@@ -52,7 +52,11 @@
 - **Priority:** LOW — behavior is intentional and tested; the gap is documentation/intent, not correctness.
 - **Session deferred:** 2026-05-23
 - **Sessions open:** 1
-- **Status:** OPEN
+- **Status:** RESOLVED 2026-05-23 (`milestone-review-phase-15`) — chose option (a): the WHITEPAPER
+  Phase 13 "Not a task orchestrator" non-goal now carries a Phase 15 scope note acknowledging the
+  Board does dependency-sequenced task coordination (`depends_on` gating + `raci` + chaining),
+  while clarifying the decision-to-work stays human/collective-driven and it is still not a
+  scheduler/runtime. Phase 15 Board bullet updated to surface `depends_on`/`raci`.
 - **Source:** WS1 drift audit, milestone review (D1/D2).
 
 ---
