@@ -107,9 +107,16 @@ export const allPhase13LeaseTests: TestFn[] = [
     expectStatus(c, 201);
     cleanup.leaseIds.push({ leaseId: c.body.lease_id, projectId, agentId });
 
+    // Auto-inject workspace_token under auth-on.
+    const { ADMIN_TOKEN } = await import('../shared/constants.js');
     await mcp.callTool({
       name: 'release_artifact',
-      arguments: { project_id: projectId, agent_id: agentId, lease_id: c.body.lease_id },
+      arguments: {
+        project_id: projectId,
+        agent_id: agentId,
+        lease_id: c.body.lease_id,
+        ...(ADMIN_TOKEN ? { workspace_token: ADMIN_TOKEN } : {}),
+      },
     });
 
     // The release worked iff the artifact is available again.
