@@ -184,12 +184,18 @@ Full migration recipe: `docs/specs/2026-05-23-deferred-029-pr-e-legacy-token-mig
 ## Closeout checklist
 
 - [x] All 9 PRs open and stacked (#20 → #29)
-- [x] 831/831 unit tests green (+111 from session start 720)
-- [x] 18 auth-ON E2E tests added (runs via `docker-compose.auth-test.yml`)
+- [x] **839/839 unit tests green** (+119 from session start 720; includes 8 real-DB regression tests for SEC-1/SEC-2/SEC-3/SEC-6)
+- [x] **19/19 auth-ON E2E DEFERRED-029 tests PASS live** against rebuilt MCP container (proven 2026-05-23 19:30Z)
 - [x] 4 adversary passes complete; 6 bypasses fixed before merge
 - [x] Migration doc + Phase 16 candidate documented
 - [x] `tsc --noEmit` clean
 - [x] Architectural lessons persisted via `add_lesson` MCP calls
+- [x] Live E2E proof: stack switched to `MCP_AUTH_ENABLED=true`, rebuild verified the deployed code matches PR F branch, all DEFERRED-029 cross-tenant tests pass, stack restored to dev mode
 - [ ] Human review + sequential merge of the stack (next-session work)
 
-DEFERRED-029 is technically complete and ready for human review/merge.
+**Pre-existing E2E failures (NOT caused by PR F):** 14 phase13-* test failures persist
+unchanged before/after the PR F rebuild (5 phase13-mcp, 4 phase13-reviews, 1
+phase13-leases, 4 phase13-cross-feature). These need separate triage. They are
+out of scope for DEFERRED-029.
+
+DEFERRED-029 is **complete and live-verified**, ready for human review/merge.

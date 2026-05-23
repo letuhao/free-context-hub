@@ -403,11 +403,14 @@ export const allDeferred029CrossTenantTests: TestFn[] = [
       // BEFORE FIX: scopedA enqueued with no project_id → row written with
       // project_id=NULL, worker runs unrestricted.
       // AFTER FIX: project_id auto-bound to scope.
+      // NOTE: payload must NOT include 'root' here — SEC-6 (added later in
+      // the same PR) rejects payload.root for scoped callers. We use a
+      // payload field the SEC-6 guard doesn't trip on (any non-root key).
       const enq = await callTool(client, 'enqueue_job', {
         workspace_token: trio.scopedAToken,
         // intentionally omit project_id
         job_type: 'workspace.scan',
-        payload: { root: '/tmp/sec-3-regression' },
+        payload: { marker: 'sec-3-regression' },
       });
       if (enq?.status !== 'queued' || !enq?.job_id) {
         throw new Error(`Expected status=queued, job_id; got: ${JSON.stringify(enq).slice(0, 200)}`);
