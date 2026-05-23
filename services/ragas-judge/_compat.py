@@ -72,6 +72,60 @@ def _install_vertexai_stub() -> None:
     sys.modules[_STUB_MODULE_NAME] = stub
 
 
+def _patch_openai_reasoning_content_fallback() -> None:
+    """For reasoning models (qwen3.6, deepseek-r1, o1, etc.) LM Studio returns
+    the structured-output JSON in ``message.reasoning_content`` and leaves
+    ``message.content`` empty. Instructor reads ``content`` only, so the JSON
+    parse fails with "EOF while parsing".
+
+    This shim wraps ``AsyncCompletions.create`` and ``Completions.create`` and,
+    when the returned message has empty ``content`` but a non-empty
+    ``reasoning_content``, copies the latter into the former so downstream
+    parsers (instructor, ragas) work transparently.
+
+    Tracked as Phase 16 OPEN-1; this is the proper fix.
+
+    REMOVE when either:
+      - LM Studio normalizes content field for reasoning models, OR
+      - ragas / instructor learns to read reasoning_content directly
+    """
+    try:
+        from openai.resources.chat.completions import AsyncCompletions, Completions
+    except ImportError:
+        return
+
+    def _maybe_fixup(result):
+        """Mutate the response in place so any consumer (instructor, raw caller)
+        sees structured output in `content`."""
+        choices = getattr(result, "choices", None)
+        if not choices:
+            return result
+        for choice in choices:
+            msg = getattr(choice, "message", None)
+            if not msg:
+                continue
+            content = getattr(msg, "content", None)
+            reasoning = getattr(msg, "reasoning_content", None)
+            if (not content) and reasoning:
+                # Strip trailing tab/space artifacts some reasoning models append
+                msg.content = reasoning.strip()
+        return result
+
+    _orig_async = AsyncCompletions.create
+    _orig_sync = Completions.create
+
+    async def _async_create(self, *args, **kwargs):
+        result = await _orig_async(self, *args, **kwargs)
+        return _maybe_fixup(result)
+
+    def _sync_create(self, *args, **kwargs):
+        result = _orig_sync(self, *args, **kwargs)
+        return _maybe_fixup(result)
+
+    AsyncCompletions.create = _async_create  # type: ignore[method-assign]
+    Completions.create = _sync_create  # type: ignore[method-assign]
+
+
 def _patch_instructor_openai_mode() -> None:
     """Swap instructor.Mode.JSON → JSON_SCHEMA for the OpenAI provider.
 
@@ -109,6 +163,8 @@ def _patch_instructor_openai_mode() -> None:
     instructor.from_openai = _patched_from_openai
 
 
-# Apply on import
+# Apply on import (order matters: stub the missing module BEFORE anything
+# tries to import ragas; patch openai BEFORE any client is constructed)
 _install_vertexai_stub()
+_patch_openai_reasoning_content_fallback()
 _patch_instructor_openai_mode()

@@ -29,7 +29,11 @@ export type StandardMetricName =
   | 'context_precision'
   | 'context_recall';
 
-export type MetricName = StandardMetricName | 'refusal_correctness';
+export type MetricName =
+  | StandardMetricName
+  | 'refusal_correctness'
+  /** Phase 17.1 C3: second judge of groundedness (single-call, cheap). */
+  | 'groundedness_self_eval';
 
 export type JudgeContext = {
   /** Optional stable id (lesson_id / chunk_id / file path / etc.) for traceability. */

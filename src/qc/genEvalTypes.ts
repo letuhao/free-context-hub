@@ -83,6 +83,9 @@ export const DEFAULT_THRESHOLDS = {
   context_precision_min: 0.8,
   context_recall_min: 0.75,
   refusal_correctness_min: 0.75,
+  /** Phase 17.1 C3: second-judge groundedness. Same target as ragas faithfulness;
+   *  divergence between the two signals a measurement issue. */
+  groundedness_self_eval_min: 0.85,
   regression_pct_max: 0.05,
 } as const;
 

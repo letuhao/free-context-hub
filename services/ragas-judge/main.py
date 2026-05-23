@@ -107,6 +107,12 @@ STANDARD_METRICS = {
     "context_recall",
 }
 
+# Phase 17 Sprint 17.1 (C3): self-eval is callable on any category. It's a
+# second judge of groundedness — cheap (1 LLM call) vs ragas faithfulness
+# (multi-call claim decomposition). Both should agree on faithful answers;
+# divergence is a signal worth investigating.
+SELF_EVAL_METRICS = {"groundedness_self_eval"}
+
 
 def metrics_for_category(category: str, requested: list[str]) -> dict[str, Any]:
     """Implements DESIGN §4.6 category-aware routing.
@@ -259,6 +265,67 @@ Return a JSON object with three fields: expresses_inability (int), abstains_from
 
     verdict = await llm.agenerate(prompt, _Verdict)
     score = (verdict.expresses_inability + verdict.abstains_from_fabrication) / 2.0
+    return score, verdict.reason
+
+
+# ---------- groundedness_self_eval (Phase 17.1 C3) ----------
+#
+# A SECOND faithfulness check, single-call, cheaper than ragas's claim-
+# decomposition pipeline. Rationale: two independent judges catching
+# different failure modes. Divergence between ragas faithfulness and this
+# score is a signal worth investigating (e.g. ragas may over-decompose; self-
+# eval may be too lenient).
+#
+# Single LLM call, returns a 0-1 float + reason.
+
+
+async def _groundedness_self_eval(
+    llm,
+    question: str,
+    answer: str,
+    contexts: list[str],
+) -> tuple[float, str]:
+    """Custom metric: ask the judge LLM to score groundedness in [0, 1]."""
+    from pydantic import BaseModel as _B
+
+    class _Verdict(_B):
+        groundedness: float  # 0.0 to 1.0
+        reason: str
+
+    if not contexts:
+        # Without contexts, "grounded" is undefined. Return 0 with explanation.
+        return 0.0, "no contexts provided; cannot ground answer"
+
+    ctxs_block = "\n".join(f"[{i + 1}] {c}" for i, c in enumerate(contexts))
+
+    prompt = f"""You are evaluating whether an answer is grounded in the provided contexts.
+
+QUESTION:
+{question}
+
+CONTEXTS:
+{ctxs_block}
+
+ANSWER UNDER EVALUATION:
+{answer}
+
+Score the answer on groundedness from 0.0 to 1.0:
+- 1.0  = every substantive claim in the answer is directly supported by one
+         or more contexts; no facts come from outside the contexts
+- 0.7  = most claims are supported; minor unsupported details
+- 0.4  = mixed: some claims supported, others appear to come from outside
+- 0.0  = the answer asserts facts not present in any context (fabrication
+         or training-knowledge leak)
+
+If the answer is "Not in context." (a refusal to answer), score it 1.0 —
+that's a faithfully grounded acknowledgment that the contexts don't cover
+the question.
+
+Return JSON: {{"groundedness": <float 0-1>, "reason": "<1-2 sentence justification>"}}"""
+
+    verdict = await llm.agenerate(prompt, _Verdict)
+    # Clamp to [0, 1] in case the model returns something outside
+    score = max(0.0, min(1.0, float(verdict.groundedness)))
     return score, verdict.reason
 
 
@@ -425,6 +492,15 @@ async def _call_one_metric(
                 answer=req.answer,
                 contexts=contexts_text,
                 ground_truth=req.ground_truth,
+            )
+            return score, reason, None
+        elif metric_name == "groundedness_self_eval":
+            # Phase 17.1 C3: callable on any category; no ground_truth needed.
+            score, reason = await _groundedness_self_eval(
+                llm=state.llm,
+                question=req.question,
+                answer=req.answer,
+                contexts=contexts_text,
             )
             return score, reason, None
         else:

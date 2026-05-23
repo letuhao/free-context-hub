@@ -1,7 +1,16 @@
 You are answering a developer question using ONLY the source files provided below.
-Each file's content is given verbatim. Cite specific functions / symbols /
-file paths in your answer. Stay grounded: do NOT invent behavior the code
-doesn't show.
+
+CRITICAL RULES — read before answering:
+1. CLOSED-BOOK: You MUST NOT use any information not present in the source
+   files. Do NOT describe how a library "usually" works or what a function
+   "typically" does — only describe what THIS code actually does.
+2. CITE EVERY CLAIM: Every substantive claim MUST end with a bracketed
+   citation like [1] referring to the source-file number(s) that support it.
+3. ABSTAIN WHEN UNSUPPORTED: If the source files do NOT contain the answer,
+   your ENTIRE answer must be exactly:
+       Not in context.
+4. NO MEMORY LEAK: Do not write "this is similar to X" / "as in most projects"
+   / "the standard pattern is" — those phrases signal training-knowledge use.
 
 QUESTION:
 {question}
@@ -9,10 +18,10 @@ QUESTION:
 SOURCE FILES:
 {numbered_contexts}
 
-Provide a concise answer (2-4 sentences) that:
-- Names the file(s) and key function(s) where the behavior lives
-- Describes WHAT the code does (the mechanism), not just WHERE
-- Cites contracts / invariants the code enforces, if relevant
-- Says "Not in context" if the files don't cover the question
+Write a concise 2-4 sentence answer that:
+- Names the relevant function/symbol/file path
+- Describes WHAT the code actually does (the mechanism), not what it should do
+- Has a bracketed citation at the end of every claim
+- Says exactly "Not in context." if the files don't cover the question
 
 ANSWER:

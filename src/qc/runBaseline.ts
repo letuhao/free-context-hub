@@ -351,6 +351,9 @@ async function runGenEvalForRow(
     'answer_relevancy',
     'context_precision',
     'context_recall',
+    // Phase 17 Sprint 17.1: second judge of groundedness, single-call.
+    // Divergence vs faithfulness is a signal worth investigating.
+    'groundedness_self_eval',
   ];
 
   const judgeReq: JudgeRequest = {
@@ -417,6 +420,13 @@ function detectFailReasons(scores: Record<string, number | null>): string[] {
   }
   if (scores.refusal_correctness !== null && scores.refusal_correctness !== undefined && scores.refusal_correctness < t.refusal_correctness_min) {
     fails.push(`refusal_correctness<${t.refusal_correctness_min}`);
+  }
+  if (
+    scores.groundedness_self_eval !== null &&
+    scores.groundedness_self_eval !== undefined &&
+    scores.groundedness_self_eval < t.groundedness_self_eval_min
+  ) {
+    fails.push(`groundedness_self_eval<${t.groundedness_self_eval_min}`);
   }
   return fails;
 }
@@ -514,6 +524,7 @@ function aggregateGen(perQuery: PerQuery[]): GenSurfaceAggregate | undefined {
     else if (m === 'context_precision') threshold = t.context_precision_min;
     else if (m === 'context_recall') threshold = t.context_recall_min;
     else if (m === 'refusal_correctness') threshold = t.refusal_correctness_min;
+    else if (m === 'groundedness_self_eval') threshold = t.groundedness_self_eval_min;
     const fail_count = vals.filter((v) => v < threshold).length;
 
     metrics[m] = {
@@ -652,8 +663,8 @@ function renderMarkdown(archive: BaselineArchive): string {
   if (surfacesWithGen.length > 0) {
     lines.push('## Gen-eval summary (per surface)');
     lines.push('');
-    lines.push('| Surface | rows w/ gt | rows judged | faithfulness | answer_relevancy | context_precision | context_recall | refusal_correctness |');
-    lines.push('|---|---:|---:|---:|---:|---:|---:|---:|');
+    lines.push('| Surface | rows w/ gt | rows judged | faithfulness | answer_relevancy | context_precision | context_recall | refusal_correctness | groundedness_self_eval |');
+    lines.push('|---|---:|---:|---:|---:|---:|---:|---:|---:|');
     const fmtGen = (m?: GenMetricSummary): string => {
       if (!m) return '—';
       return `${m.mean.toFixed(2)} ±${m.std.toFixed(2)}${m.fail_count > 0 ? ` (${m.fail_count} fail)` : ''}`;
@@ -661,11 +672,11 @@ function renderMarkdown(archive: BaselineArchive): string {
     for (const [s, a] of surfacesWithGen) {
       const g = a!.generation!;
       lines.push(
-        `| ${s} | ${g.rows_with_gt} | ${g.rows_judged} | ${fmtGen(g.metrics.faithfulness)} | ${fmtGen(g.metrics.answer_relevancy)} | ${fmtGen(g.metrics.context_precision)} | ${fmtGen(g.metrics.context_recall)} | ${fmtGen(g.metrics.refusal_correctness)} |`,
+        `| ${s} | ${g.rows_with_gt} | ${g.rows_judged} | ${fmtGen(g.metrics.faithfulness)} | ${fmtGen(g.metrics.answer_relevancy)} | ${fmtGen(g.metrics.context_precision)} | ${fmtGen(g.metrics.context_recall)} | ${fmtGen(g.metrics.refusal_correctness)} | ${fmtGen(g.metrics.groundedness_self_eval)} |`,
       );
     }
     lines.push('');
-    lines.push(`_Thresholds (WARN-only): faithfulness ≥ ${DEFAULT_THRESHOLDS.faithfulness_min} · answer_relevancy ≥ ${DEFAULT_THRESHOLDS.answer_relevancy_min} · context_precision ≥ ${DEFAULT_THRESHOLDS.context_precision_min} · context_recall ≥ ${DEFAULT_THRESHOLDS.context_recall_min} · refusal_correctness ≥ ${DEFAULT_THRESHOLDS.refusal_correctness_min}_`);
+    lines.push(`_Thresholds (WARN-only): faithfulness ≥ ${DEFAULT_THRESHOLDS.faithfulness_min} · answer_relevancy ≥ ${DEFAULT_THRESHOLDS.answer_relevancy_min} · context_precision ≥ ${DEFAULT_THRESHOLDS.context_precision_min} · context_recall ≥ ${DEFAULT_THRESHOLDS.context_recall_min} · refusal_correctness ≥ ${DEFAULT_THRESHOLDS.refusal_correctness_min} · groundedness_self_eval ≥ ${DEFAULT_THRESHOLDS.groundedness_self_eval_min}_`);
     lines.push('');
 
     // Fail-list: per-surface failing rows
