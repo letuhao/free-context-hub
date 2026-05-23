@@ -1,3 +1,51 @@
+# LONGRUN CHECKPOINT — DEFERRED-029 PR F (2026-05-23, session 3 cont.)
+
+**Status:** **DEFERRED-029 PR F — auth-ON E2E slice + cold-start adversary
+review (and 3 bypass fixes)** built on branch
+`deferred-029-pr-f-auth-on-e2e-and-security` (stacked on PR E).
+**825/825 unit green** (+5 from 820 baseline); **tsc clean**; no migration.
+
+## What PR F contains
+- **Auth-ON E2E slice:** new `test/e2e/api/deferred-029-cross-tenant.test.ts`
+  — 18 cross-tenant tests (REST + MCP, 3-case matrix per representative
+  endpoint), skipped when `MCP_AUTH_ENABLED=false`. Wired into
+  `test/e2e/api/runner.ts`.
+- **Cold-start security-adversary review:** found **THREE bypass paths** that
+  shipped through PRs B–E unnoticed. Per Sprint 15.3 lesson — hostile-actor
+  framing caught what /review-impl coverage missed.
+- **Adversary fixes (all 3 closed in this PR):**
+
+| # | Sev | Finding | Fix location |
+|---|---|---|---|
+| **SEC-1** | **CRITICAL** | `listJobs` cross-tenant read when scoped caller omits both `projectId`+`projectIds` — WHERE clause unconstrained, leaks every tenant's jobs | `src/services/jobQueue.ts` — inject `projectId=callerScope` |
+| **SEC-2** | **CRITICAL** | `triageIntake` writes coordination event to caller-supplied `route.topic_id` never scope-checked — forges tenant-attributable rows in cross-tenant `coordination_events` | `src/services/intake.ts` — `assertTopicScope(pool, callerScope, topicId)` after `assertIntakeScope` |
+| **SEC-3** | **HIGH** | `enqueueJob` allows scoped caller to omit `project_id` → row written with `project_id=NULL` → worker runs unrestricted, drives `index.run`/`git.ingest` against attacker-chosen paths | `src/services/jobQueue.ts` — auto-bind `project_id=callerScope` when scoped |
+
+- **Regression coverage:**
+  - `src/services/pr-f-adversary-fixes.test.ts` — 5 DB-free unit tests
+  - 3 new E2E auth-ON regression tests (SEC-1 leaked-rows check, SEC-2 cross-tenant topic_id reject, SEC-3 NULL-project-id binding probe)
+
+## DEFERRED-029 status after PR F (CLOSED)
+
+The cold-start security review is the safety-sensitive gate per CLAUDE.md
+Sprint 15.3 lesson. With all 3 findings fixed + regression tests in place,
+DEFERRED-029 is fully closed pending PR review.
+
+| PR | Domain | Tests |
+|---|---|---|
+| #20 (B) | lessons | — |
+| #21 (C1) | topics + board | — |
+| #22 (C2) | requests + motions + bodies + proxies | — |
+| #23 (C3) | disputes + intake + reviewRequests + chaining | 755 |
+| #24 (D1) | exchange + documents + chunks + generatedDocs | 773 |
+| #25 (D2) | git + projectSources + workspace | 785 |
+| #26 (D3) | jobQueue + artifactLeases + taxonomy + replay + groups | 803 |
+| #27 (D4) | distillation + KG + indexing + guardrails + chat-sweep + artifacts | 817 |
+| #28 (E) | retire legacy `CONTEXT_HUB_WORKSPACE_TOKEN` | 820 |
+| **this (F)** | **auth-ON E2E + adversary review + 3 CRITICAL/HIGH bypass fixes** | **825** |
+
+---
+
 # LONGRUN CHECKPOINT — DEFERRED-029 PR E (2026-05-23, session 3 cont.)
 
 **Status:** **DEFERRED-029 PR E — retire legacy `CONTEXT_HUB_WORKSPACE_TOKEN`**

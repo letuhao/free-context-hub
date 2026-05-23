@@ -69,7 +69,21 @@ async function ensureRabbitQueue(queueName: string): Promise<void> {
 }
 
 export async function enqueueJob(input: QueuePayload): Promise<{ status: 'queued'; job_id: string; backend: 'postgres' | 'rabbitmq' }> {
-  if (input.project_id) {
+  // PR F SEC-3 (Adversary HIGH #3): when a scoped caller omits project_id,
+  // the previous code silently allowed an unscoped job to be enqueued. The
+  // worker then runs it with callerScope=undefined (unrestricted by design)
+  // — letting a scoped caller drive index.run / git.ingest against any
+  // filesystem path via payload.root. Auto-bind project_id to the caller's
+  // scope when scoped; throw if the caller declared a different project_id.
+  if (typeof input.callerScope === 'string') {
+    if (!input.project_id) {
+      input = { ...input, project_id: input.callerScope };
+    } else {
+      assertCallerScope(input.callerScope, input.project_id);
+    }
+  } else if (input.project_id) {
+    // auth-off / global key + explicit project_id → still enforce (no-op on
+    // undefined/null but keeps the contract uniform).
     assertCallerScope(input.callerScope, input.project_id);
   }
   const pool = getDbPool();
@@ -311,6 +325,13 @@ export async function listJobs(params: {
     // Multi-project listing: a scoped caller may only see its own project.
     const { assertCallerScopeMulti } = await import('../core/security/callerScope.js');
     assertCallerScopeMulti(params.callerScope, params.projectIds);
+  } else if (typeof params.callerScope === 'string') {
+    // PR F SEC-1 (Adversary CRITICAL #1): when a scoped caller omits both
+    // projectId AND projectIds, the previous WHERE clause was unconstrained
+    // ('1=1') → cross-tenant read of every project's jobs. Pin the listing to
+    // the caller's scope. Auth-off (undefined) and global keys (null) still
+    // see all projects — that path is unchanged.
+    params = { ...params, projectId: params.callerScope };
   }
   const pool = getDbPool();
   const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);

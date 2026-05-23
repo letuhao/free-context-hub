@@ -26,6 +26,7 @@ import { allPhase13TaxonomyTests } from './phase13-taxonomy.test.js';
 import { allPhase13McpTests } from './phase13-mcp.test.js';
 import { allPhase13CrossFeatureTests } from './phase13-cross-feature.test.js';
 import { allPhase13AuthScopeTests } from './phase13-auth-scope.test.js';
+import { allDeferred029CrossTenantTests } from './deferred-029-cross-tenant.test.js';
 
 async function main() {
   const startMs = Date.now();
@@ -55,6 +56,7 @@ async function main() {
     ...allPhase13McpTests,
     ...allPhase13CrossFeatureTests,
     ...allPhase13AuthScopeTests, // skipped automatically when auth is disabled
+    ...allDeferred029CrossTenantTests, // DEFERRED-029 PR F — skipped when auth is disabled
   ];
 
   console.log(`  ${allTests.length} tests registered.\n`);

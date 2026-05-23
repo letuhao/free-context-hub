@@ -20,7 +20,7 @@ import type { PoolClient } from 'pg';
 import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
 import { assertCallerScope } from '../core/security/callerScope.js';
-import { assertIntakeScope } from '../core/security/scopeResolvers.js';
+import { assertIntakeScope, assertTopicScope } from '../core/security/scopeResolvers.js';
 import type { CallerScope } from '../core/security/callerScope.js';
 import { appendEvent } from './coordinationEvents.js';
 import { createModuleLogger } from '../utils/logger.js';
@@ -180,6 +180,14 @@ export async function triageIntake(
 
   const pool = getDbPool();
   await assertIntakeScope(pool, opts?.callerScope, intakeId);
+  // PR F SEC-2 (Adversary CRITICAL #2): route.topic_id is caller-supplied
+  // and was NEVER scope-checked on the link-only path. A scoped-A attacker
+  // could pass a cross-tenant topic_id and have triageIntake write an
+  // intake.triaged event into proj-B's coordination_events log (and
+  // corrupt the intake row's topic_id FK). Gate on assertTopicScope BEFORE
+  // any read/write that uses route.topic_id. Dispute path also benefits
+  // (openDispute would re-check, but here we stop earlier with same shape).
+  await assertTopicScope(pool, opts?.callerScope, topicId);
 
   // Validate topic is active before acquiring the intake row lock
   const topicCheck = await pool.query<{ status: string }>(
