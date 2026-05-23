@@ -127,6 +127,8 @@ import { isFeatureEnabled } from '../services/featureToggles.js';
 import { searchChunks } from '../services/documentChunks.js';
 import { logLessonAccess, isSalienceDisabled, type AccessLogEntry } from '../services/salience.js';
 import { getDbPool } from '../db/client.js';
+import { resolveMcpCallerScope } from './auth.js';
+import type { CallerScope } from '../core/index.js';
 
 // ── MCP error boundary: convert ContextHubError → McpError at protocol edge ──
 const CONTEXT_HUB_TO_MCP_CODE: Record<string, number> = {
@@ -134,10 +136,22 @@ const CONTEXT_HUB_TO_MCP_CODE: Record<string, number> = {
   BAD_REQUEST: ErrorCode.InvalidParams,
   NOT_FOUND: ErrorCode.InvalidParams,
   INTERNAL: ErrorCode.InternalError,
+  SERVICE_UNAVAILABLE: ErrorCode.InternalError,
 };
 
 function assertWorkspaceToken(token?: string) {
   try { coreAssertWorkspaceToken(token); }
+  catch (e) {
+    if (e instanceof ContextHubError) throw new McpError(CONTEXT_HUB_TO_MCP_CODE[e.code] ?? ErrorCode.InternalError, e.message);
+    throw e;
+  }
+}
+
+/** DEFERRED-029 PR B: MCP auth resolver mapped to McpError at the protocol edge.
+ *  Strict superset of assertWorkspaceToken — accepts legacy single-shared token
+ *  (→ scope=null, deprecated, warns) AND api_keys rows (→ keyEntry.project_scope). */
+async function resolveMcpCallerScopeOrThrow(token?: string): Promise<CallerScope> {
+  try { return await resolveMcpCallerScope(token); }
   catch (e) {
     if (e instanceof ContextHubError) throw new McpError(CONTEXT_HUB_TO_MCP_CODE[e.code] ?? ErrorCode.InternalError, e.message);
     throw e;
@@ -1053,10 +1067,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, filters, page, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       const result = await listLessons({
         projectId,
+        callerScope,
         limit: page?.limit,
         after: page?.after,
         filters: filters as { lesson_type?: any; tags_any?: string[]; status?: any },
@@ -1134,7 +1149,7 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, project_ids, group_id, include_groups, query, filters, limit, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const filtersTyped = filters as { lesson_type?: any; tags_any?: string[]; include_all_statuses?: boolean } | undefined;
 
       // Priority: project_ids > group_id > project_id + include_groups > project_id alone
@@ -1153,13 +1168,13 @@ function createMcpToolsServer() {
           resolvedIds = await resolveProjectIds(projectId, true);
         } else {
           // Single project search (backwards compat — identical to previous behavior).
-          const result = await searchLessons({ projectId, query, limit, filters: filtersTyped });
+          const result = await searchLessons({ projectId, callerScope, query, limit, filters: filtersTyped });
           const summary = `search_lessons: matches=${result.matches.length}`;
           return formatToolResponse(result, summary, output_format);
         }
       }
 
-      const result = await searchLessonsMulti({ projectIds: resolvedIds, query, limit, filters: filtersTyped });
+      const result = await searchLessonsMulti({ projectIds: resolvedIds, callerScope, query, limit, filters: filtersTyped });
       const summary = `search_lessons: matches=${result.matches.length} (multi-project: ${resolvedIds.length})`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -1418,9 +1433,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, lesson_payload, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(lesson_payload.project_id);
-      const result = await addLesson({ ...lesson_payload, project_id: projectId } as any);
+      const result = await addLesson({ ...lesson_payload, project_id: projectId, callerScope } as any);
       const summary = `add_lesson: lesson_id=${result.lesson_id ?? '(unknown)'}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -1619,9 +1634,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, lesson_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const result = await listLessonVersions({ projectId: pid, lessonId: lesson_id });
+      const result = await listLessonVersions({ projectId: pid, callerScope, lessonId: lesson_id });
       const summary = `list_lesson_versions: ${result.total_count ?? 0} version(s)`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -1655,10 +1670,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, lesson_id, title, content, tags, source_refs, changed_by, change_summary, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       const result = await updateLesson({
         projectId: pid,
+        callerScope,
         lessonId: lesson_id,
         title,
         content,
@@ -1696,7 +1712,7 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, lesson_id, status, superseded_by, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       // Phase 13 Sprint 13.3 runtime guard: belt-and-suspenders for raw callers bypassing zod.
       if ((status as string) === 'pending-review') {
@@ -1707,6 +1723,7 @@ function createMcpToolsServer() {
       }
       const result = await updateLessonStatus({
         projectId: pid,
+        callerScope,
         lessonId: lesson_id,
         status: status as any,
         supersededBy: superseded_by,
@@ -1768,13 +1785,14 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, topic, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       if (!(await isFeatureEnabled(pid, 'distillation'))) {
         return formatToolResponse({ answer: '', warning: 'Distillation is disabled for this project.' }, 'reflect: disabled', output_format);
       }
       const retrieved = await searchLessons({
         projectId: pid,
+        callerScope,
         query: topic,
         limit: 12,
         filters: { include_all_statuses: false },
