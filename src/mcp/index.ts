@@ -6,7 +6,6 @@ import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
 import {
   // errors & auth
   ContextHubError,
-  assertWorkspaceToken as coreAssertWorkspaceToken,
   resolveProjectIdOrThrow as coreResolveProjectIdOrThrow,
   // env & startup
   getEnv,
@@ -139,17 +138,11 @@ const CONTEXT_HUB_TO_MCP_CODE: Record<string, number> = {
   SERVICE_UNAVAILABLE: ErrorCode.InternalError,
 };
 
-function assertWorkspaceToken(token?: string) {
-  try { coreAssertWorkspaceToken(token); }
-  catch (e) {
-    if (e instanceof ContextHubError) throw new McpError(CONTEXT_HUB_TO_MCP_CODE[e.code] ?? ErrorCode.InternalError, e.message);
-    throw e;
-  }
-}
-
-/** DEFERRED-029 PR B: MCP auth resolver mapped to McpError at the protocol edge.
- *  Strict superset of assertWorkspaceToken — accepts legacy single-shared token
- *  (→ scope=null, deprecated, warns) AND api_keys rows (→ keyEntry.project_scope). */
+/** DEFERRED-029: MCP auth resolver mapped to McpError at the protocol edge.
+ *  Single auth entry point for every MCP tool — accepts the legacy single-shared
+ *  CONTEXT_HUB_WORKSPACE_TOKEN (→ scope=null, deprecated, warns; rejected entirely
+ *  when MCP_LEGACY_TOKEN_DISABLED=true per PR E) AND api_keys rows
+ *  (→ keyEntry.project_scope). */
 async function resolveMcpCallerScopeOrThrow(token?: string): Promise<CallerScope> {
   try { return await resolveMcpCallerScope(token); }
   catch (e) {
@@ -239,7 +232,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      // help: no project scope to enforce; still goes through the resolver so
+      // the deprecation warning + MCP_LEGACY_TOKEN_DISABLED gate fire consistently.
+      await resolveMcpCallerScopeOrThrow(workspace_token);
       const env = getEnv();
 
       const endpoint = `http://localhost:${env.MCP_PORT}/mcp`;
@@ -2655,7 +2650,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      // list_groups: admin op (global listing, no project scope to enforce).
+      // Token validated via resolver so deprecation/disable gates fire consistently.
+      await resolveMcpCallerScopeOrThrow(workspace_token);
       const groups = await listGroups();
       const summary = `list_groups: count=${groups.length}`;
       return formatToolResponse({ groups }, summary, output_format);
@@ -2680,7 +2677,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, group_id, name, description, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      // create_group: admin op — group itself is global, not project-scoped.
+      await resolveMcpCallerScopeOrThrow(workspace_token);
       const result = await createGroup({ group_id, name, description });
       const summary = `create_group: group_id=${result.group_id}`;
       return formatToolResponse(result, summary, output_format);
@@ -2699,7 +2697,8 @@ function createMcpToolsServer() {
       outputSchema: z.object({ deleted: z.boolean() }),
     },
     async ({ workspace_token, group_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      // delete_group: admin op — group itself is global.
+      await resolveMcpCallerScopeOrThrow(workspace_token);
       const result = await deleteGroup(group_id);
       const summary = `delete_group: deleted=${result.deleted}`;
       return formatToolResponse(result, summary, output_format);
@@ -2758,7 +2757,10 @@ function createMcpToolsServer() {
       outputSchema: z.object({ group_id: z.string(), members: z.array(z.string()) }),
     },
     async ({ workspace_token, group_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      // list_group_members: admin op (returns project IDs that belong to a group;
+      // no per-member tenant filter applied here — caller is expected to filter on
+      // the returned list if scoped).
+      await resolveMcpCallerScopeOrThrow(workspace_token);
       const members = await listGroupMembers(group_id);
       const summary = `list_group_members: group=${group_id} count=${members.length}`;
       return formatToolResponse({ group_id, members }, summary, output_format);
@@ -4428,7 +4430,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, is_builtin, owner_project_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      // list_taxonomy_profiles: admin op — built-ins are global; custom profiles
+      // include an owner_project_id field that callers can filter on. If a scoped
+      // caller wants only their own custom profiles they should pass
+      // owner_project_id explicitly.
+      await resolveMcpCallerScopeOrThrow(workspace_token);
       const owner = owner_project_id === 'null' ? null : owner_project_id;
       const profiles = await listTaxonomyProfiles({ owner_project_id: owner, is_builtin });
       const summary = `list_taxonomy_profiles: count=${profiles.length}`;

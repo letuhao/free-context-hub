@@ -1,3 +1,48 @@
+# LONGRUN CHECKPOINT — DEFERRED-029 PR E (2026-05-23, session 3 cont.)
+
+**Status:** **DEFERRED-029 PR E — retire legacy `CONTEXT_HUB_WORKSPACE_TOKEN`**
+built on branch `deferred-029-pr-e-retire-legacy-token` (stacked on D4).
+**820/820 unit green** (+3 from 817 baseline); **tsc clean**; no migration;
+back-compat preserved.
+
+## What PR E contains
+- **New env `MCP_LEGACY_TOKEN_DISABLED`** (default `false` = back-compat).
+  When `true`, the legacy single-shared `CONTEXT_HUB_WORKSPACE_TOKEN` is
+  rejected with `UNAUTHORIZED`. Default path keeps warning + accepting.
+- **Relaxed env validation:** `CONTEXT_HUB_WORKSPACE_TOKEN` is no longer
+  required when `MCP_AUTH_ENABLED=true` IF `MCP_LEGACY_TOKEN_DISABLED=true`
+  (api_keys-only mode).
+- **MCP handler cleanup:** removed the local `assertWorkspaceToken` wrapper
+  and `coreAssertWorkspaceToken` import. Last 8 admin-only handlers
+  (`help`, `list_groups`, `create_group`, `delete_group`,
+  `list_group_members`, `list_taxonomy_profiles`) now go through
+  `resolveMcpCallerScopeOrThrow` for consistent deprecation/disable gating.
+  **Zero `assertWorkspaceToken` usages in `src/mcp/index.ts` after PR E.**
+- **Migration doc:** `docs/specs/2026-05-23-deferred-029-pr-e-legacy-token-migration.md`
+  — 5-step migration recipe + env var matrix.
+- **Tests (+3):** new `src/mcp/auth-legacy-disabled.test.ts` — default
+  back-compat accepts the legacy token, opt-out rejects it, auth-off
+  short-circuit still wins.
+
+## State of DEFERRED-029 after PR E
+After PR E merges, the only remaining piece is **PR F** (auth-ON E2E +
+second-adversary security review). The PR F slice covers all entity-id-derive
+cross-tenant tests deferred through C/D series.
+
+| PR | Domain | Tests |
+|---|---|---|
+| #20 (B) | lessons | — |
+| #21 (C1) | topics + board | — |
+| #22 (C2) | requests + motions + bodies + proxies | — |
+| #23 (C3) | disputes + intake + reviewRequests + chaining | 755 |
+| #24 (D1) | exchange + documents + chunks + generatedDocs | 773 |
+| #25 (D2) | git + projectSources + workspace | 785 |
+| #26 (D3) | jobQueue + artifactLeases + taxonomy + replay + groups | 803 |
+| #27 (D4) | distillation + KG + indexing + guardrails + chat-sweep + artifacts | 817 |
+| **this (E)** | **retire legacy CONTEXT_HUB_WORKSPACE_TOKEN** | **820** |
+
+---
+
 # LONGRUN CHECKPOINT — DEFERRED-029 PR D4 (2026-05-23, session 3 cont.)
 
 **Status:** **DEFERRED-029 PR D4 — distillation + KG + indexing + guardrails +

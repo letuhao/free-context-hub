@@ -59,8 +59,19 @@ const EnvSchema = z.object({
     .default(false),
 
   // Single MVP workspace token for all MCP tool calls.
-  // Optional unless MCP_AUTH_ENABLED=true.
+  // DEPRECATED (DEFERRED-029): scoped api_keys rows are the preferred MCP auth
+  // mechanism. Still accepted for back-compat (matches → global scope, null)
+  // unless MCP_LEGACY_TOKEN_DISABLED=true. Optional in all configurations
+  // since PR E — api_keys-only deployments don't need this set.
   CONTEXT_HUB_WORKSPACE_TOKEN: z.string().min(1, 'CONTEXT_HUB_WORKSPACE_TOKEN is required').optional(),
+
+  // DEFERRED-029 PR E: when true, the legacy single-shared
+  // CONTEXT_HUB_WORKSPACE_TOKEN is rejected even when set in env — only
+  // api_keys rows are accepted. Use this in production deployments that have
+  // fully migrated to scoped tokens. Default false preserves back-compat.
+  MCP_LEGACY_TOKEN_DISABLED: z
+    .preprocess(v => parseBooleanEnv(v), z.boolean().optional())
+    .default(false),
 
   // When provided, MCP tools may omit project_id and fallback to this default.
   // If a tool allows missing project_id and this env is missing, the tool returns Bad Request.
@@ -359,11 +370,25 @@ const EnvSchema = z.object({
   MEMORY_BUILD_MODULE_MAX_TOKENS: z.coerce.number().int().positive().optional().default(6144),
   MEMORY_BUILD_GLOBAL_MAX_TOKENS: z.coerce.number().int().positive().optional().default(8192),
 }).superRefine((val, ctx) => {
-  if (val.MCP_AUTH_ENABLED && (!val.CONTEXT_HUB_WORKSPACE_TOKEN || val.CONTEXT_HUB_WORKSPACE_TOKEN.length === 0)) {
+  // DEFERRED-029 PR E: CONTEXT_HUB_WORKSPACE_TOKEN is no longer strictly
+  // required when MCP_AUTH_ENABLED=true — api_keys rows are now the preferred
+  // auth path. Only require it when:
+  //   - MCP auth is on AND
+  //   - the legacy token path is NOT explicitly disabled
+  //   (i.e., the operator wants to keep accepting the single-shared token).
+  // Setting MCP_LEGACY_TOKEN_DISABLED=true means "api_keys only" and the
+  // env var becomes irrelevant.
+  if (
+    val.MCP_AUTH_ENABLED &&
+    !val.MCP_LEGACY_TOKEN_DISABLED &&
+    (!val.CONTEXT_HUB_WORKSPACE_TOKEN || val.CONTEXT_HUB_WORKSPACE_TOKEN.length === 0)
+  ) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['CONTEXT_HUB_WORKSPACE_TOKEN'],
-      message: 'CONTEXT_HUB_WORKSPACE_TOKEN is required when MCP_AUTH_ENABLED=true',
+      message:
+        'CONTEXT_HUB_WORKSPACE_TOKEN is required when MCP_AUTH_ENABLED=true and MCP_LEGACY_TOKEN_DISABLED is unset/false. ' +
+        'Set MCP_LEGACY_TOKEN_DISABLED=true to use api_keys-only auth.',
     });
   }
   if (val.DISTILLATION_ENABLED && (!val.DISTILLATION_MODEL || !val.DISTILLATION_MODEL.trim())) {
@@ -475,5 +500,13 @@ export function getEnv(raw: NodeJS.ProcessEnv = process.env): Env {
   }
   if (raw === process.env) _cachedEnv = parsed.data;
   return parsed.data;
+}
+
+/** Test-only helper — bust the cached env so a fresh process.env read happens
+ *  on the next getEnv() call. Used by env-flag unit tests (e.g. PR E
+ *  MCP_LEGACY_TOKEN_DISABLED). Not exported from any barrel; tests import
+ *  directly from `../env.js`. */
+export function _resetEnvCacheForTest(): void {
+  _cachedEnv = null;
 }
 
