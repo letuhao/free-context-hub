@@ -272,6 +272,36 @@ services:
       start_period: 300s  # first run downloads model — up to ~4min
     restart: unless-stopped
 
+  # Phase 16 Sprint 16.2 — RAG gen-eval judge sidecar (FastAPI + ragas).
+  # Stateless service; reaches LM Studio on the host via host.docker.internal:1234.
+  # Opt-in via profile to avoid weighing down regular `docker compose up`.
+  # Start with: docker compose --profile measurement up -d ragas-judge
+  ragas-judge:
+    profiles: ["measurement"]
+    build:
+      context: ./services/ragas-judge
+      dockerfile: Dockerfile
+    environment:
+      # Defaults assume LM Studio on the host with Gemma-4-26B-A4B + bge-m3 embeddings.
+      # Override any of these via .env or `docker compose --env-file ...`.
+      JUDGE_AGENT_BASE_URL: ${JUDGE_AGENT_BASE_URL:-http://host.docker.internal:1234/v1}
+      JUDGE_AGENT_API_KEY: ${JUDGE_AGENT_API_KEY:-lm-studio}
+      JUDGE_AGENT_MODEL: ${JUDGE_AGENT_MODEL:-google/gemma-4-26b-a4b-it}
+      JUDGE_TEMPERATURE: ${JUDGE_TEMPERATURE:-0.0}
+      JUDGE_SEED: ${JUDGE_SEED:-42}
+      JUDGE_TIMEOUT_S: ${JUDGE_TIMEOUT_S:-60}
+      EMBEDDINGS_BASE_URL: ${EMBEDDINGS_BASE_URL:-http://host.docker.internal:1234/v1}
+      EMBEDDINGS_API_KEY: ${EMBEDDINGS_API_KEY:-lm-studio}
+      EMBEDDINGS_MODEL: ${EMBEDDINGS_MODEL:-text-embedding-bge-m3}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "3005:8000"
+    # host.docker.internal already resolved on Docker Desktop (Win/Mac);
+    # on Linux it requires this extra_hosts entry.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
   # Optional S3-compatible storage (MinIO) for future indexing phases.
   # Start with: docker compose --profile s3 up -d
   minio:
