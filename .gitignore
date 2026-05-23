@@ -1,3 +1,6 @@
+# Sprint 16.1 ephemeral drafting/review scripts + pre-fetched ground truth
+.qc-tmp/
+
 # Logs
 logs
 *.log

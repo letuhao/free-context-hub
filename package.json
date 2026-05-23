@@ -27,6 +27,7 @@
     "qc:baseline": "tsx src/qc/runBaseline.ts",
     "qc:baseline:diff": "tsx src/qc/diffBaselines.ts",
     "qc:goldenset:validate": "node scripts/validate-goldenset.mjs",
+    "qc:validate-golden": "tsx src/qc/validateGoldenSet.ts",
     "test:metrics": "tsx --test src/qc/metrics.test.ts",
     "verify:phase6": "tsx src/scripts/verifyPhase6.ts",
     "verify:phase6:prereq": "tsx src/scripts/phase6PrereqCheck.ts",
