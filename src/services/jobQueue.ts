@@ -3,6 +3,7 @@ import amqplib from 'amqplib';
 
 import { getDbPool } from '../db/client.js';
 import { getEnv } from '../env.js';
+import { ContextHubError } from '../core/errors.js';
 import { assertCallerScope } from '../core/security/callerScope.js';
 import type { CallerScope } from '../core/security/callerScope.js';
 
@@ -80,6 +81,23 @@ export async function enqueueJob(input: QueuePayload): Promise<{ status: 'queued
       input = { ...input, project_id: input.callerScope };
     } else {
       assertCallerScope(input.callerScope, input.project_id);
+    }
+    // PR F SEC-6 (Adversary #3 HIGH): SEC-3 pinned the DB project_id to the
+    // caller's scope, but the worker still reads `payload.root` verbatim and
+    // walks that filesystem path. A scoped-A attacker could pass
+    // payload.root='<path to projB cache>' and the indexer would write
+    // proj-B's source into chunks tagged project_id='A' (then read it via
+    // search_code). Same trick works for git.ingest / workspace.scan /
+    // *.build / *.loop.* jobs. Defense: scoped callers cannot specify a
+    // filesystem root — the worker auto-resolves from project_sources for
+    // the bound project_id (see resolveProjectRoot). Admin/auth-off callers
+    // (callerScope=null/undefined) keep full control by design.
+    const payloadRoot = (input.payload as Record<string, unknown> | undefined)?.root;
+    if (typeof payloadRoot === 'string' && payloadRoot.trim().length > 0) {
+      throw new ContextHubError(
+        'BAD_REQUEST',
+        'scoped callers must omit payload.root — the worker resolves the root from project_sources for the bound project_id',
+      );
     }
   } else if (input.project_id) {
     // auth-off / global key + explicit project_id → still enforce (no-op on

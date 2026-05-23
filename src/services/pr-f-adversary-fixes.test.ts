@@ -162,6 +162,62 @@ test('PR F SEC-4: unlinkDocumentFromLesson cross-tenant lesson → NOT_FOUND', a
   );
 });
 
+// ── SEC-6 (Adversary #3 HIGH): worker payload.root cross-tenant ingestion ───
+// SEC-3 pinned DB project_id; SEC-6 closes the separate filesystem-read path.
+// The worker reads payload.root verbatim — a scoped-A caller could pass a
+// path to proj-B's cache directory and have the indexer write proj-B's
+// source into chunks tagged project_id='A' (then read via search_code).
+// Post-fix: enqueueJob throws BAD_REQUEST when scoped + payload.root set.
+// Admin/auth-off callers retain full control by design.
+
+test('PR F SEC-6: scoped enqueueJob with payload.root → BAD_REQUEST', async () => {
+  await assert.rejects(
+    enqueueJob({
+      project_id: 'proj-A',
+      callerScope: 'proj-A',
+      job_type: 'index.run',
+      payload: { root: '/path/to/projB/cache' },
+    }),
+    (err: unknown) =>
+      err instanceof ContextHubError && err.code === 'BAD_REQUEST',
+  );
+});
+
+test('PR F SEC-6: scoped enqueueJob with payload.root (autobind path) → BAD_REQUEST', async () => {
+  // Also fires the SEC-3 autobind path: project_id omitted, scope = A,
+  // payload.root present → still rejected before insert.
+  await assert.rejects(
+    enqueueJob({
+      callerScope: 'proj-A',
+      job_type: 'index.run',
+      payload: { root: '/path/to/projB/cache' },
+    } as any),
+    (err: unknown) =>
+      err instanceof ContextHubError && err.code === 'BAD_REQUEST',
+  );
+});
+
+test('PR F SEC-6: scoped enqueueJob with payload.root="" (empty) → allowed (no path)', async () => {
+  // Empty string is the same as omitted — worker auto-resolves from
+  // project_sources. Should NOT throw BAD_REQUEST from the SEC-6 check;
+  // any failure here is from the DB call (no DB in this test) which we
+  // catch separately.
+  try {
+    await enqueueJob({
+      project_id: 'proj-A',
+      callerScope: 'proj-A',
+      job_type: 'index.run',
+      payload: { root: '' },
+    });
+  } catch (err: unknown) {
+    if (err instanceof ContextHubError && err.code === 'BAD_REQUEST') {
+      assert.fail(`Empty payload.root must not trigger BAD_REQUEST; got: ${err.message}`);
+    }
+    // Any other error (e.g., DB connection) is fine — proves SEC-6 guard
+    // is past, the call reached the DB layer.
+  }
+});
+
 // ── SEC-5 (Adversary #2 MEDIUM latent): cancelJob omitted-projectId trap ────
 // PRE-FIX: `if (projectId) assertCallerScope(...)` — same shape as SEC-3.
 // Today's only caller (REST documents.ts) always passes a truthy projectId,
