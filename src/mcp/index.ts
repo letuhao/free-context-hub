@@ -3500,8 +3500,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, subject_id, kind, weight, procedure, submitted_by, execution_task, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const r = await submitRequest({
+        callerScope,
         topic_id,
         subject_type: 'artifact',
         subject_id,
@@ -3555,8 +3556,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, status, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const r = await listRequests({ topic_id, status });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const r = await listRequests({ topic_id, callerScope, status });
       const result = { status: 'ok' as const, requests: r.requests };
       const summary = `list_requests: topic=${topic_id} count=${r.requests.length}`;
       return formatToolResponse(result, summary, output_format);
@@ -3601,8 +3602,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, request_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const req = await getRequest({ request_id });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const req = await getRequest({ request_id, callerScope });
       const result = req
         ? { status: 'ok', request: req }
         : { status: 'not_found', request: undefined };
@@ -3640,8 +3641,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, request_id, step_index, actor_id, decision, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const r = await decideStep({ request_id, step_index, actor_id, decision });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const r = await decideStep({ request_id, callerScope, step_index, actor_id, decision });
       const summary = `decide_request_step: request=${request_id} step=${step_index} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3713,8 +3714,8 @@ function createMcpToolsServer() {
       outputSchema: bodyRecordShape,
     },
     async ({ workspace_token, project_id, name, quorum, threshold, veto_holders, created_by, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const r = await createBody({ project_id, name, quorum, threshold, veto_holders, created_by });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const r = await createBody({ project_id, callerScope, name, quorum, threshold, veto_holders, created_by });
       const summary = `create_decision_body: body_id=${r.body_id} name=${r.name}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3739,8 +3740,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, body_id, actor_id, vote_weight, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const r = await addBodyMember({ body_id, actor_id, vote_weight });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const r = await addBodyMember({ body_id, callerScope, actor_id, vote_weight });
       const summary = `add_body_member: body=${body_id} actor=${actor_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3767,8 +3768,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, body_id, principal, proxy, granted_by, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const r = await grantProxy({ body_id, principal, proxy, granted_by });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const r = await grantProxy({ body_id, callerScope, principal, proxy, granted_by });
       const summary = `grant_proxy: body=${body_id} principal=${principal} proxy=${proxy} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3788,8 +3789,8 @@ function createMcpToolsServer() {
       outputSchema: z.object({ status: z.string() }),
     },
     async ({ workspace_token, body_id, principal, proxy, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const r = await revokeProxy({ body_id, principal, proxy });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const r = await revokeProxy({ body_id, callerScope, principal, proxy });
       const summary = `revoke_proxy: body=${body_id} principal=${principal} proxy=${proxy} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3814,8 +3815,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, body_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const r = await listProxies({ body_id });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const r = await listProxies({ body_id, callerScope });
       const summary = `list_proxies: body=${body_id} count=${r.proxies.length}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3836,8 +3837,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, body_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const body = await getBody({ body_id });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const body = await getBody({ body_id, callerScope });
       const result = body
         ? { status: 'ok', body }
         : { status: 'not_found', body: undefined };
@@ -3861,8 +3862,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const r = await listBodies({ project_id });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const r = await listBodies({ project_id, callerScope });
       const result = { status: 'ok' as const, bodies: r.bodies };
       const summary = `list_decision_bodies: count=${r.bodies.length}`;
       return formatToolResponse(result, summary, output_format);
@@ -3893,8 +3894,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, body_id, subject_ref, proposed_by, deadline_minutes, execution_task, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const r = await proposeMotion({ topic_id, body_id, subject_ref, proposed_by, deadline_minutes, execution_task });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const r = await proposeMotion({ topic_id, callerScope, body_id, subject_ref, proposed_by, deadline_minutes, execution_task });
       const summary = `propose_motion: topic=${topic_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3916,8 +3917,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, status, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const r = await listMotions({ topic_id, status });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const r = await listMotions({ topic_id, callerScope, status });
       const result = { status: 'ok' as const, motions: r.motions };
       const summary = `list_motions: topic=${topic_id} count=${r.motions.length}`;
       return formatToolResponse(result, summary, output_format);
@@ -3939,8 +3940,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, motion_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const motion = await getMotion({ motion_id });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const motion = await getMotion({ motion_id, callerScope });
       const result = motion
         ? { status: 'ok', motion }
         : { status: 'not_found', motion: undefined };
@@ -3965,8 +3966,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, motion_id, actor_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const r = await secondMotion({ motion_id, actor_id });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const r = await secondMotion({ motion_id, callerScope, actor_id });
       const summary = `second_motion: motion=${motion_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3989,8 +3990,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, motion_id, actor_id, choice, proxy_for, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const r = await castVote({
+        callerScope,
         motion_id,
         actor_id,
         choice: choice as 'for' | 'against' | 'abstain',
@@ -4016,8 +4018,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, motion_id, actor_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const r = await vetoMotion({ motion_id, actor_id });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const r = await vetoMotion({ motion_id, callerScope, actor_id });
       const summary = `veto_motion: motion=${motion_id} actor=${actor_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -4047,8 +4049,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, motion_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const r = await tallyMotion({ motion_id });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const r = await tallyMotion({ motion_id, callerScope });
       const summary = `tally_motion: motion=${motion_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },

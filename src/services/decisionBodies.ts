@@ -23,6 +23,7 @@
 import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
 import { resolveProjectIdOrThrow } from '../core/auth.js';
+import { assertCallerScope, assertCallerScopeMulti, assertBodyScope, type CallerScope } from '../core/index.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -61,12 +62,16 @@ const MAX_FIELD_LEN = 256;
  */
 export async function createBody(params: {
   project_id?: string;
+  /** DEFERRED-029: caller's scope; enforced against resolved project_id. */
+  callerScope?: CallerScope;
   name: string;
   quorum: number;
   threshold: number;
   veto_holders?: string[];
   created_by: string;
 }): Promise<BodyRecord> {
+  const resolvedProjectId = resolveProjectIdOrThrow(params.project_id);
+  assertCallerScope(params.callerScope, resolvedProjectId);
   const name = (params.name ?? '').trim();
   const createdBy = (params.created_by ?? '').trim();
   const quorum = params.quorum;
@@ -145,9 +150,12 @@ export async function createBody(params: {
  */
 export async function addBodyMember(params: {
   body_id: string;
+  /** DEFERRED-029: caller's scope; enforced via the body's derived project_id. */
+  callerScope?: CallerScope;
   actor_id: string;
   vote_weight: number;
 }): Promise<AddMemberResult> {
+  await assertBodyScope(getDbPool(), params.callerScope, params.body_id);
   const bodyId = (params.body_id ?? '').trim();
   const actorId = (params.actor_id ?? '').trim();
   const voteWeight = params.vote_weight;
@@ -214,7 +222,8 @@ function mapBodyRow(r: {
  * Get a single decision body + its members in ONE query (the 15.1
  * `fetchTopicWithRoster` snapshot pattern). Returns null when no row matches.
  */
-export async function getBody(params: { body_id: string }): Promise<BodyRecord | null> {
+export async function getBody(params: { body_id: string; callerScope?: CallerScope }): Promise<BodyRecord | null> {
+  await assertBodyScope(getDbPool(), params.callerScope, params.body_id);
   const pool = getDbPool();
   const res = await pool.query(
     `SELECT b.body_id, b.project_id, b.name, b.quorum, b.threshold, b.veto_holders,
@@ -238,8 +247,9 @@ export async function getBody(params: { body_id: string }): Promise<BodyRecord |
 /**
  * List all decision bodies for a project, each with its members.
  */
-export async function listBodies(params: { project_id?: string }): Promise<ListBodiesResult> {
+export async function listBodies(params: { project_id?: string; callerScope?: CallerScope }): Promise<ListBodiesResult> {
   const projectId = resolveProjectIdOrThrow(params.project_id);
+  assertCallerScope(params.callerScope, projectId);
   const pool = getDbPool();
   const res = await pool.query(
     `SELECT b.body_id, b.project_id, b.name, b.quorum, b.threshold, b.veto_holders,

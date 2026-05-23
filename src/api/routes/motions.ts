@@ -56,8 +56,14 @@ import {
   revokeProxy,
   listProxies,
 } from '../../core/index.js';
+import type { CallerScope } from '../../core/index.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { requireResourceScope, requireBodyProjectScope } from '../middleware/requireResourceScope.js';
+
+/** DEFERRED-029: read the caller's project scope attached by bearerAuth. */
+function callerScopeOf(req: Request): CallerScope {
+  return (req as { apiKeyScope?: CallerScope }).apiKeyScope;
+}
 
 const router = Router();
 
@@ -122,6 +128,7 @@ router.post('/decision-bodies', requireRole('admin'), requireBodyProjectScope(),
     const body = req.body ?? {};
     const result = await createBody({
       project_id: typeof body.project_id === 'string' ? body.project_id : undefined,
+      callerScope: callerScopeOf(req),
       name: asString(body.name),
       quorum: asNumber(body.quorum),
       threshold: asNumber(body.threshold),
@@ -140,6 +147,7 @@ router.post('/decision-bodies/:id/members', requireRole('admin'), requireResourc
     const body = req.body ?? {};
     const result = await addBodyMember({
       body_id: String(req.params.id),
+      callerScope: callerScopeOf(req),
       actor_id: asString(body.actor_id),
       vote_weight: asNumber(body.vote_weight),
     });
@@ -156,6 +164,7 @@ router.post('/decision-bodies/:id/proxies', requireRole('writer'), requireResour
     const body = req.body ?? {};
     const result = await grantProxy({
       body_id: String(req.params.id),
+      callerScope: callerScopeOf(req),
       principal: asString(body.principal),
       proxy: asString(body.proxy),
       granted_by: asString(body.granted_by),
@@ -170,6 +179,7 @@ router.delete('/decision-bodies/:id/proxies', requireRole('writer'), requireReso
     const body = req.body ?? {};
     const result = await revokeProxy({
       body_id: String(req.params.id),
+      callerScope: callerScopeOf(req),
       principal: asString(body.principal),
       proxy: asString(body.proxy),
     });
@@ -180,7 +190,7 @@ router.delete('/decision-bodies/:id/proxies', requireRole('writer'), requireReso
 // GET /api/decision-bodies/:id/proxies — list proxy grants for a body.
 router.get('/decision-bodies/:id/proxies', requireRole('reader'), requireResourceScope('body'), async (req, res, next) => {
   try {
-    const result = await listProxies({ body_id: String(req.params.id) });
+    const result = await listProxies({ body_id: String(req.params.id), callerScope: callerScopeOf(req) });
     res.json({ status: 'ok', data: result });
   } catch (e) { next(e); }
 });
@@ -188,7 +198,7 @@ router.get('/decision-bodies/:id/proxies', requireRole('reader'), requireResourc
 // ── GET /api/decision-bodies/:id — a single body + its members ───────────────
 router.get('/decision-bodies/:id', requireRole('reader'), requireResourceScope('body'), async (req, res, next) => {
   try {
-    const found = await getBody({ body_id: String(req.params.id) });
+    const found = await getBody({ body_id: String(req.params.id), callerScope: callerScopeOf(req) });
     if (found === null) {
       res.status(404).json({ status: 'error', error: 'decision body not found', code: 'NOT_FOUND' });
       return;
@@ -203,6 +213,7 @@ router.get('/decision-bodies', requireRole('reader'), async (req, res, next) => 
     const projectQ = req.query.project_id;
     const result = await listBodies({
       project_id: typeof projectQ === 'string' && projectQ ? projectQ : undefined,
+      callerScope: callerScopeOf(req),
     });
     res.json({ status: 'ok', data: result });
   } catch (e) { next(e); }
@@ -215,6 +226,7 @@ router.post('/topics/:id/motions', requireRole('writer'), requireResourceScope('
     const deadlineMinutes = body.deadline_minutes;
     const result = await proposeMotion({
       topic_id: String(req.params.id),
+      callerScope: callerScopeOf(req),
       body_id: asString(body.body_id),
       subject_ref: asString(body.subject_ref),
       proposed_by: asString(body.proposed_by),
@@ -231,6 +243,7 @@ router.get('/topics/:id/motions', requireRole('reader'), requireResourceScope('t
     const statusQ = req.query.status;
     const result = await listMotions({
       topic_id: String(req.params.id),
+      callerScope: callerScopeOf(req),
       status: typeof statusQ === 'string' && statusQ ? statusQ : undefined,
     });
     res.json({ status: 'ok', data: result });
@@ -240,7 +253,7 @@ router.get('/topics/:id/motions', requireRole('reader'), requireResourceScope('t
 // ── GET /api/motions/:id — a single motion + its votes ───────────────────────
 router.get('/motions/:id', requireRole('reader'), requireResourceScope('motion'), async (req, res, next) => {
   try {
-    const found = await getMotion({ motion_id: String(req.params.id) });
+    const found = await getMotion({ motion_id: String(req.params.id), callerScope: callerScopeOf(req) });
     if (found === null) {
       res.status(404).json({ status: 'error', error: 'motion not found', code: 'NOT_FOUND' });
       return;
@@ -255,6 +268,7 @@ router.post('/motions/:id/second', requireRole('writer'), requireResourceScope('
     const body = req.body ?? {};
     const result = await secondMotion({
       motion_id: String(req.params.id),
+      callerScope: callerScopeOf(req),
       actor_id: asString(body.actor_id),
     });
     res.status(statusToHttp(result.status)).json({ status: 'ok', data: result });
@@ -267,6 +281,7 @@ router.post('/motions/:id/votes', requireRole('writer'), requireResourceScope('m
     const body = req.body ?? {};
     const result = await castVote({
       motion_id: String(req.params.id),
+      callerScope: callerScopeOf(req),
       actor_id: asString(body.actor_id),
       choice: asString(body.choice) as 'for' | 'against' | 'abstain',
       proxy_for: typeof body.proxy_for === 'string' ? body.proxy_for : undefined,
@@ -281,6 +296,7 @@ router.post('/motions/:id/veto', requireRole('writer'), requireResourceScope('mo
     const body = req.body ?? {};
     const result = await vetoMotion({
       motion_id: String(req.params.id),
+      callerScope: callerScopeOf(req),
       actor_id: asString(body.actor_id),
     });
     res.status(statusToHttp(result.status)).json({ status: 'ok', data: result });
@@ -290,7 +306,7 @@ router.post('/motions/:id/veto', requireRole('writer'), requireResourceScope('mo
 // ── POST /api/motions/:id/tally — tally a motion ─────────────────────────────
 router.post('/motions/:id/tally', requireRole('writer'), requireResourceScope('motion'), async (req, res, next) => {
   try {
-    const result = await tallyMotion({ motion_id: String(req.params.id) });
+    const result = await tallyMotion({ motion_id: String(req.params.id), callerScope: callerScopeOf(req) });
     res.status(statusToHttp(result.status)).json({ status: 'ok', data: result });
   } catch (e) { next(e); }
 });

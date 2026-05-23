@@ -38,6 +38,7 @@ import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
+import { assertTopicScope, assertRequestScope, type CallerScope } from '../core/index.js';
 import { createModuleLogger } from '../utils/logger.js';
 import { appendEvent } from './coordinationEvents.js';
 import { resolveMatrixRow, deriveRoute, STEP_DEADLINE_MINUTES, LEVELS_ASC, LEVEL_RANK } from './doaMatrix.js';
@@ -117,6 +118,8 @@ export type ListRequestsResult = { requests: RequestRecord[] };
  */
 export async function submitRequest(params: {
   topic_id: string;
+  /** DEFERRED-029: caller's scope; enforced via the topic's derived project_id. */
+  callerScope?: CallerScope;
   subject_type: string;
   subject_id: string;
   kind: string;
@@ -126,6 +129,7 @@ export async function submitRequest(params: {
   /** Sprint 15.7 — optional execution_task blob for chain handler. */
   execution_task?: unknown;
 }): Promise<SubmitResult> {
+  await assertTopicScope(getDbPool(), params.callerScope, params.topic_id);
   const topicId = (params.topic_id ?? '').trim();
   const subjectType = (params.subject_type ?? '').trim();
   const subjectId = (params.subject_id ?? '').trim();
@@ -500,10 +504,13 @@ async function resolveArtifact(
  */
 export async function decideStep(params: {
   request_id: string;
+  /** DEFERRED-029: caller's scope; enforced via the request's derived project_id. */
+  callerScope?: CallerScope;
   step_index: number;
   actor_id: string;
   decision: string;
 }): Promise<DecideResult> {
+  await assertRequestScope(getDbPool(), params.callerScope, params.request_id);
   const requestId = (params.request_id ?? '').trim();
   const actorId = (params.actor_id ?? '').trim();
   const decision = (params.decision ?? '').trim();
@@ -785,8 +792,11 @@ export async function decideStep(params: {
  */
 export async function getRequest(params: {
   request_id: string;
+  /** DEFERRED-029: caller's scope; enforced via the request's derived project_id. */
+  callerScope?: CallerScope;
 }): Promise<RequestRecord | null> {
   const pool = getDbPool();
+  await assertRequestScope(pool, params.callerScope, params.request_id);
   const reqRes = await pool.query<{
     request_id: string;
     topic_id: string;
@@ -856,9 +866,12 @@ export async function getRequest(params: {
  */
 export async function listRequests(params: {
   topic_id: string;
+  /** DEFERRED-029: caller's scope; enforced via the topic's derived project_id. */
+  callerScope?: CallerScope;
   status?: string;
 }): Promise<ListRequestsResult> {
   const pool = getDbPool();
+  await assertTopicScope(pool, params.callerScope, params.topic_id);
 
   // DEFERRED-014 §3.1 — surface NOT_FOUND for unknown topic instead of silently returning []
   const topicCheck = await pool.query<{ topic_id: string }>(
