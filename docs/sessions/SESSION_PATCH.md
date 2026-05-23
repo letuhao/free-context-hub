@@ -1,3 +1,67 @@
+# LONGRUN CHECKPOINT — DEFERRED-029 PR C3 (2026-05-23, session 3)
+
+**Status:** **DEFERRED-029 PR C3 — disputes + intake + reviewRequests + chaining
+cleanup** built on branch `deferred-029-pr-c3-disputes-intake-reviews`
+(stacked on C2). **755/755 unit green** (+9 from 746 baseline); **tsc clean**;
+no migration; back-compat preserved.
+
+## What PR C3 contains
+- **Service threading (14 fns):**
+  - `disputes` (4): `openDispute` (assertTopicScope + forwards callerScope into
+    `submitRequest`), `resolveDispute`/`getDispute` (added optional 2nd-arg
+    `opts?:{callerScope?}` so existing positional tests stay green; use
+    `assertDisputeScope`), `listDisputes` (extends existing `opts` with
+    `callerScope`; uses `assertTopicScope`).
+  - `intake` (5): `submitIntake`/`listIntake` use `assertCallerScope` (direct
+    project_id); `triageIntake`/`dismissIntake`/`getIntake` use
+    `assertIntakeScope` (added optional 2nd-arg `opts?:{callerScope?}` for
+    back-compat). `triageIntake` forwards `callerScope` into `openDispute` on
+    dispute route.
+  - `reviewRequests` (5): all use `assertCallerScope` at top —
+    `submitForReview`, `listReviewRequests`, `getReviewRequest`,
+    `approveReviewRequest`, `returnReviewRequest`.
+- **chaining.ts:** doc-only invariant note added — `emitChain` is
+  server-internal, only invoked from `tallyMotion` / `decideStep` (both in
+  PR C2), which already enforce scope on their primitive. No public REST or
+  MCP path reaches `emitChain` directly; no plumbing needed.
+- **REST routes (13):** 4 disputes + 5 intake + 4 reviewRequests pass
+  `callerScopeOf(req)` (reads `req.apiKeyScope` from bearer-auth middleware).
+- **MCP handlers (11):** `submit_for_review`, `list_review_requests`,
+  `submit_intake`, `triage_intake`, `dismiss_intake`, `get_intake`,
+  `list_intake`, `open_dispute`, `resolve_dispute`, `get_dispute`,
+  `list_disputes` — all switched from `assertWorkspaceToken` to
+  `resolveMcpCallerScopeOrThrow` and pass `callerScope` into the service.
+- **Tests (+9):** `src/services/coordination-scope.test.ts` — 5 reviewRequests
+  + 2 intake direct-project_id cross-tenant tests + 2 sanity tests for
+  `undefined`/`null` scope (must NOT trip NOT_FOUND). Entity-id-derive
+  cross-tenant DB tests intentionally **deferred to PR F** (auth-ON E2E slice)
+  per DESIGN §8/§9 and PR C1/C2 precedent.
+
+## Security guardrail
+PR C3 introduces no new authorization primitive — only threads `callerScope`
+through existing-shape services, mirroring PR B/C1/C2. The
+security-framed adversarial review guardrail (Sprint 15.3 lesson) was
+acknowledged and **deferred to PR F** (formal second-adversary security
+review + auth-ON E2E), per CLAUDE.md and DESIGN §8. AUDIT_LOG records the
+decision under `phase_enter` for PR C3.
+
+## After C3 (next-session work)
+- **PR D** — lessonImportExport (deferred from PR B) + documents + chunks +
+  git + chat + workspace
+- **PR E** — retire legacy single-shared `CONTEXT_HUB_WORKSPACE_TOKEN`
+- **PR F** — auth-ON E2E slice (REST + MCP) + second-adversary security
+  review
+
+## Handoff
+Recommended review order: **#20 (B/lessons) → #21 (C1/topics+board) → #22
+(C2/requests+motions+bodies+proxies) → #23 (this PR, C3)**. Each builds on
+the prior. PR #19 (foundation, DESIGN doc) is merged.
+
+After all four merge, resume with `git checkout main && git pull` then
+branch `deferred-029-pr-d-documents-misc` from main.
+
+---
+
 # LONGRUN CHECKPOINT — Phase 15 autonomous longrun, session boundary (2026-05-23)
 
 **Status:** **DEFERRED-003 (race_exhausted coverage) — RESOLVED** on branch

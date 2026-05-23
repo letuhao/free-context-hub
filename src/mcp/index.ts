@@ -2956,10 +2956,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, agent_id, lesson_id, reviewer_note, intended_reviewer, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       const result = await submitForReview({
         project_id: projectId,
+        callerScope,
         agent_id,
         lesson_id,
         reviewer_note,
@@ -3002,10 +3003,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, status, submitted_by, limit, offset, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       const result = await listReviewRequests({
         project_id: projectId,
+        callerScope,
         status,
         submitted_by,
         limit,
@@ -4082,8 +4084,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, topic_id, kind, body, submitted_by, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const result = await submitIntake({ project_id, topic_id, kind, body, submitted_by });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const result = await submitIntake({ project_id, callerScope, topic_id, kind, body, submitted_by });
       const summary = `submit_intake: project=${project_id} kind=${kind} id=${result.intake_id}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -4117,7 +4119,7 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, intake_id, route_kind, actor_id, topic_id, routed_to, subject_ref, parties, procedure, submitted_by, kind, weight, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       let route: Parameters<typeof triageIntake>[1];
       if (route_kind === 'dispute') {
         route = {
@@ -4139,7 +4141,7 @@ function createMcpToolsServer() {
           routed_to: routed_to ?? '',
         };
       }
-      const result = await triageIntake(intake_id, route);
+      const result = await triageIntake(intake_id, route, { callerScope });
       const summary = `triage_intake: id=${intake_id} route=${route_kind} status=${result.status}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -4160,8 +4162,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, intake_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const result = await dismissIntake(intake_id);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const result = await dismissIntake(intake_id, { callerScope });
       const summary = `dismiss_intake: id=${intake_id} status=${result.status}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -4189,8 +4191,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, intake_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const result = await getIntake(intake_id);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const result = await getIntake(intake_id, { callerScope });
       const summary = `get_intake: id=${intake_id} status=${result.status}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -4224,8 +4226,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, kind, status, limit, offset, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const result = await listIntake(project_id, { kind, status, limit, offset });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const result = await listIntake(project_id, { kind, status, limit, offset, callerScope });
       const summary = `list_intake: project=${project_id} total=${result.total}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -4260,8 +4262,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, subject_ref, parties, procedure, submitted_by, kind, weight, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const result = await openDispute({ topic_id, subject_ref, parties, procedure, submitted_by, kind, weight });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const result = await openDispute({ topic_id, callerScope, subject_ref, parties, procedure, submitted_by, kind, weight });
       const summary = `open_dispute: topic=${topic_id} id=${result.dispute.dispute_id}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -4287,8 +4289,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, dispute_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const result = await resolveDispute(dispute_id);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const result = await resolveDispute(dispute_id, { callerScope });
       const summary = `resolve_dispute: id=${dispute_id} status=${result.status}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -4325,8 +4327,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, dispute_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const result = await getDispute(dispute_id);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const result = await getDispute(dispute_id, { callerScope });
       const summary = `get_dispute: id=${dispute_id} status=${result.status}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -4358,8 +4360,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, status, limit, offset, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const result = await listDisputes(topic_id, { status, limit, offset });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const result = await listDisputes(topic_id, { status, limit, offset, callerScope });
       const summary = `list_disputes: topic=${topic_id} total=${result.total}`;
       return formatToolResponse(result, summary, output_format);
     },

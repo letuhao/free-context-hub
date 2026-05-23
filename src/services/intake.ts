@@ -19,6 +19,9 @@
 import type { PoolClient } from 'pg';
 import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
+import { assertCallerScope } from '../core/security/callerScope.js';
+import { assertIntakeScope } from '../core/security/scopeResolvers.js';
+import type { CallerScope } from '../core/security/callerScope.js';
 import { appendEvent } from './coordinationEvents.js';
 import { createModuleLogger } from '../utils/logger.js';
 
@@ -76,6 +79,8 @@ const VALID_KINDS: ReadonlySet<string> = new Set(['violation_report', 'suggestio
 
 export async function submitIntake(params: {
   project_id: string;
+  /** DEFERRED-029: caller's scope; enforced against project_id. */
+  callerScope?: CallerScope;
   topic_id?: string;
   kind: string;
   body: string;
@@ -90,6 +95,7 @@ export async function submitIntake(params: {
   if (!projectId || !kind || !body || !submittedBy) {
     throw new ContextHubError('BAD_REQUEST', 'project_id, kind, body, submitted_by are required');
   }
+  assertCallerScope(params.callerScope, projectId);
   if (!VALID_KINDS.has(kind)) {
     throw new ContextHubError(
       'BAD_REQUEST',
@@ -162,6 +168,8 @@ export async function submitIntake(params: {
 export async function triageIntake(
   intake_id: string,
   route: TriageRoute,
+  /** DEFERRED-029: caller's scope; enforced via the intake's project_id (and propagated to openDispute). */
+  opts?: { callerScope?: CallerScope },
 ): Promise<TriageResult> {
   const intakeId = (intake_id ?? '').trim();
   const topicId = (route.topic_id ?? '').trim();
@@ -171,6 +179,7 @@ export async function triageIntake(
   }
 
   const pool = getDbPool();
+  await assertIntakeScope(pool, opts?.callerScope, intakeId);
 
   // Validate topic is active before acquiring the intake row lock
   const topicCheck = await pool.query<{ status: string }>(
@@ -219,6 +228,7 @@ export async function triageIntake(
       const { openDispute } = await import('./disputes.js');
       const disputeRes = await openDispute({
         topic_id: topicId,
+        callerScope: opts?.callerScope,
         subject_ref: route.subject_ref,
         parties: route.parties,
         procedure: route.procedure,
@@ -279,13 +289,18 @@ export async function triageIntake(
 
 // ── §2.1 dismissIntake ────────────────────────────────────────────────────────
 
-export async function dismissIntake(intake_id: string): Promise<IntakeItem> {
+export async function dismissIntake(
+  intake_id: string,
+  /** DEFERRED-029: caller's scope; enforced via the intake's project_id. */
+  opts?: { callerScope?: CallerScope },
+): Promise<IntakeItem> {
   const intakeId = (intake_id ?? '').trim();
   if (!intakeId) {
     throw new ContextHubError('BAD_REQUEST', 'intake_id is required');
   }
 
   const pool = getDbPool();
+  await assertIntakeScope(pool, opts?.callerScope, intakeId);
   const res = await pool.query<IntakeItem>(
     `UPDATE intake_items
         SET status='dismissed'
@@ -316,11 +331,16 @@ export async function dismissIntake(intake_id: string): Promise<IntakeItem> {
 
 // ── §2.1 getIntake ────────────────────────────────────────────────────────────
 
-export async function getIntake(intake_id: string): Promise<IntakeItem> {
+export async function getIntake(
+  intake_id: string,
+  /** DEFERRED-029: caller's scope; enforced via the intake's project_id. */
+  opts?: { callerScope?: CallerScope },
+): Promise<IntakeItem> {
   const intakeId = (intake_id ?? '').trim();
   if (!intakeId) throw new ContextHubError('BAD_REQUEST', 'intake_id is required');
 
   const pool = getDbPool();
+  await assertIntakeScope(pool, opts?.callerScope, intakeId);
   const res = await pool.query<IntakeItem>(
     `SELECT intake_id, project_id, topic_id, kind, body, submitted_by, status, routed_to,
             created_at::text AS created_at
@@ -338,10 +358,18 @@ export async function getIntake(intake_id: string): Promise<IntakeItem> {
 
 export async function listIntake(
   project_id: string,
-  opts?: { kind?: string; status?: string; limit?: number; offset?: number },
+  opts?: {
+    kind?: string;
+    status?: string;
+    limit?: number;
+    offset?: number;
+    /** DEFERRED-029: caller's scope; enforced against project_id. */
+    callerScope?: CallerScope;
+  },
 ): Promise<{ items: IntakeItem[]; total: number }> {
   const projectId = (project_id ?? '').trim();
   if (!projectId) throw new ContextHubError('BAD_REQUEST', 'project_id is required');
+  assertCallerScope(opts?.callerScope, projectId);
 
   const pool = getDbPool();
   const params: unknown[] = [projectId];
