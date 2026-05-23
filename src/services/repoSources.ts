@@ -5,6 +5,8 @@ import { promisify } from 'node:util';
 
 import { getDbPool } from '../db/client.js';
 import { materializeRepoFromS3, syncSourceArtifactToS3 } from './sourceArtifacts.js';
+import { assertCallerScope } from '../core/security/callerScope.js';
+import type { CallerScope } from '../core/security/callerScope.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -17,12 +19,15 @@ async function runGit(cwd: string, args: string[]): Promise<string> {
 
 export async function configureProjectSource(params: {
   projectId: string;
+  /** DEFERRED-029: caller's scope; enforced against projectId. */
+  callerScope?: CallerScope;
   sourceType: SourceType;
   gitUrl?: string;
   defaultRef?: string;
   repoRoot?: string;
   enabled?: boolean;
 }): Promise<{ status: 'ok'; project_id: string; source_type: SourceType }> {
+  assertCallerScope(params.callerScope, params.projectId);
   const pool = getDbPool();
   await pool.query(
     `INSERT INTO projects(project_id, name)
@@ -54,6 +59,8 @@ export async function configureProjectSource(params: {
 
 export async function prepareRepo(params: {
   projectId: string;
+  /** DEFERRED-029: caller's scope; enforced against projectId. */
+  callerScope?: CallerScope;
   gitUrl: string;
   cacheRoot: string;
   ref?: string;
@@ -74,6 +81,7 @@ export async function prepareRepo(params: {
   };
   error?: string;
 }> {
+  assertCallerScope(params.callerScope, params.projectId);
   const ref = (params.ref ?? 'main').trim() || 'main';
   const sourceStorageMode = params.sourceStorageMode ?? 'local';
   const safeProject = params.projectId.replace(/[^\w.-]+/g, '_');
@@ -149,7 +157,12 @@ export async function prepareRepo(params: {
   }
 }
 
-export async function getProjectSource(projectId: string, sourceType: SourceType): Promise<{
+export async function getProjectSource(
+  projectId: string,
+  sourceType: SourceType,
+  /** DEFERRED-029: caller's scope; enforced against projectId. */
+  opts?: { callerScope?: CallerScope },
+): Promise<{
   project_id: string;
   source_type: SourceType;
   git_url: string | null;
@@ -157,6 +170,7 @@ export async function getProjectSource(projectId: string, sourceType: SourceType
   repo_root: string | null;
   enabled: boolean;
 } | null> {
+  assertCallerScope(opts?.callerScope, projectId);
   const pool = getDbPool();
   const res = await pool.query(
     `SELECT project_id, source_type, git_url, default_ref, repo_root, enabled

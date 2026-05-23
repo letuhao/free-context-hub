@@ -2061,11 +2061,12 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, root, since, max_commits, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       const resolvedRoot = await resolveProjectRoot(pid, root);
       const result = await ingestGitHistory({
         projectId: pid,
+        callerScope,
         root: resolvedRoot,
         since,
         maxCommits: max_commits,
@@ -2103,9 +2104,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, limit, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const result = await listCommits({ projectId: pid, limit });
+      const result = await listCommits({ projectId: pid, callerScope, limit });
       const summary = `list_commits: items=${result.items.length}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2147,9 +2148,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, sha, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const result = await getCommit({ projectId: pid, sha });
+      const result = await getCommit({ projectId: pid, callerScope, sha });
       const summary = `get_commit: found=${Boolean(result.commit).toString()}, files=${result.files.length}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2184,10 +2185,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, commit_shas, limit, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       const result = await suggestLessonsFromCommits({
         projectId: pid,
+        callerScope,
         commitShas: commit_shas,
         limit,
       });
@@ -2215,10 +2217,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, commit_sha, lesson_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       const result = await linkCommitToLesson({
         projectId: pid,
+        callerScope,
         commitSha: commit_sha,
         lessonId: lesson_id,
       });
@@ -2260,10 +2263,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, commit_sha, limit, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       const result = await analyzeCommitImpact({
         projectId: pid,
+        callerScope,
         commitSha: commit_sha,
         limit,
       });
@@ -2292,10 +2296,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, source_type, git_url, default_ref, enabled, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       const result = await configureProjectSource({
         projectId: pid,
+        callerScope,
         sourceType: source_type,
         gitUrl: git_url,
         defaultRef: default_ref,
@@ -2338,11 +2343,12 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, git_url, ref, depth, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       const env = getEnv();
       const result = await prepareRepo({
         projectId: pid,
+        callerScope,
         gitUrl: git_url,
         ref,
         depth,
@@ -2378,9 +2384,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, source_type, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const source = await getProjectSource(pid, source_type);
+      const source = await getProjectSource(pid, source_type, { callerScope });
       const result = { source };
       const summary = `get_project_source: found=${Boolean(source).toString()}`;
       return formatToolResponse(result, summary, output_format);
@@ -2406,10 +2412,10 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, root_path, active, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       const resolvedRoot = await resolveProjectRoot(pid, root_path);
-      const result = await registerWorkspaceRoot({ projectId: pid, rootPath: resolvedRoot, active });
+      const result = await registerWorkspaceRoot({ projectId: pid, callerScope, rootPath: resolvedRoot, active });
       const summary = `register_workspace_root: workspace_id=${result.workspace_id}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2436,9 +2442,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const result = await listWorkspaceRoots(pid);
+      const result = await listWorkspaceRoots(pid, { callerScope });
       const summary = `list_workspace_roots: items=${result.items.length}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2476,11 +2482,12 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, root_path, run_delta_index, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       const resolvedRoot = await resolveProjectRoot(pid, root_path);
       const result = await scanWorkspaceChanges({
         projectId: pid,
+        callerScope,
         rootPath: resolvedRoot,
         runDeltaIndex: run_delta_index,
       });

@@ -1,3 +1,38 @@
+# LONGRUN CHECKPOINT — DEFERRED-029 PR D2 (2026-05-23, session 3 cont.)
+
+**Status:** **DEFERRED-029 PR D2 — git + projectSources + workspace** built
+on branch `deferred-029-pr-d2-git-sources-workspace` (stacked on PR D1).
+**785/785 unit green** (+12 from 773 baseline); **tsc clean**; no migration;
+back-compat preserved.
+
+## What PR D2 contains
+- **Service threading (12 fns), all direct project_id paths:**
+  - `gitIntelligence` (6): `ingestGitHistory`, `listCommits`, `getCommit`,
+    `suggestLessonsFromCommits`, `linkCommitToLesson`, `analyzeCommitImpact`.
+  - `repoSources` (3): `configureProjectSource`, `prepareRepo`,
+    `getProjectSource` (signature updated: 3rd `opts?:{callerScope?}` arg).
+  - `workspaceTracker` (3): `registerWorkspaceRoot`, `listWorkspaceRoots`
+    (signature updated: 2nd `opts?:{callerScope?}` arg), `scanWorkspaceChanges`.
+    `scanWorkspaceChanges` forwards `callerScope` into its internal
+    `registerWorkspaceRoot` call.
+- **REST routes (11):** 5 git + 6 workspace+sources pass `callerScopeOf(req)`.
+- **MCP handlers (12):** all 12 switched from `assertWorkspaceToken` to
+  `resolveMcpCallerScopeOrThrow` and pass `callerScope`.
+- **Tests (+12):** new `src/services/git-workspace-scope.test.ts` — 6 git +
+  3 sources + 3 workspace cross-tenant tests (DB-free, mirror PR D1 pattern).
+
+## Next-session work (D3/D4)
+- **PR D3** — jobQueue + groups + artifactLeases + taxonomyProfiles +
+  replay_topic_events (~20 MCP handlers)
+- **PR D4** — distillation + KG + indexing + guardrails + chat.ts callsite-sweep
+- **PR E** — retire legacy `CONTEXT_HUB_WORKSPACE_TOKEN`
+- **PR F** — auth-ON E2E + second-adversary security review
+
+## Handoff
+Stack: **#20 → #21 → #22 → #23 → #24 → #25 (this PR)**.
+
+---
+
 # LONGRUN CHECKPOINT — DEFERRED-029 PR D1 (2026-05-23, session 3 cont.)
 
 **Status:** **DEFERRED-029 PR D1 — exchange + documents + chunks + generatedDocs**
