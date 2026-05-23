@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import type { Request } from 'express';
 import {
   getProjectSnapshotBody,
   indexProject,
@@ -11,6 +12,7 @@ import {
   updateProject,
   addProjectToGroup,
 } from '../../core/index.js';
+import type { CallerScope } from '../../core/index.js';
 import multer from 'multer';
 import { promises as fsPromises } from 'node:fs';
 import { invalidateFeatureCache } from '../../services/featureToggles.js';
@@ -22,6 +24,11 @@ import {
   type ConflictPolicy,
 } from '../../services/exchange/importProject.js';
 import { pullFromRemote, PullError } from '../../services/exchange/pullFromRemote.js';
+
+/** DEFERRED-029: read the caller's project scope attached by bearerAuth. */
+function callerScopeOf(req: Request): CallerScope {
+  return (req as { apiKeyScope?: CallerScope }).apiKeyScope;
+}
 
 // Bundles routinely exceed the 10MB default used for document uploads —
 // 500 MB matches what we've observed in production-scale projects with
@@ -152,7 +159,7 @@ router.get('/:id/export', async (req, res, next) => {
     );
     // Disable any default JSON-ifying middleware buffering by streaming
     // straight into the response. encodeBundle pipes archiver → res.
-    await exportProject({ projectId, includeDocuments, includeChunks }, res);
+    await exportProject({ projectId, callerScope: callerScopeOf(req), includeDocuments, includeChunks }, res);
     // archiver.finalize() ended the response; nothing more to send.
   } catch (e) {
     if (e instanceof ExportNotFoundError) {
@@ -208,6 +215,7 @@ router.post(
 
       const result = await importProject({
         targetProjectId: projectId,
+        callerScope: callerScopeOf(req),
         bundlePath: tmpPath,
         policy,
         dryRun,
@@ -287,6 +295,7 @@ router.post('/:id/pull-from', requireRole('writer'), async (req, res, next) => {
 
     const result = await pullFromRemote({
       targetProjectId: projectId,
+      callerScope: callerScopeOf(req),
       remoteUrl: body.remote_url,
       remoteProjectId: body.remote_project_id,
       apiKey,

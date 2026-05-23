@@ -1,3 +1,70 @@
+# LONGRUN CHECKPOINT — DEFERRED-029 PR D1 (2026-05-23, session 3 cont.)
+
+**Status:** **DEFERRED-029 PR D1 — exchange + documents + chunks + generatedDocs**
+built on branch `deferred-029-pr-d1-exchange-docs-chunks` (stacked on PR C3).
+**773/773 unit green** (+18 from 755 baseline); **tsc clean**; no migration;
+back-compat preserved.
+
+## What PR D1 contains
+- **Service threading (20 fns):**
+  - `exchange` (3): `exportProject`, `importProject`, `pullFromRemote` — all
+    take `callerScope` against `projectId`/`targetProjectId`. `pullFromRemote`
+    forwards `callerScope` into the inner `importProject` call.
+  - `documents` (7): `createDocument`, `listDocuments`, `getDocument`,
+    `deleteDocument` use `assertCallerScope` (direct project_id);
+    `linkDocumentToLesson`, `unlinkDocumentFromLesson`, `listDocumentLessons`
+    use `assertDocumentScope` (DB-derive via `documents.project_id`).
+  - `documentChunks` (2): `searchChunks` uses `assertCallerScope`,
+    `searchChunksMulti` uses `assertCallerScopeMulti` (strict-reject).
+  - `extraction/pipeline.ts` (4): `runExtraction`, `listDocumentChunks`,
+    `updateChunk`, `deleteChunk` — all use `assertCallerScope` against
+    `projectId`.
+  - `generatedDocs.ts` (4): `upsertGeneratedDocument`, `listGeneratedDocuments`,
+    `getGeneratedDocument`, `promoteGeneratedDocument` — all use
+    `assertCallerScope` against `projectId`. Worker callsites
+    (builderMemory.ts, builderMemoryLarge.ts, backfillGeneratedDocs.ts) leave
+    `callerScope` unset (system contexts → unrestricted).
+- **New helper:** `assertDocumentScope` added to `scopeResolvers.ts` for the
+  3 docId-only fns; re-exported from `core/index.ts`.
+- **REST routes (24):** 18 documents + 3 generated-docs + 3 projects
+  (export/import/pull) + 1 chat (searchChunks) pass `callerScopeOf(req)`.
+- **MCP handlers (4):** `search_document_chunks`, `list_generated_documents`,
+  `get_generated_document`, `promote_generated_document` switched from
+  `assertWorkspaceToken` to `resolveMcpCallerScopeOrThrow` and pass
+  `callerScope` into the service.
+- **Tests (+18):** new `src/services/documents-scope.test.ts` — 2 exchange +
+  4 documents + 2 chunks + 4 extraction + 4 generatedDocs cross-tenant +
+  2 sanity tests (undefined / null). Entity-id-derive tests for the 3
+  link/unlink/listDocumentLessons fns deferred to PR F per pattern.
+
+## Known carry-forward (handled in PR D4)
+`src/api/routes/chat.ts` has 2 missed callsites that pre-date PR D1:
+- `searchLessons` (line 60) — PR B service has `callerScope?` but chat
+  doesn't pass it.
+- `tieredSearch` (line 115) — service hasn't been threaded yet (D4 scope).
+
+Both are documented in AUDIT_LOG. They're not security holes — REST middleware
+`requireProjectScope('body')` already enforces at request entry — but
+service-layer defense-in-depth will be completed in PR D4 (distillation + KG +
+indexing + remaining-misc).
+
+## Next-session work (D2/D3/D4)
+- **PR D2** — git + projectSources + workspace (~12 MCP handlers)
+- **PR D3** — jobQueue + groups + artifactLeases + taxonomyProfiles +
+  replay_topic_events (~20 MCP handlers)
+- **PR D4** — distillation (reflect/compress/summary) + KG (symbols/neighbors/
+  trace/impact) + indexing + guardrails + callsite-sweep cleanup (~9 MCP + 
+  chat.ts misses)
+- **PR E** — retire legacy `CONTEXT_HUB_WORKSPACE_TOKEN`
+- **PR F** — auth-ON E2E + second-adversary security review
+
+## Handoff
+Recommended review order: **#20 → #21 → #22 → #23 → #24 (this PR)**. Each
+builds on the prior. After this stack merges, branch the next sub-PR off
+main (or off the latest merged).
+
+---
+
 # LONGRUN CHECKPOINT — DEFERRED-029 PR C3 (2026-05-23, session 3)
 
 **Status:** **DEFERRED-029 PR C3 — disputes + intake + reviewRequests + chaining
