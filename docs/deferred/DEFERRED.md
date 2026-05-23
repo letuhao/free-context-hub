@@ -27,19 +27,37 @@
   instance; the dev posture (auth-off, single tenant) is unaffected. But MCP is the primary client
   surface, so isolation gaps there matter more than on REST.
 - **Session deferred:** 2026-05-23
+- **Session resolved:** 2026-05-23 (same session — scoped + implemented + verified)
 - **Sessions open:** 1
-- **Status:** OPEN — **scoped + scheduled** (decided 2026-05-23 during the milestone review):
-  - **Direction:** confirmed multi-tenant isolation IS a goal → implement for real (not document-and-close).
-  - **Mechanism (chosen): Option B — explicit `callerScope` parameter** threaded through every
-    service fn that takes a `project_id`, with enforcement in the service layer so REST + MCP both
-    inherit it. Chosen over AsyncLocalStorage (ambient state, harder to test) and MCP-handler-only
-    guards (would duplicate enforcement and re-create the asymmetry). Trade-off accepted: a large
-    mechanical change across hundreds of call sites — explicit + testable wins.
-  - **Plus:** a scoped MCP token model (per-project tokens; likely reuse `api_keys.project_scope`)
-    replacing the single shared `workspace_token` binary gate.
-  - **Timing:** its own dedicated phase AFTER the Phase 9–15 milestone review, with a full DESIGN
-    doc + security-framed review (safety-sensitive: tenant isolation). NOT bundled into the review.
-- **Source:** WS3 seam bug-hunt, milestone review (S3). Related: [[DEFERRED-004]] (REST tenant-scope), reinforces WS0-F5 (auth-ON E2E slice must cover MCP).
+- **Status:** **RESOLVED** — implemented across PRs #20–#29 (9 stacked PRs + 1 orthogonal test-fix PR #30).
+  Live-verified in dev mode + auth-on mode + hardened mode.
+- **Implementation summary:**
+  - **Mechanism shipped: Option B — explicit `callerScope` parameter**, threaded through ~115 service
+    fns across 8 domain PRs (B/C1/C2/C3/D1/D2/D3/D4). 10 service-layer scope helpers (`assertCallerScope`
+    + 8 DB-derive `assertXScope` helpers + `assertCallerScopeMulti`). Both REST and MCP transports
+    inherit the same enforcement.
+  - **Scoped MCP tokens:** `api_keys.project_scope` (re-used from Phase 13) is now the per-project
+    MCP token model. Legacy single-shared `CONTEXT_HUB_WORKSPACE_TOKEN` deprecated, opt-out via
+    `MCP_LEGACY_TOKEN_DISABLED=true` (PR E). REST `bearerAuth` also honors the disable flag (SEC-7
+    fix, found during hardened-mode live verification).
+  - **Security review:** 5 verification passes (4 cold-start static adversaries + 1 hardened-mode
+    live verify) found 7 bypasses (2 CRITICAL + 4 HIGH + 1 MEDIUM latent), all fixed BEFORE merge.
+    Diminishing-returns curve: 3 → 2 → 1 → 0 (static) + 1 (live).
+  - **Test coverage:** 843 unit tests green (+123 from pre-session 720) — includes 8 real-DB
+    regression tests + 18 auth-ON E2E tests covering REST + MCP cross-tenant matrix. Full E2E sweep
+    in dev mode: 300/300 (api 128 + gui 52 + smoke 111 + agent 9).
+- **Artifacts:**
+  - PRs: #20 (B), #21 (C1), #22 (C2), #23 (C3), #24 (D1), #25 (D2), #26 (D3), #27 (D4), #28 (E), #29 (F)
+  - Test-fix PR (independent of stack): #30
+  - Closeout doc: `docs/deferred-029-closeout.md`
+  - Migration doc: `docs/specs/2026-05-23-deferred-029-pr-e-legacy-token-migration.md`
+  - DESIGN doc: `docs/specs/2026-05-23-deferred-029-mcp-tenant-scope-design.md`
+  - 3 persisted MCP lessons: cold-start adversary guardrail (5287a774), three recurring bypass
+    patterns (17320a37), trust model decision (62b4e10a)
+- **Known limitations (Phase 16 candidates, not blocking):**
+  - LOW-2: `searchLessonsMulti` + `include_groups: true` strict-rejects scoped callers.
+    Functional regression, not a leak. Documented in migration doc with workaround.
+- **Source:** WS3 seam bug-hunt, milestone review (S3). Related: [[DEFERRED-004]] (REST tenant-scope), [[DEFERRED-024]] (run-next queue pop). Closed WS0-F5 (auth-ON E2E slice must cover MCP — now does).
 
 ---
 

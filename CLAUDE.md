@@ -519,6 +519,23 @@ benchmarks      profiles        in-place        Authz model, tenant
 | **13** | ✅ Complete | Multi-agent coordination protocol — artifact ownership/leasing (`artifact_leases`, TTL + lazy/background sweep, fencing), `pending-review` lesson state + Review-Request queue, taxonomy profiles (unified with `lesson_types`), agent-attributed claims; 19-bug post-hoc review fully cleared (7 sprints). |
 | **14** | ✅ Complete | Global embedding/distillation model swap — mxbai-large→bge-m3 + qwen-coder→nemotron-3-nano, all projects re-embedded in-place. DEFERRED-002 (mxbai 512-token truncation) RESOLVED; per-project model routing (DEFERRED-001) ABANDONED as unneeded. |
 | **15** | ✅ Complete | Multi-actor coordination protocol — durable append-only event log + Topic/Actor model, the Board (tasks/artifacts/claims + fencing + abandoned-claim sweep), Request-Approval (multi-level routing), Collective Decision (motions/votes/tally/veto), intake mailbox + dispute resolution, topic-closing 3-phase drain, primitive-outcome chaining, multi-tier collective routing, authorization model (3 HARD pre-prod triggers), end-to-end tenant-scope enforcement. 12 sprints (15.1–15.12), migrations 0050–0063. Closeout: `docs/phase-15-closeout.md`. |
+| **DEFERRED-029** | ✅ Complete | MCP tenant-scope enforcement — service-layer `callerScope` threaded through ~115 fns across 8 domain PRs (B/C1/C2/C3/D1/D2/D3/D4) + PR E (retire legacy `CONTEXT_HUB_WORKSPACE_TOKEN` with `MCP_LEGACY_TOKEN_DISABLED` opt-out) + PR F (auth-ON E2E + 5 verification passes catching 7 bypasses). 10 helpers (`assertCallerScope` + 8 DB-derive `assertXScope` + Multi). Tests: 843 unit + 300 E2E (api/gui/smoke/agent). Closeout: `docs/deferred-029-closeout.md`. Migration: `docs/specs/2026-05-23-deferred-029-pr-e-legacy-token-migration.md`. |
+
+## Safety-sensitive review policy
+
+For any sprint that introduces an **authorization primitive**, **tenant-isolation logic**,
+**governance/decision primitive**, **new service boundary**, or **destructive operation**:
+
+- Run a **cold-start hostile-actor adversary review** (not `/review-impl` coverage) during
+  REVIEW-CODE or POST-REVIEW. Adversary must have NO prior context — read files only.
+- **Multi-pass is not redundant** — each pass catches a different class of pattern. Expect
+  3–4 passes to saturate (curve usually 3→2→1→0). Sprint 15.3 lost 2 CRITICAL bugs by
+  skipping this; DEFERRED-029 PR F caught 7 bypasses across 5 passes.
+- **Live verification of the documented end-state** catches what static review misses.
+  When adding a security flag, grep for every authn/authz fast-path the flag should affect.
+
+Enforced via guardrail (`5c0b7b25`) and reusable lesson `5287a774`. See
+`docs/deferred-029-closeout.md` § "Architectural lessons" for the four-pass pattern.
 
 ## Phase 7 — Complete
 

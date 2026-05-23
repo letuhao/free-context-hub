@@ -1,7 +1,7 @@
 # ContextHub (Self-Hosted) White Paper
 
 ## Status
-Draft v0.6 (Phases 1–15 complete — 2026-05-23 · entire deferred backlog cleared)
+Draft v0.7 (Phases 1–15 complete + DEFERRED-029 RESOLVED — 2026-05-23)
 
 ## Abstract
 ContextHub is a self-hosted, team-friendly system that gives MCP-enabled AI coding agents **persistent memory and guardrails across sessions**. It is designed for small teams that want the essential productivity benefits of [ContextStream](https://contextstream.io/)-like workflows, without requiring a hosted SaaS dependency.
@@ -543,6 +543,59 @@ Primitives shipped (12 sprints, 15.1–15.12; migrations 0050–0063):
 - **End-to-end tenant-scope enforcement** — derive-on-id resource scoping and strict-reject collection scoping so a project-scoped key cannot read or mutate another tenant's coordination state.
 
 **Acceptance criteria (met):** all 12 sprints shipped through the v2.2 12-phase workflow (AMAW opt-in on the highest-stakes sprints); 723/723 tests green and `tsc` clean at close; the entire cross-phase deferred backlog cleared (0 OPEN). Full retro: `docs/phase-15-closeout.md`.
+
+### DEFERRED-029: MCP Tenant-Scope Enforcement — ✅ Complete
+
+Surfaced during the Phase 9–15 milestone review (WS3 seam bug-hunt): tenant isolation was
+asymmetric across transports. The REST middleware (`requireScope`/`requireProjectScope`/
+`requireResourceScope`) enforced per-project scope, but the MCP transport had a single shared
+`workspace_token` (binary gate) and the service layer did not re-check caller scope. So with
+`MCP_AUTH_ENABLED=true`, any token-holder could reach any project's lessons + coordination state
+via the MCP path.
+
+**Decision (2026-05-23):** confirmed multi-tenant isolation IS a goal → implemented for real.
+Mechanism: explicit `callerScope` parameter threaded through every service fn that takes a
+`project_id`, with enforcement in the service layer so REST + MCP both inherit it. Plus scoped
+MCP token model reusing `api_keys.project_scope`.
+
+**Shipped across 10 PRs (#20–#29 stacked DEFERRED-029 + #30 orthogonal test-fix):**
+
+- **PR A (#19):** `CallerScope` foundation — three-valued type (`undefined` = auth-off,
+  `null` = global, `string` = project-scoped); `assertCallerScope` + `assertCallerScopeMulti`
+  helpers; MCP resolver `resolveMcpCallerScope` mapping legacy + api_keys tokens to scopes.
+- **PR B (#20):** lessons domain — 8 service fns + 9 REST routes + 7 MCP handlers.
+- **PR C1/C2/C3 (#21/#22/#23):** coordination — topics, board, requests, motions, decision
+  bodies, proxies, disputes, intake, reviewRequests, chaining (~42 fns + 8 DB-derive
+  scope-resolvers `assertTopicScope`/`assertTaskScope`/`assertMotionScope`/`assertDisputeScope`/
+  `assertRequestScope`/`assertIntakeScope`/`assertBodyScope`/`assertArtifactScope`).
+- **PR D1/D2/D3/D4 (#24/#25/#26/#27):** rest of the surface — exchange (export/import/pull),
+  documents (+ `assertDocumentScope`), chunks, generatedDocs, git, projectSources, workspace,
+  jobQueue, artifactLeases, taxonomy, replayEvents, projectGroups, distillation, KG, indexing,
+  guardrails, deleteWorkspace, artifacts.
+- **PR E (#28):** retire legacy `CONTEXT_HUB_WORKSPACE_TOKEN` — `MCP_LEGACY_TOKEN_DISABLED=true`
+  opt-out path. api_keys becomes the canonical MCP token mechanism.
+- **PR F (#29):** auth-ON E2E slice (18 REST + MCP cross-tenant tests) + 5 verification passes
+  (4 cold-start static adversaries + 1 live hardened-mode verify) → caught **7 bypasses**
+  (2 CRITICAL + 4 HIGH + 1 MEDIUM latent), all fixed before merge. Adds `assertLessonScope`
+  helper. SEC-7 fix mirrors `MCP_LEGACY_TOKEN_DISABLED` enforcement on REST `bearerAuth`.
+
+**Trust model (post-DEFERRED-029):** three-valued `CallerScope` is the single source of truth
+across REST + MCP. Cross-tenant attempts return `NOT_FOUND` with the same byte shape as an
+unknown-id 404 (no existence oracle). Workers run as `callerScope = null` (trusted system actor)
+but scoped callers cannot smuggle filesystem paths via `payload.root` (SEC-6 enqueue-time
+rejection). Hardened end-state: `MCP_AUTH_ENABLED=true` + `MCP_LEGACY_TOKEN_DISABLED=true` +
+no `CONTEXT_HUB_WORKSPACE_TOKEN`; every authenticated call maps to an `api_keys` row.
+
+**Coverage:** 843 unit tests + 300 E2E (api 128 + gui 52 + smoke 111 + agent 9), all green.
+
+**Known limitation (Phase 16 candidate, not blocking):** `searchLessonsMulti + include_groups`
+strict-rejects scoped callers because `resolveProjectIds(projectId, true)` returns
+`[projectId, ...group_ids]` and `assertCallerScopeMulti` enforces exact-match. Workaround:
+iterate per-project. Future fix: `assertCallerScopeMultiInclGroups` helper that DB-checks
+each id is either `== callerScope` or a group that callerScope's project belongs to.
+
+Full closeout: `docs/deferred-029-closeout.md`. Migration recipe:
+`docs/specs/2026-05-23-deferred-029-pr-e-legacy-token-migration.md`.
 
 ### Future / non-MVP ideas (not yet built)
 These are knowledge-exchange and storage enhancements considered but intentionally out of scope through Phase 15; none are required for current deployments.
