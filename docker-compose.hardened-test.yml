@@ -1,0 +1,9 @@
+# Hardened-mode override for SEC-7 live verification.
+# Stacks ON TOP OF docker-compose.auth-test.yml (which sets MCP_AUTH_ENABLED=true).
+services:
+  mcp:
+    environment:
+      MCP_LEGACY_TOKEN_DISABLED: "true"
+  worker:
+    environment:
+      MCP_LEGACY_TOKEN_DISABLED: "true"

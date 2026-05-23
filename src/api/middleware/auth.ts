@@ -1,11 +1,16 @@
 import type { Request, Response, NextFunction } from 'express';
 import { getEnv } from '../../core/index.js';
 import { validateApiKey } from '../../services/apiKeys.js';
+import { createModuleLogger } from '../../utils/logger.js';
+
+const logger = createModuleLogger('rest-auth');
 
 /**
  * Bearer token middleware for the REST API.
  * Checks in order:
  *   1. Env var CONTEXT_HUB_WORKSPACE_TOKEN (fast path, backwards compat → admin role)
+ *      - DEPRECATED (DEFERRED-029 PR E). Rejected entirely when
+ *        MCP_LEGACY_TOKEN_DISABLED=true to mirror the MCP transport.
  *   2. api_keys table (SHA-256 hash lookup → role from DB)
  * Skipped when MCP_AUTH_ENABLED is false.
  */
@@ -23,6 +28,21 @@ export function bearerAuth(req: Request, res: Response, next: NextFunction) {
 
   // Fast path: env var token (admin)
   if (env.CONTEXT_HUB_WORKSPACE_TOKEN && token === env.CONTEXT_HUB_WORKSPACE_TOKEN) {
+    // PR F SEC-7 (third-pass live verification): mirror src/mcp/auth.ts —
+    // when MCP_LEGACY_TOKEN_DISABLED=true the legacy single-shared token
+    // must be rejected on REST too. Without this, hardened-mode deployments
+    // think they've disabled the legacy token but REST routes still accept
+    // it — a documentation/implementation mismatch with real security cost.
+    if (env.MCP_LEGACY_TOKEN_DISABLED) {
+      logger.warn(
+        { token_prefix: token.slice(0, 6), path: req.path },
+        'rest: legacy CONTEXT_HUB_WORKSPACE_TOKEN rejected (MCP_LEGACY_TOKEN_DISABLED=true); use a scoped api_keys token',
+      );
+      res.status(401).json({
+        error: 'Unauthorized: legacy single-shared token disabled — use a scoped api_keys token',
+      });
+      return;
+    }
     return next();
   }
 

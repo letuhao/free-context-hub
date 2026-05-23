@@ -75,10 +75,13 @@ Plus REST routes (~80) and MCP handlers (~70) all wired to pass `callerScope`.
 
 ---
 
-## The 6 adversary findings (all fixed before merge)
+## The 7 adversary findings (all fixed before merge)
 
-PR F's cold-start security-adversary reviews (4 passes) found 6 bypass paths that the
-prior 8 PRs shipped unnoticed. **All fixed in PR F before any production exposure.**
+PR F's cold-start security-adversary reviews (4 passes) found 6 bypass paths; **a
+seventh (SEC-7) was found during live verification of hardened mode** — REST
+`bearerAuth` middleware didn't honor `MCP_LEGACY_TOKEN_DISABLED` despite the
+migration doc claiming "legacy token rejected" in hardened mode. All 7 fixed in
+PR F before any production exposure.
 
 | # | Sev | Pattern | File | Adversary |
 |---|---|---|---|---|
@@ -88,6 +91,7 @@ prior 8 PRs shipped unnoticed. **All fixed in PR F before any production exposur
 | **SEC-4** | HIGH | `linkDocumentToLesson`/`unlinkDocumentFromLesson` cross-tenant edge writes — scope-check doc, miss lesson | `src/services/documents.ts` | #2 |
 | **SEC-5** | MEDIUM (latent) | `cancelJob` identical SEC-3 trap shape — unreachable today, footgun for next caller | `src/services/jobQueue.ts` | #2 |
 | **SEC-6** | HIGH | Worker `payload.root` cross-tenant filesystem read — SEC-3 pinned DB tag, this closes the filesystem-read path | `src/services/jobQueue.ts` (reject at enqueue) | #3 |
+| **SEC-7** | HIGH | REST `bearerAuth` didn't honor `MCP_LEGACY_TOKEN_DISABLED` — hardened-mode deployments thought they'd disabled the legacy token but REST routes still accepted it | `src/api/middleware/auth.ts` (mirror MCP resolver) | live-verify |
 
 **Recurring patterns:**
 1. **"if (project_id) assert" trap** — guard skipped when the optional id is falsy
