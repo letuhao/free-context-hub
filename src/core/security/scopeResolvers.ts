@@ -43,3 +43,5 @@ export const assertArtifactScope = (c: Conn, s: CallerScope, id: string) =>
   deriveAndAssert(c, s, `SELECT t.project_id FROM artifacts a JOIN tasks tk ON tk.task_id = a.task_id JOIN topics t ON t.topic_id = tk.topic_id WHERE a.artifact_id = $1`, id);
 export const assertDocumentScope = (c: Conn, s: CallerScope, id: string) =>
   deriveAndAssert(c, s, `SELECT project_id FROM documents WHERE doc_id = $1`, id);
+export const assertLessonScope = (c: Conn, s: CallerScope, id: string) =>
+  deriveAndAssert(c, s, `SELECT project_id FROM lessons WHERE lesson_id = $1`, id);

@@ -1,6 +1,6 @@
 import { getDbPool } from '../db/client.js';
 import { assertCallerScope } from '../core/security/callerScope.js';
-import { assertDocumentScope } from '../core/security/scopeResolvers.js';
+import { assertDocumentScope, assertLessonScope } from '../core/security/scopeResolvers.js';
 import type { CallerScope } from '../core/security/callerScope.js';
 
 export interface Document {
@@ -146,11 +146,18 @@ export async function deleteDocument(params: {
 export async function linkDocumentToLesson(params: {
   docId: string;
   lessonId: string;
-  /** DEFERRED-029: caller's scope; enforced via the document's derived project_id. */
+  /** DEFERRED-029: caller's scope; enforced via BOTH the document's AND
+   *  the lesson's derived project_id. PR F SEC-4 (Adversary #2 HIGH): the
+   *  document_lessons table has no project_id column — the link is a
+   *  cross-tenant edge if either endpoint isn't scope-checked. Scope-check
+   *  both endpoints to prevent a scoped-A attacker from linking their own
+   *  document to a cross-tenant lesson (which would also leak that lesson
+   *  via listDocumentLessons). */
   callerScope?: CallerScope;
 }): Promise<{ status: 'ok' | 'error'; error?: string }> {
   const pool = getDbPool();
   await assertDocumentScope(pool, params.callerScope, params.docId);
+  await assertLessonScope(pool, params.callerScope, params.lessonId);
   try {
     await pool.query(
       `INSERT INTO document_lessons (doc_id, lesson_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
@@ -166,11 +173,16 @@ export async function linkDocumentToLesson(params: {
 export async function unlinkDocumentFromLesson(params: {
   docId: string;
   lessonId: string;
-  /** DEFERRED-029: caller's scope; enforced via the document's derived project_id. */
+  /** DEFERRED-029: caller's scope; enforced via BOTH the document's AND
+   *  the lesson's derived project_id. PR F SEC-4 (Adversary #2 HIGH): even
+   *  for delete the secondary id is a probe oracle — without checking it,
+   *  a scoped-A caller could test which lesson_ids in proj-B exist by
+   *  observing rowCount differences. */
   callerScope?: CallerScope;
 }): Promise<boolean> {
   const pool = getDbPool();
   await assertDocumentScope(pool, params.callerScope, params.docId);
+  await assertLessonScope(pool, params.callerScope, params.lessonId);
   const result = await pool.query(
     `DELETE FROM document_lessons WHERE doc_id = $1 AND lesson_id = $2`,
     [params.docId, params.lessonId],

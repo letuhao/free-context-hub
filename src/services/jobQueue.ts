@@ -254,7 +254,17 @@ export async function cancelJob(
   /** DEFERRED-029: caller's scope; enforced against projectId when both are set. */
   opts?: { callerScope?: CallerScope },
 ): Promise<boolean> {
-  if (projectId) {
+  // PR F SEC-5 (Adversary #2 MEDIUM latent): the previous `if (projectId)`
+  // guard was the same trap shape as SEC-3 — a scoped caller could call
+  // cancelJob(jobId, undefined, {callerScope:'A'}) and the UPDATE would run
+  // unscoped (cross-tenant cancel). Today's only caller passes a truthy
+  // projectId, but the contract was a footgun for the next refactor / MCP
+  // exposure. Fix: when callerScope is a string and projectId is absent,
+  // auto-bind. Auth-off / global keys still allowed to cancel by job_id alone.
+  if (typeof opts?.callerScope === 'string') {
+    if (!projectId) projectId = opts.callerScope;
+    else assertCallerScope(opts.callerScope, projectId);
+  } else if (projectId) {
     assertCallerScope(opts?.callerScope, projectId);
   }
   const pool = getDbPool();

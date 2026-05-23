@@ -16,7 +16,7 @@ export { assertCallerScope, assertCallerScopeMulti, type CallerScope } from './s
 export {
   assertTopicScope, assertTaskScope, assertMotionScope, assertDisputeScope,
   assertRequestScope, assertIntakeScope, assertBodyScope, assertArtifactScope,
-  assertDocumentScope,
+  assertDocumentScope, assertLessonScope,
 } from './security/scopeResolvers.js';
 
 // ── Startup ──

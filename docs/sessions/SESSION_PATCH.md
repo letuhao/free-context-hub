@@ -1,9 +1,45 @@
 # LONGRUN CHECKPOINT — DEFERRED-029 PR F (2026-05-23, session 3 cont.)
 
-**Status:** **DEFERRED-029 PR F — auth-ON E2E slice + cold-start adversary
-review (and 3 bypass fixes)** built on branch
+**Status:** **DEFERRED-029 PR F — auth-ON E2E slice + TWO cold-start adversary
+reviews + 5 bypass fixes** built on branch
 `deferred-029-pr-f-auth-on-e2e-and-security` (stacked on PR E).
-**825/825 unit green** (+5 from 820 baseline); **tsc clean**; no migration.
+**828/828 unit green** (+8 from 820 baseline); **tsc clean**; no migration.
+
+## TWO adversary passes, 5 findings fixed
+
+| # | Sev | Found by | Title | Status |
+|---|---|---|---|---|
+| SEC-1 | CRITICAL | Adversary #1 | `listJobs` cross-tenant read when scoped + no projectId/projectIds | ✅ Fixed |
+| SEC-2 | CRITICAL | Adversary #1 | `triageIntake` cross-tenant `route.topic_id` event-log write | ✅ Fixed |
+| SEC-3 | HIGH | Adversary #1 | `enqueueJob` NULL-project bypass via omitted project_id | ✅ Fixed |
+| **SEC-4** | **HIGH** | **Adversary #2** | `linkDocumentToLesson`/`unlinkDocumentFromLesson` cross-tenant edge writes — same shape as SEC-2 (resource scope-checked, secondary id ignored) | ✅ **Fixed** |
+| **SEC-5** | **MEDIUM (latent)** | **Adversary #2** | `cancelJob` has identical SEC-3 trap (`if (projectId) check`) — unreachable today but trap for next caller | ✅ **Fixed** |
+
+Adversary #2 also **verified** the 3 PR-F fixes from Adversary #1 as
+**CONFIRMED-CORRECT** with explicit reasoning per edge case.
+
+## Final PR F deliverables
+- **Auth-ON E2E slice:** 18 cross-tenant tests + 3 new regression tests for
+  SEC-1/SEC-2/SEC-3 (`test/e2e/api/deferred-029-cross-tenant.test.ts`).
+- **New helper:** `assertLessonScope` in `src/core/security/scopeResolvers.ts`
+  (mirrors `assertDocumentScope` pattern; re-exported from `core/index.ts`).
+- **5 bypass fixes** across `src/services/jobQueue.ts`,
+  `src/services/intake.ts`, `src/services/documents.ts`.
+- **Regression unit tests:** +8 DB-free tests in
+  `src/services/pr-f-adversary-fixes.test.ts` covering all 5 SECs.
+
+## Sprint 15.3 lesson re-validated (twice)
+
+The CLAUDE.md safety-sensitive policy mandates hostile-actor framing for
+authz primitives. Both adversary passes proved their value:
+- Adversary #1 caught 3 CRITICAL/HIGH bypasses that all 8 prior PRs missed.
+- Adversary #2 caught 1 additional HIGH (same SEC-2 shape, different fn)
+  plus 1 latent trap.
+
+The shipping of these 5 fixes BEFORE merge — vs after a production incident
+— is the entire ROI of the cold-start review process.
+
+
 
 ## What PR F contains
 - **Auth-ON E2E slice:** new `test/e2e/api/deferred-029-cross-tenant.test.ts`
