@@ -500,7 +500,7 @@ Additional profiles can be defined per-project without code changes. The DLF pro
 
 **What Phase 13 is not**
 
-- **Not a task orchestrator.** Phase 13 does not assign work to agents, schedule agent runs, or manage dependencies between tasks. It provides visibility and signaling primitives that agents and humans use to coordinate — coordination remains human-driven.
+- **Not a task orchestrator (Phase 13 scope).** Phase 13 itself does not assign work to agents, schedule agent runs, or manage dependencies between tasks; it provides visibility and signaling primitives. **Scope note (Phase 15):** the Board (15.2) deliberately evolved past this boundary — `tasks` carry `depends_on` (claiming a task is gated until its dependencies complete) and `raci` responsibility metadata, and primitive-outcome chaining (15.7) auto-materializes approved decisions into tasks. The system therefore now does **dependency-sequenced task coordination**. The *decision* to do work stays human/collective-driven (votes, approvals); what is automated is sequencing and follow-up materialization. It is still not a general scheduler/runtime — it does not execute agent runs.
 - **Not passive monitoring.** Following the same reasoning as the dropped "Multi-Agent Passive Collection" feature: agents call `claim_artifact` and `submit_for_review` explicitly when they mean it. There is no background conversation parser.
 - **Not a messaging bus.** Agents do not send messages to each other directly. All coordination flows through the shared knowledge store and the human reviewer. This is intentional: the human remains the authority; agents signal to the human, not to each other.
 
@@ -532,7 +532,7 @@ The organizing invariant: **every state change is an append-only event on a topi
 Primitives shipped (12 sprints, 15.1–15.12; migrations 0050–0063):
 
 - **Coordination substrate** — a durable append-only event log plus the Topic / Actor / participant model every later primitive builds on.
-- **The Board** — `tasks` posted to a topic, derived-identity `artifacts` with versioning, `claims` (evolving Phase 13 leasing) with fencing tokens, and an abandoned-claim sweep.
+- **The Board** — `tasks` posted to a topic (with `depends_on` dependency gating and `raci` responsibility metadata — see the Phase 13 "not a task orchestrator" scope note), derived-identity `artifacts` with versioning, `claims` (evolving Phase 13 leasing) with fencing tokens, and an abandoned-claim sweep.
 - **Request-Approval** — `requests` + `request_steps` with multi-level routing; a request can route through a chain of approvers.
 - **Collective Decision** — motions, votes, tally, and veto: the voting half of governance.
 - **Intake mailbox + dispute resolution** — the inbound-item and adjudication halves of the model.

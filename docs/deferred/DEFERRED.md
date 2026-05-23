@@ -1,7 +1,143 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 025 -->
+<!-- Next ID: 030 -->
+
+## DEFERRED-029
+
+- **What:** Tenant isolation is asymmetric across transports. The tenant-scope work
+  (DEFERRED-004, Sprint 15.12) is **Express middleware** (`requireScope`/`requireProjectScope`/
+  `requireResourceScope`) and the service layer does not re-check caller scope. The **MCP
+  transport does not run that middleware** and has no per-project scope concept — MCP auth is a
+  single shared `workspace_token` (binary gate); `project_id` is a free parameter defaulting to
+  `DEFAULT_PROJECT_ID`. So with `MCP_AUTH_ENABLED=true`, any token-holder can reach any project's
+  lessons + coordination state via the MCP path. (15.11 authorization *levels* live in the
+  service layer, so they DO apply to MCP; only tenant-scope is REST-only.)
+- **Why deferred:** found during WS3 of the milestone review
+  (`docs/qc/ws3-seam-bughunt-findings.md` S3). A cross-phase architectural gap, not a single bug;
+  needs a product decision before implementation.
+- **Decision needed:** is the MCP surface single-tenant-per-instance (then document it and close),
+  or must it enforce per-project isolation on a shared instance (then move scope enforcement into
+  the service layer so both REST and MCP inherit it, and add scoped MCP tokens)?
+- **Trigger condition:** any plan to run a shared multi-tenant instance with `MCP_AUTH_ENABLED`,
+  OR a security review of the MCP surface.
+- **Estimated size:** L–XL — service-layer scope enforcement (so both transports inherit it) +
+  scoped MCP token model + tests on the MCP path.
+- **Priority:** MED — exploitable only with `MCP_AUTH_ENABLED=true` on a shared multi-tenant
+  instance; the dev posture (auth-off, single tenant) is unaffected. But MCP is the primary client
+  surface, so isolation gaps there matter more than on REST.
+- **Session deferred:** 2026-05-23
+- **Sessions open:** 1
+- **Status:** OPEN — **scoped + scheduled** (decided 2026-05-23 during the milestone review):
+  - **Direction:** confirmed multi-tenant isolation IS a goal → implement for real (not document-and-close).
+  - **Mechanism (chosen): Option B — explicit `callerScope` parameter** threaded through every
+    service fn that takes a `project_id`, with enforcement in the service layer so REST + MCP both
+    inherit it. Chosen over AsyncLocalStorage (ambient state, harder to test) and MCP-handler-only
+    guards (would duplicate enforcement and re-create the asymmetry). Trade-off accepted: a large
+    mechanical change across hundreds of call sites — explicit + testable wins.
+  - **Plus:** a scoped MCP token model (per-project tokens; likely reuse `api_keys.project_scope`)
+    replacing the single shared `workspace_token` binary gate.
+  - **Timing:** its own dedicated phase AFTER the Phase 9–15 milestone review, with a full DESIGN
+    doc + security-framed review (safety-sensitive: tenant isolation). NOT bundled into the review.
+- **Source:** WS3 seam bug-hunt, milestone review (S3). Related: [[DEFERRED-004]] (REST tenant-scope), reinforces WS0-F5 (auth-ON E2E slice must cover MCP).
+
+---
+
+## DEFERRED-028
+
+- **What:** The coordination layer (Phase 15 Board) became a **light task orchestrator**, which
+  contradicts the WHITEPAPER Phase 13 non-goal: *"Not a task orchestrator… does not assign work
+  to agents, schedule agent runs, or manage dependencies between tasks."* Concretely:
+  `tasks.depends_on` + `claimTask` blocking a claim with `unmet_dependencies`
+  ([board.ts:392](src/services/board.ts#L392)) = dependency-sequenced work; `tasks.raci` =
+  assignment; `chaining.ts` auto-materializes approved decisions into (dependency-gated) tasks.
+- **Why deferred:** found during WS1 of the milestone review (`docs/qc/ws1-drift-audit-findings.md`
+  D1/D2). This is not a bug — it is a doc-vs-implementation contradiction that needs a **product
+  decision**, not a code fix in the review PR.
+- **Decision needed:** either (a) update the non-goal/whitepaper to acknowledge the system now
+  does dependency-sequenced task coordination (likely the right call — the feature is deliberate
+  and shipped), or (b) reconsider hard-gating vs advisory `depends_on`.
+- **Trigger condition:** next WHITEPAPER revision OR a product-owner review of coordination scope.
+- **Estimated size:** XS (doc) if (a); M if (b) revisits gating semantics.
+- **Priority:** LOW — behavior is intentional and tested; the gap is documentation/intent, not correctness.
+- **Session deferred:** 2026-05-23
+- **Sessions open:** 1
+- **Status:** RESOLVED 2026-05-23 (`milestone-review-phase-15`) — chose option (a): the WHITEPAPER
+  Phase 13 "Not a task orchestrator" non-goal now carries a Phase 15 scope note acknowledging the
+  Board does dependency-sequenced task coordination (`depends_on` gating + `raci` + chaining),
+  while clarifying the decision-to-work stays human/collective-driven and it is still not a
+  scheduler/runtime. Phase 15 Board bullet updated to surface `depends_on`/`raci`.
+- **Source:** WS1 drift audit, milestone review (D1/D2).
+
+---
+
+## DEFERRED-025
+
+- **What:** Hard 500 when the embedding model is unavailable. `searchLessons`, `updateLesson`
+  (`src/services/lessons.ts`), and `runExtraction` (`src/services/extraction/pipeline.ts`)
+  propagate `embedTexts` HTTP 400 ("model unloaded") as an unhandled 500 to the client.
+- **Why deferred:** found during WS0 of the Phase 9–15 milestone review (`docs/qc/ws0-regression-findings.md` F2); a real-bug fix that needs its own debugging task, not bundled into the review test PR.
+- **Drift:** Phase 6 design promised graceful fallback when the model is unavailable (tiered
+  search → FTS). Search should degrade to FTS; write paths (update/extract) should enqueue
+  re-embed as a job rather than failing the write.
+- **Trigger condition:** any embeddings-availability hardening pass, OR a user report of 500s
+  during model load/unload.
+- **Estimated size:** M — fallback in search path + async re-embed on write paths + tests.
+- **Priority:** MED — degrades core search/write whenever the embedding server hiccups.
+- **Session deferred:** 2026-05-23
+- **Sessions open:** 1
+- **Status:** RESOLVED 2026-05-23 (`milestone-review-phase-15`). **Read paths:** `searchLessons`
+  and `searchLessonsMulti` now catch an embed failure, log a WARN, and degrade to FTS-only ranking
+  (sem_score → `0`, require an actual FTS match so we don't return the whole table; empty result
+  when there are also no FTS tokens). **Write paths (fail-loud, cleanly):** `embedder.embedTexts`
+  now throws `ContextHubError('SERVICE_UNAVAILABLE')` on an embeddings HTTP error → mapped to **503**
+  (new code in `errorHandler`), instead of leaking a raw "HTTP 400" as a generic 500. Tests:
+  `embedder.test.ts` (typed SERVICE_UNAVAILABLE) + live-verified the FTS fallback end-to-end against
+  the rebuilt stack with embeddings unreachable (matches returned, no throw). 728 unit green; tsc
+  clean; semantic happy-path E2E 105/105 on the rebuilt container.
+- **Source:** WS0 regression run, milestone review (F2).
+
+---
+
+## DEFERRED-026
+
+- **What:** Global search references a non-existent column. `src/services/globalSearch.ts:80`
+  runs `SELECT sha, message, author, committed_at AS date` against `git_commits`, but that
+  table has `author_name`/`author_email` (migration 0005), no `author`. The per-source error
+  is swallowed, so the **commits section is silently dropped** from global-search results
+  while smoke tests stay green.
+- **Why deferred:** found during WS0 of the milestone review (`docs/qc/ws0-regression-findings.md` F3); real-bug fix with its own (small) task.
+- **Trigger condition:** immediate — small, safe fix (`author` → `author_name`, or alias).
+- **Estimated size:** XS — one column reference + a global-search test asserting commit hits.
+- **Priority:** MED — global search silently returns incomplete results (no commits).
+- **Session deferred:** 2026-05-23
+- **Sessions open:** 1
+- **Status:** RESOLVED 2026-05-23 (`milestone-review-phase-15`) — `globalSearch.ts:80` now selects
+  `author_name AS author` (preserves the API contract). Regression test
+  `src/services/globalSearch.test.ts` seeds a commit and asserts it surfaces with author populated.
+- **Source:** WS0 regression run, milestone review (F3).
+
+---
+
+## DEFERRED-027
+
+- **What:** `updateLessonStatus` (`src/services/lessons.ts`, the `PATCH /api/lessons/:id/status`
+  path) leaks a raw DB error as a 500 on a malformed uuid: `invalid input syntax for type
+  uuid: "undefined"`. A missing/invalid id or `superseded_by` should be validated and returned
+  as 400, not surfaced as an unhandled Postgres error.
+- **Why deferred:** found during WS0 of the milestone review (`docs/qc/ws0-regression-findings.md` F4); real-bug fix with its own task (root-cause whether the undefined comes from a caller or a missing guard).
+- **Trigger condition:** immediate — input-validation hardening.
+- **Estimated size:** S — uuid validation at the route/service boundary + a 400 test.
+- **Priority:** LOW–MED — leaks DB internals and returns 500 for what should be a 400; not a data-integrity risk.
+- **Session deferred:** 2026-05-23
+- **Sessions open:** 1
+- **Status:** RESOLVED 2026-05-23 (`milestone-review-phase-15`) — added `assertUuid()` guard in
+  `lessons.ts`, called at the top of `updateLessonStatus` (lessonId + superseded_by) and
+  `updateLesson` (lessonId); throws `ContextHubError('BAD_REQUEST')` → 400 via errorHandler.
+  Service-layer guard so REST + MCP + import all inherit it. 3 tests in `lessons.test.ts`.
+- **Source:** WS0 regression run, milestone review (F4).
+
+---
 
 ## DEFERRED-024
 

@@ -260,3 +260,33 @@ test('rerankExternalApi — empty response array returns original order', async 
     global.fetch = originalFetch;
   }
 });
+
+// ── DEFERRED-027: malformed uuid → BAD_REQUEST (not a raw SQL 500) ──
+// assertUuid throws before any DB query, so these run without a live DB.
+import { updateLessonStatus, updateLesson } from './lessons.js';
+
+test('DEFERRED-027: updateLessonStatus rejects a non-uuid lessonId with BAD_REQUEST', async () => {
+  await assert.rejects(
+    updateLessonStatus({ projectId: 'p', lessonId: 'undefined', status: 'active' as any }),
+    /lessonId must be a valid UUID/,
+  );
+});
+
+test('DEFERRED-027: updateLessonStatus rejects a non-uuid superseded_by with BAD_REQUEST', async () => {
+  await assert.rejects(
+    updateLessonStatus({
+      projectId: 'p',
+      lessonId: '11111111-1111-1111-1111-111111111111',
+      status: 'superseded' as any,
+      supersededBy: 'not-a-uuid',
+    }),
+    /superseded_by must be a valid UUID/,
+  );
+});
+
+test('DEFERRED-027: updateLesson rejects a non-uuid lessonId with BAD_REQUEST', async () => {
+  await assert.rejects(
+    updateLesson({ projectId: 'p', lessonId: 'undefined' }),
+    /lessonId must be a valid UUID/,
+  );
+});

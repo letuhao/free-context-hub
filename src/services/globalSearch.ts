@@ -77,7 +77,7 @@ export async function globalSearch(params: {
     ),
     // Commits
     pool.query(
-      `SELECT sha, message, author, committed_at AS date
+      `SELECT sha, message, author_name AS author, committed_at AS date
        FROM git_commits
        WHERE project_id = $1
          AND (message ILIKE $2 OR sha ILIKE $2)
