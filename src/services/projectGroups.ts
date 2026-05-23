@@ -1,5 +1,7 @@
 import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
+import { assertCallerScope } from '../core/security/callerScope.js';
+import type { CallerScope } from '../core/security/callerScope.js';
 
 const MAX_GROUP_MEMBERS = 50;
 
@@ -90,7 +92,13 @@ export async function listGroupMembers(groupId: string): Promise<string[]> {
   return (res.rows ?? []).map((r: any) => String(r.project_id));
 }
 
-export async function addProjectToGroup(groupId: string, projectId: string): Promise<{ added: boolean }> {
+export async function addProjectToGroup(
+  groupId: string,
+  projectId: string,
+  /** DEFERRED-029: caller's scope; enforced against projectId. */
+  opts?: { callerScope?: CallerScope },
+): Promise<{ added: boolean }> {
+  assertCallerScope(opts?.callerScope, projectId);
   const pool = getDbPool();
 
   // Guard: group must exist.
@@ -122,7 +130,13 @@ export async function addProjectToGroup(groupId: string, projectId: string): Pro
   return { added: (res.rowCount ?? 0) > 0 };
 }
 
-export async function removeProjectFromGroup(groupId: string, projectId: string): Promise<{ removed: boolean }> {
+export async function removeProjectFromGroup(
+  groupId: string,
+  projectId: string,
+  /** DEFERRED-029: caller's scope; enforced against projectId. */
+  opts?: { callerScope?: CallerScope },
+): Promise<{ removed: boolean }> {
+  assertCallerScope(opts?.callerScope, projectId);
   const pool = getDbPool();
   const res = await pool.query(
     `DELETE FROM project_group_members WHERE group_id = $1 AND project_id = $2 RETURNING project_id`,
@@ -131,7 +145,12 @@ export async function removeProjectFromGroup(groupId: string, projectId: string)
   return { removed: (res.rowCount ?? 0) > 0 };
 }
 
-export async function listGroupsForProject(projectId: string): Promise<ProjectGroup[]> {
+export async function listGroupsForProject(
+  projectId: string,
+  /** DEFERRED-029: caller's scope; enforced against projectId. */
+  opts?: { callerScope?: CallerScope },
+): Promise<ProjectGroup[]> {
+  assertCallerScope(opts?.callerScope, projectId);
   const pool = getDbPool();
   const res = await pool.query(
     `SELECT g.*
@@ -211,11 +230,15 @@ function validateColor(color: string | undefined): void {
 
 export async function createProject(params: {
   project_id: string;
+  /** DEFERRED-029: caller's scope; enforced against project_id. A scoped key may
+   *  only create its OWN project; an admin/global key may create any. */
+  callerScope?: CallerScope;
   name?: string;
   description?: string;
   color?: string;
   settings?: Record<string, unknown>;
 }): Promise<{ project_id: string }> {
+  assertCallerScope(params.callerScope, params.project_id);
   const pool = getDbPool();
 
   // Validate project_id format: lowercase alphanumeric + hyphens, no leading/trailing hyphens
@@ -257,8 +280,16 @@ export async function createProject(params: {
 
 export async function updateProject(
   projectId: string,
-  params: { name?: string; description?: string; color?: string; settings?: Record<string, unknown> },
+  params: {
+    /** DEFERRED-029: caller's scope; enforced against projectId. */
+    callerScope?: CallerScope;
+    name?: string;
+    description?: string;
+    color?: string;
+    settings?: Record<string, unknown>;
+  },
 ): Promise<{ project_id: string }> {
+  assertCallerScope(params.callerScope, projectId);
   const pool = getDbPool();
 
   if (params.name !== undefined && params.name.length > MAX_NAME_LENGTH) {

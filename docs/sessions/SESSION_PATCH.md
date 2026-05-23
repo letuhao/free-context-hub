@@ -1,3 +1,48 @@
+# LONGRUN CHECKPOINT — DEFERRED-029 PR D3 (2026-05-23, session 3 cont.)
+
+**Status:** **DEFERRED-029 PR D3 — jobQueue + artifactLeases + taxonomyProfiles
++ replayEvents + projectGroups** built on branch
+`deferred-029-pr-d3-jobs-groups-leases-taxonomy` (stacked on D2).
+**803/803 unit green** (+18 from 785 baseline); **tsc clean**; no migration;
+back-compat preserved.
+
+## What PR D3 contains
+- **Service threading (18 fns):**
+  - `jobQueue` (3): `enqueueJob`, `listJobs` (also gets `assertCallerScopeMulti`
+    on multi-project), `cancelJob` (new opts arg).
+  - `artifactLeases` (6): `claimArtifact`, `releaseArtifact`, `renewArtifact`,
+    `listActiveClaims`, `checkArtifactAvailability`, `forceReleaseArtifact`.
+  - `taxonomyService` (3 project-scoped): `getActiveProfile` (opts arg),
+    `activateProfile`, `deactivateProfile` (opts arg). Admin ops
+    (`listTaxonomyProfiles`, `createTaxonomyProfile`, `upsertBuiltinProfile`)
+    intentionally unrestricted. `getValidLessonTypes`/`validateLessonType`
+    inherit scope from already-scoped callers (addLesson, MCP add_lesson).
+  - `coordinationEvents.replayEvents` (1): uses `assertTopicScope` (DB-derive).
+  - `projectGroups` (5 project-scoped): `addProjectToGroup`,
+    `removeProjectFromGroup`, `listGroupsForProject`, `createProject`,
+    `updateProject`. Admin ops (`listGroups`, `listAllProjects`,
+    `listGroupMembers`, `createGroup`, `deleteGroup`) intentionally
+    unrestricted.
+- **REST routes:** 5 jobs + 6 artifactLeases + 6 groups + 3 taxonomy + 2
+  projects (create/update). All pass `callerScopeOf(req)`.
+- **MCP handlers (19):** 3 jobs + 5 leases + 4 groups + 1 replay + 3 taxonomy.
+  `run_next_job` now passes `callerScope ?? undefined` as `projectScope` to
+  honor DEFERRED-024 contract for scoped MCP keys.
+- **Tests (+18):** new `src/services/d3-scope.test.ts` — 4 jobQueue + 6
+  artifactLeases + 3 taxonomy + 5 groups cross-tenant tests (DB-free).
+  `replayEvents` cross-tenant (topic-derive) deferred to PR F.
+
+## Next-session work (D4 + remainder)
+- **PR D4** — distillation (reflect/compress/summary) + KG (symbols/neighbors/
+  trace/impact) + indexing + guardrails + chat.ts callsite-sweep (~9 MCP)
+- **PR E** — retire legacy `CONTEXT_HUB_WORKSPACE_TOKEN`
+- **PR F** — auth-ON E2E + second-adversary security review
+
+## Handoff
+Stack: **#20 → #21 → #22 → #23 → #24 → #25 → #26 (this PR)**.
+
+---
+
 # LONGRUN CHECKPOINT — DEFERRED-029 PR D2 (2026-05-23, session 3 cont.)
 
 **Status:** **DEFERRED-029 PR D2 — git + projectSources + workspace** built

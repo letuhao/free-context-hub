@@ -2543,10 +2543,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, job_type, payload, correlation_id, queue_name, max_attempts, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const pid = project_id ? resolveProjectIdOrThrow(project_id) : undefined;
       const result = await enqueueJob({
         project_id: pid,
+        callerScope,
         job_type,
         payload: payload ?? {},
         correlation_id,
@@ -2590,9 +2591,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, correlation_id, status, limit, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const pid = project_id ? resolveProjectIdOrThrow(project_id) : undefined;
-      const result = await listJobs({ projectId: pid, correlationId: correlation_id, status, limit });
+      const result = await listJobs({ projectId: pid, callerScope, correlationId: correlation_id, status, limit });
       const summary = `list_jobs: items=${result.items.length}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2616,8 +2617,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, queue_name, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const result = await runNextJob(queue_name);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      // DEFERRED-024 + 029: a scoped caller drains ONLY its own project's queue;
+      // global/auth-off (null/undefined) → all projects.
+      const projectScope = callerScope ?? undefined;
+      const result = await runNextJob(queue_name, projectScope);
       const summary = `run_next_job: status=${result.status}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2707,8 +2711,8 @@ function createMcpToolsServer() {
       outputSchema: z.object({ added: z.boolean() }),
     },
     async ({ workspace_token, group_id, project_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const result = await addProjectToGroup(group_id, project_id);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const result = await addProjectToGroup(group_id, project_id, { callerScope });
       const summary = `add_project_to_group: group=${group_id} project=${project_id} added=${result.added}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2727,8 +2731,8 @@ function createMcpToolsServer() {
       outputSchema: z.object({ removed: z.boolean() }),
     },
     async ({ workspace_token, group_id, project_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const result = await removeProjectFromGroup(group_id, project_id);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const result = await removeProjectFromGroup(group_id, project_id, { callerScope });
       const summary = `remove_project_from_group: group=${group_id} project=${project_id} removed=${result.removed}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2768,9 +2772,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
-      const groups = await listGroupsForProject(projectId);
+      const groups = await listGroupsForProject(projectId, { callerScope });
       const summary = `list_project_groups: project=${projectId} groups=${groups.length}`;
       return formatToolResponse({ project_id: projectId, groups }, summary, output_format);
     },
@@ -2810,10 +2814,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, agent_id, artifact_type, artifact_id, task_description, ttl_minutes, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       const result = await claimArtifact({
         project_id: projectId,
+        callerScope,
         agent_id,
         artifact_type,
         artifact_id,
@@ -2841,9 +2846,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, agent_id, lease_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
-      const result = await releaseArtifact({ project_id: projectId, agent_id, lease_id });
+      const result = await releaseArtifact({ project_id: projectId, callerScope, agent_id, lease_id });
       const summary = `release_artifact: ${result.status}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2869,9 +2874,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, agent_id, lease_id, extend_by_minutes, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
-      const result = await renewArtifact({ project_id: projectId, agent_id, lease_id, extend_by_minutes });
+      const result = await renewArtifact({ project_id: projectId, callerScope, agent_id, lease_id, extend_by_minutes });
       const summary = `renew_artifact: ${result.status}${'effective_extension_minutes' in result ? ` ext=${result.effective_extension_minutes}min` : ''}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2900,9 +2905,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, artifact_type, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
-      const result = await listActiveClaims({ project_id: projectId, artifact_type });
+      const result = await listActiveClaims({ project_id: projectId, callerScope, artifact_type });
       const summary = `list_active_claims: ${result.claims.length} claim(s)`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2933,9 +2938,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, artifact_type, artifact_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
-      const result = await checkArtifactAvailability({ project_id: projectId, artifact_type, artifact_id });
+      const result = await checkArtifactAvailability({ project_id: projectId, callerScope, artifact_type, artifact_id });
       const summary = `check_artifact_availability: available=${result.available}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -3246,8 +3251,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, since, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const r = await replayEvents({ topic_id, since_seq: since });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const r = await replayEvents({ topic_id, callerScope, since_seq: since });
       const result = {
         status: 'ok',
         topic_id: r.topic_id,
@@ -4438,9 +4443,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
-      const profile = await getActiveProfile(projectId);
+      const profile = await getActiveProfile(projectId, { callerScope });
       const valid_lesson_types = await getValidLessonTypes(projectId);
       const summary = `get_active_taxonomy_profile: ${profile ? profile.slug : 'none'} (valid_types=${valid_lesson_types.length})`;
       return formatToolResponse({ profile, valid_lesson_types }, summary, output_format);
@@ -4464,9 +4469,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, slug, activated_by, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
-      const result = await activateProfile({ project_id: projectId, slug, activated_by });
+      const result = await activateProfile({ project_id: projectId, callerScope, slug, activated_by });
       const summary = `activate_taxonomy_profile: ${result.status} slug=${slug}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -4486,9 +4491,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
-      const result = await deactivateProfile(projectId);
+      const result = await deactivateProfile(projectId, { callerScope });
       const summary = `deactivate_taxonomy_profile: ${result.status}`;
       return formatToolResponse(result, summary, output_format);
     },

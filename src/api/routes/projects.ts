@@ -61,6 +61,7 @@ router.post('/', requireRole('writer'), async (req, res, next) => {
     const trimmedDesc = typeof description === 'string' ? description.trim() : undefined;
     const result = await createProject({
       project_id: project_id.trim(),
+      callerScope: callerScopeOf(req),
       name: trimmedName || undefined,
       description: trimmedDesc || undefined,
       color,
@@ -71,7 +72,7 @@ router.post('/', requireRole('writer'), async (req, res, next) => {
     let group_warning: string | undefined;
     if (group_id && typeof group_id === 'string') {
       try {
-        await addProjectToGroup(group_id, project_id);
+        await addProjectToGroup(group_id, project_id, { callerScope: callerScopeOf(req) });
       } catch (err: any) {
         group_warning = `Project created but failed to add to group "${group_id}": ${err?.message ?? 'unknown error'}`;
       }
@@ -89,6 +90,7 @@ router.put('/:id', requireRole('writer'), async (req, res, next) => {
     const trimmedName = typeof name === 'string' ? name.trim() : undefined;
     const trimmedDesc = typeof description === 'string' ? description.trim() : undefined;
     const result = await updateProject(projectId, {
+      callerScope: callerScopeOf(req),
       name: trimmedName,
       description: trimmedDesc,
       color,

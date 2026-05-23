@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import type { Request } from 'express';
 import {
   claimArtifact,
   releaseArtifact,
@@ -8,8 +9,14 @@ import {
   forceReleaseArtifact,
   resolveProjectIdOrThrow,
 } from '../../core/index.js';
+import type { CallerScope } from '../../core/index.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { requireScope } from '../middleware/requireScope.js';
+
+/** DEFERRED-029: read the caller's project scope attached by bearerAuth. */
+function callerScopeOf(req: Request): CallerScope {
+  return (req as { apiKeyScope?: CallerScope }).apiKeyScope;
+}
 
 /**
  * Phase 13 Sprint 13.1 — Artifact leases REST routes.
@@ -30,7 +37,7 @@ router.get('/', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String((req.params as Record<string, string>).id ?? ''));
     const artifactType = req.query.artifact_type ? String(req.query.artifact_type) : undefined;
-    const result = await listActiveClaims({ project_id: projectId, artifact_type: artifactType });
+    const result = await listActiveClaims({ project_id: projectId, callerScope: callerScopeOf(req), artifact_type: artifactType });
     res.json(result);
   } catch (e) { next(e); }
 });
@@ -45,6 +52,7 @@ router.post('/', requireRole('writer'), async (req, res, next) => {
     }
     const result = await claimArtifact({
       project_id: projectId,
+      callerScope: callerScopeOf(req),
       agent_id: String(agent_id),
       artifact_type: String(artifact_type),
       artifact_id: String(artifact_id),
@@ -68,6 +76,7 @@ router.post('/check', async (req, res, next) => {
     }
     const result = await checkArtifactAvailability({
       project_id: projectId,
+      callerScope: callerScopeOf(req),
       artifact_type: String(artifact_type),
       artifact_id: String(artifact_id),
     });
@@ -86,6 +95,7 @@ router.patch('/:leaseId', requireRole('writer'), async (req, res, next) => {
     }
     const result = await renewArtifact({
       project_id: projectId,
+      callerScope: callerScopeOf(req),
       agent_id: String(agent_id),
       lease_id: leaseId,
       extend_by_minutes,
@@ -103,7 +113,7 @@ router.delete('/:leaseId/force', requireRole('admin'), requireScope('id'), async
   try {
     const projectId = resolveProjectIdOrThrow(String((req.params as Record<string, string>).id ?? ''));
     const leaseId = String(req.params.leaseId);
-    const result = await forceReleaseArtifact({ project_id: projectId, lease_id: leaseId });
+    const result = await forceReleaseArtifact({ project_id: projectId, callerScope: callerScopeOf(req), lease_id: leaseId });
     res.status(result.status === 'force_released' ? 200 : 404).json(result);
   } catch (e) { next(e); }
 });
@@ -119,6 +129,7 @@ router.delete('/:leaseId', requireRole('writer'), async (req, res, next) => {
     }
     const result = await releaseArtifact({
       project_id: projectId,
+      callerScope: callerScopeOf(req),
       agent_id: String(agentId),
       lease_id: leaseId,
     });

@@ -3,6 +3,8 @@ import amqplib from 'amqplib';
 
 import { getDbPool } from '../db/client.js';
 import { getEnv } from '../env.js';
+import { assertCallerScope } from '../core/security/callerScope.js';
+import type { CallerScope } from '../core/security/callerScope.js';
 
 export type JobType =
   | 'repo.sync'
@@ -24,6 +26,8 @@ type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'dead_letter' |
 
 type QueuePayload = {
   project_id?: string;
+  /** DEFERRED-029: caller's scope; enforced against project_id when both are set. */
+  callerScope?: CallerScope;
   job_type: JobType;
   payload: Record<string, unknown>;
   correlation_id?: string;
@@ -65,6 +69,9 @@ async function ensureRabbitQueue(queueName: string): Promise<void> {
 }
 
 export async function enqueueJob(input: QueuePayload): Promise<{ status: 'queued'; job_id: string; backend: 'postgres' | 'rabbitmq' }> {
+  if (input.project_id) {
+    assertCallerScope(input.callerScope, input.project_id);
+  }
   const pool = getDbPool();
   const jobId = randomUUID();
   const queueName = input.queue_name ?? 'default';
@@ -227,7 +234,15 @@ export async function isJobCancelled(jobId: string): Promise<boolean> {
  * When `projectId` is supplied the update is scoped to that project so a
  * known job_id from another tenant cannot be cancelled cross-tenant.
  */
-export async function cancelJob(jobId: string, projectId?: string): Promise<boolean> {
+export async function cancelJob(
+  jobId: string,
+  projectId?: string,
+  /** DEFERRED-029: caller's scope; enforced against projectId when both are set. */
+  opts?: { callerScope?: CallerScope },
+): Promise<boolean> {
+  if (projectId) {
+    assertCallerScope(opts?.callerScope, projectId);
+  }
   const pool = getDbPool();
   const res = projectId
     ? await pool.query(
@@ -268,6 +283,8 @@ export async function failJob(jobId: string, attempts: number, maxAttempts: numb
 export async function listJobs(params: {
   projectId?: string;
   projectIds?: string[];
+  /** DEFERRED-029: caller's scope; enforced against projectId / projectIds when set. */
+  callerScope?: CallerScope;
   correlationId?: string;
   status?: JobStatus;
   limit?: number;
@@ -288,6 +305,13 @@ export async function listJobs(params: {
   }>;
   total_count: number;
 }> {
+  if (params.projectId) {
+    assertCallerScope(params.callerScope, params.projectId);
+  } else if (params.projectIds && params.projectIds.length > 0) {
+    // Multi-project listing: a scoped caller may only see its own project.
+    const { assertCallerScopeMulti } = await import('../core/security/callerScope.js');
+    assertCallerScopeMulti(params.callerScope, params.projectIds);
+  }
   const pool = getDbPool();
   const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
   const offset = Math.max(params.offset ?? 0, 0);
