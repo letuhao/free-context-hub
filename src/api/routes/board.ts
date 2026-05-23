@@ -29,8 +29,14 @@ import {
   baselineArtifact,
   ContextHubError,
 } from '../../core/index.js';
+import type { CallerScope } from '../../core/index.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { requireResourceScope, requireBodyProjectScope } from '../middleware/requireResourceScope.js';
+
+/** DEFERRED-029: read the caller's project scope attached by bearerAuth. */
+function callerScopeOf(req: Request): CallerScope {
+  return (req as { apiKeyScope?: CallerScope }).apiKeyScope;
+}
 
 const router = Router();
 
@@ -87,6 +93,7 @@ router.post('/topics/:id/tasks', requireRole('writer'), requireResourceScope('to
     const body = req.body ?? {};
     const result = await postTask({
       topic_id: String(req.params.id),
+      callerScope: callerScopeOf(req),
       title: asString(body.title),
       topology: asString(body.topology),
       depends_on: Array.isArray(body.depends_on) ? body.depends_on : undefined,
@@ -104,7 +111,7 @@ router.get('/topics/:id/board', requireResourceScope('topic'), async (req, res, 
   try {
     const statusQ = req.query.status;
     const status = typeof statusQ === 'string' && statusQ ? statusQ : undefined;
-    const result = await listBoard({ topic_id: String(req.params.id), status });
+    const result = await listBoard({ topic_id: String(req.params.id), callerScope: callerScopeOf(req), status });
     res.json({ status: 'ok', data: result });
   } catch (e) { next(e); }
 });
@@ -115,6 +122,7 @@ router.post('/tasks/:id/claim', requireRole('writer'), requireResourceScope('tas
     const body = req.body ?? {};
     const result = await claimTask({
       task_id: String(req.params.id),
+      callerScope: callerScopeOf(req),
       actor_id: asString(body.actor_id),
       ttl_minutes: typeof body.ttl_minutes === 'number' ? body.ttl_minutes : undefined,
     });
@@ -128,6 +136,7 @@ router.post('/tasks/:id/release', requireRole('writer'), requireResourceScope('t
     const body = req.body ?? {};
     const result = await releaseTask({
       task_id: String(req.params.id),
+      callerScope: callerScopeOf(req),
       actor_id: asString(body.actor_id),
     });
     res.status(statusToHttp(result.status)).json({ status: 'ok', data: result });
@@ -140,6 +149,7 @@ router.post('/tasks/:id/complete', requireRole('writer'), requireResourceScope('
     const body = req.body ?? {};
     const result = await completeTask({
       task_id: String(req.params.id),
+      callerScope: callerScopeOf(req),
       actor_id: asString(body.actor_id),
     });
     res.status(statusToHttp(result.status)).json({ status: 'ok', data: result });

@@ -23,6 +23,7 @@
 import { randomUUID } from 'node:crypto';
 import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
+import { assertTopicScope, assertTaskScope, type CallerScope } from '../core/index.js';
 import { createModuleLogger } from '../utils/logger.js';
 import { appendEvent } from './coordinationEvents.js';
 
@@ -114,6 +115,8 @@ function clampTtl(ttlMinutes?: number): number {
  */
 export async function postTask(params: {
   topic_id: string;
+  /** DEFERRED-029: caller's scope; enforced via the topic's derived project_id. */
+  callerScope?: CallerScope;
   title: string;
   topology: string;
   depends_on?: string[];
@@ -123,6 +126,7 @@ export async function postTask(params: {
   created_by: string;
 }): Promise<TaskRecord> {
   const topicId = (params.topic_id ?? '').trim();
+  await assertTopicScope(getDbPool(), params.callerScope, topicId);
   const title = (params.title ?? '').trim();
   const topology = params.topology;
   const slot = (params.slot ?? '').trim();
@@ -269,12 +273,15 @@ export async function postTask(params: {
  */
 export async function listBoard(params: {
   topic_id: string;
+  /** DEFERRED-029: caller's scope; enforced via the topic's derived project_id. */
+  callerScope?: CallerScope;
   status?: string;
 }): Promise<ListBoardResult> {
   const topicId = (params.topic_id ?? '').trim();
   if (!topicId) throw new ContextHubError('BAD_REQUEST', 'topic_id is required');
 
   const pool = getDbPool();
+  await assertTopicScope(pool, params.callerScope, topicId);
   // [LOW-7] topic-existence check — a nonexistent topic is NOT_FOUND (consistent
   // with getTopic / replayEvents), so a caller can tell "no tasks" from "no topic".
   const topicRes = await pool.query(`SELECT 1 FROM topics WHERE topic_id = $1`, [topicId]);
@@ -342,6 +349,8 @@ export async function listBoard(params: {
  */
 export async function claimTask(params: {
   task_id: string;
+  /** DEFERRED-029: caller's scope; enforced via the task's derived project_id. */
+  callerScope?: CallerScope;
   actor_id: string;
   ttl_minutes?: number;
 }): Promise<ClaimResult> {
@@ -350,6 +359,7 @@ export async function claimTask(params: {
   if (!taskId || !actorId) {
     throw new ContextHubError('BAD_REQUEST', 'task_id and actor_id are required');
   }
+  await assertTaskScope(getDbPool(), params.callerScope, taskId);
   const ttl = clampTtl(params.ttl_minutes);
 
   const pool = getDbPool();
@@ -531,6 +541,8 @@ export async function claimTask(params: {
  */
 export async function releaseTask(params: {
   task_id: string;
+  /** DEFERRED-029: caller's scope; enforced via the task's derived project_id. */
+  callerScope?: CallerScope;
   actor_id: string;
 }): Promise<ReleaseResult> {
   const taskId = (params.task_id ?? '').trim();
@@ -538,6 +550,7 @@ export async function releaseTask(params: {
   if (!taskId || !actorId) {
     throw new ContextHubError('BAD_REQUEST', 'task_id and actor_id are required');
   }
+  await assertTaskScope(getDbPool(), params.callerScope, taskId);
 
   const pool = getDbPool();
   const client = await pool.connect();
@@ -624,6 +637,8 @@ export async function releaseTask(params: {
  */
 export async function completeTask(params: {
   task_id: string;
+  /** DEFERRED-029: caller's scope; enforced via the task's derived project_id. */
+  callerScope?: CallerScope;
   actor_id: string;
 }): Promise<CompleteResult> {
   const taskId = (params.task_id ?? '').trim();
@@ -631,6 +646,7 @@ export async function completeTask(params: {
   if (!taskId || !actorId) {
     throw new ContextHubError('BAD_REQUEST', 'task_id and actor_id are required');
   }
+  await assertTaskScope(getDbPool(), params.callerScope, taskId);
 
   const pool = getDbPool();
   const client = await pool.connect();

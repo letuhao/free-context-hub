@@ -3074,9 +3074,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, name, charter, created_by, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
-      const t = await charterTopic({ project_id: projectId, name, charter, created_by });
+      const t = await charterTopic({ project_id: projectId, callerScope, name, charter, created_by });
       const result = {
         status: 'ok',
         topic_id: t.topic_id,
@@ -3116,8 +3116,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, actor_id, actor_type, display_name, level, since, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const pack = await joinTopic({ topic_id, actor_id, actor_type, display_name, level, since_seq: since });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const pack = await joinTopic({ topic_id, callerScope, actor_id, actor_type, display_name, level, since_seq: since });
       const result = {
         status: 'ok',
         topic: pack.topic,
@@ -3147,8 +3147,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const tr = await getTopic({ topic_id });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const tr = await getTopic({ topic_id, callerScope });
       const result = { status: 'ok', topic: tr.topic, roster: tr.roster };
       const summary = `get_topic: topic=${topic_id} status=${tr.topic.status} roster=${tr.roster.length}`;
       return formatToolResponse(result, summary, output_format);
@@ -3173,8 +3173,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, actor_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const r = await closeTopic({ topic_id, actor_id });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const r = await closeTopic({ topic_id, callerScope, actor_id });
       const result = {
         status: 'ok',
         topic_id: r.topic_id,
@@ -3207,8 +3207,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, actor_id, level, granted_by, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const r = await grantLevel({ topic_id, actor_id, level, granted_by });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const r = await grantLevel({ topic_id, callerScope, actor_id, level, granted_by });
       const summary = `grant_level: topic=${topic_id} target=${actor_id} level=${level} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3303,8 +3303,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, title, topology, depends_on, raci, slot, kind, created_by, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const task = await postTask({ topic_id, title, topology, depends_on, raci, slot, kind, created_by });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const task = await postTask({ topic_id, callerScope, title, topology, depends_on, raci, slot, kind, created_by });
       const result = { status: 'ok' as const, task };
       const summary = `post_task: task_id=${task.task_id} artifact_id=${task.artifact_id} status=${task.status}`;
       return formatToolResponse(result, summary, output_format);
@@ -3327,8 +3327,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, status, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const board = await listBoard({ topic_id, status });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const board = await listBoard({ topic_id, callerScope, status });
       const result = { status: 'ok' as const, tasks: board.tasks };
       const summary = `list_board: topic=${topic_id} tasks=${board.tasks.length}`;
       return formatToolResponse(result, summary, output_format);
@@ -3357,8 +3357,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, task_id, actor_id, ttl_minutes, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const r = await claimTask({ task_id, actor_id, ttl_minutes });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const r = await claimTask({ task_id, callerScope, actor_id, ttl_minutes });
       const summary = `claim_task: task=${task_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3379,8 +3379,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, task_id, actor_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const r = await releaseTask({ task_id, actor_id });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const r = await releaseTask({ task_id, callerScope, actor_id });
       const summary = `release_task: task=${task_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3401,8 +3401,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, task_id, actor_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const r = await completeTask({ task_id, actor_id });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const r = await completeTask({ task_id, callerScope, actor_id });
       const summary = `complete_task: task=${task_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
