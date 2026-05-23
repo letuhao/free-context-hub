@@ -627,10 +627,13 @@ export const allPhase10Tests: TestFn[] = [
     // Call MCP tool — extractJson returns { matches, explanations } directly
     let res: any;
     try {
+      // Auto-inject workspace_token under auth-on stacks.
+      const { ADMIN_TOKEN } = await import('../shared/constants.js');
       res = await callTool(mcp, 'search_document_chunks', {
         project_id: projectId,
         query: 'retry backoff policy',
         limit: 5,
+        ...(ADMIN_TOKEN ? { workspace_token: ADMIN_TOKEN } : {}),
       });
     } catch (err) {
       throw new Error(`MCP search_document_chunks call failed: ${err instanceof Error ? err.message : String(err)}`);

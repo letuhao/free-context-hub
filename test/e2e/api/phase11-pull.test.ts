@@ -102,9 +102,14 @@ export const allPhase11PullTests: TestFn[] = [
     const targetProjectId = `sp115-dst-${runMarker}-${Math.random().toString(36).slice(2, 8)}`;
     cleanup.projectIds.push(targetProjectId);
 
+    // Under auth-on the loopback remote fetch needs a Bearer token.
+    // Pass ADMIN_TOKEN through to pullFromRemote which forwards it as
+    // Authorization header on the export call.
+    const { ADMIN_TOKEN } = await import('../shared/constants.js');
     const pullR = await api.post(`/api/projects/${encodeURIComponent(targetProjectId)}/pull-from`, {
       remote_url: API_BASE,
       remote_project_id: sourceProjectId,
+      ...(ADMIN_TOKEN ? { api_key: ADMIN_TOKEN } : {}),
     });
     expectStatus(pullR, 200);
     const body = pullR.body;
@@ -166,9 +171,12 @@ export const allPhase11PullTests: TestFn[] = [
     const targetProjectId = `sp115-dry-${runMarker}-${Math.random().toString(36).slice(2, 8)}`;
     cleanup.projectIds.push(targetProjectId);
 
+    // Under auth-on the loopback remote fetch needs a Bearer token.
+    const { ADMIN_TOKEN } = await import('../shared/constants.js');
     const pullR = await api.post(`/api/projects/${encodeURIComponent(targetProjectId)}/pull-from`, {
       remote_url: API_BASE,
       remote_project_id: sourceProjectId,
+      ...(ADMIN_TOKEN ? { api_key: ADMIN_TOKEN } : {}),
       dry_run: true,
     });
     expectStatus(pullR, 200);
