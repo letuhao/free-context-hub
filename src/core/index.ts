@@ -13,6 +13,10 @@ export { assertWorkspaceToken, resolveProjectIdOrThrow } from './auth.js';
 
 // ── Security: service-layer tenant-scope guard (DEFERRED-029) ──
 export { assertCallerScope, assertCallerScopeMulti, type CallerScope } from './security/callerScope.js';
+export {
+  assertTopicScope, assertTaskScope, assertMotionScope, assertDisputeScope,
+  assertRequestScope, assertIntakeScope, assertBodyScope, assertArtifactScope,
+} from './security/scopeResolvers.js';
 
 // ── Startup ──
 export { logStartupEnvSummary } from './startup.js';
