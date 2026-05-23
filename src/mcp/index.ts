@@ -825,11 +825,12 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, root, output_format, options }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       const resolvedRoot = await resolveProjectRoot(projectId, root);
       const result = await indexProject({
         projectId,
+        callerScope,
         root: resolvedRoot,
         linesPerChunk: options?.lines_per_chunk,
         embeddingBatchSize: options?.embedding_batch_size,
@@ -899,10 +900,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, query, filters, limit, debug, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       const result = await searchCode({
         projectId,
+        callerScope,
         query,
         pathGlob: filters?.path_glob,
         includeTests: filters?.include_tests,
@@ -988,10 +990,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, query, kind, filters, max_files, semantic_threshold, debug, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       const result = await tieredSearch({
         projectId,
+        callerScope,
         query,
         kind: kind as any,
         includeTests: filters?.include_tests,
@@ -1483,12 +1486,14 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, action_context, include_groups, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const explicit = action_context.project_id ?? action_context.workspace;
       const projectId = explicit && String(explicit).trim() ? String(explicit) : resolveProjectIdOrThrow(undefined);
 
       if (include_groups) {
         // Check guardrails from project + all its groups. Merge results.
+        // For scoped callers, cross-tenant group members will throw NOT_FOUND
+        // (correct security posture — no oracle leak).
         const allIds = await resolveProjectIds(projectId, true);
         let totalChecked = 0;
         const allMatched: Array<{ rule_id: string; verification_method: string; requirement: string }> = [];
@@ -1496,7 +1501,7 @@ function createMcpToolsServer() {
         let firstPrompt: string | undefined;
 
         for (const pid of allIds) {
-          const r = await checkGuardrails(pid, action_context);
+          const r = await checkGuardrails(pid, action_context, { callerScope });
           totalChecked += r.rules_checked;
           if (!r.pass) {
             anyFailed = true;
@@ -1516,7 +1521,7 @@ function createMcpToolsServer() {
         return formatToolResponse(merged, summary, output_format);
       }
 
-      const result = await checkGuardrails(projectId, action_context);
+      const result = await checkGuardrails(projectId, action_context, { callerScope });
       const summary = `check_guardrails: pass=${result.pass}, rules_checked=${result.rules_checked}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -1557,7 +1562,7 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, task, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       const env = getEnv();
 
@@ -1567,7 +1572,7 @@ function createMcpToolsServer() {
         'docs/sessions/SESSION_PATCH.md',
       ];
 
-      const project_snapshot = await getProjectSnapshotBody(pid);
+      const project_snapshot = await getProjectSnapshotBody(pid, { callerScope });
 
       const suggested_next_calls: Array<{ tool: string; arguments: any; reason: string }> = [];
       const q = task?.query ?? task?.intent ?? '';
@@ -1757,9 +1762,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const body = (await getProjectSnapshotBody(pid)) ?? '';
+      const body = (await getProjectSnapshotBody(pid, { callerScope })) ?? '';
       const result = { project_id: pid, body, updated_hint: 'Snapshot rebuilds on add_lesson and index_project.' };
       const summary = `get_project_summary: chars=${body.length}`;
       return formatToolResponse(result, summary, output_format);
@@ -1849,7 +1854,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, text, max_output_chars, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      // compress_context is pure text → no project scope to enforce.
+      // Still go through the resolver so the deprecated-shared-token warning fires consistently.
+      await resolveMcpCallerScopeOrThrow(workspace_token);
       const result = await compressText({ text, maxOutputChars: max_output_chars });
       const summary = `compress_context: out_chars=${result.compressed.length}`;
       return formatToolResponse(result, summary, output_format);
@@ -1876,9 +1883,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
-      const result = await deleteWorkspace(projectId);
+      const result = await deleteWorkspace(projectId, { callerScope });
       const summary = `delete_workspace: deleted=${result.deleted}, project_id=${result.deleted_project_id}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -1909,9 +1916,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, query, limit, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const result = await searchSymbols({ projectId: pid, query, limit });
+      const result = await searchSymbols({ projectId: pid, callerScope, query, limit });
       const summary = `search_symbols: matches=${result.matches.length}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -1954,9 +1961,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, symbol_id, depth, limit, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const result = await getSymbolNeighbors({ projectId: pid, symbolId: symbol_id, depth, limit });
+      const result = await getSymbolNeighbors({ projectId: pid, callerScope, symbolId: symbol_id, depth, limit });
       const summary = `get_symbol_neighbors: neighbors=${result.neighbors.length}, edges=${result.edges.length}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -1983,10 +1990,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, from_symbol_id, to_symbol_id, max_hops, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       const result = await traceDependencyPath({
         projectId: pid,
+        callerScope,
         fromSymbolId: from_symbol_id,
         toSymbolId: to_symbol_id,
         maxHops: max_hops,
@@ -2030,9 +2038,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, lesson_id, limit, output_format }) => {
-      assertWorkspaceToken(workspace_token);
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const result = await getLessonImpact({ projectId: pid, lessonId: lesson_id, limit });
+      const result = await getLessonImpact({ projectId: pid, callerScope, lessonId: lesson_id, limit });
       const summary = `get_lesson_impact: linked_symbols=${result.linked_symbols.length}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -3447,8 +3455,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, artifact_id, claim_id, fencing_token, content_ref, actor_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const r = await writeArtifact({ artifact_id, claim_id, fencing_token, content_ref, actor_id });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const r = await writeArtifact({ artifact_id, callerScope, claim_id, fencing_token, content_ref, actor_id });
       const summary = `write_artifact: artifact=${artifact_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3474,8 +3482,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, artifact_id, claim_id, fencing_token, actor_id, output_format }) => {
-      assertWorkspaceToken(workspace_token);
-      const r = await baselineArtifact({ artifact_id, claim_id, fencing_token, actor_id });
+      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const r = await baselineArtifact({ artifact_id, callerScope, claim_id, fencing_token, actor_id });
       const summary = `baseline_artifact: artifact=${artifact_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },

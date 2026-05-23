@@ -1,5 +1,12 @@
 import { Router } from 'express';
+import type { Request } from 'express';
 import { tieredSearch, resolveProjectIdOrThrow } from '../../core/index.js';
+import type { CallerScope } from '../../core/index.js';
+
+/** DEFERRED-029: read the caller's project scope attached by bearerAuth. */
+function callerScopeOf(req: Request): CallerScope {
+  return (req as { apiKeyScope?: CallerScope }).apiKeyScope;
+}
 
 const router = Router();
 
@@ -9,6 +16,7 @@ router.post('/code-tiered', async (req, res, next) => {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await tieredSearch({
       projectId,
+      callerScope: callerScopeOf(req),
       query: req.body.query,
       kind: req.body.kind,
       maxFiles: req.body.max_files,

@@ -1,7 +1,14 @@
 import { Router } from 'express';
+import type { Request } from 'express';
 import { checkGuardrails, resolveProjectIdOrThrow, resolveProjectIds } from '../../core/index.js';
+import type { CallerScope } from '../../core/index.js';
 import { listGuardrailRules, simulateGuardrails } from '../../services/guardrails.js';
 import { resolveProjectIdOrIds } from '../middleware/resolveProjectParams.js';
+
+/** DEFERRED-029: read the caller's project scope attached by bearerAuth. */
+function callerScopeOf(req: Request): CallerScope {
+  return (req as { apiKeyScope?: CallerScope }).apiKeyScope;
+}
 
 const router = Router();
 
@@ -12,6 +19,7 @@ router.get('/rules', async (req, res, next) => {
     const result = await listGuardrailRules(pid, {
       limit: req.query.limit ? Number(req.query.limit) : undefined,
       offset: req.query.offset ? Number(req.query.offset) : undefined,
+      callerScope: callerScopeOf(req),
     });
     res.json(result);
   } catch (e) { next(e); }
@@ -30,7 +38,7 @@ router.post('/simulate', async (req, res, next) => {
       res.status(400).json({ error: 'maximum 50 actions per request' });
       return;
     }
-    const results = await simulateGuardrails(projectId, actions.map(String));
+    const results = await simulateGuardrails(projectId, actions.map(String), { callerScope: callerScopeOf(req) });
     res.json({ results });
   } catch (e) { next(e); }
 });
@@ -48,7 +56,7 @@ router.post('/check', async (req, res, next) => {
       let firstPrompt: string | undefined;
 
       for (const pid of allIds) {
-        const r = await checkGuardrails(pid, req.body.action_context);
+        const r = await checkGuardrails(pid, req.body.action_context, { callerScope: callerScopeOf(req) });
         totalChecked += r.rules_checked;
         if (!r.pass) {
           anyFailed = true;
@@ -67,7 +75,7 @@ router.post('/check', async (req, res, next) => {
       return;
     }
 
-    const result = await checkGuardrails(projectId, req.body.action_context);
+    const result = await checkGuardrails(projectId, req.body.action_context, { callerScope: callerScopeOf(req) });
     res.json(result);
   } catch (e) { next(e); }
 });

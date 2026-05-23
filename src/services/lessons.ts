@@ -1706,7 +1706,12 @@ export async function updateLessonStatus(params: {
   return { status: 'ok' };
 }
 
-export async function deleteWorkspace(projectId: string) {
+export async function deleteWorkspace(
+  projectId: string,
+  /** DEFERRED-029: caller's scope; enforced against projectId. */
+  opts?: { callerScope?: CallerScope },
+) {
+  assertCallerScope(opts?.callerScope, projectId);
   const pool = getDbPool();
 
   await pool.query('BEGIN');

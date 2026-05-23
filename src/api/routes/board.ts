@@ -162,6 +162,7 @@ router.put('/artifacts/:id', requireRole('writer'), async (req, res, next) => {
     const body = req.body ?? {};
     const result = await writeArtifact({
       artifact_id: String(req.params.id),
+      callerScope: callerScopeOf(req),
       claim_id: asString(body.claim_id),
       fencing_token: typeof body.fencing_token === 'number' ? body.fencing_token : NaN,
       content_ref: asString(body.content_ref),
@@ -177,6 +178,7 @@ router.post('/artifacts/:id/baseline', requireRole('writer'), requireResourceSco
     const body = req.body ?? {};
     const result = await baselineArtifact({
       artifact_id: String(req.params.id),
+      callerScope: callerScopeOf(req),
       claim_id: asString(body.claim_id),
       fencing_token: typeof body.fencing_token === 'number' ? body.fencing_token : NaN,
       actor_id: asString(body.actor_id),

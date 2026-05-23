@@ -10,11 +10,15 @@ import { decomposeQuery } from '../utils/queryDecomposer.js';
 import { getLanguageSearchHints, getProjectDominantLanguage } from '../utils/languageHints.js';
 import { buildFtsQuery } from '../utils/ftsTokenizer.js';
 import { createModuleLogger } from '../utils/logger.js';
+import { assertCallerScope } from '../core/security/callerScope.js';
+import type { CallerScope } from '../core/security/callerScope.js';
 
 const logger = createModuleLogger('retriever');
 
 export type SearchCodeParams = {
   projectId: string;
+  /** DEFERRED-029: caller's scope; enforced against projectId. */
+  callerScope?: CallerScope;
   query: string;
   pathGlob?: string;
   includeTests?: boolean;
@@ -527,6 +531,7 @@ async function llmRerank(params: {
 
 export async function searchCode({
   projectId,
+  callerScope,
   query,
   pathGlob,
   includeTests,
@@ -541,6 +546,7 @@ export async function searchCode({
   debug,
   hybridMode,
 }: SearchCodeParams): Promise<SearchCodeResult> {
+  assertCallerScope(callerScope, projectId);
   const searchStartMs = Date.now();
   const env = getEnv();
   const pool = getDbPool();

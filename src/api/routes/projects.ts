@@ -105,7 +105,7 @@ router.put('/:id', requireRole('writer'), async (req, res, next) => {
 router.get('/:id/summary', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String(req.params.id));
-    const body = await getProjectSnapshotBody(projectId);
+    const body = await getProjectSnapshotBody(projectId, { callerScope: callerScopeOf(req) });
     if (body === null) {
       res.status(404).json({ error: 'No summary found for project', project_id: projectId });
       return;
@@ -121,6 +121,7 @@ router.post('/:id/index', requireRole('writer'), async (req, res, next) => {
     const root = await resolveProjectRoot(projectId, req.body.root);
     const result = await indexProject({
       projectId,
+      callerScope: callerScopeOf(req),
       root,
       linesPerChunk: req.body.lines_per_chunk,
       embeddingBatchSize: req.body.embedding_batch_size,

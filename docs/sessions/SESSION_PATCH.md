@@ -1,3 +1,70 @@
+# LONGRUN CHECKPOINT — DEFERRED-029 PR D4 (2026-05-23, session 3 cont.)
+
+**Status:** **DEFERRED-029 PR D4 — distillation + KG + indexing + guardrails +
+chat-sweep + artifacts** built on branch
+`deferred-029-pr-d4-distill-kg-index-guardrails` (stacked on D3, final D
+sub-PR). **817/817 unit green** (+14 from 803 baseline); **tsc clean**;
+no migration; back-compat preserved.
+
+## What PR D4 contains
+- **Service threading (15 fns):**
+  - `guardrails` (3): `listGuardrailRules` (also uses `assertCallerScopeMulti`
+    when projectIds is an array), `simulateGuardrails`, `checkGuardrails`.
+  - `snapshot` (2): `getProjectSnapshotBody`, `rebuildProjectSnapshot`.
+  - `indexer` (1): `indexProject`.
+  - `retriever` (1): `searchCode`.
+  - `tieredRetriever` (1): `tieredSearch`.
+  - `kg/query` (4): `searchSymbols`, `getSymbolNeighbors`,
+    `traceDependencyPath`, `getLessonImpact`.
+  - `lessons.deleteWorkspace` (1): added optional 2nd-arg opts.
+  - `artifacts` (2): `writeArtifact`, `baselineArtifact` — use
+    `assertArtifactScope` (DB-derive via tasks→topics→project_id).
+- **Pure distiller fns NOT threaded:** `reflectOnTopic`, `compressText`,
+  `distillLesson`, `suggestLessonFromCommit` — they take no `project_id` so
+  there's nothing to enforce at the service layer; scope is enforced at the
+  MCP/REST handler before they're called.
+- **chat.ts callsite-sweep:** `searchLessons` + `tieredSearch` now pass
+  `callerScope` — resolves the known carry-forward from PR D1.
+- **REST routes wired:** 3 guardrails + 1 search/code-tiered + 2 projects
+  (summary + index) + 2 board (writeArtifact + baselineArtifact). All pass
+  `callerScopeOf(req)`.
+- **MCP handlers (13):** `index_project`, `search_code`, `search_code_tiered`,
+  `check_guardrails` (include_groups branch + single), `get_context`,
+  `get_project_summary`, `compress_context` (token validation only — no
+  project), `delete_workspace`, `search_symbols`, `get_symbol_neighbors`,
+  `trace_dependency_path`, `get_lesson_impact`, `write_artifact`,
+  `baseline_artifact`.
+- **Tests (+14):** new `src/services/d4-scope.test.ts` — 4 guardrails + 2
+  snapshot + 1 indexer + 2 retrieval + 4 KG + 1 deleteWorkspace cross-tenant
+  tests (DB-free).
+
+## State of DEFERRED-029 after D4
+After D4 merges, the entire user-facing surface threads `callerScope`. The
+~8 remaining `assertWorkspaceToken` usages are all admin-only ops (`help`,
+`list/create/delete_group`, `list_group_members`, `list_taxonomy_profiles`)
+which are intentionally unrestricted and will be cleaned up in PR E along
+with the retirement of the legacy single-shared `CONTEXT_HUB_WORKSPACE_TOKEN`.
+
+| PR | Domain | Tests |
+|---|---|---|
+| #20 (B) | lessons | — |
+| #21 (C1) | topics + board | — |
+| #22 (C2) | requests + motions + bodies + proxies | — |
+| #23 (C3) | disputes + intake + reviewRequests + chaining | 755 |
+| #24 (D1) | exchange + documents + chunks + generatedDocs | 773 |
+| #25 (D2) | git + projectSources + workspace | 785 |
+| #26 (D3) | jobQueue + artifactLeases + taxonomy + replay + groups | 803 |
+| **this (D4)** | **distillation + KG + indexing + guardrails + chat-sweep + artifacts** | **817** |
+
+## Next-session work (final)
+- **PR E** — retire legacy `CONTEXT_HUB_WORKSPACE_TOKEN`. Cleanup of remaining
+  ~8 admin-only `assertWorkspaceToken` callsites.
+- **PR F** — auth-ON E2E (REST + MCP) + second-adversary security review
+  (covers all entity-id-derive cross-tenant tests deferred through the
+  C-series + D-series).
+
+---
+
 # LONGRUN CHECKPOINT — DEFERRED-029 PR D3 (2026-05-23, session 3 cont.)
 
 **Status:** **DEFERRED-029 PR D3 — jobQueue + artifactLeases + taxonomyProfiles

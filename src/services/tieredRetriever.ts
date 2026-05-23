@@ -15,6 +15,8 @@ import { embedTexts } from './embedder.js';
 import { getEnv } from '../env.js';
 import { ripgrepMultiPattern } from '../utils/ripgrepSearch.js';
 import { buildFtsQuery } from '../utils/ftsTokenizer.js';
+import { assertCallerScope } from '../core/security/callerScope.js';
+import type { CallerScope } from '../core/security/callerScope.js';
 import { createModuleLogger } from '../utils/logger.js';
 import { detectLanguage } from '../utils/languageDetect.js';
 import type { ChunkKind } from '../utils/languageDetect.js';
@@ -44,6 +46,8 @@ export type FileCandidate = {
 
 export type TieredSearchParams = {
   projectId: string;
+  /** DEFERRED-029: caller's scope; enforced against projectId. */
+  callerScope?: CallerScope;
   query: string;
   /** Filter results to specific kinds. Default: all kinds. */
   kind?: ChunkKind | ChunkKind[];
@@ -936,6 +940,7 @@ async function executeSemanticFirst(ctx: ProfileContext): Promise<ProfileResult>
 // ═══════════════════════════════════════════════════════════════════════════
 
 export async function tieredSearch(params: TieredSearchParams): Promise<TieredSearchResult> {
+  assertCallerScope(params.callerScope, params.projectId);
   const startMs = Date.now();
   const pool = getDbPool();
   const env = getEnv();
