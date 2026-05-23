@@ -1,0 +1,18 @@
+You are answering a developer question using ONLY the source files provided below.
+Each file's content is given verbatim. Cite specific functions / symbols /
+file paths in your answer. Stay grounded: do NOT invent behavior the code
+doesn't show.
+
+QUESTION:
+{question}
+
+SOURCE FILES:
+{numbered_contexts}
+
+Provide a concise answer (2-4 sentences) that:
+- Names the file(s) and key function(s) where the behavior lives
+- Describes WHAT the code does (the mechanism), not just WHERE
+- Cites contracts / invariants the code enforces, if relevant
+- Says "Not in context" if the files don't cover the question
+
+ANSWER:

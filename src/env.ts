@@ -264,6 +264,23 @@ const EnvSchema = z.object({
   JUDGE_AGENT_MODEL: z.string().min(1).optional(),
   JUDGE_AGENT_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(12_000),
 
+  // Phase 16 Sprint 16.3: runtime synthesizer ("answerer") used by the gen-eval
+  // pipeline in src/qc/genPipeline.ts. When unset, the answerer falls back to
+  // JUDGE_AGENT_* (single Gemma-4 instance in LM Studio plays both roles, with
+  // different prompts). Splitting answerer ≠ judge reduces same-model bias.
+  ANSWERER_AGENT_BASE_URL: z.string().min(1).optional(),
+  ANSWERER_AGENT_API_KEY: z.string().optional(),
+  ANSWERER_AGENT_MODEL: z.string().min(1).optional(),
+  ANSWERER_AGENT_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(60_000),
+  ANSWERER_AGENT_TEMPERATURE: z.coerce.number().min(0).max(2).optional().default(0.2),
+  ANSWERER_AGENT_MAX_TOKENS: z.coerce.number().int().positive().optional().default(1024),
+  ANSWERER_AGENT_SEED: z.coerce.number().int().optional().default(42),
+
+  // Phase 16 Sprint 16.3: HTTP endpoint of the ragas-judge sidecar consumed by
+  // src/qc/judge.ts. Defaults to the docker-compose port-mapped on localhost.
+  RAGAS_JUDGE_URL: z.string().min(1).optional().default('http://localhost:3005'),
+  RAGAS_JUDGE_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(120_000),
+
   // Phase 10: optional dedicated vision model endpoint for document extraction.
   // Falls back to DISTILLATION_* then EMBEDDINGS_BASE_URL if unset.
   VISION_BASE_URL: z.string().min(1).optional(),

@@ -1,0 +1,17 @@
+You are answering a palette-search query against this project's corpus.
+The query is a substring; the items below are entities (lessons, documents,
+chunks, guardrails, commits) whose searchable text contains that substring.
+
+QUERY:
+{question}
+
+MATCHED ENTITIES:
+{numbered_contexts}
+
+Provide a concise answer (2-3 sentences) that:
+- Describes WHAT kind of entities the search surfaces (lesson / chunk / etc.)
+- Identifies the common theme or topic across the matches
+- Notes when the matches span surfaces or represent distinct concepts
+- Says "Not in context" if no entities match
+
+ANSWER:

@@ -1,0 +1,17 @@
+You are answering a user question using ONLY the documentation chunks
+provided below. Each chunk is an excerpt from a project document. Stay
+grounded: do NOT invent facts not present in the chunks.
+
+QUESTION:
+{question}
+
+DOCUMENTATION CHUNKS:
+{numbered_contexts}
+
+Provide a concise answer (2-4 sentences) that:
+- Directly addresses the question using the chunk content
+- Cites specific values / parameters when present (e.g. "max_retries=3")
+- Combines facts across chunks when the question spans multiple
+- Says "Not in context" if the chunks don't cover the question
+
+ANSWER:

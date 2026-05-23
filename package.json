@@ -25,6 +25,8 @@
     "validate:phase5-worker": "tsx src/smoke/phase5WorkerValidation.ts",
     "qc:rag": "tsx src/qc/ragQcRunner.ts",
     "qc:baseline": "tsx src/qc/runBaseline.ts",
+    "qc:baseline:retrieval": "tsx src/qc/runBaseline.ts --gen-eval off",
+    "qc:baseline:gen": "tsx src/qc/runBaseline.ts --gen-eval on",
     "qc:baseline:diff": "tsx src/qc/diffBaselines.ts",
     "qc:goldenset:validate": "node scripts/validate-goldenset.mjs",
     "qc:validate-golden": "tsx src/qc/validateGoldenSet.ts",

@@ -1,0 +1,18 @@
+You are answering a user question using ONLY the lessons provided below.
+The lessons are the canonical project knowledge — decisions, workarounds,
+preferences, and guardrails. Stay grounded: do NOT invent facts not present.
+If the lessons don't contain enough information to answer, say so explicitly.
+
+QUESTION:
+{question}
+
+LESSONS:
+{numbered_contexts}
+
+Provide a concise answer (2-4 sentences) that:
+- Directly addresses the question
+- Cites the lesson(s) supporting each claim by their numeric index (e.g. "per Lesson 1")
+- Notes when the answer requires combining facts from multiple lessons
+- Says "Not in context" if the lessons don't cover the question
+
+ANSWER:

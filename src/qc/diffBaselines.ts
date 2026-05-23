@@ -30,11 +30,28 @@ export type Metrics = {
   latency_mean_ms: number | null;
 };
 
+/** Sprint 16.3: gen-eval metric summary parallel to runBaseline's GenMetricSummary. */
+export type GenMetricSummary = {
+  mean: number;
+  std: number;
+  p10: number;
+  fail_count: number;
+};
+
+export type GenSurfaceAggregate = {
+  rows_with_gt: number;
+  rows_judged: number;
+  rows_skipped: number;
+  metrics: Record<string, GenMetricSummary>;
+};
+
 export type SurfaceAggregate = {
   query_count: number;
   errors: number;
   project_id?: string;
   metrics: Metrics;
+  /** Sprint 16.3: present iff this baseline ran with --gen-eval. */
+  generation?: GenSurfaceAggregate;
 };
 
 export /** Sprint 12.0.2 /review-impl MED-1: when both archives carry a
@@ -270,6 +287,74 @@ export function diffSurface(
   return { md: lines.join('\n'), regressions };
 }
 
+/** Sprint 16.3: compute gen-metric deltas for one surface.
+ *
+ *  - If either side lacks `generation`, skip and emit a note (cross-schema diff).
+ *  - Otherwise emit per-metric delta + regression flag on `current.mean <
+ *    prior.mean * (1 - 0.05)`.
+ */
+export const GEN_REGRESSION_PCT_MAX = 0.05;
+
+export function diffGenSurface(
+  name: string,
+  fromG: GenSurfaceAggregate | undefined,
+  toG: GenSurfaceAggregate | undefined,
+): { md: string; regressions: string[] } {
+  const lines: string[] = [];
+  const regressions: string[] = [];
+
+  if (!fromG && !toG) return { md: '', regressions };
+  if (!fromG || !toG) {
+    lines.push(`### ${name} — gen-eval (one-sided)`);
+    lines.push('');
+    if (!fromG) lines.push('_Prior baseline had no gen-eval data; current has — first gen-eval baseline for this surface._');
+    else lines.push('_Current baseline dropped gen-eval data; cannot compare. Confirm intentional._');
+    lines.push('');
+    return { md: lines.join('\n'), regressions };
+  }
+
+  lines.push(`### ${name} — gen-eval`);
+  lines.push('');
+  lines.push('| metric | from mean ±std | to mean ±std | Δ mean | Δ% | from fails | to fails | flag |');
+  lines.push('|---|---|---|---:|---:|---:|---:|:--:|');
+
+  const allMetrics = new Set<string>([
+    ...Object.keys(fromG.metrics),
+    ...Object.keys(toG.metrics),
+  ]);
+  const fmtPair = (m?: GenMetricSummary) => (m ? `${m.mean.toFixed(3)} ±${m.std.toFixed(3)}` : '—');
+
+  for (const m of allMetrics) {
+    const f = fromG.metrics[m];
+    const t = toG.metrics[m];
+    if (!f || !t) {
+      lines.push(`| ${m} | ${fmtPair(f)} | ${fmtPair(t)} | — | — | ${f?.fail_count ?? '—'} | ${t?.fail_count ?? '—'} | ⚪ |`);
+      continue;
+    }
+    const delta = t.mean - f.mean;
+    const pct = f.mean === 0 ? null : (delta / f.mean) * 100;
+    const deltaFmt = `${delta > 0 ? '+' : ''}${delta.toFixed(3)}`;
+    const pctFmt = pct === null ? '∞' : `${pct > 0 ? '+' : ''}${pct.toFixed(1)}%`;
+    let flag = '⚪';
+    if (delta > 0.01) flag = '🟢';
+    else if (delta < -0.01) flag = '🔴';
+    // Regression rule (Sprint 16.3 D5 thresholds): drop > 5% relative
+    const regressionThresh = -f.mean * GEN_REGRESSION_PCT_MAX;
+    if (delta < regressionThresh) {
+      regressions.push(
+        `**${name}/gen-${m}**: mean dropped ${pctFmt} (from ${f.mean.toFixed(3)} to ${t.mean.toFixed(3)}, threshold > 5% relative drop)`,
+      );
+    }
+    lines.push(`| ${m} | ${fmtPair(f)} | ${fmtPair(t)} | ${deltaFmt} | ${pctFmt} | ${f.fail_count} | ${t.fail_count} | ${flag} |`);
+  }
+
+  lines.push('');
+  lines.push(`- rows judged: ${fromG.rows_judged} → ${toG.rows_judged}`);
+  lines.push(`- rows skipped (no ideal_answer): ${fromG.rows_skipped} → ${toG.rows_skipped}`);
+  lines.push('');
+  return { md: lines.join('\n'), regressions };
+}
+
 export function renderDiff(fromA: Archive, toA: Archive): string {
   const lines: string[] = [];
   lines.push(`# Baseline diff — ${fromA.tag} → ${toA.tag}`);
@@ -291,6 +376,7 @@ export function renderDiff(fromA: Archive, toA: Archive): string {
   ]);
 
   const allRegressions: string[] = [];
+  let hadAnyGen = false;
   for (const name of surfaceNames) {
     // Sprint 12.0.2 MED-1: pass per-surface noise_floor slices when either
     // archive carries them. Type assertion: SurfaceNoiseFloor is a subset
@@ -300,6 +386,20 @@ export function renderDiff(fromA: Archive, toA: Archive): string {
     const { md, regressions } = diffSurface(name, fromA.surfaces?.[name], toA.surfaces?.[name], fromNF, toNF);
     lines.push(md);
     allRegressions.push(...regressions);
+
+    // Sprint 16.3: gen-eval delta
+    const fromG = fromA.surfaces?.[name]?.generation;
+    const toG = toA.surfaces?.[name]?.generation;
+    if (fromG || toG) {
+      hadAnyGen = true;
+      const { md: genMd, regressions: genRegs } = diffGenSurface(name, fromG, toG);
+      if (genMd) lines.push(genMd);
+      allRegressions.push(...genRegs);
+    }
+  }
+  if (!hadAnyGen) {
+    lines.push('_(no gen-eval data in either archive)_');
+    lines.push('');
   }
 
   lines.push('## Regressions flagged');

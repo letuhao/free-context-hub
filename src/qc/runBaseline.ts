@@ -47,10 +47,19 @@ import {
   fmtNoiseFloorValue,
   type NoiseFloorPerSurface,
 } from './noiseFloor.js';
+import { runGenPipeline, allTemplateHashes, type AnswererConfig } from './genPipeline.js';
+import { scoreOnce, type JudgeRequest, type MetricName } from './judge.js';
+import type {
+  GenResult,
+  GenManifest,
+  GenSurfaceAggregate,
+  GenMetricSummary,
+} from './genEvalTypes.js';
+import { DEFAULT_THRESHOLDS } from './genEvalTypes.js';
 
 dotenv.config();
 
-const SCHEMA_VERSION = '1.0';
+const SCHEMA_VERSION = '1.1'; // Sprint 16.3: bumped from 1.0 — added generation block
 const DEFAULT_SAMPLES = 3;
 const DEFAULT_K = 10;
 const DEFAULT_OUT_DIR = 'docs/qc/baselines';
@@ -95,7 +104,30 @@ function parseArgs(argv: string[]) {
   // distinguish real signal from measurement-jitter without requiring
   // operators to run and track a separate control archive by hand.
   const control = args.get('control') === 'true' || args.get('control') === '1';
-  return { tag, k, samples, outDir, surfacesFilter, control };
+
+  // Sprint 16.3: gen-eval flags.
+  //  auto = run when row has ideal_answer (default)
+  //  on   = error if row has no ideal_answer and gen-eval is enabled (strict)
+  //  off  = skip gen-eval entirely (retrieval-only, like the pre-16.3 default)
+  const genEval = (args.get('gen-eval') ?? 'auto') as 'auto' | 'on' | 'off';
+  const judgeUrl = args.get('judge-url') ?? process.env.RAGAS_JUDGE_URL ?? 'http://localhost:3005';
+  const topKContexts = Number(args.get('top-k-contexts') ?? 5);
+  // Limit per-surface row count — useful for smoke runs.
+  const maxRowsRaw = args.get('max-rows');
+  const maxRows = maxRowsRaw ? Number(maxRowsRaw) : null;
+
+  return {
+    tag,
+    k,
+    samples,
+    outDir,
+    surfacesFilter,
+    control,
+    genEval,
+    judgeUrl,
+    topKContexts,
+    maxRows,
+  };
 }
 
 // ----------------------- Target-matching per surface -----------------------
@@ -155,6 +187,9 @@ type PerQuery = {
    *  rank-order-inversion). */
   friction_classes: string[];
   error?: string;
+  /** Sprint 16.3: gen-eval result, attached only when the row had an
+   *  ideal_answer AND gen-eval was enabled for this run. */
+  generation?: GenResult;
 };
 
 /** Run the adapter N times to measure latency under repeated calls. We use
@@ -182,6 +217,7 @@ async function evalQuery(
   q: GoldenQuery,
   k: number,
   samples: number,
+  genEval?: GenEvalConfig,
 ): Promise<PerQuery> {
   const { last, latencies } = await runSamples(() => dispatch(q.query, k), samples);
   const topK = last.items.slice(0, k);
@@ -223,6 +259,31 @@ async function evalQuery(
     error: last.error,
   });
 
+  // Sprint 16.3: gen-eval pipeline runs after retrieval, only when:
+  //   1. gen-eval is enabled (auto/on)
+  //   2. row has an ideal_answer (means it's a gen-eval-tagged row)
+  //   3. retrieval didn't error
+  let generation: GenResult | undefined = undefined;
+  const shouldGenEval =
+    genEval !== undefined &&
+    genEval.mode !== 'off' &&
+    q.ideal_answer !== undefined &&
+    !last.error;
+  if (shouldGenEval && genEval) {
+    generation = await runGenEvalForRow(surface, q, topK, genEval);
+  } else if (genEval?.mode === 'on' && q.ideal_answer === undefined) {
+    // Strict mode: row missing ideal_answer is a hard error
+    generation = {
+      generated_answer: '',
+      contexts_used: [],
+      prompt_used: '',
+      synth_ms: 0,
+      judge_ms: 0,
+      scores: {},
+      error: 'gen-eval=on but row has no ideal_answer',
+    };
+  }
+
   return {
     id: q.id,
     group: q.group,
@@ -237,7 +298,127 @@ async function evalQuery(
     has_relevant_hit_in_top_k,
     friction_classes,
     error: last.error,
+    ...(generation ? { generation } : {}),
   };
+}
+
+// Sprint 16.3: gen-eval helpers
+
+type GenEvalConfig = {
+  mode: 'auto' | 'on' | 'off';
+  judgeUrl: string;
+  judgeTimeoutMs: number;
+  answerer: AnswererConfig;
+  topKContexts: number;
+};
+
+/** Run synth + judge for a single row. Errors are captured into GenResult.error
+ *  so they don't fail the whole baseline. */
+async function runGenEvalForRow(
+  surface: Surface,
+  q: GoldenQuery,
+  retrievalHits: SurfaceResult['items'],
+  cfg: GenEvalConfig,
+): Promise<GenResult> {
+  // 1. Synthesize an answer using the top-K retrieval hits.
+  const synthRes = await runGenPipeline(
+    {
+      surface,
+      question: q.query,
+      retrievalHits,
+      topK: cfg.topKContexts,
+    },
+    cfg.answerer,
+  );
+
+  // Synth failed → return error result without judge call.
+  if (synthRes.error) {
+    return {
+      generated_answer: synthRes.generated_answer,
+      contexts_used: synthRes.contexts_used,
+      prompt_used: synthRes.prompt_used,
+      synth_ms: synthRes.synth_ms,
+      judge_ms: 0,
+      scores: {},
+      error: synthRes.error,
+    };
+  }
+
+  // 2. Route metrics: standard set for most categories; refusal_correctness
+  // added by sidecar for no_answer rows (server-side routing).
+  const requestedMetrics: MetricName[] = [
+    'faithfulness',
+    'answer_relevancy',
+    'context_precision',
+    'context_recall',
+  ];
+
+  const judgeReq: JudgeRequest = {
+    request_id: `${surface}/${q.id}`,
+    question: q.query,
+    answer: synthRes.generated_answer,
+    contexts: synthRes.contexts_used.map((c) => ({
+      id: c.key,
+      text: c.snippet_preview ?? '',
+    })),
+    ground_truth: q.ideal_answer,
+    answer_category: q.answer_category,
+    metrics: requestedMetrics,
+    options: { include_reasons: true },
+  };
+
+  const t0 = Date.now();
+  try {
+    const judgeRes = await scoreOnce(judgeReq, {
+      baseUrl: cfg.judgeUrl,
+      timeoutMs: cfg.judgeTimeoutMs,
+    });
+    const judge_ms = Date.now() - t0;
+    return {
+      generated_answer: synthRes.generated_answer,
+      contexts_used: synthRes.contexts_used,
+      prompt_used: synthRes.prompt_used,
+      synth_ms: synthRes.synth_ms,
+      judge_ms,
+      scores: judgeRes.scores,
+      reasons: Object.keys(judgeRes.reasons).length ? judgeRes.reasons : undefined,
+      skipped: judgeRes.skipped.length ? judgeRes.skipped : undefined,
+      skip_reason: judgeRes.skip_reason ?? undefined,
+      fail_reasons: detectFailReasons(judgeRes.scores),
+    };
+  } catch (err) {
+    const judge_ms = Date.now() - t0;
+    return {
+      generated_answer: synthRes.generated_answer,
+      contexts_used: synthRes.contexts_used,
+      prompt_used: synthRes.prompt_used,
+      synth_ms: synthRes.synth_ms,
+      judge_ms,
+      scores: {},
+      error: `judge_failed: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
+
+function detectFailReasons(scores: Record<string, number | null>): string[] {
+  const fails: string[] = [];
+  const t = DEFAULT_THRESHOLDS;
+  if (scores.faithfulness !== null && scores.faithfulness !== undefined && scores.faithfulness < t.faithfulness_min) {
+    fails.push(`faithfulness<${t.faithfulness_min}`);
+  }
+  if (scores.answer_relevancy !== null && scores.answer_relevancy !== undefined && scores.answer_relevancy < t.answer_relevancy_min) {
+    fails.push(`answer_relevancy<${t.answer_relevancy_min}`);
+  }
+  if (scores.context_precision !== null && scores.context_precision !== undefined && scores.context_precision < t.context_precision_min) {
+    fails.push(`context_precision<${t.context_precision_min}`);
+  }
+  if (scores.context_recall !== null && scores.context_recall !== undefined && scores.context_recall < t.context_recall_min) {
+    fails.push(`context_recall<${t.context_recall_min}`);
+  }
+  if (scores.refusal_correctness !== null && scores.refusal_correctness !== undefined && scores.refusal_correctness < t.refusal_correctness_min) {
+    fails.push(`refusal_correctness<${t.refusal_correctness_min}`);
+  }
+  return fails;
 }
 
 // ---------------------------- Friction classifier --------------------------
@@ -276,6 +457,9 @@ type SurfaceAggregate = {
    *  preserve provenance when surfaces target different projects
    *  (e.g. lessons→free-context-hub vs code→qc-free-context-hub). */
   project_id: string;
+  /** Sprint 16.3: gen-eval rollup, present when at least one row produced
+   *  numeric scores. Null for retrieval-only baselines. */
+  generation?: GenSurfaceAggregate;
   metrics: {
     recall_at_5: number; recall_at_10: number;
     mrr: number;
@@ -294,6 +478,54 @@ type SurfaceAggregate = {
   };
   per_query: PerQuery[];
 };
+
+function aggregateGen(perQuery: PerQuery[]): GenSurfaceAggregate | undefined {
+  const withGen = perQuery.filter((q) => q.generation !== undefined);
+  if (!withGen.length) return undefined;
+
+  const judged = withGen.filter((q) => !q.generation!.error);
+  const rows_with_gt = withGen.length;
+  const rows_judged = judged.length;
+  const rows_skipped = perQuery.length - withGen.length;
+
+  // Collect each metric's values across all judged rows.
+  const byMetric: Record<string, number[]> = {};
+  for (const q of judged) {
+    const scores = q.generation!.scores;
+    for (const [m, v] of Object.entries(scores)) {
+      if (v === null || v === undefined || !Number.isFinite(v)) continue;
+      (byMetric[m] = byMetric[m] ?? []).push(v);
+    }
+  }
+
+  const metrics: Record<string, GenMetricSummary> = {};
+  const t = DEFAULT_THRESHOLDS;
+  for (const [m, vals] of Object.entries(byMetric)) {
+    if (!vals.length) continue;
+    const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+    const variance = vals.reduce((a, b) => a + (b - mean) ** 2, 0) / vals.length;
+    const std = Math.sqrt(variance);
+    const sorted = [...vals].sort((a, b) => a - b);
+    const p10 = sorted[Math.max(0, Math.floor(sorted.length * 0.1))]!;
+
+    let threshold = 0;
+    if (m === 'faithfulness') threshold = t.faithfulness_min;
+    else if (m === 'answer_relevancy') threshold = t.answer_relevancy_min;
+    else if (m === 'context_precision') threshold = t.context_precision_min;
+    else if (m === 'context_recall') threshold = t.context_recall_min;
+    else if (m === 'refusal_correctness') threshold = t.refusal_correctness_min;
+    const fail_count = vals.filter((v) => v < threshold).length;
+
+    metrics[m] = {
+      mean: round(mean),
+      std: round(std),
+      p10: round(p10),
+      fail_count,
+    };
+  }
+
+  return { rows_with_gt, rows_judged, rows_skipped, metrics };
+}
 
 function aggregate(perQuery: PerQuery[], projectId: string): SurfaceAggregate {
   const n = perQuery.length;
@@ -336,10 +568,13 @@ function aggregate(perQuery: PerQuery[], projectId: string): SurfaceAggregate {
   const allSamples = perQuery.flatMap((q) => q.latency_ms_samples);
   const lat = latencySummary(allSamples);
 
+  const gen = aggregateGen(perQuery);
+
   return {
     query_count: n,
     errors,
     project_id: projectId,
+    ...(gen ? { generation: gen } : {}),
     metrics: {
       recall_at_5: round(sumRecall5 / nWithTargets),
       recall_at_10: round(sumRecall10 / nWithTargets),
@@ -369,7 +604,7 @@ function fmtMetric(v: number | null): string {
 }
 
 function renderMarkdown(archive: BaselineArchive): string {
-  const { tag, git_commit, git_branch, run_started_at, elapsed_ms, project_id, surfaces, noise_floor } = archive;
+  const { tag, git_commit, git_branch, run_started_at, elapsed_ms, project_id, surfaces, noise_floor, gen_manifest } = archive;
   const lines: string[] = [];
   lines.push('---');
   lines.push(`tag: ${tag}`);
@@ -382,6 +617,23 @@ function renderMarkdown(archive: BaselineArchive): string {
   lines.push('');
   lines.push(`# RAG Baseline — ${tag}`);
   lines.push('');
+
+  // Sprint 16.3: gen-eval manifest section.
+  if (gen_manifest) {
+    lines.push('## Gen-eval manifest');
+    lines.push('');
+    lines.push(`- **answerer:** \`${gen_manifest.answerer_model_id}\` @ \`${gen_manifest.answerer_endpoint}\` (temp=${gen_manifest.answerer_temperature}, seed=${gen_manifest.answerer_seed}, max_tokens=${gen_manifest.answerer_max_tokens})`);
+    lines.push(`- **judge:** \`${gen_manifest.judge_model_id}\` @ \`${gen_manifest.judge_endpoint}\``);
+    if (gen_manifest.judge_prompts_hash) {
+      lines.push(`- **judge prompts hash:** \`${gen_manifest.judge_prompts_hash}\``);
+    }
+    lines.push(`- **synthesizer template hashes:**`);
+    for (const [s, h] of Object.entries(gen_manifest.synthesizer_prompt_hashes)) {
+      lines.push(`  - ${s}: \`${h}\``);
+    }
+    lines.push('');
+  }
+
   lines.push('## Summary (all surfaces)');
   lines.push('');
   lines.push('| Surface | Project | Q | err | recall@5 | recall@10 | MRR | nDCG@5 | nDCG@10 | dup@10 | dup@10 nearsem | cov% | p50 ms | p95 ms |');
@@ -394,6 +646,46 @@ function renderMarkdown(archive: BaselineArchive): string {
     );
   }
   lines.push('');
+
+  // Sprint 16.3: per-surface gen-eval rollup table (if any surface has gen data).
+  const surfacesWithGen = Object.entries(surfaces).filter(([, a]) => a?.generation);
+  if (surfacesWithGen.length > 0) {
+    lines.push('## Gen-eval summary (per surface)');
+    lines.push('');
+    lines.push('| Surface | rows w/ gt | rows judged | faithfulness | answer_relevancy | context_precision | context_recall | refusal_correctness |');
+    lines.push('|---|---:|---:|---:|---:|---:|---:|---:|');
+    const fmtGen = (m?: GenMetricSummary): string => {
+      if (!m) return '—';
+      return `${m.mean.toFixed(2)} ±${m.std.toFixed(2)}${m.fail_count > 0 ? ` (${m.fail_count} fail)` : ''}`;
+    };
+    for (const [s, a] of surfacesWithGen) {
+      const g = a!.generation!;
+      lines.push(
+        `| ${s} | ${g.rows_with_gt} | ${g.rows_judged} | ${fmtGen(g.metrics.faithfulness)} | ${fmtGen(g.metrics.answer_relevancy)} | ${fmtGen(g.metrics.context_precision)} | ${fmtGen(g.metrics.context_recall)} | ${fmtGen(g.metrics.refusal_correctness)} |`,
+      );
+    }
+    lines.push('');
+    lines.push(`_Thresholds (WARN-only): faithfulness ≥ ${DEFAULT_THRESHOLDS.faithfulness_min} · answer_relevancy ≥ ${DEFAULT_THRESHOLDS.answer_relevancy_min} · context_precision ≥ ${DEFAULT_THRESHOLDS.context_precision_min} · context_recall ≥ ${DEFAULT_THRESHOLDS.context_recall_min} · refusal_correctness ≥ ${DEFAULT_THRESHOLDS.refusal_correctness_min}_`);
+    lines.push('');
+
+    // Fail-list: per-surface failing rows
+    lines.push('### Gen-eval threshold violations');
+    lines.push('');
+    let totalFails = 0;
+    for (const [s, a] of surfacesWithGen) {
+      const failing = a!.per_query.filter((q) => q.generation?.fail_reasons && q.generation.fail_reasons.length > 0);
+      if (failing.length === 0) continue;
+      totalFails += failing.length;
+      lines.push(`**${s}** (${failing.length}):`);
+      for (const q of failing.slice(0, 5)) {
+        lines.push(`  - \`${q.id}\` — ${q.generation!.fail_reasons!.join(', ')}`);
+      }
+      if (failing.length > 5) lines.push(`  - _(+${failing.length - 5} more)_`);
+      lines.push('');
+    }
+    if (totalFails === 0) lines.push('_(none — all judged rows met threshold)_');
+    lines.push('');
+  }
 
   for (const [s, a] of Object.entries(surfaces)) {
     if (!a) continue;
@@ -485,6 +777,10 @@ function renderMarkdown(archive: BaselineArchive): string {
 
 type BaselineArchive = {
   schema_version: string;
+  /** Sprint 16.3: top-level manifest for gen-eval — judge + answerer model
+   *  pinning + per-surface synthesizer prompt hashes. Present iff gen-eval
+   *  ran (any surface had at least one row with ideal_answer). */
+  gen_manifest?: GenManifest;
   tag: string;
   run_started_at: string;
   run_ended_at: string;
@@ -530,7 +826,14 @@ function gitInfo(): { commit: string; branch: string } {
  *  call this twice without duplicating the loop. */
 async function runAllSurfaces(
   client: McpClient,
-  opts: { k: number; samples: number; surfacesFilter: Surface[]; label: string },
+  opts: {
+    k: number;
+    samples: number;
+    surfacesFilter: Surface[];
+    label: string;
+    genEval?: GenEvalConfig;
+    maxRows: number | null;
+  },
 ): Promise<{ surfaces: Partial<Record<Surface, SurfaceAggregate>>; primaryProjectId: string }> {
   const surfaces: Partial<Record<Surface, SurfaceAggregate>> = {};
   let primaryProjectId = 'free-context-hub';
@@ -553,12 +856,26 @@ async function runAllSurfaces(
 
     const dispatch = makeDispatcher(surface, client, pid);
     const perQuery: PerQuery[] = [];
-    for (const q of set.queries) {
+    // Sprint 16.3: --max-rows truncation for smoke runs.
+    const queriesToRun =
+      opts.maxRows !== null ? set.queries.slice(0, opts.maxRows) : set.queries;
+    for (const q of queriesToRun) {
       process.stdout.write(`  ${perQueryPrefix}${surface}/${q.id} ... `);
-      const res = await evalQuery(surface, dispatch, q, opts.k, opts.samples);
+      const res = await evalQuery(surface, dispatch, q, opts.k, opts.samples, opts.genEval);
       const frictionNote = res.friction_classes.length ? ', ' + res.friction_classes.join(';') : '';
+      let genNote = '';
+      if (res.generation) {
+        if (res.generation.error) {
+          genNote = `, gen=ERR(${res.generation.error.slice(0, 40)})`;
+        } else {
+          const f = res.generation.scores.faithfulness;
+          const fmt = (v: number | null | undefined) =>
+            v === null || v === undefined ? '—' : v.toFixed(2);
+          genNote = `, gen[f=${fmt(f)}/r=${fmt(res.generation.scores.answer_relevancy)}/cp=${fmt(res.generation.scores.context_precision)}/cr=${fmt(res.generation.scores.context_recall)}]`;
+        }
+      }
       process.stdout.write(
-        `${res.found_ranks.length ? 'HIT@' + res.found_ranks.join(',') : 'MISS'} (${res.latency_ms_median}ms${frictionNote})\n`,
+        `${res.found_ranks.length ? 'HIT@' + res.found_ranks.join(',') : 'MISS'} (${res.latency_ms_median}ms${frictionNote}${genNote})\n`,
       );
       perQuery.push(res);
     }
@@ -568,14 +885,99 @@ async function runAllSurfaces(
   return { surfaces, primaryProjectId };
 }
 
+// Sprint 16.3: probe judge sidecar /health for manifest fields.
+async function probeJudgeManifest(judgeUrl: string): Promise<{
+  ragas_version?: string;
+  judge_model?: string;
+  judge_endpoint?: string;
+  prompts_hash?: string;
+}> {
+  try {
+    const url = judgeUrl.replace(/\/$/, '') + '/health';
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 5_000);
+    try {
+      const res = await fetch(url, { signal: ctl.signal });
+      if (!res.ok) return {};
+      return (await res.json()) as any;
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch {
+    return {};
+  }
+}
+
 async function main() {
-  const { tag, k, samples, outDir, surfacesFilter, control } = parseArgs(process.argv.slice(2));
+  const {
+    tag,
+    k,
+    samples,
+    outDir,
+    surfacesFilter,
+    control,
+    genEval,
+    judgeUrl,
+    topKContexts,
+    maxRows,
+  } = parseArgs(process.argv.slice(2));
   const today = new Date().toISOString().slice(0, 10);
   const runStart = new Date();
   const { commit, branch } = gitInfo();
 
-  console.log(`[baseline] tag=${tag} k=${k} samples=${samples} control=${control} surfaces=${surfacesFilter.join(',')}`);
-  console.log(`[baseline] MCP=${MCP_URL}  API=${API_URL}`);
+  console.log(`[baseline] tag=${tag} k=${k} samples=${samples} control=${control} gen-eval=${genEval} surfaces=${surfacesFilter.join(',')}${maxRows !== null ? ` max-rows=${maxRows}` : ''}`);
+  console.log(`[baseline] MCP=${MCP_URL}  API=${API_URL}${genEval !== 'off' ? `  JUDGE=${judgeUrl}` : ''}`);
+
+  // Sprint 16.3: build gen-eval config when not disabled.
+  let genConfig: GenEvalConfig | undefined = undefined;
+  let genManifest: GenManifest | undefined = undefined;
+  if (genEval !== 'off') {
+    const answererBaseUrl =
+      process.env.ANSWERER_AGENT_BASE_URL ?? process.env.JUDGE_AGENT_BASE_URL ?? 'http://localhost:1234/v1';
+    const answererApiKey =
+      process.env.ANSWERER_AGENT_API_KEY ?? process.env.JUDGE_AGENT_API_KEY ?? 'lm-studio';
+    const answererModel =
+      process.env.ANSWERER_AGENT_MODEL ?? process.env.JUDGE_AGENT_MODEL ?? 'google/gemma-4-26b-a4b';
+    const answererTemperature = Number(process.env.ANSWERER_AGENT_TEMPERATURE ?? '0.2');
+    const answererSeed = Number(process.env.ANSWERER_AGENT_SEED ?? '42');
+    const answererMaxTokens = Number(process.env.ANSWERER_AGENT_MAX_TOKENS ?? '1024');
+    const answererTimeoutMs = Number(process.env.ANSWERER_AGENT_TIMEOUT_MS ?? '60000');
+    const judgeTimeoutMs = Number(process.env.RAGAS_JUDGE_TIMEOUT_MS ?? '120000');
+
+    genConfig = {
+      mode: genEval,
+      judgeUrl,
+      judgeTimeoutMs,
+      answerer: {
+        baseUrl: answererBaseUrl,
+        apiKey: answererApiKey,
+        model: answererModel,
+        temperature: answererTemperature,
+        seed: answererSeed,
+        maxTokens: answererMaxTokens,
+        timeoutMs: answererTimeoutMs,
+      },
+      topKContexts,
+    };
+
+    // Probe judge /health for manifest (best-effort; doesn't block run).
+    const probe = await probeJudgeManifest(judgeUrl);
+    const synthHashes = await allTemplateHashes();
+    genManifest = {
+      judge_endpoint: probe.judge_endpoint ?? judgeUrl,
+      judge_model_id: probe.judge_model ?? 'unknown',
+      judge_prompts_hash: probe.prompts_hash ?? null,
+      answerer_endpoint: answererBaseUrl,
+      answerer_model_id: answererModel,
+      answerer_temperature: answererTemperature,
+      answerer_seed: answererSeed,
+      answerer_max_tokens: answererMaxTokens,
+      synthesizer_prompt_hashes: synthHashes,
+    };
+    console.log(
+      `[baseline] gen-eval enabled: answerer=${answererModel} @ ${answererBaseUrl}, judge=${probe.judge_model ?? 'unknown'} @ ${judgeUrl}, top-K=${topKContexts}`,
+    );
+  }
 
   const client = new McpClient({ name: 'rag-baseline-runner', version: '1.0.0' }, { capabilities: {} });
   await client.connect(new StreamableHTTPClientTransport(new URL(MCP_URL), {}));
@@ -596,10 +998,10 @@ async function main() {
       // archive's top-level `elapsed_ms` isn't the only available timing.
       console.log('[baseline] --control mode: running goldenset twice to establish noise floor');
       const c0 = Date.now();
-      const run1 = await runAllSurfaces(client, { k, samples, surfacesFilter, label: 'control' });
+      const run1 = await runAllSurfaces(client, { k, samples, surfacesFilter, label: 'control', genEval: genConfig, maxRows });
       controlElapsedMs = Date.now() - c0;
       const n0 = Date.now();
-      const run2 = await runAllSurfaces(client, { k, samples, surfacesFilter, label: 'new' });
+      const run2 = await runAllSurfaces(client, { k, samples, surfacesFilter, label: 'new', genEval: genConfig, maxRows });
       newElapsedMs = Date.now() - n0;
       surfaces = run2.surfaces;
       primaryProjectId = run2.primaryProjectId;
@@ -608,7 +1010,7 @@ async function main() {
     } else {
       // Sprint 12.0.2 /review-impl COSMETIC-1: restore the pre-12.0.2
       // `[baseline]` log prefix for non-control runs (empty label).
-      const res = await runAllSurfaces(client, { k, samples, surfacesFilter, label: '' });
+      const res = await runAllSurfaces(client, { k, samples, surfacesFilter, label: '', genEval: genConfig, maxRows });
       surfaces = res.surfaces;
       primaryProjectId = res.primaryProjectId;
     }
@@ -637,6 +1039,7 @@ async function main() {
   const runEnd = new Date();
   const archive: BaselineArchive = {
     schema_version: SCHEMA_VERSION,
+    ...(genManifest ? { gen_manifest: genManifest } : {}),
     tag: finalTag,
     run_started_at: runStart.toISOString(),
     run_ended_at: runEnd.toISOString(),
