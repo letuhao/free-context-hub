@@ -1487,8 +1487,11 @@ function createMcpToolsServer() {
 
       if (include_groups) {
         // Check guardrails from project + all its groups. Merge results.
-        // For scoped callers, cross-tenant group members will throw NOT_FOUND
-        // (correct security posture — no oracle leak).
+        // PR F Adversary #4 LOW-1: resolveProjectIds returns [projectId, ...group_ids].
+        // For scoped callers, per-pid assertCallerScope rejects group_ids
+        // (NOT_FOUND). Graceful-skip preserves the security contract while
+        // not breaking the include_groups feature — the root projectId was
+        // already scope-asserted via the resolver above.
         const allIds = await resolveProjectIds(projectId, true);
         let totalChecked = 0;
         const allMatched: Array<{ rule_id: string; verification_method: string; requirement: string }> = [];
@@ -1496,7 +1499,15 @@ function createMcpToolsServer() {
         let firstPrompt: string | undefined;
 
         for (const pid of allIds) {
-          const r = await checkGuardrails(pid, action_context, { callerScope });
+          let r;
+          try {
+            r = await checkGuardrails(pid, action_context, { callerScope });
+          } catch (e: any) {
+            // Cross-tenant group member → service threw NOT_FOUND. Skip
+            // silently for scoped callers.
+            if (e?.code === 'NOT_FOUND' && typeof callerScope === 'string') continue;
+            throw e;
+          }
           totalChecked += r.rules_checked;
           if (!r.pass) {
             anyFailed = true;

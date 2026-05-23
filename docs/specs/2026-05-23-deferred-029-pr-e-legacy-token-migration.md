@@ -91,6 +91,38 @@ project boundary, and there is no global override.
 
 ## After PR E
 
-PR F closes DEFERRED-029 with the auth-ON E2E slice (REST + MCP) and a
-second-adversary security review covering all entity-id-derive cross-tenant
-tests deferred through C/D series.
+PR F closes DEFERRED-029 with the auth-ON E2E slice (REST + MCP) and four
+cold-start security-adversary reviews that closed 6 distinct bypass paths
+(SEC-1 through SEC-6) before any production exposure.
+
+## Known limitation — `include_groups: true` on multi-project lesson search
+
+`POST /api/lessons/search-multi` (and the MCP `search_lessons` tool when
+called with `include_groups: true`) currently rejects scoped callers with
+`NOT_FOUND` if their project belongs to any groups. Reason:
+`resolveProjectIds(projectId, true)` returns `[projectId, ...group_ids]` and
+the service's `assertCallerScopeMulti` strict-rejects when the array
+contains anything other than `[callerScope]`.
+
+This is a feature regression introduced by DEFERRED-029, NOT a leak. PR F
+fixed the equivalent issue for `checkGuardrails` (Adversary #4 LOW-1) by
+graceful-skip on `NOT_FOUND` from per-pid scope checks. The same pattern
+isn't applied to `searchLessonsMulti` because lesson search semantically
+expects a UNION of project_ids — silent skipping would change result-set
+shape without notice.
+
+**Workaround for scoped callers:** call `search_lessons` once per project
+the caller belongs to (e.g., iterate `list_project_groups` then
+`search_lessons` per group's member projects the caller has scope on).
+This requires the future group-aware authz helper described below.
+
+**Future fix (Phase 16 candidate):** add
+`assertCallerScopeMultiInclGroups(callerScope, projectIds)` that DB-checks
+each projectId is either `== callerScope` OR a group_id that callerScope's
+project belongs to (via `project_group_members`). Routes that combine
+multi-project listing with group expansion would call this helper instead
+of `assertCallerScopeMulti`.
+
+Tracked as a LOW-severity follow-up — no security impact (the strict-reject
+is a safe degradation: scoped callers cannot accidentally see cross-tenant
+data; admin/auth-off callers retain full functionality).
