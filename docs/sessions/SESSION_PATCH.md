@@ -1,8 +1,74 @@
-# LONGRUN CHECKPOINT — Phase 15 autonomous longrun, session boundary (2026-05-23)
+# LONGRUN CHECKPOINT — Milestone review + DEFERRED-029 kicked off (2026-05-23, session 2)
 
-**Status:** **DEFERRED-003 (race_exhausted coverage) — RESOLVED** on branch
-`race-exhausted-coverage-deferred-003`. 723/723 green; tsc clean; no migration.
-**The entire DEFERRED backlog is now CLEARED** — no OPEN items remain (003 was the last).
+**Status:** Phase 9–15 milestone review **COMPLETE** (PR #17 + #18 merged); DEFERRED-029
+(MCP tenant-scope enforcement) **in flight** with **4 stacked PRs open** covering ~2/3 of the
+service surface.
+
+## What landed on main this session
+- **PR #17** ✅ — Phase 15 complete + entire deferred backlog cleared + Phase 15 closeout doc +
+  CLAUDE.md table/diagram for Phases 12–15 + WHITEPAPER v0.6.
+- **PR #18** ✅ — Milestone review (WS0/WS1/WS3 audit work-streams) + 4 fixes:
+  - **DEFERRED-025** (MED): `searchLessons` / `searchLessonsMulti` degrade to FTS when embeddings
+    unavailable; embedder throws `ContextHubError('SERVICE_UNAVAILABLE')` → 503 (writes
+    fail-loud cleanly). Live-verified.
+  - **DEFERRED-026** (MED): `globalSearch.ts:80` `author` → `author_name AS author` (commits
+    were silently dropped from results).
+  - **DEFERRED-027** (LOW-MED): `assertUuid()` in `updateLesson` / `updateLessonStatus` → 400
+    instead of raw uuid SQL 500.
+  - **DEFERRED-028** (LOW, doc): WHITEPAPER Phase 13 "not a task orchestrator" non-goal carries
+    a Phase 15 scope note acknowledging the Board's `depends_on` + `raci` dependency-sequenced
+    coordination.
+- Baseline at PR #18 merge: **728/728 unit tests green**; tsc clean; entire DEFERRED backlog
+  cleared **except** DEFERRED-029 (deliberately scoped+scheduled — see below).
+
+## DEFERRED-029 — MCP tenant-scope enforcement (in flight)
+WS3-S3 surfaced an asymmetry: REST enforces per-key project-scope via middleware; MCP has only
+a binary shared `workspace_token` and no per-project scope. Decided multi-tenant isolation IS
+a goal; chosen mechanism: **Option B — explicit `callerScope` parameter** threaded through
+every service fn touching `project_id`, with enforcement in the service layer so REST + MCP
+both inherit. Plus a scoped MCP token model (reuse `api_keys.project_scope`).
+
+The work is split per DESIGN §8 into 6 sub-PRs (A–F). **4 open as of this session boundary;
+all stacked linearly**, all 746/746 unit green, all tsc clean, all back-compat with
+`callerScope=undefined`:
+
+| PR | Branch | Domain | Status |
+|---|---|---|---|
+| **#19** | `deferred-029-mcp-tenant-scope-design` | A: CLARIFY + DESIGN + foundation (`CallerScope` type, `assertCallerScope`/`Multi` helpers, `resolveMcpCallerScope` MCP resolver, 9 helper unit tests). Zero behavior change. | open, review-ready |
+| **#20** | `deferred-029-pr-b-lessons` | B: lessons domain — 8 service fns + 9 REST routes + 7 MCP handlers + 9 cross-tenant unit tests | open, stacked on #19 |
+| **#21** | `deferred-029-pr-c-coordination` | C1: topics + board — 10 fns + 10 routes + 10 MCP. Adds `src/core/security/scopeResolvers.ts` (per-entity DB-derive helpers mirroring `requireResourceScope` queries). | open, stacked on #20 |
+| **#22** | `deferred-029-pr-c2-requests-motions` | C2: requests + motions + decisionBodies + proxies — 18 fns + 17 routes + 18 MCP | open, stacked on #21 |
+
+Cross-tenant DB tests for entity-id-derive paths are intentionally **deferred to PR F** (auth-ON
+E2E slice) where they cover both REST and MCP end-to-end. The helper-unit-test matrix (PR A)
+proves the core enforcement primitive; PRs B/C1/C2 prove the wiring via tsc + back-compat
+preservation.
+
+## Open after this session (next-session work)
+- **DEFERRED-029 PR C3** — disputes + intake + reviewRequests + chaining cleanup (final
+  coordination sub-PR; ~10 fns)
+- **DEFERRED-029 PR D** — `lessonImportExport` (export/import deferred from PR B) + documents +
+  chunks + git + chat + workspace
+- **DEFERRED-029 PR E** — retire/deprecate the legacy single-shared MCP `CONTEXT_HUB_WORKSPACE_TOKEN`
+  (currently kept as deprecated-but-accepted for back-compat)
+- **DEFERRED-029 PR F** — auth-ON E2E slice (REST **and** MCP) + second-adversary security
+  review (CLAUDE.md safety-sensitive code requirement)
+
+## Handoff for next session (fresh context)
+1. Recommended review order: **#19 → #20 → #21 → #22** (each builds on the prior).
+2. PR #19 carries the DESIGN doc — that's the contract every later PR implements. Approving
+   #19 first reduces churn risk on later PRs.
+3. After #22 merges, resume with `git checkout main && git pull` then branch
+   `deferred-029-pr-c3-disputes-intake-reviews` from main.
+4. Validated collaboration pattern (saved to memory `feedback_design-first-big-changes`):
+   for large/risky/security-sensitive changes, checkpoint with options before implementing;
+   user prefers the careful path.
+
+---
+
+## (prior in this session) DEFERRED-003 (race_exhausted coverage) — RESOLVED
+**Status:** **DEFERRED-003 — RESOLVED** on branch `race-exhausted-coverage-deferred-003`
+(merged via PR #17). 723/723 green; tsc clean; no migration.
 
 ## DEFERRED-003 outcome (race_exhausted retry-loop coverage)
 The retry loop in `claimArtifact` was extracted into an exported, injectable seam
