@@ -11,6 +11,9 @@ export { ContextHubError } from './errors.js';
 // ── Auth ──
 export { assertWorkspaceToken, resolveProjectIdOrThrow } from './auth.js';
 
+// ── Security: service-layer tenant-scope guard (DEFERRED-029) ──
+export { assertCallerScope, assertCallerScopeMulti, type CallerScope } from './security/callerScope.js';
+
 // ── Startup ──
 export { logStartupEnvSummary } from './startup.js';
 
