@@ -206,11 +206,25 @@ def _build_openai_client(base_url: str, api_key: str, *, async_mode: bool = Fals
 
     async_mode=True returns AsyncOpenAI — required by ragas metrics when using
     ascore() / agenerate(). async_mode=False returns the sync OpenAI client.
+
+    Phase 17.x: tightened defaults to fail-fast on LM Studio's Channel Errors.
+    The openai-python client's defaults (max_retries=2, ~60s backoffs) cause
+    100+ second per-row latency when LM Studio is having a bad minute. By
+    setting max_retries=0 we let OUR resilience layer (_retry_on_transient
+    in this file) own the retry policy — explicit, observable, and bounded.
+    Timeout is set to 90s (most chat responses come back in 5-30s on local
+    models; 90s catches genuinely-slow generations without burning minutes
+    on stuck connections).
     """
     from openai import AsyncOpenAI, OpenAI
 
     cls = AsyncOpenAI if async_mode else OpenAI
-    return cls(base_url=base_url, api_key=api_key)
+    return cls(
+        base_url=base_url,
+        api_key=api_key,
+        max_retries=0,  # we wrap our own retry; don't double-retry
+        timeout=90.0,   # fail-fast on stuck connections
+    )
 
 
 def _init_llm(cfg: Config):

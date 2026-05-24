@@ -911,7 +911,7 @@ async function runAllSurfaces(
     const set = JSON.parse(setRaw) as GoldenSet;
     const pid = set.project_id_suggested ?? primaryProjectId;
     if (surface === 'lessons') primaryProjectId = pid;
-    console.log(`${prefix} ${surface}: ${set.queries.length} queries against project=${pid}`);
+    console.log(`[${ts()}] ${prefix} ${surface}: ${set.queries.length} queries against project=${pid}`);
 
     const dispatch = makeDispatcher(surface, client, pid);
     const perQuery: PerQuery[] = [];
@@ -1085,8 +1085,8 @@ async function main() {
   const runStart = new Date();
   const { commit, branch } = gitInfo();
 
-  console.log(`[baseline] tag=${tag} k=${k} samples=${samples} control=${control} gen-eval=${genEval} synth-mode=${synthMode} surfaces=${surfacesFilter.join(',')}${maxRows !== null ? ` max-rows=${maxRows}` : ''}`);
-  console.log(`[baseline] MCP=${MCP_URL}  API=${API_URL}${genEval !== 'off' ? `  JUDGE=${judgeUrl}` : ''}`);
+  console.log(`[${ts()}] [baseline] tag=${tag} k=${k} samples=${samples} control=${control} gen-eval=${genEval} synth-mode=${synthMode} surfaces=${surfacesFilter.join(',')}${maxRows !== null ? ` max-rows=${maxRows}` : ''}`);
+  console.log(`[${ts()}] [baseline] MCP=${MCP_URL}  API=${API_URL}${genEval !== 'off' ? `  JUDGE=${judgeUrl}` : ''}`);
 
   // Sprint 16.3: build gen-eval config when not disabled.
   let genConfig: GenEvalConfig | undefined = undefined;
@@ -1139,7 +1139,7 @@ async function main() {
       ...(coveHashes ? { cove_prompt_hashes: coveHashes } : {}),
     };
     console.log(
-      `[baseline] gen-eval enabled: answerer=${answererModel} @ ${answererBaseUrl}, judge=${probe.judge_model ?? 'unknown'} @ ${judgeUrl}, top-K=${topKContexts}, synth-mode=${synthMode}`,
+      `[${ts()}] [baseline] gen-eval enabled: answerer=${answererModel} @ ${answererBaseUrl}, judge=${probe.judge_model ?? 'unknown'} @ ${judgeUrl}, top-K=${topKContexts}, synth-mode=${synthMode}`,
     );
 
     // Phase 17.x: preflight check — refuse to start if LM Studio doesn't have
@@ -1161,7 +1161,7 @@ async function main() {
       process.exit(2);
     }
     if (!skipPreflight) {
-      console.log('[baseline] preflight OK — LM Studio + judge sidecar pinned to expected models');
+      console.log(`[${ts()}] [baseline] preflight OK — LM Studio + judge sidecar pinned to expected models`);
     }
 
     // Phase 17.x: pre-warm the sidecar by sending a trivial /score request.
@@ -1170,7 +1170,7 @@ async function main() {
     // and trip our retry-on-transient window. Eating the warmup cost
     // ONCE here keeps row-level latencies predictable.
     if (!skipPreflight) {
-      console.log('[baseline] warming up judge sidecar...');
+      console.log(`[${ts()}] [baseline] warming up judge sidecar...`);
       const t0 = Date.now();
       try {
         await scoreOnce(
@@ -1186,10 +1186,10 @@ async function main() {
           },
           { baseUrl: judgeUrl, timeoutMs: 180_000 },
         );
-        console.log(`[baseline] sidecar warm (${Date.now() - t0}ms)`);
+        console.log(`[${ts()}] [baseline] sidecar warm (${Date.now() - t0}ms)`);
       } catch (err) {
         console.warn(
-          `[baseline] warmup failed (${Date.now() - t0}ms): ${(err as Error).message}. Continuing — first row may show extra latency.`,
+          `[${ts()}] [baseline] warmup failed (${Date.now() - t0}ms): ${(err as Error).message}. Continuing — first row may show extra latency.`,
         );
       }
     }
@@ -1278,9 +1278,9 @@ async function main() {
   await fs.writeFile(jsonPath, JSON.stringify(archive, null, 2), 'utf8');
   await fs.writeFile(mdPath, renderMarkdown(archive), 'utf8');
 
-  console.log(`\n[baseline] wrote ${jsonPath}`);
-  console.log(`[baseline] wrote ${mdPath}`);
-  console.log(`[baseline] elapsed ${archive.elapsed_ms}ms across ${surfacesFilter.length} surface(s)`);
+  console.log(`\n[${ts()}] [baseline] wrote ${jsonPath}`);
+  console.log(`[${ts()}] [baseline] wrote ${mdPath}`);
+  console.log(`[${ts()}] [baseline] elapsed ${archive.elapsed_ms}ms across ${surfacesFilter.length} surface(s)`);
 }
 
 function makeDispatcher(

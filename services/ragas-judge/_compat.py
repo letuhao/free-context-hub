@@ -158,7 +158,20 @@ def _patch_instructor_openai_mode() -> None:
         # MD_JSON, etc. alone for whoever wants those modes deliberately.
         if kwargs.get("mode") == target_mode:
             kwargs["mode"] = schema_mode
-        return _original_from_openai(client, **kwargs)
+        wrapped = _original_from_openai(client, **kwargs)
+        # Phase 17.x: tighten instructor's default retry policy. Instructor
+        # uses tenacity with `wait_random_exponential(multiplier=1, max=15)`
+        # which produces 15-30s gaps in our trace when the LLM returns
+        # imperfect JSON. We override `default_max_retries` to 1 so a single
+        # failure surfaces immediately to our outer _retry_on_transient
+        # layer (which has its own bounded backoff). User-observable effect:
+        # idle gaps between LM Studio calls drop from ~30s to ~1s.
+        try:
+            if hasattr(wrapped, "default_max_retries"):
+                wrapped.default_max_retries = 1
+        except Exception:
+            pass
+        return wrapped
 
     instructor.from_openai = _patched_from_openai
 
