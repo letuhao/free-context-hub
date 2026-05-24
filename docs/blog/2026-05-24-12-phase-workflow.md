@@ -8,13 +8,15 @@
 
 ---
 
-I've been building [free-context-hub](https://github.com/letuhao/free-context-hub) — a self-hosted persistent memory and guardrails layer for AI agents — using an iterative 12-phase workflow I refined over 8 months. The project now sits at 1,600+ commits across many feature branches, covering 15 development phases: backend (MCP server, REST API), a full Next.js frontend (20+ pages), RAG pipelines with reranking benchmarks, multi-agent coordination protocols, knowledge portability, and tenant-scoped access control.
+I've been using an iterative 12-phase workflow I refined over 8 months — across [free-context-hub](https://github.com/letuhao/free-context-hub) (a self-hosted persistent memory and guardrails layer for AI agents), a separate lore-weave project, and a handful of private internal systems. Across all of them, the workflow has accumulated 2,500+ commits, 41+ database migrations, and a trail of written specs and audit logs I can still query months after the sessions that produced them.
+
+The free-context-hub project alone covers 15 development phases: backend (MCP server, REST API), a full Next.js frontend (20+ pages), RAG pipelines with reranking benchmarks, multi-agent coordination protocols, knowledge portability, and tenant-scoped access control.
 
 I'm sharing the workflow because it's worked better than anything else I've tried, and because the honest trade-offs are worth knowing before you adopt it.
 
 The files are in the repository:
-- **[`docs/WORKFLOW.md`](../WORKFLOW.md)** — standalone 11-phase template to copy into any project
-- **[`CLAUDE.md`](../../CLAUDE.md)** — the full 12-phase live spec (adds POST-REVIEW gate vs. the template)
+- **[`docs/WORKFLOW.md`](../WORKFLOW.md)** — standalone 12-phase template to copy into any project
+- **[`CLAUDE.md`](../../CLAUDE.md)** — the live project spec with project-specific tooling and AMAW wiring
 - **[`docs/amaw-workflow.md`](../amaw-workflow.md)** — opt-in multi-agent extension spec
 
 ---
@@ -188,7 +190,7 @@ On this single project — [free-context-hub](https://github.com/letuhao/free-co
 - Knowledge portability: zip+JSONL bundle format, streaming import/export, cross-instance pull with SSRF hardening
 - Tenant-scoped access control: authz model, 3-tier routing, event log, collective decisions
 
-That's 1,600+ commits, 41+ database migrations, and a live audit trail I can query across sessions that ran months apart.
+That's 400+ commits on this project alone — part of a wider 2,500+ commit track record across three codebases — with a live audit trail I can query across sessions that ran months apart.
 
 The hardest part was Phase 10 (SESSION) — keeping the session patch updated after every sprint without skipping it. Once that became a habit, sessions started to feel continuous rather than amnesia-punctuated.
 
@@ -246,10 +248,10 @@ The workflow is designed for the first category. Using it for the second is just
 
 **Start with the template:**
 
-1. Copy [`docs/WORKFLOW.md`](../WORKFLOW.md) into your project root or paste the relevant sections into your `CLAUDE.md` / agent instructions — this is the 11-phase base
-2. Add the POST-REVIEW gate (Phase 9) from [`CLAUDE.md`](../../CLAUDE.md) if you want the full 12-phase version with the human checkpoint
-3. Customize the `[CUSTOMIZE]` sections for your stack (verification commands, test runner, any MCP tools you use — MCP is the Model Context Protocol, an interface for giving AI agents access to external tools and knowledge stores; the workflow works without it)
-4. Add `workflow-gate.sh` from the repository root to enforce the phase gates mechanically
+1. Copy [`docs/WORKFLOW.md`](../WORKFLOW.md) into your project root or paste the relevant sections into your `CLAUDE.md` / agent instructions — this is the full 12-phase spec
+2. Customize the `[CUSTOMIZE]` sections for your stack (verification commands, test runner, any MCP tools you use — MCP is the Model Context Protocol, an interface for giving AI agents access to external tools and knowledge stores; the workflow works without it)
+3. Add `workflow-gate.sh` from the repository root to enforce the phase gates mechanically — without this, agents will skip phases
+4. For high-stakes tasks, see [`docs/amaw-workflow.md`](../amaw-workflow.md) for the AMAW multi-agent extension
 5. Start with just **task size classification + VERIFY** — those two alone change how you work with agents
 
 The workflow is model-agnostic. I use it with Claude Code but nothing in the spec requires it.
@@ -262,7 +264,7 @@ The 12-phase workflow is not magic. It's a way of making explicit things that we
 
 The cost is real — more tokens, more time spent clarifying, more things requiring your approval before the AI proceeds. The benefit is also real: you end up with a system you understand deeply, and a trail of why it was built the way it was.
 
-For me, after 1,600+ commits on this project alone, that trade-off is still worth it.
+For me, after 2,500+ commits across multiple projects, that trade-off is still worth it.
 
 ---
 

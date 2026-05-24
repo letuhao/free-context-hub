@@ -1,32 +1,35 @@
-# Agent Workflow v2
+# Agent Workflow v2.2
 
 > A structured development workflow for AI coding agents. Combines the best of [Superpowers](https://github.com/obra/superpowers) (execution discipline, TDD, verification gates) with session persistence, role-based review, and knowledge-driven guardrails.
 >
 > **How to use:** Copy this file into your project root or paste the relevant sections into your `CLAUDE.md` / agent instructions. Customize the `[CUSTOMIZE]` sections for your project.
+>
+> **AMAW opt-in:** For high-stakes work (schema migrations, new service boundaries, security-critical paths), an optional multi-agent extension replaces the human review gates with cold-start sub-agents. See [`docs/amaw-workflow.md`](amaw-workflow.md).
 
 ---
 
-## Task Workflow (11 phases)
+## Task Workflow (12 phases)
 
 Every task follows this workflow. The agent plays all roles sequentially.
 
 ```
-Phase      | Role              | What Happens
------------|-------------------|----------------------------------------------
-1. CLARIFY | Architect + PO    | Brainstorm, ask questions, define scope
-2. DESIGN  | Lead              | API contract / component API / data flow
-3. REVIEW  | PO + Lead         | Review design spec before coding
-4. PLAN    | Lead + Developer  | Decompose into bite-sized tasks (2-5 min)
-5. BUILD   | Developer         | Write code (TDD: red -> green -> refactor)
-6. VERIFY  | Developer         | Evidence-based verification gate
-7. REVIEW  | Lead              | Code review (spec compliance + quality)
-8. QC      | QA / PO           | Test against acceptance criteria
-9. SESSION | Developer         | Update session notes + task status
-10. COMMIT | Developer         | Git commit (+ push if approved)
-11. RETRO  | All               | Record decision/workaround if learned
+Phase           | Role              | What Happens
+----------------|-------------------|----------------------------------------------
+1. CLARIFY      | Architect + PO    | Brainstorm, ask questions, define scope
+2. DESIGN       | Lead              | API contract / component API / data flow
+3. REVIEW       | PO + Lead         | Review design spec before coding
+4. PLAN         | Lead + Developer  | Decompose into bite-sized tasks (2-5 min)
+5. BUILD        | Developer         | Write code (TDD: red -> green -> refactor)
+6. VERIFY       | Developer         | Evidence-based verification gate
+7. REVIEW       | Lead              | Code review (spec compliance + quality)
+8. QC           | QA / PO           | Test against acceptance criteria
+9. POST-REVIEW  | Human             | Final gate — NEVER skippable (see below)
+10. SESSION     | Developer         | Update session notes + task status
+11. COMMIT      | Developer         | Git commit (+ push if approved)
+12. RETRO       | All               | Record decision/workaround if learned
 ```
 
-**Status tracking:** `[ ]` not started · `[C]` clarify · `[D]` design · `[P]` plan · `[B]` build · `[V]` verify · `[R]` review · `[Q]` QC · `[S]` session · `[✓]` done
+**Status tracking:** `[ ]` not started · `[C]` clarify · `[D]` design · `[P]` plan · `[B]` build · `[V]` verify · `[R]` review · `[Q]` QC · `[PR]` post-review · `[S]` session · `[✓]` done
 
 **Task types:** `[FE]` frontend · `[BE]` backend · `[FS]` full-stack
 
@@ -189,7 +192,22 @@ Both stages must pass. If issues found: fix → re-verify (Phase 6) → re-revie
 - Edge cases, error states, regression checks
 - If QC fails: loop back to Phase 5 BUILD
 
-### Phase 9: SESSION
+### Phase 9: POST-REVIEW — NEVER skippable
+
+The final human gate before SESSION. Different scope from Phase 7 (code review) — this is the full-picture check.
+
+**What the human reads:**
+1. The spec written in Phase 1–2 (is the implementation aligned with what was approved?)
+2. The diff (does the code match the spec?)
+3. Any open findings from Phase 7 REVIEW (were they all resolved?)
+
+**Verdict:** CLEAR (proceed to SESSION) or BLOCKED (fix the specific issue, re-run QC, re-run POST-REVIEW).
+
+> **Why this can't be skipped:** Phase 7 is a code-quality pass. POST-REVIEW is a spec-compliance pass. They answer different questions. An agent that "already reviewed in phase 7" has not done POST-REVIEW.
+
+<!-- [CUSTOMIZE] In AMAW mode this gate is held by a cold-start Scope Guard sub-agent instead of a human. See docs/amaw-workflow.md for the full spec. -->
+
+### Phase 10: SESSION
 
 <!-- [CUSTOMIZE] Change the file path to match your project's session tracking location -->
 
@@ -202,13 +220,13 @@ What to include:
 - Live test results (real stack, not mocked)
 - What's next
 
-### Phase 10: COMMIT
+### Phase 11: COMMIT
 
 - Write clear commit message (what + why)
 - `git commit` — small and atomic preferred
 - Push only with user approval or pre-authorized rules
 
-### Phase 11: RETRO
+### Phase 12: RETRO
 
 - If a non-obvious decision was made → record it (decision log, ADR, lesson, etc.)
 - If a workaround was needed → record it with context so it can be revisited
@@ -302,6 +320,7 @@ Add this to your CLAUDE.md alongside the workflow:
 | Skip PLAN, jump to BUILD | "It's a small change" | Small changes grow; no plan = no checkpoint |
 | Skip VERIFY after BUILD | "Tests passed earlier" | Stale results are not evidence |
 | Skip REVIEW after VERIFY | "I wrote it, I know it's correct" | Author blindness is real |
+| Skip POST-REVIEW | "I reviewed in phase 7" | Phase 7 is code quality; POST-REVIEW is spec compliance — different scope, never skippable |
 | Skip SESSION before COMMIT | "I'll update later" | You won't. Context is lost |
 | Combine multiple phases | "CLARIFY+DESIGN+PLAN in one go" | Phases exist to create pause points |
 
@@ -386,14 +405,15 @@ Layer 1 alone works ~70% of the time. Adding Layer 2 gets to ~90%. Layer 3 catch
 ## Quick Reference Card
 
 ```
-CLARIFY → DESIGN → REVIEW → PLAN → BUILD → VERIFY → REVIEW → QC → SESSION → COMMIT → RETRO
-   C         D        R        P       B        V        R       Q       S        ✓        ✓
+CLARIFY → DESIGN → REVIEW → PLAN → BUILD → VERIFY → REVIEW → QC → POST-REVIEW → SESSION → COMMIT → RETRO
+   C         D        R        P       B        V        R       Q        PR           S        ✓        ✓
 
 Skip CLARIFY+PLAN: only XS (1 file, 0-1 logic, 0 side effects)
-Skip PLAN only: XS or S (1-2 files, 0 side effects)
-Skip TDD for: UI layout, config, docs, migrations
-Hard stop debugging after: 3 failed fix attempts
-Verify gate: run command → read output → then claim
+Skip PLAN only:    XS or S (1-2 files, 0 side effects)
+NEVER skip:        POST-REVIEW (human reads spec + diff, issues CLEAR or BLOCKED)
+Skip TDD for:      UI layout, config, docs, migrations
+Hard stop after:   3 failed fix attempts → discuss with user
+Verify gate:       run command → read output → then claim
 ```
 
 ---
@@ -405,4 +425,4 @@ Verify gate: run command → read output → then claim
 
 ---
 
-*Last updated: 2026-04-16 — Workflow v2*
+*Last updated: 2026-05-24 — Workflow v2.2 (12 phases, POST-REVIEW gate added)*
