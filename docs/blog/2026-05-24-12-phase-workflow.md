@@ -4,11 +4,18 @@
 
 ---
 
-I've shipped software with AI coding assistants across many projects, accumulating over 2,500 commits. In that time I've tried most of the popular "AI workflow" patterns: raw prompting, skeleton-driven iteration, test-first generation, the works. Most of them are fine for throwaway scripts. For production systems with real complexity — multi-service backends, evolving data schemas, security-sensitive paths — they tend to collapse around the second or third sprint.
+**Quick screen:** if you're writing throwaway scripts or solo prototypes, this workflow is overkill — skip to the [Cons](#the-real-cons) and [Who This Is For](#who-this-is-for) sections first.
 
-This post is about the workflow I settled on: a 12-phase, human-in-the-loop structure that I've been refining and using to deliver real features. I want to share it because it works well for me, and because most of what's written about AI coding workflows skips the hard part: **what do you do when the AI is confidently wrong?**
+---
 
-The files are in this repository: [`docs/WORKFLOW.md`](../WORKFLOW.md) and the full spec is embedded in [`CLAUDE.md`](../../CLAUDE.md) at the project root.
+I've been building [free-context-hub](https://github.com/letuhao/free-context-hub) — a self-hosted persistent memory and guardrails layer for AI agents — using an iterative 12-phase workflow I refined over 8 months. The project now sits at 1,600+ commits across many feature branches, covering 15 development phases: backend (MCP server, REST API), a full Next.js frontend (20+ pages), RAG pipelines with reranking benchmarks, multi-agent coordination protocols, knowledge portability, and tenant-scoped access control.
+
+I'm sharing the workflow because it's worked better than anything else I've tried, and because the honest trade-offs are worth knowing before you adopt it.
+
+The files are in the repository:
+- **[`docs/WORKFLOW.md`](../WORKFLOW.md)** — standalone 11-phase template to copy into any project
+- **[`CLAUDE.md`](../../CLAUDE.md)** — the full 12-phase live spec (adds POST-REVIEW gate vs. the template)
+- **[`docs/amaw-workflow.md`](../amaw-workflow.md)** — opt-in multi-agent extension spec
 
 ---
 
@@ -29,18 +36,18 @@ The standard advice is "just review the diff." But reviewing a diff without havi
 
 The workflow is an evolution of two ideas:
 
-**[Superpowers](https://github.com/obra/superpowers)** — a coding agent discipline framework that introduced TDD protocol, the evidence gate (run verification fresh before claiming success), and the debugging protocol (no fix without root cause). I absorbed these directly into the workflow. If you haven't read Superpowers, it's worth your time.
+**[Superpowers](https://github.com/obra/superpowers)** — a coding agent discipline framework that introduced TDD protocol, the evidence gate (run verification fresh before claiming success), and the debugging protocol (no fix without root cause). I absorbed these directly. If you haven't read Superpowers, it's worth your time.
 
-**Human-in-the-loop gatekeeping** — my own addition. The core insight: a human reading a short spec + a single diff catches dramatically more than a human reading code cold. So the workflow structures every task to produce exactly those artifacts, at exactly the right moment.
+**Human-in-the-loop gatekeeping** — my own addition. The core insight: a human reading a short spec + a single diff catches dramatically more than a human reading code cold. The workflow structures every task to produce exactly those artifacts, at exactly the right moment.
 
-The combination took me about 8 months of iteration to stabilize. The version in this repo is v2.2 (default mode) with an optional AMAW multi-agent extension for high-stakes work.
+The combination took about 8 months of iteration to stabilize. What's here is v2.2 (default mode) with an optional AMAW (Autonomous Multi-Agent Workflow) extension for high-stakes work.
 
 ---
 
 ## The 12 Phases
 
 ```
-Phase          │ Role                  │ What Happens
+Phase          │ Role (default v2.2)   │ What Happens
 ───────────────┼───────────────────────┼──────────────────────────────────────────
 1. CLARIFY     │ Architect + Human     │ Read context, write spec, expose assumptions
 2. DESIGN      │ Lead                  │ API contract / data flow → DESIGN.md
@@ -49,11 +56,11 @@ Phase          │ Role                  │ What Happens
 5. BUILD       │ Developer             │ TDD: red → green → refactor
 6. VERIFY      │ Developer             │ Run tests fresh, capture exit code + output
 7. REVIEW      │ Lead                  │ Code vs spec — find exactly 3 divergences
-8. QC          │ QA / PO               │ Spec fingerprint vs implementation, AC coverage
+8. QC          │ Main session          │ Spec fingerprint vs implementation, AC coverage
 9. POST-REVIEW │ Human checkpoint      │ Final gate — blocked on any unresolved issue
 10. SESSION    │ Scribe                │ SESSION_PATCH.md + DEFERRED.md + AUDIT_LOG
 11. COMMIT     │ Developer             │ Git commit
-12. RETRO      │ All                   │ add_lesson to knowledge layer + finalize audit
+12. RETRO      │ All                   │ Record lessons + finalize audit log
 ```
 
 The phases look heavy on paper. In practice, for an XS task (single file, one logic change, no side effects) you're allowed to skip CLARIFY and PLAN and go straight to BUILD — the workflow is explicit about this via a mandatory **task size classification** step.
@@ -100,8 +107,9 @@ Every popular AI workflow has phases that agents skip "to save time." This workf
 | Skip PLAN, jump to BUILD | "It's a small change" | Small changes grow; no plan = no checkpoint |
 | Skip VERIFY after BUILD | "Tests passed earlier" | Stale results are not evidence |
 | Skip REVIEW after VERIFY | "I wrote it, I know it's correct" | Author blindness is real |
-| Skip POST-REVIEW | "I reviewed in phase 7" | Phase 7 is code review; POST-REVIEW is the final conservative gate |
+| Skip POST-REVIEW | "I reviewed in phase 7" | Phase 7 is code review; POST-REVIEW is the final conservative gate — different scope |
 | Skip SESSION before COMMIT | "I'll update later" | You won't. Context is lost. |
+| Combine multiple phases | "CLARIFY+DESIGN+PLAN in one go" | Each phase boundary is a deliberate pause point; skipping it removes the checkpoint |
 
 Naming these patterns and treating them as violations changes the conversation. When the agent tries to jump phases, you have a handle to point at.
 
@@ -132,7 +140,7 @@ This sounds obvious. It is not obvious when you're deep in a session and the pre
 In v2.2 (default mode), there are two mandatory human checkpoints:
 
 1. **After CLARIFY** — human reads the spec and approves the scope before any design or code starts
-2. **After POST-REVIEW** — human reviews the AUDIT_LOG summary + diff before the SESSION phase commits anything
+2. **After POST-REVIEW** — human reviews the AUDIT_LOG, the spec, and the diff before SESSION commits anything
 
 These are not optional. The whole model is that the human reads a short spec, not a long codebase. The AI builds the spec; the human approves it; the AI builds the code against the approved spec. The POST-REVIEW diff is then code-vs-approved-spec, which is a comparison a human can actually do.
 
@@ -140,14 +148,16 @@ These are not optional. The whole model is that the human reads a short spec, no
 
 ## AMAW: The Opt-In Multi-Agent Extension
 
-For high-stakes work — data migrations, new service boundaries, security-critical paths — there's an optional extension called AMAW (Autonomous Multi-Agent Workflow). Instead of a human at the review gates, you spawn cold-start sub-agents:
+For high-stakes work — data migrations, new service boundaries, security-critical paths — there's an optional extension: **AMAW (Autonomous Multi-Agent Workflow)**. In AMAW mode, cold-start sub-agents replace or augment the human review gates:
 
-- **Adversary** — finds exactly 3 things that could go wrong. Never says what's good.
+- **Adversary** — finds exactly 3 things that could go wrong. *Why 3? Enough to surface real issues, few enough to force prioritization rather than a laundry list.* Never says what's good.
 - **Scope Guard** — compares spec fingerprint vs implementation, checks AC coverage, issues CLEAR or BLOCKED
 - **Scribe** — records decisions, writes session summaries, detects deferred items
 - **Audit Logger** — finalizes the audit trail at RETRO
 
-The key insight is **cold-start sub-agents**: each agent is spawned fresh with only file access. It cannot inherit the main session's context rot or biases. It reads what's written; it can't be influenced by what was discussed in chat.
+The key insight is **cold-start**: each agent is spawned fresh with only file access. It cannot inherit the main session's context rot or biases. It reads what's written; it can't be influenced by what was discussed in chat.
+
+> **Note:** AMAW doesn't make the workflow fully autonomous. The human still approves the spec at CLARIFY end; AMAW replaces the code-review and POST-REVIEW gates with sub-agents. If you need zero human interaction, this workflow isn't designed for that.
 
 AMAW costs roughly $1–5 in sub-agent tokens and ~30 extra minutes per task. I use it for schema migrations and multi-system contracts. For everyday work, the human-in-loop default catches the same issues faster and cheaper.
 
@@ -161,19 +171,24 @@ Every phase transition and agent verdict appends to `docs/audit/AUDIT_LOG.jsonl`
 {"ts":"2026-05-15T17:42:00Z","task":"phase-14-model-swap","phase":"review-design","agent":"adversary","action":"review","status":"REJECTED","findings_count":3,"block_count":2,"warn_count":1,"note":"..."}
 ```
 
-Append-only. Never modified. Main session and sub-agents both write to it, but never delete or edit existing lines.
+Append-only. Never modified. Main session and sub-agents both write to it, never delete or edit existing lines.
 
-This becomes the durable record of what was decided and why — something that doesn't exist in most AI coding setups where everything is ephemeral chat.
+This becomes the durable record of what was decided and why — something that doesn't exist in most AI coding setups where everything lives in ephemeral chat.
 
 ---
 
 ## What I've Shipped With This
 
-Using this workflow across projects I've delivered:
+On this single project — [free-context-hub](https://github.com/letuhao/free-context-hub) — I've delivered 15 development phases covering:
 
-- 15 development phases covering core backend (MCP, REST API), frontend (20+ pages in Next.js), RAG pipeline with reranking benchmarks, multi-agent coordination protocols, knowledge portability, and tenant-scoped access control
-- 2,500+ commits, most of them structured with phase tags and evidence logs
-- A running audit trail that let me diagnose context drift across sessions months apart
+- Core backend: MCP server (36 tools), REST API (70+ endpoints), background worker
+- Frontend: Next.js 16 + React 19, 20+ pages, human-in-loop review UI
+- RAG pipeline: tiered search (ripgrep → FTS → semantic), 8-model embedding benchmark, reranking benchmarks with reproducible reports
+- Multi-agent coordination: artifact leases with TTL/fencing, pending-review state, taxonomy profiles
+- Knowledge portability: zip+JSONL bundle format, streaming import/export, cross-instance pull with SSRF hardening
+- Tenant-scoped access control: authz model, 3-tier routing, event log, collective decisions
+
+That's 1,600+ commits, 41+ database migrations, and a live audit trail I can query across sessions that ran months apart.
 
 The hardest part was Phase 10 (SESSION) — keeping the session patch updated after every sprint without skipping it. Once that became a habit, sessions started to feel continuous rather than amnesia-punctuated.
 
@@ -181,75 +196,75 @@ The hardest part was Phase 10 (SESSION) — keeping the session patch updated af
 
 ## The Real Pros
 
-**You understand your own system deeply.** Because you write the spec and approve it, you can't hide behind "the AI built it." You actually know what was built and why the trade-offs were made.
+**You understand your own system deeply.** Because you write the spec and approve it, you can't hide behind "the AI built it." You actually know what was built and why the trade-offs were made. This is the biggest practical advantage for me — not velocity, but comprehension.
 
-**Delivery quality is high.** Every architectural decision has a written rationale. Every code change has a spec it was validated against. Review diffs are meaningful because the intent was written before the code.
+**Architectural decisions have a paper trail.** Every trade-off is in a spec file that was approved before code was written. When a future session revisits a design choice, the rationale is readable, not reconstructed from diff archaeology.
 
-**Context drift is visible.** When an AI starts building something that wasn't in the spec, the spec fingerprint comparison catches it. Without a written spec, you'd never notice.
+**Context drift is visible.** When an AI starts building something that wasn't in the spec, the spec fingerprint comparison at POST-REVIEW catches it. Without a written spec, you'd never notice until integration time.
 
-**Deferred items don't get lost.** The workflow forces any "we'll do this later" to be written in `DEFERRED.md` with a trigger condition. Nothing lives only in chat.
+**Deferred items don't get lost.** The workflow forces any "we'll do this later" to be written in `DEFERRED.md` with a specific trigger condition. Nothing lives only in chat — chat is ephemeral, files are truth.
 
-**It's incrementally adoptable.** You can start with just CLARIFY + VERIFY and get substantial value. Add the other phases as your trust in the workflow grows.
+**It's incrementally adoptable.** You can start with just CLARIFY + VERIFY and get substantial value. Add phases as your trust in the workflow grows.
 
 ---
 
 ## The Real Cons
 
-**Token usage is high.** Each phase generates artifacts (spec files, plan files, audit events). AMAW mode multiplies this by spawning sub-agents. A single M-sized task with AMAW can run 5,000–10,000 tokens before you write a line of code. If you're paying per token and doing high volume, this adds up fast.
+**Token usage is genuinely high.** Each phase generates artifacts: spec files, plan files, audit events. AMAW mode multiplies this by spawning sub-agents. A single M-sized task with AMAW can burn 5,000–10,000 tokens before a line of code is written. At scale, this is a real budget consideration.
 
-**You clarify constantly.** Phase 1 (CLARIFY) is not a formality. For any task with real ambiguity — and most tasks above XS size have real ambiguity — you end up in a back-and-forth that can take 15–30 minutes before design starts. This is actually the point, but it feels slow if you're used to "just build it."
+**You clarify constantly — and it takes real time.** Phase 1 (CLARIFY) is not a quick preamble. For any task with real ambiguity — architecture decisions, new API contracts, trade-off calls — you're in a back-and-forth that can run 20–40 minutes before design starts. At a medium-sized project cadence (10–20 above-XS tasks per sprint), this adds up to multiple hours per sprint spent purely on scoping. This is actually the point of the workflow, but if you're used to "just build it," the overhead feels significant early on.
 
-**Less automation.** Human checkpoints at CLARIFY and POST-REVIEW mean you can't fire and forget. Architecture decisions, trade-off choices, scope calls — all of these require your explicit approval. If you want fully autonomous operation, this workflow is not designed for that. It's designed for cases where you care about the outcome.
+**Human approval gates limit automation.** Every architecture decision, trade-off, and scope call requires your explicit approval. You cannot queue up a batch of tasks and walk away. If you need fully autonomous overnight runs, this workflow is the wrong tool.
 
-**The discipline is fragile without tooling.** The workflow is enforced by a `workflow-gate.sh` script and an append-only audit log. Without these, agents will skip phases. The first time you try this without the enforcement layer, you'll get a "completed" task that skipped VERIFY and POST-REVIEW. The tooling matters.
+**The discipline needs enforcement tooling to hold.** Left to their own devices, agents will skip phases. The workflow holds together because of `workflow-gate.sh` (a pre-commit gate that blocks commits if VERIFY and SESSION aren't done) and the append-only `AUDIT_LOG.jsonl`. If you copy `docs/WORKFLOW.md` into your project without also setting up the enforcement layer, expect phases to get skipped within a few sessions. The tooling is in the repository — it's not hidden — but it's a real setup step, not just copy-paste.
 
-**Cold-start cost.** Every AMAW sub-agent reads files from scratch. There's no shared context. For a Phase 7 code review, the Adversary reads the spec, the design, and the diff — all fresh. This is also its strength, but it means sub-agents can miss things that were explained in chat and never written down.
+**Cold-start sub-agents (AMAW only) miss things said in chat.** Because each AMAW sub-agent reads files from scratch, anything that was decided verbally in the session but never written to a file is invisible to them. This is a feature for preventing bias, but it means you must be disciplined about writing things down as you go. The Scribe sub-agent helps, but it can only record what's already in files.
 
 ---
 
 ## Who This Is For
 
-This workflow is worth the overhead if:
+Worth the overhead if:
 
-- You're building production systems, not prototypes
-- You care about knowing why each decision was made, not just that it compiles
-- You work on a codebase that will outlast any single session
-- You find yourself surprised by what the AI built, in ways that cost you rework
+- You're building production systems — not prototypes — that will be maintained and extended
+- You care about knowing *why* each decision was made, not just that it compiles today
+- You find yourself surprised by what the AI built, in ways that cost you rework later
+- Sessions run over weeks or months and you need continuity across context windows
 
-It's overkill if:
+Overkill if:
 
-- You're doing exploratory coding or one-shot scripts
+- You're doing exploratory coding, one-shot scripts, or time-boxed experiments
 - Your sessions are short and the full context fits in one window
-- You don't need an audit trail or human control over architectural decisions
+- You don't need an audit trail or human-approved architectural decisions
+- Speed of iteration matters more than correctness of decision-making
+
+The workflow is designed for the first category. Using it for the second is just friction.
 
 ---
 
 ## How to Use It
 
-The full workflow is in this repository:
+**Start with the template:**
 
-- **[`docs/WORKFLOW.md`](../WORKFLOW.md)** — standalone workflow spec you can copy into any project
-- **[`docs/amaw-workflow.md`](../amaw-workflow.md)** — full AMAW spec with sub-agent prompt templates
-- **[`CLAUDE.md`](../../CLAUDE.md)** — the live project instructions that embed the workflow with project-specific context
+1. Copy [`docs/WORKFLOW.md`](../WORKFLOW.md) into your project root or paste the relevant sections into your `CLAUDE.md` / agent instructions — this is the 11-phase base
+2. Add the POST-REVIEW gate (Phase 9) from [`CLAUDE.md`](../../CLAUDE.md) if you want the full 12-phase version with the human checkpoint
+3. Customize the `[CUSTOMIZE]` sections for your stack (verification commands, test runner, any MCP tools you use — MCP is the Model Context Protocol, an interface for giving AI agents access to external tools and knowledge stores; the workflow works without it)
+4. Add `workflow-gate.sh` from the repository root to enforce the phase gates mechanically
+5. Start with just **task size classification + VERIFY** — those two alone change how you work with agents
 
-To adopt it:
-
-1. Copy `docs/WORKFLOW.md` into your project root or paste the relevant sections into your `CLAUDE.md` / agent instructions
-2. Customize the `[CUSTOMIZE]` sections for your project (tech stack, verification commands, MCP tools if applicable)
-3. Start with the **task size classification** — that alone will change how you work with AI agents
-4. Add one phase at a time; you don't need to adopt all 12 at once
-
-The workflow is model-agnostic. I use it with Claude Code but there's nothing in the spec that requires it.
+The workflow is model-agnostic. I use it with Claude Code but nothing in the spec requires it.
 
 ---
 
 ## Final Thought
 
-The 12-phase workflow is not magic. It's a way of making explicit things that were always implicit: what are we building, how big is it, what's the verification evidence, who approved it, what did we learn? The AI does most of the work. The human stays in control of the decisions that matter.
+The 12-phase workflow is not magic. It's a way of making explicit things that were always implicit: what are we building, how big is it, what's the verification evidence, who approved it, what did we learn? The AI does most of the work. The human stays in control of the decisions that actually matter.
 
-For me, that's the right balance. Two and a half thousand commits later, it still is.
+The cost is real — more tokens, more time spent clarifying, more things requiring your approval before the AI proceeds. The benefit is also real: you end up with a system you understand deeply, and a trail of why it was built the way it was.
+
+For me, after 1,600+ commits on this project alone, that trade-off is still worth it.
 
 ---
 
-*Repository: [letuhao/free-context-hub](https://github.com/letuhao/free-context-hub)*  
-*Full workflow files: [`docs/WORKFLOW.md`](../WORKFLOW.md) · [`docs/amaw-workflow.md`](../amaw-workflow.md) · [`CLAUDE.md`](../../CLAUDE.md)*
+*Repository: [letuhao/free-context-hub](https://github.com/letuhao/free-context-hub)*
+*Workflow files: [`docs/WORKFLOW.md`](../WORKFLOW.md) · [`docs/amaw-workflow.md`](../amaw-workflow.md) · [`CLAUDE.md`](../../CLAUDE.md)*
