@@ -1,37 +1,73 @@
-You are revising a draft answer using verification results. The draft may
-contain claims that are not actually supported by the contexts. The
-verification answers tell you which claims are supported and which are not.
+You are producing the FINAL revised answer using the draft + verification
+results. The verification step labeled each claim as SUPPORTED or
+NOT_SUPPORTED based on the contexts.
 
 RULES FOR THE REVISED ANSWER:
 
-  1. CLOSED-BOOK: Use ONLY the contexts. Do NOT use training knowledge.
-  2. DROP UNSUPPORTED CLAIMS: If a verification answer says the claim is
-     not supported (or only partially supported), remove or correct that
-     claim in the revised answer.
-  3. KEEP SUPPORTED CLAIMS: Retain claims that the verifications confirmed
-     as supported by the contexts.
-  4. CITE EVERY CLAIM: Every substantive claim in the revised answer must
-     end with a bracketed citation like [1] referring to the context
-     number(s) that support it.
-  5. ABSTAIN IF NOTHING REMAINS: If after dropping unsupported claims the
-     answer has no substantive content left, your ENTIRE revised answer
-     must be exactly:
+  1. CLOSED-BOOK: Use ONLY the contexts. No training knowledge.
+  2. KEEP SUPPORTED CLAIMS verbatim or paraphrased.
+  3. DROP NOT_SUPPORTED CLAIMS entirely — do NOT try to defend them.
+  4. CITE EVERY CLAIM with [N] referring to context numbers.
+  5. ABSTAIN: If after dropping NOT_SUPPORTED claims the answer has no
+     substantive content left, output exactly:
          Not in context.
-  6. CONCISE: 2-4 sentences. Do not pad. Do not narrate the revision.
+  6. CONCISE: 2-4 sentences. No padding. No narrating the revision.
+  7. NO META-COMMENTARY: never write things like "Draft Answer: ...",
+     "Verification Results: ...", or "After revision: ...". Output ONLY
+     the revised answer text.
+
+────────────────────────────────────────────────────────────────────────
+EXAMPLE 1 — drop one fabricated claim
+────────────────────────────────────────────────────────────────────────
+
+DRAFT ANSWER:
+  The max retry count is 3 [1], with a base delay of 100ms [1]. Industry
+  standard is exponential backoff with jitter [1].
+
+VERIFICATION RESULTS:
+  Q1: Is the claim "the maximum retry count is 3" supported by the contexts?
+  A1: SUPPORTED: Context [1] states "Max retries = 3".
+  Q2: Is the claim "the base delay is 100ms" supported by the contexts?
+  A2: NOT_SUPPORTED: The contexts do not mention any base delay value.
+  Q3: Is the claim "exponential backoff with jitter is the retry strategy" supported by the contexts?
+  A3: SUPPORTED: Context [1] states "exponential backoff with jitter".
+
+REVISED ANSWER:
+  The max retry count is 3 [1] and the retry strategy is exponential
+  backoff with jitter [1].
+
+────────────────────────────────────────────────────────────────────────
+EXAMPLE 2 — every claim NOT_SUPPORTED → abstain
+────────────────────────────────────────────────────────────────────────
+
+DRAFT ANSWER:
+  The system uses Kafka for messaging [1] and Cassandra for storage [1].
+
+VERIFICATION RESULTS:
+  Q1: Is the claim "the system uses Kafka for messaging" supported by the contexts?
+  A1: NOT_SUPPORTED: The contexts do not mention Kafka.
+  Q2: Is the claim "the system uses Cassandra for storage" supported by the contexts?
+  A2: NOT_SUPPORTED: The contexts do not mention Cassandra.
+
+REVISED ANSWER:
+  Not in context.
+
+────────────────────────────────────────────────────────────────────────
+NOW REVISE FOR THIS DRAFT
+────────────────────────────────────────────────────────────────────────
 
 ORIGINAL QUESTION:
 {question}
 
-DRAFT ANSWER (may have unsupported claims):
+DRAFT ANSWER:
 {draft_answer}
 
-VERIFICATION RESULTS (audit of the draft against contexts):
+VERIFICATION RESULTS:
 {verifications_block}
 
 CONTEXTS:
 {numbered_contexts}
 
-Write ONLY the revised answer. No prefix, no commentary, no markdown
-headers — just the answer text.
+Output ONLY the revised answer text. No prefix, no commentary.
 
 REVISED ANSWER:

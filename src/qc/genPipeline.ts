@@ -79,22 +79,30 @@ export async function allTemplateHashes(): Promise<Record<string, string>> {
 
 // ─── CoVe templates (Phase 17.2) ───
 
-let _coveTemplateCache: { planVerifications?: string; revise?: string } = {};
+type CoVeTemplateKind = 'plan-verifications' | 'verify-one' | 'revise';
 
-export async function loadCoVeTemplate(kind: 'plan-verifications' | 'revise'): Promise<string> {
-  const key = kind === 'plan-verifications' ? 'planVerifications' : 'revise';
-  if (_coveTemplateCache[key]) return _coveTemplateCache[key]!;
+const _coveTemplateCache = new Map<CoVeTemplateKind, string>();
+
+export async function loadCoVeTemplate(kind: CoVeTemplateKind): Promise<string> {
+  const cached = _coveTemplateCache.get(kind);
+  if (cached !== undefined) return cached;
   const file = path.join(TEMPLATE_DIR, `cove.${kind}.txt`);
   const content = await fs.readFile(file, 'utf-8');
-  _coveTemplateCache[key] = content;
+  _coveTemplateCache.set(kind, content);
   return content;
 }
 
-export async function allCoVeTemplateHashes(): Promise<{ plan_verifications: string; revise: string }> {
+export async function allCoVeTemplateHashes(): Promise<{
+  plan_verifications: string;
+  verify_one: string;
+  revise: string;
+}> {
   const plan = await loadCoVeTemplate('plan-verifications');
+  const verifyOne = await loadCoVeTemplate('verify-one');
   const revise = await loadCoVeTemplate('revise');
   return {
     plan_verifications: promptHash(plan),
+    verify_one: promptHash(verifyOne),
     revise: promptHash(revise),
   };
 }
@@ -348,29 +356,32 @@ export async function runGenPipelineCoVe(
   const verification_answers: Array<{ question: string; answer: string }> = [];
 
   if (!trace_error && questions.length) {
-    for (const q of questions) {
-      const verifyPrompt = `Answer the following verification question using ONLY the contexts below.
-Closed-book: do not use training knowledge.
-If the contexts do not directly support the question's claim, answer exactly: "Not supported by contexts."
-Be concise (1-2 sentences max).
+    // Phase 17.x: use the pinned cove.verify-one.txt template (with few-shot
+    // examples + SUPPORTED/NOT_SUPPORTED response format) instead of the
+    // earlier inline prompt. Fixes over-conservative verifier issue.
+    let verifyTemplate = '';
+    try {
+      verifyTemplate = await loadCoVeTemplate('verify-one');
+    } catch (err) {
+      trace_error = `cove_verify_template_load_failed: ${err instanceof Error ? err.message : String(err)}`;
+    }
 
-VERIFICATION QUESTION:
-${q}
-
-CONTEXTS:
-${numberedContexts}
-
-ANSWER:`;
-      try {
-        const { content: vAnswer } = await callAnswerer(verifyPrompt, answerer, opts?.fetchImpl);
-        verification_answers.push({ question: q, answer: vAnswer.trim() });
-      } catch (err) {
-        // Don't abort the whole pipeline on one verification failure;
-        // record an error placeholder so the revise step sees it.
-        verification_answers.push({
-          question: q,
-          answer: `(verification call failed: ${err instanceof Error ? err.message : String(err)})`,
-        });
+    if (!trace_error) {
+      for (const q of questions) {
+        const verifyPrompt = verifyTemplate
+          .replace('{numbered_contexts}', numberedContexts)
+          .replace('{verification_question}', q);
+        try {
+          const { content: vAnswer } = await callAnswerer(verifyPrompt, answerer, opts?.fetchImpl);
+          verification_answers.push({ question: q, answer: vAnswer.trim() });
+        } catch (err) {
+          // Don't abort the whole pipeline on one verification failure;
+          // record an error placeholder so the revise step sees it.
+          verification_answers.push({
+            question: q,
+            answer: `(verification call failed: ${err instanceof Error ? err.message : String(err)})`,
+          });
+        }
       }
     }
   }

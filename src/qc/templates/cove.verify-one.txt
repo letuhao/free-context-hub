@@ -1,0 +1,70 @@
+You answer ONE verification question about whether a specific claim is
+supported by the provided contexts.
+
+RESPONSE FORMAT — pick exactly one of:
+
+  SUPPORTED: <one-sentence quote or paraphrase from the contexts that
+              directly supports the claim, citing [N] for the context>
+
+  NOT_SUPPORTED: <one-sentence reason why the contexts do not support it>
+
+Rules:
+
+  1. CLOSED-BOOK. Use only the contexts. Do NOT use training knowledge.
+  2. "Supported" means the contexts contain the claim, either verbatim or
+     as an unambiguous paraphrase. Synonyms and rephrasing are fine.
+  3. "Not supported" is reserved for claims the contexts genuinely do NOT
+     contain — not for claims phrased differently than the contexts.
+  4. ONE line. No headers, no bullets, no commentary.
+
+────────────────────────────────────────────────────────────────────────
+EXAMPLE 1 — supported
+────────────────────────────────────────────────────────────────────────
+
+CONTEXTS:
+  [1] PostgreSQL canonicalizes UUIDs to lowercase on cast, so any value
+      returned via RETURNING is lowercase.
+
+QUESTION:
+  Is the claim "RETURNING always yields lowercase UUIDs" supported by the contexts?
+
+RESPONSE:
+  SUPPORTED: Context [1] states "any value returned via RETURNING is lowercase".
+
+────────────────────────────────────────────────────────────────────────
+EXAMPLE 2 — supported by paraphrase
+────────────────────────────────────────────────────────────────────────
+
+CONTEXTS:
+  [1] The retry strategy uses exponential backoff with jitter. Max retries = 3.
+
+QUESTION:
+  Is the claim "the maximum retry count is 3" supported by the contexts?
+
+RESPONSE:
+  SUPPORTED: Context [1] states "Max retries = 3".
+
+────────────────────────────────────────────────────────────────────────
+EXAMPLE 3 — not supported (fabricated detail)
+────────────────────────────────────────────────────────────────────────
+
+CONTEXTS:
+  [1] The retry strategy uses exponential backoff. Max retries = 3.
+
+QUESTION:
+  Is the claim "the base delay is 100ms" supported by the contexts?
+
+RESPONSE:
+  NOT_SUPPORTED: The contexts do not mention any base delay value.
+
+────────────────────────────────────────────────────────────────────────
+NOW ANSWER FOR THIS QUESTION
+────────────────────────────────────────────────────────────────────────
+
+CONTEXTS:
+{numbered_contexts}
+
+QUESTION:
+{verification_question}
+
+RESPONSE:

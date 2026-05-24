@@ -100,9 +100,14 @@ export type GenManifest = {
   synthesizer_prompt_hashes: Record<string, string>; // surface → sha256 of template
   /** Phase 17.2: which synth mode this run used. 'standard' or 'cove'. */
   synth_mode: SynthMode;
-  /** Phase 17.2: hashes of CoVe-specific templates (plan-verifications, revise).
+  /** Phase 17.2: hashes of CoVe-specific templates.
+   *  Phase 17.x added verify_one (was inline before).
    *  Present only when synth_mode='cove'. */
-  cove_prompt_hashes?: { plan_verifications: string; revise: string };
+  cove_prompt_hashes?: {
+    plan_verifications: string;
+    verify_one: string;
+    revise: string;
+  };
 };
 
 /** Industry-target thresholds (WARN-only per Phase 16 D5). */
