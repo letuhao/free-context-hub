@@ -262,12 +262,14 @@ The workflow is designed for the first category. Using it for the second is just
 
 ## How to Use It
 
+All workflow files live in the [`agentic-workflow/`](https://github.com/letuhao/free-context-hub/tree/main/agentic-workflow) folder of the free-context-hub repository.
+
 **Start with the template:**
 
-1. Copy [`docs/WORKFLOW.md`](../WORKFLOW.md) into your project root or paste the relevant sections into your `CLAUDE.md` / agent instructions — this is the full 12-phase spec
+1. Copy `WORKFLOW.md` into your project root or paste the relevant sections into your `CLAUDE.md` / agent instructions — this is the full 12-phase spec
 2. Customize the `[CUSTOMIZE]` sections for your stack (verification commands, test runner, any MCP tools you use — MCP is the Model Context Protocol, an interface for giving AI agents access to external tools and knowledge stores; the workflow works without it)
-3. Add `workflow-gate.sh` from the repository root to enforce the phase gates mechanically — without this, agents will skip phases
-4. For high-stakes tasks, see [`docs/amaw-workflow.md`](../amaw-workflow.md) for the AMAW multi-agent extension
+3. Add `workflow-gate.sh` from the same folder to enforce the phase gates mechanically — without this, agents will skip phases
+4. For high-stakes tasks, see `amaw-workflow.md` for the AMAW multi-agent extension
 5. Start with just **task size classification + VERIFY** — those two alone change how you work with agents
 
 The workflow is model-agnostic. I use it with Claude Code but nothing in the spec requires it.
