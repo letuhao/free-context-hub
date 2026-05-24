@@ -24,6 +24,7 @@ import _compat  # noqa: F401  (imported for side effect: installs sys.modules st
 
 import asyncio
 import logging
+import random
 import time
 from contextlib import asynccontextmanager
 from typing import Any, Optional
@@ -106,6 +107,68 @@ STANDARD_METRICS = {
     "context_precision",
     "context_recall",
 }
+
+
+# Phase 17.x: LM Studio ECONNRESET resilience. Mirror of TS llmResilience.
+# Matches transient error phrases / codes the LM Studio bug tracker documents.
+_TRANSIENT_PHRASES = (
+    "socket hang up",
+    "econnreset",
+    "fetch failed",
+    "connection error",
+    "remote end closed",
+    "connect timeout",
+    "headers timeout",
+    "the operation was aborted",
+    "broken pipe",
+)
+
+
+def _is_transient_llm_error(err: BaseException) -> bool:
+    msg = str(err).lower()
+    if any(p in msg for p in _TRANSIENT_PHRASES):
+        return True
+    # openai / httpx connection errors
+    name = type(err).__name__
+    if name in {"APIConnectionError", "APITimeoutError", "InternalServerError", "ConnectError"}:
+        return True
+    if name.startswith("ConnectionError"):
+        return True
+    return False
+
+
+async def _retry_on_transient(
+    fn,
+    *,
+    max_attempts: int = 3,
+    base_delay_ms: int = 500,
+    max_delay_ms: int = 8_000,
+):
+    """Async wrapper that retries `fn()` on transient LM-Studio-style errors.
+    Non-transient errors propagate immediately."""
+    last_err = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return await fn()
+        except BaseException as err:  # noqa: BLE001
+            last_err = err
+            if not _is_transient_llm_error(err):
+                raise
+            if attempt >= max_attempts:
+                break
+            delay = min(max_delay_ms, base_delay_ms * (2 ** (attempt - 1))) / 1000.0
+            # Small jitter to avoid synchronized retries from concurrent metrics
+            delay += random.uniform(0, 0.2)
+            logger.warning(
+                "transient LLM error on attempt %d (%s): %s — retrying in %.1fs",
+                attempt,
+                type(err).__name__,
+                str(err)[:120],
+                delay,
+            )
+            await asyncio.sleep(delay)
+    assert last_err is not None
+    raise last_err
 
 # Phase 17 Sprint 17.1 (C3): self-eval is callable on any category. It's a
 # second judge of groundedness — cheap (1 LLM call) vs ragas faithfulness
@@ -439,19 +502,27 @@ async def _call_one_metric(
 
     Returns (score, reason, error). At most one of (score, error) is non-None.
     """
+    # Phase 17.x: wrap each metric call with _retry_on_transient to absorb LM
+    # Studio's ECONNRESET / "fetch failed" / 6-11% baseline failure rate.
+    # Non-transient errors (e.g. ground_truth missing, schema validation)
+    # propagate immediately.
     try:
         if metric_name == "faithfulness":
             metric = state.metrics["faithfulness"]
-            result = await metric.ascore(
-                user_input=req.question,
-                response=req.answer,
-                retrieved_contexts=contexts_text,
+            result = await _retry_on_transient(
+                lambda: metric.ascore(
+                    user_input=req.question,
+                    response=req.answer,
+                    retrieved_contexts=contexts_text,
+                )
             )
         elif metric_name == "answer_relevancy":
             metric = state.metrics["answer_relevancy"]
-            result = await metric.ascore(
-                user_input=req.question,
-                response=req.answer,
+            result = await _retry_on_transient(
+                lambda: metric.ascore(
+                    user_input=req.question,
+                    response=req.answer,
+                )
             )
         elif metric_name == "context_precision":
             if req.ground_truth is None:
@@ -461,10 +532,12 @@ async def _call_one_metric(
                     detail="context_precision requires ground_truth",
                 )
             metric = state.metrics["context_precision"]
-            result = await metric.ascore(
-                user_input=req.question,
-                reference=req.ground_truth,
-                retrieved_contexts=contexts_text,
+            result = await _retry_on_transient(
+                lambda: metric.ascore(
+                    user_input=req.question,
+                    reference=req.ground_truth,
+                    retrieved_contexts=contexts_text,
+                )
             )
         elif metric_name == "context_recall":
             if req.ground_truth is None:
@@ -474,10 +547,12 @@ async def _call_one_metric(
                     detail="context_recall requires ground_truth",
                 )
             metric = state.metrics["context_recall"]
-            result = await metric.ascore(
-                user_input=req.question,
-                retrieved_contexts=contexts_text,
-                reference=req.ground_truth,
+            result = await _retry_on_transient(
+                lambda: metric.ascore(
+                    user_input=req.question,
+                    retrieved_contexts=contexts_text,
+                    reference=req.ground_truth,
+                )
             )
         elif metric_name == "refusal_correctness":
             if req.ground_truth is None:
@@ -486,21 +561,25 @@ async def _call_one_metric(
                     error="missing_ground_truth",
                     detail="refusal_correctness requires ground_truth (NO_ANSWER text)",
                 )
-            score, reason = await _refusal_correctness(
-                llm=state.llm,
-                question=req.question,
-                answer=req.answer,
-                contexts=contexts_text,
-                ground_truth=req.ground_truth,
+            score, reason = await _retry_on_transient(
+                lambda: _refusal_correctness(
+                    llm=state.llm,
+                    question=req.question,
+                    answer=req.answer,
+                    contexts=contexts_text,
+                    ground_truth=req.ground_truth,
+                )
             )
             return score, reason, None
         elif metric_name == "groundedness_self_eval":
             # Phase 17.1 C3: callable on any category; no ground_truth needed.
-            score, reason = await _groundedness_self_eval(
-                llm=state.llm,
-                question=req.question,
-                answer=req.answer,
-                contexts=contexts_text,
+            score, reason = await _retry_on_transient(
+                lambda: _groundedness_self_eval(
+                    llm=state.llm,
+                    question=req.question,
+                    answer=req.answer,
+                    contexts=contexts_text,
+                )
             )
             return score, reason, None
         else:

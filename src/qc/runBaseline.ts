@@ -125,6 +125,8 @@ function parseArgs(argv: string[]) {
   // Phase 17.2: synthesizer mode. 'standard' is the Phase 16.3+17.1 single-shot
   // synth; 'cove' is Chain-of-Verification 4-step. CoVe is ~3-4× LLM cost.
   const synthMode = (args.get('synth-mode') ?? 'standard') as SynthMode;
+  // Phase 17.x: skip preflight if explicitly requested (e.g. dev iteration).
+  const skipPreflight = args.get('no-preflight') === 'true' || args.get('no-preflight') === '1';
 
   return {
     tag,
@@ -138,6 +140,7 @@ function parseArgs(argv: string[]) {
     topKContexts,
     maxRows,
     synthMode,
+    skipPreflight,
   };
 }
 
@@ -929,6 +932,81 @@ async function runAllSurfaces(
   return { surfaces, primaryProjectId };
 }
 
+// Phase 17.x: preflight verifies LM Studio has the expected models loaded
+// BEFORE the baseline starts. Refusing to start beats producing a baseline
+// with 80% errors due to forced unloads.
+//
+// Returns null on success; non-null = abort with message.
+async function preflightGenEval(opts: {
+  judgeUrl: string;
+  answererModel: string;
+  expectedEmbeddings?: string;
+  lmStudioUrl?: string;
+  skip?: boolean;
+}): Promise<string | null> {
+  if (opts.skip) return null;
+  const lmStudio = opts.lmStudioUrl ?? 'http://localhost:1234';
+  const expectedEmbed = opts.expectedEmbeddings ?? 'text-embedding-bge-m3';
+
+  // Probe LM Studio loaded models
+  let loaded: Array<{ id: string; type?: string; state?: string }> = [];
+  try {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 5_000);
+    try {
+      const res = await fetch(`${lmStudio}/api/v0/models`, { signal: ctl.signal });
+      if (!res.ok) return `LM Studio /api/v0/models returned HTTP ${res.status}`;
+      const d = (await res.json()) as { data?: Array<{ id: string; type?: string; state?: string }> };
+      loaded = (d.data ?? []).filter((m) => m.state === 'loaded');
+    } finally {
+      clearTimeout(t);
+    }
+  } catch (err) {
+    return `LM Studio unreachable at ${lmStudio}: ${(err as Error).message}`;
+  }
+
+  if (!loaded.find((m) => m.id === opts.answererModel)) {
+    return (
+      `expected answerer model "${opts.answererModel}" not loaded in LM Studio.\n` +
+      `   loaded chat models: [${loaded.filter((m) => m.type === 'llm' || m.type === 'vlm').map((m) => m.id).join(', ') || 'none'}]\n` +
+      `   load it via LM Studio Developer page or 'lms load', then retry.`
+    );
+  }
+  if (!loaded.find((m) => m.id === expectedEmbed)) {
+    return (
+      `expected embeddings model "${expectedEmbed}" not loaded in LM Studio.\n` +
+      `   loaded embeddings: [${loaded.filter((m) => m.type === 'embeddings').map((m) => m.id).join(', ') || 'none'}]`
+    );
+  }
+
+  // Probe judge sidecar
+  try {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 5_000);
+    try {
+      const res = await fetch(`${opts.judgeUrl.replace(/\/$/, '')}/health`, { signal: ctl.signal });
+      if (!res.ok) return `ragas-judge sidecar /health returned HTTP ${res.status}`;
+      const d = (await res.json()) as { status?: string; judge_model?: string };
+      if (d.status !== 'ok') return `ragas-judge sidecar status='${d.status}', expected 'ok'`;
+      // If the sidecar's judge_model doesn't match the answerer, every judge
+      // call would trigger an LM Studio model swap — strictly refuse.
+      if (d.judge_model && d.judge_model !== opts.answererModel) {
+        return (
+          `sidecar judge_model='${d.judge_model}' but baseline expects '${opts.answererModel}'.\n` +
+          `   mismatch causes LM Studio to swap models on every judge call.\n` +
+          `   restart sidecar with: JUDGE_AGENT_MODEL=${opts.answererModel} docker compose --profile measurement up -d ragas-judge --force-recreate`
+        );
+      }
+    } finally {
+      clearTimeout(t);
+    }
+  } catch (err) {
+    return `ragas-judge sidecar unreachable at ${opts.judgeUrl}: ${(err as Error).message}`;
+  }
+
+  return null;
+}
+
 // Sprint 16.3: probe judge sidecar /health for manifest fields.
 async function probeJudgeManifest(judgeUrl: string): Promise<{
   ragas_version?: string;
@@ -965,6 +1043,7 @@ async function main() {
     topKContexts,
     maxRows,
     synthMode,
+    skipPreflight,
   } = parseArgs(process.argv.slice(2));
   const today = new Date().toISOString().slice(0, 10);
   const runStart = new Date();
@@ -1026,6 +1105,58 @@ async function main() {
     console.log(
       `[baseline] gen-eval enabled: answerer=${answererModel} @ ${answererBaseUrl}, judge=${probe.judge_model ?? 'unknown'} @ ${judgeUrl}, top-K=${topKContexts}, synth-mode=${synthMode}`,
     );
+
+    // Phase 17.x: preflight check — refuse to start if LM Studio doesn't have
+    // expected models loaded or sidecar judge model doesn't match. Prevents
+    // wasted multi-hour runs on a broken stack state.
+    const preflightFailure = await preflightGenEval({
+      judgeUrl,
+      answererModel,
+      expectedEmbeddings: process.env.EMBEDDINGS_MODEL ?? 'text-embedding-bge-m3',
+      lmStudioUrl: 'http://localhost:1234',
+      skip: skipPreflight,
+    });
+    if (preflightFailure) {
+      console.error('');
+      console.error('[baseline] PREFLIGHT FAILED:');
+      console.error('  ' + preflightFailure.split('\n').join('\n  '));
+      console.error('');
+      console.error('[baseline] To bypass (NOT recommended for measurements): add --no-preflight');
+      process.exit(2);
+    }
+    if (!skipPreflight) {
+      console.log('[baseline] preflight OK — LM Studio + judge sidecar pinned to expected models');
+    }
+
+    // Phase 17.x: pre-warm the sidecar by sending a trivial /score request.
+    // First-call after sidecar startup lazily initializes the ragas LLM
+    // (instructor.from_openai + embeddings client). That can take 20-40s
+    // and trip our retry-on-transient window. Eating the warmup cost
+    // ONCE here keeps row-level latencies predictable.
+    if (!skipPreflight) {
+      console.log('[baseline] warming up judge sidecar...');
+      const t0 = Date.now();
+      try {
+        await scoreOnce(
+          {
+            request_id: 'warmup',
+            question: 'What is 2+2?',
+            answer: 'Four [1].',
+            contexts: [{ id: 'w', text: '2+2 equals 4.' }],
+            ground_truth: '4.',
+            answer_category: 'standard',
+            metrics: ['groundedness_self_eval'],
+            options: { include_reasons: false },
+          },
+          { baseUrl: judgeUrl, timeoutMs: 180_000 },
+        );
+        console.log(`[baseline] sidecar warm (${Date.now() - t0}ms)`);
+      } catch (err) {
+        console.warn(
+          `[baseline] warmup failed (${Date.now() - t0}ms): ${(err as Error).message}. Continuing — first row may show extra latency.`,
+        );
+      }
+    }
   }
 
   const client = new McpClient({ name: 'rag-baseline-runner', version: '1.0.0' }, { capabilities: {} });

@@ -537,6 +537,44 @@ For any sprint that introduces an **authorization primitive**, **tenant-isolatio
 Enforced via guardrail (`5c0b7b25`) and reusable lesson `5287a774`. See
 `docs/deferred-029-closeout.md` § "Architectural lessons" for the four-pass pattern.
 
+## Baseline-stack invariant (Phase 17.x)
+
+**Before running `npm run qc:baseline:gen`, the LM Studio + sidecar stack
+must be in a controlled state.** Otherwise LM Studio's auto-unload will swap
+models mid-run, producing 6-11% baseline ECONNRESET / Channel Error failures
+(per [lmstudio-bug-tracker#945](https://github.com/lmstudio-ai/lmstudio-bug-tracker/issues/945))
+and contaminating measurement.
+
+**The invariant:**
+
+1. LM Studio has **exactly two models loaded** simultaneously:
+   - Chat model (e.g. `mistralai/mistral-nemo-instruct-2407`) — answerer, judge, reranker all share it
+   - Embeddings model (`text-embedding-bge-m3`)
+2. **All chat callers** (answerer, judge sidecar, MCP reranker, distillation worker) point at the SAME chat model so no swap is ever triggered.
+3. The ragas-judge sidecar's `JUDGE_AGENT_MODEL` env matches what the runner sets `ANSWERER_AGENT_MODEL` to.
+4. `DISTILLATION_MODEL` is unset/empty during baseline (worker no-ops; prevents background swap).
+
+**Enforcement:**
+
+- `.env.baseline` — canonical pins for every chat/judge/rerank/distillation env var.
+- `scripts/start-baseline-stack.sh` — restarts MCP + worker + ragas-judge with `.env.baseline` overrides, then runs preflight.
+- `scripts/preflight-baseline.mjs` — standalone preflight check (also invoked from inside `runBaseline.ts`); refuses to proceed if invariant violated.
+- `runBaseline.ts` has a built-in preflight call. Use `--no-preflight` only for dev iteration, NEVER for committed measurements.
+
+**Recommended invocation:**
+
+```bash
+# 1. Load the two expected models in LM Studio (Developer page or `lms load`)
+# 2. Start the controlled stack:
+bash scripts/start-baseline-stack.sh
+# 3. Run the baseline:
+ANSWERER_AGENT_MODEL=mistralai/mistral-nemo-instruct-2407 \
+RAGAS_JUDGE_URL=http://localhost:3005 \
+  npx tsx src/qc/runBaseline.ts --tag <date>-<descriptor> --gen-eval on
+```
+
+**Documented in:** `docs/qc/2026-05-24-phase-17-answerer-model-selection.md` (model rationale) + the smoke baselines under `docs/qc/baselines/`.
+
 ## Phase 7 — Complete
 
 **Status:** All 7 sprints complete. 20 pages, 30+ REST endpoints, 38 migrations.

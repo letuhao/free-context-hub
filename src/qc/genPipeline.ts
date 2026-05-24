@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import type { Surface } from './goldenTypes.js';
 import type { SurfaceItem } from './surfaces.js';
 import { promptHash, type GenContextUsed, type GenResult, type CoVeTrace } from './genEvalTypes.js';
+import { retryOnTransient } from './llmResilience.js';
 
 // Resolve template directory relative to THIS file so the pipeline works
 // regardless of CWD (tsx run from project root, vitest from anywhere, etc.).
@@ -157,9 +158,6 @@ async function callAnswerer(
   const baseUrl = cfg.baseUrl.replace(/\/$/, '');
   const url = baseUrl.endsWith('/v1') ? `${baseUrl}/chat/completions` : `${baseUrl}/v1/chat/completions`;
 
-  const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), cfg.timeoutMs);
-
   const body = JSON.stringify({
     model: cfg.model,
     messages: [{ role: 'user', content: prompt }] satisfies ChatMessage[],
@@ -173,31 +171,56 @@ async function callAnswerer(
     chat_template_kwargs: { enable_thinking: false },
   });
 
-  try {
-    const res = await fetchImpl(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey}` },
-      body,
-      signal: ctl.signal,
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '<unreadable>');
-      throw new Error(`answerer HTTP ${res.status}: ${text.slice(0, 200)}`);
-    }
-    const data = (await res.json()) as ChatCompletionResponse;
-    if (data.error) throw new Error(`answerer error: ${data.error.message ?? JSON.stringify(data.error)}`);
-    const choice = data.choices?.[0];
-    if (!choice || !choice.message) throw new Error('answerer returned no choices/message');
-    // Reasoning-model fallback: when `content` is empty but `reasoning_content`
-    // has the answer (qwen3.6 / gemma-4 reasoning / deepseek-r1 / o1 etc.),
-    // promote it. Mirrors services/ragas-judge/_compat.py shim.
-    const rawContent = (choice.message.content ?? '').trim();
-    const rawReasoning = (choice.message.reasoning_content ?? '').trim();
-    const content = rawContent || rawReasoning;
-    return { content, finish_reason: choice.finish_reason };
-  } finally {
-    clearTimeout(timer);
-  }
+  // Phase 17.x: wrap with retryOnTransient. LM Studio has a documented 6-11%
+  // baseline failure rate from socket-level termination (ECONNRESET, EPIPE,
+  // "fetch failed"). Retry up to 3x with exponential backoff handles this
+  // cleanly without polluting per-row error rates.
+  return await retryOnTransient(
+    async () => {
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), cfg.timeoutMs);
+      try {
+        const res = await fetchImpl(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey}` },
+          body,
+          signal: ctl.signal,
+        });
+        if (!res.ok) {
+          const text = await res.text().catch(() => '<unreadable>');
+          // Throw with embedded status so retryOnTransient can classify (5xx → retry).
+          const err = new Error(`answerer HTTP ${res.status}: ${text.slice(0, 200)}`);
+          (err as { status?: number }).status = res.status;
+          throw err;
+        }
+        const data = (await res.json()) as ChatCompletionResponse;
+        if (data.error)
+          throw new Error(`answerer error: ${data.error.message ?? JSON.stringify(data.error)}`);
+        const choice = data.choices?.[0];
+        if (!choice || !choice.message)
+          throw new Error('answerer returned no choices/message');
+        // Reasoning-model fallback: when `content` is empty but `reasoning_content`
+        // has the answer (qwen3.6 / gemma-4 reasoning / deepseek-r1 / o1 etc.),
+        // promote it. Mirrors services/ragas-judge/_compat.py shim.
+        const rawContent = (choice.message.content ?? '').trim();
+        const rawReasoning = (choice.message.reasoning_content ?? '').trim();
+        const content = rawContent || rawReasoning;
+        return { content, finish_reason: choice.finish_reason };
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+    {
+      maxAttempts: 3,
+      baseDelayMs: 500,
+      onRetry: (attempt, err, ms) => {
+        const msg = (err as { message?: string }).message ?? String(err);
+        console.warn(
+          `[answerer] transient error on attempt ${attempt}, retrying in ${ms}ms: ${msg.slice(0, 100)}`,
+        );
+      },
+    },
+  );
 }
 
 // ─── public pipeline ───

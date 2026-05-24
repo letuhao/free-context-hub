@@ -14,6 +14,7 @@
  */
 
 import { setTimeout as delay } from 'node:timers/promises';
+import { retryOnTransient } from './llmResilience.js';
 
 export type AnswerCategory =
   | 'standard'
@@ -154,50 +155,45 @@ export async function scoreOnce(
     }
   };
 
-  let last: { ok: boolean; status: number; text: string };
-  try {
-    last = await attempt();
-  } catch (err) {
-    // Network error / abort / DNS — retry once if enabled
-    if (retryOnce) {
-      await delay(500);
+  // Phase 17.x: wrap with retryOnTransient. The sidecar's UPSTREAM dependency
+  // (LM Studio) has the documented 6-11% ECONNRESET rate; that propagates to
+  // judge sidecar 5xx responses. retryOnTransient catches those + adds a
+  // shared circuit breaker for run-wide visibility.
+  //
+  // We keep the legacy `retryOnce` parameter for compatibility but it's now a
+  // superset — when retryOnce=false we degrade to maxAttempts=1.
+  const last = await retryOnTransient(
+    async () => {
+      let r: { ok: boolean; status: number; text: string };
       try {
-        last = await attempt();
-      } catch (err2) {
-        throw new JudgeError('judge sidecar unreachable after retry', { cause: err2 });
-      }
-    } else {
-      throw new JudgeError('judge sidecar unreachable', { cause: err });
-    }
-  }
-
-  if (!last.ok) {
-    // Retry once on 5xx (transient sidecar / dependency failures)
-    if (retryOnce && last.status >= 500) {
-      await delay(500);
-      try {
-        last = await attempt();
+        r = await attempt();
       } catch (err) {
-        throw new JudgeError(`judge sidecar 5xx then unreachable on retry`, {
-          status: last.status,
-          cause: err,
+        // Re-throw as a JudgeError so the caller can introspect status; wrap
+        // network errors with status=0 so isTransientLLMError catches them.
+        throw new JudgeError('judge sidecar unreachable', { status: 0, cause: err });
+      }
+      if (!r.ok) {
+        // Throw with status so retryOnTransient classifies 5xx as transient.
+        let detail: unknown = undefined;
+        try { detail = JSON.parse(r.text); } catch { detail = r.text; }
+        throw new JudgeError(`judge sidecar HTTP ${r.status}`, {
+          status: r.status,
+          cause: detail,
         });
       }
-    }
-  }
-
-  if (!last.ok) {
-    let detail: unknown = undefined;
-    try {
-      detail = JSON.parse(last.text);
-    } catch {
-      detail = last.text;
-    }
-    throw new JudgeError(`judge sidecar HTTP ${last.status}`, {
-      status: last.status,
-      cause: detail,
-    });
-  }
+      return r;
+    },
+    {
+      maxAttempts: retryOnce ? 3 : 1,
+      baseDelayMs: 500,
+      onRetry: (attempt, err, ms) => {
+        const msg = (err as { message?: string }).message ?? String(err);
+        console.warn(
+          `[judge] transient error on attempt ${attempt}, retrying in ${ms}ms: ${msg.slice(0, 100)}`,
+        );
+      },
+    },
+  );
 
   let parsed: JudgeResponse;
   try {

@@ -84,7 +84,7 @@ test('scoreOnce', async (t) => {
     assert.equal(r.scores.faithfulness, 0.5);
   });
 
-  await t.test('5xx then 5xx → throws JudgeError', async () => {
+  await t.test('5xx then 5xx → throws JudgeError after 3 attempts (Phase 17.x)', async () => {
     let n = 0;
     const stubFetch = async () => {
       n++;
@@ -98,7 +98,9 @@ test('scoreOnce', async (t) => {
         return true;
       },
     );
-    assert.equal(n, 2); // initial + 1 retry
+    // Phase 17.x bumped from 1 retry → 2 retries (3 attempts total) for LM
+    // Studio ECONNRESET resilience.
+    assert.equal(n, 3);
   });
 
   await t.test('network error then 200 → retries once', async () => {
