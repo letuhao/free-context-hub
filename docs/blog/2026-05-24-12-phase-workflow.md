@@ -8,7 +8,7 @@
 
 ---
 
-I've been using an iterative 12-phase workflow I refined iteratively — across [free-context-hub](https://github.com/letuhao/free-context-hub) (a self-hosted persistent memory and guardrails layer for AI agents), a separate lore-weave project, and a handful of private internal systems. Across all of them, the workflow has accumulated 2,500+ commits and a trail of written specs and audit logs I can still query months after the sessions that produced them.
+I've been using an iterative 12-phase workflow I refined iteratively — across [free-context-hub](https://github.com/letuhao/free-context-hub) (a self-hosted persistent memory and guardrails layer for AI agents), [lore-weave](https://github.com/letuhao/lore-weave) (described below), and a handful of private internal systems. Across all of them, the workflow has accumulated 4,000+ commits and a trail of written specs and audit logs I can still query months after the sessions that produced them.
 
 The free-context-hub project alone covers 15 development phases: backend (MCP server, REST API), a full Next.js frontend (20+ pages), RAG pipelines with reranking benchmarks, multi-agent coordination protocols, knowledge portability, and tenant-scoped access control.
 
@@ -18,6 +18,38 @@ The files are in the repository:
 - **[`docs/WORKFLOW.md`](../WORKFLOW.md)** — standalone 12-phase template to copy into any project
 - **[`CLAUDE.md`](../../CLAUDE.md)** — the live project spec with project-specific tooling and AMAW wiring
 - **[`docs/amaw-workflow.md`](../amaw-workflow.md)** — opt-in multi-agent extension spec
+
+---
+
+## The Second Project: LoreWeave
+
+[LoreWeave](https://github.com/letuhao/lore-weave) is the project where the workflow gets the most sustained stress-testing. It's a multi-agent cloud platform for multilingual novel workflows — translation, analysis, knowledge graph construction, and AI-assisted creative writing — cloud-hosted (AWS) with Docker Compose for local development.
+
+The architecture is a microservices monorepo: 19 services across three language stacks:
+
+| Stack | Services |
+|---|---|
+| **Go / Chi** | auth, books, sharing, catalog, provider-registry, usage-billing, translation, glossary |
+| **Python / FastAPI** | chat (LiteLLM), knowledge (Postgres + Neo4j), video-gen (ComfyUI gateway) |
+| **TypeScript / NestJS** | api-gateway-bff (all external traffic), notification |
+
+Supporting that are two async workers (`worker-infra`, `worker-ai`), plus the infrastructure tier: per-service Postgres DBs, Redis Streams for job queues, MinIO for object storage.
+
+After 67 sessions and 1,497 commits since March 2026, the five core modules are closed (smoke-tested):
+
+| Module | Domain |
+|---|---|
+| M01 | Identity & Auth — JWT, refresh, multi-device sessions |
+| M02 | Books & Sharing — book lifecycle, visibility policy, public catalog |
+| M03 | Provider Registry — BYOK AI provider credentials, platform model catalog |
+| M04 | Raw Translation Pipeline — async job lifecycle, chunked chapter translation |
+| M05 | Glossary & Lore Management — multilingual lore entities, evidence tracking, RAG export |
+
+The current work (Phase 6) is the usage-billing subsystem: budget reservation before job execution, streaming billing (so a 10,000-token chat job can't blow past a daily cap), per-model `usage_logs` audit rows, and the hierarchical book extraction engine (structural decomposer → parallel map + checkpoint → hierarchical reduce + per-level summaries — the three-phase sequence that gives the platform 50MB-novel local processing capability).
+
+Planning artifacts across all modules total 137 documents. The audit log (append-only JSONL) has 140 entries from AMAW-verified tasks alone — not counting the regular per-session SESSION_PATCH entries.
+
+The project is designed as a hobby + open-source platform. No deadlines, no external audience pressure, which is why the workflow's "don't rush past quality issues" rule is actually enforceable — there's no release clock to override it.
 
 ---
 
@@ -181,7 +213,9 @@ This becomes the durable record of what was decided and why — something that d
 
 ## What I've Shipped With This
 
-On this single project — [free-context-hub](https://github.com/letuhao/free-context-hub) — I've delivered 15 development phases covering:
+### free-context-hub
+
+On [free-context-hub](https://github.com/letuhao/free-context-hub) I've delivered 15 development phases covering:
 
 - Core backend: MCP server (36 tools), REST API (70+ endpoints), background worker
 - Frontend: Next.js 16 + React 19, 20+ pages, human-in-loop review UI
@@ -190,7 +224,19 @@ On this single project — [free-context-hub](https://github.com/letuhao/free-co
 - Knowledge portability: zip+JSONL bundle format, streaming import/export, cross-instance pull with SSRF hardening
 - Tenant-scoped access control: authz model, 3-tier routing, event log, collective decisions
 
-That's 400+ commits on this project alone — part of a wider 2,500+ commit track record across three codebases — with a live audit trail I can query across sessions that ran months apart.
+### LoreWeave
+
+On lore-weave I've delivered 5 full vertical modules and am mid-way through a sixth, accumulating 1,497 commits since March 2026 across 19 microservices. The modules completed so far cover:
+
+- **Identity & Auth** — JWT issuance, refresh rotation, multi-device session management (Go/Chi + NestJS gateway)
+- **Books & Sharing** — book and chapter lifecycle, visibility policy, public catalog browse (Go/Chi, Postgres, MinIO)
+- **Provider Registry** — BYOK AI provider credential vault, platform model catalog, streaming proxy, budget pre-flight (Go/Chi + worker-ai)
+- **Raw Translation Pipeline** — async chunk-level translation job lifecycle, job queue via Redis Streams, per-chapter result storage, BYOK + platform model routing (Go/Chi + Python/FastAPI + worker-infra)
+- **Glossary & Lore Management** — multilingual entity management, chapter M:N evidence linking, wiki article generation, RAG-ready glossary export (Go/Chi, Postgres, glossary-service + knowledge-service two-layer pattern)
+
+The current Phase 6 work — usage-billing and hierarchical book extraction — is where the cross-service contract surface gets the most complex: streaming billing that can't exceed a daily cap mid-stream, usage_logs audit rows that must fire for both streamed and non-streamed paths, and a three-phase extraction engine (structural decomposer → parallel map+checkpoint → hierarchical reduce) that operates across book-service, knowledge-service, and worker-infra simultaneously.
+
+That's 400+ commits on free-context-hub and 1,497 on lore-weave — part of a wider 4,000+ commit track record — with a live audit trail I can query across sessions that ran months apart.
 
 The hardest part was Phase 10 (SESSION) — keeping the session patch updated after every sprint without skipping it. Once that became a habit, sessions started to feel continuous rather than amnesia-punctuated.
 
@@ -264,9 +310,9 @@ The 12-phase workflow is not magic. It's a way of making explicit things that we
 
 The cost is real — more tokens, more time spent clarifying, more things requiring your approval before the AI proceeds. The benefit is also real: you end up with a system you understand deeply, and a trail of why it was built the way it was.
 
-For me, after 2,500+ commits across multiple projects, that trade-off is still worth it.
+For me, after 4,000+ commits across multiple projects, that trade-off is still worth it.
 
 ---
 
-*Repository: [letuhao/free-context-hub](https://github.com/letuhao/free-context-hub)*
+*Repositories: [letuhao/free-context-hub](https://github.com/letuhao/free-context-hub) · [letuhao/lore-weave](https://github.com/letuhao/lore-weave)*
 *Workflow files: [`docs/WORKFLOW.md`](../WORKFLOW.md) · [`docs/amaw-workflow.md`](../amaw-workflow.md) · [`CLAUDE.md`](../../CLAUDE.md)*
