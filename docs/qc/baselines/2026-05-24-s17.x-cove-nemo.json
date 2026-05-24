@@ -1,0 +1,223 @@
+{
+  "schema_version": "1.1",
+  "gen_manifest": {
+    "judge_endpoint": "http://host.docker.internal:1234/v1",
+    "judge_model_id": "mistralai/mistral-nemo-instruct-2407",
+    "judge_prompts_hash": "c0165a73c10c4e04",
+    "answerer_endpoint": "http://localhost:1234/v1",
+    "answerer_model_id": "mistralai/mistral-nemo-instruct-2407",
+    "answerer_temperature": 0.2,
+    "answerer_seed": 42,
+    "answerer_max_tokens": 1024,
+    "synthesizer_prompt_hashes": {
+      "lessons": "13ac4e950489bde6",
+      "code": "3a2ea1624ae0a1fc",
+      "chunks": "a01005e0d102b2c1",
+      "global": "5ae7c8e925ad8a47"
+    },
+    "synth_mode": "cove",
+    "cove_prompt_hashes": {
+      "plan_verifications": "ed577d49415f027d",
+      "revise": "822833cc0ab973d6"
+    }
+  },
+  "tag": "s17.x-cove-nemo",
+  "run_started_at": "2026-05-24T07:08:58.433Z",
+  "run_ended_at": "2026-05-24T07:13:07.808Z",
+  "elapsed_ms": 249375,
+  "git_commit": "4826302+dirty",
+  "git_branch": "phase-16-sprint-16.1-gen-eval-dataset",
+  "project_id": "free-context-hub",
+  "samples_per_query": 1,
+  "k": 10,
+  "surfaces": {
+    "lessons": {
+      "query_count": 1,
+      "errors": 0,
+      "project_id": "free-context-hub",
+      "generation": {
+        "rows_with_gt": 1,
+        "rows_judged": 1,
+        "rows_skipped": 0,
+        "metrics": {
+          "faithfulness": {
+            "mean": 0.6667,
+            "std": 0,
+            "p10": 0.6667,
+            "fail_count": 1
+          },
+          "answer_relevancy": {
+            "mean": 0.8025,
+            "std": 0,
+            "p10": 0.8025,
+            "fail_count": 1
+          },
+          "context_precision": {
+            "mean": 1,
+            "std": 0,
+            "p10": 1,
+            "fail_count": 0
+          },
+          "context_recall": {
+            "mean": 0.4,
+            "std": 0,
+            "p10": 0.4,
+            "fail_count": 1
+          },
+          "groundedness_self_eval": {
+            "mean": 1,
+            "std": 0,
+            "p10": 1,
+            "fail_count": 0
+          }
+        }
+      },
+      "metrics": {
+        "recall_at_5": 1,
+        "recall_at_10": 1,
+        "mrr": 1,
+        "ndcg_at_5": 1,
+        "ndcg_at_10": 1,
+        "duplication_rate_at_10": 0,
+        "duplication_rate_nearsemantic_at_10": 0,
+        "coverage_pct": 1,
+        "latency_p50_ms": 4378,
+        "latency_p95_ms": 4378,
+        "latency_mean_ms": 4378
+      },
+      "per_query": [
+        {
+          "id": "lesson-pg-uuid-casing",
+          "group": "confident-hit",
+          "query": "how to handle pg UUID casing when building map lookups after RETURNING",
+          "top_k_keys": [
+            "68b2f2cb-2271-454e-bf7e-7831fafb9e3c",
+            "5258dbfe-b76d-42aa-b680-15eb9a7b83d7",
+            "898c3ce8-80a6-4a63-9359-9deaf495633d",
+            "17320a37-4f2e-4708-8446-429d35f0f3fa",
+            "61835c5d-d5c8-4d61-9fa0-3497aadee229",
+            "beeef1e1-aa87-48c1-911d-235ad21ebfce",
+            "4e2b8497-8d8b-4d33-bd2d-1ffd2d66c860",
+            "d081e672-e52e-41c8-a939-bbc08a87b253",
+            "e3190078-c8ee-469d-8cad-404e7e806923",
+            "cd0db880-5c36-477f-9f15-6f85dca64596"
+          ],
+          "top_k_titles": [
+            "pg UUID cast RETURNING is always canonical lowercase — map keys must match",
+            "Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1",
+            "Docker compose --force-recreate doesn't pick up local src changes; rebuild the image first",
+            "Three recurring bypass patterns in tenant-scope work — grep these in every authz PR",
+            "Bundle export must filter owner_project_id to prevent built-in injection on import",
+            "Sprint 13.2 — F1 TTL sweep + Active Work GUI shipped via 6-round AMAW longrun (3 design + 3 code Adversary rounds, max-cap each)",
+            "Phase 15 coordination substrate: event-log & transaction patterns (Sprint 15.1)",
+            "HuggingFace TEI + RERANK_TYPE=api code path unlocks true cross-encoders, but bge-reranker-v2-m3 underperforms on this goldenset",
+            "DEFERRED-024: tenant-scope a cross-project queue pop by threading an optional scope filter",
+            "Dup-rate metric keyed on exact entity id is blind to same-title-different-UUID noise"
+          ],
+          "top_k_snippets": [
+            "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…",
+            "The codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[])` for multiple projects, avoiding the N+1 problem. This pattern should be app…",
+            "When making changes to src/ in a Docker-compose setup, you must rebuild the image using `docker compose build <service>` before running `docker compose up -d --force-recreate <service>`. This ensures that local source changes are incorporated into the new image. Failure to do so…",
+            "Three recurring bypass patterns in tenant-scope work identified for grep-checking in every new authz/tenant-scope PR: 1. 'if (project_id) assert' trap - service fn gates scope check behind falsy project_id, skipping check and unconstrained WHERE clause -> cross-tenant read/write…",
+            "The DEFERRED-023 change introduced taxonomy_profiles as a bundle entity. Built-in profiles have owner_project_id IS NULL, while custom profiles carry the owning project ID. The export filters WHERE owner_project_id=$1 ensure built-ins are never exported, preventing them from bei…",
+            "...",
+            "Phase 15 Sprint 15.1 introduced an append-only event log and coordination substrate with four key patterns: 1) Per-topic seq + close-seal enforced in a single UPDATE statement, using row-lock to serialize appends and ensure monotonic, gap-free sequences. 2) Two-transaction read-…",
+            "Sprint 12.1g implemented external rerank endpoint support for true cross-encoders using TEI and RERANK_TYPE=api. While the infrastructure is deterministic, bge-reranker-v2-m3 underperformed on a goldenset compared to other models like gte and generative LLM rerank. The underperf…",
+            "Some tenant-scope holes have no request-time project to guard — they live in SERVICE pop/scheduling semantics. /jobs/run-next → runNextJob(queue) → claimNextQueuedJob(queue) popped the next queued job across ALL projects (FOR UPDATE SKIP LOCKED on the global queue). A guard on t…",
+            "The current duplication rate metric in src/qc/metrics.ts is flawed as it only considers exact entity IDs, ignoring same-title-different-UUID noise. This results in a dup-rate of 0 even when there are multiple near-duplicate lessons with distinct UUIDs. The first archived baselin…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            4378
+          ],
+          "latency_ms_median": 4378,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "When building map lookups after `RETURNING` with PostgreSQL UUIDs, ensure your map keys match the canonical lowercase form as pg canonicalizes UUIDs on cast [1].",
+            "contexts_used": [
+              {
+                "key": "68b2f2cb-2271-454e-bf7e-7831fafb9e3c",
+                "title": "pg UUID cast RETURNING is always canonical lowercase — map keys must match",
+                "snippet_preview": "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If",
+                "char_count": 280
+              },
+              {
+                "key": "5258dbfe-b76d-42aa-b680-15eb9a7b83d7",
+                "title": "Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1",
+                "snippet_preview": "The codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[",
+                "char_count": 280
+              },
+              {
+                "key": "898c3ce8-80a6-4a63-9359-9deaf495633d",
+                "title": "Docker compose --force-recreate doesn't pick up local src changes; rebuild the image first",
+                "snippet_preview": "When making changes to src/ in a Docker-compose setup, you must rebuild the image using `docker compose build <service>` before running `docker compose up -d --force-recreate <service>`. This ensures ",
+                "char_count": 280
+              }
+            ],
+            "prompt_used": "You are answering a user question using ONLY the lessons provided below.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information that is not present in\n   the lessons. Treat your own training knowledge as off-limits. If a fact\n   isn't in a lesson below, it doesn't exist for this answer.\n2. CITE EVERY CLAIM: Every substantive claim in your answer MUST end with\n   a bracketed citation like [1] or [1,3] referring to the lesson number(s)\n   that support it. Claims without citations are not allowed.\n3. ABSTAIN WHEN UNSUPPORTED: If the lessons do NOT contain enough information\n   to answer the question, your ENTIRE answer must be exactly:\n       Not in context.\n   Do not pad, do not speculate, do not partially answer.\n4. NO MEMORY LEAK: Do not say \"as you know\" / \"as is well known\" / \"typically\"\n   / \"in general\" — those phrases signal use of training knowledge.\n\nQUESTION:\nhow to handle pg UUID casing when building map lookups after RETURNING\n\nLESSONS:\n[1] — pg UUID cast RETURNING is always canonical lowercase — map keys must match\nkey: 68b2f2cb-2271-454e-bf7e-7831fafb9e3c\nWhen using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…\n\n---\n\n[2] — Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1\nkey: 5258dbfe-b76d-42aa-b680-15eb9a7b83d7\nThe codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[])` for multiple projects, avoiding the N+1 problem. This pattern should be app…\n\n---\n\n[3] — Docker compose --force-recreate doesn't pick up local src changes; rebuild the image first\nkey: 898c3ce8-80a6-4a63-9359-9deaf495633d\nWhen making changes to src/ in a Docker-compose setup, you must rebuild the image using `docker compose build <service>` before running `docker compose up -d --force-recreate <service>`. This ensures that local source changes are incorporated into the new image. Failure to do so…\n\nWrite a concise 2-4 sentence answer that:\n- Directly answers the question\n- Has a bracketed citation at the end of every claim\n- Combines multiple lessons when needed (e.g. \"X applies [1], and Y also\n  applies [3], so both checks are required\")\n- Says exactly \"Not in context.\" if the lessons don't cover the question\n\nANSWER:\n",
+            "synth_ms": 5763,
+            "judge_ms": 239015,
+            "scores": {
+              "faithfulness": 0.6666666666666666,
+              "answer_relevancy": 0.802456130659932,
+              "context_precision": 0.9999999999,
+              "context_recall": 0.4,
+              "groundedness_self_eval": 1
+            },
+            "reasons": {
+              "groundedness_self_eval": "The answer directly quotes and summarizes context [1], stating exactly what it says about pg's UUID casing behavior when using `RETURNING` with `ANY()`. No unsupported details or external knowledge is added."
+            },
+            "fail_reasons": [
+              "faithfulness<0.9",
+              "answer_relevancy<0.85",
+              "context_recall<0.75"
+            ],
+            "cove": {
+              "draft_answer": "When building map lookups after `RETURNING` with PostgreSQL UUIDs, ensure your map keys match the canonical lowercase form as pg canonicalizes UUIDs on cast [1]. This is crucial to maintain consistency and avoid case-based mismatches in your JavaScript Map.",
+              "verification_questions": [
+                "Does the answer claim that pg canonicalizes UUIDs on cast?",
+                "Does the answer mention a specific JavaScript Map being used for lookups?",
+                "Does the answer state that non-canonical UUIDs are matched case-insensitively by pg?"
+              ],
+              "verification_answers": [
+                {
+                  "question": "Does the answer claim that pg canonicalizes UUIDs on cast?",
+                  "answer": "Not supported by contexts."
+                },
+                {
+                  "question": "Does the answer mention a specific JavaScript Map being used for lookups?",
+                  "answer": "Not supported by contexts."
+                },
+                {
+                  "question": "Does the answer state that non-canonical UUIDs are matched case-insensitively by pg?",
+                  "answer": "Not supported by contexts."
+                }
+              ],
+              "revised_answer": "When building map lookups after `RETURNING` with PostgreSQL UUIDs, ensure your map keys match the canonical lowercase form as pg canonicalizes UUIDs on cast [1].",
+              "step_ms": {
+                "plan": 677,
+                "verify": 525,
+                "revise": 574
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
