@@ -125,8 +125,9 @@ class CircuitBreaker {
     const now = Date.now();
     // Throttle warn to once per 30s to avoid log spam
     if (this.consecutive_failures >= this.threshold && now - this.last_warn_at > 30_000) {
+      const _ts = new Date().toISOString().slice(11, 23);
       console.warn(
-        `\n[llm-resilience] WARNING: ${this.consecutive_failures} consecutive transient LLM failures.`,
+        `\n[${_ts}] [llm-resilience] WARNING: ${this.consecutive_failures} consecutive transient LLM failures.`,
       );
       console.warn(
         '[llm-resilience] LM Studio may be wedged. Try: (1) restart LM Studio app,',

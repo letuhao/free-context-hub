@@ -188,8 +188,9 @@ export async function scoreOnce(
       baseDelayMs: 500,
       onRetry: (attempt, err, ms) => {
         const msg = (err as { message?: string }).message ?? String(err);
+        const t = new Date().toISOString().slice(11, 23);
         console.warn(
-          `[judge] transient error on attempt ${attempt}, retrying in ${ms}ms: ${msg.slice(0, 100)}`,
+          `[${t}] [judge] transient on attempt ${attempt}, retrying in ${ms}ms: ${msg.slice(0, 100)}`,
         );
       },
     },

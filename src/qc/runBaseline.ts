@@ -644,6 +644,18 @@ function round(x: number): number {
   return Math.round(x * 10000) / 10000;
 }
 
+// Phase 17.x: timestamped logging so operators can see WHERE time is spent
+// during long baseline runs (especially when retries fire silently between
+// rows). Format: "HH:MM:SS.mmm".
+function ts(): string {
+  const d = new Date();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  const ms = String(d.getMilliseconds()).padStart(3, '0');
+  return `${hh}:${mm}:${ss}.${ms}`;
+}
+
 // ------------------------------ Markdown render ----------------------------
 
 function fmtMetric(v: number | null): string {
@@ -906,25 +918,49 @@ async function runAllSurfaces(
     // Sprint 16.3: --max-rows truncation for smoke runs.
     const queriesToRun =
       opts.maxRows !== null ? set.queries.slice(0, opts.maxRows) : set.queries;
-    for (const q of queriesToRun) {
-      process.stdout.write(`  ${perQueryPrefix}${surface}/${q.id} ... `);
+
+    // Phase 17.x: heartbeat every 30s prints "still alive" so an operator
+    // tailing the log can tell the difference between "row is taking a while"
+    // and "process is wedged". Clears at end of surface or process exit.
+    let heartbeatCount = 0;
+    let lastHeartbeatRow: string | null = null;
+    const heartbeat = setInterval(() => {
+      heartbeatCount++;
+      const where = lastHeartbeatRow ?? '(no row yet)';
+      console.log(`[${ts()}]   ⏳ heartbeat #${heartbeatCount} — surface=${surface}, current_row=${where}`);
+    }, 30_000);
+
+    try {
+      for (const q of queriesToRun) {
+        lastHeartbeatRow = q.id;
+      const rowStartMs = Date.now();
+      // Phase 17.x: timestamp the row START so retry pauses between rows are
+      // attributable. Flush so interactive `tail -f` sees this immediately.
+      process.stdout.write(`[${ts()}]   ${perQueryPrefix}${surface}/${q.id} ... `);
       const res = await evalQuery(surface, dispatch, q, opts.k, opts.samples, opts.genEval);
+      const rowMs = Date.now() - rowStartMs;
       const frictionNote = res.friction_classes.length ? ', ' + res.friction_classes.join(';') : '';
       let genNote = '';
       if (res.generation) {
+        // Phase 17.x: surface synth_ms + judge_ms separately so we can see
+        // which stage is slow. Format compact for terminal: "s:NNNms+j:NNNms".
+        const timing = `s:${res.generation.synth_ms}ms+j:${res.generation.judge_ms}ms`;
         if (res.generation.error) {
-          genNote = `, gen=ERR(${res.generation.error.slice(0, 40)})`;
+          genNote = `, gen=ERR(${timing}, ${res.generation.error.slice(0, 60)})`;
         } else {
           const f = res.generation.scores.faithfulness;
           const fmt = (v: number | null | undefined) =>
             v === null || v === undefined ? '—' : v.toFixed(2);
-          genNote = `, gen[f=${fmt(f)}/r=${fmt(res.generation.scores.answer_relevancy)}/cp=${fmt(res.generation.scores.context_precision)}/cr=${fmt(res.generation.scores.context_recall)}]`;
+          genNote = `, gen[${timing}, f=${fmt(f)}/r=${fmt(res.generation.scores.answer_relevancy)}/cp=${fmt(res.generation.scores.context_precision)}/cr=${fmt(res.generation.scores.context_recall)}/gse=${fmt(res.generation.scores.groundedness_self_eval)}]`;
         }
       }
       process.stdout.write(
-        `${res.found_ranks.length ? 'HIT@' + res.found_ranks.join(',') : 'MISS'} (${res.latency_ms_median}ms${frictionNote}${genNote})\n`,
+        `${res.found_ranks.length ? 'HIT@' + res.found_ranks.join(',') : 'MISS'} retrieval=${res.latency_ms_median}ms row_total=${rowMs}ms${frictionNote}${genNote}\n`,
       );
-      perQuery.push(res);
+        perQuery.push(res);
+      }
+    } finally {
+      clearInterval(heartbeat);
     }
     surfaces[surface] = aggregate(perQuery, pid);
   }

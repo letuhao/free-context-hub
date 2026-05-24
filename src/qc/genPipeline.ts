@@ -215,8 +215,9 @@ async function callAnswerer(
       baseDelayMs: 500,
       onRetry: (attempt, err, ms) => {
         const msg = (err as { message?: string }).message ?? String(err);
+        const t = new Date().toISOString().slice(11, 23);
         console.warn(
-          `[answerer] transient error on attempt ${attempt}, retrying in ${ms}ms: ${msg.slice(0, 100)}`,
+          `[${t}] [answerer] transient on attempt ${attempt}, retrying in ${ms}ms: ${msg.slice(0, 100)}`,
         );
       },
     },
