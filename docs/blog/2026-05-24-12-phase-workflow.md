@@ -8,7 +8,7 @@
 
 ---
 
-I've been using an iterative 12-phase workflow I refined over 8 months — across [free-context-hub](https://github.com/letuhao/free-context-hub) (a self-hosted persistent memory and guardrails layer for AI agents), a separate lore-weave project, and a handful of private internal systems. Across all of them, the workflow has accumulated 2,500+ commits and a trail of written specs and audit logs I can still query months after the sessions that produced them.
+I've been using an iterative 12-phase workflow I refined iteratively — across [free-context-hub](https://github.com/letuhao/free-context-hub) (a self-hosted persistent memory and guardrails layer for AI agents), a separate lore-weave project, and a handful of private internal systems. Across all of them, the workflow has accumulated 2,500+ commits and a trail of written specs and audit logs I can still query months after the sessions that produced them.
 
 The free-context-hub project alone covers 15 development phases: backend (MCP server, REST API), a full Next.js frontend (20+ pages), RAG pipelines with reranking benchmarks, multi-agent coordination protocols, knowledge portability, and tenant-scoped access control.
 
@@ -42,7 +42,7 @@ The workflow is an evolution of two ideas:
 
 **Human-in-the-loop gatekeeping** — my own addition. The core insight: a human reading a short spec + a single diff catches dramatically more than a human reading code cold. The workflow structures every task to produce exactly those artifacts, at exactly the right moment.
 
-The combination took about 8 months of iteration to stabilize. What's here is v2.2 (default mode) with an optional AMAW (Autonomous Multi-Agent Workflow) extension for high-stakes work.
+The combination took multiple iterations to stabilize. What's here is v2.2 (default mode) with an optional AMAW (Autonomous Multi-Agent Workflow) extension for high-stakes work.
 
 ---
 
