@@ -662,7 +662,18 @@ async def score(req: ScoreRequest) -> ScoreResponse:
 
     _ensure_initialized()
 
-    contexts_text = [c.text for c in req.contexts]
+    # Phase 17.x Bug 2a fix: ragas's NLI verifier only sees the JOINED context
+    # STRING — `ContextItem.id` (the file path / lesson UUID) is dropped on the
+    # floor. So synthesizer-cited "located in src/kg/projectGraph.ts" claims
+    # are systematically rejected as "context does not provide location info"
+    # even when the file IS context [3]. Probe in services/ragas-judge/
+    # bug2_probe.py confirmed this is the dominant Bug 2 mechanism on the
+    # code surface. Solution: prepend "File: <id>" so the judge can entail
+    # location/source claims against the same evidence the synthesizer cited.
+    contexts_text = [
+        f"File: {c.id}\n{c.text}" if c.id else c.text
+        for c in req.contexts
+    ]
 
     scores: dict[str, Optional[float]] = {}
     reasons: dict[str, str] = {}
