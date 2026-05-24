@@ -360,7 +360,7 @@ State is tracked in `.workflow-state.json` (add to `.gitignore`). The script:
 - **Blocks phase jumps** — can't go from CLARIFY to BUILD without completing/skipping intermediate phases
 - **Records evidence** — what was the output of each phase
 - **Records skips with reasons** — auditable trail of what was bypassed and why
-- **Pre-commit gate** — blocks `git commit` if VERIFY and SESSION are not completed
+- **Pre-commit gate** — blocks `git commit` if VERIFY, POST-REVIEW, and SESSION are not completed
 
 ### Layer 3: Claude Code Hooks (hardest enforcement)
 
@@ -386,7 +386,7 @@ Add to `.claude/settings.json`:
 }
 ```
 
-This hook runs BEFORE every Bash tool call. If the command contains `git commit`, it checks the workflow state. If VERIFY or SESSION phases are not completed, **the commit is blocked** and the agent sees an error message explaining what to do.
+This hook runs BEFORE every Bash tool call. If the command contains `git commit`, it checks the workflow state. If VERIFY, POST-REVIEW, or SESSION phases are not completed, **the commit is blocked** and the agent sees an error message explaining what to do.
 
 ### How the 3 layers work together
 
@@ -420,7 +420,7 @@ Verify gate:       run command → read output → then claim
 
 ## Credits
 
-- **Session persistence, role perspectives, guardrails** — [free-context-hub](https://github.com/) project workflow (2024-2026)
+- **Session persistence, role perspectives, guardrails** — [free-context-hub](https://github.com/letuhao/free-context-hub) project workflow (2024-2026)
 - **Brainstorming, TDD, verification gate, debugging, subagent dispatch** — [Superpowers](https://github.com/obra/superpowers) by Jesse Vincent / Prime Radiant
 
 ---

@@ -8,7 +8,7 @@
 
 ---
 
-I've been using an iterative 12-phase workflow I refined over 8 months — across [free-context-hub](https://github.com/letuhao/free-context-hub) (a self-hosted persistent memory and guardrails layer for AI agents), a separate lore-weave project, and a handful of private internal systems. Across all of them, the workflow has accumulated 2,500+ commits, 41+ database migrations, and a trail of written specs and audit logs I can still query months after the sessions that produced them.
+I've been using an iterative 12-phase workflow I refined over 8 months — across [free-context-hub](https://github.com/letuhao/free-context-hub) (a self-hosted persistent memory and guardrails layer for AI agents), a separate lore-weave project, and a handful of private internal systems. Across all of them, the workflow has accumulated 2,500+ commits and a trail of written specs and audit logs I can still query months after the sessions that produced them.
 
 The free-context-hub project alone covers 15 development phases: backend (MCP server, REST API), a full Next.js frontend (20+ pages), RAG pipelines with reranking benchmarks, multi-agent coordination protocols, knowledge portability, and tenant-scoped access control.
 
@@ -159,7 +159,7 @@ For high-stakes work — data migrations, new service boundaries, security-criti
 
 The key insight is **cold-start**: each agent is spawned fresh with only file access. It cannot inherit the main session's context rot or biases. It reads what's written; it can't be influenced by what was discussed in chat.
 
-> **Note:** AMAW doesn't make the workflow fully autonomous. The human still approves the spec at CLARIFY end; AMAW replaces the code-review and POST-REVIEW gates with sub-agents. If you need zero human interaction, this workflow isn't designed for that.
+> **Note:** AMAW removes the human from all review gates — including POST-REVIEW, which is held by the Scope Guard instead. At CLARIFY, rather than a human approving the spec, the Adversary challenges it at the next phase. In practice this means AMAW sessions can run with minimal human interaction, but they still require a human to kick off the task and review the final audit log. Pure fire-and-forget is not the design intent.
 
 AMAW costs roughly $1–5 in sub-agent tokens and ~30 extra minutes per task. I use it for schema migrations and multi-system contracts. For everyday work, the human-in-loop default catches the same issues faster and cheaper.
 
