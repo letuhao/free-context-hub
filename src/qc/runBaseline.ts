@@ -47,13 +47,20 @@ import {
   fmtNoiseFloorValue,
   type NoiseFloorPerSurface,
 } from './noiseFloor.js';
-import { runGenPipeline, allTemplateHashes, type AnswererConfig } from './genPipeline.js';
+import {
+  runGenPipeline,
+  runGenPipelineCoVe,
+  allTemplateHashes,
+  allCoVeTemplateHashes,
+  type AnswererConfig,
+} from './genPipeline.js';
 import { scoreOnce, type JudgeRequest, type MetricName } from './judge.js';
 import type {
   GenResult,
   GenManifest,
   GenSurfaceAggregate,
   GenMetricSummary,
+  SynthMode,
 } from './genEvalTypes.js';
 import { DEFAULT_THRESHOLDS } from './genEvalTypes.js';
 
@@ -115,6 +122,9 @@ function parseArgs(argv: string[]) {
   // Limit per-surface row count — useful for smoke runs.
   const maxRowsRaw = args.get('max-rows');
   const maxRows = maxRowsRaw ? Number(maxRowsRaw) : null;
+  // Phase 17.2: synthesizer mode. 'standard' is the Phase 16.3+17.1 single-shot
+  // synth; 'cove' is Chain-of-Verification 4-step. CoVe is ~3-4× LLM cost.
+  const synthMode = (args.get('synth-mode') ?? 'standard') as SynthMode;
 
   return {
     tag,
@@ -127,6 +137,7 @@ function parseArgs(argv: string[]) {
     judgeUrl,
     topKContexts,
     maxRows,
+    synthMode,
   };
 }
 
@@ -310,6 +321,8 @@ type GenEvalConfig = {
   judgeTimeoutMs: number;
   answerer: AnswererConfig;
   topKContexts: number;
+  /** Phase 17.2: 'standard' single-shot or 'cove' Chain-of-Verification. */
+  synthMode: SynthMode;
 };
 
 /** Run synth + judge for a single row. Errors are captured into GenResult.error
@@ -321,15 +334,28 @@ async function runGenEvalForRow(
   cfg: GenEvalConfig,
 ): Promise<GenResult> {
   // 1. Synthesize an answer using the top-K retrieval hits.
-  const synthRes = await runGenPipeline(
-    {
-      surface,
-      question: q.query,
-      retrievalHits,
-      topK: cfg.topKContexts,
-    },
-    cfg.answerer,
-  );
+  //    Phase 17.2: CoVe mode runs the 4-step verification pipeline; standard
+  //    runs the single-shot synthesizer.
+  const synthRes =
+    cfg.synthMode === 'cove'
+      ? await runGenPipelineCoVe(
+          {
+            surface,
+            question: q.query,
+            retrievalHits,
+            topK: cfg.topKContexts,
+          },
+          cfg.answerer,
+        )
+      : await runGenPipeline(
+          {
+            surface,
+            question: q.query,
+            retrievalHits,
+            topK: cfg.topKContexts,
+          },
+          cfg.answerer,
+        );
 
   // Synth failed → return error result without judge call.
   if (synthRes.error) {
@@ -341,6 +367,9 @@ async function runGenEvalForRow(
       judge_ms: 0,
       scores: {},
       error: synthRes.error,
+      ...((synthRes as unknown as { cove?: import('./genEvalTypes.js').CoVeTrace }).cove
+        ? { cove: (synthRes as unknown as { cove: import('./genEvalTypes.js').CoVeTrace }).cove }
+        : {}),
     };
   }
 
@@ -371,6 +400,8 @@ async function runGenEvalForRow(
   };
 
   const t0 = Date.now();
+  // Phase 17.2: capture cove trace from synth result (may be undefined)
+  const coveTrace = (synthRes as unknown as { cove?: import('./genEvalTypes.js').CoVeTrace }).cove;
   try {
     const judgeRes = await scoreOnce(judgeReq, {
       baseUrl: cfg.judgeUrl,
@@ -388,6 +419,7 @@ async function runGenEvalForRow(
       skipped: judgeRes.skipped.length ? judgeRes.skipped : undefined,
       skip_reason: judgeRes.skip_reason ?? undefined,
       fail_reasons: detectFailReasons(judgeRes.scores),
+      ...(coveTrace ? { cove: coveTrace } : {}),
     };
   } catch (err) {
     const judge_ms = Date.now() - t0;
@@ -399,6 +431,7 @@ async function runGenEvalForRow(
       judge_ms,
       scores: {},
       error: `judge_failed: ${err instanceof Error ? err.message : String(err)}`,
+      ...(coveTrace ? { cove: coveTrace } : {}),
     };
   }
 }
@@ -931,12 +964,13 @@ async function main() {
     judgeUrl,
     topKContexts,
     maxRows,
+    synthMode,
   } = parseArgs(process.argv.slice(2));
   const today = new Date().toISOString().slice(0, 10);
   const runStart = new Date();
   const { commit, branch } = gitInfo();
 
-  console.log(`[baseline] tag=${tag} k=${k} samples=${samples} control=${control} gen-eval=${genEval} surfaces=${surfacesFilter.join(',')}${maxRows !== null ? ` max-rows=${maxRows}` : ''}`);
+  console.log(`[baseline] tag=${tag} k=${k} samples=${samples} control=${control} gen-eval=${genEval} synth-mode=${synthMode} surfaces=${surfacesFilter.join(',')}${maxRows !== null ? ` max-rows=${maxRows}` : ''}`);
   console.log(`[baseline] MCP=${MCP_URL}  API=${API_URL}${genEval !== 'off' ? `  JUDGE=${judgeUrl}` : ''}`);
 
   // Sprint 16.3: build gen-eval config when not disabled.
@@ -969,11 +1003,13 @@ async function main() {
         timeoutMs: answererTimeoutMs,
       },
       topKContexts,
+      synthMode,
     };
 
     // Probe judge /health for manifest (best-effort; doesn't block run).
     const probe = await probeJudgeManifest(judgeUrl);
     const synthHashes = await allTemplateHashes();
+    const coveHashes = synthMode === 'cove' ? await allCoVeTemplateHashes() : undefined;
     genManifest = {
       judge_endpoint: probe.judge_endpoint ?? judgeUrl,
       judge_model_id: probe.judge_model ?? 'unknown',
@@ -984,9 +1020,11 @@ async function main() {
       answerer_seed: answererSeed,
       answerer_max_tokens: answererMaxTokens,
       synthesizer_prompt_hashes: synthHashes,
+      synth_mode: synthMode,
+      ...(coveHashes ? { cove_prompt_hashes: coveHashes } : {}),
     };
     console.log(
-      `[baseline] gen-eval enabled: answerer=${answererModel} @ ${answererBaseUrl}, judge=${probe.judge_model ?? 'unknown'} @ ${judgeUrl}, top-K=${topKContexts}`,
+      `[baseline] gen-eval enabled: answerer=${answererModel} @ ${answererBaseUrl}, judge=${probe.judge_model ?? 'unknown'} @ ${judgeUrl}, top-K=${topKContexts}, synth-mode=${synthMode}`,
     );
   }
 

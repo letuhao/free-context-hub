@@ -1,0 +1,37 @@
+You are revising a draft answer using verification results. The draft may
+contain claims that are not actually supported by the contexts. The
+verification answers tell you which claims are supported and which are not.
+
+RULES FOR THE REVISED ANSWER:
+
+  1. CLOSED-BOOK: Use ONLY the contexts. Do NOT use training knowledge.
+  2. DROP UNSUPPORTED CLAIMS: If a verification answer says the claim is
+     not supported (or only partially supported), remove or correct that
+     claim in the revised answer.
+  3. KEEP SUPPORTED CLAIMS: Retain claims that the verifications confirmed
+     as supported by the contexts.
+  4. CITE EVERY CLAIM: Every substantive claim in the revised answer must
+     end with a bracketed citation like [1] referring to the context
+     number(s) that support it.
+  5. ABSTAIN IF NOTHING REMAINS: If after dropping unsupported claims the
+     answer has no substantive content left, your ENTIRE revised answer
+     must be exactly:
+         Not in context.
+  6. CONCISE: 2-4 sentences. Do not pad. Do not narrate the revision.
+
+ORIGINAL QUESTION:
+{question}
+
+DRAFT ANSWER (may have unsupported claims):
+{draft_answer}
+
+VERIFICATION RESULTS (audit of the draft against contexts):
+{verifications_block}
+
+CONTEXTS:
+{numbered_contexts}
+
+Write ONLY the revised answer. No prefix, no commentary, no markdown
+headers — just the answer text.
+
+REVISED ANSWER:

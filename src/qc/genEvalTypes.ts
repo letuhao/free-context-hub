@@ -22,6 +22,28 @@ export type GenContextUsed = {
   char_count: number;
 };
 
+/** Phase 17.2: synthesizer mode.
+ *  - 'standard' = single-shot answer (Phase 16.3 + 17.1 templates)
+ *  - 'cove'     = Chain-of-Verification 4-step pipeline (Meta paper)
+ */
+export type SynthMode = 'standard' | 'cove';
+
+/** Phase 17.2: per-step trace of a CoVe run, kept for full traceability +
+ *  scorecard drilldown. Attached to GenResult.cove when synth_mode='cove'. */
+export type CoVeTrace = {
+  /** Step 1: initial draft answer (same as a 'standard' answer for the row). */
+  draft_answer: string;
+  /** Step 2: verification questions the LLM generated about its own draft. */
+  verification_questions: string[];
+  /** Step 3: per-question answer against contexts only. */
+  verification_answers: Array<{ question: string; answer: string }>;
+  /** Step 4: revised answer using draft + verification answers. This becomes
+   *  the official GenResult.generated_answer for CoVe rows. */
+  revised_answer: string;
+  /** Per-step wall-clock in ms. */
+  step_ms: { plan: number; verify: number; revise: number };
+};
+
 /** Per-query gen-eval result, attached to PerQuery.generation when present. */
 export type GenResult = {
   /** Full synthesizer output (kept for replay + scorecard drilldown). */
@@ -45,6 +67,8 @@ export type GenResult = {
   fail_reasons?: string[];
   /** Set when the synth or judge errored on this row; scores will be null. */
   error?: string;
+  /** Phase 17.2: full CoVe trace when synth_mode='cove'. Absent for 'standard'. */
+  cove?: CoVeTrace;
 };
 
 /** Aggregate stats for one metric across all rows on a surface. */
@@ -74,6 +98,11 @@ export type GenManifest = {
   answerer_seed: number;
   answerer_max_tokens: number;
   synthesizer_prompt_hashes: Record<string, string>; // surface → sha256 of template
+  /** Phase 17.2: which synth mode this run used. 'standard' or 'cove'. */
+  synth_mode: SynthMode;
+  /** Phase 17.2: hashes of CoVe-specific templates (plan-verifications, revise).
+   *  Present only when synth_mode='cove'. */
+  cove_prompt_hashes?: { plan_verifications: string; revise: string };
 };
 
 /** Industry-target thresholds (WARN-only per Phase 16 D5). */

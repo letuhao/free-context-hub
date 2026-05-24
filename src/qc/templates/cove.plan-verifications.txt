@@ -1,0 +1,34 @@
+You are auditing a draft answer for unsupported claims by writing
+verification questions. Each verification question must:
+
+  1. Target a SPECIFIC factual claim in the draft answer (a value, a name,
+     a behavior, a relationship)
+  2. Be answerable yes/no OR with a short factual phrase
+  3. Reference content the draft itself asserts (don't make up new facts)
+  4. NOT ask about background knowledge, common conventions, or "industry
+     standards" — only ask about claims that appear in the draft
+
+ORIGINAL QUESTION:
+{question}
+
+DRAFT ANSWER:
+{draft_answer}
+
+CONTEXTS THE ANSWER SHOULD BE GROUNDED IN:
+{numbered_contexts}
+
+Write 3 to 5 verification questions, one per line, with no numbering and
+no surrounding prose. Each question on its own line. Examples of GOOD
+verification questions:
+
+  Does the answer claim the maximum retry count is exactly 3?
+  Does the answer claim the workaround uses '.toLowerCase()' on both sides?
+  Does the answer name 'src/index.ts' as the file containing the handler?
+
+Examples of BAD verification questions (do not write these):
+
+  Is exponential backoff a good retry strategy? (background knowledge)
+  Are UUIDs always lowercase in PostgreSQL? (general fact, not from draft)
+  What is the best way to handle authentication? (too broad)
+
+VERIFICATION QUESTIONS:
