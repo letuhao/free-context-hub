@@ -463,6 +463,8 @@ free-context-hub/
 
 ## Development Phases
 
+> **Strategic arc:** ContextHub is the MCP-served implementation of the Dead Light Framework (DLF). The 5-phase strategic view (Memory → Eval → Governance → Benchmark → Runtime Enforcement) lives in [`ROADMAP.md`](ROADMAP.md). The sprint-level history below maps to those strategic phases — Phases 1–11 → Strategic Phase 1; Phase 12 + 16 + 17 → Strategic Phase 2; Phases 13–15 + DEFERRED-029 → Strategic Phase 3; Phase 18 → Strategic Phase 4; Phase 19 → Strategic Phase 5.
+
 ```
 Phase 1-2 ✅    Phase 3 ✅      Phase 4 ✅      Phase 5 ✅
 Core MVP        Distillation    Knowledge       Git Intelligence
