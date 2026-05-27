@@ -1,7 +1,33 @@
 # ContextHub (Self-Hosted) White Paper
 
 ## Status
-Draft v0.7 (Phases 1–15 complete + DEFERRED-029 RESOLVED — 2026-05-23)
+Draft v0.8 (Phases 1–15 complete + DEFERRED-029 RESOLVED; Phase 16 RAG production-readiness + Phase 17 anti-hallucination active on separate branches — 2026-05-27)
+
+## Strategic Framing
+
+ContextHub is the MCP-served, software-substrate implementation of the **Dead Light Framework (DLF)** — a governance methodology for hybrid human + AI organizations. The visible feature surface (memory, lessons, guardrails) is the foundation; the deeper arc is a five-phase research program:
+
+```
+Phase 1 — Memory + Knowledge Layer          ✅ shipped
+Phase 2 — Eval Dataset + RAG Production     🔄 active (separate branch)
+Phase 3 — Governance Primitives             🔄 active (separate branch)
+Phase 4 — Governance Benchmark Suite        ⏳ planned
+Phase 5 — Runtime Enforcement + Isolation   💡 research / literature review
+```
+
+Phase 1 is what most users interact with today. Phases 2 and 3 are being built in parallel — generation-quality evaluation under Ragas, and the DLF-derived coordination primitives (motions, proxies, scope, approval, dispute, multi-tier routing). Phase 4 will benchmark Phase 3 across diverse governance scenarios. Phase 5 is the pre-action runtime enforcement layer, still in literature review.
+
+The thesis underneath: whether the same governance substrate can let one person operate at the throughput that normally takes a team of dozens, by treating AI agents as governed organizational members with delegated authority — not as copilots. A separate long-running project of the founder's serves as the live benchmark for the thesis, in parallel with the Phase 4 governance benchmark suite.
+
+For the high-level strategic view see [`ROADMAP.md`](ROADMAP.md). For sprint-level history (the 15+ phases of feature work that built Phase 1, plus the multi-actor coordination primitives in Phases 13–15 that form the foundation of Strategic Phase 3), continue reading.
+
+## Where this sits in the public landscape
+
+The AI agent governance / coordination / runtime-enforcement space is **forming fast**. April–May 2026 saw real shipments from Microsoft Agent Governance Toolkit (MIT, ~2.9k stars, sub-ms policy engine + M-of-N quorum approval), Galileo Agent Control (Apache-2.0 control plane), USC Aegis (MIT, 14-framework auto-patching pre-execution firewall), and others. ContextHub is one of several projects converging on the broader problem.
+
+The differentiated wedge: **no other public project combines** (a) persistent semantic memory of decisions / lessons / workarounds, (b) full DLF-derived collective-decision primitives (motions, proxies, disputes, multi-tier routing, 3-phase topic close, append-only event log per topic), and (c) tenant-scope isolation enforced at the service layer, **under one MIT roof, served via MCP**. ContextHub is not trying to be "the agent governance toolkit"; it is one implementation of one specific governance methodology.
+
+Honest gaps versus current leaders: no cryptographic agent identity yet (MS / Aegis ship Ed25519 / DIDs), TS-only SDK (MS ships 5 languages), no zero-code framework auto-patching (Aegis covers 14 frameworks), Phase 5 runtime enforcement not yet built, no published attack-block benchmarks on the policy paths. Full survey: [`docs/research/2026-05-27-competitive-landscape.md`](docs/research/2026-05-27-competitive-landscape.md).
 
 ## Abstract
 ContextHub is a self-hosted, team-friendly system that gives MCP-enabled AI coding agents **persistent memory and guardrails across sessions**. It is designed for small teams that want the essential productivity benefits of [ContextStream](https://contextstream.io/)-like workflows, without requiring a hosted SaaS dependency.
@@ -596,6 +622,51 @@ each id is either `== callerScope` or a group that callerScope's project belongs
 
 Full closeout: `docs/deferred-029-closeout.md`. Migration recipe:
 `docs/specs/2026-05-23-deferred-029-pr-e-legacy-token-migration.md`.
+
+### Phase 16: Production-Ready RAG with Generation-Quality Evaluation — 🔄 IN PROGRESS (separate branch)
+
+Phases 1–12 measured retrieval (recall@k, MRR, nDCG, latency). Generation quality — faithfulness, answer relevancy, context precision — remained a blind spot. Phase 16 closes that gap.
+
+- **152-row gen-eval dataset:** 127 retrieval queries (extended with `ideal_answer`) + 25 hand-curated edge cases (5 multi-hop, 5 no-answer, 5 contradictory-source, 5 paraphrase-robustness, 5 distractor-stress).
+- **Ragas judge sidecar:** Python / FastAPI service running `google/gemma-4-26b-a4b-it` (MoE, 4B activated of 26B total, 256K context). Cross-process for isolation, pinned model id in baseline manifest.
+- **Metrics:** faithfulness ≥ 0.9 · answer_relevancy ≥ 0.85 · context_precision ≥ 0.8 · context_recall ≥ 0.75 · refusal_correctness ≥ 0.75 · groundedness_self_eval ≥ 0.85 — shipped in WARN mode for 2 weeks of baseline variance data, then flip to BLOCK.
+- **Controlled-pipeline first (Path A):** single retriever per surface + templated synthesizer + judge invoked via OpenAI-compat client. Production-fidelity pipeline (Path B — call actual chat / qaAgent endpoint) deferred to a follow-up sprint after Path A proves itself.
+- **Sprint plan (3 sprints, ~7 days):** 16.1 dataset bootstrap · 16.2 ragas sidecar · 16.3 wire judge into runBaseline.
+
+Status: Sprint 16.1–16.3 shipped. First production-grade baseline complete: 148/152 rows judged in ~36 min, 97% success.
+
+Spec: `docs/specs/2026-05-23-phase-16-rag-production-clarify.md` and design doc.
+
+### Phase 17: Anti-Hallucination Experiments — 🔄 IN PROGRESS (separate branch)
+
+Phase 16 made generation measurable. Phase 17 uses that signal to push answer faithfulness up via targeted technique experiments.
+
+- **Citation-forced prompt templates:** require the model to cite specific lesson IDs in answers; templates pinned in baseline manifest.
+- **Selective abstention:** model returns "not in context" instead of fabricating when the retrieved chunks do not support an answer.
+- **`groundedness_self_eval` metric:** model evaluates its own answer against retrieved context before returning — moves part of the hallucination check into the model itself.
+- **Chain-of-Verification (CoVe) synthesizer:** generate verification questions, check each claim, then synthesize. Currently in smoke-test phase — recall@10 = 1.0 on smoke baselines, but `answer_relevancy` dropped to 0.55 (below the 0.85 threshold), suggesting CoVe is making answers overly hedged. Under investigation.
+
+Status: 17.1 shipped (citation templates + abstention + groundedness_self_eval). 17.2 (CoVe) in smoke-test iteration. Baselines under `docs/qc/baselines/2026-05-24-s17.2-*.md`.
+
+### Phase 18 (planned): Governance Benchmark Suite
+
+Validate the Phase 13–15 governance primitives across diverse scenarios — flat / hierarchical / federated org topologies; collaborative / adversarial / byzantine conflict patterns; all-human, human-led + AI, AI-led + human review, all-AI with human escape valve. Per-scenario success metric: was the right outcome reached, in the right number of steps, by the right principals, with auditability intact? A long-running external project of the founder's serves as a live benchmark substrate.
+
+No detailed design yet — begins once Phase 17 stabilizes.
+
+### Phase 19 (research / design): Runtime Enforcement & Isolation
+
+Move from after-the-fact audit to **before-the-action enforcement** — a policy engine that constrains or mediates agent behavior *before* it occurs, plus an isolation environment for experimental / dangerous actions. This is the layer Microsoft Agent Governance Toolkit, Galileo Agent Control, and USC Aegis already ship in some form; ContextHub does not yet have it.
+
+Open design questions:
+
+- Policy language — adopt OPA Rego / Cedar (MS pattern, industry standard), or design a DLF-native policy DSL?
+- Where does enforcement live — gateway, SDK shim, OS-level sandbox?
+- Contract between Phase 3 governance decisions and runtime enforcement? (Motion carries → policy update; request approved → isolated execution env provisioned.)
+- Cryptographic identity — adopt DIDs / Ed25519 (MS / Aegis pattern), or scoped API keys (current model)?
+- Isolation primitive — container / VM / WASM / process-level seccomp?
+
+Literature review in progress (DAO-AI, Microsoft Agent OS, Aegis architecture, Cedar policy language, AGT-style trust scoring). No detailed design yet.
 
 ### Future / non-MVP ideas (not yet built)
 These are knowledge-exchange and storage enhancements considered but intentionally out of scope through Phase 15; none are required for current deployments.
