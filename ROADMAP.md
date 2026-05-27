@@ -107,17 +107,29 @@ Phase 1 is the foundation. Phase 2 and Phase 3 are being built in parallel on se
 
 **Goal:** Move from after-the-fact audit to **before-the-action enforcement**. A policy engine that constrains or mediates agent behavior *before* it occurs — and an isolation environment for experimental or dangerous actions that should be sandboxed even if the policy decision is "allow."
 
-**Why it matters:** Phase 1's guardrails block at the application layer — they intercept tool calls inside the MCP server. Phase 5 is about a coherent runtime substrate that handles policy decision, policy enforcement, sandboxing, and post-action attestation as one system. Most of the current public ecosystem (Microsoft Agent Governance Toolkit, USC Aegis, Galileo Agent Control) ships pre-action policy enforcement; this is the layer free-context-hub does not yet have.
+**Why it matters:** Phase 1's guardrails block at the application layer — they intercept tool calls inside the MCP server. Phase 5 is the coherent runtime substrate that handles policy decision, policy enforcement, sandboxing, and post-action attestation as one system — closing the loop between Phase 3 governance decisions and what an agent is actually allowed to do at runtime.
 
 **Open design questions:**
 
-- Policy language — adopt OPA Rego / Cedar (industry standard, MS pattern), or design a DLF-native policy DSL?
+- Policy language — adopt an established policy DSL or design a DLF-native one tightly coupled to the governance primitives?
 - Where does the enforcement live — gateway, SDK shim, OS-level sandbox?
 - What is the contract between Phase 3 governance decisions and Phase 5 runtime enforcement? (A motion carries → runtime policy updates; a request is approved → an isolated execution env is provisioned; etc.)
-- Cryptographic agent identity — adopt DIDs / Ed25519 (MS / Aegis pattern), or scoped API keys (current model)?
+- Cryptographic agent identity vs scoped API keys — what's the right level of identity strength per deployment posture?
 - Isolation primitives — container / VM / WASM / process-level seccomp?
 
-**Status:** Literature review in progress (DAO-AI, Microsoft Agent OS, Aegis architecture, Cedar policy language, AGT-style trust scoring). No detailed design yet.
+**Status:** Literature review in progress (DAO-AI, policy DSL ecosystems, sandboxing primitives, agent identity frameworks). No detailed design yet.
+
+---
+
+## Beyond Phase 5 — expansion directions
+
+A non-exhaustive list of expansion directions scoped for future roadmap phases once Phase 5 stabilizes:
+
+- **Cross-language SDKs** — the current implementation is TypeScript / Node; additional language bindings for Python, Go, .NET are on the table as adoption signals warrant
+- **Framework integrations** — zero-code adapters for popular agent frameworks beyond raw MCP, so teams don't have to refactor their existing stack to adopt the governance layer
+- **Published security benchmarks** — attack-block, false-positive, and latency benchmarks on the Phase 5 policy paths, comparable to what's becoming standard in the agent-security space
+- **Compliance regulatory mappings** — explicit mappings from DLF primitives to EU AI Act, HIPAA, SOC 2, OWASP Agentic Top 10 categories, to help adopters in regulated environments
+- **Cryptographic identity hardening** — depending on how Phase 5 lands and what deployment postures demand
 
 ---
 
@@ -133,13 +145,9 @@ This is the experiment. The roadmap above is the apparatus.
 
 ## Where this sits in the public landscape
 
-A detailed competitive survey of the AI agent governance / coordination / runtime-enforcement space lives at [`docs/research/2026-05-27-competitive-landscape.md`](docs/research/2026-05-27-competitive-landscape.md).
+The AI agent governance / coordination / runtime-enforcement space is **forming fast** — multiple serious projects have shipped in 2026 and the category is still actively being defined. free-context-hub is one of several projects converging on the broader problem from different angles.
 
-The short version:
-
-- The space is **forming fast** — Microsoft Agent Governance Toolkit, Galileo Agent Control, USC Aegis, and several others all shipped real things in April–May 2026
-- **No competitor combines** persistent semantic memory of decisions + full collective-decision primitives (motions / proxies / disputes / multi-tier routing) + the DLF governance model under one MIT roof
-- **Real gaps vs leaders:** no cryptographic agent identity yet, TS-only SDK, no framework auto-patching, Phase 5 runtime enforcement not yet built, no published attack-block benchmarks
+The differentiated wedge: the combination of persistent semantic memory of decisions + DLF-derived collective-decision primitives (motions / proxies / disputes / multi-tier routing / 3-phase topic close / append-only event log) + tenant-scope isolation, under one MIT roof, served via MCP.
 
 free-context-hub is not trying to be "the agent governance toolkit." It is one implementation of one specific governance methodology, served via MCP, designed to scale across mixed human + AI organizations.
 

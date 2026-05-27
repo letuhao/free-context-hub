@@ -23,11 +23,11 @@ For the high-level strategic view see [`ROADMAP.md`](ROADMAP.md). For sprint-lev
 
 ## Where this sits in the public landscape
 
-The AI agent governance / coordination / runtime-enforcement space is **forming fast**. April–May 2026 saw real shipments from Microsoft Agent Governance Toolkit (MIT, ~2.9k stars, sub-ms policy engine + M-of-N quorum approval), Galileo Agent Control (Apache-2.0 control plane), USC Aegis (MIT, 14-framework auto-patching pre-execution firewall), and others. ContextHub is one of several projects converging on the broader problem.
+The AI agent governance / coordination / runtime-enforcement space is **forming fast** — multiple serious projects have shipped in 2026 and the category is still actively being defined. ContextHub is one of several projects converging on the broader problem from different angles.
 
 The differentiated wedge: **no other public project combines** (a) persistent semantic memory of decisions / lessons / workarounds, (b) full DLF-derived collective-decision primitives (motions, proxies, disputes, multi-tier routing, 3-phase topic close, append-only event log per topic), and (c) tenant-scope isolation enforced at the service layer, **under one MIT roof, served via MCP**. ContextHub is not trying to be "the agent governance toolkit"; it is one implementation of one specific governance methodology.
 
-Honest gaps versus current leaders: no cryptographic agent identity yet (MS / Aegis ship Ed25519 / DIDs), TS-only SDK (MS ships 5 languages), no zero-code framework auto-patching (Aegis covers 14 frameworks), Phase 5 runtime enforcement not yet built, no published attack-block benchmarks on the policy paths. Full survey: [`docs/research/2026-05-27-competitive-landscape.md`](docs/research/2026-05-27-competitive-landscape.md).
+Several expansion directions are scoped for future phases of the roadmap — see [`ROADMAP.md`](ROADMAP.md) for the strategic arc and where the work is heading next.
 
 ## Abstract
 ContextHub is a self-hosted, team-friendly system that gives MCP-enabled AI coding agents **persistent memory and guardrails across sessions**. It is designed for small teams that want the essential productivity benefits of [ContextStream](https://contextstream.io/)-like workflows, without requiring a hosted SaaS dependency.
@@ -656,17 +656,17 @@ No detailed design yet — begins once Phase 17 stabilizes.
 
 ### Phase 19 (research / design): Runtime Enforcement & Isolation
 
-Move from after-the-fact audit to **before-the-action enforcement** — a policy engine that constrains or mediates agent behavior *before* it occurs, plus an isolation environment for experimental / dangerous actions. This is the layer Microsoft Agent Governance Toolkit, Galileo Agent Control, and USC Aegis already ship in some form; ContextHub does not yet have it.
+Move from after-the-fact audit to **before-the-action enforcement** — a policy engine that constrains or mediates agent behavior *before* it occurs, plus an isolation environment for experimental / dangerous actions that should be sandboxed even if the policy decision is "allow." This closes the loop between Phase 3 governance decisions and what an agent is actually allowed to do at runtime.
 
 Open design questions:
 
-- Policy language — adopt OPA Rego / Cedar (MS pattern, industry standard), or design a DLF-native policy DSL?
+- Policy language — adopt an established policy DSL, or design a DLF-native one tightly coupled to the governance primitives?
 - Where does enforcement live — gateway, SDK shim, OS-level sandbox?
 - Contract between Phase 3 governance decisions and runtime enforcement? (Motion carries → policy update; request approved → isolated execution env provisioned.)
-- Cryptographic identity — adopt DIDs / Ed25519 (MS / Aegis pattern), or scoped API keys (current model)?
+- Cryptographic agent identity vs scoped API keys — what's the right level of identity strength per deployment posture?
 - Isolation primitive — container / VM / WASM / process-level seccomp?
 
-Literature review in progress (DAO-AI, Microsoft Agent OS, Aegis architecture, Cedar policy language, AGT-style trust scoring). No detailed design yet.
+Literature review in progress (DAO-AI, policy DSL ecosystems, sandboxing primitives, agent identity frameworks). No detailed design yet.
 
 ### Future / non-MVP ideas (not yet built)
 These are knowledge-exchange and storage enhancements considered but intentionally out of scope through Phase 15; none are required for current deployments.

@@ -37,7 +37,7 @@ Memory      Eval +      Governance  Benchmark   Runtime
 
 Phase 1 is the core feature surface most users interact with today. Phases 2 and 3 are being built in parallel on separate branches — generation-quality evaluation (Phase 2) and the coordination / governance primitives drawn from DLF (Phase 3: motions, proxies, scope, approval, dispute, multi-tier routing). Phase 4 will benchmark Phase 3 across diverse governance scenarios. Phase 5 — pre-action runtime enforcement and isolation environments for dangerous tasks — is still in literature review.
 
-Where this sits in the public landscape: see the [competitive survey](docs/research/2026-05-27-competitive-landscape.md). Microsoft Agent Governance Toolkit, USC Aegis, Galileo Agent Control and others all ship real things; the differentiated wedge here is the combination of persistent semantic memory + DLF-derived collective-decision primitives + tenant-scope isolation under one MIT roof.
+The differentiated wedge: persistent semantic memory of decisions + DLF-derived collective-decision primitives + tenant-scope isolation under one MIT roof, served via MCP. Several expansion directions are scoped for future phases — see [ROADMAP.md](ROADMAP.md).
 
 ---
 
@@ -429,4 +429,4 @@ Please open an issue first for large changes so we can discuss the approach.
 
 MIT — see [LICENSE](LICENSE) for details.
 
-[Roadmap](ROADMAP.md) | [Whitepaper](WHITEPAPER.md) | [Quickstart Guide](docs/QUICKSTART.md) | [Competitive Landscape](docs/research/2026-05-27-competitive-landscape.md) | [Knowledge Exchange Reference](docs/references/knowledge-exchange.md)
+[Roadmap](ROADMAP.md) | [Whitepaper](WHITEPAPER.md) | [Quickstart Guide](docs/QUICKSTART.md) | [Knowledge Exchange Reference](docs/references/knowledge-exchange.md)
