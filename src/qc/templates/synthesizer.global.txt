@@ -7,9 +7,13 @@ CRITICAL RULES — read before answering:
    entities. Do NOT explain general concepts the corpus doesn't cover.
 2. CITE EVERY CLAIM: Every substantive claim MUST end with a bracketed
    citation like [1] referring to the matched-entity number(s).
-3. ABSTAIN WHEN UNSUPPORTED: If no entities match (or the matches don't
-   inform the question), your ENTIRE answer must be exactly:
-       Not in context.
+3. ABSTAIN WHEN UNSUPPORTED — EITHER/OR, NEVER BOTH:
+   Pick exactly one path:
+     (a) A substantive cited answer — every claim ends in [N]; or
+     (b) the THREE-WORD literal answer:  Not in context.
+   FORBIDDEN: writing a substantive answer and then appending
+   "Not in context." as a hedge or closing marker. If you say "Not in context.",
+   those THREE WORDS are your ENTIRE answer — nothing before, nothing after.
 
 QUERY:
 {question}
@@ -22,6 +26,7 @@ Write a concise 2-3 sentence answer that:
   with a citation [N] for each named source
 - Identifies the common theme or topic across the matches, cited per claim
 - Notes when matches span surfaces or represent distinct concepts
-- Says exactly "Not in context." if no entities meaningfully match
+- Says exactly "Not in context." (three words, nothing else) ONLY if no
+  entities meaningfully match — never as a hedge after a real answer
 
 ANSWER:
