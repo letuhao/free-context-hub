@@ -145,6 +145,42 @@ try {
   check('ragas-judge sidecar reachable', false, `${JUDGE_URL} → ${err.message}`);
 }
 
+// ─── Container env audit (2026-06-17 baseline-stack bug fix) ───
+// CRITICAL: --env-file .env.baseline only affects compose-substitution; the
+// container env comes from `env_file: - .env` UNLESS docker-compose has an
+// explicit `environment:` line with substitution. Even when substitution is
+// in place, colon-hyphen `${X:-default}` reverts to default for empty values.
+// Both bugs were present until 2026-06-17 and silently contaminated every
+// baseline by leaving the WORKER running gemma-flavored faq.build /
+// knowledge.loop / raptor.build jobs that swap LM Studio mid-measurement.
+// Audit the running containers directly to catch any future regression.
+async function dockerEnv(container, varName) {
+  const { spawnSync } = await import('node:child_process');
+  const r = spawnSync('docker', [
+    'exec', container, 'sh', '-c', `printenv ${varName} || true`,
+  ], { encoding: 'utf8' });
+  return (r.stdout || '').trim();
+}
+for (const svc of ['free-context-hub-mcp-1', 'free-context-hub-worker-1']) {
+  const distModel = await dockerEnv(svc, 'DISTILLATION_MODEL');
+  const distEnabled = await dockerEnv(svc, 'DISTILLATION_ENABLED');
+  const qaModel = await dockerEnv(svc, 'QA_AGENT_MODEL');
+  const builderModel = await dockerEnv(svc, 'BUILDER_AGENT_MODEL');
+  // The intent of .env.baseline: every chain that falls through to
+  // DISTILLATION_MODEL must end with either an empty value or the
+  // EXPECTED_CHAT model. ANY OTHER value would swap LM Studio mid-run.
+  const safe = (v) => v === '' || v === EXPECTED_CHAT;
+  const allSafe = safe(distModel) && safe(qaModel) && safe(builderModel)
+    && distEnabled !== 'true';
+  check(
+    `${svc} model env safe for baseline`,
+    allSafe,
+    allSafe
+      ? `DISTILLATION_MODEL='${distModel}', DISTILLATION_ENABLED='${distEnabled}', QA_AGENT_MODEL='${qaModel}', BUILDER_AGENT_MODEL='${builderModel}'`
+      : `DISTILLATION_MODEL='${distModel}', DISTILLATION_ENABLED='${distEnabled}', QA_AGENT_MODEL='${qaModel}', BUILDER_AGENT_MODEL='${builderModel}' — any non-empty + non-'${EXPECTED_CHAT}' value here triggers a mid-baseline swap. Verify start-baseline-stack.sh used .env.baseline AND docker-compose.yml uses single-hyphen substitution`,
+  );
+}
+
 // ─── Reminder about other env consumers ───
 console.log('');
 console.log('Process-environment hints (set these on the runBaseline.ts invocation):');

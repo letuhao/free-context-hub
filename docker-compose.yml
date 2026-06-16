@@ -103,21 +103,36 @@ services:
       LESSONS_SALIENCE_ALPHA: ${LESSONS_SALIENCE_ALPHA:-0.10}
       LESSONS_SALIENCE_DISABLED: ${LESSONS_SALIENCE_DISABLED:-false}
       LESSONS_SALIENCE_NO_WRITE: ${LESSONS_SALIENCE_NO_WRITE:-false}
-      # Sprint 12.1e4 /review-impl: expose DISTILLATION_ENABLED for baseline
-      # runs that want to skip LLM rerank (measured drift source across
-      # container recreates). Default true preserves production behavior.
-      DISTILLATION_ENABLED: ${DISTILLATION_ENABLED:-true}
+      # 2026-06-17 baseline-stack invariant fix:
+      # Phase 17 baseline-stack invariant (CLAUDE.md) says
+      # "DISTILLATION_MODEL is unset/empty during baseline (worker no-ops;
+      # prevents background swap)." But `.env.baseline` setting these to
+      # empty did NOT propagate to containers — `--env-file` only affects
+      # compose-substitution; the container's actual env came from
+      # `env_file: - .env`. AND the colon-hyphen syntax `${X:-default}`
+      # falls back to default whenever X is unset OR empty, so even when
+      # substitution worked the empty value was overridden by the default.
+      # Both fixed below: explicit `environment:` lines + single-hyphen
+      # syntax `${X-default}` (default only when X is UNSET; empty X is
+      # honored as empty). Without this fix the worker was running
+      # gemma-flavored faq.build / knowledge.loop / raptor.build jobs DURING
+      # baseline runs, swapping mistral-nemo out of LM Studio mid-measurement
+      # (lmstudio-bug-tracker#945).
+      DISTILLATION_MODEL: ${DISTILLATION_MODEL-google/gemma-4-26b-a4b-qat}
+      DISTILLATION_ENABLED: ${DISTILLATION_ENABLED-true}
+      BUILDER_AGENT_MODEL: ${BUILDER_AGENT_MODEL-}
+      QA_AGENT_MODEL: ${QA_AGENT_MODEL-}
       # Sprint 12.1f: expose RERANK_TYPE + RERANK_MODEL for cross-encoder
       # rerank evaluation. Default RERANK_TYPE=generative preserves
       # production (uses DISTILLATION_MODEL). Set RERANK_TYPE=cross-encoder
       # and RERANK_MODEL=<cross-encoder-model> to use embedding-based
       # deterministic rerank instead.
-      RERANK_TYPE: ${RERANK_TYPE:-generative}
-      RERANK_MODEL: ${RERANK_MODEL:-}
+      RERANK_TYPE: ${RERANK_TYPE-generative}
+      RERANK_MODEL: ${RERANK_MODEL-}
       # 2026-06-16: cross-encoder via local-rerank-service (Cohere /v1/rerank).
-      RERANK_API_PROTOCOL: ${RERANK_API_PROTOCOL:-cohere}
-      RERANK_BASE_URL: ${RERANK_BASE_URL:-}
-      RERANK_API_KEY: ${RERANK_API_KEY:-}
+      RERANK_API_PROTOCOL: ${RERANK_API_PROTOCOL-cohere}
+      RERANK_BASE_URL: ${RERANK_BASE_URL-}
+      RERANK_API_KEY: ${RERANK_API_KEY-}
     ports:
       - "3000:3000"
       - "3001:3001"
@@ -167,6 +182,19 @@ services:
       REDIS_PREFIX: ${REDIS_PREFIX:-contexthub}
       REDIS_RETRIEVAL_TTL_SECONDS: ${REDIS_RETRIEVAL_TTL_SECONDS:-900}
       REDIS_RERANK_TTL_SECONDS: ${REDIS_RERANK_TTL_SECONDS:-7200}
+      # 2026-06-17 baseline-stack invariant fix — same rationale as the mcp
+      # service block above. The worker is the WORST offender for the
+      # baseline-stack invariant: faq.build / knowledge.loop / raptor.build
+      # jobs continuously hit LM Studio with DISTILLATION_MODEL (gemma)
+      # while a baseline runs with mistral-nemo, swapping models mid-run.
+      # Single-hyphen syntax + explicit environment lines so .env.baseline
+      # can ACTUALLY propagate empty values to the container.
+      DISTILLATION_MODEL: ${DISTILLATION_MODEL-google/gemma-4-26b-a4b-qat}
+      DISTILLATION_ENABLED: ${DISTILLATION_ENABLED-true}
+      BUILDER_AGENT_MODEL: ${BUILDER_AGENT_MODEL-}
+      QA_AGENT_MODEL: ${QA_AGENT_MODEL-}
+      RERANK_MODEL: ${RERANK_MODEL-}
+      RERANK_TYPE: ${RERANK_TYPE-generative}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -288,15 +316,21 @@ services:
     environment:
       # Defaults assume LM Studio on the host with Gemma-4-26B-A4B + bge-m3 embeddings.
       # Override any of these via .env or `docker compose --env-file ...`.
-      JUDGE_AGENT_BASE_URL: ${JUDGE_AGENT_BASE_URL:-http://host.docker.internal:1234/v1}
-      JUDGE_AGENT_API_KEY: ${JUDGE_AGENT_API_KEY:-lm-studio}
-      JUDGE_AGENT_MODEL: ${JUDGE_AGENT_MODEL:-google/gemma-4-26b-a4b-it}
-      JUDGE_TEMPERATURE: ${JUDGE_TEMPERATURE:-0.0}
-      JUDGE_SEED: ${JUDGE_SEED:-42}
-      JUDGE_TIMEOUT_S: ${JUDGE_TIMEOUT_S:-60}
-      EMBEDDINGS_BASE_URL: ${EMBEDDINGS_BASE_URL:-http://host.docker.internal:1234/v1}
-      EMBEDDINGS_API_KEY: ${EMBEDDINGS_API_KEY:-lm-studio}
-      EMBEDDINGS_MODEL: ${EMBEDDINGS_MODEL:-text-embedding-bge-m3}
+      # 2026-06-17 baseline-stack invariant fix — single-hyphen syntax
+      # `${X-default}` so .env.baseline's explicit empty/override values
+      # PROPAGATE to the container, not get masked by the default. The old
+      # colon-hyphen `${X:-default}` made `.env.baseline JUDGE_AGENT_MODEL=`
+      # silently revert to gemma — the bug at the heart of the model-swap
+      # contamination CLAUDE.md warned about.
+      JUDGE_AGENT_BASE_URL: ${JUDGE_AGENT_BASE_URL-http://host.docker.internal:1234/v1}
+      JUDGE_AGENT_API_KEY: ${JUDGE_AGENT_API_KEY-lm-studio}
+      JUDGE_AGENT_MODEL: ${JUDGE_AGENT_MODEL-google/gemma-4-26b-a4b-it}
+      JUDGE_TEMPERATURE: ${JUDGE_TEMPERATURE-0.0}
+      JUDGE_SEED: ${JUDGE_SEED-42}
+      JUDGE_TIMEOUT_S: ${JUDGE_TIMEOUT_S-60}
+      EMBEDDINGS_BASE_URL: ${EMBEDDINGS_BASE_URL-http://host.docker.internal:1234/v1}
+      EMBEDDINGS_API_KEY: ${EMBEDDINGS_API_KEY-lm-studio}
+      EMBEDDINGS_MODEL: ${EMBEDDINGS_MODEL-text-embedding-bge-m3}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       # Phase 17.x — disable ragas analytics. Ragas POSTs to t.explodinggradients.com
       # after every metric/embedding call. From inside the Docker container,

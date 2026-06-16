@@ -1,7 +1,73 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 031 -->
+<!-- Next ID: 032 -->
+
+## DEFERRED-031
+
+- **Title:** Global-surface synth: substring-search faithfulness / answer-relevancy trade-off
+  cannot be cleanly resolved with the current RAGAS metric framework
+- **Trigger condition:** any future Phase 17 metric framework change that decouples
+  "groundedness of substantive claims" from "presence of meta-claims," OR a switch to a
+  different judge (e.g. an NLI judge that scores propositions instead of substring
+  recoverability).
+- **Status:** OPEN (2026-06-17)
+- **Context:** Bug 3 v8 fix (Phase 17 closeout) reduced hedging across all surfaces by
+  ~55%. On the `lessons`, `code`, and `chunks` surfaces this was a net win
+  (`faith` neutral or up, `ar` up). On the **`global` surface**, `faith` dropped
+  **−0.119** while `ar` rose +0.097 (v9 vs v6, n=10). DEFERRED-030 closeout note
+  flagged "may need an ABSTAIN rule specific to substring-search semantics."
+- **⚠️ 2026-06-17 investigation INVALIDATED by baseline-stack contamination
+  bug.** Both smoke iterations (and the v9 reference they were compared
+  against) ran with the worker container leaking `DISTILLATION_MODEL=gemma`
+  while the baseline ran with mistral-nemo. LM Studio swapped models mid-
+  measurement (lmstudio-bug-tracker#945). Full root-cause + fix:
+  `docs/qc/2026-06-17-baseline-stack-bug-postmortem.md`. The investigation
+  CONCLUSION below ("not fixable at template layer alone") stands as a
+  hypothesis, but the magnitudes (Δfaith +0.005, Δar −0.126; Δfaith
+  +0.128, Δar −0.268) are not trustworthy. A clean re-measurement after
+  the baseline-stack fix is required before this item can move from
+  "documented hypothesis" to "proven trade-off."
+
+- **Pre-contamination-fix investigation result — NOT FIXABLE at the template layer alone:**
+  - Two iterations attempted on `synthesizer.global.txt` against the controlled
+    baseline stack (mistral-nemo answerer + mistral-nemo judge, seed=42, top-K=3,
+    n=10 smoke per iteration):
+    - **v1 (per-entity description, drop "common theme" framing):** Δfaith
+      +0.005 (noise), Δar **−0.126**. Model produced bullet-style answers that
+      tanked answer-relevancy without recovering faithfulness.
+    - **v2 (prose + silent-skip irrelevant matches + anti-fabrication):** Δfaith
+      **+0.128** (real lift), Δar **−0.268** (cratered). Model gamed the
+      silent-skip rule by writing minimal answers ("The search surfaces two
+      relevant entities: a lesson [1] and a document [2]." — 77 chars, no
+      substantive description). RAGAS faithfulness rises trivially when there
+      are fewer claims to ground; AR collapses because the answer doesn't
+      actually answer the user's question.
+  - **Root cause:** RAGAS `faithfulness` counts the FRACTION of claims that are
+    substring-recoverable from the contexts. Honest meta-claims ("entity X
+    is unrelated to the substring query") are scored as ungrounded because
+    "unrelated" is not in the context. Substring-search inherently surfaces
+    semantically-diverse matches, so any honest description either (a)
+    fabricates a unifying theme (low faith, high AR), (b) explicitly notes
+    diversity (low faith, OK AR), or (c) lists types without substance
+    (high faith, low AR). The metric framework rewards (a) the most.
+  - **Production decision (2026-06-17):** template REVERTED to v8 state on
+    branch `deferred-030-rerank-quality`. Both failed iterations preserved as
+    smoke baselines under `docs/qc/baselines/2026-06-16-2026-06-17-phase-17-bug3-global-fix*.{json,md}`
+    so a future attempt can compare against them.
+- **Estimated size:** M — likely requires either (a) a Phase 17.3 NLI-based judge
+  that scores propositions instead of substring recoverability, OR (b) a separate
+  "substring-search" metric that distinguishes substantive descriptions from
+  meta-claims about match irrelevance, OR (c) accept that global-surface gen-eval
+  is fundamentally noisy and use retrieval metrics only for that surface.
+- **Priority:** LOW — production behavior unchanged (template at v8); affects only
+  the `global` surface (10 of ~152 golden rows). Other surfaces (lessons, code,
+  chunks) unaffected by this gap.
+- **Sessions open:** 1
+- **Source:** Phase 17 closeout note (`docs/qc/2026-05-25-phase-17-ragas-judge-fix-a-b.md`)
+  + DEFERRED-030 follow-up investigation 2026-06-17.
+
+---
 
 ## DEFERRED-030
 
