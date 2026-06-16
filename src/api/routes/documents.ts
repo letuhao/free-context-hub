@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import type { Request } from 'express';
 import { requireProjectScope, requireResourceScope } from '../middleware/requireResourceScope.js';
 import multer from 'multer';
 import { createHash } from 'node:crypto';
@@ -20,7 +21,13 @@ import { estimateVisionCost } from '../../services/extraction/vision.js';
 import { enqueueJob, cancelJob } from '../../services/jobQueue.js';
 import type { ExtractionMode, ChunkTemplate } from '../../services/extraction/types.js';
 import { resolveProjectIdOrThrow } from '../../core/index.js';
+import type { CallerScope } from '../../core/index.js';
 import { getDbPool } from '../../db/client.js';
+
+/** DEFERRED-029: read the caller's project scope attached by bearerAuth. */
+function callerScopeOf(req: Request): CallerScope {
+  return (req as { apiKeyScope?: CallerScope }).apiKeyScope;
+}
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB
@@ -109,6 +116,7 @@ router.post('/upload', upload.single('file'), requireProjectScope('body'), async
     try {
       const result = await createDocument({
         projectId,
+        callerScope: callerScopeOf(req),
         name,
         docType,
         content,
@@ -213,6 +221,7 @@ router.post('/ingest-url', requireProjectScope('body'), async (req, res, next) =
     try {
       const result = await createDocument({
         projectId,
+        callerScope: callerScopeOf(req),
         name,
         docType: fetched.docType as any,
         // Store the originating URL in the url column so users can see where
@@ -253,6 +262,7 @@ router.post('/', requireProjectScope('body'), async (req, res, next) => {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await createDocument({
       projectId,
+      callerScope: callerScopeOf(req),
       name: req.body.name,
       docType: req.body.doc_type,
       url: req.body.url,
@@ -271,6 +281,7 @@ router.get('/', requireProjectScope('query'), async (req, res, next) => {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
     const result = await listDocuments({
       projectId,
+      callerScope: callerScopeOf(req),
       docType: req.query.doc_type as string | undefined,
       linked: req.query.linked as 'linked' | 'unlinked' | undefined,
       lessonId: req.query.lesson_id as string | undefined,
@@ -285,7 +296,7 @@ router.get('/', requireProjectScope('query'), async (req, res, next) => {
 router.get('/:id', requireResourceScope('document', 'id'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
-    const result = await getDocument({ docId: String(req.params.id), projectId });
+    const result = await getDocument({ docId: String(req.params.id), projectId, callerScope: callerScopeOf(req) });
     if (!result) {
       res.status(404).json({ status: 'error', error: 'document not found' });
       return;
@@ -298,7 +309,7 @@ router.get('/:id', requireResourceScope('document', 'id'), async (req, res, next
 router.post('/:id/generate-lessons', requireResourceScope('document', 'id'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
-    const doc = await getDocument({ docId: String(req.params.id), projectId });
+    const doc = await getDocument({ docId: String(req.params.id), projectId, callerScope: callerScopeOf(req) });
     if (!doc) {
       res.status(404).json({ status: 'error', error: 'document not found' });
       return;
@@ -325,7 +336,7 @@ router.post('/:id/generate-lessons', requireResourceScope('document', 'id'), asy
 router.delete('/:id', requireResourceScope('document', 'id'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow((req.query.project_id as string | undefined) ?? req.body?.project_id);
-    const deleted = await deleteDocument({ docId: String(req.params.id), projectId });
+    const deleted = await deleteDocument({ docId: String(req.params.id), projectId, callerScope: callerScopeOf(req) });
     if (!deleted) {
       res.status(404).json({ status: 'error', error: 'document not found' });
       return;
@@ -340,6 +351,7 @@ router.post('/:id/lessons/:lessonId', requireResourceScope('document', 'id'), as
     const result = await linkDocumentToLesson({
       docId: String(req.params.id),
       lessonId: String(req.params.lessonId),
+      callerScope: callerScopeOf(req),
     });
     if (result.status === 'error') {
       res.status(400).json(result);
@@ -355,6 +367,7 @@ router.delete('/:id/lessons/:lessonId', requireResourceScope('document', 'id'), 
     const deleted = await unlinkDocumentFromLesson({
       docId: String(req.params.id),
       lessonId: String(req.params.lessonId),
+      callerScope: callerScopeOf(req),
     });
     if (!deleted) {
       res.status(404).json({ status: 'error', error: 'link not found' });
@@ -367,7 +380,7 @@ router.delete('/:id/lessons/:lessonId', requireResourceScope('document', 'id'), 
 /** GET /api/documents/:id/lessons — list lessons linked to a document */
 router.get('/:id/lessons', requireResourceScope('document', 'id'), async (req, res, next) => {
   try {
-    const result = await listDocumentLessons({ docId: String(req.params.id) });
+    const result = await listDocumentLessons({ docId: String(req.params.id), callerScope: callerScopeOf(req) });
     res.json(result);
   } catch (e) { next(e); }
 });
@@ -448,6 +461,7 @@ router.post('/:id/extract', requireResourceScope('document', 'id'), async (req, 
     const result = await runExtraction({
       docId: String(req.params.id),
       projectId,
+      callerScope: callerScopeOf(req),
       mode,
       template,
     });
@@ -609,6 +623,7 @@ router.get('/:id/chunks', requireResourceScope('document', 'id'), async (req, re
     const result = await listDocumentChunks({
       docId: String(req.params.id),
       projectId,
+      callerScope: callerScopeOf(req),
     });
     res.json(result);
   } catch (e) { next(e); }
@@ -629,6 +644,7 @@ router.put('/:id/chunks/:chunkId', requireResourceScope('document', 'id'), async
       docId: String(req.params.id),
       chunkId: String(req.params.chunkId),
       projectId,
+      callerScope: callerScopeOf(req),
       content,
       expectedUpdatedAt,
     });
@@ -659,6 +675,7 @@ router.delete('/:id/chunks/:chunkId', requireResourceScope('document', 'id'), as
       docId: String(req.params.id),
       chunkId: String(req.params.chunkId),
       projectId,
+      callerScope: callerScopeOf(req),
     });
     if (!deleted) {
       res.status(404).json({ status: 'error', error: 'chunk not found' });
@@ -836,6 +853,7 @@ router.post('/chunks/search', requireProjectScope('body'), async (req, res, next
 
     const result = await searchChunks({
       projectId,
+      callerScope: callerScopeOf(req),
       query,
       limit,
       chunkTypes,

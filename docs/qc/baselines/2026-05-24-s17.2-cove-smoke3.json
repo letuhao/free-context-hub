@@ -1,0 +1,204 @@
+{
+  "schema_version": "1.1",
+  "gen_manifest": {
+    "judge_endpoint": "http://host.docker.internal:1234/v1",
+    "judge_model_id": "google/gemma-4-26b-a4b",
+    "judge_prompts_hash": "c0165a73c10c4e04",
+    "answerer_endpoint": "http://localhost:1234/v1",
+    "answerer_model_id": "google/gemma-4-26b-a4b",
+    "answerer_temperature": 0.2,
+    "answerer_seed": 42,
+    "answerer_max_tokens": 1024,
+    "synthesizer_prompt_hashes": {
+      "lessons": "13ac4e950489bde6",
+      "code": "3a2ea1624ae0a1fc",
+      "chunks": "a01005e0d102b2c1",
+      "global": "5ae7c8e925ad8a47"
+    },
+    "synth_mode": "cove",
+    "cove_prompt_hashes": {
+      "plan_verifications": "ed577d49415f027d",
+      "revise": "822833cc0ab973d6"
+    }
+  },
+  "tag": "s17.2-cove-smoke3",
+  "run_started_at": "2026-05-24T06:48:32.855Z",
+  "run_ended_at": "2026-05-24T06:51:02.443Z",
+  "elapsed_ms": 149588,
+  "git_commit": "b52ca3a+dirty",
+  "git_branch": "phase-16-sprint-16.1-gen-eval-dataset",
+  "project_id": "free-context-hub",
+  "samples_per_query": 1,
+  "k": 10,
+  "surfaces": {
+    "lessons": {
+      "query_count": 1,
+      "errors": 0,
+      "project_id": "free-context-hub",
+      "generation": {
+        "rows_with_gt": 1,
+        "rows_judged": 1,
+        "rows_skipped": 0,
+        "metrics": {
+          "answer_relevancy": {
+            "mean": 0.3776,
+            "std": 0,
+            "p10": 0.3776,
+            "fail_count": 1
+          }
+        }
+      },
+      "metrics": {
+        "recall_at_5": 1,
+        "recall_at_10": 1,
+        "mrr": 1,
+        "ndcg_at_5": 1,
+        "ndcg_at_10": 1,
+        "duplication_rate_at_10": 0,
+        "duplication_rate_nearsemantic_at_10": 0,
+        "coverage_pct": 1,
+        "latency_p50_ms": 4376,
+        "latency_p95_ms": 4376,
+        "latency_mean_ms": 4376
+      },
+      "per_query": [
+        {
+          "id": "lesson-pg-uuid-casing",
+          "group": "confident-hit",
+          "query": "how to handle pg UUID casing when building map lookups after RETURNING",
+          "top_k_keys": [
+            "68b2f2cb-2271-454e-bf7e-7831fafb9e3c",
+            "5258dbfe-b76d-42aa-b680-15eb9a7b83d7",
+            "898c3ce8-80a6-4a63-9359-9deaf495633d",
+            "17320a37-4f2e-4708-8446-429d35f0f3fa",
+            "61835c5d-d5c8-4d61-9fa0-3497aadee229",
+            "beeef1e1-aa87-48c1-911d-235ad21ebfce",
+            "4e2b8497-8d8b-4d33-bd2d-1ffd2d66c860",
+            "d081e672-e52e-41c8-a939-bbc08a87b253",
+            "e3190078-c8ee-469d-8cad-404e7e806923",
+            "cd0db880-5c36-477f-9f15-6f85dca64596"
+          ],
+          "top_k_titles": [
+            "pg UUID cast RETURNING is always canonical lowercase — map keys must match",
+            "Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1",
+            "Docker compose --force-recreate doesn't pick up local src changes; rebuild the image first",
+            "Three recurring bypass patterns in tenant-scope work — grep these in every authz PR",
+            "Bundle export must filter owner_project_id to prevent built-in injection on import",
+            "Sprint 13.2 — F1 TTL sweep + Active Work GUI shipped via 6-round AMAW longrun (3 design + 3 code Adversary rounds, max-cap each)",
+            "Phase 15 coordination substrate: event-log & transaction patterns (Sprint 15.1)",
+            "HuggingFace TEI + RERANK_TYPE=api code path unlocks true cross-encoders, but bge-reranker-v2-m3 underperforms on this goldenset",
+            "DEFERRED-024: tenant-scope a cross-project queue pop by threading an optional scope filter",
+            "Dup-rate metric keyed on exact entity id is blind to same-title-different-UUID noise"
+          ],
+          "top_k_snippets": [
+            "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…",
+            "The codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[])` for multiple projects, avoiding the N+1 problem. This pattern should be app…",
+            "When making changes to src/ in a Docker-compose setup, you must rebuild the image using `docker compose build <service>` before running `docker compose up -d --force-recreate <service>`. This ensures that local source changes are incorporated into the new image. Failure to do so…",
+            "Three recurring bypass patterns in tenant-scope work identified for grep-checking in every new authz/tenant-scope PR: 1. 'if (project_id) assert' trap - service fn gates scope check behind falsy project_id, skipping check and unconstrained WHERE clause -> cross-tenant read/write…",
+            "The DEFERRED-023 change introduced taxonomy_profiles as a bundle entity. Built-in profiles have owner_project_id IS NULL, while custom profiles carry the owning project ID. The export filters WHERE owner_project_id=$1 ensure built-ins are never exported, preventing them from bei…",
+            "...",
+            "Phase 15 Sprint 15.1 introduced an append-only event log and coordination substrate with four key patterns: 1) Per-topic seq + close-seal enforced in a single UPDATE statement, using row-lock to serialize appends and ensure monotonic, gap-free sequences. 2) Two-transaction read-…",
+            "Sprint 12.1g implemented external rerank endpoint support for true cross-encoders using TEI and RERANK_TYPE=api. While the infrastructure is deterministic, bge-reranker-v2-m3 underperformed on a goldenset compared to other models like gte and generative LLM rerank. The underperf…",
+            "Some tenant-scope holes have no request-time project to guard — they live in SERVICE pop/scheduling semantics. /jobs/run-next → runNextJob(queue) → claimNextQueuedJob(queue) popped the next queued job across ALL projects (FOR UPDATE SKIP LOCKED on the global queue). A guard on t…",
+            "The current duplication rate metric in src/qc/metrics.ts is flawed as it only considers exact entity IDs, ignoring same-title-different-UUID noise. This results in a dup-rate of 0 even when there are multiple near-duplicate lessons with distinct UUIDs. The first archived baselin…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            4376
+          ],
+          "latency_ms_median": 4376,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "*   Draft Answer: \"When building a JavaScript Map keyed by IDs returned from a query, the map keys must match the canonical lowercase form [1]. This is because PostgreSQL always canonicalizes UUIDs to lowercase during the cast process [1].\"\n    *   Verification Results (Q1-Q5): The verification results provided are actually instructions/metadata for an evaluation task. There is no actual \"Yes/No\" or \"Supported/Not supported\" answer provided for any specific claim in the draft.\n    *   Wait, let me look at the `VERIFICATION RESULTS` section again very carefully.\n\n    `VERIFICATION RESULTS (audit of the draft against contexts):`\n    `Q1: Goal: Audit a draft answer for unsupported claims by writing verification questions.`\n    `A1: Not supported by contexts.`\n    `Q2: Constraints for Verification Questions:`\n    `A2: Not-supported...`\n    `Q3: Target specific factual claims in the draft.`\n    `A3: Not supported...`\n    `Q4: ... (contains instructions and context summaries)`\n\n    This is extremely confusing. The \"VERIFICATION RESULTS\" section doesn't contain answers to questions about the *draft*. Instead, it contains a series of Q&A pairs that look like they are describing the *process* of creating verification questions or defining constraints for them.\n    Specifically:\n    `Q1: Goal... A1: Not supported by contexts.`\n    `Q2: Constraints... A2: Not supported by contexts.`\n    `Q3: Target specific factual claims... A3: Not supported by contexts.`\n\n    This looks like the \"Verification Results\" provided are actually a log of an agent attempting to verify something, but the answers (A1, A2, A3) are all saying \"Not supported by contexts.\" This is very strange. Usually, verification results would say \"Claim 1: Supported\", \"Claim 2: Not supported\".\n\n    However, if I take the `VERIFICATION RESULTS` literally:\n    The text says `A1: Not supported by contexts`, `A2: Not supported by contexts`, and `A3: Not supported by contexts`.\n    If these are the answers to the verification of the claims in the draft, then *every* claim is \"Not supported\".\n\n    Let's look at the content of the draft vs. Context [1].\n    Draft Claim 1: \"When building a JavaScript Map keyed by IDs returned from a query, the map keys must match the canonical lowercase form.\"\n    Context [1]: \"...When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast...\"\n    This claim *is* supported by Context [1].\n\n    Draft Claim 2: \"This is because PostgreSQL always canonicalizes UUIDs to lowercase during the cast process.\"\n    Context [1]: \"...because pg canonicalizes UUIDs on cast...\" (Note: The context says `pg` node driver, not necessarily PostgreSQL itself, but it mentions `pg-node`. However, it does say \"the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast\").\n    This claim *is* supported by Context [1].\n\n    So why do the `VERIFICATION RESULTS` say \"Not supported by contexts\"?\n    Looking at the structure of Q1-A1, Q2-A2, etc., they are not verifying claims. They are meta-questions about the task itself.\n    Q1: Goal... A1: Not supported...\n    Q2: Constraints... A2: Not-supported...\n    Q3: Target specific factual claims... A3: Not supported...\n\n    This looks like a broken prompt where the \"Verification Results\" are actually just garbage text or metadata from an automated evaluation process that failed to find any valid questions.\n\n    *Wait!* Let me look at `A4`.\n    `A4: * Question type: Verification question (Yes/No or short factual phrase). ... Context [1]: Discusses UUID casting in PostgreSQL... Context [2]... Context [3]...`\n    `A4` actually contains the summary of the contexts! It says \"Context [1]: Discusses UUID casting in PostgreSQL (`pg` node driver). `RETURNING` is always canonical lowercase. Map keys must match.\"\n\n    This means the *actual* verification information for the draft claims is contained within the text of `A4`.\n    Let's re-examine `A4`:\n    \"Context [1]: Discusses UUID casting in PostgreSQL (`pg` node driver). `RETURNING` is always canonical lowercase. Map keys must match.\"\n\n    So, let's evaluate the draft",
+            "contexts_used": [
+              {
+                "key": "68b2f2cb-2271-454e-bf7e-7831fafb9e3c",
+                "title": "pg UUID cast RETURNING is always canonical lowercase — map keys must match",
+                "snippet_preview": "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If",
+                "char_count": 280
+              },
+              {
+                "key": "5258dbfe-b76d-42aa-b680-15eb9a7b83d7",
+                "title": "Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1",
+                "snippet_preview": "The codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[",
+                "char_count": 280
+              },
+              {
+                "key": "898c3ce8-80a6-4a63-9359-9deaf495633d",
+                "title": "Docker compose --force-recreate doesn't pick up local src changes; rebuild the image first",
+                "snippet_preview": "When making changes to src/ in a Docker-compose setup, you must rebuild the image using `docker compose build <service>` before running `docker compose up -d --force-recreate <service>`. This ensures ",
+                "char_count": 280
+              }
+            ],
+            "prompt_used": "You are answering a user question using ONLY the lessons provided below.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information that is not present in\n   the lessons. Treat your own training knowledge as off-limits. If a fact\n   isn't in a lesson below, it doesn't exist for this answer.\n2. CITE EVERY CLAIM: Every substantive claim in your answer MUST end with\n   a bracketed citation like [1] or [1,3] referring to the lesson number(s)\n   that support it. Claims without citations are not allowed.\n3. ABSTAIN WHEN UNSUPPORTED: If the lessons do NOT contain enough information\n   to answer the question, your ENTIRE answer must be exactly:\n       Not in context.\n   Do not pad, do not speculate, do not partially answer.\n4. NO MEMORY LEAK: Do not say \"as you know\" / \"as is well known\" / \"typically\"\n   / \"in general\" — those phrases signal use of training knowledge.\n\nQUESTION:\nhow to handle pg UUID casing when building map lookups after RETURNING\n\nLESSONS:\n[1] — pg UUID cast RETURNING is always canonical lowercase — map keys must match\nkey: 68b2f2cb-2271-454e-bf7e-7831fafb9e3c\nWhen using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…\n\n---\n\n[2] — Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1\nkey: 5258dbfe-b76d-42aa-b680-15eb9a7b83d7\nThe codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[])` for multiple projects, avoiding the N+1 problem. This pattern should be app…\n\n---\n\n[3] — Docker compose --force-recreate doesn't pick up local src changes; rebuild the image first\nkey: 898c3ce8-80a6-4a63-9359-9deaf495633d\nWhen making changes to src/ in a Docker-compose setup, you must rebuild the image using `docker compose build <service>` before running `docker compose up -d --force-recreate <service>`. This ensures that local source changes are incorporated into the new image. Failure to do so…\n\nWrite a concise 2-4 sentence answer that:\n- Directly answers the question\n- Has a bracketed citation at the end of every claim\n- Combines multiple lessons when needed (e.g. \"X applies [1], and Y also\n  applies [3], so both checks are required\")\n- Says exactly \"Not in context.\" if the lessons don't cover the question\n\nANSWER:\n",
+            "synth_ms": 70077,
+            "judge_ms": 74901,
+            "scores": {
+              "faithfulness": null,
+              "answer_relevancy": 0.37756548903433673,
+              "context_precision": null,
+              "context_recall": null,
+              "groundedness_self_eval": null
+            },
+            "fail_reasons": [
+              "answer_relevancy<0.85"
+            ],
+            "cove": {
+              "draft_answer": "When building a JavaScript Map keyed by IDs returned from a query, the map keys must match the canonical lowercase form [1]. This is because PostgreSQL always canonicalizes UUIDs to lowercase during the cast process [1].",
+              "verification_questions": [
+                "Goal: Audit a draft answer for unsupported claims by writing verification questions.",
+                "Constraints for Verification Questions:",
+                "Target specific factual claims in the draft.",
+                "/2. Answerable with Yes/No or short factual phrase.",
+                "Reference content asserted in the draft (no external facts)."
+              ],
+              "verification_answers": [
+                {
+                  "question": "Goal: Audit a draft answer for unsupported claims by writing verification questions.",
+                  "answer": "Not supported by contexts."
+                },
+                {
+                  "question": "Constraints for Verification Questions:",
+                  "answer": "Not supported by contexts."
+                },
+                {
+                  "question": "Target specific factual claims in the draft.",
+                  "answer": "Not supported by contexts."
+                },
+                {
+                  "question": "/2. Answerable with Yes/No or short factual phrase.",
+                  "answer": "*   Question type: Verification question (Yes/No or short factual phrase).\n    *   Constraint 1: Use ONLY provided contexts.\n    *   Constraint 2: Closed-book (no external knowledge).\n    *   Constraint 3: If not supported, answer \"Not supported by contexts.\"\n    *   Constraint 4: Concise (1-2 sentences max).\n\n    *   Context [1]: Discusses UUID casting in PostgreSQL (`pg` node driver). `RETURNING` is always canonical lowercase. Map keys must match. `WHERE id = ANY($1::uuid[])` handles non-canonical input by matching case, but the returned key is lowercase.\n    *   Context [2]: Discusses optimizing multi-project salience aggregation using `project_id = ANY(...)` to avoid N+1 queries.\n    *   Context [3]: Discusses Docker compose behavior regarding local source changes and the need to rebuild images before `--force-recreate`.\n\n    *   The user provided \"/2. Answerable with Yes/No or short factual phrase.\" as part of the prompt, but there is no actual question following it in the \"VERIFICATION QUESTION\" field.\n    *   Wait, looking closer at the prompt: `VERIFICATION QUESTION: /2. Answerable with Yes/No or short factual phrase.`\n    *   This looks like a template error or a placeholder. There is no specific claim to verify.\n\n    *Self-Correction:* Let me re-read the \"VERIFICATION QUESTION\" section.\n    `VERIFICATION QUESTION:`\n    `/2. Answerable with Yes/No or short factual phrase.`\n\n    There is literally no question provided in the prompt after the label \"VERIFICATION QUESTION:\". It just contains a instruction about how the question *should* be answered (likely copied from a dataset template).\n\n    Wait, let me look at the text again.\n    `VERIFICATION QUESTION:`\n    `/2. Answerable with Yes/No or short factual phrase.`\n\n    Is there a hidden question? No.\n    Is it possible the user *meant* to ask something but forgot? Or is the \"question\" actually just that string?\n    If I treat \"/2. Answerable with Yes/No or short factual phrase.\" as the question, it's not a claim to verify.\n\n    Let me check if there's any other text. No.\n\n    However, often in these types of prompts, the \"VERIFICATION QUESTION\" is the part that follows the colon. Here, what follows the colon is \"/2. Answerable with Yes/No or short factual phrase.\" This looks like metadata for a task rather than a question.\n\n    If there is no question to verify, I cannot verify anything.\n    According to instructions: \"If the contexts do not directly support the question's claim, answer exactly: 'Not supported by contexts.'\"\n\n    Since there is no claim provided in the `VERIFICATION QUESTION` field, it is impossible for the contexts to support it.\n\n    *Wait*, let me look at the prompt one more time very carefully.\n    `VERIFICATION QUESTION:`\n    `/2. Answerable with Yes/No or short factual phrase.`\n\n    Is there any chance the question is embedded in the context? No, that would violate \"Closed-book\".\n    Is it possible the user wants me to verify if \"/2. Answerable with Yes/No or short factual phrase.\" is true? That doesn't make sense.\n\n    Let's assume the prompt is malformed and there is no question. If there is no question, I cannot answer \"Yes\" or \"No\".\n    If I look at the structure of similar LLM evaluation datasets (like FEVER or similar), sometimes the question is missing in a bad copy-paste.\n\n    Let's check if any part of the context *is* the question. No.\n\n    Could the question be: \"Is the answerable with Yes/No or short factual phrase?\" No, that's meta.\n\n    Actually, looking at the prompt again:\n    `VERIFICATION QUESTION:`\n    `/2. Answerable with Yes/No or short factual phrase.`\n\n    This is definitely a placeholder. Since there is no claim to verify, I must conclude it is not supported by the contexts.\n\n    *Alternative interpretation:* Is the user asking me to answer the question \"/2. Answerable with Yes/No or short factual phrase.\"? That's not a question.\n\n    Let's try to see if any of the context content could be interpreted as a question.\n    Context 1: UUID lowercase...\n    Context 2: Multi-project salience...\n    Context/3: Docker compose...\n\n    There is no claim. I will output \"Not supported by contexts.\" because there is no question provided to"
+                },
+                {
+                  "question": "Reference content asserted in the draft (no external facts).",
+                  "answer": "*   Task: Answer a verification question based *only* on provided contexts.\n    *   Constraint 1: Closed-book (no external knowledge).\n    *   Constraint 2: If not supported, answer \"Not supported by contexts.\"\n    *   Constraint 3: Concise (1-2 sentences max).\n    *   Verification Question: \"Reference content asserted in the draft (no external facts).\"\n\n    *Wait*, looking at the \"VERIFICATION QUESTION\" field again. It says: \"Reference content asserted in the draft (no external facts).\" This isn't actually a question. It looks like a placeholder or an instruction that was accidentally pasted into the question field.\n\n    Let me re-read carefully.\n    \"VERIFICATION QUESTION: Reference content asserted in the draft (no external facts).\"\n\n    Is there a claim to verify? Usually, a verification question asks \"Is it true that [claim]?\" or \"Does context X support [claim]?\". Here, the text provided as the question is just a meta-instruction.\n\n    However, looking at how these prompts usually work in evaluation datasets:\n    The user might have intended to ask if a specific claim (which isn't there) is true.\n    Or, perhaps the \"VERIFICATION QUESTION\" *is* the text to be verified? But it contains no assertion. It says \"Reference content asserted in the draft (no external facts).\" This is an instruction.\n\n    Let's look at the contexts:\n    [1] UUID casting returns lowercase.\n    [2] Multi-project salience needs batching with `ANY` to avoid N+1.\n    [3] Docker compose `--force-recreate` requires a rebuild for local src changes.\n\n    If I treat \"Reference content asserted in the draft (no external facts)\" as the question, there is no claim within it to verify against the contexts.\n\n    Wait, looking at common patterns for this type of prompt:\n    Sometimes the \"VERIFICATION QUESTION\" is actually a statement that needs to be checked. But here, the statement is \"Reference content asserted in the draft (no-external facts)\". This isn't an assertion about the context.\n\n    Let me check if I missed anything.\n    Context 1: UUIDs are canonical lowercase.\n    Context 2: `computeSalienceMultiProject` uses `= ANY($1::text[])`.\n    Context 3: Rebuild image before `--force-recreate` for src changes.\n\n    The \"Question\" provided is: \"Reference content asserted in the draft (no external facts).\"\n    This contains no factual claim about the contents of the contexts. It's a meta-instruction.\n\n    If there is no claim to verify, I cannot say it is supported or not supported by the context because there is nothing *to* support/refute. However, strictly following \"If the contexts do not directly support the question's claim, answer exactly: 'Not supported by contexts.'\", since there is no claim in the question, I must conclude it is not supported.\n\n    Let me double-check if the user meant for me to verify something else.\n    Is it possible the \"VERIFICATION QUESTION\" is actually a header and the question is missing?\n    Or is the question asking me to *act* as a verifier for content that isn't there?\n\n    Actually, looking at the prompt structure:\n    `VERIFICATION QUESTION: Reference content asserted in the draft (no external facts).`\n    This looks like a mistake in the prompt construction. The user provided an instruction where the question should be.\n\n    However, I must follow the instructions: \"If the contexts do/do not directly support the question's claim...\"\n    Since there is no claim in the text \"Reference content asserted in the draft (no external facts).\", it cannot be supported by the contexts.\n\n    Let me re-read the prompt one more time. Is there any other way to interpret this?\n    Maybe the user wants me to verify if the *contexts* contain reference content asserted in a draft? No, that makes no sense.\n\n    Could the question be asking if the provided context is \"Reference content asserted in the draft\"? Still doesn't make sense.\n\n    Let's assume the prompt is broken and there is no claim.\n    If I cannot find a claim to verify, the answer must be \"Not supported by contexts.\"\n\n    Wait, let me look at the text again.\n    \"Reference content asserted in the draft (no external facts).\"\n    This looks like a instruction for a human annotator or an LLM task description that was accidentally placed in the question field.\n\n    Since there is no claim to verify, I will provide the required response for when no support is found.\n\n    *Self-Correction:* Is it possible the"
+                }
+              ],
+              "revised_answer": "*   Draft Answer: \"When building a JavaScript Map keyed by IDs returned from a query, the map keys must match the canonical lowercase form [1]. This is because PostgreSQL always canonicalizes UUIDs to lowercase during the cast process [1].\"\n    *   Verification Results (Q1-Q5): The verification results provided are actually instructions/metadata for an evaluation task. There is no actual \"Yes/No\" or \"Supported/Not supported\" answer provided for any specific claim in the draft.\n    *   Wait, let me look at the `VERIFICATION RESULTS` section again very carefully.\n\n    `VERIFICATION RESULTS (audit of the draft against contexts):`\n    `Q1: Goal: Audit a draft answer for unsupported claims by writing verification questions.`\n    `A1: Not supported by contexts.`\n    `Q2: Constraints for Verification Questions:`\n    `A2: Not-supported...`\n    `Q3: Target specific factual claims in the draft.`\n    `A3: Not supported...`\n    `Q4: ... (contains instructions and context summaries)`\n\n    This is extremely confusing. The \"VERIFICATION RESULTS\" section doesn't contain answers to questions about the *draft*. Instead, it contains a series of Q&A pairs that look like they are describing the *process* of creating verification questions or defining constraints for them.\n    Specifically:\n    `Q1: Goal... A1: Not supported by contexts.`\n    `Q2: Constraints... A2: Not supported by contexts.`\n    `Q3: Target specific factual claims... A3: Not supported by contexts.`\n\n    This looks like the \"Verification Results\" provided are actually a log of an agent attempting to verify something, but the answers (A1, A2, A3) are all saying \"Not supported by contexts.\" This is very strange. Usually, verification results would say \"Claim 1: Supported\", \"Claim 2: Not supported\".\n\n    However, if I take the `VERIFICATION RESULTS` literally:\n    The text says `A1: Not supported by contexts`, `A2: Not supported by contexts`, and `A3: Not supported by contexts`.\n    If these are the answers to the verification of the claims in the draft, then *every* claim is \"Not supported\".\n\n    Let's look at the content of the draft vs. Context [1].\n    Draft Claim 1: \"When building a JavaScript Map keyed by IDs returned from a query, the map keys must match the canonical lowercase form.\"\n    Context [1]: \"...When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast...\"\n    This claim *is* supported by Context [1].\n\n    Draft Claim 2: \"This is because PostgreSQL always canonicalizes UUIDs to lowercase during the cast process.\"\n    Context [1]: \"...because pg canonicalizes UUIDs on cast...\" (Note: The context says `pg` node driver, not necessarily PostgreSQL itself, but it mentions `pg-node`. However, it does say \"the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast\").\n    This claim *is* supported by Context [1].\n\n    So why do the `VERIFICATION RESULTS` say \"Not supported by contexts\"?\n    Looking at the structure of Q1-A1, Q2-A2, etc., they are not verifying claims. They are meta-questions about the task itself.\n    Q1: Goal... A1: Not supported...\n    Q2: Constraints... A2: Not-supported...\n    Q3: Target specific factual claims... A3: Not supported...\n\n    This looks like a broken prompt where the \"Verification Results\" are actually just garbage text or metadata from an automated evaluation process that failed to find any valid questions.\n\n    *Wait!* Let me look at `A4`.\n    `A4: * Question type: Verification question (Yes/No or short factual phrase). ... Context [1]: Discusses UUID casting in PostgreSQL... Context [2]... Context [3]...`\n    `A4` actually contains the summary of the contexts! It says \"Context [1]: Discusses UUID casting in PostgreSQL (`pg` node driver). `RETURNING` is always canonical lowercase. Map keys must match.\"\n\n    This means the *actual* verification information for the draft claims is contained within the text of `A4`.\n    Let's re-examine `A4`:\n    \"Context [1]: Discusses UUID casting in PostgreSQL (`pg` node driver). `RETURNING` is always canonical lowercase. Map keys must match.\"\n\n    So, let's evaluate the draft",
+              "step_ms": {
+                "plan": 8646,
+                "verify": 35390,
+                "revise": 9662
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

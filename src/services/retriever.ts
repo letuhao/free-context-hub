@@ -9,19 +9,24 @@ import { redisGetJson, redisKey, redisSetJson } from './redisCache.js';
 import { decomposeQuery } from '../utils/queryDecomposer.js';
 import { getLanguageSearchHints, getProjectDominantLanguage } from '../utils/languageHints.js';
 import { buildFtsQuery } from '../utils/ftsTokenizer.js';
+import { cohereRerank } from './rerankClient.js';
 import { createModuleLogger } from '../utils/logger.js';
+import { assertCallerScope } from '../core/security/callerScope.js';
+import type { CallerScope } from '../core/security/callerScope.js';
 
 const logger = createModuleLogger('retriever');
 
 export type SearchCodeParams = {
   projectId: string;
+  /** DEFERRED-029: caller's scope; enforced against projectId. */
+  callerScope?: CallerScope;
   query: string;
   pathGlob?: string;
   includeTests?: boolean;
   includeSmoke?: boolean;
   preferPaths?: string[];
   qcNoCap?: boolean;
-  rerankMode?: 'off' | 'llm';
+  rerankMode?: 'off' | 'llm' | 'api';
   lexicalBoost?: boolean;
   kgAssist?: boolean;
   lessonToCode?: boolean;
@@ -525,8 +530,54 @@ async function llmRerank(params: {
   }
 }
 
+/**
+ * Cross-encoder rerank for code search (2026-06-16) via the shared Cohere
+ * boundary ({@link cohereRerank}) — local-rerank-service now, cloud later by
+ * config. Document text = `path\nsnippet` (parity with llmRerank's PATH+SNIPPET).
+ * Returns a full permutation of candidate indices on success; THROWS on failure
+ * (matching llmRerank) so the dispatcher's catch keeps base order and does not
+ * cache a degraded order.
+ */
+async function apiRerank(params: {
+  query: string;
+  candidates: Array<{ path: string; snippet: string }>;
+  timeoutMs: number;
+}): Promise<number[]> {
+  const env = getEnv();
+  const n = params.candidates.length;
+  const documents = params.candidates.map(c => `${c.path}\n${c.snippet}`);
+  const ranked = await cohereRerank({
+    query: params.query,
+    documents,
+    baseUrl: env.RERANK_BASE_URL ?? 'http://127.0.0.1:28417',
+    apiKey: env.RERANK_API_KEY,
+    model: env.RERANK_MODEL ?? 'bge-reranker-v2-m3',
+    timeoutMs: params.timeoutMs,
+  });
+  const order = ranked.map(r => r.index);
+  // Append any indices the server omitted to keep a full permutation.
+  const seen = new Set(order);
+  for (let i = 0; i < n; i++) if (!seen.has(i)) order.push(i);
+  return order;
+}
+
+/**
+ * Default rerank mode for INTERACTIVE entry points (MCP search_code) only.
+ * Maps the global RERANK_TYPE to a retriever rerankMode so production queries
+ * default to the configured cross-encoder. Internal callers (qcEval, faqBuilder,
+ * sub-query recursion) do NOT use this — they keep retriever's internal `'off'`
+ * default so benchmark/no-rerank baselines stay valid.
+ */
+export function defaultInteractiveRerankMode(): 'off' | 'llm' | 'api' {
+  const t = getEnv().RERANK_TYPE;
+  if (t === 'api') return 'api';
+  if (t === 'generative') return 'llm';
+  return 'off'; // 'cross-encoder' (embedding-cosine) has no code-search path
+}
+
 export async function searchCode({
   projectId,
+  callerScope,
   query,
   pathGlob,
   includeTests,
@@ -541,6 +592,7 @@ export async function searchCode({
   debug,
   hybridMode,
 }: SearchCodeParams): Promise<SearchCodeResult> {
+  assertCallerScope(callerScope, projectId);
   const searchStartMs = Date.now();
   const env = getEnv();
   const pool = getDbPool();
@@ -916,15 +968,17 @@ export async function searchCode({
     if (n <= maxPerFile) capped.push(m);
   }
 
-  // Optional sync LLM rerank (online path).
+  // Optional sync rerank (online path): 'llm' = generative ranker, 'api' =
+  // cross-encoder via the Cohere boundary (local-rerank-service / cloud).
   let reranked = capped;
   const mode = rerankMode ?? 'off';
-  if (mode === 'llm') {
+  if (mode === 'llm' || mode === 'api') {
     const ttlMs = env.RERANK_CACHE_TTL_SECONDS * 1000;
     const topN = Math.min(20, reranked.length);
     const candidates = reranked.slice(0, topN).map(m => ({ path: m.path, snippet: m.snippet }));
     const cacheKey = redisKey([
       'rerank',
+      mode, // distinct cache namespace per ranker so llm/api orders don't collide
       projectId,
       String(cacheVersion),
       Buffer.from(query).toString('base64url'),
@@ -941,7 +995,9 @@ export async function searchCode({
         reranked = order.map(i => reranked[i]).filter(Boolean);
       } else {
         try {
-          const order = await llmRerank({ query, candidates, timeoutMs: env.RERANK_TIMEOUT_MS });
+          const order = mode === 'api'
+            ? await apiRerank({ query, candidates, timeoutMs: env.RERANK_API_TIMEOUT_MS })
+            : await llmRerank({ query, candidates, timeoutMs: env.RERANK_TIMEOUT_MS });
           rerankCache.set(cacheKey, { expiresAt: now + ttlMs, order });
           await redisSetJson(cacheKey, order, env.REDIS_RERANK_TTL_SECONDS).catch(() => {});
           reranked = order.map(i => reranked[i]).filter(Boolean);

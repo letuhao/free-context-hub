@@ -28,6 +28,7 @@
 import type { PoolClient } from 'pg';
 import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
+import { assertTopicScope, assertMotionScope, type CallerScope } from '../core/index.js';
 import { createModuleLogger } from '../utils/logger.js';
 import { appendEvent } from './coordinationEvents.js';
 import {
@@ -243,6 +244,8 @@ function decideOutcome(
  */
 export async function proposeMotion(params: {
   topic_id: string;
+  /** DEFERRED-029: caller's scope; enforced via the topic's derived project_id. */
+  callerScope?: CallerScope;
   body_id: string;
   subject_ref: string;
   proposed_by: string;
@@ -250,6 +253,7 @@ export async function proposeMotion(params: {
   /** Sprint 15.7 — optional execution_task blob for chain handler on carried. */
   execution_task?: unknown;
 }): Promise<ProposeResult> {
+  await assertTopicScope(getDbPool(), params.callerScope, params.topic_id);
   const topicId = (params.topic_id ?? '').trim();
   const bodyId = (params.body_id ?? '').trim();
   const subjectRef = (params.subject_ref ?? '').trim();
@@ -361,8 +365,11 @@ export async function proposeMotion(params: {
  */
 export async function secondMotion(params: {
   motion_id: string;
+  /** DEFERRED-029: caller's scope; enforced via the motion's derived project_id. */
+  callerScope?: CallerScope;
   actor_id: string;
 }): Promise<SecondResult> {
+  await assertMotionScope(getDbPool(), params.callerScope, params.motion_id);
   const motionId = (params.motion_id ?? '').trim();
   const actorId = (params.actor_id ?? '').trim();
   if (!motionId || !actorId) {
@@ -453,10 +460,13 @@ export async function secondMotion(params: {
  */
 export async function castVote(params: {
   motion_id: string;
+  /** DEFERRED-029: caller's scope; enforced via the motion's derived project_id. */
+  callerScope?: CallerScope;
   actor_id: string;
   choice: MotionVoteChoice;
   proxy_for?: string;
 }): Promise<VoteResult> {
+  await assertMotionScope(getDbPool(), params.callerScope, params.motion_id);
   const motionId = (params.motion_id ?? '').trim();
   const actorId = (params.actor_id ?? '').trim();
   const choice = (params.choice ?? '') as string;
@@ -589,8 +599,11 @@ export async function castVote(params: {
  */
 export async function vetoMotion(params: {
   motion_id: string;
+  /** DEFERRED-029: caller's scope; enforced via the motion's derived project_id. */
+  callerScope?: CallerScope;
   actor_id: string;
 }): Promise<VetoResult> {
+  await assertMotionScope(getDbPool(), params.callerScope, params.motion_id);
   const motionId = (params.motion_id ?? '').trim();
   const actorId = (params.actor_id ?? '').trim();
   if (!motionId || !actorId) {
@@ -693,13 +706,14 @@ export async function vetoMotion(params: {
  * Lock order: `motion → topics` (the votes aggregate is unlocked — the
  * `motion … FOR UPDATE` lock already serializes `castVote`).
  */
-export async function tallyMotion(params: { motion_id: string }): Promise<TallyResult> {
+export async function tallyMotion(params: { motion_id: string; callerScope?: CallerScope }): Promise<TallyResult> {
   const motionId = (params.motion_id ?? '').trim();
   if (!motionId) {
     throw new ContextHubError('BAD_REQUEST', 'motion_id is required');
   }
 
   const pool = getDbPool();
+  await assertMotionScope(pool, params.callerScope, motionId);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -873,8 +887,9 @@ const MOTION_SELECT = `
 /**
  * Get a single motion + its votes in ONE query. Returns null when no row matches.
  */
-export async function getMotion(params: { motion_id: string }): Promise<MotionRecord | null> {
+export async function getMotion(params: { motion_id: string; callerScope?: CallerScope }): Promise<MotionRecord | null> {
   const pool = getDbPool();
+  await assertMotionScope(pool, params.callerScope, params.motion_id);
   const res = await pool.query(
     `${MOTION_SELECT}
       WHERE m.motion_id = $1
@@ -893,9 +908,12 @@ export async function getMotion(params: { motion_id: string }): Promise<MotionRe
  */
 export async function listMotions(params: {
   topic_id: string;
+  /** DEFERRED-029: caller's scope; enforced via the topic's derived project_id. */
+  callerScope?: CallerScope;
   status?: string;
 }): Promise<ListMotionsResult> {
   const pool = getDbPool();
+  await assertTopicScope(pool, params.callerScope, params.topic_id);
   const topicRes = await pool.query(
     `SELECT 1 FROM topics WHERE topic_id=$1`,
     [params.topic_id],

@@ -59,8 +59,19 @@ const EnvSchema = z.object({
     .default(false),
 
   // Single MVP workspace token for all MCP tool calls.
-  // Optional unless MCP_AUTH_ENABLED=true.
+  // DEPRECATED (DEFERRED-029): scoped api_keys rows are the preferred MCP auth
+  // mechanism. Still accepted for back-compat (matches → global scope, null)
+  // unless MCP_LEGACY_TOKEN_DISABLED=true. Optional in all configurations
+  // since PR E — api_keys-only deployments don't need this set.
   CONTEXT_HUB_WORKSPACE_TOKEN: z.string().min(1, 'CONTEXT_HUB_WORKSPACE_TOKEN is required').optional(),
+
+  // DEFERRED-029 PR E: when true, the legacy single-shared
+  // CONTEXT_HUB_WORKSPACE_TOKEN is rejected even when set in env — only
+  // api_keys rows are accepted. Use this in production deployments that have
+  // fully migrated to scoped tokens. Default false preserves back-compat.
+  MCP_LEGACY_TOKEN_DISABLED: z
+    .preprocess(v => parseBooleanEnv(v), z.boolean().optional())
+    .default(false),
 
   // When provided, MCP tools may omit project_id and fallback to this default.
   // If a tool allows missing project_id and this env is missing, the tool returns Bad Request.
@@ -221,10 +232,19 @@ const EnvSchema = z.object({
   //   compatible models like gte-reranker-modernbert-base (12.1f finding).
   //   Deterministic. Quality: partial win over no-rerank on 40q goldenset.
   // api: external /rerank endpoint (TEI, Infinity, Cohere). Unblocks true cross-encoders
-  //   like bge-reranker-v2-m3, jina-reranker-v3. Deterministic. Quality: TBD in 12.1g.
-  //   Requires RERANK_BASE_URL set (default in docker-compose: http://tei-rerank:80).
-  RERANK_TYPE: z.enum(['generative', 'cross-encoder', 'api']).optional().default('generative'),
+  //   like bge-reranker-v2-m3, jina-reranker-v3. Deterministic.
+  //   2026-06-16: now the DEFAULT — cross-encoder rerank via local-rerank-service.
+  //   Requires RERANK_BASE_URL (default below: local-rerank-service on 127.0.0.1:28417).
+  RERANK_TYPE: z.enum(['generative', 'cross-encoder', 'api']).optional().default('api'),
+  /** Wire protocol for RERANK_TYPE='api'.
+   *  'cohere' = Cohere /v1/rerank schema (local-rerank-service, Cohere/Jina/Voyage cloud) — DEFAULT.
+   *  'tei'    = HuggingFace text-embeddings-inference /rerank {query,texts} legacy schema. */
+  RERANK_API_PROTOCOL: z.enum(['cohere', 'tei']).optional().default('cohere'),
   RERANK_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(1800),
+  /** Tighter budget for the api (cross-encoder) path — warm inference is tens of ms;
+   *  a short ceiling bounds the cost when the rerank service is cold/unreachable
+   *  (caller falls back to base order). */
+  RERANK_API_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(800),
   RERANK_CACHE_TTL_SECONDS: z.coerce.number().int().positive().optional().default(3600),
 
   // Optional dedicated QA agent model endpoint for FAQ/RAPTOR synthesis.
@@ -252,6 +272,23 @@ const EnvSchema = z.object({
   JUDGE_AGENT_API_KEY: z.string().optional(),
   JUDGE_AGENT_MODEL: z.string().min(1).optional(),
   JUDGE_AGENT_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(12_000),
+
+  // Phase 16 Sprint 16.3: runtime synthesizer ("answerer") used by the gen-eval
+  // pipeline in src/qc/genPipeline.ts. When unset, the answerer falls back to
+  // JUDGE_AGENT_* (single Gemma-4 instance in LM Studio plays both roles, with
+  // different prompts). Splitting answerer ≠ judge reduces same-model bias.
+  ANSWERER_AGENT_BASE_URL: z.string().min(1).optional(),
+  ANSWERER_AGENT_API_KEY: z.string().optional(),
+  ANSWERER_AGENT_MODEL: z.string().min(1).optional(),
+  ANSWERER_AGENT_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(60_000),
+  ANSWERER_AGENT_TEMPERATURE: z.coerce.number().min(0).max(2).optional().default(0.2),
+  ANSWERER_AGENT_MAX_TOKENS: z.coerce.number().int().positive().optional().default(1024),
+  ANSWERER_AGENT_SEED: z.coerce.number().int().optional().default(42),
+
+  // Phase 16 Sprint 16.3: HTTP endpoint of the ragas-judge sidecar consumed by
+  // src/qc/judge.ts. Defaults to the docker-compose port-mapped on localhost.
+  RAGAS_JUDGE_URL: z.string().min(1).optional().default('http://localhost:3005'),
+  RAGAS_JUDGE_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(120_000),
 
   // Phase 10: optional dedicated vision model endpoint for document extraction.
   // Falls back to DISTILLATION_* then EMBEDDINGS_BASE_URL if unset.
@@ -359,11 +396,25 @@ const EnvSchema = z.object({
   MEMORY_BUILD_MODULE_MAX_TOKENS: z.coerce.number().int().positive().optional().default(6144),
   MEMORY_BUILD_GLOBAL_MAX_TOKENS: z.coerce.number().int().positive().optional().default(8192),
 }).superRefine((val, ctx) => {
-  if (val.MCP_AUTH_ENABLED && (!val.CONTEXT_HUB_WORKSPACE_TOKEN || val.CONTEXT_HUB_WORKSPACE_TOKEN.length === 0)) {
+  // DEFERRED-029 PR E: CONTEXT_HUB_WORKSPACE_TOKEN is no longer strictly
+  // required when MCP_AUTH_ENABLED=true — api_keys rows are now the preferred
+  // auth path. Only require it when:
+  //   - MCP auth is on AND
+  //   - the legacy token path is NOT explicitly disabled
+  //   (i.e., the operator wants to keep accepting the single-shared token).
+  // Setting MCP_LEGACY_TOKEN_DISABLED=true means "api_keys only" and the
+  // env var becomes irrelevant.
+  if (
+    val.MCP_AUTH_ENABLED &&
+    !val.MCP_LEGACY_TOKEN_DISABLED &&
+    (!val.CONTEXT_HUB_WORKSPACE_TOKEN || val.CONTEXT_HUB_WORKSPACE_TOKEN.length === 0)
+  ) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['CONTEXT_HUB_WORKSPACE_TOKEN'],
-      message: 'CONTEXT_HUB_WORKSPACE_TOKEN is required when MCP_AUTH_ENABLED=true',
+      message:
+        'CONTEXT_HUB_WORKSPACE_TOKEN is required when MCP_AUTH_ENABLED=true and MCP_LEGACY_TOKEN_DISABLED is unset/false. ' +
+        'Set MCP_LEGACY_TOKEN_DISABLED=true to use api_keys-only auth.',
     });
   }
   if (val.DISTILLATION_ENABLED && (!val.DISTILLATION_MODEL || !val.DISTILLATION_MODEL.trim())) {
@@ -475,5 +526,13 @@ export function getEnv(raw: NodeJS.ProcessEnv = process.env): Env {
   }
   if (raw === process.env) _cachedEnv = parsed.data;
   return parsed.data;
+}
+
+/** Test-only helper — bust the cached env so a fresh process.env read happens
+ *  on the next getEnv() call. Used by env-flag unit tests (e.g. PR E
+ *  MCP_LEGACY_TOKEN_DISABLED). Not exported from any barrel; tests import
+ *  directly from `../env.js`. */
+export function _resetEnvCacheForTest(): void {
+  _cachedEnv = null;
 }
 

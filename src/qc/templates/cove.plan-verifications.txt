@@ -1,0 +1,61 @@
+You are auditing a draft answer by writing verification questions. The next
+step will check each question against the contexts; we will then revise the
+draft to drop any claims the verification couldn't confirm.
+
+EACH VERIFICATION QUESTION MUST:
+
+  1. Quote or paraphrase ONE specific claim from the draft (a value, name,
+     mechanism, relationship, or behavior).
+  2. Ask whether that claim is supported by the contexts — using the form:
+     "Is the claim '<claim>' supported by the contexts?"
+  3. Be self-contained: a reader who never saw the draft must still
+     understand what's being verified.
+  4. NOT ask about background knowledge, common conventions, or "industry
+     standards" — only audit claims that appear in the draft itself.
+
+────────────────────────────────────────────────────────────────────────
+EXAMPLE 1
+────────────────────────────────────────────────────────────────────────
+
+DRAFT:
+  PostgreSQL canonicalizes UUIDs to lowercase on cast [1], so RETURNING
+  always yields lowercase [1]. Call .toLowerCase() on both sides of a Map
+  lookup [1].
+
+GOOD VERIFICATION QUESTIONS:
+  Is the claim "PostgreSQL canonicalizes UUIDs to lowercase on cast" supported by the contexts?
+  Is the claim "RETURNING always yields lowercase UUIDs" supported by the contexts?
+  Is the claim "the fix is to call .toLowerCase() on both sides of a Map lookup" supported by the contexts?
+
+────────────────────────────────────────────────────────────────────────
+EXAMPLE 2
+────────────────────────────────────────────────────────────────────────
+
+DRAFT:
+  The max retry count is 3 [1], with a 100ms base delay [1]. Industry
+  standard is exponential backoff with jitter [1].
+
+GOOD VERIFICATION QUESTIONS:
+  Is the claim "the maximum retry count is 3" supported by the contexts?
+  Is the claim "the base delay is 100ms" supported by the contexts?
+  Is the claim "exponential backoff with jitter is the retry strategy" supported by the contexts?
+  (Notice: the draft framed the last as "industry standard" — a memory-leak
+   phrase. We still audit the underlying claim, not the framing.)
+
+────────────────────────────────────────────────────────────────────────
+NOW WRITE FOR THIS DRAFT
+────────────────────────────────────────────────────────────────────────
+
+ORIGINAL QUESTION:
+{question}
+
+DRAFT ANSWER:
+{draft_answer}
+
+CONTEXTS THE ANSWER SHOULD BE GROUNDED IN:
+{numbered_contexts}
+
+Write 3 to 5 verification questions. Each question on its own line.
+NO numbering. NO bullets. NO surrounding prose. NO commentary.
+
+VERIFICATION QUESTIONS:

@@ -13,9 +13,14 @@ export { assertWorkspaceToken, resolveProjectIdOrThrow } from './auth.js';
 
 // ── Security: service-layer tenant-scope guard (DEFERRED-029) ──
 export { assertCallerScope, assertCallerScopeMulti, type CallerScope } from './security/callerScope.js';
+export {
+  assertTopicScope, assertTaskScope, assertMotionScope, assertDisputeScope,
+  assertRequestScope, assertIntakeScope, assertBodyScope, assertArtifactScope,
+  assertDocumentScope, assertLessonScope,
+} from './security/scopeResolvers.js';
 
 // ── Startup ──
-export { logStartupEnvSummary } from './startup.js';
+export { logStartupEnvSummary, prewarmReranker } from './startup.js';
 
 // ── Environment ──
 export { getEnv } from '../env.js';
@@ -29,7 +34,7 @@ export { getLessonImpact, getSymbolNeighbors, searchSymbols, traceDependencyPath
 
 // ── Services: indexing & retrieval ──
 export { indexProject } from '../services/indexer.js';
-export { searchCode } from '../services/retriever.js';
+export { searchCode, defaultInteractiveRerankMode } from '../services/retriever.js';
 export { tieredSearch } from '../services/tieredRetriever.js';
 
 // ── Services: lessons & guardrails ──

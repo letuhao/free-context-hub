@@ -15,6 +15,8 @@ import { embedTexts } from './embedder.js';
 import { buildFtsQuery } from '../utils/ftsTokenizer.js';
 import { createModuleLogger } from '../utils/logger.js';
 import { nearSemanticKey } from '../utils/nearSemanticKey.js';
+import { assertCallerScope, assertCallerScopeMulti } from '../core/security/callerScope.js';
+import type { CallerScope } from '../core/security/callerScope.js';
 
 const logger = createModuleLogger('document-chunks-search');
 
@@ -22,6 +24,8 @@ export type ChunkTypeFilter = 'text' | 'table' | 'code' | 'diagram_description' 
 
 export interface SearchChunksParams {
   projectId: string;
+  /** DEFERRED-029: caller's scope; enforced against projectId. */
+  callerScope?: CallerScope;
   query: string;
   limit?: number;
   /** Restrict to specific chunk types (empty/undefined = all). */
@@ -139,6 +143,7 @@ function isChunksDedupDisabled(): boolean {
 }
 
 export async function searchChunks(params: SearchChunksParams): Promise<SearchChunksResult> {
+  assertCallerScope(params.callerScope, params.projectId);
   const pool = getDbPool();
   // Hard-cap at 100 — chunks are shorter than lessons so a wider pool is
   // fine, and the GUI's "Load more" button walks up to this ceiling.
@@ -308,15 +313,19 @@ export async function searchChunks(params: SearchChunksParams): Promise<SearchCh
 /** Multi-project variant (mirrors searchLessonsMulti). */
 export async function searchChunksMulti(params: {
   projectIds: string[];
+  /** DEFERRED-029: caller's scope; strict-reject if request reaches outside it. */
+  callerScope?: CallerScope;
   query: string;
   limit?: number;
   chunkTypes?: ChunkTypeFilter[];
 }): Promise<SearchChunksResult> {
   const projectIds = [...new Set(params.projectIds.filter(Boolean))];
   if (projectIds.length === 0) return { matches: [], explanations: ['no project_ids provided'] };
+  assertCallerScopeMulti(params.callerScope, projectIds);
   if (projectIds.length === 1) {
     return searchChunks({
       projectId: projectIds[0],
+      callerScope: params.callerScope,
       query: params.query,
       limit: params.limit,
       chunkTypes: params.chunkTypes,

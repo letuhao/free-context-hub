@@ -18,6 +18,17 @@
  *   - emitChain(client, args): transactional helper invoked inside the source-
  *     event txn. Locks topics FOR UPDATE, branches posted vs deferred, emits
  *     the right events, returns ChainResult.
+ *
+ * DEFERRED-029 tenant-scope invariant:
+ *   `emitChain` is server-internal: it is only reachable from inside the
+ *   transactions of `tallyMotion` (services/motions.ts) and `decideStep`
+ *   (services/requests.ts), which both call `assertMotionScope` /
+ *   `assertRequestScope` at the top of their fn body BEFORE opening the txn.
+ *   The `topic_id` passed in is the same `topic_id` already authorized.
+ *   There is no public REST route or MCP handler that invokes `emitChain`
+ *   directly; therefore it neither accepts nor needs a `callerScope` param.
+ *   If a future caller is added (e.g. a new outcome handler), it must
+ *   enforce scope on its primitive BEFORE calling into this helper.
  */
 
 import { randomUUID } from 'node:crypto';

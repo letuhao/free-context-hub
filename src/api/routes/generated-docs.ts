@@ -1,11 +1,18 @@
 import { Router } from 'express';
+import type { Request } from 'express';
 import {
   listGeneratedDocuments,
   getGeneratedDocument,
   promoteGeneratedDocument,
   resolveProjectIdOrThrow,
 } from '../../core/index.js';
+import type { CallerScope } from '../../core/index.js';
 import { requireRole } from '../middleware/requireRole.js';
+
+/** DEFERRED-029: read the caller's project scope attached by bearerAuth. */
+function callerScopeOf(req: Request): CallerScope {
+  return (req as { apiKeyScope?: CallerScope }).apiKeyScope;
+}
 
 const router = Router();
 
@@ -15,6 +22,7 @@ router.get('/', async (req, res, next) => {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
     const result = await listGeneratedDocuments({
       projectId,
+      callerScope: callerScopeOf(req),
       docType: req.query.doc_type as any,
       limit: req.query.limit ? Number(req.query.limit) : undefined,
       offset: req.query.offset ? Number(req.query.offset) : undefined,
@@ -28,7 +36,7 @@ router.get('/', async (req, res, next) => {
 router.get('/:id', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
-    const result = await getGeneratedDocument({ projectId, docId: req.params.id });
+    const result = await getGeneratedDocument({ projectId, callerScope: callerScopeOf(req), docId: req.params.id });
     if (!result) {
       res.status(404).json({ error: 'Document not found' });
       return;
@@ -41,7 +49,7 @@ router.get('/:id', async (req, res, next) => {
 router.post('/:id/promote', requireRole('writer'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
-    const result = await promoteGeneratedDocument({ projectId, docId: String(req.params.id) });
+    const result = await promoteGeneratedDocument({ projectId, callerScope: callerScopeOf(req), docId: String(req.params.id) });
     res.json(result);
   } catch (e) { next(e); }
 });

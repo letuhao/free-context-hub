@@ -23,8 +23,14 @@ import {
   resolveDispute,
   listDisputes,
 } from '../../core/index.js';
+import type { CallerScope } from '../../core/index.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { requireResourceScope, requireBodyTopicScope } from '../middleware/requireResourceScope.js';
+
+/** DEFERRED-029: read the caller's project scope attached by bearerAuth. */
+function callerScopeOf(req: Request): CallerScope {
+  return (req as { apiKeyScope?: CallerScope }).apiKeyScope;
+}
 
 const router = Router();
 
@@ -48,6 +54,7 @@ router.post('/disputes', requireRole('writer'), requireBodyTopicScope(), async (
     const body = req.body ?? {};
     const result = await openDispute({
       topic_id: asString(body.topic_id),
+      callerScope: callerScopeOf(req),
       subject_ref: asString(body.subject_ref),
       parties: Array.isArray(body.parties) ? body.parties as string[] : [],
       procedure: asString(body.procedure) as 'unilateral' | 'collective',
@@ -62,7 +69,7 @@ router.post('/disputes', requireRole('writer'), requireBodyTopicScope(), async (
 // ── GET /api/disputes/:id — get a single dispute + resolution request ─────────
 router.get('/disputes/:id', requireRole('reader'), requireResourceScope('dispute'), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const result = await getDispute(String(req.params.id));
+    const result = await getDispute(String(req.params.id), { callerScope: callerScopeOf(req) });
     res.json({ status: 'ok', data: result });
   } catch (e) { next(e); }
 });
@@ -70,7 +77,7 @@ router.get('/disputes/:id', requireRole('reader'), requireResourceScope('dispute
 // ── POST /api/disputes/:id/resolve — resolve a dispute ───────────────────────
 router.post('/disputes/:id/resolve', requireRole('writer'), requireResourceScope('dispute'), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const result = await resolveDispute(String(req.params.id));
+    const result = await resolveDispute(String(req.params.id), { callerScope: callerScopeOf(req) });
     res.status(200).json({ status: 'ok', data: result });
   } catch (e) { next(e); }
 });
@@ -83,7 +90,7 @@ router.get('/topics/:id/disputes', requireRole('reader'), requireResourceScope('
     const limit = typeof req.query.limit === 'string' ? parseInt(req.query.limit, 10) : undefined;
     const offset = typeof req.query.offset === 'string' ? parseInt(req.query.offset, 10) : undefined;
 
-    const result = await listDisputes(topicId, { status, limit, offset });
+    const result = await listDisputes(topicId, { status, limit, offset, callerScope: callerScopeOf(req) });
     res.json({ status: 'ok', data: result });
   } catch (e) { next(e); }
 });

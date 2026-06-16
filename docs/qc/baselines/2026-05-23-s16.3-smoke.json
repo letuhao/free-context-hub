@@ -1,0 +1,236 @@
+{
+  "schema_version": "1.1",
+  "gen_manifest": {
+    "judge_endpoint": "http://host.docker.internal:1234/v1",
+    "judge_model_id": "google/gemma-4-26b-a4b-it",
+    "judge_prompts_hash": "c0165a73c10c4e04",
+    "answerer_endpoint": "http://localhost:1234/v1",
+    "answerer_model_id": "qwen/qwen3.6-35b-a3b",
+    "answerer_temperature": 0.2,
+    "answerer_seed": 42,
+    "answerer_max_tokens": 1024,
+    "synthesizer_prompt_hashes": {
+      "lessons": "83bf99ccc7669f11",
+      "code": "ccafae05c7dfbc4d",
+      "chunks": "2a4c55b771767102",
+      "global": "eb8e60e5f227eefe"
+    }
+  },
+  "tag": "s16.3-smoke",
+  "run_started_at": "2026-05-23T19:26:51.995Z",
+  "run_ended_at": "2026-05-23T19:27:36.605Z",
+  "elapsed_ms": 44610,
+  "git_commit": "73ff96a+dirty",
+  "git_branch": "phase-16-sprint-16.1-gen-eval-dataset",
+  "project_id": "free-context-hub",
+  "samples_per_query": 1,
+  "k": 10,
+  "surfaces": {
+    "lessons": {
+      "query_count": 2,
+      "errors": 0,
+      "project_id": "free-context-hub",
+      "generation": {
+        "rows_with_gt": 2,
+        "rows_judged": 0,
+        "rows_skipped": 0,
+        "metrics": {}
+      },
+      "metrics": {
+        "recall_at_5": 1,
+        "recall_at_10": 1,
+        "mrr": 1,
+        "ndcg_at_5": 1,
+        "ndcg_at_10": 1,
+        "duplication_rate_at_10": 0,
+        "duplication_rate_nearsemantic_at_10": 0,
+        "coverage_pct": 1,
+        "latency_p50_ms": 4314,
+        "latency_p95_ms": 5341,
+        "latency_mean_ms": 4828
+      },
+      "per_query": [
+        {
+          "id": "lesson-pg-uuid-casing",
+          "group": "confident-hit",
+          "query": "how to handle pg UUID casing when building map lookups after RETURNING",
+          "top_k_keys": [
+            "68b2f2cb-2271-454e-bf7e-7831fafb9e3c",
+            "5258dbfe-b76d-42aa-b680-15eb9a7b83d7",
+            "898c3ce8-80a6-4a63-9359-9deaf495633d",
+            "beeef1e1-aa87-48c1-911d-235ad21ebfce",
+            "4e2b8497-8d8b-4d33-bd2d-1ffd2d66c860",
+            "d081e672-e52e-41c8-a939-bbc08a87b253",
+            "cd0db880-5c36-477f-9f15-6f85dca64596",
+            "17320a37-4f2e-4708-8446-429d35f0f3fa",
+            "e3190078-c8ee-469d-8cad-404e7e806923",
+            "61835c5d-d5c8-4d61-9fa0-3497aadee229"
+          ],
+          "top_k_titles": [
+            "pg UUID cast RETURNING is always canonical lowercase — map keys must match",
+            "Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1",
+            "Docker compose --force-recreate doesn't pick up local src changes; rebuild the image first",
+            "Sprint 13.2 — F1 TTL sweep + Active Work GUI shipped via 6-round AMAW longrun (3 design + 3 code Adversary rounds, max-cap each)",
+            "Phase 15 coordination substrate: event-log & transaction patterns (Sprint 15.1)",
+            "HuggingFace TEI + RERANK_TYPE=api code path unlocks true cross-encoders, but bge-reranker-v2-m3 underperforms on this goldenset",
+            "Dup-rate metric keyed on exact entity id is blind to same-title-different-UUID noise",
+            "Three recurring bypass patterns in tenant-scope work — grep these in every authz PR",
+            "DEFERRED-024: tenant-scope a cross-project queue pop by threading an optional scope filter",
+            "Bundle export must filter owner_project_id to prevent built-in injection on import"
+          ],
+          "top_k_snippets": [
+            "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…",
+            "The codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[])` for multiple projects, avoiding the N+1 problem. This pattern should be app…",
+            "When making changes to src/ in a Docker-compose setup, you must rebuild the image using `docker compose build <service>` before running `docker compose up -d --force-recreate <service>`. This ensures that local source changes are incorporated into the new image. Failure to do so…",
+            "...",
+            "Phase 15 Sprint 15.1 introduced an append-only event log and coordination substrate with four key patterns: 1) Per-topic seq + close-seal enforced in a single UPDATE statement, using row-lock to serialize appends and ensure monotonic, gap-free sequences. 2) Two-transaction read-…",
+            "Sprint 12.1g implemented external rerank endpoint support for true cross-encoders using TEI and RERANK_TYPE=api. While the infrastructure is deterministic, bge-reranker-v2-m3 underperformed on a goldenset compared to other models like gte and generative LLM rerank. The underperf…",
+            "The current duplication rate metric in src/qc/metrics.ts is flawed as it only considers exact entity IDs, ignoring same-title-different-UUID noise. This results in a dup-rate of 0 even when there are multiple near-duplicate lessons with distinct UUIDs. The first archived baselin…",
+            "Three recurring bypass patterns in tenant-scope work identified for grep-checking in every new authz/tenant-scope PR: 1. 'if (project_id) assert' trap - service fn gates scope check behind falsy project_id, skipping check and unconstrained WHERE clause -> cross-tenant read/write…",
+            "Some tenant-scope holes have no request-time project to guard — they live in SERVICE pop/scheduling semantics. /jobs/run-next → runNextJob(queue) → claimNextQueuedJob(queue) popped the next queued job across ALL projects (FOR UPDATE SKIP LOCKED on the global queue). A guard on t…",
+            "The DEFERRED-023 change introduced taxonomy_profiles as a bundle entity. Built-in profiles have owner_project_id IS NULL, while custom profiles carry the owning project ID. The export filters WHERE owner_project_id=$1 ensure built-ins are never exported, preventing them from bei…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            5341
+          ],
+          "latency_ms_median": 5341,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "",
+            "contexts_used": [
+              {
+                "key": "68b2f2cb-2271-454e-bf7e-7831fafb9e3c",
+                "title": "pg UUID cast RETURNING is always canonical lowercase — map keys must match",
+                "snippet_preview": "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If",
+                "char_count": 280
+              },
+              {
+                "key": "5258dbfe-b76d-42aa-b680-15eb9a7b83d7",
+                "title": "Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1",
+                "snippet_preview": "The codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[",
+                "char_count": 280
+              },
+              {
+                "key": "898c3ce8-80a6-4a63-9359-9deaf495633d",
+                "title": "Docker compose --force-recreate doesn't pick up local src changes; rebuild the image first",
+                "snippet_preview": "When making changes to src/ in a Docker-compose setup, you must rebuild the image using `docker compose build <service>` before running `docker compose up -d --force-recreate <service>`. This ensures ",
+                "char_count": 280
+              }
+            ],
+            "prompt_used": "You are answering a user question using ONLY the lessons provided below.\nThe lessons are the canonical project knowledge — decisions, workarounds,\npreferences, and guardrails. Stay grounded: do NOT invent facts not present.\nIf the lessons don't contain enough information to answer, say so explicitly.\n\nQUESTION:\nhow to handle pg UUID casing when building map lookups after RETURNING\n\nLESSONS:\n[1] — pg UUID cast RETURNING is always canonical lowercase — map keys must match\nkey: 68b2f2cb-2271-454e-bf7e-7831fafb9e3c\nWhen using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…\n\n---\n\n[2] — Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1\nkey: 5258dbfe-b76d-42aa-b680-15eb9a7b83d7\nThe codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[])` for multiple projects, avoiding the N+1 problem. This pattern should be app…\n\n---\n\n[3] — Docker compose --force-recreate doesn't pick up local src changes; rebuild the image first\nkey: 898c3ce8-80a6-4a63-9359-9deaf495633d\nWhen making changes to src/ in a Docker-compose setup, you must rebuild the image using `docker compose build <service>` before running `docker compose up -d --force-recreate <service>`. This ensures that local source changes are incorporated into the new image. Failure to do so…\n\nProvide a concise answer (2-4 sentences) that:\n- Directly addresses the question\n- Cites the lesson(s) supporting each claim by their numeric index (e.g. \"per Lesson 1\")\n- Notes when the answer requires combining facts from multiple lessons\n- Says \"Not in context\" if the lessons don't cover the question\n\nANSWER:\n",
+            "synth_ms": 20939,
+            "judge_ms": 5,
+            "scores": {},
+            "error": "judge_failed: judge sidecar HTTP 422"
+          }
+        },
+        {
+          "id": "lesson-undici-version-pinning",
+          "group": "confident-hit",
+          "query": "why must undici userland version match the Node bundled version",
+          "top_k_keys": [
+            "82e14086-dc76-40f5-81f5-e7ef0c4c97ef",
+            "68b2f2cb-2271-454e-bf7e-7831fafb9e3c",
+            "61835c5d-d5c8-4d61-9fa0-3497aadee229",
+            "cd0db880-5c36-477f-9f15-6f85dca64596",
+            "d6b8cde5-a965-4cb5-a159-7efa125e4923",
+            "bb39fe5e-0345-4b98-976b-fe3b0743f169",
+            "4a014c4c-5984-460e-bd68-cb7b0d6ff677",
+            "fe395858-9efb-42db-ae30-6369d9dd9992",
+            "5258dbfe-b76d-42aa-b680-15eb9a7b83d7",
+            "289f24f9-3e56-4e81-82ff-2aaaf4ceeea8"
+          ],
+          "top_k_titles": [
+            "undici userland version MUST match Node's bundled version for fetch dispatcher interop",
+            "pg UUID cast RETURNING is always canonical lowercase — map keys must match",
+            "Bundle export must filter owner_project_id to prevent built-in injection on import",
+            "Dup-rate metric keyed on exact entity id is blind to same-title-different-UUID noise",
+            "DEFERRED-004: tenant-scope must DERIVE project from the resource id, not trust a declared field",
+            "Baseline determinism holds for back-to-back runs only; hours-separated runs jitter by embeddings-service load",
+            "Sprint 15.12: tenant-scope via per-entity resolver middleware (404, not 403)",
+            "Node ESM CLI main-guard needs pathToFileURL on Windows, not plain `file://` concat",
+            "Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1",
+            "Sprint 15.10: event-payload field rename from degraded_to to escalated_to"
+          ],
+          "top_k_snippets": [
+            "Node's global fetch() requires the userland undici version to match its internally bundled version to avoid obscure errors. Node 23.11.1 bundles undici 6.21.2, so pinning userland undici to ^6.21.2 is recommended. Verify compatibility on Node upgrades as internal undici versions…",
+            "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…",
+            "The DEFERRED-023 change introduced taxonomy_profiles as a bundle entity. Built-in profiles have owner_project_id IS NULL, while custom profiles carry the owning project ID. The export filters WHERE owner_project_id=$1 ensure built-ins are never exported, preventing them from bei…",
+            "The current duplication rate metric in src/qc/metrics.ts is flawed as it only considers exact entity IDs, ignoring same-title-different-UUID noise. This results in a dup-rate of 0 even when there are multiple near-duplicate lessons with distinct UUIDs. The first archived baselin…",
+            "Enforcing tenant-scope on writer routes: a guard that checks the caller-DECLARED project_id (body/query) against apiKeyScope is INSUFFICIENT for routes with a resource :id. A scoped key can pass its OWN project_id (passes the check) but a cross-tenant resource :id; safety then d…",
+            "Baseline determinism holds for back-to-back runs but varies with embeddings-service load when run hours apart. Root cause is transient CPU/memory load on the MCP container affecting query scoring. The diff generator flags this as a regression, but it's measurement noise. Operato…",
+            "Implement per-entity resolver middleware for tenant isolation, returning 404 NOT_FOUND when resource belongs to another project or doesn't exist. For create routes, inject scope from BODY if missing, preventing unauthorized access. Enforce via apiKeyScope auth checks.",
+            "The guard condition `if (import.meta.url === \"file://\" + process.argv[1])` fails on Windows due to path format differences. The fix involves using `pathToFileURL` from node:url to normalize both sides of the comparison, ensuring consistent URL formats.",
+            "The codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[])` for multiple projects, avoiding the N+1 problem. This pattern should be app…",
+            "Rename `degraded_to` to `escalated_to` in Sprint 15.10 payload to resolve semantic confusion between two fields with the same meaning. This unification ensures consistent interpretation across historic and new event paths, preventing future parsing complexities."
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            4314
+          ],
+          "latency_ms_median": 4314,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "",
+            "contexts_used": [
+              {
+                "key": "82e14086-dc76-40f5-81f5-e7ef0c4c97ef",
+                "title": "undici userland version MUST match Node's bundled version for fetch dispatcher interop",
+                "snippet_preview": "Node's global fetch() requires the userland undici version to match its internally bundled version to avoid obscure errors. Node 23.11.1 bundles undici 6.21.2, so pinning userland undici to ^6.21.2 is",
+                "char_count": 280
+              },
+              {
+                "key": "68b2f2cb-2271-454e-bf7e-7831fafb9e3c",
+                "title": "pg UUID cast RETURNING is always canonical lowercase — map keys must match",
+                "snippet_preview": "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If",
+                "char_count": 280
+              },
+              {
+                "key": "61835c5d-d5c8-4d61-9fa0-3497aadee229",
+                "title": "Bundle export must filter owner_project_id to prevent built-in injection on import",
+                "snippet_preview": "The DEFERRED-023 change introduced taxonomy_profiles as a bundle entity. Built-in profiles have owner_project_id IS NULL, while custom profiles carry the owning project ID. The export filters WHERE ow",
+                "char_count": 280
+              }
+            ],
+            "prompt_used": "You are answering a user question using ONLY the lessons provided below.\nThe lessons are the canonical project knowledge — decisions, workarounds,\npreferences, and guardrails. Stay grounded: do NOT invent facts not present.\nIf the lessons don't contain enough information to answer, say so explicitly.\n\nQUESTION:\nwhy must undici userland version match the Node bundled version\n\nLESSONS:\n[1] — undici userland version MUST match Node's bundled version for fetch dispatcher interop\nkey: 82e14086-dc76-40f5-81f5-e7ef0c4c97ef\nNode's global fetch() requires the userland undici version to match its internally bundled version to avoid obscure errors. Node 23.11.1 bundles undici 6.21.2, so pinning userland undici to ^6.21.2 is recommended. Verify compatibility on Node upgrades as internal undici versions…\n\n---\n\n[2] — pg UUID cast RETURNING is always canonical lowercase — map keys must match\nkey: 68b2f2cb-2271-454e-bf7e-7831fafb9e3c\nWhen using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…\n\n---\n\n[3] — Bundle export must filter owner_project_id to prevent built-in injection on import\nkey: 61835c5d-d5c8-4d61-9fa0-3497aadee229\nThe DEFERRED-023 change introduced taxonomy_profiles as a bundle entity. Built-in profiles have owner_project_id IS NULL, while custom profiles carry the owning project ID. The export filters WHERE owner_project_id=$1 ensure built-ins are never exported, preventing them from bei…\n\nProvide a concise answer (2-4 sentences) that:\n- Directly addresses the question\n- Cites the lesson(s) supporting each claim by their numeric index (e.g. \"per Lesson 1\")\n- Notes when the answer requires combining facts from multiple lessons\n- Says \"Not in context\" if the lessons don't cover the question\n\nANSWER:\n",
+            "synth_ms": 13629,
+            "judge_ms": 0,
+            "scores": {},
+            "error": "answerer_failed: answerer HTTP 400: {\"error\":\"Model unloaded.\"}"
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { getEnv } from '../env.js';
-import { ContextHubError } from '../core/index.js';
+import { ContextHubError, assertCallerScope, assertCallerScopeMulti, type CallerScope } from '../core/index.js';
 import { getDbPool } from '../db/client.js';
 import { linkLessonToSymbols, upsertLessonNode } from '../kg/linker.js';
 import { deleteProjectGraph } from '../kg/projectGraph.js';
 import { embedTexts } from './embedder.js';
+import { cohereRerank } from './rerankClient.js';
 import { distillLesson } from './distiller.js';
 import { rebuildProjectSnapshot } from './snapshot.js';
 import { expandForFtsIndex, buildFtsQuery } from '../utils/ftsTokenizer.js';
@@ -37,6 +38,8 @@ export type GuardrailRulePayload = {
 
 export type LessonPayload = {
   project_id: string;
+  /** DEFERRED-029: caller's scope; enforced against project_id. */
+  callerScope?: CallerScope;
   lesson_type: LessonType;
   title: string;
   content: string;
@@ -198,6 +201,8 @@ async function generateSearchAliases(title: string, content: string): Promise<st
 }
 
 export async function addLesson(payload: LessonPayload): Promise<AddLessonResult> {
+  // DEFERRED-029: service-layer tenant-scope guard (REST + MCP both inherit).
+  assertCallerScope(payload.callerScope, payload.project_id);
   // Phase 13 Sprint 13.5 — single source of truth for lesson_type validation.
   // Runs at the SERVICE layer so REST POST /api/lessons, REST /import, MCP
   // add_lesson, and any future caller all hit the same gate. Built-ins always
@@ -343,6 +348,8 @@ export type SortOrder = 'asc' | 'desc';
 export type ListLessonsParams = {
   projectId?: string;
   projectIds?: string[];
+  /** DEFERRED-029: caller's scope; enforced against projectId (single) or projectIds (multi). */
+  callerScope?: CallerScope;
   limit?: number;
   /** Cursor-based pagination (legacy, still supported). */
   after?: string;
@@ -380,6 +387,16 @@ function escapeIlike(s: string): string {
 }
 
 export async function listLessons(params: ListLessonsParams): Promise<ListLessonsResult> {
+  // DEFERRED-029: enforce scope against whichever project axis was supplied.
+  // Single-project path: assertCallerScope. Multi-project path: assertCallerScopeMulti.
+  if (params.projectIds && params.projectIds.length > 0) {
+    assertCallerScopeMulti(params.callerScope, params.projectIds);
+  } else if (params.projectId) {
+    assertCallerScope(params.callerScope, params.projectId);
+  } else if (params.callerScope) {
+    // A scoped caller asking for "all projects" (no projectId/Ids) is meaningless.
+    throw new ContextHubError('NOT_FOUND', 'not found');
+  }
   const pool = getDbPool();
   const limit = Math.min(Math.max(params.limit ?? 20, 1), 100);
   const lessonType = params.filters?.lesson_type;
@@ -493,6 +510,8 @@ export async function listLessons(params: ListLessonsParams): Promise<ListLesson
 
 export type SearchLessonsParams = {
   projectId: string;
+  /** DEFERRED-029: caller's scope; enforced against projectId. */
+  callerScope?: CallerScope;
   query: string;
   limit?: number;
   filters?: {
@@ -771,6 +790,55 @@ export async function rerankExternalApi(query: string, candidates: RerankCandida
   } finally { clearTimeout(t); }
 }
 
+/**
+ * Cohere-compatible external reranker (2026-06-16). Adapts lesson candidates to
+ * the shared {@link cohereRerank} boundary used by local-rerank-service and any
+ * Cohere/Jina/Voyage cloud endpoint. Document text = `title. snippet` (parity
+ * with the TEI path). Maps server indices back to caller index fields. Failure
+ * falls back to base order — same contract as the sibling rerankers.
+ */
+async function rerankCohereApi(query: string, candidates: RerankCandidate[]): Promise<number[]> {
+  const env = getEnv();
+  const baseUrl = env.RERANK_BASE_URL ?? 'http://127.0.0.1:28417';
+  const model = env.RERANK_MODEL ?? 'bge-reranker-v2-m3';
+  const documents = candidates.map(c => `${c.title}. ${c.snippet}`);
+  try {
+    const ranked = await cohereRerank({
+      query,
+      documents,
+      baseUrl,
+      apiKey: env.RERANK_API_KEY,
+      model,
+      timeoutMs: env.RERANK_API_TIMEOUT_MS,
+    });
+    const order = ranked
+      .map(r => candidates[r.index]?.index)
+      .filter((v): v is number => v !== undefined);
+    logger.info({
+      candidates: candidates.length,
+      top3: order.slice(0, 3),
+      top3_scores: ranked.slice(0, 3).map(r => r.relevanceScore.toFixed(4)),
+      mode: 'cohere-api',
+    }, 'lesson rerank: done');
+    return order.length ? order : candidates.map(c => c.index);
+  } catch (err) {
+    logger.warn({ error: err instanceof Error ? err.message : String(err), url: `${baseUrl}/v1/rerank` },
+      'cohere-api rerank: failed — falling back to no-rerank. Ensure local-rerank-service is running.');
+    return candidates.map(c => c.index);
+  }
+}
+
+/** Whether a usable reranker is configured. 2026-06-16 measurement-bug fix:
+ *  the `api` (cross-encoder service) and `cross-encoder` (embedding-cosine) paths
+ *  do NOT require DISTILLATION_ENABLED — that flag gates only the generative LLM
+ *  path. Conflating them silently disabled cross-encoder lesson rerank whenever
+ *  distillation was off, making rerank A/Bs measure no-rerank-vs-no-rerank. */
+function rerankConfigured(): boolean {
+  const env = getEnv();
+  if (env.RERANK_TYPE === 'api' || env.RERANK_TYPE === 'cross-encoder') return true;
+  return Boolean((env.RERANK_MODEL || env.DISTILLATION_MODEL) && env.DISTILLATION_ENABLED);
+}
+
 /** Dispatch to the correct reranker based on RERANK_TYPE. */
 async function rerankLessons(params: {
   query: string;
@@ -782,8 +850,12 @@ async function rerankLessons(params: {
   // Cohere). No LM Studio model required; RERANK_BASE_URL alone determines
   // destination. Checked FIRST so the DISTILLATION_MODEL fallback below
   // doesn't suppress api mode when DISTILLATION_ENABLED=false.
+  // 2026-06-16: RERANK_API_PROTOCOL selects the wire format — 'cohere' (default,
+  // local-rerank-service + cloud) or 'tei' (legacy HuggingFace TEI).
   if (env.RERANK_TYPE === 'api') {
-    return rerankExternalApi(params.query, params.candidates);
+    return env.RERANK_API_PROTOCOL === 'tei'
+      ? rerankExternalApi(params.query, params.candidates)
+      : rerankCohereApi(params.query, params.candidates);
   }
 
   const model = env.RERANK_MODEL ?? env.DISTILLATION_MODEL;
@@ -860,6 +932,8 @@ function isDedupDisabled(): boolean {
 }
 
 export async function searchLessons(params: SearchLessonsParams): Promise<SearchLessonsResult> {
+  // DEFERRED-029: service-layer tenant-scope guard (REST + MCP both inherit).
+  assertCallerScope(params.callerScope, params.projectId);
   const pool = getDbPool();
   const limit = Math.min(Math.max(params.limit ?? 10, 1), 50);
   const lessonType = params.filters?.lesson_type;
@@ -1081,7 +1155,7 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
   // LLM rerank: re-order top candidates for better ranking.
   // Dynamic budget: skip for small sets, scale up for large lesson bases.
   const env = getEnv();
-  if (rerankBudget > 0 && matches.length >= 2 && (env.RERANK_MODEL || env.DISTILLATION_MODEL) && env.DISTILLATION_ENABLED) {
+  if (rerankBudget > 0 && matches.length >= 2 && rerankConfigured()) {
     try {
       const rerankCount = Math.min(matches.length, rerankBudget);
       const rerankCandidates = matches.slice(0, rerankCount).map((m, i) => ({
@@ -1149,6 +1223,8 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
 
 export type SearchLessonsMultiParams = {
   projectIds: string[];
+  /** DEFERRED-029: caller's scope; enforced against projectIds via strict-reject. */
+  callerScope?: CallerScope;
   query: string;
   limit?: number;
   filters?: {
@@ -1164,12 +1240,14 @@ export type SearchLessonsMultiParams = {
  * Single embedding computation, single SQL query, single rerank pass.
  */
 export async function searchLessonsMulti(params: SearchLessonsMultiParams): Promise<SearchLessonsResult> {
+  // DEFERRED-029: strict-reject if the requested projects fall outside the caller's scope.
+  assertCallerScopeMulti(params.callerScope, params.projectIds);
   const pool = getDbPool();
   const projectIds = [...new Set(params.projectIds.filter(Boolean))];
 
   // If only one project, delegate to single-project search (same perf path).
   if (projectIds.length === 1) {
-    return searchLessons({ projectId: projectIds[0], query: params.query, limit: params.limit, filters: params.filters });
+    return searchLessons({ projectId: projectIds[0], callerScope: params.callerScope, query: params.query, limit: params.limit, filters: params.filters });
   }
   if (projectIds.length === 0) {
     return { matches: [], explanations: ['no project_ids provided'] };
@@ -1361,7 +1439,7 @@ export async function searchLessonsMulti(params: SearchLessonsMultiParams): Prom
 
   // Rerank pass (same logic as single-project).
   const env = getEnv();
-  if (rerankBudget > 0 && matches.length >= 2 && (env.RERANK_MODEL || env.DISTILLATION_MODEL) && env.DISTILLATION_ENABLED) {
+  if (rerankBudget > 0 && matches.length >= 2 && rerankConfigured()) {
     try {
       const rerankCount = Math.min(matches.length, rerankBudget);
       const rerankCandidates = matches.slice(0, rerankCount).map((m, i) => ({
@@ -1420,6 +1498,8 @@ function assertUuid(value: string | null | undefined, field: string): void {
 
 export async function updateLesson(params: {
   projectId: string;
+  /** DEFERRED-029: caller's scope; enforced against projectId. */
+  callerScope?: CallerScope;
   lessonId: string;
   title?: string;
   content?: string;
@@ -1430,6 +1510,7 @@ export async function updateLesson(params: {
 }): Promise<{ status: 'ok' | 'error'; error?: string; re_embedded?: boolean; version_number?: number }> {
   const pool = getDbPool();
 
+  assertCallerScope(params.callerScope, params.projectId);
   // DEFERRED-027: reject malformed ids before they reach the uuid-typed query.
   assertUuid(params.lessonId, 'lessonId');
 
@@ -1524,9 +1605,12 @@ export async function updateLesson(params: {
 
 export async function listLessonVersions(params: {
   projectId: string;
+  /** DEFERRED-029: caller's scope; enforced against projectId. */
+  callerScope?: CallerScope;
   lessonId: string;
 }): Promise<{ status: 'ok' | 'error'; error?: string; versions?: any[]; total_count?: number }> {
   const pool = getDbPool();
+  assertCallerScope(params.callerScope, params.projectId);
 
   const existing = await pool.query(
     `SELECT lesson_id FROM lessons WHERE project_id=$1 AND lesson_id=$2`,
@@ -1553,9 +1637,12 @@ export async function listLessonVersions(params: {
 
 export async function batchUpdateLessonStatus(params: {
   projectId: string;
+  /** DEFERRED-029: caller's scope; enforced against projectId. */
+  callerScope?: CallerScope;
   lessonIds: string[];
   status: LessonStatus;
 }): Promise<{ status: 'ok' | 'error'; error?: string; updated_count?: number; failed_ids?: string[] }> {
+  assertCallerScope(params.callerScope, params.projectId);
   if (!params.lessonIds.length) {
     return { status: 'error', error: 'lesson_ids is empty' };
   }
@@ -1602,9 +1689,12 @@ export async function updateLessonStatus(params: {
   lessonId: string;
   status: LessonStatus;
   supersededBy?: string | null;
+  /** DEFERRED-029: caller's scope; enforced against projectId. */
+  callerScope?: CallerScope;
 }): Promise<{ status: 'ok' | 'error'; error?: string }> {
   const pool = getDbPool();
 
+  assertCallerScope(params.callerScope, params.projectId);
   // DEFERRED-027: reject malformed ids before they reach the uuid-typed query.
   assertUuid(params.lessonId, 'lessonId');
   assertUuid(params.supersededBy, 'superseded_by');
@@ -1670,7 +1760,12 @@ export async function updateLessonStatus(params: {
   return { status: 'ok' };
 }
 
-export async function deleteWorkspace(projectId: string) {
+export async function deleteWorkspace(
+  projectId: string,
+  /** DEFERRED-029: caller's scope; enforced against projectId. */
+  opts?: { callerScope?: CallerScope },
+) {
+  assertCallerScope(opts?.callerScope, projectId);
   const pool = getDbPool();
 
   await pool.query('BEGIN');

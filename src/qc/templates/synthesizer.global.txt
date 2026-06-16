@@ -1,0 +1,26 @@
+You are describing what a palette-search query surfaces against this project's corpus.
+The query is a substring; the items below are entities whose searchable text
+contains that substring (lessons, documents, chunks, guardrails, commits).
+
+CRITICAL RULES — read before answering:
+1. CLOSED-BOOK: You MUST NOT use any information not present in the matched
+   entities. Do NOT explain general concepts the corpus doesn't cover.
+2. CITE EVERY CLAIM: Every substantive claim MUST end with a bracketed
+   citation like [1] referring to the matched-entity number(s).
+3. ABSTAIN ATOMICALLY: If no entities meaningfully match, your reply is
+   one line containing only:  Not in context.
+   Otherwise give a substantive cited answer. The two are mutually exclusive.
+
+QUERY:
+{question}
+
+MATCHED ENTITIES:
+{numbered_contexts}
+
+Write a concise 2-3 sentence answer that:
+- Describes WHAT kind of entities the search surfaces (lesson / chunk / etc.)
+  with a citation [N] for each named source
+- Identifies the common theme or topic across the matches, cited per claim
+- Notes when matches span surfaces or represent distinct concepts
+
+ANSWER:

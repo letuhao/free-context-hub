@@ -463,6 +463,8 @@ free-context-hub/
 
 ## Development Phases
 
+> **Strategic arc:** ContextHub is the MCP-served implementation of the Dead Light Framework (DLF). The 5-phase strategic view (Memory → Eval → Governance → Benchmark → Runtime Enforcement) lives in [`ROADMAP.md`](ROADMAP.md). The sprint-level history below maps to those strategic phases — Phases 1–11 → Strategic Phase 1; Phase 12 + 16 + 17 → Strategic Phase 2; Phases 13–15 + DEFERRED-029 → Strategic Phase 3; Phase 18 → Strategic Phase 4; Phase 19 → Strategic Phase 5.
+
 ```
 Phase 1-2 ✅    Phase 3 ✅      Phase 4 ✅      Phase 5 ✅
 Core MVP        Distillation    Knowledge       Git Intelligence
@@ -519,6 +521,61 @@ benchmarks      profiles        in-place        Authz model, tenant
 | **13** | ✅ Complete | Multi-agent coordination protocol — artifact ownership/leasing (`artifact_leases`, TTL + lazy/background sweep, fencing), `pending-review` lesson state + Review-Request queue, taxonomy profiles (unified with `lesson_types`), agent-attributed claims; 19-bug post-hoc review fully cleared (7 sprints). |
 | **14** | ✅ Complete | Global embedding/distillation model swap — mxbai-large→bge-m3 + qwen-coder→nemotron-3-nano, all projects re-embedded in-place. DEFERRED-002 (mxbai 512-token truncation) RESOLVED; per-project model routing (DEFERRED-001) ABANDONED as unneeded. |
 | **15** | ✅ Complete | Multi-actor coordination protocol — durable append-only event log + Topic/Actor model, the Board (tasks/artifacts/claims + fencing + abandoned-claim sweep), Request-Approval (multi-level routing), Collective Decision (motions/votes/tally/veto), intake mailbox + dispute resolution, topic-closing 3-phase drain, primitive-outcome chaining, multi-tier collective routing, authorization model (3 HARD pre-prod triggers), end-to-end tenant-scope enforcement. 12 sprints (15.1–15.12), migrations 0050–0063. Closeout: `docs/phase-15-closeout.md`. |
+| **DEFERRED-029** | ✅ Complete | MCP tenant-scope enforcement — service-layer `callerScope` threaded through ~115 fns across 8 domain PRs (B/C1/C2/C3/D1/D2/D3/D4) + PR E (retire legacy `CONTEXT_HUB_WORKSPACE_TOKEN` with `MCP_LEGACY_TOKEN_DISABLED` opt-out) + PR F (auth-ON E2E + 5 verification passes catching 7 bypasses). 10 helpers (`assertCallerScope` + 8 DB-derive `assertXScope` + Multi). Tests: 843 unit + 300 E2E (api/gui/smoke/agent). Closeout: `docs/deferred-029-closeout.md`. Migration: `docs/specs/2026-05-23-deferred-029-pr-e-legacy-token-migration.md`. |
+
+## Safety-sensitive review policy
+
+For any sprint that introduces an **authorization primitive**, **tenant-isolation logic**,
+**governance/decision primitive**, **new service boundary**, or **destructive operation**:
+
+- Run a **cold-start hostile-actor adversary review** (not `/review-impl` coverage) during
+  REVIEW-CODE or POST-REVIEW. Adversary must have NO prior context — read files only.
+- **Multi-pass is not redundant** — each pass catches a different class of pattern. Expect
+  3–4 passes to saturate (curve usually 3→2→1→0). Sprint 15.3 lost 2 CRITICAL bugs by
+  skipping this; DEFERRED-029 PR F caught 7 bypasses across 5 passes.
+- **Live verification of the documented end-state** catches what static review misses.
+  When adding a security flag, grep for every authn/authz fast-path the flag should affect.
+
+Enforced via guardrail (`5c0b7b25`) and reusable lesson `5287a774`. See
+`docs/deferred-029-closeout.md` § "Architectural lessons" for the four-pass pattern.
+
+## Baseline-stack invariant (Phase 17.x)
+
+**Before running `npm run qc:baseline:gen`, the LM Studio + sidecar stack
+must be in a controlled state.** Otherwise LM Studio's auto-unload will swap
+models mid-run, producing 6-11% baseline ECONNRESET / Channel Error failures
+(per [lmstudio-bug-tracker#945](https://github.com/lmstudio-ai/lmstudio-bug-tracker/issues/945))
+and contaminating measurement.
+
+**The invariant:**
+
+1. LM Studio has **exactly two models loaded** simultaneously:
+   - Chat model (e.g. `mistralai/mistral-nemo-instruct-2407`) — answerer, judge, reranker all share it
+   - Embeddings model (`text-embedding-bge-m3`)
+2. **All chat callers** (answerer, judge sidecar, MCP reranker, distillation worker) point at the SAME chat model so no swap is ever triggered.
+3. The ragas-judge sidecar's `JUDGE_AGENT_MODEL` env matches what the runner sets `ANSWERER_AGENT_MODEL` to.
+4. `DISTILLATION_MODEL` is unset/empty during baseline (worker no-ops; prevents background swap).
+
+**Enforcement:**
+
+- `.env.baseline` — canonical pins for every chat/judge/rerank/distillation env var.
+- `scripts/start-baseline-stack.sh` — restarts MCP + worker + ragas-judge with `.env.baseline` overrides, then runs preflight.
+- `scripts/preflight-baseline.mjs` — standalone preflight check (also invoked from inside `runBaseline.ts`); refuses to proceed if invariant violated.
+- `runBaseline.ts` has a built-in preflight call. Use `--no-preflight` only for dev iteration, NEVER for committed measurements.
+
+**Recommended invocation:**
+
+```bash
+# 1. Load the two expected models in LM Studio (Developer page or `lms load`)
+# 2. Start the controlled stack:
+bash scripts/start-baseline-stack.sh
+# 3. Run the baseline:
+ANSWERER_AGENT_MODEL=mistralai/mistral-nemo-instruct-2407 \
+RAGAS_JUDGE_URL=http://localhost:3005 \
+  npx tsx src/qc/runBaseline.ts --tag <date>-<descriptor> --gen-eval on
+```
+
+**Documented in:** `docs/qc/2026-05-24-phase-17-answerer-model-selection.md` (model rationale) + the smoke baselines under `docs/qc/baselines/`.
 
 ## Phase 7 — Complete
 

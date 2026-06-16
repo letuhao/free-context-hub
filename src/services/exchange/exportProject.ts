@@ -22,9 +22,13 @@ import {
   type BundleDocument,
   type EncodeResult,
 } from './bundleFormat.js';
+import { assertCallerScope } from '../../core/security/callerScope.js';
+import type { CallerScope } from '../../core/security/callerScope.js';
 
 export interface ExportProjectOptions {
   projectId: string;
+  /** DEFERRED-029: caller's scope; enforced against projectId. */
+  callerScope?: CallerScope;
   /** Default true — full export per phase 11 design ("bundle huge is normal"). */
   includeDocuments?: boolean;
   /** Default true. */
@@ -69,6 +73,7 @@ export async function exportProject(
 ): Promise<EncodeResult> {
   const pool = getDbPool();
   const projectId = opts.projectId;
+  assertCallerScope(opts.callerScope, projectId);
   const includeDocuments = opts.includeDocuments !== false;
   const includeChunks = opts.includeChunks !== false;
   const batchSize = opts.batchSize ?? 100;

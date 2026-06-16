@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import type { Request } from 'express';
 import { requireProjectScope } from '../middleware/requireResourceScope.js';
 import { requireScope } from '../middleware/requireScope.js';
 import {
@@ -10,6 +11,12 @@ import {
   removeProjectFromGroup,
   listGroupsForProject,
 } from '../../core/index.js';
+import type { CallerScope } from '../../core/index.js';
+
+/** DEFERRED-029: read the caller's project scope attached by bearerAuth. */
+function callerScopeOf(req: Request): CallerScope {
+  return (req as { apiKeyScope?: CallerScope }).apiKeyScope;
+}
 
 const router = Router();
 
@@ -58,7 +65,7 @@ router.post('/:id/members', requireProjectScope('body'), async (req, res, next) 
       res.status(400).json({ error: 'project_id is required' });
       return;
     }
-    const result = await addProjectToGroup(String(req.params.id), String(project_id));
+    const result = await addProjectToGroup(String(req.params.id), String(project_id), { callerScope: callerScopeOf(req) });
     res.status(result.added ? 201 : 200).json(result);
   } catch (e) { next(e); }
 });
@@ -66,7 +73,7 @@ router.post('/:id/members', requireProjectScope('body'), async (req, res, next) 
 /** DELETE /api/groups/:id/members/:projectId — remove a project from a group */
 router.delete('/:id/members/:projectId', requireScope('projectId'), async (req, res, next) => {
   try {
-    const result = await removeProjectFromGroup(String(req.params.id), String(req.params.projectId));
+    const result = await removeProjectFromGroup(String(req.params.id), String(req.params.projectId), { callerScope: callerScopeOf(req) });
     res.json(result);
   } catch (e) { next(e); }
 });
@@ -74,7 +81,7 @@ router.delete('/:id/members/:projectId', requireScope('projectId'), async (req, 
 /** GET /api/projects/:projectId/groups — list groups a project belongs to */
 router.get('/by-project/:projectId', requireScope('projectId'), async (req, res, next) => {
   try {
-    const groups = await listGroupsForProject(String(req.params.projectId));
+    const groups = await listGroupsForProject(String(req.params.projectId), { callerScope: callerScopeOf(req) });
     res.json({ project_id: String(req.params.projectId), groups });
   } catch (e) { next(e); }
 });

@@ -3,6 +3,9 @@ import amqplib from 'amqplib';
 
 import { getDbPool } from '../db/client.js';
 import { getEnv } from '../env.js';
+import { ContextHubError } from '../core/errors.js';
+import { assertCallerScope } from '../core/security/callerScope.js';
+import type { CallerScope } from '../core/security/callerScope.js';
 
 export type JobType =
   | 'repo.sync'
@@ -24,6 +27,8 @@ type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'dead_letter' |
 
 type QueuePayload = {
   project_id?: string;
+  /** DEFERRED-029: caller's scope; enforced against project_id when both are set. */
+  callerScope?: CallerScope;
   job_type: JobType;
   payload: Record<string, unknown>;
   correlation_id?: string;
@@ -65,6 +70,40 @@ async function ensureRabbitQueue(queueName: string): Promise<void> {
 }
 
 export async function enqueueJob(input: QueuePayload): Promise<{ status: 'queued'; job_id: string; backend: 'postgres' | 'rabbitmq' }> {
+  // PR F SEC-3 (Adversary HIGH #3): when a scoped caller omits project_id,
+  // the previous code silently allowed an unscoped job to be enqueued. The
+  // worker then runs it with callerScope=undefined (unrestricted by design)
+  // — letting a scoped caller drive index.run / git.ingest against any
+  // filesystem path via payload.root. Auto-bind project_id to the caller's
+  // scope when scoped; throw if the caller declared a different project_id.
+  if (typeof input.callerScope === 'string') {
+    if (!input.project_id) {
+      input = { ...input, project_id: input.callerScope };
+    } else {
+      assertCallerScope(input.callerScope, input.project_id);
+    }
+    // PR F SEC-6 (Adversary #3 HIGH): SEC-3 pinned the DB project_id to the
+    // caller's scope, but the worker still reads `payload.root` verbatim and
+    // walks that filesystem path. A scoped-A attacker could pass
+    // payload.root='<path to projB cache>' and the indexer would write
+    // proj-B's source into chunks tagged project_id='A' (then read it via
+    // search_code). Same trick works for git.ingest / workspace.scan /
+    // *.build / *.loop.* jobs. Defense: scoped callers cannot specify a
+    // filesystem root — the worker auto-resolves from project_sources for
+    // the bound project_id (see resolveProjectRoot). Admin/auth-off callers
+    // (callerScope=null/undefined) keep full control by design.
+    const payloadRoot = (input.payload as Record<string, unknown> | undefined)?.root;
+    if (typeof payloadRoot === 'string' && payloadRoot.trim().length > 0) {
+      throw new ContextHubError(
+        'BAD_REQUEST',
+        'scoped callers must omit payload.root — the worker resolves the root from project_sources for the bound project_id',
+      );
+    }
+  } else if (input.project_id) {
+    // auth-off / global key + explicit project_id → still enforce (no-op on
+    // undefined/null but keeps the contract uniform).
+    assertCallerScope(input.callerScope, input.project_id);
+  }
   const pool = getDbPool();
   const jobId = randomUUID();
   const queueName = input.queue_name ?? 'default';
@@ -227,7 +266,25 @@ export async function isJobCancelled(jobId: string): Promise<boolean> {
  * When `projectId` is supplied the update is scoped to that project so a
  * known job_id from another tenant cannot be cancelled cross-tenant.
  */
-export async function cancelJob(jobId: string, projectId?: string): Promise<boolean> {
+export async function cancelJob(
+  jobId: string,
+  projectId?: string,
+  /** DEFERRED-029: caller's scope; enforced against projectId when both are set. */
+  opts?: { callerScope?: CallerScope },
+): Promise<boolean> {
+  // PR F SEC-5 (Adversary #2 MEDIUM latent): the previous `if (projectId)`
+  // guard was the same trap shape as SEC-3 — a scoped caller could call
+  // cancelJob(jobId, undefined, {callerScope:'A'}) and the UPDATE would run
+  // unscoped (cross-tenant cancel). Today's only caller passes a truthy
+  // projectId, but the contract was a footgun for the next refactor / MCP
+  // exposure. Fix: when callerScope is a string and projectId is absent,
+  // auto-bind. Auth-off / global keys still allowed to cancel by job_id alone.
+  if (typeof opts?.callerScope === 'string') {
+    if (!projectId) projectId = opts.callerScope;
+    else assertCallerScope(opts.callerScope, projectId);
+  } else if (projectId) {
+    assertCallerScope(opts?.callerScope, projectId);
+  }
   const pool = getDbPool();
   const res = projectId
     ? await pool.query(
@@ -268,6 +325,8 @@ export async function failJob(jobId: string, attempts: number, maxAttempts: numb
 export async function listJobs(params: {
   projectId?: string;
   projectIds?: string[];
+  /** DEFERRED-029: caller's scope; enforced against projectId / projectIds when set. */
+  callerScope?: CallerScope;
   correlationId?: string;
   status?: JobStatus;
   limit?: number;
@@ -288,6 +347,20 @@ export async function listJobs(params: {
   }>;
   total_count: number;
 }> {
+  if (params.projectId) {
+    assertCallerScope(params.callerScope, params.projectId);
+  } else if (params.projectIds && params.projectIds.length > 0) {
+    // Multi-project listing: a scoped caller may only see its own project.
+    const { assertCallerScopeMulti } = await import('../core/security/callerScope.js');
+    assertCallerScopeMulti(params.callerScope, params.projectIds);
+  } else if (typeof params.callerScope === 'string') {
+    // PR F SEC-1 (Adversary CRITICAL #1): when a scoped caller omits both
+    // projectId AND projectIds, the previous WHERE clause was unconstrained
+    // ('1=1') → cross-tenant read of every project's jobs. Pin the listing to
+    // the caller's scope. Auth-off (undefined) and global keys (null) still
+    // see all projects — that path is unchanged.
+    params = { ...params, projectId: params.callerScope };
+  }
   const pool = getDbPool();
   const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
   const offset = Math.max(params.offset ?? 0, 0);

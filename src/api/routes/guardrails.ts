@@ -1,7 +1,14 @@
 import { Router } from 'express';
+import type { Request } from 'express';
 import { checkGuardrails, resolveProjectIdOrThrow, resolveProjectIds } from '../../core/index.js';
+import type { CallerScope } from '../../core/index.js';
 import { listGuardrailRules, simulateGuardrails } from '../../services/guardrails.js';
 import { resolveProjectIdOrIds } from '../middleware/resolveProjectParams.js';
+
+/** DEFERRED-029: read the caller's project scope attached by bearerAuth. */
+function callerScopeOf(req: Request): CallerScope {
+  return (req as { apiKeyScope?: CallerScope }).apiKeyScope;
+}
 
 const router = Router();
 
@@ -12,6 +19,7 @@ router.get('/rules', async (req, res, next) => {
     const result = await listGuardrailRules(pid, {
       limit: req.query.limit ? Number(req.query.limit) : undefined,
       offset: req.query.offset ? Number(req.query.offset) : undefined,
+      callerScope: callerScopeOf(req),
     });
     res.json(result);
   } catch (e) { next(e); }
@@ -30,7 +38,7 @@ router.post('/simulate', async (req, res, next) => {
       res.status(400).json({ error: 'maximum 50 actions per request' });
       return;
     }
-    const results = await simulateGuardrails(projectId, actions.map(String));
+    const results = await simulateGuardrails(projectId, actions.map(String), { callerScope: callerScopeOf(req) });
     res.json({ results });
   } catch (e) { next(e); }
 });
@@ -47,8 +55,27 @@ router.post('/check', async (req, res, next) => {
       let anyFailed = false;
       let firstPrompt: string | undefined;
 
+      // PR F Adversary #4 LOW-1: resolveProjectIds returns [projectId, ...group_ids].
+      // Per-pid assertCallerScope would reject scoped callers on group_ids
+      // (they're not the caller's project_id). Graceful-skip on NOT_FOUND from
+      // the scope helper preserves the security contract (caller can only see
+      // their own data + group-shared data they have explicit authority for)
+      // while not breaking the include_groups feature for scoped callers.
+      // The root `projectId` was already scope-asserted indirectly by the route's
+      // requireProjectScope middleware + the service's assertCallerScope.
+      const callerScope = callerScopeOf(req);
       for (const pid of allIds) {
-        const r = await checkGuardrails(pid, req.body.action_context);
+        let r;
+        try {
+          r = await checkGuardrails(pid, req.body.action_context, { callerScope });
+        } catch (e: any) {
+          // Cross-tenant group member → service threw NOT_FOUND. Skip silently
+          // for scoped callers (same data they could not see via per-project
+          // checkGuardrails call). Admin/auth-off (callerScope=null/undefined)
+          // never throw here, so this branch only fires for scoped callers.
+          if (e?.code === 'NOT_FOUND' && typeof callerScope === 'string') continue;
+          throw e;
+        }
         totalChecked += r.rules_checked;
         if (!r.pass) {
           anyFailed = true;
@@ -67,7 +94,7 @@ router.post('/check', async (req, res, next) => {
       return;
     }
 
-    const result = await checkGuardrails(projectId, req.body.action_context);
+    const result = await checkGuardrails(projectId, req.body.action_context, { callerScope: callerScopeOf(req) });
     res.json(result);
   } catch (e) { next(e); }
 });

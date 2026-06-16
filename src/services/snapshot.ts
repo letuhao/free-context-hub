@@ -1,6 +1,13 @@
 import { getDbPool } from '../db/client.js';
+import { assertCallerScope } from '../core/security/callerScope.js';
+import type { CallerScope } from '../core/security/callerScope.js';
 
-export async function getProjectSnapshotBody(projectId: string): Promise<string | null> {
+export async function getProjectSnapshotBody(
+  projectId: string,
+  /** DEFERRED-029: caller's scope; enforced against projectId. */
+  opts?: { callerScope?: CallerScope },
+): Promise<string | null> {
+  assertCallerScope(opts?.callerScope, projectId);
   const pool = getDbPool();
   const res = await pool.query(`SELECT body FROM project_snapshots WHERE project_id=$1`, [projectId]);
   const row = res.rows?.[0];
@@ -9,7 +16,12 @@ export async function getProjectSnapshotBody(projectId: string): Promise<string 
   return body.length ? body : null;
 }
 
-export async function rebuildProjectSnapshot(projectId: string): Promise<void> {
+export async function rebuildProjectSnapshot(
+  projectId: string,
+  /** DEFERRED-029: caller's scope; enforced against projectId. */
+  opts?: { callerScope?: CallerScope },
+): Promise<void> {
+  assertCallerScope(opts?.callerScope, projectId);
   const pool = getDbPool();
 
   const lessonsRes = await pool.query(

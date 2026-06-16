@@ -1,0 +1,281 @@
+{
+  "schema_version": "1.1",
+  "gen_manifest": {
+    "judge_endpoint": "http://host.docker.internal:1234/v1",
+    "judge_model_id": "mistralai/mistral-nemo-instruct-2407",
+    "judge_prompts_hash": "c0165a73c10c4e04",
+    "answerer_endpoint": "http://localhost:1234/v1",
+    "answerer_model_id": "mistralai/mistral-nemo-instruct-2407",
+    "answerer_temperature": 0.2,
+    "answerer_seed": 42,
+    "answerer_max_tokens": 1024,
+    "synthesizer_prompt_hashes": {
+      "lessons": "13ac4e950489bde6",
+      "code": "3a2ea1624ae0a1fc",
+      "chunks": "a01005e0d102b2c1",
+      "global": "5ae7c8e925ad8a47"
+    },
+    "synth_mode": "standard"
+  },
+  "tag": "s17.x-controlled-smoke",
+  "run_started_at": "2026-05-24T10:06:58.488Z",
+  "run_ended_at": "2026-05-24T10:17:10.303Z",
+  "elapsed_ms": 611815,
+  "git_commit": "66d7855+dirty",
+  "git_branch": "phase-16-sprint-16.1-gen-eval-dataset",
+  "project_id": "free-context-hub",
+  "samples_per_query": 1,
+  "k": 10,
+  "surfaces": {
+    "lessons": {
+      "query_count": 2,
+      "errors": 0,
+      "project_id": "free-context-hub",
+      "generation": {
+        "rows_with_gt": 2,
+        "rows_judged": 1,
+        "rows_skipped": 0,
+        "metrics": {
+          "faithfulness": {
+            "mean": 0.6667,
+            "std": 0,
+            "p10": 0.6667,
+            "fail_count": 1
+          },
+          "answer_relevancy": {
+            "mean": 0.7998,
+            "std": 0,
+            "p10": 0.7998,
+            "fail_count": 1
+          },
+          "context_precision": {
+            "mean": 1,
+            "std": 0,
+            "p10": 1,
+            "fail_count": 0
+          },
+          "context_recall": {
+            "mean": 0.2,
+            "std": 0,
+            "p10": 0.2,
+            "fail_count": 1
+          },
+          "groundedness_self_eval": {
+            "mean": 1,
+            "std": 0,
+            "p10": 1,
+            "fail_count": 0
+          }
+        }
+      },
+      "metrics": {
+        "recall_at_5": 1,
+        "recall_at_10": 1,
+        "mrr": 1,
+        "ndcg_at_5": 1,
+        "ndcg_at_10": 1,
+        "duplication_rate_at_10": 0,
+        "duplication_rate_nearsemantic_at_10": 0,
+        "coverage_pct": 1,
+        "latency_p50_ms": 1045,
+        "latency_p95_ms": 5279,
+        "latency_mean_ms": 3162
+      },
+      "per_query": [
+        {
+          "id": "lesson-pg-uuid-casing",
+          "group": "confident-hit",
+          "query": "how to handle pg UUID casing when building map lookups after RETURNING",
+          "top_k_keys": [
+            "68b2f2cb-2271-454e-bf7e-7831fafb9e3c",
+            "5258dbfe-b76d-42aa-b680-15eb9a7b83d7",
+            "17320a37-4f2e-4708-8446-429d35f0f3fa",
+            "898c3ce8-80a6-4a63-9359-9deaf495633d",
+            "61835c5d-d5c8-4d61-9fa0-3497aadee229",
+            "beeef1e1-aa87-48c1-911d-235ad21ebfce",
+            "4e2b8497-8d8b-4d33-bd2d-1ffd2d66c860",
+            "e3190078-c8ee-469d-8cad-404e7e806923",
+            "d081e672-e52e-41c8-a939-bbc08a87b253",
+            "cd0db880-5c36-477f-9f15-6f85dca64596"
+          ],
+          "top_k_titles": [
+            "pg UUID cast RETURNING is always canonical lowercase — map keys must match",
+            "Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1",
+            "Three recurring bypass patterns in tenant-scope work — grep these in every authz PR",
+            "Docker compose --force-recreate doesn't pick up local src changes; rebuild the image first",
+            "Bundle export must filter owner_project_id to prevent built-in injection on import",
+            "Sprint 13.2 — F1 TTL sweep + Active Work GUI shipped via 6-round AMAW longrun (3 design + 3 code Adversary rounds, max-cap each)",
+            "Phase 15 coordination substrate: event-log & transaction patterns (Sprint 15.1)",
+            "DEFERRED-024: tenant-scope a cross-project queue pop by threading an optional scope filter",
+            "HuggingFace TEI + RERANK_TYPE=api code path unlocks true cross-encoders, but bge-reranker-v2-m3 underperforms on this goldenset",
+            "Dup-rate metric keyed on exact entity id is blind to same-title-different-UUID noise"
+          ],
+          "top_k_snippets": [
+            "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…",
+            "The codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[])` for multiple projects, avoiding the N+1 problem. This pattern should be app…",
+            "Three recurring bypass patterns in tenant-scope work identified for grep-checking in every new authz/tenant-scope PR: 1. 'if (project_id) assert' trap - service fn gates scope check behind falsy project_id, skipping check and unconstrained WHERE clause -> cross-tenant read/write…",
+            "When making changes to src/ in a Docker-compose setup, you must rebuild the image using `docker compose build <service>` before running `docker compose up -d --force-recreate <service>`. This ensures that local source changes are incorporated into the new image. Failure to do so…",
+            "The DEFERRED-023 change introduced taxonomy_profiles as a bundle entity. Built-in profiles have owner_project_id IS NULL, while custom profiles carry the owning project ID. The export filters WHERE owner_project_id=$1 ensure built-ins are never exported, preventing them from bei…",
+            "...",
+            "Phase 15 Sprint 15.1 introduced an append-only event log and coordination substrate with four key patterns: 1) Per-topic seq + close-seal enforced in a single UPDATE statement, using row-lock to serialize appends and ensure monotonic, gap-free sequences. 2) Two-transaction read-…",
+            "Some tenant-scope holes have no request-time project to guard — they live in SERVICE pop/scheduling semantics. /jobs/run-next → runNextJob(queue) → claimNextQueuedJob(queue) popped the next queued job across ALL projects (FOR UPDATE SKIP LOCKED on the global queue). A guard on t…",
+            "Sprint 12.1g implemented external rerank endpoint support for true cross-encoders using TEI and RERANK_TYPE=api. While the infrastructure is deterministic, bge-reranker-v2-m3 underperformed on a goldenset compared to other models like gte and generative LLM rerank. The underperf…",
+            "The current duplication rate metric in src/qc/metrics.ts is flawed as it only considers exact entity IDs, ignoring same-title-different-UUID noise. This results in a dup-rate of 0 even when there are multiple near-duplicate lessons with distinct UUIDs. The first archived baselin…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            5279
+          ],
+          "latency_ms_median": 5279,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "When building map lookups after `RETURNING` with pg UUIDs, ensure your map keys match the canonical lowercase form as pg canonicalizes UUIDs on cast [1]. This is crucial to maintain consistency and avoid case-based discrepancies.",
+            "contexts_used": [
+              {
+                "key": "68b2f2cb-2271-454e-bf7e-7831fafb9e3c",
+                "title": "pg UUID cast RETURNING is always canonical lowercase — map keys must match",
+                "snippet_preview": "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If",
+                "char_count": 280
+              },
+              {
+                "key": "5258dbfe-b76d-42aa-b680-15eb9a7b83d7",
+                "title": "Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1",
+                "snippet_preview": "The codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[",
+                "char_count": 280
+              },
+              {
+                "key": "17320a37-4f2e-4708-8446-429d35f0f3fa",
+                "title": "Three recurring bypass patterns in tenant-scope work — grep these in every authz PR",
+                "snippet_preview": "Three recurring bypass patterns in tenant-scope work identified for grep-checking in every new authz/tenant-scope PR: 1. 'if (project_id) assert' trap - service fn gates scope check behind falsy proje",
+                "char_count": 280
+              }
+            ],
+            "prompt_used": "You are answering a user question using ONLY the lessons provided below.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information that is not present in\n   the lessons. Treat your own training knowledge as off-limits. If a fact\n   isn't in a lesson below, it doesn't exist for this answer.\n2. CITE EVERY CLAIM: Every substantive claim in your answer MUST end with\n   a bracketed citation like [1] or [1,3] referring to the lesson number(s)\n   that support it. Claims without citations are not allowed.\n3. ABSTAIN WHEN UNSUPPORTED: If the lessons do NOT contain enough information\n   to answer the question, your ENTIRE answer must be exactly:\n       Not in context.\n   Do not pad, do not speculate, do not partially answer.\n4. NO MEMORY LEAK: Do not say \"as you know\" / \"as is well known\" / \"typically\"\n   / \"in general\" — those phrases signal use of training knowledge.\n\nQUESTION:\nhow to handle pg UUID casing when building map lookups after RETURNING\n\nLESSONS:\n[1] — pg UUID cast RETURNING is always canonical lowercase — map keys must match\nkey: 68b2f2cb-2271-454e-bf7e-7831fafb9e3c\nWhen using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…\n\n---\n\n[2] — Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1\nkey: 5258dbfe-b76d-42aa-b680-15eb9a7b83d7\nThe codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[])` for multiple projects, avoiding the N+1 problem. This pattern should be app…\n\n---\n\n[3] — Three recurring bypass patterns in tenant-scope work — grep these in every authz PR\nkey: 17320a37-4f2e-4708-8446-429d35f0f3fa\nThree recurring bypass patterns in tenant-scope work identified for grep-checking in every new authz/tenant-scope PR: 1. 'if (project_id) assert' trap - service fn gates scope check behind falsy project_id, skipping check and unconstrained WHERE clause -> cross-tenant read/write…\n\nWrite a concise 2-4 sentence answer that:\n- Directly answers the question\n- Has a bracketed citation at the end of every claim\n- Combines multiple lessons when needed (e.g. \"X applies [1], and Y also\n  applies [3], so both checks are required\")\n- Says exactly \"Not in context.\" if the lessons don't cover the question\n\nANSWER:\n",
+            "synth_ms": 1870,
+            "judge_ms": 361542,
+            "scores": {},
+            "error": "judge_failed: judge sidecar unreachable"
+          }
+        },
+        {
+          "id": "lesson-undici-version-pinning",
+          "group": "confident-hit",
+          "query": "why must undici userland version match the Node bundled version",
+          "top_k_keys": [
+            "82e14086-dc76-40f5-81f5-e7ef0c4c97ef",
+            "fe395858-9efb-42db-ae30-6369d9dd9992",
+            "eb7409e5-d2bf-407b-9811-fca62a2c3ded",
+            "68b2f2cb-2271-454e-bf7e-7831fafb9e3c",
+            "61835c5d-d5c8-4d61-9fa0-3497aadee229",
+            "d6b8cde5-a965-4cb5-a159-7efa125e4923",
+            "cd0db880-5c36-477f-9f15-6f85dca64596",
+            "4a014c4c-5984-460e-bd68-cb7b0d6ff677",
+            "289f24f9-3e56-4e81-82ff-2aaaf4ceeea8",
+            "bb39fe5e-0345-4b98-976b-fe3b0743f169"
+          ],
+          "top_k_titles": [
+            "undici userland version MUST match Node's bundled version for fetch dispatcher interop",
+            "Node ESM CLI main-guard needs pathToFileURL on Windows, not plain `file://` concat",
+            "Sprint 15.11: dispatch mechanical test-helper migration to a subagent",
+            "pg UUID cast RETURNING is always canonical lowercase — map keys must match",
+            "Bundle export must filter owner_project_id to prevent built-in injection on import",
+            "DEFERRED-004: tenant-scope must DERIVE project from the resource id, not trust a declared field",
+            "Dup-rate metric keyed on exact entity id is blind to same-title-different-UUID noise",
+            "Sprint 15.12: tenant-scope via per-entity resolver middleware (404, not 403)",
+            "Sprint 15.10: event-payload field rename from degraded_to to escalated_to",
+            "Baseline determinism holds for back-to-back runs only; hours-separated runs jitter by embeddings-service load"
+          ],
+          "top_k_snippets": [
+            "Node's global fetch() requires the userland undici version to match its internally bundled version to avoid obscure errors. Node 23.11.1 bundles undici 6.21.2, so pinning userland undici to ^6.21.2 is recommended. Verify compatibility on Node upgrades as internal undici versions…",
+            "The guard condition `if (import.meta.url === \"file://\" + process.argv[1])` fails on Windows due to path format differences. The fix involves using `pathToFileURL` from node:url to normalize both sides of the comparison, ensuring consistent URL formats.",
+            "An authz change that forbids self-asserted participant levels broke 165 of 657 tests — every setup helper that joined non-owner actors at coordination/authority. The fix is mechanical but spans 13 files with a consistent pattern (owner joins first as authority; others join execu…",
+            "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…",
+            "The DEFERRED-023 change introduced taxonomy_profiles as a bundle entity. Built-in profiles have owner_project_id IS NULL, while custom profiles carry the owning project ID. The export filters WHERE owner_project_id=$1 ensure built-ins are never exported, preventing them from bei…",
+            "Enforcing tenant-scope on writer routes: a guard that checks the caller-DECLARED project_id (body/query) against apiKeyScope is INSUFFICIENT for routes with a resource :id. A scoped key can pass its OWN project_id (passes the check) but a cross-tenant resource :id; safety then d…",
+            "The current duplication rate metric in src/qc/metrics.ts is flawed as it only considers exact entity IDs, ignoring same-title-different-UUID noise. This results in a dup-rate of 0 even when there are multiple near-duplicate lessons with distinct UUIDs. The first archived baselin…",
+            "Implement per-entity resolver middleware for tenant isolation, returning 404 NOT_FOUND when resource belongs to another project or doesn't exist. For create routes, inject scope from BODY if missing, preventing unauthorized access. Enforce via apiKeyScope auth checks.",
+            "Rename `degraded_to` to `escalated_to` in Sprint 15.10 payload to resolve semantic confusion between two fields with the same meaning. This unification ensures consistent interpretation across historic and new event paths, preventing future parsing complexities.",
+            "Baseline determinism holds for back-to-back runs but varies with embeddings-service load when run hours apart. Root cause is transient CPU/memory load on the MCP container affecting query scoring. The diff generator flags this as a regression, but it's measurement noise. Operato…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            1045
+          ],
+          "latency_ms_median": 1045,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "The undici userland version must match Node's bundled version to ensure interoperability with Node's global fetch() function, as they need to be compatible for proper functioning [1].",
+            "contexts_used": [
+              {
+                "key": "82e14086-dc76-40f5-81f5-e7ef0c4c97ef",
+                "title": "undici userland version MUST match Node's bundled version for fetch dispatcher interop",
+                "snippet_preview": "Node's global fetch() requires the userland undici version to match its internally bundled version to avoid obscure errors. Node 23.11.1 bundles undici 6.21.2, so pinning userland undici to ^6.21.2 is",
+                "char_count": 280
+              },
+              {
+                "key": "fe395858-9efb-42db-ae30-6369d9dd9992",
+                "title": "Node ESM CLI main-guard needs pathToFileURL on Windows, not plain `file://` concat",
+                "snippet_preview": "The guard condition `if (import.meta.url === \"file://\" + process.argv[1])` fails on Windows due to path format differences. The fix involves using `pathToFileURL` from node:url to normalize both sides",
+                "char_count": 252
+              },
+              {
+                "key": "eb7409e5-d2bf-407b-9811-fca62a2c3ded",
+                "title": "Sprint 15.11: dispatch mechanical test-helper migration to a subagent",
+                "snippet_preview": "An authz change that forbids self-asserted participant levels broke 165 of 657 tests — every setup helper that joined non-owner actors at coordination/authority. The fix is mechanical but spans 13 fil",
+                "char_count": 280
+              }
+            ],
+            "prompt_used": "You are answering a user question using ONLY the lessons provided below.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information that is not present in\n   the lessons. Treat your own training knowledge as off-limits. If a fact\n   isn't in a lesson below, it doesn't exist for this answer.\n2. CITE EVERY CLAIM: Every substantive claim in your answer MUST end with\n   a bracketed citation like [1] or [1,3] referring to the lesson number(s)\n   that support it. Claims without citations are not allowed.\n3. ABSTAIN WHEN UNSUPPORTED: If the lessons do NOT contain enough information\n   to answer the question, your ENTIRE answer must be exactly:\n       Not in context.\n   Do not pad, do not speculate, do not partially answer.\n4. NO MEMORY LEAK: Do not say \"as you know\" / \"as is well known\" / \"typically\"\n   / \"in general\" — those phrases signal use of training knowledge.\n\nQUESTION:\nwhy must undici userland version match the Node bundled version\n\nLESSONS:\n[1] — undici userland version MUST match Node's bundled version for fetch dispatcher interop\nkey: 82e14086-dc76-40f5-81f5-e7ef0c4c97ef\nNode's global fetch() requires the userland undici version to match its internally bundled version to avoid obscure errors. Node 23.11.1 bundles undici 6.21.2, so pinning userland undici to ^6.21.2 is recommended. Verify compatibility on Node upgrades as internal undici versions…\n\n---\n\n[2] — Node ESM CLI main-guard needs pathToFileURL on Windows, not plain `file://` concat\nkey: fe395858-9efb-42db-ae30-6369d9dd9992\nThe guard condition `if (import.meta.url === \"file://\" + process.argv[1])` fails on Windows due to path format differences. The fix involves using `pathToFileURL` from node:url to normalize both sides of the comparison, ensuring consistent URL formats.\n\n---\n\n[3] — Sprint 15.11: dispatch mechanical test-helper migration to a subagent\nkey: eb7409e5-d2bf-407b-9811-fca62a2c3ded\nAn authz change that forbids self-asserted participant levels broke 165 of 657 tests — every setup helper that joined non-owner actors at coordination/authority. The fix is mechanical but spans 13 files with a consistent pattern (owner joins first as authority; others join execu…\n\nWrite a concise 2-4 sentence answer that:\n- Directly answers the question\n- Has a bracketed citation at the end of every claim\n- Combines multiple lessons when needed (e.g. \"X applies [1], and Y also\n  applies [3], so both checks are required\")\n- Says exactly \"Not in context.\" if the lessons don't cover the question\n\nANSWER:\n",
+            "synth_ms": 692,
+            "judge_ms": 239257,
+            "scores": {
+              "faithfulness": 0.6666666666666666,
+              "answer_relevancy": 0.7998388767555819,
+              "context_precision": 0.9999999999,
+              "context_recall": 0.2,
+              "groundedness_self_eval": 1
+            },
+            "reasons": {
+              "groundedness_self_eval": "The answer directly quotes and paraphrases context [1], using 'interoperability', 'compatible', and 'Node's global fetch() function' which are all present in the provided contexts."
+            },
+            "fail_reasons": [
+              "faithfulness<0.9",
+              "answer_relevancy<0.85",
+              "context_recall<0.75"
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

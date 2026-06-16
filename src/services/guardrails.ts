@@ -1,4 +1,6 @@
 import { getDbPool } from '../db/client.js';
+import { assertCallerScope, assertCallerScopeMulti } from '../core/security/callerScope.js';
+import type { CallerScope } from '../core/security/callerScope.js';
 
 export type ActionContext = {
   action: string;
@@ -42,7 +44,16 @@ export type GuardrailRule = {
   status: string;
 };
 
-export async function listGuardrailRules(projectIdOrIds: string | string[], opts?: { limit?: number; offset?: number }): Promise<{ rules: GuardrailRule[]; total_count: number }> {
+export async function listGuardrailRules(
+  projectIdOrIds: string | string[],
+  /** DEFERRED-029: caller's scope; enforced against projectIdOrIds. */
+  opts?: { limit?: number; offset?: number; callerScope?: CallerScope },
+): Promise<{ rules: GuardrailRule[]; total_count: number }> {
+  if (Array.isArray(projectIdOrIds)) {
+    assertCallerScopeMulti(opts?.callerScope, projectIdOrIds);
+  } else {
+    assertCallerScope(opts?.callerScope, projectIdOrIds);
+  }
   const pool = getDbPool();
   const limit = Math.min(opts?.limit ?? 50, 200);
   const offset = Math.max(opts?.offset ?? 0, 0);
@@ -77,8 +88,11 @@ export type SimulateResult = {
 export async function simulateGuardrails(
   projectId: string,
   actions: string[],
+  /** DEFERRED-029: caller's scope; enforced against projectId. */
+  opts?: { callerScope?: CallerScope },
 ): Promise<SimulateResult[]> {
-  const { rules } = await listGuardrailRules(projectId, { limit: 200 });
+  assertCallerScope(opts?.callerScope, projectId);
+  const { rules } = await listGuardrailRules(projectId, { limit: 200, callerScope: opts?.callerScope });
   return actions.map((action) => {
     const matched = rules.filter((r) => matchTrigger(r.trigger, action));
     return {
@@ -93,7 +107,13 @@ export async function simulateGuardrails(
   });
 }
 
-export async function checkGuardrails(projectId: string, actionContext: ActionContext): Promise<GuardrailCheckResult> {
+export async function checkGuardrails(
+  projectId: string,
+  actionContext: ActionContext,
+  /** DEFERRED-029: caller's scope; enforced against projectId. */
+  opts?: { callerScope?: CallerScope },
+): Promise<GuardrailCheckResult> {
+  assertCallerScope(opts?.callerScope, projectId);
   const pool = getDbPool();
 
   // Only check guardrails whose parent lesson is active (not superseded/archived).

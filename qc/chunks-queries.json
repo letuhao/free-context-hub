@@ -13,50 +13,169 @@
       "id": "chunk-retry-strategy-overview",
       "group": "confident-hit",
       "query": "what is the retry strategy for external API calls?",
-      "target_chunk_ids": ["f379c8f6-1c30-4ca7-971d-76c8c573d9d5"],
-      "must_keywords": ["retry"]
+      "target_chunk_ids": [
+        "f379c8f6-1c30-4ca7-971d-76c8c573d9d5"
+      ],
+      "must_keywords": [
+        "retry"
+      ],
+      "ideal_answer": "External API calls use exponential backoff with jitter. The maximum retry count is 3, starting with a 100ms base delay that doubles on each failure. This approach balances reliability against increased tail latency for downstream callers.",
+      "must_contain_facts": [
+        "exponential backoff with jitter is used",
+        "maximum retry count is 3",
+        "base delay starts at 100ms",
+        "delay doubles on each failure"
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "drafted_at": "2026-05-24T03:00:00Z",
+      "reviewed_by": "letuhao1994@gmail.com"
     },
     {
       "id": "chunk-retry-config-table",
       "group": "confident-hit",
       "query": "retry configuration parameters base delay and multiplier",
-      "target_chunk_ids": ["e0b2c3e7-6e09-4a0e-9f69-c1f10855003e"],
-      "must_keywords": ["configuration"]
+      "target_chunk_ids": [
+        "e0b2c3e7-6e09-4a0e-9f69-c1f10855003e"
+      ],
+      "must_keywords": [
+        "configuration"
+      ],
+      "ideal_answer": "The retry configuration defines five parameters: max_retries (default 3), base_delay_ms (default 100), backoff_multiplier (default 2.0), jitter_fraction (default 0.2), and max_delay_ms (default 5000). The backoff multiplier controls how delay grows per attempt, and max_delay_ms caps the per-attempt delay.",
+      "must_contain_facts": [
+        "max_retries defaults to 3",
+        "base_delay_ms defaults to 100",
+        "backoff_multiplier defaults to 2.0",
+        "jitter_fraction defaults to 0.2",
+        "max_delay_ms defaults to 5000"
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "drafted_at": "2026-05-24T03:00:00Z",
+      "reviewed_by": "letuhao1994@gmail.com"
     },
     {
       "id": "chunk-retry-implementation-code",
       "group": "confident-hit",
       "query": "how to implement a retry middleware wrapping fetch",
-      "target_chunk_ids": ["49d773e1-b2b1-4ccc-a31b-aaafb848b32b"],
-      "must_keywords": ["middleware"]
+      "target_chunk_ids": [
+        "49d773e1-b2b1-4ccc-a31b-aaafb848b32b"
+      ],
+      "must_keywords": [
+        "middleware"
+      ],
+      "ideal_answer": "Implement retries as middleware by wrapping fetch in a `withRetry(fn, opts)` function. On each retry, sleep for base_delay_ms × backoff_multiplier ^ attempt with jitter applied, clamped at max_delay_ms. Only idempotent requests should use retry middleware; the final error is returned when all retries are exhausted.",
+      "must_contain_facts": [
+        "retries are implemented as middleware wrapping fetch",
+        "the wrapper function accepts opts for retry configuration",
+        "delay per attempt is base_delay multiplied by backoff_multiplier to the power of attempt",
+        "delay is clamped at max_delay_ms",
+        "jitter is applied to the delay",
+        "only idempotent requests should be retried",
+        "the final error is returned when all retries fail"
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "drafted_at": "2026-05-24T03:00:00Z",
+      "reviewed_by": "letuhao1994@gmail.com"
     },
     {
       "id": "chunk-authentication-overview",
       "group": "confident-hit",
       "query": "API authentication using API key in Authorization header",
-      "target_chunk_ids": ["80f588e6-5b9a-4252-bb2d-9f06cdcf79c5"],
-      "must_keywords": ["authentication"]
+      "target_chunk_ids": [
+        "80f588e6-5b9a-4252-bb2d-9f06cdcf79c5"
+      ],
+      "must_keywords": [
+        "authentication"
+      ],
+      "ideal_answer": "Authentication is performed via an API key passed in the Authorization header as a Bearer token. Keys are issued per project and scoped to a role. Requests missing a valid key receive a 401 response; keys are stored hashed using SHA-256 at rest and the plaintext is shown only at issuance.",
+      "must_contain_facts": [
+        "API key is sent in the Authorization header as a Bearer token",
+        "keys are issued per project",
+        "keys are scoped to a role",
+        "missing or invalid key returns 401",
+        "keys are stored hashed using SHA-256",
+        "plaintext key is shown only at issuance"
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "drafted_at": "2026-05-24T03:00:00Z",
+      "reviewed_by": "letuhao1994@gmail.com"
     },
     {
       "id": "chunk-role-definitions",
       "group": "confident-hit",
       "query": "what are the user roles admin editor viewer in the system",
-      "target_chunk_ids": ["0eba6916-0ab4-4289-96b5-554c7d96bc0b"],
-      "must_keywords": ["admin"]
+      "target_chunk_ids": [
+        "0eba6916-0ab4-4289-96b5-554c7d96bc0b"
+      ],
+      "must_keywords": [
+        "admin"
+      ],
+      "ideal_answer": "Three roles exist: admin, editor, and viewer. Admin has full read, write, delete, and user-management access; editor can read and write but cannot delete or manage users; viewer is read-only. Custom roles are not supported.",
+      "must_contain_facts": [
+        "three roles exist: admin, editor, viewer",
+        "admin has full read/write/delete and user management",
+        "editor can read and write but cannot delete or manage users",
+        "viewer is read-only",
+        "custom roles are not supported"
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "drafted_at": "2026-05-24T03:00:00Z",
+      "reviewed_by": "letuhao1994@gmail.com"
     },
     {
       "id": "chunk-data-storage-pgvector",
       "group": "confident-hit",
       "query": "how are lessons stored pgvector postgres",
-      "target_chunk_ids": ["0a02f1bd-8108-4efa-8a9e-f2fcd75ad4e3"],
-      "must_keywords": ["pgvector"]
+      "target_chunk_ids": [
+        "0a02f1bd-8108-4efa-8a9e-f2fcd75ad4e3"
+      ],
+      "must_keywords": [
+        "pgvector"
+      ],
+      "ideal_answer": "Lessons and document chunks are stored in PostgreSQL with the pgvector extension. Embedding vectors are 1024-dimensional and indexed using HNSW for cosine similarity. The lesson table is indexed by project_id and status, with an additional GIN index for full-text search fallback.",
+      "must_contain_facts": [
+        "storage backend is PostgreSQL with pgvector extension",
+        "embedding vectors are 1024-dimensional",
+        "HNSW index is used for cosine similarity search",
+        "lesson table is indexed by project_id and status",
+        "a GIN index supports full-text search fallback"
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "drafted_at": "2026-05-24T03:00:00Z",
+      "reviewed_by": "letuhao1994@gmail.com"
     },
     {
       "id": "chunk-adr-intro-dup",
       "group": "duplicate-trap",
       "query": "architecture decision records introduction",
-      "target_chunk_ids": ["512d7a46-e7f5-45aa-b3e5-6902e3ca6cd8", "79e04437-5277-48af-9f9a-e45a7c078771"],
-      "must_keywords": ["decision"]
+      "target_chunk_ids": [
+        "512d7a46-e7f5-45aa-b3e5-6902e3ca6cd8",
+        "79e04437-5277-48af-9f9a-e45a7c078771"
+      ],
+      "must_keywords": [
+        "decision"
+      ],
+      "ideal_answer": "Architecture Decision Records (ADRs) document significant design choices made for the project. Each ADR captures the context, the decision taken, and the resulting consequences. This introductory chunk appears in both the docx and png corpus variants.",
+      "must_contain_facts": [
+        "ADRs document significant architectural design choices",
+        "each ADR captures context, decision, and consequences"
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "drafted_at": "2026-05-24T03:00:00Z",
+      "reviewed_by": "letuhao1994@gmail.com"
     },
     {
       "id": "chunk-cross-retry-auth-storage",
@@ -66,19 +185,109 @@
         "f379c8f6-1c30-4ca7-971d-76c8c573d9d5",
         "80f588e6-5b9a-4252-bb2d-9f06cdcf79c5",
         "0a02f1bd-8108-4efa-8a9e-f2fcd75ad4e3"
-      ]
+      ],
+      "ideal_answer": "Retry uses exponential backoff with jitter, capped at 3 attempts. Authentication requires a per-project Bearer API key in the Authorization header, with keys stored hashed at rest. Lessons and chunks are persisted in PostgreSQL with pgvector, using 1024-dimensional HNSW-indexed embeddings.",
+      "must_contain_facts": [
+        "retry uses exponential backoff with jitter",
+        "maximum retry attempts is 3",
+        "authentication uses a Bearer API key in the Authorization header",
+        "keys are stored hashed",
+        "storage uses PostgreSQL with pgvector",
+        "embeddings are 1024-dimensional with HNSW indexing"
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "drafted_at": "2026-05-24T03:00:00Z",
+      "reviewed_by": "letuhao1994@gmail.com"
     },
     {
       "id": "chunk-miss-quantum",
       "group": "adversarial-miss",
       "query": "quantum flux capacitor documentation chapter 7",
-      "target_chunk_ids": []
+      "target_chunk_ids": [],
+      "ideal_answer": "[NO_ANSWER] No chunk in this corpus addresses quantum mechanics, flux capacitors, or this fictional reference work.",
+      "must_contain_facts": [],
+      "answer_style": "concise",
+      "answer_category": "no_answer",
+      "drafted_by": "llm",
+      "drafted_at": "2026-05-24T03:00:00Z",
+      "reviewed_by": "letuhao1994@gmail.com"
     },
     {
       "id": "chunk-miss-jazz",
       "group": "adversarial-miss",
       "query": "history of bebop jazz improvisation notation",
-      "target_chunk_ids": []
+      "target_chunk_ids": [],
+      "ideal_answer": "[NO_ANSWER] No chunk in this corpus covers music history, jazz, or improvisation notation.",
+      "must_contain_facts": [],
+      "answer_style": "concise",
+      "answer_category": "no_answer",
+      "drafted_by": "llm",
+      "drafted_at": "2026-05-24T03:00:00Z",
+      "reviewed_by": "letuhao1994@gmail.com"
+    },
+    {
+      "id": "chunk-edge-multi-hop-1",
+      "group": "edge-multi-hop",
+      "query": "What's the complete retry mechanism — strategy, configuration, and implementation?",
+      "target_chunk_ids": [
+        "f379c8f6-1c30-4ca7-971d-76c8c573d9d5",
+        "e0b2c3e7-6e09-4a0e-9f69-c1f10855003e",
+        "49d773e1-b2b1-4ccc-a31b-aaafb848b32b"
+      ],
+      "must_keywords": [
+        "retry",
+        "backoff"
+      ],
+      "ideal_answer": "Strategy: exponential backoff with jitter for external API calls, max 3 retries. Configuration: base delay 100ms, multiplier 2.0, jitter fraction 0.2, max delay 5000ms. Implementation: a `withRetry(fn, opts)` middleware wraps fetch, sleeps for (base × multiplier^attempt) × random-jitter, clamps to max_delay, and only applies to idempotent requests.",
+      "must_contain_facts": [
+        "retry strategy uses exponential backoff with jitter",
+        "max retry count is 3",
+        "base delay is 100ms and the backoff multiplier is 2",
+        "implementation is a withRetry middleware wrapping fetch",
+        "retries are limited to idempotent requests"
+      ],
+      "answer_style": "concise",
+      "answer_category": "multi_hop",
+      "drafted_by": "human",
+      "drafted_at": "2026-05-24T04:00:00Z"
+    },
+    {
+      "id": "chunk-edge-no-answer-1",
+      "group": "edge-no-answer",
+      "query": "How does the system handle GDPR right-to-erasure requests?",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "[NO_ANSWER] No chunk in this corpus addresses GDPR, right-to-erasure, or data-subject-rights workflows. The sample documentation set covers retry, authentication, roles, and storage — not privacy regulation.",
+      "must_contain_facts": [],
+      "answer_style": "concise",
+      "answer_category": "no_answer",
+      "drafted_by": "human",
+      "drafted_at": "2026-05-24T04:00:00Z"
+    },
+    {
+      "id": "chunk-edge-distractor-1",
+      "group": "edge-distractor",
+      "query": "What is the maximum retry value used in the system?",
+      "target_chunk_ids": [
+        "e0b2c3e7-6e09-4a0e-9f69-c1f10855003e"
+      ],
+      "must_keywords": [
+        "max_retries",
+        "3"
+      ],
+      "ideal_answer": "The maximum retry count is 3, taken from the `max_retries` parameter in the retry configuration table. A separate `max_delay_ms` parameter caps per-attempt delay at 5000ms, but that is a delay ceiling, not a count of retries — the question is ambiguous and the correct answer is the count, 3.",
+      "must_contain_facts": [
+        "max_retries is 3",
+        "max_retries is sourced from the retry configuration table",
+        "max_delay_ms (5000ms) caps per-attempt delay, not retry count",
+        "the question can be ambiguously interpreted as either count or delay"
+      ],
+      "answer_style": "concise",
+      "answer_category": "distractor",
+      "drafted_by": "human",
+      "drafted_at": "2026-05-24T04:00:00Z"
     }
   ]
 }

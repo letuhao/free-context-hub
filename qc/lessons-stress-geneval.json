@@ -1,0 +1,419 @@
+{
+  "surface": "lessons",
+  "project_id_suggested": "free-context-hub",
+  "version": "2026-06-16-rerank-stress-geneval",
+  "note": "LLM-drafted ideal_answers for the hard-band A/B. reviewed_by=PENDING-REVIEW — measurement use only, not shipped.",
+  "queries": [
+    {
+      "id": "lesson-stress-4a1e3c16",
+      "group": "rerank-stress-headroom",
+      "query": "How to ensure an active process uses original data instead of updated rules?",
+      "target_lesson_ids": [
+        "4a1e3c16-b9fa-46fe-bd94-c99c5ec32b44"
+      ],
+      "must_keywords": [
+        "sprint",
+        "persist",
+        "level"
+      ],
+      "ideal_answer": "To ensure an active process uses original data instead of updated rules, you must snapshot the route's rules at the time of submission. This is achieved by adding a 'body_by_level' JSONB column to the 'requests' table. The 'submitRequest' function should write the full body map to this column upon submission. Subsequently, 'applyMotionToStep' must read from this stored 'body_by_level' snapshot rather than performing a fresh matrix resolution.",
+      "must_contain_facts": [
+        "Snapshot the route's rules at submission time.",
+        "Add a 'body_by_level' JSONB column to the 'requests' table.",
+        "Store the full body map in 'body_by_level' during 'submitRequest'.",
+        "Read from the stored snapshot in 'applyMotionToStep' instead of re-resolving."
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "reviewed_by": "PENDING-REVIEW"
+    },
+    {
+      "id": "lesson-stress-1eaa0a03",
+      "group": "rerank-stress-headroom",
+      "query": "How to safely stop processing all items in a collection without losing data or locking?",
+      "target_lesson_ids": [
+        "1eaa0a03-afd2-417e-8476-7dff5e681455"
+      ],
+      "must_keywords": [
+        "sprint",
+        "three",
+        "phase"
+      ],
+      "ideal_answer": "To safely stop processing, use a three-phase close pattern. First, freeze the topic in a 'closing' state using SELECT FOR UPDATE to ensure atomicity. Second, drain items one-by-one within individual transactions, using try/catch blocks so that a single item failure does not abort the entire drain. Finally, transition from 'closing' to 'closed' using optimistic updates to avoid deadlocks with concurrent deciders, and emit a 'topic.closed' event upon completion.",
+      "must_contain_facts": [
+        "Use a three-phase close pattern (freeze, drain, seal).",
+        "Drain items one-by-one in individual transactions.",
+        "Use try/catch blocks to prevent item failures from aborting the drain.",
+        "Use optimistic updates during the seal phase to avoid deadlocks."
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "reviewed_by": "PENDING-REVIEW"
+    },
+    {
+      "id": "lesson-stress-289f24f9",
+      "group": "rerank-stress-headroom",
+      "query": "Why are some event messages using different keys for the same status information?",
+      "target_lesson_ids": [
+        "289f24f9-3e56-4e81-82ff-2aaaf4ceeea8"
+      ],
+      "must_keywords": [
+        "sprint",
+        "event",
+        "payload"
+      ],
+      "ideal_answer": "This occurs because Sprint 15.8 used the field name 'degraded_to' for the lapsed-degrade path, while Sprint 15.10 introduced a re-propose path using 'escalated_to' for the same semantic information. To avoid confusion, the design was unified in Sprint 15.10 to use 'escalated_to' for both paths. However, historic events in the database remain immutable and retain the original 'degraded_to' field name.",
+      "must_contain_facts": [
+        "Sprint 15.8 used 'degraded_to'",
+        "Sprint 15.10 introduced 'escalated_to' for the same semantic",
+        "Historic events in the DB are immutable and retain 'degraded_to'"
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "reviewed_by": "PENDING-REVIEW"
+    },
+    {
+      "id": "lesson-stress-004444c4",
+      "group": "rerank-stress-headroom",
+      "query": "Why are identical content items being merged when they belong to different owners or categories?",
+      "target_lesson_ids": [
+        "004444c4-3cb8-4405-85b8-120c73c6379d"
+      ],
+      "must_keywords": [
+        "retrieval",
+        "dedup",
+        "keys"
+      ],
+      "ideal_answer": "Identical content items are being merged because the initial deduplication implementation used only a content-level hash, specifically `nearSemanticKey(title, snippet)`. This approach fails to distinguish between legitimate variants that belong to different projects or different lesson types, causing them to collapse into a single cluster.",
+      "must_contain_facts": [
+        "The original key used only a content-level hash (nearSemanticKey(title, snippet)).",
+        "The current implementation collapses cross-project variants.",
+        "The current implementation collapses cross-type variants."
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "reviewed_by": "PENDING-REVIEW"
+    },
+    {
+      "id": "lesson-stress-beeef1e1",
+      "group": "rerank-stress-headroom",
+      "query": "How to prevent multiple instances from running the same cleanup job simultaneously?",
+      "target_lesson_ids": [
+        "beeef1e1-aa87-48c1-911d-235ad21ebfce"
+      ],
+      "must_keywords": [
+        "sprint",
+        "sweep",
+        "active"
+      ],
+      "ideal_answer": "To prevent multiple instances from running the same cleanup job simultaneously, use an advisory-lock-guarded scheduler. This utilizes Postgres pg_try_advisory_lock keyed on SHA256('phase-13.leases-sweep') as a signed int64. In multi-replica deployments, this mechanism serializes the sweep enqueue to a single leader per cycle.",
+      "must_contain_facts": [
+        "Use an advisory-lock-guarded scheduler",
+        "Utilize Postgres pg_try_advisory_lock",
+        "Key is SHA256('phase-13.leases-sweep') as a signed int64",
+        "Serializes sweep enqueue to a single leader per cycle"
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "reviewed_by": "PENDING-REVIEW"
+    },
+    {
+      "id": "lesson-stress-206e30df",
+      "group": "rerank-stress-headroom",
+      "query": "Why are background cleanup tasks blocking other scheduled maintenance processes for too long?",
+      "target_lesson_ids": [
+        "206e30df-829a-46f1-b51e-93145f9105fb"
+      ],
+      "must_keywords": [
+        "sprint",
+        "cycle",
+        "stuck"
+      ],
+      "ideal_answer": "Background cleanup tasks were blocking other scheduled maintenance processes because the sweepStuckClosingTopics function processed every stale topic within the scheduler's advisory-lock hold. With a 60s statement_timeout per call, the worst-case hold duration was N * 60s, potentially lasting hours. This was fixed by limiting the scan query to a maximum of 10 topics per cycle (K=10), bounding the worst-case hold to 10 minutes.",
+      "must_contain_facts": [
+        "The outer loop processed every stale topic inside the advisory-lock hold.",
+        "Worst-case hold was N * 60s per call.",
+        "A limit of 10 topics per cycle (K=10) was implemented.",
+        "The new worst-case hold is bounded at 10 minutes."
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "reviewed_by": "PENDING-REVIEW"
+    },
+    {
+      "id": "lesson-stress-d6648258",
+      "group": "rerank-stress-headroom",
+      "query": "Why does deleting parent records fail due to remaining linked child entries in tests?",
+      "target_lesson_ids": [
+        "d6648258-41f0-41a7-a14e-8b1e01b3531b"
+      ],
+      "must_keywords": [
+        "sprint",
+        "test",
+        "cleanup"
+      ],
+      "ideal_answer": "Deleting parent records fails because tallyMotion(carried) and sweepExpiredMotions(carried) create new tasks and artifacts as side effects. Previously, the motions.test.ts cleanup() only deleted votes, motions, and coordination_events, leaving chained tasks behind. This caused a foreign key constraint violation ('tasks_topic_id_fkey') when attempting to delete from topics. To maintain test isolation, the cleanup must follow the full cascade: votes → motions → claims → artifact_versions → artifacts → tasks → coordination_events → topics.",
+      "must_contain_facts": [
+        "tallyMotion and sweepExpiredMotions create tasks and artifacts as side effects",
+        "chained tasks remain after previous cleanup processes",
+        "a foreign key constraint violation 'tasks_topic_id_fkey' occurs during topic deletion",
+        "cleanup must follow a specific cascade order including tasks and artifacts"
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "reviewed_by": "PENDING-REVIEW"
+    },
+    {
+      "id": "lesson-stress-1ef42f81",
+      "group": "rerank-stress-headroom",
+      "query": "Why does adding more difficult examples fail to lower my performance scores?",
+      "target_lesson_ids": [
+        "1ef42f81-29ba-4e5e-a18f-d91c5ebb6c18"
+      ],
+      "must_keywords": [
+        "broadening",
+        "saturated",
+        "goldenset"
+      ],
+      "ideal_answer": "Adding more difficult examples fails to lower MRR because of two mechanisms: first, increasing the proportion of 'adversarial-miss' queries (which contribute 0 to MRR) can actually lift the aggregate. Second, MRR uses best-rank-only logic, meaning any query where at least one target hits rank-1 contributes a perfect 1.0. This prevents multi-target ambiguous queries from stressing the metric, causing MRR to saturate even when the retriever's performance on other targets is poor.",
+      "must_contain_facts": [
+        "Adversarial-miss queries contribute MRR=0 and can lift the aggregate.",
+        "MRR uses best-rank-only logic (return 1/min(found_ranks)).",
+        "Any query with a target at rank-1 contributes MRR=1.0.",
+        "Multi-target ambiguous queries do not stress MRR."
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "reviewed_by": "PENDING-REVIEW"
+    },
+    {
+      "id": "lesson-stress-abe242ea",
+      "group": "rerank-stress-headroom",
+      "query": "Why do certain pages flicker or show incorrect states during initial page load?",
+      "target_lesson_ids": [
+        "abe242ea-31ef-4d14-9245-92cfa16b8975"
+      ],
+      "must_keywords": [
+        "noprojectguard",
+        "hydration",
+        "safe"
+      ],
+      "ideal_answer": "Certain pages may flicker or show incorrect states during initial page load due to SSR hydration. To prevent this flash, NoProjectGuard ensures that data pages only activate after projects have successfully loaded from the API (when projects.length > 0).",
+      "must_contain_facts": [
+        "Flickering is caused by SSR hydration issues.",
+        "NoProjectGuard prevents flashes during SSR hydration.",
+        "Activation only occurs after projects load from the API.",
+        "Activation requires projects.length > 0."
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "reviewed_by": "PENDING-REVIEW"
+    },
+    {
+      "id": "lesson-stress-e87cd142",
+      "group": "rerank-stress-headroom",
+      "query": "Why are our measurement metrics producing incorrect values without triggering any system errors?",
+      "target_lesson_ids": [
+        "e87cd142-9fc3-4ef9-868f-11ed3e7577bf"
+      ],
+      "must_keywords": [
+        "review",
+        "impl",
+        "adversarial"
+      ],
+      "ideal_answer": "Measurement metrics produce incorrect values without triggering errors because bugs in benchmarking and measurement infrastructure often do not crash the system. Instead, they silently produce wrong numbers, leading to false confidence. Examples include metrics being blind to specific data pathologies (like same-title-different-UUID) or field parsing gaps where data is parsed but never consumed by the runner.",
+      "must_contain_facts": [
+        "Bugs in measurement infrastructure do not crash the system.",
+        "They silently produce wrong numbers.",
+        "These bugs lead to false confidence.",
+        "Examples include metrics being blind to specific data pathologies."
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "reviewed_by": "PENDING-REVIEW"
+    },
+    {
+      "id": "lesson-stress-a0792c20",
+      "group": "rerank-stress-headroom",
+      "query": "How to catch more bugs and errors during the final verification stage of development?",
+      "target_lesson_ids": [
+        "a0792c20-305b-4640-b6c7-befffcf5c3e1"
+      ],
+      "must_keywords": [
+        "invoke",
+        "review",
+        "impl"
+      ],
+      "ideal_answer": "To catch more bugs during final verification, you should invoke /review-impl by default during POST-REVIEW, especially for safety-sensitive code like auth, credential handling, or destructive operations. For larger changes, consider running /review-impl twice. Additionally, shift your mindset from self-review to identifying what test coverage misses, and ensure you document the process and rationale for using /review-impl.",
+      "must_contain_facts": [
+        "Invoke /review-impl by default during POST-REVIEW",
+        "Run /review-impl twice for larger changes",
+        "Shift mindset from self-review to identifying test coverage gaps",
+        "Use /review-impl for safety-sensitive code like auth or destructive ops"
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "reviewed_by": "PENDING-REVIEW"
+    },
+    {
+      "id": "lesson-stress-17320a37",
+      "group": "rerank-stress-headroom",
+      "query": "How to prevent unauthorized access when a user provides incomplete or unverified identifiers?",
+      "target_lesson_ids": [
+        "17320a37-4f2e-4708-8446-429d35f0f3fa"
+      ],
+      "must_keywords": [
+        "three",
+        "recurring",
+        "bypass"
+      ],
+      "ideal_answer": "To prevent unauthorized access, follow these fixes: 1) If a project_id is absent when the callerScope is a string, either auto-bind the project_id to the callerScope or throw a NOT_FOUND error; never silently skip the check. 2) Always scope-check every caller-supplied ID that the resulting row will be attributed to. 3) Reject dangerous payload fields (like filesystem paths, URLs, or IDs) at the boundary for scoped callers, or have the worker auto-resolve them from project_sources.",
+      "must_contain_facts": [
+        "Auto-bind project_id to callerScope or throw NOT_FOUND if project_id is absent.",
+        "Never silently skip scope checks when project_id is falsy.",
+        "Scope-check every caller-supplied ID used for row attribution.",
+        "Reject dangerous payload fields at the boundary or auto-resolve from project_sources."
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "reviewed_by": "PENDING-REVIEW"
+    },
+    {
+      "id": "lesson-stress-57685eb8",
+      "group": "rerank-stress-headroom",
+      "query": "How to fix a module loading loop when two files require each other?",
+      "target_lesson_ids": [
+        "57685eb8-c4ba-4e78-8417-97fa9f3a395d"
+      ],
+      "must_keywords": [
+        "sprint",
+        "circular",
+        "intake"
+      ],
+      "ideal_answer": "To fix a module loading loop caused by circular dependencies between intake.ts and disputes.ts, use a dynamic await import('./disputes.js') inside the triageIntake function instead of a top-level import. This pattern avoids the module-load cycle.",
+      "must_contain_facts": [
+        "Use dynamic await import('./disputes.js')",
+        "Place the dynamic import inside the triageIntake function",
+        "Avoid using top-level imports to prevent module-load cycles"
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "reviewed_by": "PENDING-REVIEW"
+    },
+    {
+      "id": "lesson-stress-ee1ec705",
+      "group": "rerank-stress-headroom",
+      "query": "Why does adjusting the weight parameter fail to change results for new datasets?",
+      "target_lesson_ids": [
+        "ee1ec705-1454-4662-9eda-d4d47f429352"
+      ],
+      "must_keywords": [
+        "salience",
+        "blend",
+        "candidate"
+      ],
+      "ideal_answer": "Adjusting the weight parameter (α) fails because salience blend is a no-op when no candidate lessons have access-log history. In clean or bootstrap-only datasets, top-K hybrid candidates have zero entries in the lesson_access_log, meaning salience is undefined or ≤ 0. In these cases, the blend contributes no boost regardless of the α value, making it mathematically irrelevant rather than just a small effect.",
+      "must_contain_facts": [
+        "Salience blend is a no-op when candidates have zero entries in lesson_access_log",
+        "α has zero mathematical effect when salience is undefined or ≤ 0",
+        "This occurs in clean or bootstrap-only datasets",
+        "The blend contributes no boost regardless of the α value"
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "reviewed_by": "PENDING-REVIEW"
+    },
+    {
+      "id": "lesson-stress-f690c505",
+      "group": "rerank-stress-headroom",
+      "query": "How to choose the right intensity of review cycles based on the level of risk?",
+      "target_lesson_ids": [
+        "f690c505-f146-4bcd-acf5-582bd441c731"
+      ],
+      "must_keywords": [
+        "phase",
+        "longrun",
+        "closeout"
+      ],
+      "ideal_answer": "Choose intensity based on the scope and risk of changes: Use FULL-MODE (6 Adversary calls) for schema changes, new schedulers, or new endpoints with cross-cutting auth surfaces. Use COMPRESSED-MODE (2 Adversary rounds) for backend service-layer changes with clear contracts. Use HYPER-COMPRESSED (0 Adversary rounds, using Scope Guard) for low-risk GUI-only changes against already-shipped backend contracts.",
+      "must_contain_facts": [
+        "FULL-MODE is for schema changes, new schedulers, or new endpoints with cross-cutting auth.",
+        "COMPRESSED-MODE is for backend service-layer changes with clear contracts.",
+        "HYPER-COMPRESSED is for low-risk GUI-only changes against shipped backend contracts.",
+        "Intensity is determined by the level of risk and scope of changes."
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "reviewed_by": "PENDING-REVIEW"
+    },
+    {
+      "id": "lesson-stress-e15edaef",
+      "group": "rerank-stress-headroom",
+      "query": "Why are build artifacts and session files being stored in the database?",
+      "target_lesson_ids": [
+        "e15edaef-1d63-4cff-a9cc-7f972a0887d5"
+      ],
+      "must_keywords": [
+        "index_project",
+        "default",
+        "excludes"
+      ],
+      "ideal_answer": "Build artifacts and session files are being stored in the database because the default exclude logic in `src/services/indexer.ts:55` only ignores `.git` and `node_modules`. Consequently, directories like `dist/`, `.next/`, and `.claude/` leak into the chunks table, which dilutes retrieval relevance and inflates latency.",
+      "must_contain_facts": [
+        "Default exclude logic only ignores .git and node_modules",
+        "The logic is located in src/services/indexer.ts:55",
+        "Directories like dist/, .next/, and .claude/ leak into the chunks table",
+        "This causes diluted retrieval relevance and inflated latency"
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "reviewed_by": "PENDING-REVIEW"
+    },
+    {
+      "id": "lesson-stress-db9027fb",
+      "group": "rerank-stress-headroom",
+      "query": "How to accurately measure performance improvements when the baseline changes between test periods?",
+      "target_lesson_ids": [
+        "db9027fb-986b-4915-9dac-e6e5688c3ac1"
+      ],
+      "must_keywords": [
+        "ranking",
+        "metrics",
+        "delta"
+      ],
+      "ideal_answer": "To accurately measure performance improvements when baselines change, use delta-from-control (new_MRR − control_MRR) instead of raw MRR differences between sprints. Raw differences mix code effects with data drift caused by changing underlying data (like new lessons or corpus edits). To implement this, always run --control in --samples mode so each sprint has its own within-sprint control. You should cite delta-from-control in commit messages and explicitly flag any raw cross-sprint differences as methodological limitations.",
+      "must_contain_facts": [
+        "Use delta-from-control (new_MRR − control_MRR) instead of raw MRR differences.",
+        "Raw differences mix code effects with data drift.",
+        "Run --control in --samples mode for each sprint.",
+        "Cite delta-from-control in commit messages."
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "reviewed_by": "PENDING-REVIEW"
+    },
+    {
+      "id": "lesson-stress-b1d76cc8",
+      "group": "rerank-stress-headroom",
+      "query": "Why are performance variations being flagged as regressions when they are actually within expected jitter?",
+      "target_lesson_ids": [
+        "b1d76cc8-fd55-4457-b447-18314afc72f9"
+      ],
+      "must_keywords": [
+        "benchmark",
+        "diff",
+        "generator"
+      ],
+      "ideal_answer": "Performance variations were being flagged as regressions because the diffBaselines.ts tool initially did not read the `archive.noise_floor` field emitted by `runBaseline --control`. Although the noise floor data was being produced, the comparison tooling was not consuming it, making the data 'write-only.' This caused jitter to be incorrectly identified as regressions until the fix in commit 3e91d76 allowed the tooling to recognize and skip flagging for breaches within the noise floor.",
+      "must_contain_facts": [
+        "diffBaselines.ts did not initially read the noise_floor field",
+        "The data was being produced but was 'write-only'",
+        "The tool failed to distinguish jitter from actual regressions",
+        "Commit 3e91d76 fixed this by teaching the tooling to consume noise floor slices"
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "reviewed_by": "PENDING-REVIEW"
+    }
+  ]
+}

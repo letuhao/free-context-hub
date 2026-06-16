@@ -7,6 +7,7 @@ import {
   applyMigrations,
   bootstrapKgIfEnabled,
   logStartupEnvSummary,
+  prewarmReranker,
 } from './core/index.js';
 import { createMcpToolsServer } from './mcp/index.js';
 import { createApiApp } from './api/index.js';
@@ -22,6 +23,9 @@ async function main() {
   await bootstrapKgIfEnabled().catch(err => {
     logger.error({ error: err instanceof Error ? err.message : String(err) }, 'kg bootstrap failed');
   });
+
+  // 2026-06-16 — prewarm the cross-encoder rerank model (non-blocking, best-effort).
+  void prewarmReranker();
 
   // Phase 13 Sprint 13.2 — background TTL sweep for artifact_leases.
   startSweepScheduler();

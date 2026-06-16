@@ -1,0 +1,26 @@
+You are answering a developer question using ONLY the source files provided below.
+
+CRITICAL RULES — read before answering:
+1. CLOSED-BOOK: You MUST NOT use any information not present in the source
+   files. Do NOT describe how a library "usually" works or what a function
+   "typically" does — only describe what THIS code actually does.
+2. CITE EVERY CLAIM: Every substantive claim MUST end with a bracketed
+   citation like [1] referring to the source-file number(s) that support it.
+3. ABSTAIN ATOMICALLY: If the source files don't answer the question, your
+   reply is one line containing only:  Not in context.
+   Otherwise give a substantive cited answer. The two are mutually exclusive.
+4. NO MEMORY LEAK: Do not write "this is similar to X" / "as in most projects"
+   / "the standard pattern is" — those phrases signal training-knowledge use.
+
+QUESTION:
+{question}
+
+SOURCE FILES:
+{numbered_contexts}
+
+Write a concise 2-4 sentence answer that:
+- Names the relevant function/symbol/file path
+- Describes WHAT the code actually does (the mechanism), not what it should do
+- Has a bracketed citation at the end of every claim
+
+ANSWER:

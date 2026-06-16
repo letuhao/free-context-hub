@@ -1,0 +1,3804 @@
+{
+  "schema_version": "1.1",
+  "gen_manifest": {
+    "judge_endpoint": "http://host.docker.internal:1234/v1",
+    "judge_model_id": "mistralai/mistral-nemo-instruct-2407",
+    "judge_prompts_hash": "c0165a73c10c4e04",
+    "answerer_endpoint": "http://localhost:1234/v1",
+    "answerer_model_id": "mistralai/mistral-nemo-instruct-2407",
+    "answerer_temperature": 0.2,
+    "answerer_seed": 42,
+    "answerer_max_tokens": 1024,
+    "synthesizer_prompt_hashes": {
+      "lessons": "13ac4e950489bde6",
+      "code": "3a2ea1624ae0a1fc",
+      "chunks": "a01005e0d102b2c1",
+      "global": "5ae7c8e925ad8a47"
+    },
+    "synth_mode": "standard"
+  },
+  "tag": "phase-17-first-controlled-baseline-partial",
+  "run_started_at": "2026-05-24T10:21:51.056Z",
+  "run_ended_at": "2026-05-24T10:33:10.209Z",
+  "elapsed_ms": 679153,
+  "git_commit": "3892f68+dirty",
+  "git_branch": "phase-16-sprint-16.1-gen-eval-dataset",
+  "project_id": "free-context-hub",
+  "samples_per_query": 1,
+  "k": 10,
+  "surfaces": {
+    "lessons": {
+      "query_count": 48,
+      "errors": 42,
+      "project_id": "free-context-hub",
+      "generation": {
+        "rows_with_gt": 6,
+        "rows_judged": 5,
+        "rows_skipped": 42,
+        "metrics": {
+          "faithfulness": {
+            "mean": 0.8667,
+            "std": 0.1633,
+            "p10": 0.6667,
+            "fail_count": 2
+          },
+          "answer_relevancy": {
+            "mean": 0.7357,
+            "std": 0.0917,
+            "p10": 0.5577,
+            "fail_count": 5
+          },
+          "context_precision": {
+            "mean": 1,
+            "std": 0,
+            "p10": 1,
+            "fail_count": 0
+          },
+          "context_recall": {
+            "mean": 0.29,
+            "std": 0.0554,
+            "p10": 0.2,
+            "fail_count": 5
+          },
+          "groundedness_self_eval": {
+            "mean": 1,
+            "std": 0,
+            "p10": 1,
+            "fail_count": 0
+          }
+        }
+      },
+      "metrics": {
+        "recall_at_5": 0.1333,
+        "recall_at_10": 0.1333,
+        "mrr": 0.1333,
+        "ndcg_at_5": 0.1333,
+        "ndcg_at_10": 0.1333,
+        "duplication_rate_at_10": 0,
+        "duplication_rate_nearsemantic_at_10": 0,
+        "coverage_pct": 0.1333,
+        "latency_p50_ms": 1,
+        "latency_p95_ms": 955,
+        "latency_mean_ms": 215
+      },
+      "per_query": [
+        {
+          "id": "lesson-pg-uuid-casing",
+          "group": "confident-hit",
+          "query": "how to handle pg UUID casing when building map lookups after RETURNING",
+          "top_k_keys": [
+            "68b2f2cb-2271-454e-bf7e-7831fafb9e3c",
+            "5258dbfe-b76d-42aa-b680-15eb9a7b83d7",
+            "17320a37-4f2e-4708-8446-429d35f0f3fa",
+            "898c3ce8-80a6-4a63-9359-9deaf495633d",
+            "61835c5d-d5c8-4d61-9fa0-3497aadee229",
+            "beeef1e1-aa87-48c1-911d-235ad21ebfce",
+            "4e2b8497-8d8b-4d33-bd2d-1ffd2d66c860",
+            "e3190078-c8ee-469d-8cad-404e7e806923",
+            "d081e672-e52e-41c8-a939-bbc08a87b253",
+            "cd0db880-5c36-477f-9f15-6f85dca64596"
+          ],
+          "top_k_titles": [
+            "pg UUID cast RETURNING is always canonical lowercase — map keys must match",
+            "Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1",
+            "Three recurring bypass patterns in tenant-scope work — grep these in every authz PR",
+            "Docker compose --force-recreate doesn't pick up local src changes; rebuild the image first",
+            "Bundle export must filter owner_project_id to prevent built-in injection on import",
+            "Sprint 13.2 — F1 TTL sweep + Active Work GUI shipped via 6-round AMAW longrun (3 design + 3 code Adversary rounds, max-cap each)",
+            "Phase 15 coordination substrate: event-log & transaction patterns (Sprint 15.1)",
+            "DEFERRED-024: tenant-scope a cross-project queue pop by threading an optional scope filter",
+            "HuggingFace TEI + RERANK_TYPE=api code path unlocks true cross-encoders, but bge-reranker-v2-m3 underperforms on this goldenset",
+            "Dup-rate metric keyed on exact entity id is blind to same-title-different-UUID noise"
+          ],
+          "top_k_snippets": [
+            "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…",
+            "The codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[])` for multiple projects, avoiding the N+1 problem. This pattern should be app…",
+            "Three recurring bypass patterns in tenant-scope work identified for grep-checking in every new authz/tenant-scope PR: 1. 'if (project_id) assert' trap - service fn gates scope check behind falsy project_id, skipping check and unconstrained WHERE clause -> cross-tenant read/write…",
+            "When making changes to src/ in a Docker-compose setup, you must rebuild the image using `docker compose build <service>` before running `docker compose up -d --force-recreate <service>`. This ensures that local source changes are incorporated into the new image. Failure to do so…",
+            "The DEFERRED-023 change introduced taxonomy_profiles as a bundle entity. Built-in profiles have owner_project_id IS NULL, while custom profiles carry the owning project ID. The export filters WHERE owner_project_id=$1 ensure built-ins are never exported, preventing them from bei…",
+            "...",
+            "Phase 15 Sprint 15.1 introduced an append-only event log and coordination substrate with four key patterns: 1) Per-topic seq + close-seal enforced in a single UPDATE statement, using row-lock to serialize appends and ensure monotonic, gap-free sequences. 2) Two-transaction read-…",
+            "Some tenant-scope holes have no request-time project to guard — they live in SERVICE pop/scheduling semantics. /jobs/run-next → runNextJob(queue) → claimNextQueuedJob(queue) popped the next queued job across ALL projects (FOR UPDATE SKIP LOCKED on the global queue). A guard on t…",
+            "Sprint 12.1g implemented external rerank endpoint support for true cross-encoders using TEI and RERANK_TYPE=api. While the infrastructure is deterministic, bge-reranker-v2-m3 underperformed on a goldenset compared to other models like gte and generative LLM rerank. The underperf…",
+            "The current duplication rate metric in src/qc/metrics.ts is flawed as it only considers exact entity IDs, ignoring same-title-different-UUID noise. This results in a dup-rate of 0 even when there are multiple near-duplicate lessons with distinct UUIDs. The first archived baselin…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            573
+          ],
+          "latency_ms_median": 573,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "When building map lookups after `RETURNING` with pg UUIDs, ensure your map keys match the canonical lowercase form as pg canonicalizes UUIDs on cast [1]. This is crucial to maintain consistency and avoid mismatches due to case differences.",
+            "contexts_used": [
+              {
+                "key": "68b2f2cb-2271-454e-bf7e-7831fafb9e3c",
+                "title": "pg UUID cast RETURNING is always canonical lowercase — map keys must match",
+                "snippet_preview": "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If",
+                "char_count": 280
+              },
+              {
+                "key": "5258dbfe-b76d-42aa-b680-15eb9a7b83d7",
+                "title": "Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1",
+                "snippet_preview": "The codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[",
+                "char_count": 280
+              },
+              {
+                "key": "17320a37-4f2e-4708-8446-429d35f0f3fa",
+                "title": "Three recurring bypass patterns in tenant-scope work — grep these in every authz PR",
+                "snippet_preview": "Three recurring bypass patterns in tenant-scope work identified for grep-checking in every new authz/tenant-scope PR: 1. 'if (project_id) assert' trap - service fn gates scope check behind falsy proje",
+                "char_count": 280
+              }
+            ],
+            "prompt_used": "You are answering a user question using ONLY the lessons provided below.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information that is not present in\n   the lessons. Treat your own training knowledge as off-limits. If a fact\n   isn't in a lesson below, it doesn't exist for this answer.\n2. CITE EVERY CLAIM: Every substantive claim in your answer MUST end with\n   a bracketed citation like [1] or [1,3] referring to the lesson number(s)\n   that support it. Claims without citations are not allowed.\n3. ABSTAIN WHEN UNSUPPORTED: If the lessons do NOT contain enough information\n   to answer the question, your ENTIRE answer must be exactly:\n       Not in context.\n   Do not pad, do not speculate, do not partially answer.\n4. NO MEMORY LEAK: Do not say \"as you know\" / \"as is well known\" / \"typically\"\n   / \"in general\" — those phrases signal use of training knowledge.\n\nQUESTION:\nhow to handle pg UUID casing when building map lookups after RETURNING\n\nLESSONS:\n[1] — pg UUID cast RETURNING is always canonical lowercase — map keys must match\nkey: 68b2f2cb-2271-454e-bf7e-7831fafb9e3c\nWhen using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…\n\n---\n\n[2] — Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1\nkey: 5258dbfe-b76d-42aa-b680-15eb9a7b83d7\nThe codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[])` for multiple projects, avoiding the N+1 problem. This pattern should be app…\n\n---\n\n[3] — Three recurring bypass patterns in tenant-scope work — grep these in every authz PR\nkey: 17320a37-4f2e-4708-8446-429d35f0f3fa\nThree recurring bypass patterns in tenant-scope work identified for grep-checking in every new authz/tenant-scope PR: 1. 'if (project_id) assert' trap - service fn gates scope check behind falsy project_id, skipping check and unconstrained WHERE clause -> cross-tenant read/write…\n\nWrite a concise 2-4 sentence answer that:\n- Directly answers the question\n- Has a bracketed citation at the end of every claim\n- Combines multiple lessons when needed (e.g. \"X applies [1], and Y also\n  applies [3], so both checks are required\")\n- Says exactly \"Not in context.\" if the lessons don't cover the question\n\nANSWER:\n",
+            "synth_ms": 1732,
+            "judge_ms": 116443,
+            "scores": {
+              "faithfulness": 0.6666666666666666,
+              "answer_relevancy": 0.8005705220170519,
+              "context_precision": 0.9999999999,
+              "context_recall": 0.25,
+              "groundedness_self_eval": 1
+            },
+            "reasons": {
+              "groundedness_self_eval": "The answer directly references context [1], which discusses how pg canonicalizes UUIDs on cast and the resulting lowercase form used as map keys."
+            },
+            "fail_reasons": [
+              "faithfulness<0.9",
+              "answer_relevancy<0.85",
+              "context_recall<0.75"
+            ]
+          }
+        },
+        {
+          "id": "lesson-undici-version-pinning",
+          "group": "confident-hit",
+          "query": "why must undici userland version match the Node bundled version",
+          "top_k_keys": [
+            "82e14086-dc76-40f5-81f5-e7ef0c4c97ef",
+            "fe395858-9efb-42db-ae30-6369d9dd9992",
+            "eb7409e5-d2bf-407b-9811-fca62a2c3ded",
+            "68b2f2cb-2271-454e-bf7e-7831fafb9e3c",
+            "61835c5d-d5c8-4d61-9fa0-3497aadee229",
+            "d6b8cde5-a965-4cb5-a159-7efa125e4923",
+            "cd0db880-5c36-477f-9f15-6f85dca64596",
+            "4a014c4c-5984-460e-bd68-cb7b0d6ff677",
+            "289f24f9-3e56-4e81-82ff-2aaaf4ceeea8",
+            "bb39fe5e-0345-4b98-976b-fe3b0743f169"
+          ],
+          "top_k_titles": [
+            "undici userland version MUST match Node's bundled version for fetch dispatcher interop",
+            "Node ESM CLI main-guard needs pathToFileURL on Windows, not plain `file://` concat",
+            "Sprint 15.11: dispatch mechanical test-helper migration to a subagent",
+            "pg UUID cast RETURNING is always canonical lowercase — map keys must match",
+            "Bundle export must filter owner_project_id to prevent built-in injection on import",
+            "DEFERRED-004: tenant-scope must DERIVE project from the resource id, not trust a declared field",
+            "Dup-rate metric keyed on exact entity id is blind to same-title-different-UUID noise",
+            "Sprint 15.12: tenant-scope via per-entity resolver middleware (404, not 403)",
+            "Sprint 15.10: event-payload field rename from degraded_to to escalated_to",
+            "Baseline determinism holds for back-to-back runs only; hours-separated runs jitter by embeddings-service load"
+          ],
+          "top_k_snippets": [
+            "Node's global fetch() requires the userland undici version to match its internally bundled version to avoid obscure errors. Node 23.11.1 bundles undici 6.21.2, so pinning userland undici to ^6.21.2 is recommended. Verify compatibility on Node upgrades as internal undici versions…",
+            "The guard condition `if (import.meta.url === \"file://\" + process.argv[1])` fails on Windows due to path format differences. The fix involves using `pathToFileURL` from node:url to normalize both sides of the comparison, ensuring consistent URL formats.",
+            "An authz change that forbids self-asserted participant levels broke 165 of 657 tests — every setup helper that joined non-owner actors at coordination/authority. The fix is mechanical but spans 13 files with a consistent pattern (owner joins first as authority; others join execu…",
+            "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…",
+            "The DEFERRED-023 change introduced taxonomy_profiles as a bundle entity. Built-in profiles have owner_project_id IS NULL, while custom profiles carry the owning project ID. The export filters WHERE owner_project_id=$1 ensure built-ins are never exported, preventing them from bei…",
+            "Enforcing tenant-scope on writer routes: a guard that checks the caller-DECLARED project_id (body/query) against apiKeyScope is INSUFFICIENT for routes with a resource :id. A scoped key can pass its OWN project_id (passes the check) but a cross-tenant resource :id; safety then d…",
+            "The current duplication rate metric in src/qc/metrics.ts is flawed as it only considers exact entity IDs, ignoring same-title-different-UUID noise. This results in a dup-rate of 0 even when there are multiple near-duplicate lessons with distinct UUIDs. The first archived baselin…",
+            "Implement per-entity resolver middleware for tenant isolation, returning 404 NOT_FOUND when resource belongs to another project or doesn't exist. For create routes, inject scope from BODY if missing, preventing unauthorized access. Enforce via apiKeyScope auth checks.",
+            "Rename `degraded_to` to `escalated_to` in Sprint 15.10 payload to resolve semantic confusion between two fields with the same meaning. This unification ensures consistent interpretation across historic and new event paths, preventing future parsing complexities.",
+            "Baseline determinism holds for back-to-back runs but varies with embeddings-service load when run hours apart. Root cause is transient CPU/memory load on the MCP container affecting query scoring. The diff generator flags this as a regression, but it's measurement noise. Operato…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            5770
+          ],
+          "latency_ms_median": 5770,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "The undici userland version must match Node's bundled version to ensure interoperability with Node's global fetch() function, as they need to be compatible for proper functioning [1].",
+            "contexts_used": [
+              {
+                "key": "82e14086-dc76-40f5-81f5-e7ef0c4c97ef",
+                "title": "undici userland version MUST match Node's bundled version for fetch dispatcher interop",
+                "snippet_preview": "Node's global fetch() requires the userland undici version to match its internally bundled version to avoid obscure errors. Node 23.11.1 bundles undici 6.21.2, so pinning userland undici to ^6.21.2 is",
+                "char_count": 280
+              },
+              {
+                "key": "fe395858-9efb-42db-ae30-6369d9dd9992",
+                "title": "Node ESM CLI main-guard needs pathToFileURL on Windows, not plain `file://` concat",
+                "snippet_preview": "The guard condition `if (import.meta.url === \"file://\" + process.argv[1])` fails on Windows due to path format differences. The fix involves using `pathToFileURL` from node:url to normalize both sides",
+                "char_count": 252
+              },
+              {
+                "key": "eb7409e5-d2bf-407b-9811-fca62a2c3ded",
+                "title": "Sprint 15.11: dispatch mechanical test-helper migration to a subagent",
+                "snippet_preview": "An authz change that forbids self-asserted participant levels broke 165 of 657 tests — every setup helper that joined non-owner actors at coordination/authority. The fix is mechanical but spans 13 fil",
+                "char_count": 280
+              }
+            ],
+            "prompt_used": "You are answering a user question using ONLY the lessons provided below.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information that is not present in\n   the lessons. Treat your own training knowledge as off-limits. If a fact\n   isn't in a lesson below, it doesn't exist for this answer.\n2. CITE EVERY CLAIM: Every substantive claim in your answer MUST end with\n   a bracketed citation like [1] or [1,3] referring to the lesson number(s)\n   that support it. Claims without citations are not allowed.\n3. ABSTAIN WHEN UNSUPPORTED: If the lessons do NOT contain enough information\n   to answer the question, your ENTIRE answer must be exactly:\n       Not in context.\n   Do not pad, do not speculate, do not partially answer.\n4. NO MEMORY LEAK: Do not say \"as you know\" / \"as is well known\" / \"typically\"\n   / \"in general\" — those phrases signal use of training knowledge.\n\nQUESTION:\nwhy must undici userland version match the Node bundled version\n\nLESSONS:\n[1] — undici userland version MUST match Node's bundled version for fetch dispatcher interop\nkey: 82e14086-dc76-40f5-81f5-e7ef0c4c97ef\nNode's global fetch() requires the userland undici version to match its internally bundled version to avoid obscure errors. Node 23.11.1 bundles undici 6.21.2, so pinning userland undici to ^6.21.2 is recommended. Verify compatibility on Node upgrades as internal undici versions…\n\n---\n\n[2] — Node ESM CLI main-guard needs pathToFileURL on Windows, not plain `file://` concat\nkey: fe395858-9efb-42db-ae30-6369d9dd9992\nThe guard condition `if (import.meta.url === \"file://\" + process.argv[1])` fails on Windows due to path format differences. The fix involves using `pathToFileURL` from node:url to normalize both sides of the comparison, ensuring consistent URL formats.\n\n---\n\n[3] — Sprint 15.11: dispatch mechanical test-helper migration to a subagent\nkey: eb7409e5-d2bf-407b-9811-fca62a2c3ded\nAn authz change that forbids self-asserted participant levels broke 165 of 657 tests — every setup helper that joined non-owner actors at coordination/authority. The fix is mechanical but spans 13 files with a consistent pattern (owner joins first as authority; others join execu…\n\nWrite a concise 2-4 sentence answer that:\n- Directly answers the question\n- Has a bracketed citation at the end of every claim\n- Combines multiple lessons when needed (e.g. \"X applies [1], and Y also\n  applies [3], so both checks are required\")\n- Says exactly \"Not in context.\" if the lessons don't cover the question\n\nANSWER:\n",
+            "synth_ms": 747,
+            "judge_ms": 114442,
+            "scores": {
+              "faithfulness": 0.6666666666666666,
+              "answer_relevancy": 0.7988230096807661,
+              "context_precision": 0.9999999999,
+              "context_recall": 0.2,
+              "groundedness_self_eval": 1
+            },
+            "reasons": {
+              "groundedness_self_eval": "The answer directly quotes and paraphrases context [1], using 'interoperability with Node's global fetch() function' from the original text and 'need to be compatible for proper functioning' which is a reasonable inference based on the information given in the context."
+            },
+            "fail_reasons": [
+              "faithfulness<0.9",
+              "answer_relevancy<0.85",
+              "context_recall<0.75"
+            ]
+          }
+        },
+        {
+          "id": "lesson-pyenv-python3-shim",
+          "group": "confident-hit",
+          "query": "pyenv-win python3.bat shim fails with multi-line -c bash arguments",
+          "top_k_keys": [
+            "8788dd3e-2f89-4bb5-b899-d9d3c362da11",
+            "fe395858-9efb-42db-ae30-6369d9dd9992",
+            "3ab6adbf-2c0e-4274-95a4-f2683d55cefb",
+            "5c0b7b25-4a93-4961-bf64-e0c967438b24",
+            "f690c505-f146-4bcd-acf5-582bd441c731",
+            "beeef1e1-aa87-48c1-911d-235ad21ebfce",
+            "49b21049-d5f1-480d-afe5-cfb822674b2c",
+            "5563f50f-3d96-429c-9e71-482f893329c9",
+            "b85dc715-80d8-4f04-9efd-9bcd16a45dc3",
+            "17320a37-4f2e-4708-8446-429d35f0f3fa"
+          ],
+          "top_k_titles": [
+            "pyenv-win python3.bat shim corrupts multi-line -c args",
+            "Node ESM CLI main-guard needs pathToFileURL on Windows, not plain `file://` concat",
+            "Measure-first baseline sprints establish the scorecard before any improvement ships",
+            "Sprints adding an authorization / governance primitive require a security-framed cold-start adversarial review",
+            "Phase 13 longrun closeout: 6 sprints, 4 sessions, hybrid AMAW mode trade-offs across full/compressed/hyper-compressed",
+            "Sprint 13.2 — F1 TTL sweep + Active Work GUI shipped via 6-round AMAW longrun (3 design + 3 code Adversary rounds, max-cap each)",
+            "Phase 13 post-hoc review: AMAW caught real bugs in-loop but 19 escaped (3 HIGH) — 3 structural gaps",
+            "Sprint 15.6 HIGH: writer paths phai check 'closing' chu khong chi 'closed'",
+            "Sprint 15.8: chain dedup via subject_ref string-prefix — load-bearing convention",
+            "Three recurring bypass patterns in tenant-scope work — grep these in every authz PR"
+          ],
+          "top_k_snippets": [
+            "The python3.bat shim in pyenv-win corrupts multi-line -c arguments on Windows, causing silent IndentationErrors. A workaround is to use plain 'python' instead of 'python3' to avoid the issue.",
+            "The guard condition `if (import.meta.url === \"file://\" + process.argv[1])` fails on Windows due to path format differences. The fix involves using `pathToFileURL` from node:url to normalize both sides of the comparison, ensuring consistent URL formats.",
+            "Sprint 12.0 focuses on establishing a baseline scorecard without shipping retrieval improvements. This sets a foundation for subsequent sprints to build upon, ensuring that all future work can be measured and compared effectively. The deliverables include numeric data archived i…",
+            "Sprint 15.3 introduced an authorization primitive requiring a security-framed cold-start adversarial review to identify critical gaps missed by previous rounds.",
+            "...",
+            "...",
+            "Phase 13 AMAW post‑hoc review identified 19 missed bugs (3 HIGH) due to three structural gaps: AMAW never reviews its own fixes, review budget is allocated by feature area not blast radius, and non‑negotiable gates were skipped despite being logged. Cold‑start Adversary reviews …",
+            "The current implementation only checks if the topic status is 'closed', but not 'closing'. This allows items to be created in Phases 1-3 and pass through Phase 2 scan, even when the topic has been sealed. The fix requires all writer paths to verify that the status is either 'clo…",
+            "Implement chain dedup by suppressing redundant task emissions when a motion's subject_ref starts with 'request_step:', ensuring only the request's handler emits tasks. This convention is critical for accurate chain handling in motions.ts:tallyMotion and coordinationSweep.ts:swee…",
+            "Three recurring bypass patterns in tenant-scope work identified for grep-checking in every new authz/tenant-scope PR: 1. 'if (project_id) assert' trap - service fn gates scope check behind falsy project_id, skipping check and unconstrained WHERE clause -> cross-tenant read/write…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            955
+          ],
+          "latency_ms_median": 955,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "The python3.bat shim in pyenv-win corrupts multi-line -c arguments on Windows, causing silent IndentationErrors. To resolve this issue, use plain 'python' instead of 'python3' [1].",
+            "contexts_used": [
+              {
+                "key": "8788dd3e-2f89-4bb5-b899-d9d3c362da11",
+                "title": "pyenv-win python3.bat shim corrupts multi-line -c args",
+                "snippet_preview": "The python3.bat shim in pyenv-win corrupts multi-line -c arguments on Windows, causing silent IndentationErrors. A workaround is to use plain 'python' instead of 'python3' to avoid the issue.",
+                "char_count": 191
+              },
+              {
+                "key": "fe395858-9efb-42db-ae30-6369d9dd9992",
+                "title": "Node ESM CLI main-guard needs pathToFileURL on Windows, not plain `file://` concat",
+                "snippet_preview": "The guard condition `if (import.meta.url === \"file://\" + process.argv[1])` fails on Windows due to path format differences. The fix involves using `pathToFileURL` from node:url to normalize both sides",
+                "char_count": 252
+              },
+              {
+                "key": "3ab6adbf-2c0e-4274-95a4-f2683d55cefb",
+                "title": "Measure-first baseline sprints establish the scorecard before any improvement ships",
+                "snippet_preview": "Sprint 12.0 focuses on establishing a baseline scorecard without shipping retrieval improvements. This sets a foundation for subsequent sprints to build upon, ensuring that all future work can be meas",
+                "char_count": 280
+              }
+            ],
+            "prompt_used": "You are answering a user question using ONLY the lessons provided below.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information that is not present in\n   the lessons. Treat your own training knowledge as off-limits. If a fact\n   isn't in a lesson below, it doesn't exist for this answer.\n2. CITE EVERY CLAIM: Every substantive claim in your answer MUST end with\n   a bracketed citation like [1] or [1,3] referring to the lesson number(s)\n   that support it. Claims without citations are not allowed.\n3. ABSTAIN WHEN UNSUPPORTED: If the lessons do NOT contain enough information\n   to answer the question, your ENTIRE answer must be exactly:\n       Not in context.\n   Do not pad, do not speculate, do not partially answer.\n4. NO MEMORY LEAK: Do not say \"as you know\" / \"as is well known\" / \"typically\"\n   / \"in general\" — those phrases signal use of training knowledge.\n\nQUESTION:\npyenv-win python3.bat shim fails with multi-line -c bash arguments\n\nLESSONS:\n[1] — pyenv-win python3.bat shim corrupts multi-line -c args\nkey: 8788dd3e-2f89-4bb5-b899-d9d3c362da11\nThe python3.bat shim in pyenv-win corrupts multi-line -c arguments on Windows, causing silent IndentationErrors. A workaround is to use plain 'python' instead of 'python3' to avoid the issue.\n\n---\n\n[2] — Node ESM CLI main-guard needs pathToFileURL on Windows, not plain `file://` concat\nkey: fe395858-9efb-42db-ae30-6369d9dd9992\nThe guard condition `if (import.meta.url === \"file://\" + process.argv[1])` fails on Windows due to path format differences. The fix involves using `pathToFileURL` from node:url to normalize both sides of the comparison, ensuring consistent URL formats.\n\n---\n\n[3] — Measure-first baseline sprints establish the scorecard before any improvement ships\nkey: 3ab6adbf-2c0e-4274-95a4-f2683d55cefb\nSprint 12.0 focuses on establishing a baseline scorecard without shipping retrieval improvements. This sets a foundation for subsequent sprints to build upon, ensuring that all future work can be measured and compared effectively. The deliverables include numeric data archived i…\n\nWrite a concise 2-4 sentence answer that:\n- Directly answers the question\n- Has a bracketed citation at the end of every claim\n- Combines multiple lessons when needed (e.g. \"X applies [1], and Y also\n  applies [3], so both checks are required\")\n- Says exactly \"Not in context.\" if the lessons don't cover the question\n\nANSWER:\n",
+            "synth_ms": 812,
+            "judge_ms": 113945,
+            "scores": {
+              "faithfulness": 1,
+              "answer_relevancy": 0.7387961675992085,
+              "context_precision": 0.9999999999,
+              "context_recall": 0.3333333333333333,
+              "groundedness_self_eval": 1
+            },
+            "reasons": {
+              "groundedness_self_eval": "The answer directly quotes and summarizes context [1], restating its problem and solution without adding any new information."
+            },
+            "fail_reasons": [
+              "answer_relevancy<0.85",
+              "context_recall<0.75"
+            ]
+          }
+        },
+        {
+          "id": "lesson-npm-test-silent-skip",
+          "group": "confident-hit",
+          "query": "npm test script lists test files explicitly so new ones silently skip",
+          "top_k_keys": [
+            "0f4be646-18a0-4301-b329-301b12c0945e",
+            "eb7409e5-d2bf-407b-9811-fca62a2c3ded",
+            "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+            "29f1a41f-8c33-49b9-9492-1716bf79512d",
+            "e87cd142-9fc3-4ef9-868f-11ed3e7577bf",
+            "eff18c7c-5296-466d-9fc8-711fcb9c7439",
+            "17320a37-4f2e-4708-8446-429d35f0f3fa",
+            "bf594f20-148e-4d37-8b63-cc63cf6faab9",
+            "e15edaef-1d63-4cff-a9cc-7f972a0887d5",
+            "a6a3a11d-00e8-4b7e-83f5-18d3c24b73a7"
+          ],
+          "top_k_titles": [
+            "npm test script lists files explicitly — new test files silently skipped unless added",
+            "Sprint 15.11: dispatch mechanical test-helper migration to a subagent",
+            "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types",
+            "DEFERRED-008: explicit column lists in export/import silently drop new columns",
+            "/review-impl adversarial review catches silent-false-confidence bugs POST-REVIEW misses",
+            "DEFERRED-008: explicit column lists in export/import silently drop new columns",
+            "Three recurring bypass patterns in tenant-scope work — grep these in every authz PR",
+            "Sprint 15.9: S-size sprints may skip PLAN; cleanup passes are well-suited to this lane",
+            "index_project default excludes cover .git + node_modules only; dist/ .next/ .claude/ leak into the chunks table",
+            "REST e2e dedup-wiring tests fight infrastructure: distillation + async extraction defeat naive seed-and-verify"
+          ],
+          "top_k_snippets": [
+            "The `test` script in package.json uses explicit file paths instead of a glob, causing new test files to be silently skipped unless manually added. This leads to missing tests during the build process without any warnings or errors.",
+            "An authz change that forbids self-asserted participant levels broke 165 of 657 tests — every setup helper that joined non-owner actors at coordination/authority. The fix is mechanical but spans 13 files with a consistent pattern (owner joins first as authority; others join execu…",
+            "During POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness with zero false positives and no regressions.",
+            "The Phase 11 exchange path (exportProject SELECT + importProject INSERT/UPDATE) uses EXPLICIT column lists. When migration 0052 added lesson_types.scope (NOT NULL DEFAULT 'global'), the explicit lists silently dropped it → imported profile-scoped types became global (scope-leak …",
+            "In Phase 12 Sprint 12.0, /review-impl caught 15 additional findings, including 6 MED and 6 LOW issues in benchmarking/measurement infrastructure. These bugs silently produce wrong numbers without crashing the system. Key examples include a dup-rate metric blind to certain pathol…",
+            "Phase 11 exchange path uses explicit column lists; migration 0052 added lesson_types.scope (NOT NULL DEFAULT global) but existing exported lists silently dropped it, causing imported profile-scoped types to become global. Fix involves adding scope to all three column lists and i…",
+            "Three recurring bypass patterns in tenant-scope work identified for grep-checking in every new authz/tenant-scope PR: 1. 'if (project_id) assert' trap - service fn gates scope check behind falsy project_id, skipping check and unconstrained WHERE clause -> cross-tenant read/write…",
+            "S-size sprints can skip PLAN when working on well-understood cleanup tasks with minimal logic changes and no side effects, as demonstrated in Sprint 15.9's CLARIFY brief which covered all aspects of the cleanup process efficiently.",
+            "During Phase 12 Sprint 12.0.1, indexing the free-context-hub project ingested 3925 chunks but revealed ~4426 junk rows including dist/, .next/, and .claude/ files. The default exclude logic only covers .git and node_modules. A direct SQL query was used to purge these junk rows, …",
+            "In Phase 12 Sprint 12.1b, adding e2e integration tests for dedup wiring encountered infrastructure challenges. For lessons, LLM non-determinism caused slight summary variations, leading to dedup misses. For chunks, the async nature of chunking resulted in immediate search return…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            880
+          ],
+          "latency_ms_median": 880,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "The `test` script in package.json lists files explicitly, causing new test files to be silently skipped unless manually added [1].",
+            "contexts_used": [
+              {
+                "key": "0f4be646-18a0-4301-b329-301b12c0945e",
+                "title": "npm test script lists files explicitly — new test files silently skipped unless added",
+                "snippet_preview": "The `test` script in package.json uses explicit file paths instead of a glob, causing new test files to be silently skipped unless manually added. This leads to missing tests during the build process ",
+                "char_count": 231
+              },
+              {
+                "key": "eb7409e5-d2bf-407b-9811-fca62a2c3ded",
+                "title": "Sprint 15.11: dispatch mechanical test-helper migration to a subagent",
+                "snippet_preview": "An authz change that forbids self-asserted participant levels broke 165 of 657 tests — every setup helper that joined non-owner actors at coordination/authority. The fix is mechanical but spans 13 fil",
+                "char_count": 280
+              },
+              {
+                "key": "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+                "title": "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types",
+                "snippet_preview": "During POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness ",
+                "char_count": 245
+              }
+            ],
+            "prompt_used": "You are answering a user question using ONLY the lessons provided below.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information that is not present in\n   the lessons. Treat your own training knowledge as off-limits. If a fact\n   isn't in a lesson below, it doesn't exist for this answer.\n2. CITE EVERY CLAIM: Every substantive claim in your answer MUST end with\n   a bracketed citation like [1] or [1,3] referring to the lesson number(s)\n   that support it. Claims without citations are not allowed.\n3. ABSTAIN WHEN UNSUPPORTED: If the lessons do NOT contain enough information\n   to answer the question, your ENTIRE answer must be exactly:\n       Not in context.\n   Do not pad, do not speculate, do not partially answer.\n4. NO MEMORY LEAK: Do not say \"as you know\" / \"as is well known\" / \"typically\"\n   / \"in general\" — those phrases signal use of training knowledge.\n\nQUESTION:\nnpm test script lists test files explicitly so new ones silently skip\n\nLESSONS:\n[1] — npm test script lists files explicitly — new test files silently skipped unless added\nkey: 0f4be646-18a0-4301-b329-301b12c0945e\nThe `test` script in package.json uses explicit file paths instead of a glob, causing new test files to be silently skipped unless manually added. This leads to missing tests during the build process without any warnings or errors.\n\n---\n\n[2] — Sprint 15.11: dispatch mechanical test-helper migration to a subagent\nkey: eb7409e5-d2bf-407b-9811-fca62a2c3ded\nAn authz change that forbids self-asserted participant levels broke 165 of 657 tests — every setup helper that joined non-owner actors at coordination/authority. The fix is mechanical but spans 13 files with a consistent pattern (owner joins first as authority; others join execu…\n\n---\n\n[3] — Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types\nkey: a0792c20-305b-4640-b6c7-befffcf5c3e1\nDuring POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness with zero false positives and no regressions.\n\nWrite a concise 2-4 sentence answer that:\n- Directly answers the question\n- Has a bracketed citation at the end of every claim\n- Combines multiple lessons when needed (e.g. \"X applies [1], and Y also\n  applies [3], so both checks are required\")\n- Says exactly \"Not in context.\" if the lessons don't cover the question\n\nANSWER:\n",
+            "synth_ms": 544,
+            "judge_ms": 112249,
+            "scores": {
+              "faithfulness": 1,
+              "answer_relevancy": 0.5577279358221404,
+              "context_precision": 0.9999999999,
+              "context_recall": 0.3333333333333333,
+              "groundedness_self_eval": 1
+            },
+            "reasons": {
+              "groundedness_self_eval": "The answer is directly copied from context [1], with no additional information or unsupported details."
+            },
+            "fail_reasons": [
+              "answer_relevancy<0.85",
+              "context_recall<0.75"
+            ]
+          }
+        },
+        {
+          "id": "lesson-api-lessons-items-shape",
+          "group": "confident-hit",
+          "query": "GET /api/lessons response shape uses items not lessons",
+          "top_k_keys": [
+            "2af9bb39-e127-4527-8453-4813a66ae28b",
+            "d081e672-e52e-41c8-a939-bbc08a87b253",
+            "c0e76a3d-cf5c-456a-b064-8731f3f62bc7",
+            "a688cb2c-3ed5-4fdd-ad07-0a8f5f4f5d6c",
+            "004444c4-3cb8-4405-85b8-120c73c6379d",
+            "4a014c4c-5984-460e-bd68-cb7b0d6ff677",
+            "f142bda7-8a61-4d56-b4b4-d7f8035f6b06",
+            "c73a8738-874f-4832-92eb-16e6765924ba",
+            "4e2b8497-8d8b-4d33-bd2d-1ffd2d66c860",
+            "d6b8cde5-a965-4cb5-a159-7efa125e4923"
+          ],
+          "top_k_titles": [
+            "GET /api/lessons returns rows under `items`, not `lessons` or `results`",
+            "HuggingFace TEI + RERANK_TYPE=api code path unlocks true cross-encoders, but bge-reranker-v2-m3 underperforms on this goldenset",
+            "Canonical lesson status slug is `pending-review` (hyphen) — never `pending_review`",
+            "Access-frequency salience needs query-conditioning OR drop weak signals — naive rank-weighted logging creates popularity feedback loop",
+            "Retrieval dedup keys should include project_id + lesson_type beyond content hash",
+            "Sprint 15.12: tenant-scope via per-entity resolver middleware (404, not 403)",
+            "Retrieval-layer changes silently propagate to downstream consumers (reflect tool example)",
+            "Test review lesson: Always validate API responses",
+            "Phase 15 coordination substrate: event-log & transaction patterns (Sprint 15.1)",
+            "DEFERRED-004: tenant-scope must DERIVE project from the resource id, not trust a declared field"
+          ],
+          "top_k_snippets": [
+            "The API endpoint /api/lessons returns data under 'items', not 'lessons' or 'results'. Tests should read from body.items to avoid confusion and silent failures. Verify the field name against the service implementation, and if unsure, dump the response body in a test.",
+            "Sprint 12.1g implemented external rerank endpoint support for true cross-encoders using TEI and RERANK_TYPE=api. While the infrastructure is deterministic, bge-reranker-v2-m3 underperformed on a goldenset compared to other models like gte and generative LLM rerank. The underperf…",
+            "The lesson status for a lesson awaiting human review is the slug `pending-review` WITH A HYPHEN. It is written by submit_for_review, stored in lessons.status, and matched by the REST API's ?status= filter. The canonical status set is: active, draft, pending-review, superseded, a…",
+            "In Phase 12 Sprint 12.1c, adding `lesson_access_log` and related features led to a popularity feedback loop, causing MRR and nDCG drops. The issue arises from rank-weighted logs being too cheap, allowing broad-coverage lessons to dominate salience. Mitigation paths include query…",
+            "The current deduplication key implementation using `nearSemanticKey(title, snippet)` is insufficient as it collapses legitimate cross-project and cross-type variants. The fix involves updating the key to include `project_id` and `lesson_type`, resulting in a more precise dedupli…",
+            "Implement per-entity resolver middleware for tenant isolation, returning 404 NOT_FOUND when resource belongs to another project or doesn't exist. For create routes, inject scope from BODY if missing, preventing unauthorized access. Enforce via apiKeyScope auth checks.",
+            "The retrieval-layer changes in Phase 12 Sprint 12.1a affected the reflect MCP tool's output, leading to different synthesis results before and after deduplication. This behavior change wasn't within the sprint's scope, causing discrepancies for operators running the same query. …",
+            "Ensure API response validation by checking status codes, verifying expected fields, and handling errors gracefully to prevent data processing issues.",
+            "Phase 15 Sprint 15.1 introduced an append-only event log and coordination substrate with four key patterns: 1) Per-topic seq + close-seal enforced in a single UPDATE statement, using row-lock to serialize appends and ensure monotonic, gap-free sequences. 2) Two-transaction read-…",
+            "Enforcing tenant-scope on writer routes: a guard that checks the caller-DECLARED project_id (body/query) against apiKeyScope is INSUFFICIENT for routes with a resource :id. A scoped key can pass its OWN project_id (passes the check) but a cross-tenant resource :id; safety then d…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            858
+          ],
+          "latency_ms_median": 858,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "The GET /api/lessons response indeed uses 'items' not 'lessons'. The API returns data under 'items', not 'lessons' or 'results' [1].",
+            "contexts_used": [
+              {
+                "key": "2af9bb39-e127-4527-8453-4813a66ae28b",
+                "title": "GET /api/lessons returns rows under `items`, not `lessons` or `results`",
+                "snippet_preview": "The API endpoint /api/lessons returns data under 'items', not 'lessons' or 'results'. Tests should read from body.items to avoid confusion and silent failures. Verify the field name against the servic",
+                "char_count": 266
+              },
+              {
+                "key": "d081e672-e52e-41c8-a939-bbc08a87b253",
+                "title": "HuggingFace TEI + RERANK_TYPE=api code path unlocks true cross-encoders, but bge-reranker-v2-m3 underperforms on this goldenset",
+                "snippet_preview": "Sprint 12.1g implemented external rerank endpoint support for true cross-encoders using TEI and RERANK_TYPE=api. While the infrastructure is deterministic, bge-reranker-v2-m3 underperformed on a golde",
+                "char_count": 280
+              },
+              {
+                "key": "c0e76a3d-cf5c-456a-b064-8731f3f62bc7",
+                "title": "Canonical lesson status slug is `pending-review` (hyphen) — never `pending_review`",
+                "snippet_preview": "The lesson status for a lesson awaiting human review is the slug `pending-review` WITH A HYPHEN. It is written by submit_for_review, stored in lessons.status, and matched by the REST API's ?status= fi",
+                "char_count": 280
+              }
+            ],
+            "prompt_used": "You are answering a user question using ONLY the lessons provided below.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information that is not present in\n   the lessons. Treat your own training knowledge as off-limits. If a fact\n   isn't in a lesson below, it doesn't exist for this answer.\n2. CITE EVERY CLAIM: Every substantive claim in your answer MUST end with\n   a bracketed citation like [1] or [1,3] referring to the lesson number(s)\n   that support it. Claims without citations are not allowed.\n3. ABSTAIN WHEN UNSUPPORTED: If the lessons do NOT contain enough information\n   to answer the question, your ENTIRE answer must be exactly:\n       Not in context.\n   Do not pad, do not speculate, do not partially answer.\n4. NO MEMORY LEAK: Do not say \"as you know\" / \"as is well known\" / \"typically\"\n   / \"in general\" — those phrases signal use of training knowledge.\n\nQUESTION:\nGET /api/lessons response shape uses items not lessons\n\nLESSONS:\n[1] — GET /api/lessons returns rows under `items`, not `lessons` or `results`\nkey: 2af9bb39-e127-4527-8453-4813a66ae28b\nThe API endpoint /api/lessons returns data under 'items', not 'lessons' or 'results'. Tests should read from body.items to avoid confusion and silent failures. Verify the field name against the service implementation, and if unsure, dump the response body in a test.\n\n---\n\n[2] — HuggingFace TEI + RERANK_TYPE=api code path unlocks true cross-encoders, but bge-reranker-v2-m3 underperforms on this goldenset\nkey: d081e672-e52e-41c8-a939-bbc08a87b253\nSprint 12.1g implemented external rerank endpoint support for true cross-encoders using TEI and RERANK_TYPE=api. While the infrastructure is deterministic, bge-reranker-v2-m3 underperformed on a goldenset compared to other models like gte and generative LLM rerank. The underperf…\n\n---\n\n[3] — Canonical lesson status slug is `pending-review` (hyphen) — never `pending_review`\nkey: c0e76a3d-cf5c-456a-b064-8731f3f62bc7\nThe lesson status for a lesson awaiting human review is the slug `pending-review` WITH A HYPHEN. It is written by submit_for_review, stored in lessons.status, and matched by the REST API's ?status= filter. The canonical status set is: active, draft, pending-review, superseded, a…\n\nWrite a concise 2-4 sentence answer that:\n- Directly answers the question\n- Has a bracketed citation at the end of every claim\n- Combines multiple lessons when needed (e.g. \"X applies [1], and Y also\n  applies [3], so both checks are required\")\n- Says exactly \"Not in context.\" if the lessons don't cover the question\n\nANSWER:\n",
+            "synth_ms": 605,
+            "judge_ms": 113309,
+            "scores": {
+              "faithfulness": 1,
+              "answer_relevancy": 0.7827272582637322,
+              "context_precision": 0.9999999999,
+              "context_recall": 0.3333333333333333,
+              "groundedness_self_eval": 1
+            },
+            "reasons": {
+              "groundedness_self_eval": "The answer directly quotes and summarizes context [1], making no unsupported claims or additions."
+            },
+            "fail_reasons": [
+              "answer_relevancy<0.85",
+              "context_recall<0.75"
+            ]
+          }
+        },
+        {
+          "id": "lesson-review-impl-default",
+          "group": "confident-hit",
+          "query": "should I invoke review-impl in post-review by default in the v2.2 workflow",
+          "top_k_keys": [
+            "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+            "e87cd142-9fc3-4ef9-868f-11ed3e7577bf",
+            "2097202f-4d46-4420-a088-d1351378286f",
+            "5287a774-5761-412f-a150-31db7f2b3880",
+            "e15edaef-1d63-4cff-a9cc-7f972a0887d5",
+            "9875a2ee-fd66-4b05-9693-d7c41e366e94",
+            "5ab3a1ba-b0b4-481c-997a-5b0f61138d63",
+            "a6a3a11d-00e8-4b7e-83f5-18d3c24b73a7",
+            "f142bda7-8a61-4d56-b4b4-d7f8035f6b06",
+            "c0e76a3d-cf5c-456a-b064-8731f3f62bc7"
+          ],
+          "top_k_titles": [
+            "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types",
+            "/review-impl adversarial review catches silent-false-confidence bugs POST-REVIEW misses",
+            "POST-REVIEW investigation can flip a sprint conclusion; inspect top-K composition when a metric surprises",
+            "Cold-start hostile-actor adversary review is mandatory for authz primitives",
+            "index_project default excludes cover .git + node_modules only; dist/ .next/ .claude/ leak into the chunks table",
+            "Opt-in Docker services via profiles — don't make measurement-only infra a hard dependency",
+            "Revert a default based on bad data; don't defend it with handwave arguments",
+            "REST e2e dedup-wiring tests fight infrastructure: distillation + async extraction defeat naive seed-and-verify",
+            "Retrieval-layer changes silently propagate to downstream consumers (reflect tool example)",
+            "Canonical lesson status slug is `pending-review` (hyphen) — never `pending_review`"
+          ],
+          "top_k_snippets": [
+            "During POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness with zero false positives and no regressions.",
+            "In Phase 12 Sprint 12.0, /review-impl caught 15 additional findings, including 6 MED and 6 LOW issues in benchmarking/measurement infrastructure. These bugs silently produce wrong numbers without crashing the system. Key examples include a dup-rate metric blind to certain pathol…",
+            "Sprint 12.1e2 BUILD initially showed a clear winner with one caveat. A POST-REVIEW checkpoint revealed that the regression was an artifact due to goldenset-pollution fixture lessons displacing the target. The lesson is to inspect the TOP-K COMPOSITION of affected queries when me…",
+            "Cold-start hostile-actor adversary review is mandatory for new authz primitives, governance changes, and destructive operations. Multi-pass reviews catch different classes of vulnerabilities beyond implementation coverage. Four passes saturated findings; skipping leads to critic…",
+            "During Phase 12 Sprint 12.0.1, indexing the free-context-hub project ingested 3925 chunks but revealed ~4426 junk rows including dist/, .next/, and .claude/ files. The default exclude logic only covers .git and node_modules. A direct SQL query was used to purge these junk rows, …",
+            "Sprint 12.1g introduced a tei-rerank Docker service for QC measurement, which was always-on despite being unused in production. This caused unnecessary resource consumption. The fix involves adding profiles to the service block and removing hard dependencies. A general pattern i…",
+            "Sprint 12.1e2 raised the LESSONS_SALIENCE_HALF_LIFE_DAYS default from 7 to 30 based on A/B metrics, but Sprint 12.1e3 found these gains were due to a measurement-write-drift artifact. Option 1 was chosen to revert to HL=7 and correct the record. The cost of reverting is minimal …",
+            "In Phase 12 Sprint 12.1b, adding e2e integration tests for dedup wiring encountered infrastructure challenges. For lessons, LLM non-determinism caused slight summary variations, leading to dedup misses. For chunks, the async nature of chunking resulted in immediate search return…",
+            "The retrieval-layer changes in Phase 12 Sprint 12.1a affected the reflect MCP tool's output, leading to different synthesis results before and after deduplication. This behavior change wasn't within the sprint's scope, causing discrepancies for operators running the same query. …",
+            "The lesson status for a lesson awaiting human review is the slug `pending-review` WITH A HYPHEN. It is written by submit_for_review, stored in lessons.status, and matched by the REST API's ?status= filter. The canonical status set is: active, draft, pending-review, superseded, a…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            1264
+          ],
+          "latency_ms_median": 1264,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "Yes, you should invoke /review-impl by default during POST-REVIEW in the v2.2 workflow as it has proven effective in catching issues missed in initial reviews [1]. This includes situations where silent-false-confidence bugs were found that POST-REVIEW might otherwise miss [2].",
+            "contexts_used": [
+              {
+                "key": "a0792c20-305b-4640-b6c7-befffcf5c3e1",
+                "title": "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types",
+                "snippet_preview": "During POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness ",
+                "char_count": 245
+              },
+              {
+                "key": "e87cd142-9fc3-4ef9-868f-11ed3e7577bf",
+                "title": "/review-impl adversarial review catches silent-false-confidence bugs POST-REVIEW misses",
+                "snippet_preview": "In Phase 12 Sprint 12.0, /review-impl caught 15 additional findings, including 6 MED and 6 LOW issues in benchmarking/measurement infrastructure. These bugs silently produce wrong numbers without cras",
+                "char_count": 280
+              },
+              {
+                "key": "2097202f-4d46-4420-a088-d1351378286f",
+                "title": "POST-REVIEW investigation can flip a sprint conclusion; inspect top-K composition when a metric surprises",
+                "snippet_preview": "Sprint 12.1e2 BUILD initially showed a clear winner with one caveat. A POST-REVIEW checkpoint revealed that the regression was an artifact due to goldenset-pollution fixture lessons displacing the tar",
+                "char_count": 280
+              }
+            ],
+            "prompt_used": "You are answering a user question using ONLY the lessons provided below.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information that is not present in\n   the lessons. Treat your own training knowledge as off-limits. If a fact\n   isn't in a lesson below, it doesn't exist for this answer.\n2. CITE EVERY CLAIM: Every substantive claim in your answer MUST end with\n   a bracketed citation like [1] or [1,3] referring to the lesson number(s)\n   that support it. Claims without citations are not allowed.\n3. ABSTAIN WHEN UNSUPPORTED: If the lessons do NOT contain enough information\n   to answer the question, your ENTIRE answer must be exactly:\n       Not in context.\n   Do not pad, do not speculate, do not partially answer.\n4. NO MEMORY LEAK: Do not say \"as you know\" / \"as is well known\" / \"typically\"\n   / \"in general\" — those phrases signal use of training knowledge.\n\nQUESTION:\nshould I invoke review-impl in post-review by default in the v2.2 workflow\n\nLESSONS:\n[1] — Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types\nkey: a0792c20-305b-4640-b6c7-befffcf5c3e1\nDuring POST-REVIEW for safety-sensitive code, invoke /review-impl by default to catch issues missed in initial reviews. Consider running it twice on large diffs. This approach has shown effectiveness with zero false positives and no regressions.\n\n---\n\n[2] — /review-impl adversarial review catches silent-false-confidence bugs POST-REVIEW misses\nkey: e87cd142-9fc3-4ef9-868f-11ed3e7577bf\nIn Phase 12 Sprint 12.0, /review-impl caught 15 additional findings, including 6 MED and 6 LOW issues in benchmarking/measurement infrastructure. These bugs silently produce wrong numbers without crashing the system. Key examples include a dup-rate metric blind to certain pathol…\n\n---\n\n[3] — POST-REVIEW investigation can flip a sprint conclusion; inspect top-K composition when a metric surprises\nkey: 2097202f-4d46-4420-a088-d1351378286f\nSprint 12.1e2 BUILD initially showed a clear winner with one caveat. A POST-REVIEW checkpoint revealed that the regression was an artifact due to goldenset-pollution fixture lessons displacing the target. The lesson is to inspect the TOP-K COMPOSITION of affected queries when me…\n\nWrite a concise 2-4 sentence answer that:\n- Directly answers the question\n- Has a bracketed citation at the end of every claim\n- Combines multiple lessons when needed (e.g. \"X applies [1], and Y also\n  applies [3], so both checks are required\")\n- Says exactly \"Not in context.\" if the lessons don't cover the question\n\nANSWER:\n",
+            "synth_ms": 975,
+            "judge_ms": 82587,
+            "scores": {},
+            "error": "judge_failed: judge sidecar unreachable"
+          }
+        },
+        {
+          "id": "lesson-noproject-guard-hydration",
+          "group": "confident-hit",
+          "query": "NoProjectGuard hydration-safe approach for Next.js data pages",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-project-crud-validation",
+          "group": "confident-hit",
+          "query": "project CRUD POST PUT endpoints with validation rules",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-multi-project-color",
+          "group": "confident-hit",
+          "query": "multi-project color and description schema additions",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-code-review-workflow-pref",
+          "group": "confident-hit",
+          "query": "code review preference: review each file group separately after bulk implementation",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-dup-max-retry-guardrail",
+          "group": "duplicate-trap",
+          "query": "max retry attempts must be 3 external API call guardrail",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            0
+          ],
+          "latency_ms_median": 0,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-dup-global-search-retry-pattern",
+          "group": "duplicate-trap",
+          "query": "global search test retry pattern exponential backoff",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-dup-valid-impexp-fixture",
+          "group": "duplicate-trap",
+          "query": "valid impexp extra entry fixture",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-miss-unicorn",
+          "group": "adversarial-miss",
+          "query": "how to render a rainbow unicorn in WebGL with subsurface scattering",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-miss-astrophysics",
+          "group": "adversarial-miss",
+          "query": "thermonuclear astrophysics of quark-gluon plasma at LHC",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-miss-falconry",
+          "group": "adversarial-miss",
+          "query": "medieval falconry training manual hood design",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-cross-integration-test-backoff",
+          "group": "cross-topic",
+          "query": "integration test exponential backoff retry strategy",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            0
+          ],
+          "latency_ms_median": 0,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-cross-sprint-11-closeout",
+          "group": "cross-topic",
+          "query": "sprint 11.6c-sec DNS pinning body-stall timeout security polish",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-cross-workflow-gate",
+          "group": "cross-topic",
+          "query": "workflow gate state machine 12-phase workflow v2.2",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-cross-agent-bootstrap-e2e",
+          "group": "cross-topic",
+          "query": "agent context bootstrap end-to-end testing",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-ambig-measurement-methodology",
+          "group": "ambiguous-multi-target",
+          "query": "how do we measure RAG ranking changes rigorously",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-ambig-dedup-key-design",
+          "group": "ambiguous-multi-target",
+          "query": "how to build a near-duplicate key that doesn't over-collapse or under-collapse",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            0
+          ],
+          "latency_ms_median": 0,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-ambig-review-impl-default",
+          "group": "ambiguous-multi-target",
+          "query": "invoke adversarial review in post-review by default",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-ambig-popularity-feedback",
+          "group": "ambiguous-multi-target",
+          "query": "when salience boosts cause popular lessons to drown out specific hits",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-ambig-baseline-drift",
+          "group": "ambiguous-multi-target",
+          "query": "why do baselines drift between runs",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-ambig-numeric-edge-cases",
+          "group": "ambiguous-multi-target",
+          "query": "handling numeric edge cases and avoiding silent failures",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-ambig-test-infra-async",
+          "group": "ambiguous-multi-target",
+          "query": "integration test fixture timing and async work",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-ambig-noise-floor",
+          "group": "ambiguous-multi-target",
+          "query": "noise floor for A/B diffs catches jitter",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-ambig-downstream-propagation",
+          "group": "ambiguous-multi-target",
+          "query": "downstream consumers silently break when ranking shifts",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-ambig-fire-and-forget-pool",
+          "group": "ambiguous-multi-target",
+          "query": "how to avoid pool starvation when inserting asynchronously",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            0
+          ],
+          "latency_ms_median": 0,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-ambig-multi-project-isolation",
+          "group": "ambiguous-multi-target",
+          "query": "how to keep project data isolated in queries and dedup",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-ambig-composite-relevance",
+          "group": "ambiguous-multi-target",
+          "query": "why use a composite signal not pure semantic for ranking boost",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-ambig-content-empty-dedup",
+          "group": "ambiguous-multi-target",
+          "query": "empty content fields cause false dedup collisions",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-ambig-recency-frequency-retrieval",
+          "group": "ambiguous-multi-target",
+          "query": "does recency and frequency belong in retrieval ranking",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-ambig-dedup-e2e-testing",
+          "group": "ambiguous-multi-target",
+          "query": "why can't I write a simple seed-and-verify e2e test for dedup",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-para-pg-map-miss",
+          "group": "semantic-paraphrase",
+          "query": "why does a Map miss entries right after an insert returns the key",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            0
+          ],
+          "latency_ms_median": 0,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-para-undici-node-mismatch",
+          "group": "semantic-paraphrase",
+          "query": "why does swapping http agents between the default and an installed one break streaming bodies",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-para-nan-defensive-math",
+          "group": "semantic-paraphrase",
+          "query": "defensive bounds via min and max don't stop bad numeric input from corrupting results",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-para-new-test-not-running",
+          "group": "semantic-paraphrase",
+          "query": "why is a brand new unit test file not executing when the suite passes",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-para-windows-python-newlines",
+          "group": "semantic-paraphrase",
+          "query": "on Windows my inline Python script argument loses newlines at the batch-file boundary",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-edge-multi-hop-1",
+          "group": "edge-multi-hop",
+          "query": "What two patterns combine for safe state-transition testing in coordination layer tests?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-edge-multi-hop-2",
+          "group": "edge-multi-hop",
+          "query": "What review steps are required when adding a new authorization or governance primitive?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-edge-no-answer-1",
+          "group": "edge-no-answer",
+          "query": "What's the recommended approach for distributed transactions across multiple Postgres instances?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            0
+          ],
+          "latency_ms_median": 0,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-edge-contradictory-1",
+          "group": "edge-contradictory",
+          "query": "Should every sprint require a cold-start adversarial review?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            0
+          ],
+          "latency_ms_median": 0,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-edge-contradictory-2",
+          "group": "edge-contradictory",
+          "query": "Can a lesson drafted by an LLM be considered final without further review?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-edge-paraphrase-1",
+          "group": "edge-paraphrase",
+          "query": "My JS Map can't find rows after pg returns the inserted UUIDs — what's going on?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-edge-paraphrase-2",
+          "group": "edge-paraphrase",
+          "query": "Why does my fetch call break after I install undici from npm?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lesson-edge-distractor-1",
+          "group": "edge-distractor",
+          "query": "How should I invoke python in cross-platform shell scripts?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        }
+      ]
+    },
+    "code": {
+      "query_count": 77,
+      "errors": 77,
+      "project_id": "free-context-hub",
+      "metrics": {
+        "recall_at_5": 0,
+        "recall_at_10": 0,
+        "mrr": 0,
+        "ndcg_at_5": 0,
+        "ndcg_at_10": 0,
+        "duplication_rate_at_10": 0,
+        "duplication_rate_nearsemantic_at_10": 0,
+        "coverage_pct": 0,
+        "latency_p50_ms": 1,
+        "latency_p95_ms": 1,
+        "latency_mean_ms": 1
+      },
+      "per_query": [
+        {
+          "id": "auth-workspace-token-validate",
+          "group": "mcp-auth",
+          "query": "Where is workspace_token validated for MCP tool calls?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "mcp-streamable-http-endpoint",
+          "group": "mcp-server",
+          "query": "Where is the MCP HTTP endpoint implemented and what routes are exposed?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "index-project-main-pipeline",
+          "group": "indexing",
+          "query": "How does index_project discover files, chunk them, embed, and write to Postgres?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "ignore-rules-loading",
+          "group": "indexing",
+          "query": "Where do ignore patterns come from and what default ignores are applied?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            0
+          ],
+          "latency_ms_median": 0,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "embedding-request-shape",
+          "group": "embeddings",
+          "query": "How does the embeddings client call /v1/embeddings and validate dimensions?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            0
+          ],
+          "latency_ms_median": 0,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "project-snapshot-rebuild",
+          "group": "snapshots",
+          "query": "Where is the project snapshot rebuilt and when does it update?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            2
+          ],
+          "latency_ms_median": 2,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "kg-bootstrap",
+          "group": "kg",
+          "query": "How is the Neo4j Knowledge Graph bootstrapped on startup and schema ensured?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "kg-upsert-from-indexer",
+          "group": "kg",
+          "query": "Where is file graph upsert triggered during indexing?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            2
+          ],
+          "latency_ms_median": 2,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "kg-ts-morph-extractor",
+          "group": "kg",
+          "query": "How do we extract TypeScript/JavaScript symbols and edges using ts-morph?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "kg-query-tools",
+          "group": "kg",
+          "query": "Where are the KG MCP tools implemented (search_symbols, neighbors, trace path, lesson impact)?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lessons-storage-and-search",
+          "group": "lessons",
+          "query": "Where are lessons stored and how does search_lessons retrieve matches?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "guardrails-check",
+          "group": "guardrails",
+          "query": "How does check_guardrails evaluate rules and return prompts?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "git-ingest-core",
+          "group": "git",
+          "query": "How does ingest_git_history parse git log/diff and upsert commits + files?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "git-deleted-files-handling",
+          "group": "git",
+          "query": "How are deleted files represented during commit ingestion (D change kind) and why aren't they dropped?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "git-proposal-upsert-idempotent",
+          "group": "git",
+          "query": "Where is idempotent draft proposal upsert implemented for suggest_lessons_from_commits?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            0
+          ],
+          "latency_ms_median": 0,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "repo-source-config",
+          "group": "sources",
+          "query": "How is remote git source configuration stored and retrieved?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            0
+          ],
+          "latency_ms_median": 0,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "prepare-repo-clone-fetch-checkout",
+          "group": "sources",
+          "query": "How does prepare_repo clone/fetch/checkout and record last_sync_commit?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "s3-source-artifacts",
+          "group": "sources",
+          "query": "How are source artifacts synced to S3 and materialized back to disk (git bundle)?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "job-queue-postgres-claim",
+          "group": "queue",
+          "query": "How are async jobs stored and claimed from Postgres (SKIP LOCKED)?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "job-queue-rabbitmq",
+          "group": "queue",
+          "query": "How does RabbitMQ publishing work and how does the worker consume messages?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "job-executor-dispatch",
+          "group": "queue",
+          "query": "Where does the worker dispatch job types to prepareRepo/ingestGitHistory/indexProject?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            0
+          ],
+          "latency_ms_median": 0,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "workspace-scan-porcelain",
+          "group": "workspace",
+          "query": "How does scan_workspace detect modified/untracked/staged files in a local git workspace?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "env-schema-queue-s3",
+          "group": "config",
+          "query": "Where are QUEUE_* and S3_* environment variables validated?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "migrations-git-intelligence",
+          "group": "db",
+          "query": "Which migration creates git intelligence tables and draft proposal uniqueness?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "migrations-sources-jobs",
+          "group": "db",
+          "query": "Which migration creates project_sources, project_workspaces, workspace_deltas, async_jobs?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "tool-output-formatting",
+          "group": "mcp-server",
+          "query": "How does the server format MCP tool responses (json_only/summary_only/auto_both)?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "output-format-parser-smoke",
+          "group": "mcp-server",
+          "query": "Where do our clients parse MCP tool outputs that may contain summary+json (auto_both)?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "env-boolean-parser",
+          "group": "config",
+          "query": "How are boolean environment variables parsed safely?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "mcp-tool-registrations",
+          "group": "mcp-server",
+          "query": "Where are MCP tools registered and which modules implement them?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "db-migrations-apply",
+          "group": "db",
+          "query": "How does the server apply SQL migrations on startup?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "db-pool-singleton",
+          "group": "db",
+          "query": "Where is the Postgres connection pool created and reused?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            0
+          ],
+          "latency_ms_median": 0,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "guardrails-storage",
+          "group": "guardrails",
+          "query": "Where are guardrails stored and how are triggers matched?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "lessons-distillation-enabled",
+          "group": "lessons",
+          "query": "Where does distillation affect lesson creation, summary, and conflict suggestions?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "distiller-commit-suggestion-schema",
+          "group": "distillation",
+          "query": "How do we validate LLM output schema for commit-to-lesson suggestions?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "job-correlation-filter",
+          "group": "queue",
+          "query": "How does list_jobs filter by correlation_id and why is it important for per-run reporting?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "rabbitmq-queue-assert-bind",
+          "group": "queue",
+          "query": "Where do we assert/bind RabbitMQ queues and what routing keys are used?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            0
+          ],
+          "latency_ms_median": 0,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "worker-rabbitmq-consumer",
+          "group": "queue",
+          "query": "How does the worker start a RabbitMQ consumer and ack/nack messages?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "worker-fallback-postgres-polling",
+          "group": "queue",
+          "query": "Does the worker still poll Postgres as a fallback and where is that loop implemented?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "repo-sync-fanout",
+          "group": "queue",
+          "query": "When repo.sync succeeds, where do we enqueue git.ingest and index.run and propagate correlation_id?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "project-sources-schema",
+          "group": "sources",
+          "query": "What is the schema for project_sources and how does it support remote_git and local_workspace?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            0
+          ],
+          "latency_ms_median": 0,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "workspace-deltas-schema",
+          "group": "workspace",
+          "query": "What table stores workspace deltas and what fields capture modified/untracked/staged files?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "scan-workspace-delta-index",
+          "group": "workspace",
+          "query": "How does scan_workspace optionally trigger delta indexing?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "delete-workspace-cascades",
+          "group": "storage",
+          "query": "When delete_workspace is called, which tables are cleared for phase 5/6 features?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "kg-ids-deterministic",
+          "group": "kg",
+          "query": "How are deterministic IDs generated for KG nodes and symbols?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            0
+          ],
+          "latency_ms_median": 0,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "kg-linker-lessons",
+          "group": "kg",
+          "query": "How are lessons linked to code symbols in Neo4j and what heuristics are used?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            0
+          ],
+          "latency_ms_median": 0,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "kg-project-graph-delete",
+          "group": "kg",
+          "query": "How do we delete graph data for a project (cleanup)?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "git-impact-analysis",
+          "group": "git",
+          "query": "How does analyze_commit_impact combine changed files with KG symbol/lesson links?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "git-link-commit-to-lesson",
+          "group": "git",
+          "query": "How does link_commit_to_lesson update lesson source_refs and refresh symbol links?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "git-proposal-sanitization",
+          "group": "git",
+          "query": "Where do we sanitize source_refs to avoid [object Object] and ensure determinism?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "mcp-health-endpoint",
+          "group": "mcp-server",
+          "query": "Where is the health endpoint implemented and what does it return?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            0
+          ],
+          "latency_ms_median": 0,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "mcp-output-format-default",
+          "group": "mcp-server",
+          "query": "What is the default output_format behavior and how is auto_both constructed?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            0
+          ],
+          "latency_ms_median": 0,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "config-default-project-id",
+          "group": "config",
+          "query": "How does DEFAULT_PROJECT_ID work and where is it applied when project_id is omitted?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "config-env-loading-dotenv",
+          "group": "config",
+          "query": "Where do we load .env and validate environment variables at startup?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "config-embeddings-base-url",
+          "group": "embeddings",
+          "query": "Where is EMBEDDINGS_BASE_URL used to call the OpenAI-compatible embeddings API?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "config-embeddings-api-key",
+          "group": "embeddings",
+          "query": "Where is EMBEDDINGS_API_KEY read and sent to the embeddings server?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            0
+          ],
+          "latency_ms_median": 0,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "config-distillation-enabled",
+          "group": "distillation",
+          "query": "Where do we gate LLM distillation with DISTILLATION_ENABLED?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "config-kg-enabled",
+          "group": "kg",
+          "query": "Where is KG_ENABLED validated and how do KG tools behave when disabled?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "auth-tool-wrapper",
+          "group": "mcp-auth",
+          "query": "Where is assertWorkspaceToken called for each MCP tool and what error does it throw?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "auth-workspace-token-env",
+          "group": "mcp-auth",
+          "query": "Where is the workspace token configured (CONTEXT_HUB_WORKSPACE_TOKEN) and checked?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "indexer-chunk-size-config",
+          "group": "indexing",
+          "query": "Where are chunk sizes/overlap configured for indexing (and what defaults are used)?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "retriever-search-code-boosts",
+          "group": "retrieval",
+          "query": "Where is search_code implemented and how do semantic/lexical/KG boosts combine?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            0
+          ],
+          "latency_ms_median": 0,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "retriever-default-excludes",
+          "group": "retrieval",
+          "query": "What default excludes are applied in search_code (tests, __tests__, smoke)?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "queue-backend-selection",
+          "group": "queue",
+          "query": "Where is the queue backend selected (postgres vs rabbitmq) and what env vars control it?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "queue-job-types",
+          "group": "queue",
+          "query": "Where are job types enumerated and dispatched?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "smoke-queue-tools-block",
+          "group": "smoke",
+          "query": "Where is the smoke test block for queue/source tools (prepare_repo, enqueue_job, run_next_job, scan_workspace)?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "ci-phase5-worker-validation-workflow",
+          "group": "ci",
+          "query": "Where is the GitHub Actions workflow that runs validate:phase5-worker on a schedule?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "ci-mock-embeddings-server",
+          "group": "ci",
+          "query": "Where is the CI mock embeddings server implemented and what API does it expose?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            0
+          ],
+          "latency_ms_median": 0,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "code-edge-multi-hop-1",
+          "group": "edge-multi-hop",
+          "query": "How does index_project hand off chunks to the embedding service before writing to Postgres?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "code-edge-no-answer-1",
+          "group": "edge-no-answer",
+          "query": "Where is the WebSocket gateway configured for streaming chat replies?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            0
+          ],
+          "latency_ms_median": 0,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "code-edge-no-answer-2",
+          "group": "edge-no-answer",
+          "query": "How does the Kafka consumer initialize at startup?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "code-edge-contradictory-1",
+          "group": "edge-contradictory",
+          "query": "Does MCP_AUTH_ENABLED apply uniformly across REST and MCP transports?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            2
+          ],
+          "latency_ms_median": 2,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "code-edge-contradictory-2",
+          "group": "edge-contradictory",
+          "query": "Are retries enabled by default in this project's service layer?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "code-edge-paraphrase-1",
+          "group": "edge-paraphrase",
+          "query": "Where does the system check the workspace token for tools invoked over MCP?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "code-edge-paraphrase-2",
+          "group": "edge-paraphrase",
+          "query": "What tiers does the tiered code search use to find a function definition?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            0
+          ],
+          "latency_ms_median": 0,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "code-edge-distractor-1",
+          "group": "edge-distractor",
+          "query": "How is auth handled for the chat sidebar?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "code-edge-distractor-2",
+          "group": "edge-distractor",
+          "query": "Where is retry logic defined?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "code-edge-distractor-3",
+          "group": "edge-distractor",
+          "query": "How are tests organized in this project?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        }
+      ]
+    },
+    "chunks": {
+      "query_count": 13,
+      "errors": 13,
+      "project_id": "free-context-hub",
+      "metrics": {
+        "recall_at_5": 0,
+        "recall_at_10": 0,
+        "mrr": 0,
+        "ndcg_at_5": 0,
+        "ndcg_at_10": 0,
+        "duplication_rate_at_10": 0,
+        "duplication_rate_nearsemantic_at_10": 0,
+        "coverage_pct": 0,
+        "latency_p50_ms": 1,
+        "latency_p95_ms": 1,
+        "latency_mean_ms": 1
+      },
+      "per_query": [
+        {
+          "id": "chunk-retry-strategy-overview",
+          "group": "confident-hit",
+          "query": "what is the retry strategy for external API calls?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "chunk-retry-config-table",
+          "group": "confident-hit",
+          "query": "retry configuration parameters base delay and multiplier",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "chunk-retry-implementation-code",
+          "group": "confident-hit",
+          "query": "how to implement a retry middleware wrapping fetch",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "chunk-authentication-overview",
+          "group": "confident-hit",
+          "query": "API authentication using API key in Authorization header",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "chunk-role-definitions",
+          "group": "confident-hit",
+          "query": "what are the user roles admin editor viewer in the system",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "chunk-data-storage-pgvector",
+          "group": "confident-hit",
+          "query": "how are lessons stored pgvector postgres",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "chunk-adr-intro-dup",
+          "group": "duplicate-trap",
+          "query": "architecture decision records introduction",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "chunk-cross-retry-auth-storage",
+          "group": "cross-topic",
+          "query": "summary of retry authentication and data storage decisions",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "chunk-miss-quantum",
+          "group": "adversarial-miss",
+          "query": "quantum flux capacitor documentation chapter 7",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "chunk-miss-jazz",
+          "group": "adversarial-miss",
+          "query": "history of bebop jazz improvisation notation",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            0
+          ],
+          "latency_ms_median": 0,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "chunk-edge-multi-hop-1",
+          "group": "edge-multi-hop",
+          "query": "What's the complete retry mechanism — strategy, configuration, and implementation?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "chunk-edge-no-answer-1",
+          "group": "edge-no-answer",
+          "query": "How does the system handle GDPR right-to-erasure requests?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "chunk-edge-distractor-1",
+          "group": "edge-distractor",
+          "query": "What is the maximum retry value used in the system?",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        }
+      ]
+    },
+    "global": {
+      "query_count": 14,
+      "errors": 14,
+      "project_id": "free-context-hub",
+      "metrics": {
+        "recall_at_5": 0,
+        "recall_at_10": 0,
+        "mrr": 0,
+        "ndcg_at_5": 0,
+        "ndcg_at_10": 0,
+        "duplication_rate_at_10": 0,
+        "duplication_rate_nearsemantic_at_10": 0,
+        "coverage_pct": 0,
+        "latency_p50_ms": 1,
+        "latency_p95_ms": 1,
+        "latency_mean_ms": 1
+      },
+      "per_query": [
+        {
+          "id": "global-retry-substr",
+          "group": "confident-hit",
+          "query": "retry",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "global-validation-substr",
+          "group": "confident-hit",
+          "query": "validation",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "global-authentication-substr",
+          "group": "confident-hit",
+          "query": "Authentication",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "global-max-retry-substr",
+          "group": "confident-hit",
+          "query": "Max retry",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            0
+          ],
+          "latency_ms_median": 0,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "global-architecture-substr",
+          "group": "confident-hit",
+          "query": "Architecture Decision",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "global-pgvector-substr",
+          "group": "confident-hit",
+          "query": "pgvector",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "global-review-impl-substr",
+          "group": "confident-hit",
+          "query": "review-impl",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            0
+          ],
+          "latency_ms_median": 0,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "global-undici-substr",
+          "group": "confident-hit",
+          "query": "undici",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "global-workspace-substr",
+          "group": "coverage-probe",
+          "query": "workspace",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "global-miss-zephyr",
+          "group": "adversarial-miss",
+          "query": "zephyr-ninja-pyramid-2026",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "global-edge-multi-hop-1",
+          "group": "edge-multi-hop",
+          "query": "retry workflow",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "global-edge-no-answer-1",
+          "group": "edge-no-answer",
+          "query": "obfuscation cipher quantum",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "global-edge-contradictory-1",
+          "group": "edge-contradictory",
+          "query": "approval",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            1
+          ],
+          "latency_ms_median": 1,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        },
+        {
+          "id": "global-edge-paraphrase-1",
+          "group": "edge-paraphrase",
+          "query": "ADRs",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            0
+          ],
+          "latency_ms_median": 0,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "retrieval-error",
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "error": "fetch failed"
+        }
+      ]
+    }
+  }
+}

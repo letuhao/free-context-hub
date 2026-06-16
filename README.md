@@ -24,6 +24,23 @@ It also provides a **web GUI** for humans to review, approve, and refine AI-gene
 
 ---
 
+## What this actually is
+
+The visible surface is memory, lessons, and guardrails for AI coding agents. The deeper arc — see [ROADMAP.md](ROADMAP.md) for the full picture — is a five-phase research program building the MCP-served, software-substrate implementation of the **Dead Light Framework (DLF)**: a governance methodology for hybrid human + AI organizations.
+
+```
+Phase 1 ─── Phase 2 ─── Phase 3 ─── Phase 4 ─── Phase 5
+Memory      Eval +      Governance  Benchmark   Runtime
++ Knowledge RAG Quality Primitives  Governance  Enforcement
+✅ shipped   🔄 active   🔄 active   ⏳ planned   💡 research
+```
+
+Phase 1 is the core feature surface most users interact with today. Phases 2 and 3 are being built in parallel on separate branches — generation-quality evaluation (Phase 2) and the coordination / governance primitives drawn from DLF (Phase 3: motions, proxies, scope, approval, dispute, multi-tier routing). Phase 4 will benchmark Phase 3 across diverse governance scenarios. Phase 5 — pre-action runtime enforcement and isolation environments for dangerous tasks — is still in literature review.
+
+The differentiated wedge: persistent semantic memory of decisions + DLF-derived collective-decision primitives + tenant-scope isolation under one MIT roof, served via MCP. Several expansion directions are scoped for future phases — see [ROADMAP.md](ROADMAP.md).
+
+---
+
 ## Screenshots
 
 > 20 pages, 70+ REST endpoints, full human-in-the-loop workflow.
@@ -275,6 +292,8 @@ We tested 8 embedding models and 8 reranker models ([embedding/reranker benchmar
 
 ## Roadmap
 
+> For the **strategic five-phase arc** (Memory → Eval → Governance → Benchmark → Runtime Enforcement) and its DLF lineage, see [ROADMAP.md](ROADMAP.md). The list below is the **sprint-level history** mapped to the strategic phases.
+
 **Completed:**
 - [x] **Phase 1-2**: Core MVP — Lessons, Search, Guardrails
 - [x] **Phase 3**: Knowledge Distillation & Reflection
@@ -318,12 +337,49 @@ We tested 8 embedding models and 8 reranker models ([embedding/reranker benchmar
   - 8 reranker models benchmarked; `qwen3-4b-instruct-ranker` recommended (+9% accuracy at 180 lessons, 1.8s latency)
   - Rerank arc integrated into tiered search pipeline with configurable model + fallback
   - 7 sprints
+- [x] **Phase 13**: Multi-Agent Coordination Protocol
+  - Artifact ownership / leasing with TTL + fencing tokens + abandoned-claim sweep
+  - `pending-review` lesson lifecycle state + Review Request queue
+  - Taxonomy profiles (unified with `lesson_types`); Dead Light Framework reference profile shipped
+  - 19-bug post-hoc review fully cleared; 7 sprints
+- [x] **Phase 14**: Global Embedding & Distillation Model Swap
+  - Embeddings: mxbai-large → bge-m3 (8192-token context, resolved silent 512-token truncation)
+  - Distillation: qwen-coder → nemotron-3-nano (later switched to ibm/granite-4-h-tiny per current benchmark)
+  - All projects re-embedded in place
+- [x] **Phase 15**: Multi-Actor Coordination Protocol
+  - Coordination substrate: durable append-only event log, Topic / Actor / participant model
+  - The Board: tasks with dependency gating, derived-identity artifacts, claims with fencing
+  - Request / Approval: multi-level routing, unilateral and collective procedures
+  - Collective Decision: motions, votes, tally, veto, quorum
+  - Intake mailbox, dispute resolution, 3-phase topic-close drain
+  - Primitive-outcome chaining, multi-tier collective routing
+  - Authorization model: non-owner level-grant, owner permanence, 3 HARD pre-prod triggers
+  - End-to-end tenant-scope enforcement; 12 sprints (15.1–15.12), migrations 0050–0063
+- [x] **DEFERRED-029**: MCP Tenant-Scope Enforcement
+  - `CallerScope` threaded through ~115 service functions across 8 domain PRs
+  - Scoped MCP token model via `api_keys.project_scope`; legacy `CONTEXT_HUB_WORKSPACE_TOKEN` retired
+  - 5 adversary review passes (4 static + 1 live hardened-mode) found 7 bypasses (2 CRITICAL / 4 HIGH / 1 MED), all fixed before merge
+  - 843 unit + 300 E2E tests green; 10 stacked PRs (#20–#29) + 1 orthogonal test-fix (#30)
 
 **In Progress:**
-- [ ] **Phase 13**: Multi-Agent Coordination Protocol
-  - **Artifact ownership / leasing** — agents claim exclusive write access to a named target for a bounded time window; other agents see what is claimed, by whom, and for how long; prevents duplicate work and concurrent write conflicts without central orchestration
-  - **Review-request state** — a new `pending-review` lesson lifecycle step, distinct from `draft`; explicit agent-to-human handoff: submitting agent names the artifact and the human reviewer; triggers the Review Inbox queue with optional notification; no polling required
-  - **Domain taxonomy extension** — first-class support for custom lesson type hierarchies that map to external structured schemas (governance audits, compliance checklists, methodology sections); initial reference implementation uses Dead Light Framework's Phase 0 document structure (`reckoning-finding`, `candidate-decision`, `failure-candidate`, `implicit-principle`, `codex-guardrail`) as the motivating case
+- [ ] **Phase 16**: Production-Ready RAG with Generation-Quality Evaluation *(separate branch)*
+  - 152-row gen-eval dataset (127 retrieval queries + 25 hand-curated edge cases)
+  - Ragas judge sidecar (Python / FastAPI) running `google/gemma-4-26b-a4b-it`
+  - Metrics: faithfulness, answer_relevancy, context_precision, context_recall, refusal_correctness, groundedness_self_eval
+  - Threshold gates in WARN mode until 2 weeks of baseline variance data, then flip to BLOCK
+- [ ] **Phase 17**: Anti-Hallucination Experiments *(separate branch)*
+  - Citation-forced prompt templates, selective abstention
+  - Chain-of-Verification synthesizer
+  - `groundedness_self_eval` metric for model-side grounding check
+
+**Planned (no detailed design yet):**
+- [ ] **Phase 18 — Governance Benchmark Suite**
+  - Catalog of governance scenarios across org topologies (flat / hierarchical / federated), conflict patterns (collaborative / adversarial / byzantine), and human + AI mixes
+  - Per-scenario success metrics: right outcome, right number of steps, right principals, auditability intact
+- [ ] **Phase 19 — Runtime Enforcement & Isolation**
+  - Pre-action policy engine that blocks agent behavior before it occurs
+  - Isolated environments for experimental / dangerous tasks
+  - Open design questions: policy DSL (DLF-native vs OPA Rego / Cedar), enforcement location (gateway / SDK / OS sandbox), cryptographic identity (DIDs vs scoped API keys), isolation primitive (container / VM / WASM / seccomp)
 
 **Intentionally Dropped:**
 - ~~Multi-Agent Passive Collection~~ — Parsing agent conversations costs tokens and captures noise. `add_lesson` captures verified conclusions explicitly.
@@ -336,12 +392,14 @@ We tested 8 embedding models and 8 reranker models ([embedding/reranker benchmar
 
 | Metric | Count |
 |:-------|:------|
-| MCP Tools | 45 |
-| REST Endpoints | 105+ (adds `/export`, `/import`, `/pull-from` in Phase 11) |
+| MCP Tools | 45+ |
+| REST Endpoints | 105+ |
 | GUI Pages | 23 |
-| Database Migrations | 41 |
-| E2E Tests | 198+ (adds 15 Phase-11 tests; all passing) |
-| Development Phases | **12 complete · Phase 13 in progress** |
+| Database Migrations | 63 |
+| Unit Tests | 843 |
+| E2E Tests | 300 (api 128 + gui 52 + smoke 111 + agent 9) |
+| Sprint Phases | **15 complete + DEFERRED-029 · Phase 16/17 active on separate branches** |
+| Strategic Arc | **Phase 1 shipped · Phase 2 + Phase 3 in progress · Phase 4 + Phase 5 planned** ([ROADMAP.md](ROADMAP.md)) |
 
 ---
 
@@ -371,4 +429,4 @@ Please open an issue first for large changes so we can discuss the approach.
 
 MIT — see [LICENSE](LICENSE) for details.
 
-[Whitepaper](WHITEPAPER.md) | [Quickstart Guide](docs/QUICKSTART.md) | [Knowledge Exchange Reference](docs/references/knowledge-exchange.md)
+[Roadmap](ROADMAP.md) | [Whitepaper](WHITEPAPER.md) | [Quickstart Guide](docs/QUICKSTART.md) | [Knowledge Exchange Reference](docs/references/knowledge-exchange.md)

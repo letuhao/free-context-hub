@@ -15,6 +15,8 @@
 
 import { randomUUID } from 'node:crypto';
 import { getDbPool } from '../db/client.js';
+import { assertCallerScope } from '../core/security/callerScope.js';
+import type { CallerScope } from '../core/security/callerScope.js';
 import { logActivity } from './activity.js';
 import { createModuleLogger } from '../utils/logger.js';
 
@@ -29,11 +31,14 @@ export type SubmitResult =
 
 export async function submitForReview(params: {
   project_id: string;
+  /** DEFERRED-029: caller's scope; enforced against project_id. */
+  callerScope?: CallerScope;
   agent_id: string;
   lesson_id: string;
   reviewer_note?: string;
   intended_reviewer?: string;
 }): Promise<SubmitResult> {
+  assertCallerScope(params.callerScope, params.project_id);
   const pool = getDbPool();
   const client = await pool.connect();
   try {
@@ -170,11 +175,14 @@ export type ReviewRequestDetail = ReviewRequestRow & {
 
 export async function listReviewRequests(params: {
   project_id: string;
+  /** DEFERRED-029: caller's scope; enforced against project_id. */
+  callerScope?: CallerScope;
   status?: 'pending' | 'approved' | 'returned';
   submitted_by?: string;
   limit?: number;
   offset?: number;
 }): Promise<{ items: ReviewRequestRow[]; total_count: number }> {
+  assertCallerScope(params.callerScope, params.project_id);
   const pool = getDbPool();
   const status = params.status ?? 'pending';
   // SS4 (BUG-13.3-3): coerce non-finite (NaN) limit/offset to defaults — `??`
@@ -229,7 +237,13 @@ export async function listReviewRequests(params: {
   };
 }
 
-export async function getReviewRequest(params: { project_id: string; request_id: string }): Promise<ReviewRequestDetail | null> {
+export async function getReviewRequest(params: {
+  project_id: string;
+  request_id: string;
+  /** DEFERRED-029: caller's scope; enforced against project_id. */
+  callerScope?: CallerScope;
+}): Promise<ReviewRequestDetail | null> {
+  assertCallerScope(params.callerScope, params.project_id);
   const pool = getDbPool();
   const r = await pool.query<Record<string, unknown>>(
     `SELECT rr.request_id, rr.project_id, rr.lesson_id,
@@ -353,8 +367,14 @@ async function resolveRequest(
 }
 
 export async function approveReviewRequest(params: {
-  project_id: string; request_id: string; resolved_by: string; resolution_note?: string;
+  project_id: string;
+  request_id: string;
+  resolved_by: string;
+  resolution_note?: string;
+  /** DEFERRED-029: caller's scope; enforced against project_id. */
+  callerScope?: CallerScope;
 }): Promise<ResolveResult> {
+  assertCallerScope(params.callerScope, params.project_id);
   return resolveRequest(
     { project_id: params.project_id, request_id: params.request_id, resolved_by: params.resolved_by, resolution_note: params.resolution_note ?? null },
     'approve',
@@ -362,8 +382,14 @@ export async function approveReviewRequest(params: {
 }
 
 export async function returnReviewRequest(params: {
-  project_id: string; request_id: string; resolved_by: string; resolution_note: string;
+  project_id: string;
+  request_id: string;
+  resolved_by: string;
+  resolution_note: string;
+  /** DEFERRED-029: caller's scope; enforced against project_id. */
+  callerScope?: CallerScope;
 }): Promise<ResolveResult> {
+  assertCallerScope(params.callerScope, params.project_id);
   return resolveRequest(
     { project_id: params.project_id, request_id: params.request_id, resolved_by: params.resolved_by, resolution_note: params.resolution_note },
     'return',

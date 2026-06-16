@@ -1,3 +1,410 @@
+# LONGRUN CHECKPOINT — DEFERRED-029 PR F (2026-05-23, session 3 cont.)
+
+**Status:** **DEFERRED-029 PR F — auth-ON E2E slice + TWO cold-start adversary
+reviews + 5 bypass fixes** built on branch
+`deferred-029-pr-f-auth-on-e2e-and-security` (stacked on PR E).
+**828/828 unit green** (+8 from 820 baseline); **tsc clean**; no migration.
+
+## TWO adversary passes, 5 findings fixed
+
+| # | Sev | Found by | Title | Status |
+|---|---|---|---|---|
+| SEC-1 | CRITICAL | Adversary #1 | `listJobs` cross-tenant read when scoped + no projectId/projectIds | ✅ Fixed |
+| SEC-2 | CRITICAL | Adversary #1 | `triageIntake` cross-tenant `route.topic_id` event-log write | ✅ Fixed |
+| SEC-3 | HIGH | Adversary #1 | `enqueueJob` NULL-project bypass via omitted project_id | ✅ Fixed |
+| **SEC-4** | **HIGH** | **Adversary #2** | `linkDocumentToLesson`/`unlinkDocumentFromLesson` cross-tenant edge writes — same shape as SEC-2 (resource scope-checked, secondary id ignored) | ✅ **Fixed** |
+| **SEC-5** | **MEDIUM (latent)** | **Adversary #2** | `cancelJob` has identical SEC-3 trap (`if (projectId) check`) — unreachable today but trap for next caller | ✅ **Fixed** |
+
+Adversary #2 also **verified** the 3 PR-F fixes from Adversary #1 as
+**CONFIRMED-CORRECT** with explicit reasoning per edge case.
+
+## Final PR F deliverables
+- **Auth-ON E2E slice:** 18 cross-tenant tests + 3 new regression tests for
+  SEC-1/SEC-2/SEC-3 (`test/e2e/api/deferred-029-cross-tenant.test.ts`).
+- **New helper:** `assertLessonScope` in `src/core/security/scopeResolvers.ts`
+  (mirrors `assertDocumentScope` pattern; re-exported from `core/index.ts`).
+- **5 bypass fixes** across `src/services/jobQueue.ts`,
+  `src/services/intake.ts`, `src/services/documents.ts`.
+- **Regression unit tests:** +8 DB-free tests in
+  `src/services/pr-f-adversary-fixes.test.ts` covering all 5 SECs.
+
+## Sprint 15.3 lesson re-validated (twice)
+
+The CLAUDE.md safety-sensitive policy mandates hostile-actor framing for
+authz primitives. Both adversary passes proved their value:
+- Adversary #1 caught 3 CRITICAL/HIGH bypasses that all 8 prior PRs missed.
+- Adversary #2 caught 1 additional HIGH (same SEC-2 shape, different fn)
+  plus 1 latent trap.
+
+The shipping of these 5 fixes BEFORE merge — vs after a production incident
+— is the entire ROI of the cold-start review process.
+
+
+
+## What PR F contains
+- **Auth-ON E2E slice:** new `test/e2e/api/deferred-029-cross-tenant.test.ts`
+  — 18 cross-tenant tests (REST + MCP, 3-case matrix per representative
+  endpoint), skipped when `MCP_AUTH_ENABLED=false`. Wired into
+  `test/e2e/api/runner.ts`.
+- **Cold-start security-adversary review:** found **THREE bypass paths** that
+  shipped through PRs B–E unnoticed. Per Sprint 15.3 lesson — hostile-actor
+  framing caught what /review-impl coverage missed.
+- **Adversary fixes (all 3 closed in this PR):**
+
+| # | Sev | Finding | Fix location |
+|---|---|---|---|
+| **SEC-1** | **CRITICAL** | `listJobs` cross-tenant read when scoped caller omits both `projectId`+`projectIds` — WHERE clause unconstrained, leaks every tenant's jobs | `src/services/jobQueue.ts` — inject `projectId=callerScope` |
+| **SEC-2** | **CRITICAL** | `triageIntake` writes coordination event to caller-supplied `route.topic_id` never scope-checked — forges tenant-attributable rows in cross-tenant `coordination_events` | `src/services/intake.ts` — `assertTopicScope(pool, callerScope, topicId)` after `assertIntakeScope` |
+| **SEC-3** | **HIGH** | `enqueueJob` allows scoped caller to omit `project_id` → row written with `project_id=NULL` → worker runs unrestricted, drives `index.run`/`git.ingest` against attacker-chosen paths | `src/services/jobQueue.ts` — auto-bind `project_id=callerScope` when scoped |
+
+- **Regression coverage:**
+  - `src/services/pr-f-adversary-fixes.test.ts` — 5 DB-free unit tests
+  - 3 new E2E auth-ON regression tests (SEC-1 leaked-rows check, SEC-2 cross-tenant topic_id reject, SEC-3 NULL-project-id binding probe)
+
+## DEFERRED-029 status after PR F (CLOSED)
+
+The cold-start security review is the safety-sensitive gate per CLAUDE.md
+Sprint 15.3 lesson. With all 3 findings fixed + regression tests in place,
+DEFERRED-029 is fully closed pending PR review.
+
+| PR | Domain | Tests |
+|---|---|---|
+| #20 (B) | lessons | — |
+| #21 (C1) | topics + board | — |
+| #22 (C2) | requests + motions + bodies + proxies | — |
+| #23 (C3) | disputes + intake + reviewRequests + chaining | 755 |
+| #24 (D1) | exchange + documents + chunks + generatedDocs | 773 |
+| #25 (D2) | git + projectSources + workspace | 785 |
+| #26 (D3) | jobQueue + artifactLeases + taxonomy + replay + groups | 803 |
+| #27 (D4) | distillation + KG + indexing + guardrails + chat-sweep + artifacts | 817 |
+| #28 (E) | retire legacy `CONTEXT_HUB_WORKSPACE_TOKEN` | 820 |
+| **this (F)** | **auth-ON E2E + adversary review + 3 CRITICAL/HIGH bypass fixes** | **825** |
+
+---
+
+# LONGRUN CHECKPOINT — DEFERRED-029 PR E (2026-05-23, session 3 cont.)
+
+**Status:** **DEFERRED-029 PR E — retire legacy `CONTEXT_HUB_WORKSPACE_TOKEN`**
+built on branch `deferred-029-pr-e-retire-legacy-token` (stacked on D4).
+**820/820 unit green** (+3 from 817 baseline); **tsc clean**; no migration;
+back-compat preserved.
+
+## What PR E contains
+- **New env `MCP_LEGACY_TOKEN_DISABLED`** (default `false` = back-compat).
+  When `true`, the legacy single-shared `CONTEXT_HUB_WORKSPACE_TOKEN` is
+  rejected with `UNAUTHORIZED`. Default path keeps warning + accepting.
+- **Relaxed env validation:** `CONTEXT_HUB_WORKSPACE_TOKEN` is no longer
+  required when `MCP_AUTH_ENABLED=true` IF `MCP_LEGACY_TOKEN_DISABLED=true`
+  (api_keys-only mode).
+- **MCP handler cleanup:** removed the local `assertWorkspaceToken` wrapper
+  and `coreAssertWorkspaceToken` import. Last 8 admin-only handlers
+  (`help`, `list_groups`, `create_group`, `delete_group`,
+  `list_group_members`, `list_taxonomy_profiles`) now go through
+  `resolveMcpCallerScopeOrThrow` for consistent deprecation/disable gating.
+  **Zero `assertWorkspaceToken` usages in `src/mcp/index.ts` after PR E.**
+- **Migration doc:** `docs/specs/2026-05-23-deferred-029-pr-e-legacy-token-migration.md`
+  — 5-step migration recipe + env var matrix.
+- **Tests (+3):** new `src/mcp/auth-legacy-disabled.test.ts` — default
+  back-compat accepts the legacy token, opt-out rejects it, auth-off
+  short-circuit still wins.
+
+## State of DEFERRED-029 after PR E
+After PR E merges, the only remaining piece is **PR F** (auth-ON E2E +
+second-adversary security review). The PR F slice covers all entity-id-derive
+cross-tenant tests deferred through C/D series.
+
+| PR | Domain | Tests |
+|---|---|---|
+| #20 (B) | lessons | — |
+| #21 (C1) | topics + board | — |
+| #22 (C2) | requests + motions + bodies + proxies | — |
+| #23 (C3) | disputes + intake + reviewRequests + chaining | 755 |
+| #24 (D1) | exchange + documents + chunks + generatedDocs | 773 |
+| #25 (D2) | git + projectSources + workspace | 785 |
+| #26 (D3) | jobQueue + artifactLeases + taxonomy + replay + groups | 803 |
+| #27 (D4) | distillation + KG + indexing + guardrails + chat-sweep + artifacts | 817 |
+| **this (E)** | **retire legacy CONTEXT_HUB_WORKSPACE_TOKEN** | **820** |
+
+---
+
+# LONGRUN CHECKPOINT — DEFERRED-029 PR D4 (2026-05-23, session 3 cont.)
+
+**Status:** **DEFERRED-029 PR D4 — distillation + KG + indexing + guardrails +
+chat-sweep + artifacts** built on branch
+`deferred-029-pr-d4-distill-kg-index-guardrails` (stacked on D3, final D
+sub-PR). **817/817 unit green** (+14 from 803 baseline); **tsc clean**;
+no migration; back-compat preserved.
+
+## What PR D4 contains
+- **Service threading (15 fns):**
+  - `guardrails` (3): `listGuardrailRules` (also uses `assertCallerScopeMulti`
+    when projectIds is an array), `simulateGuardrails`, `checkGuardrails`.
+  - `snapshot` (2): `getProjectSnapshotBody`, `rebuildProjectSnapshot`.
+  - `indexer` (1): `indexProject`.
+  - `retriever` (1): `searchCode`.
+  - `tieredRetriever` (1): `tieredSearch`.
+  - `kg/query` (4): `searchSymbols`, `getSymbolNeighbors`,
+    `traceDependencyPath`, `getLessonImpact`.
+  - `lessons.deleteWorkspace` (1): added optional 2nd-arg opts.
+  - `artifacts` (2): `writeArtifact`, `baselineArtifact` — use
+    `assertArtifactScope` (DB-derive via tasks→topics→project_id).
+- **Pure distiller fns NOT threaded:** `reflectOnTopic`, `compressText`,
+  `distillLesson`, `suggestLessonFromCommit` — they take no `project_id` so
+  there's nothing to enforce at the service layer; scope is enforced at the
+  MCP/REST handler before they're called.
+- **chat.ts callsite-sweep:** `searchLessons` + `tieredSearch` now pass
+  `callerScope` — resolves the known carry-forward from PR D1.
+- **REST routes wired:** 3 guardrails + 1 search/code-tiered + 2 projects
+  (summary + index) + 2 board (writeArtifact + baselineArtifact). All pass
+  `callerScopeOf(req)`.
+- **MCP handlers (13):** `index_project`, `search_code`, `search_code_tiered`,
+  `check_guardrails` (include_groups branch + single), `get_context`,
+  `get_project_summary`, `compress_context` (token validation only — no
+  project), `delete_workspace`, `search_symbols`, `get_symbol_neighbors`,
+  `trace_dependency_path`, `get_lesson_impact`, `write_artifact`,
+  `baseline_artifact`.
+- **Tests (+14):** new `src/services/d4-scope.test.ts` — 4 guardrails + 2
+  snapshot + 1 indexer + 2 retrieval + 4 KG + 1 deleteWorkspace cross-tenant
+  tests (DB-free).
+
+## State of DEFERRED-029 after D4
+After D4 merges, the entire user-facing surface threads `callerScope`. The
+~8 remaining `assertWorkspaceToken` usages are all admin-only ops (`help`,
+`list/create/delete_group`, `list_group_members`, `list_taxonomy_profiles`)
+which are intentionally unrestricted and will be cleaned up in PR E along
+with the retirement of the legacy single-shared `CONTEXT_HUB_WORKSPACE_TOKEN`.
+
+| PR | Domain | Tests |
+|---|---|---|
+| #20 (B) | lessons | — |
+| #21 (C1) | topics + board | — |
+| #22 (C2) | requests + motions + bodies + proxies | — |
+| #23 (C3) | disputes + intake + reviewRequests + chaining | 755 |
+| #24 (D1) | exchange + documents + chunks + generatedDocs | 773 |
+| #25 (D2) | git + projectSources + workspace | 785 |
+| #26 (D3) | jobQueue + artifactLeases + taxonomy + replay + groups | 803 |
+| **this (D4)** | **distillation + KG + indexing + guardrails + chat-sweep + artifacts** | **817** |
+
+## Next-session work (final)
+- **PR E** — retire legacy `CONTEXT_HUB_WORKSPACE_TOKEN`. Cleanup of remaining
+  ~8 admin-only `assertWorkspaceToken` callsites.
+- **PR F** — auth-ON E2E (REST + MCP) + second-adversary security review
+  (covers all entity-id-derive cross-tenant tests deferred through the
+  C-series + D-series).
+
+---
+
+# LONGRUN CHECKPOINT — DEFERRED-029 PR D3 (2026-05-23, session 3 cont.)
+
+**Status:** **DEFERRED-029 PR D3 — jobQueue + artifactLeases + taxonomyProfiles
++ replayEvents + projectGroups** built on branch
+`deferred-029-pr-d3-jobs-groups-leases-taxonomy` (stacked on D2).
+**803/803 unit green** (+18 from 785 baseline); **tsc clean**; no migration;
+back-compat preserved.
+
+## What PR D3 contains
+- **Service threading (18 fns):**
+  - `jobQueue` (3): `enqueueJob`, `listJobs` (also gets `assertCallerScopeMulti`
+    on multi-project), `cancelJob` (new opts arg).
+  - `artifactLeases` (6): `claimArtifact`, `releaseArtifact`, `renewArtifact`,
+    `listActiveClaims`, `checkArtifactAvailability`, `forceReleaseArtifact`.
+  - `taxonomyService` (3 project-scoped): `getActiveProfile` (opts arg),
+    `activateProfile`, `deactivateProfile` (opts arg). Admin ops
+    (`listTaxonomyProfiles`, `createTaxonomyProfile`, `upsertBuiltinProfile`)
+    intentionally unrestricted. `getValidLessonTypes`/`validateLessonType`
+    inherit scope from already-scoped callers (addLesson, MCP add_lesson).
+  - `coordinationEvents.replayEvents` (1): uses `assertTopicScope` (DB-derive).
+  - `projectGroups` (5 project-scoped): `addProjectToGroup`,
+    `removeProjectFromGroup`, `listGroupsForProject`, `createProject`,
+    `updateProject`. Admin ops (`listGroups`, `listAllProjects`,
+    `listGroupMembers`, `createGroup`, `deleteGroup`) intentionally
+    unrestricted.
+- **REST routes:** 5 jobs + 6 artifactLeases + 6 groups + 3 taxonomy + 2
+  projects (create/update). All pass `callerScopeOf(req)`.
+- **MCP handlers (19):** 3 jobs + 5 leases + 4 groups + 1 replay + 3 taxonomy.
+  `run_next_job` now passes `callerScope ?? undefined` as `projectScope` to
+  honor DEFERRED-024 contract for scoped MCP keys.
+- **Tests (+18):** new `src/services/d3-scope.test.ts` — 4 jobQueue + 6
+  artifactLeases + 3 taxonomy + 5 groups cross-tenant tests (DB-free).
+  `replayEvents` cross-tenant (topic-derive) deferred to PR F.
+
+## Next-session work (D4 + remainder)
+- **PR D4** — distillation (reflect/compress/summary) + KG (symbols/neighbors/
+  trace/impact) + indexing + guardrails + chat.ts callsite-sweep (~9 MCP)
+- **PR E** — retire legacy `CONTEXT_HUB_WORKSPACE_TOKEN`
+- **PR F** — auth-ON E2E + second-adversary security review
+
+## Handoff
+Stack: **#20 → #21 → #22 → #23 → #24 → #25 → #26 (this PR)**.
+
+---
+
+# LONGRUN CHECKPOINT — DEFERRED-029 PR D2 (2026-05-23, session 3 cont.)
+
+**Status:** **DEFERRED-029 PR D2 — git + projectSources + workspace** built
+on branch `deferred-029-pr-d2-git-sources-workspace` (stacked on PR D1).
+**785/785 unit green** (+12 from 773 baseline); **tsc clean**; no migration;
+back-compat preserved.
+
+## What PR D2 contains
+- **Service threading (12 fns), all direct project_id paths:**
+  - `gitIntelligence` (6): `ingestGitHistory`, `listCommits`, `getCommit`,
+    `suggestLessonsFromCommits`, `linkCommitToLesson`, `analyzeCommitImpact`.
+  - `repoSources` (3): `configureProjectSource`, `prepareRepo`,
+    `getProjectSource` (signature updated: 3rd `opts?:{callerScope?}` arg).
+  - `workspaceTracker` (3): `registerWorkspaceRoot`, `listWorkspaceRoots`
+    (signature updated: 2nd `opts?:{callerScope?}` arg), `scanWorkspaceChanges`.
+    `scanWorkspaceChanges` forwards `callerScope` into its internal
+    `registerWorkspaceRoot` call.
+- **REST routes (11):** 5 git + 6 workspace+sources pass `callerScopeOf(req)`.
+- **MCP handlers (12):** all 12 switched from `assertWorkspaceToken` to
+  `resolveMcpCallerScopeOrThrow` and pass `callerScope`.
+- **Tests (+12):** new `src/services/git-workspace-scope.test.ts` — 6 git +
+  3 sources + 3 workspace cross-tenant tests (DB-free, mirror PR D1 pattern).
+
+## Next-session work (D3/D4)
+- **PR D3** — jobQueue + groups + artifactLeases + taxonomyProfiles +
+  replay_topic_events (~20 MCP handlers)
+- **PR D4** — distillation + KG + indexing + guardrails + chat.ts callsite-sweep
+- **PR E** — retire legacy `CONTEXT_HUB_WORKSPACE_TOKEN`
+- **PR F** — auth-ON E2E + second-adversary security review
+
+## Handoff
+Stack: **#20 → #21 → #22 → #23 → #24 → #25 (this PR)**.
+
+---
+
+# LONGRUN CHECKPOINT — DEFERRED-029 PR D1 (2026-05-23, session 3 cont.)
+
+**Status:** **DEFERRED-029 PR D1 — exchange + documents + chunks + generatedDocs**
+built on branch `deferred-029-pr-d1-exchange-docs-chunks` (stacked on PR C3).
+**773/773 unit green** (+18 from 755 baseline); **tsc clean**; no migration;
+back-compat preserved.
+
+## What PR D1 contains
+- **Service threading (20 fns):**
+  - `exchange` (3): `exportProject`, `importProject`, `pullFromRemote` — all
+    take `callerScope` against `projectId`/`targetProjectId`. `pullFromRemote`
+    forwards `callerScope` into the inner `importProject` call.
+  - `documents` (7): `createDocument`, `listDocuments`, `getDocument`,
+    `deleteDocument` use `assertCallerScope` (direct project_id);
+    `linkDocumentToLesson`, `unlinkDocumentFromLesson`, `listDocumentLessons`
+    use `assertDocumentScope` (DB-derive via `documents.project_id`).
+  - `documentChunks` (2): `searchChunks` uses `assertCallerScope`,
+    `searchChunksMulti` uses `assertCallerScopeMulti` (strict-reject).
+  - `extraction/pipeline.ts` (4): `runExtraction`, `listDocumentChunks`,
+    `updateChunk`, `deleteChunk` — all use `assertCallerScope` against
+    `projectId`.
+  - `generatedDocs.ts` (4): `upsertGeneratedDocument`, `listGeneratedDocuments`,
+    `getGeneratedDocument`, `promoteGeneratedDocument` — all use
+    `assertCallerScope` against `projectId`. Worker callsites
+    (builderMemory.ts, builderMemoryLarge.ts, backfillGeneratedDocs.ts) leave
+    `callerScope` unset (system contexts → unrestricted).
+- **New helper:** `assertDocumentScope` added to `scopeResolvers.ts` for the
+  3 docId-only fns; re-exported from `core/index.ts`.
+- **REST routes (24):** 18 documents + 3 generated-docs + 3 projects
+  (export/import/pull) + 1 chat (searchChunks) pass `callerScopeOf(req)`.
+- **MCP handlers (4):** `search_document_chunks`, `list_generated_documents`,
+  `get_generated_document`, `promote_generated_document` switched from
+  `assertWorkspaceToken` to `resolveMcpCallerScopeOrThrow` and pass
+  `callerScope` into the service.
+- **Tests (+18):** new `src/services/documents-scope.test.ts` — 2 exchange +
+  4 documents + 2 chunks + 4 extraction + 4 generatedDocs cross-tenant +
+  2 sanity tests (undefined / null). Entity-id-derive tests for the 3
+  link/unlink/listDocumentLessons fns deferred to PR F per pattern.
+
+## Known carry-forward (handled in PR D4)
+`src/api/routes/chat.ts` has 2 missed callsites that pre-date PR D1:
+- `searchLessons` (line 60) — PR B service has `callerScope?` but chat
+  doesn't pass it.
+- `tieredSearch` (line 115) — service hasn't been threaded yet (D4 scope).
+
+Both are documented in AUDIT_LOG. They're not security holes — REST middleware
+`requireProjectScope('body')` already enforces at request entry — but
+service-layer defense-in-depth will be completed in PR D4 (distillation + KG +
+indexing + remaining-misc).
+
+## Next-session work (D2/D3/D4)
+- **PR D2** — git + projectSources + workspace (~12 MCP handlers)
+- **PR D3** — jobQueue + groups + artifactLeases + taxonomyProfiles +
+  replay_topic_events (~20 MCP handlers)
+- **PR D4** — distillation (reflect/compress/summary) + KG (symbols/neighbors/
+  trace/impact) + indexing + guardrails + callsite-sweep cleanup (~9 MCP + 
+  chat.ts misses)
+- **PR E** — retire legacy `CONTEXT_HUB_WORKSPACE_TOKEN`
+- **PR F** — auth-ON E2E + second-adversary security review
+
+## Handoff
+Recommended review order: **#20 → #21 → #22 → #23 → #24 (this PR)**. Each
+builds on the prior. After this stack merges, branch the next sub-PR off
+main (or off the latest merged).
+
+---
+
+# LONGRUN CHECKPOINT — DEFERRED-029 PR C3 (2026-05-23, session 3)
+
+**Status:** **DEFERRED-029 PR C3 — disputes + intake + reviewRequests + chaining
+cleanup** built on branch `deferred-029-pr-c3-disputes-intake-reviews`
+(stacked on C2). **755/755 unit green** (+9 from 746 baseline); **tsc clean**;
+no migration; back-compat preserved.
+
+## What PR C3 contains
+- **Service threading (14 fns):**
+  - `disputes` (4): `openDispute` (assertTopicScope + forwards callerScope into
+    `submitRequest`), `resolveDispute`/`getDispute` (added optional 2nd-arg
+    `opts?:{callerScope?}` so existing positional tests stay green; use
+    `assertDisputeScope`), `listDisputes` (extends existing `opts` with
+    `callerScope`; uses `assertTopicScope`).
+  - `intake` (5): `submitIntake`/`listIntake` use `assertCallerScope` (direct
+    project_id); `triageIntake`/`dismissIntake`/`getIntake` use
+    `assertIntakeScope` (added optional 2nd-arg `opts?:{callerScope?}` for
+    back-compat). `triageIntake` forwards `callerScope` into `openDispute` on
+    dispute route.
+  - `reviewRequests` (5): all use `assertCallerScope` at top —
+    `submitForReview`, `listReviewRequests`, `getReviewRequest`,
+    `approveReviewRequest`, `returnReviewRequest`.
+- **chaining.ts:** doc-only invariant note added — `emitChain` is
+  server-internal, only invoked from `tallyMotion` / `decideStep` (both in
+  PR C2), which already enforce scope on their primitive. No public REST or
+  MCP path reaches `emitChain` directly; no plumbing needed.
+- **REST routes (13):** 4 disputes + 5 intake + 4 reviewRequests pass
+  `callerScopeOf(req)` (reads `req.apiKeyScope` from bearer-auth middleware).
+- **MCP handlers (11):** `submit_for_review`, `list_review_requests`,
+  `submit_intake`, `triage_intake`, `dismiss_intake`, `get_intake`,
+  `list_intake`, `open_dispute`, `resolve_dispute`, `get_dispute`,
+  `list_disputes` — all switched from `assertWorkspaceToken` to
+  `resolveMcpCallerScopeOrThrow` and pass `callerScope` into the service.
+- **Tests (+9):** `src/services/coordination-scope.test.ts` — 5 reviewRequests
+  + 2 intake direct-project_id cross-tenant tests + 2 sanity tests for
+  `undefined`/`null` scope (must NOT trip NOT_FOUND). Entity-id-derive
+  cross-tenant DB tests intentionally **deferred to PR F** (auth-ON E2E slice)
+  per DESIGN §8/§9 and PR C1/C2 precedent.
+
+## Security guardrail
+PR C3 introduces no new authorization primitive — only threads `callerScope`
+through existing-shape services, mirroring PR B/C1/C2. The
+security-framed adversarial review guardrail (Sprint 15.3 lesson) was
+acknowledged and **deferred to PR F** (formal second-adversary security
+review + auth-ON E2E), per CLAUDE.md and DESIGN §8. AUDIT_LOG records the
+decision under `phase_enter` for PR C3.
+
+## After C3 (next-session work)
+- **PR D** — lessonImportExport (deferred from PR B) + documents + chunks +
+  git + chat + workspace
+- **PR E** — retire legacy single-shared `CONTEXT_HUB_WORKSPACE_TOKEN`
+- **PR F** — auth-ON E2E slice (REST + MCP) + second-adversary security
+  review
+
+## Handoff
+Recommended review order: **#20 (B/lessons) → #21 (C1/topics+board) → #22
+(C2/requests+motions+bodies+proxies) → #23 (this PR, C3)**. Each builds on
+the prior. PR #19 (foundation, DESIGN doc) is merged.
+
+After all four merge, resume with `git checkout main && git pull` then
+branch `deferred-029-pr-d-documents-misc` from main.
+
+---
+
 # LONGRUN CHECKPOINT — Milestone review + DEFERRED-029 kicked off (2026-05-23, session 2)
 
 **Status:** Phase 9–15 milestone review **COMPLETE** (PR #17 + #18 merged); DEFERRED-029

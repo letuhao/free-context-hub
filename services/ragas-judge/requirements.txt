@@ -1,0 +1,18 @@
+# Phase 16 Sprint 16.2 — Ragas judge sidecar dependencies.
+#
+# Pin ragas to 0.4.3 (latest stable as of 2026-05-24); upgrade procedure
+# documented in docs/specs/2026-05-23-phase-16-rag-production-design.md §10 R5.
+
+# Direct deps pinned; transitive deps (httpx, openai, etc.) resolved by pip
+# to satisfy the constraints of all our direct deps simultaneously. Pinning
+# transitives causes ResolutionImpossible errors as upstream packages bump
+# their bounds.
+ragas==0.4.3
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+pydantic==2.10.4
+litellm==1.55.3
+python-dotenv==1.0.1
+
+# Test-only
+pytest==8.3.4

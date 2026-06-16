@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import type { Request } from 'express';
 import { requireProjectScope } from '../middleware/requireResourceScope.js';
 import { streamText, tool, stepCountIs, convertToModelMessages } from 'ai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
@@ -11,7 +12,13 @@ import {
   tieredSearch,
   createModuleLogger,
 } from '../../core/index.js';
+import type { CallerScope } from '../../core/index.js';
 import { searchChunks } from '../../services/documentChunks.js';
+
+/** DEFERRED-029: read the caller's project scope attached by bearerAuth. */
+function callerScopeOf(req: Request): CallerScope {
+  return (req as { apiKeyScope?: CallerScope }).apiKeyScope;
+}
 
 const logger = createModuleLogger('chat');
 const router = Router();
@@ -57,7 +64,7 @@ Be concise and direct. Use markdown formatting.`,
           }),
           execute: async ({ query }) => {
             logger.info({ projectId, query }, 'chat tool: search_lessons');
-            return searchLessons({ projectId, query, limit: 5 });
+            return searchLessons({ projectId, callerScope: callerScopeOf(req), query, limit: 5 });
           },
         }),
         check_guardrails: tool({
@@ -86,6 +93,7 @@ Be concise and direct. Use markdown formatting.`,
             logger.info({ projectId, query, chunk_types }, 'chat tool: search_documents');
             const res = await searchChunks({
               projectId,
+              callerScope: callerScopeOf(req),
               query,
               limit: 5,
               chunkTypes: chunk_types as any,
@@ -112,7 +120,7 @@ Be concise and direct. Use markdown formatting.`,
           }),
           execute: async ({ query, kind }) => {
             logger.info({ projectId, query, kind }, 'chat tool: search_code');
-            return tieredSearch({ projectId, query, kind: kind as any, maxFiles: 5 });
+            return tieredSearch({ projectId, callerScope: callerScopeOf(req), query, kind: kind as any, maxFiles: 5 });
           },
         }),
       },
