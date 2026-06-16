@@ -148,7 +148,21 @@ The v8 templates ship. **Lesson for future prompt engineering on weak models**: 
 
 **Code refusal_correctness ceiling.** v6's `code refusal_correctness = 0.25` reflects 2 rows where the synthesizer over-refused. v8 didn't move this (still 0.00 on n=2 — noise floor); a stronger experiment would need more no-answer rows in the goldenset.
 
-**Full-baseline confirmation deferred.** v7 and v8 are code-surface-only smokes (77 rows, ~22 min each). A full 4-surface v9 (152 rows, ~41 min) would confirm whether the anchor-effect framing generalizes to lessons/chunks/global. Likely yes given the prompts share the same structure, but not yet measured.
+**Full-baseline v9 confirmed v8 generalizes** ([`2026-06-16-phase-17-baseline-v9-bug3-v8-full`](baselines/2026-06-16-phase-17-baseline-v9-bug3-v8-full.md), 152 rows, ~40 min):
+
+| Surface | hedge v6 → v9 | pure refusal v6 → v9 | AR Δ | faithfulness Δ |
+|---|---:|---:|---:|---:|
+| lessons | 4 → 3 | 2 → 4 | −0.03 | +0.01 |
+| code | 14 → **5** | 0 → 1 | **+0.11** | −0.04 (noise) |
+| chunks | 1 → 1 | 0 → 0 | −0.01 | +0.05 |
+| global | 1 → 0 | 4 → 4 | **+0.10** | **−0.12** ⚠ |
+| **total** | **20 → 9 (−55%)** | 6 → 9 | mixed | mixed |
+
+**Key win**: hedge -55% net across all surfaces, replicating the code-only smoke finding.
+
+**Significant secondary**: AR +0.11 on code, +0.10 on global — substantive answers without trailing hedges score significantly more relevant.
+
+**One concerning move — global faithfulness −0.12.** Row-by-row: 5 substring-summary rows dropped (validation/max-retry/retry/architecture/pgvector), 3 rose (authentication/undici/edge-contradictory). This is a classic faithfulness/relevance trade-off: synth now produces more informative answers (AR up) but less strictly entailed by the matched-entity text (f down). The global surface has different semantics — substring search across entity types, not file-content QA — so the terse v8 rule may be over-aggressive there. **Future work**: per-surface ABSTAIN rule tuning, especially for global.
 
 ## Files changed
 
