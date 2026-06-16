@@ -405,3 +405,53 @@ test('DEFERRED-030: applyRerankMinScore returns a NEW array (does not mutate inp
   const out = applyRerankMinScore(ranked, 0);
   assert.notStrictEqual(out, ranked);
 });
+
+// ── DEFERRED-030 review LOW-1: shouldRunRerank decision (pure helper) ──
+import { shouldRunRerank } from './lessons.js';
+
+test('DEFERRED-030: shouldRunRerank — rerankParam=false wins over everything else', () => {
+  // Even a "perfect" environment: rerank=false short-circuits.
+  assert.equal(
+    shouldRunRerank({ rerankParam: false, rerankBudget: 30, matchesLength: 50, rerankConfigured: true }),
+    false,
+  );
+});
+
+test('DEFERRED-030: shouldRunRerank — undefined rerankParam + healthy budget + configured → true', () => {
+  assert.equal(
+    shouldRunRerank({ rerankParam: undefined, rerankBudget: 30, matchesLength: 50, rerankConfigured: true }),
+    true,
+  );
+});
+
+test('DEFERRED-030: shouldRunRerank — rerankParam=true is equivalent to undefined (default behavior)', () => {
+  assert.equal(
+    shouldRunRerank({ rerankParam: true, rerankBudget: 30, matchesLength: 50, rerankConfigured: true }),
+    true,
+  );
+});
+
+test('DEFERRED-030: shouldRunRerank — budget=0 disables even when configured', () => {
+  assert.equal(
+    shouldRunRerank({ rerankParam: undefined, rerankBudget: 0, matchesLength: 50, rerankConfigured: true }),
+    false,
+  );
+});
+
+test('DEFERRED-030: shouldRunRerank — matchesLength<2 nothing to reorder', () => {
+  assert.equal(
+    shouldRunRerank({ rerankParam: undefined, rerankBudget: 30, matchesLength: 1, rerankConfigured: true }),
+    false,
+  );
+  assert.equal(
+    shouldRunRerank({ rerankParam: undefined, rerankBudget: 30, matchesLength: 0, rerankConfigured: true }),
+    false,
+  );
+});
+
+test('DEFERRED-030: shouldRunRerank — no reranker configured → false (even with healthy budget)', () => {
+  assert.equal(
+    shouldRunRerank({ rerankParam: undefined, rerankBudget: 30, matchesLength: 50, rerankConfigured: false }),
+    false,
+  );
+});

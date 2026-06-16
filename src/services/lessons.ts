@@ -723,6 +723,41 @@ function cosineSimilarity(a: number[], b: number[]): number {
 }
 
 /**
+ * DEFERRED-030: pure helper — given cohereRerank's ranked output, drop items
+ * whose relevance_score is strictly below `minScore`. `minScore=0` (or NaN/neg)
+ * is the no-floor case and is a pass-through. Exported for unit testing.
+ *
+ * NOTE: defined ABOVE its first user (`rerankExternalApi`) for reading order.
+ */
+export function applyRerankMinScore<R extends { relevanceScore: number }>(
+  ranked: ReadonlyArray<R>,
+  minScore: number,
+): R[] {
+  if (!Number.isFinite(minScore) || minScore <= 0) return [...ranked];
+  return ranked.filter(r => r.relevanceScore >= minScore);
+}
+
+/**
+ * DEFERRED-030: pure helper — decide whether to run the rerank dispatcher.
+ * Extracted so the gating logic has a unit-test surface independent of the
+ * full searchLessons pipeline (DB + embeddings + dispatcher). Both
+ * `searchLessons` and `searchLessonsMulti` call this exact decision.
+ *
+ * - `rerankParam === false` is an EXPLICIT bypass (benchmark / debug). Wins.
+ * - Otherwise: require a positive budget, ≥2 matches to reorder, and a
+ *   configured reranker.
+ */
+export function shouldRunRerank(opts: {
+  rerankParam: boolean | undefined;
+  rerankBudget: number;
+  matchesLength: number;
+  rerankConfigured: boolean;
+}): boolean {
+  if (opts.rerankParam === false) return false;
+  return opts.rerankBudget > 0 && opts.matchesLength >= 2 && opts.rerankConfigured;
+}
+
+/**
  * Sprint 12.1g — External-API reranker.
  *
  * POSTs query + candidate texts to a Cohere/TEI-compatible /rerank endpoint
@@ -811,19 +846,6 @@ export async function rerankExternalApi(query: string, candidates: RerankCandida
  * with the TEI path). Maps server indices back to caller index fields. Failure
  * falls back to base order — same contract as the sibling rerankers.
  */
-/**
- * DEFERRED-030: pure helper — given cohereRerank's ranked output, drop items
- * whose relevance_score is strictly below `minScore`. `minScore=0` is the
- * no-floor case and is a pass-through. Exported for unit testing.
- */
-export function applyRerankMinScore<R extends { relevanceScore: number }>(
-  ranked: ReadonlyArray<R>,
-  minScore: number,
-): R[] {
-  if (!Number.isFinite(minScore) || minScore <= 0) return [...ranked];
-  return ranked.filter(r => r.relevanceScore >= minScore);
-}
-
 async function rerankCohereApi(query: string, candidates: RerankCandidate[]): Promise<number[]> {
   const env = getEnv();
   const baseUrl = env.RERANK_BASE_URL ?? 'http://127.0.0.1:28417';
@@ -1200,7 +1222,12 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
   const env = getEnv();
   if (params.rerank === false) {
     explanations.push('rerank: skipped (rerank=false on request)');
-  } else if (rerankBudget > 0 && matches.length >= 2 && rerankConfigured()) {
+  } else if (shouldRunRerank({
+    rerankParam: params.rerank,
+    rerankBudget,
+    matchesLength: matches.length,
+    rerankConfigured: rerankConfigured(),
+  })) {
     try {
       const rerankCount = Math.min(matches.length, rerankBudget);
       const rerankCandidates = matches.slice(0, rerankCount).map((m, i) => ({
@@ -1212,14 +1239,20 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
       const rerankedOrder = await rerankLessons({ query: params.query, candidates: rerankCandidates });
 
       // Apply reranked order to matches. DEFERRED-030: dispatcher MAY return
-      // fewer indices than rerankCount when `RERANK_MIN_SCORE>0` filters
-      // off-topic candidates out of the cross-encoder result.
+      // fewer indices than rerankCount — EITHER because `RERANK_MIN_SCORE>0`
+      // filtered off-topic candidates, OR because the rerank server returned
+      // a short response. Distinguish in the explanation so a debug reader
+      // can tell which mechanism dropped items.
       const rerankedTop = rerankedOrder.map(i => matches[i]).filter(Boolean);
       const remaining = matches.slice(rerankCandidates.length);
-      const droppedByFloor = rerankCount - rerankedTop.length;
+      const delta = rerankCount - rerankedTop.length;
       matches = [...rerankedTop, ...remaining];
 
-      const note = droppedByFloor > 0 ? `, dropped=${droppedByFloor} (min_score=${env.RERANK_MIN_SCORE})` : '';
+      const note = delta > 0
+        ? (env.RERANK_MIN_SCORE > 0
+            ? `, dropped=${delta} (min_score=${env.RERANK_MIN_SCORE})`
+            : `, partial_rerank=${rerankedTop.length}/${rerankCount}`)
+        : '';
       explanations.push(`reranked: top ${rerankedTop.length}/${rerankCount} candidates (budget=${rerankBudget}, total_lessons=${totalLessons}${note})`);
     } catch (err) {
       explanations.push(`rerank skipped: ${err instanceof Error ? err.message : String(err)}`);
@@ -1492,7 +1525,12 @@ export async function searchLessonsMulti(params: SearchLessonsMultiParams): Prom
   const env = getEnv();
   if (params.rerank === false) {
     explanations.push('rerank: skipped (rerank=false on request)');
-  } else if (rerankBudget > 0 && matches.length >= 2 && rerankConfigured()) {
+  } else if (shouldRunRerank({
+    rerankParam: params.rerank,
+    rerankBudget,
+    matchesLength: matches.length,
+    rerankConfigured: rerankConfigured(),
+  })) {
     try {
       const rerankCount = Math.min(matches.length, rerankBudget);
       const rerankCandidates = matches.slice(0, rerankCount).map((m, i) => ({
@@ -1503,9 +1541,13 @@ export async function searchLessonsMulti(params: SearchLessonsMultiParams): Prom
       const rerankedOrder = await rerankLessons({ query: params.query, candidates: rerankCandidates });
       const rerankedTop = rerankedOrder.map(i => matches[i]).filter(Boolean);
       const remaining = matches.slice(rerankCandidates.length);
-      const droppedByFloor = rerankCount - rerankedTop.length;
+      const delta = rerankCount - rerankedTop.length;
       matches = [...rerankedTop, ...remaining];
-      const note = droppedByFloor > 0 ? `, dropped=${droppedByFloor} (min_score=${env.RERANK_MIN_SCORE})` : '';
+      const note = delta > 0
+        ? (env.RERANK_MIN_SCORE > 0
+            ? `, dropped=${delta} (min_score=${env.RERANK_MIN_SCORE})`
+            : `, partial_rerank=${rerankedTop.length}/${rerankCount}`)
+        : '';
       explanations.push(`reranked: top ${rerankedTop.length}/${rerankCount} candidates (budget=${rerankBudget}, total_lessons=${totalLessons}${note})`);
     } catch (err) {
       explanations.push(`rerank skipped: ${err instanceof Error ? err.message : String(err)}`);

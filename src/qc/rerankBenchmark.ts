@@ -263,16 +263,20 @@ async function main() {
   await client.close();
 
   // Step 2: Test each reranker.
+  //
+  // DEFERRED-030 review LOW-2: default kept SHORT — `(no-rerank)` baseline +
+  // the cross-encoder (the production default). LLM rerankers (qwen3-reranker-*,
+  // zerank-2, jina-reranker-v3, gte-reranker-modernbert-base,
+  // llama-nemotron-rerank-1b-v2) are opt-in via RERANK_BENCH_MODELS so a
+  // first-time run doesn't waste cycles failing-fast against unloaded LM Studio
+  // models and emitting misleading "all queries scored equivalently" rows.
+  //
+  // To benchmark an LLM reranker: load it in LM Studio first, then run:
+  //   RERANK_BENCH_MODELS='(no-rerank),(cross-encoder)bge-reranker-v2-m3,qwen3-reranker-4b' \
+  //     npx tsx src/qc/rerankBenchmark.ts
   const DEFAULT_MODELS = [
     '(no-rerank)',
     CE_SENTINEL,
-    'qwen.qwen3-reranker-4b',
-    'qwen3-reranker-0.6b',
-    'qwen3-reranker-8b',
-    'zerank-2',
-    'jina-reranker-v3',
-    'gte-reranker-modernbert-base',
-    'llama-nemotron-rerank-1b-v2',
   ];
   const MODELS = process.env.RERANK_BENCH_MODELS
     ? process.env.RERANK_BENCH_MODELS.split(',').map(s => s.trim()).filter(Boolean)

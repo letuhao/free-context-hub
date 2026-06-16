@@ -249,7 +249,14 @@ const EnvSchema = z.object({
   /** DEFERRED-030: cross-encoder relevance-score floor (0..1, inclusive lower bound)
    *  for `RERANK_TYPE=api`. Docs whose cross-encoder score is strictly below this
    *  value are DROPPED from the result set (off-topic rejection), not just demoted.
-   *  Default 0 = no floor = identical to pre-DEFERRED-030 behavior. */
+   *  Default 0 = no floor = identical to pre-DEFERRED-030 behavior.
+   *
+   *  SCOPE NOTE: this floor is enforced ONLY on the LESSONS surface (via
+   *  `rerankCohereApi`/`rerankExternalApi` in `services/lessons.ts`). The
+   *  code-search surface (`services/retriever.ts:apiRerank`) does NOT yet honor
+   *  it — a future code-search quality pass should thread the same env through
+   *  `apiRerank` or rename this knob to `RERANK_MIN_SCORE_LESSONS`. Tracked at
+   *  the call site (search `RERANK_MIN_SCORE` in retriever.ts). */
   RERANK_MIN_SCORE: z.coerce.number().min(0).max(1).optional().default(0),
 
   // Optional dedicated QA agent model endpoint for FAQ/RAPTOR synthesis.
