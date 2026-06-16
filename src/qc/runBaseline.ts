@@ -55,6 +55,7 @@ import {
   type AnswererConfig,
 } from './genPipeline.js';
 import { scoreOnce, type JudgeRequest, type MetricName } from './judge.js';
+import { buildJudgeContexts } from './judgeContexts.js';
 import type {
   GenResult,
   GenManifest,
@@ -391,19 +392,7 @@ async function runGenEvalForRow(
     'groundedness_self_eval',
   ];
 
-  // Phase 17.x Bug 2 fix: the judge MUST see the same snippet the synthesizer
-  // saw, otherwise it can reject claims the synth was entitled to make. Before
-  // this fix the judge got the 200-char `snippet_preview` while the synth got
-  // up to 1000 chars from h.snippet — that asymmetry caused systematic
-  // "context does not contain X" rejections. Match the synthesizer's
-  // formatContext cap (genPipeline.ts DEFAULT_MAX_CHARS=1000).
-  const JUDGE_SNIPPET_MAX_CHARS = 1000;
-  const judgeContexts = retrievalHits
-    .slice(0, cfg.topKContexts)
-    .map((h) => ({
-      id: h.key,
-      text: (h.snippet ?? '').slice(0, JUDGE_SNIPPET_MAX_CHARS),
-    }));
+  const judgeContexts = buildJudgeContexts(retrievalHits, cfg.topKContexts);
 
   const judgeReq: JudgeRequest = {
     request_id: `${surface}/${q.id}`,
