@@ -94,6 +94,11 @@ class HealthResponse(BaseModel):
     ragas_version: str
     judge_endpoint: str
     judge_model: str
+    # Phase 17 Bug 2c provenance: expose sampling params so the runner can
+    # bake them into the baseline manifest. Score-to-score jitter from
+    # non-zero temperature is real; readers need to know what was set.
+    judge_temperature: float
+    judge_seed: int
     embeddings_endpoint: str
     embeddings_model: str
     prompts_hash: str
@@ -501,6 +506,8 @@ def health() -> HealthResponse:
         ragas_version=state.ragas_version,
         judge_endpoint=state.config.judge_base_url,
         judge_model=state.config.judge_model,
+        judge_temperature=state.config.judge_temperature,
+        judge_seed=state.config.judge_seed,
         embeddings_endpoint=state.config.embeddings_base_url,
         embeddings_model=state.config.embeddings_model,
         prompts_hash=state.prompts_hash,
