@@ -145,6 +145,43 @@ try {
   check('ragas-judge sidecar reachable', false, `${JUDGE_URL} → ${err.message}`);
 }
 
+// ─── Cross-encoder rerank service reachable ───
+// 2026-06-17: baselines now match production (RERANK_TYPE=api +
+// bge-reranker-v2-m3 via local-rerank-service on port 28417). If the
+// service isn't up, the rerank dispatcher silently falls back to base
+// order — a baseline run would silently measure "no rerank" instead of
+// the cross-encoder, the same class of contamination as the model-swap
+// bug just fixed. Audit explicitly.
+const RERANK_URL = process.env.RERANK_SERVICE_URL || 'http://localhost:28417';
+const RERANK_TOKEN = process.env.RERANK_SERVICE_TOKEN || process.env.RERANK_API_KEY || 'change-me';
+try {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 5000);
+  const res = await fetch(`${RERANK_URL}/v1/rerank`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RERANK_TOKEN}` },
+    signal: ctl.signal,
+    body: JSON.stringify({
+      model: 'bge-reranker-v2-m3',
+      query: 'preflight',
+      documents: ['warm-up call'],
+      return_documents: false,
+    }),
+  });
+  clearTimeout(t);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const d = await res.json();
+  const model = d.model || '(unspecified)';
+  check(
+    `Cross-encoder rerank service reachable (${RERANK_URL})`,
+    Array.isArray(d.results) && d.results.length > 0,
+    `model=${model}, latency=cold-start probed OK`,
+  );
+} catch (err) {
+  check(`Cross-encoder rerank service reachable (${RERANK_URL})`, false,
+    `${err.message} — start it with the bge-reranker-v2-m3 model loaded, or baseline will silently measure no-rerank instead of production behavior`);
+}
+
 // ─── Container env audit (2026-06-17 baseline-stack bug fix) ───
 // CRITICAL: --env-file .env.baseline only affects compose-substitution; the
 // container env comes from `env_file: - .env` UNLESS docker-compose has an
@@ -178,6 +215,19 @@ for (const svc of ['free-context-hub-mcp-1', 'free-context-hub-worker-1']) {
     allSafe
       ? `DISTILLATION_MODEL='${distModel}', DISTILLATION_ENABLED='${distEnabled}', QA_AGENT_MODEL='${qaModel}', BUILDER_AGENT_MODEL='${builderModel}'`
       : `DISTILLATION_MODEL='${distModel}', DISTILLATION_ENABLED='${distEnabled}', QA_AGENT_MODEL='${qaModel}', BUILDER_AGENT_MODEL='${builderModel}' — any non-empty + non-'${EXPECTED_CHAT}' value here triggers a mid-baseline swap. Verify start-baseline-stack.sh used .env.baseline AND docker-compose.yml uses single-hyphen substitution`,
+  );
+
+  // 2026-06-17: also audit rerank config — baseline must match production
+  // (RERANK_TYPE=api + cross-encoder). If RERANK_TYPE=generative leaks in,
+  // baseline silently measures the legacy generative reranker instead of
+  // bge-reranker-v2-m3. Same class of measurement-vs-production drift.
+  const rerankType = await dockerEnv(svc, 'RERANK_TYPE');
+  check(
+    `${svc} RERANK_TYPE matches production (api / cross-encoder)`,
+    rerankType === 'api',
+    rerankType === 'api'
+      ? `RERANK_TYPE='${rerankType}' (matches production)`
+      : `RERANK_TYPE='${rerankType}' — production uses 'api' (cross-encoder via bge-reranker-v2-m3). Baseline silently measures a different reranker if this drifts`,
   );
 }
 

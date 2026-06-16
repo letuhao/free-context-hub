@@ -17,17 +17,22 @@
   (`faith` neutral or up, `ar` up). On the **`global` surface**, `faith` dropped
   **−0.119** while `ar` rose +0.097 (v9 vs v6, n=10). DEFERRED-030 closeout note
   flagged "may need an ABSTAIN rule specific to substring-search semantics."
-- **⚠️ 2026-06-17 investigation INVALIDATED by baseline-stack contamination
-  bug.** Both smoke iterations (and the v9 reference they were compared
-  against) ran with the worker container leaking `DISTILLATION_MODEL=gemma`
-  while the baseline ran with mistral-nemo. LM Studio swapped models mid-
-  measurement (lmstudio-bug-tracker#945). Full root-cause + fix:
-  `docs/qc/2026-06-17-baseline-stack-bug-postmortem.md`. The investigation
-  CONCLUSION below ("not fixable at template layer alone") stands as a
-  hypothesis, but the magnitudes (Δfaith +0.005, Δar −0.126; Δfaith
-  +0.128, Δar −0.268) are not trustworthy. A clean re-measurement after
-  the baseline-stack fix is required before this item can move from
-  "documented hypothesis" to "proven trade-off."
+- **⚠️ 2026-06-17 first investigation was contaminated by the baseline-
+  stack model-swap bug.** v1/v2 smoke iterations and the v9 reference
+  ran with worker leaking `DISTILLATION_MODEL=gemma` while the baseline
+  ran with mistral-nemo. Root cause + fix:
+  `docs/qc/2026-06-17-baseline-stack-bug-postmortem.md`. Both smokes
+  preserved as historical artifacts but their magnitudes (Δfaith +0.005,
+  Δar −0.126; Δfaith +0.128, Δar −0.268) are not trustworthy on their own.
+
+- **✅ 2026-06-17 v10 clean-stack baseline CONFIRMS the trade-off is REAL.**
+  After fixing the baseline-stack bug + switching baseline rerank to
+  match production (bge-reranker-v2-m3 via local-rerank-service), the
+  v10 full-152-row baseline measured global-surface faithfulness =
+  0.254 vs v9's 0.372 (Δ −0.118). The trade-off survives the clean
+  stack. The "not fixable at template layer alone" conclusion below
+  stands as a confirmed finding, not a hypothesis. Results in
+  `docs/qc/2026-06-17-v10-clean-stack-baseline-results.md`.
 
 - **Pre-contamination-fix investigation result — NOT FIXABLE at the template layer alone:**
   - Two iterations attempted on `synthesizer.global.txt` against the controlled
