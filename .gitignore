@@ -203,3 +203,6 @@ backups/
 .phase-gates/
 
 .VSCodeCounter/
+
+# Phase 17 audit probe — docker-mount scratch (canonical inputs live in docs/qc/baselines/)
+services/ragas-judge/_*.json

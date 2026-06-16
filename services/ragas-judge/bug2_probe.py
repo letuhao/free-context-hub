@@ -5,8 +5,12 @@ For each input row:
   2. Call ragas's NLIStatementPrompt with the same contexts -> per-claim {statement, reason, verdict}
   3. Print everything alongside the reference score from the baseline.
 
-Read: services/ragas-judge/_bug2_probe_input.json (mounted from docs/qc/baselines/_bug2_probe_input.json)
-Write: services/ragas-judge/_bug2_probe_output.json
+Canonical input: docs/qc/baselines/_bug2_probe_input.json
+Run:
+  docker cp docs/qc/baselines/_bug2_probe_input.json free-context-hub-ragas-judge-1:/app/_bug2_probe_input.json
+  docker cp services/ragas-judge/bug2_probe.py    free-context-hub-ragas-judge-1:/app/bug2_probe.py
+  docker exec ... python //app/bug2_probe.py
+Write: /app/_bug2_probe_output.json (container-local; copy out if needed)
 """
 
 from __future__ import annotations
