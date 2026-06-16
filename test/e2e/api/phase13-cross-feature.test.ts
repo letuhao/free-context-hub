@@ -85,9 +85,16 @@ export const allPhase13CrossFeatureTests: TestFn[] = [
     await api.patch(`/api/lessons/${lr.body.lesson_id}/status`, { project_id: projectId, status: 'draft' });
 
     // F2: submit it for review via the MCP tool.
+    // Auto-inject workspace_token under auth-on (same fix as phase13-mcp).
+    const { ADMIN_TOKEN } = await import('../shared/constants.js');
     const submitRes: any = await mcp.callTool({
       name: 'submit_for_review',
-      arguments: { project_id: projectId, agent_id: `agent-${runMarker}`, lesson_id: lr.body.lesson_id },
+      arguments: {
+        project_id: projectId,
+        agent_id: `agent-${runMarker}`,
+        lesson_id: lr.body.lesson_id,
+        ...(ADMIN_TOKEN ? { workspace_token: ADMIN_TOKEN } : {}),
+      },
     });
     const sc = submitRes?.structuredContent ?? {};
     const text: string = submitRes?.content?.[0]?.text ?? '';
