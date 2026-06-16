@@ -1,3 +1,29 @@
+# HOUSEKEEPING — branch cleanup + ragas-judge image rebuild (2026-06-17)
+
+Two no-code-change debt items closed:
+
+- **A4 — stale branches removed.** `deferred-029-b-f` (last `27ba49a`) and
+  `phase-16-17-eval-judge-fix` (last `cb2ec26`) were leftovers from the failed
+  stacked-PR attempt earlier in the Phase 16/17 work. Their content survived
+  via PR #34 (the single-PR merge after the pivot). Verified `--is-ancestor`
+  of `origin/main` false but `git diff --stat main..<branch>` shows main
+  ahead by 100k+ lines (branches are STRICTLY behind). Deleted from origin +
+  local.
+- **A1 — ragas-judge sidecar image rebuilt.** Phase 17 Bug 2c provenance
+  (`HealthResponse.judge_temperature` + `judge_seed`) was committed to
+  `services/ragas-judge/main.py` but only landed in the RUNNING container
+  via `docker cp`. A `docker compose up -d --force-recreate ragas-judge`
+  would have wiped those changes by rolling back to the pre-Bug-2c image.
+  Fix: `docker compose build ragas-judge` + force-recreate. Verified
+  end-to-end: `curl http://localhost:3005/health` now returns
+  `"judge_temperature":0.0,"judge_seed":42` after a clean recreate, sourced
+  from the baked image. Persistence path closed.
+
+No commits — A4 was remote-only; A1 was an image-build against source
+already in main. PR #35 unchanged.
+
+---
+
 # LONGRUN CHECKPOINT — DEFERRED-030 rerank quality (2026-06-16)
 
 **Status:** **DEFERRED-030 cross-encoder rerank quality + harness hygiene** built
