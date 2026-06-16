@@ -92,6 +92,12 @@ export type GenManifest = {
   judge_endpoint: string;
   judge_model_id: string;
   judge_prompts_hash?: string | null;
+  /** Phase 17 Bug 2c provenance: judge sampling params (probed from /health).
+   *  Optional for back-compat with archives produced before the sidecar
+   *  started returning these fields. Non-zero temperature causes ~5% jitter
+   *  on per-row scores even with the seed pinned. */
+  judge_temperature?: number;
+  judge_seed?: number;
   answerer_endpoint: string;
   answerer_model_id: string;
   answerer_temperature: number;

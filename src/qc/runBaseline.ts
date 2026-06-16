@@ -685,7 +685,14 @@ function renderMarkdown(archive: BaselineArchive): string {
     lines.push('## Gen-eval manifest');
     lines.push('');
     lines.push(`- **answerer:** \`${gen_manifest.answerer_model_id}\` @ \`${gen_manifest.answerer_endpoint}\` (temp=${gen_manifest.answerer_temperature}, seed=${gen_manifest.answerer_seed}, max_tokens=${gen_manifest.answerer_max_tokens})`);
-    lines.push(`- **judge:** \`${gen_manifest.judge_model_id}\` @ \`${gen_manifest.judge_endpoint}\``);
+    {
+      const t = gen_manifest.judge_temperature;
+      const s = gen_manifest.judge_seed;
+      const samplingNote = t !== undefined && s !== undefined
+        ? ` (temp=${t}, seed=${s})`
+        : '';
+      lines.push(`- **judge:** \`${gen_manifest.judge_model_id}\` @ \`${gen_manifest.judge_endpoint}\`${samplingNote}`);
+    }
     if (gen_manifest.judge_prompts_hash) {
       lines.push(`- **judge prompts hash:** \`${gen_manifest.judge_prompts_hash}\``);
     }
@@ -1047,10 +1054,13 @@ async function preflightGenEval(opts: {
 }
 
 // Sprint 16.3: probe judge sidecar /health for manifest fields.
+// Phase 17 Bug 2c: also surface judge_temperature/judge_seed for provenance.
 async function probeJudgeManifest(judgeUrl: string): Promise<{
   ragas_version?: string;
   judge_model?: string;
   judge_endpoint?: string;
+  judge_temperature?: number;
+  judge_seed?: number;
   prompts_hash?: string;
 }> {
   try {
@@ -1132,6 +1142,11 @@ async function main() {
       judge_endpoint: probe.judge_endpoint ?? judgeUrl,
       judge_model_id: probe.judge_model ?? 'unknown',
       judge_prompts_hash: probe.prompts_hash ?? null,
+      // Phase 17 Bug 2c: pin judge sampling params in manifest. Sidecar
+      // /health surfaces these; baselines made before the sidecar started
+      // returning them will see these fields absent (back-compat).
+      ...(probe.judge_temperature !== undefined ? { judge_temperature: probe.judge_temperature } : {}),
+      ...(probe.judge_seed !== undefined ? { judge_seed: probe.judge_seed } : {}),
       answerer_endpoint: answererBaseUrl,
       answerer_model_id: answererModel,
       answerer_temperature: answererTemperature,
