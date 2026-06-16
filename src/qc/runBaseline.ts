@@ -76,7 +76,10 @@ const API_URL = process.env.API_BASE_URL?.trim() || 'http://localhost:3001';
 
 /** Where each surface's golden set lives. */
 const GOLDEN_FILES: Record<Surface, string> = {
-  lessons: 'qc/lessons-queries.json',
+  // 2026-06-16: QC_LESSONS_FILE overrides the lessons golden set so an A/B can
+  // run gen-eval against the rerank-stress (hard-band) set without touching the
+  // shipped golden file.
+  lessons: process.env.QC_LESSONS_FILE?.trim() || 'qc/lessons-queries.json',
   code: 'qc/queries.json',
   chunks: 'qc/chunks-queries.json',
   global: 'qc/global-queries.json',

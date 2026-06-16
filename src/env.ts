@@ -232,10 +232,19 @@ const EnvSchema = z.object({
   //   compatible models like gte-reranker-modernbert-base (12.1f finding).
   //   Deterministic. Quality: partial win over no-rerank on 40q goldenset.
   // api: external /rerank endpoint (TEI, Infinity, Cohere). Unblocks true cross-encoders
-  //   like bge-reranker-v2-m3, jina-reranker-v3. Deterministic. Quality: TBD in 12.1g.
-  //   Requires RERANK_BASE_URL set (default in docker-compose: http://tei-rerank:80).
-  RERANK_TYPE: z.enum(['generative', 'cross-encoder', 'api']).optional().default('generative'),
+  //   like bge-reranker-v2-m3, jina-reranker-v3. Deterministic.
+  //   2026-06-16: now the DEFAULT — cross-encoder rerank via local-rerank-service.
+  //   Requires RERANK_BASE_URL (default below: local-rerank-service on 127.0.0.1:28417).
+  RERANK_TYPE: z.enum(['generative', 'cross-encoder', 'api']).optional().default('api'),
+  /** Wire protocol for RERANK_TYPE='api'.
+   *  'cohere' = Cohere /v1/rerank schema (local-rerank-service, Cohere/Jina/Voyage cloud) — DEFAULT.
+   *  'tei'    = HuggingFace text-embeddings-inference /rerank {query,texts} legacy schema. */
+  RERANK_API_PROTOCOL: z.enum(['cohere', 'tei']).optional().default('cohere'),
   RERANK_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(1800),
+  /** Tighter budget for the api (cross-encoder) path — warm inference is tens of ms;
+   *  a short ceiling bounds the cost when the rerank service is cold/unreachable
+   *  (caller falls back to base order). */
+  RERANK_API_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(800),
   RERANK_CACHE_TTL_SECONDS: z.coerce.number().int().positive().optional().default(3600),
 
   // Optional dedicated QA agent model endpoint for FAQ/RAPTOR synthesis.

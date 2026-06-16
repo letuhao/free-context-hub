@@ -13,12 +13,20 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import * as z from 'zod/v4';
+import { cohereRerank } from '../services/rerankClient.js';
 
 dotenv.config();
 
 const MCP_URL = process.env.MCP_SERVER_URL?.trim() || 'http://localhost:3000/mcp';
 const LLM_URL = process.env.RERANK_BASE_URL?.trim() || process.env.DISTILLATION_BASE_URL?.trim() || process.env.EMBEDDINGS_BASE_URL?.trim() || 'http://localhost:1234';
 const LLM_KEY = process.env.RERANK_API_KEY ?? process.env.DISTILLATION_API_KEY ?? process.env.EMBEDDINGS_API_KEY ?? '';
+// Cross-encoder (Cohere /v1/rerank) service — kept SEPARATE from LLM_URL so the
+// LLM rerankers above don't accidentally POST chat completions to it. Set
+// RERANK_SERVICE_URL=http://localhost:28417 (local-rerank-service) to measure it.
+const CE_URL = process.env.RERANK_SERVICE_URL?.trim() || 'http://localhost:28417';
+const CE_KEY = process.env.RERANK_SERVICE_TOKEN ?? '';
+const CE_MODEL = process.env.RERANK_SERVICE_MODEL?.trim() || 'bge-reranker-v2-m3';
+const CE_SENTINEL = '(cross-encoder)bge-reranker-v2-m3';
 const PID = 'free-context-hub';
 
 const RerankOrderSchema = z.object({ order: z.array(z.number().int().nonnegative()) });
@@ -53,7 +61,19 @@ async function rerankWithModel(model: string, query: string, candidates: Match[]
   try {
     const res = await fetch(url, {
       method: 'POST', headers, signal: ac.signal,
-      body: JSON.stringify({ model, messages: [{ role: 'system', content: system }, { role: 'user', content: user }], temperature: 0.0, max_tokens: maxTokens }),
+      // Disable hidden thinking so reasoning models don't burn the output budget
+      // (verified working for LM Studio + Qwen3.x via the lore-weave SDK):
+      //   reasoning_effort:"none"  → the cross-provider kill switch LM Studio honors
+      //   chat_template_kwargs.enable_thinking:false → companion (llama.cpp/vLLM)
+      // Gemma 4 ignores BOTH — disable its reasoning in the LM Studio UI instead.
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+        temperature: 0.0,
+        max_tokens: maxTokens,
+        reasoning_effort: 'none',
+        chat_template_kwargs: { enable_thinking: false },
+      }),
     });
     if (!res.ok) return candidates.map((_, i) => i);
 
@@ -79,6 +99,22 @@ async function rerankWithModel(model: string, query: string, candidates: Match[]
   } catch {
     return candidates.map((_, i) => i);
   } finally { clearTimeout(t); }
+}
+
+/** Cross-encoder rerank via the shared Cohere boundary (local-rerank-service / cloud). */
+async function rerankWithCrossEncoder(query: string, candidates: Match[]): Promise<number[]> {
+  const documents = candidates.map(c => `${c.title}. ${c.content_snippet}`);
+  try {
+    const ranked = await cohereRerank({
+      query, documents, baseUrl: CE_URL, apiKey: CE_KEY || undefined, model: CE_MODEL, timeoutMs: 10000,
+    });
+    const order = ranked.map(r => r.index);
+    const seen = new Set(order);
+    for (let i = 0; i < candidates.length; i++) if (!seen.has(i)) order.push(i);
+    return order;
+  } catch {
+    return candidates.map((_, i) => i);
+  }
 }
 
 type Q = { q: string; expect: string | null };
@@ -136,8 +172,13 @@ async function main() {
   await client.close();
 
   // Step 2: Test each reranker model.
-  const MODELS = [
+  // Default list = the original LLM reranker survey. Override with
+  // RERANK_BENCH_MODELS="(no-rerank),(cross-encoder)bge-reranker-v2-m3,<chat-model-id>"
+  // to test only the rerankers actually loaded in LM Studio. CE_SENTINEL selects
+  // the cross-encoder path; everything else is treated as an LM Studio chat model.
+  const DEFAULT_MODELS = [
     '(no-rerank)',
+    CE_SENTINEL,                  // cross-encoder via local-rerank-service (Cohere /v1/rerank)
     'qwen.qwen3-reranker-4b',
     'qwen3-reranker-0.6b',
     'qwen3-reranker-8b',
@@ -146,6 +187,9 @@ async function main() {
     'gte-reranker-modernbert-base',
     'llama-nemotron-rerank-1b-v2',
   ];
+  const MODELS = process.env.RERANK_BENCH_MODELS
+    ? process.env.RERANK_BENCH_MODELS.split(',').map(s => s.trim()).filter(Boolean)
+    : DEFAULT_MODELS;
 
   const results: Array<{ model: string; pass: number; total: number; avg: number; negAvg: number; gap: number; latency: number }> = [];
 
@@ -166,7 +210,9 @@ async function main() {
       if (!isNoRerank && matches.length >= 2) {
         const start = Date.now();
         const top = matches.slice(0, 15);
-        const order = await rerankWithModel(model, q.q, top, 500);
+        const order = model === CE_SENTINEL
+          ? await rerankWithCrossEncoder(q.q, top)
+          : await rerankWithModel(model, q.q, top, 500);
         totalLatency += Date.now() - start;
         const rerankedTop = order.map(i => top[i]).filter(Boolean);
         reranked = [...rerankedTop, ...matches.slice(15)];

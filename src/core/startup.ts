@@ -15,6 +15,37 @@ function maskDatabaseUrl(databaseUrl: string) {
   }
 }
 
+/**
+ * Best-effort prewarm of the cross-encoder rerank model (2026-06-16).
+ * local-rerank-service lazy-loads on first request (~30-60s); without a prewarm
+ * the first interactive query would time out and silently fall back to base
+ * order. Fire a `/v1/models/{model}/load` and ignore any failure — the service
+ * being down is non-fatal (rerank degrades to base order anyway).
+ * Only runs when RERANK_TYPE='api' with the cohere protocol.
+ */
+export async function prewarmReranker(): Promise<void> {
+  const env = getEnv();
+  if (env.RERANK_TYPE !== 'api' || env.RERANK_API_PROTOCOL !== 'cohere') return;
+  const baseUrl = (env.RERANK_BASE_URL ?? 'http://127.0.0.1:28417').replace(/\/$/, '');
+  const model = env.RERANK_MODEL ?? 'bge-reranker-v2-m3';
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (env.RERANK_API_KEY) headers.Authorization = `Bearer ${env.RERANK_API_KEY}`;
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 90_000); // cold load can take ~60s
+  try {
+    const res = await fetch(`${baseUrl}/v1/models/${encodeURIComponent(model)}/load`, {
+      method: 'POST', headers, signal: ac.signal, body: '{}',
+    });
+    if (res.ok) logger.info({ baseUrl, model }, 'reranker prewarm: model loaded');
+    else logger.warn({ baseUrl, model, status: res.status }, 'reranker prewarm: non-ok (continuing)');
+  } catch (err) {
+    logger.warn({ baseUrl, model, error: err instanceof Error ? err.message : String(err) },
+      'reranker prewarm: failed (continuing — rerank degrades to base order)');
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export function logStartupEnvSummary() {
   const env = getEnv();
   const safe = {

@@ -5,6 +5,7 @@ import { getDbPool } from '../db/client.js';
 import { linkLessonToSymbols, upsertLessonNode } from '../kg/linker.js';
 import { deleteProjectGraph } from '../kg/projectGraph.js';
 import { embedTexts } from './embedder.js';
+import { cohereRerank } from './rerankClient.js';
 import { distillLesson } from './distiller.js';
 import { rebuildProjectSnapshot } from './snapshot.js';
 import { expandForFtsIndex, buildFtsQuery } from '../utils/ftsTokenizer.js';
@@ -789,6 +790,55 @@ export async function rerankExternalApi(query: string, candidates: RerankCandida
   } finally { clearTimeout(t); }
 }
 
+/**
+ * Cohere-compatible external reranker (2026-06-16). Adapts lesson candidates to
+ * the shared {@link cohereRerank} boundary used by local-rerank-service and any
+ * Cohere/Jina/Voyage cloud endpoint. Document text = `title. snippet` (parity
+ * with the TEI path). Maps server indices back to caller index fields. Failure
+ * falls back to base order — same contract as the sibling rerankers.
+ */
+async function rerankCohereApi(query: string, candidates: RerankCandidate[]): Promise<number[]> {
+  const env = getEnv();
+  const baseUrl = env.RERANK_BASE_URL ?? 'http://127.0.0.1:28417';
+  const model = env.RERANK_MODEL ?? 'bge-reranker-v2-m3';
+  const documents = candidates.map(c => `${c.title}. ${c.snippet}`);
+  try {
+    const ranked = await cohereRerank({
+      query,
+      documents,
+      baseUrl,
+      apiKey: env.RERANK_API_KEY,
+      model,
+      timeoutMs: env.RERANK_API_TIMEOUT_MS,
+    });
+    const order = ranked
+      .map(r => candidates[r.index]?.index)
+      .filter((v): v is number => v !== undefined);
+    logger.info({
+      candidates: candidates.length,
+      top3: order.slice(0, 3),
+      top3_scores: ranked.slice(0, 3).map(r => r.relevanceScore.toFixed(4)),
+      mode: 'cohere-api',
+    }, 'lesson rerank: done');
+    return order.length ? order : candidates.map(c => c.index);
+  } catch (err) {
+    logger.warn({ error: err instanceof Error ? err.message : String(err), url: `${baseUrl}/v1/rerank` },
+      'cohere-api rerank: failed — falling back to no-rerank. Ensure local-rerank-service is running.');
+    return candidates.map(c => c.index);
+  }
+}
+
+/** Whether a usable reranker is configured. 2026-06-16 measurement-bug fix:
+ *  the `api` (cross-encoder service) and `cross-encoder` (embedding-cosine) paths
+ *  do NOT require DISTILLATION_ENABLED — that flag gates only the generative LLM
+ *  path. Conflating them silently disabled cross-encoder lesson rerank whenever
+ *  distillation was off, making rerank A/Bs measure no-rerank-vs-no-rerank. */
+function rerankConfigured(): boolean {
+  const env = getEnv();
+  if (env.RERANK_TYPE === 'api' || env.RERANK_TYPE === 'cross-encoder') return true;
+  return Boolean((env.RERANK_MODEL || env.DISTILLATION_MODEL) && env.DISTILLATION_ENABLED);
+}
+
 /** Dispatch to the correct reranker based on RERANK_TYPE. */
 async function rerankLessons(params: {
   query: string;
@@ -800,8 +850,12 @@ async function rerankLessons(params: {
   // Cohere). No LM Studio model required; RERANK_BASE_URL alone determines
   // destination. Checked FIRST so the DISTILLATION_MODEL fallback below
   // doesn't suppress api mode when DISTILLATION_ENABLED=false.
+  // 2026-06-16: RERANK_API_PROTOCOL selects the wire format — 'cohere' (default,
+  // local-rerank-service + cloud) or 'tei' (legacy HuggingFace TEI).
   if (env.RERANK_TYPE === 'api') {
-    return rerankExternalApi(params.query, params.candidates);
+    return env.RERANK_API_PROTOCOL === 'tei'
+      ? rerankExternalApi(params.query, params.candidates)
+      : rerankCohereApi(params.query, params.candidates);
   }
 
   const model = env.RERANK_MODEL ?? env.DISTILLATION_MODEL;
@@ -1101,7 +1155,7 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
   // LLM rerank: re-order top candidates for better ranking.
   // Dynamic budget: skip for small sets, scale up for large lesson bases.
   const env = getEnv();
-  if (rerankBudget > 0 && matches.length >= 2 && (env.RERANK_MODEL || env.DISTILLATION_MODEL) && env.DISTILLATION_ENABLED) {
+  if (rerankBudget > 0 && matches.length >= 2 && rerankConfigured()) {
     try {
       const rerankCount = Math.min(matches.length, rerankBudget);
       const rerankCandidates = matches.slice(0, rerankCount).map((m, i) => ({
@@ -1385,7 +1439,7 @@ export async function searchLessonsMulti(params: SearchLessonsMultiParams): Prom
 
   // Rerank pass (same logic as single-project).
   const env = getEnv();
-  if (rerankBudget > 0 && matches.length >= 2 && (env.RERANK_MODEL || env.DISTILLATION_MODEL) && env.DISTILLATION_ENABLED) {
+  if (rerankBudget > 0 && matches.length >= 2 && rerankConfigured()) {
     try {
       const rerankCount = Math.min(matches.length, rerankBudget);
       const rerankCandidates = matches.slice(0, rerankCount).map((m, i) => ({

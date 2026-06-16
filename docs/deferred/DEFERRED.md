@@ -1,7 +1,27 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 030 -->
+<!-- Next ID: 031 -->
+
+## DEFERRED-030
+
+- **Title:** Cross-encoder rerank — valid quality measurement (recall@k) + harness hygiene
+- **Trigger condition:** any RAG quality pass on rerank, OR before citing a rerank *quality*
+  (not latency) number publicly / on a CV.
+- **Status:** OPEN (2026-06-16)
+- **Context:** Cross-encoder (`bge-reranker-v2-m3`) integration shipped + deployed
+  (`RERANK_TYPE=api`, Cohere protocol). **Latency** is measured + solid (90 ms vs ~6.8 s general
+  LLM vs 1.8 s Phase-12 ranker). **Quality is NOT validly measured** — three follow-ups:
+  1. `src/qc/rerankBenchmark.ts` `expect` labels are stale (authored for the Phase-12 lesson
+     set; current catalog differs) → refresh ~33 labels to the live catalog for real recall@k/MRR.
+  2. Add a raw-prefetch toggle so the harness baseline isn't itself cross-encoder-reranked now
+     that `RERANK_TYPE=api` reranks server-side during `search_lessons`.
+  3. v2: `min_rerank_score` floor using cross-encoder scores (off-topic rejection).
+- **Source:** Spec [[2026-06-16-cross-encoder-rerank-integration]] · benchmark
+  `docs/benchmarks/2026-06-16-cross-encoder-rerank-benchmark.md`. User opted "Deploy + clean
+  re-measure (latency)" and deferred the label refresh.
+
+---
 
 ## DEFERRED-029
 

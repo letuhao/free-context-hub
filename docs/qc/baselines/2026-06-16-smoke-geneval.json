@@ -1,0 +1,667 @@
+{
+  "schema_version": "1.1",
+  "gen_manifest": {
+    "judge_endpoint": "http://host.docker.internal:1234/v1",
+    "judge_model_id": "google/gemma-4-26b-a4b-qat",
+    "judge_prompts_hash": "c0165a73c10c4e04",
+    "answerer_endpoint": "http://localhost:1234/v1",
+    "answerer_model_id": "google/gemma-4-26b-a4b-qat",
+    "answerer_temperature": 0.2,
+    "answerer_seed": 42,
+    "answerer_max_tokens": 1024,
+    "synthesizer_prompt_hashes": {
+      "lessons": "13ac4e950489bde6",
+      "code": "3a2ea1624ae0a1fc",
+      "chunks": "a01005e0d102b2c1",
+      "global": "5ae7c8e925ad8a47"
+    },
+    "synth_mode": "standard"
+  },
+  "tag": "smoke-geneval",
+  "run_started_at": "2026-06-16T05:34:37.395Z",
+  "run_ended_at": "2026-06-16T05:35:59.448Z",
+  "elapsed_ms": 82053,
+  "git_commit": "3353494+dirty",
+  "git_branch": "phase-16-sprint-16.1-gen-eval-dataset",
+  "project_id": "free-context-hub",
+  "samples_per_query": 3,
+  "k": 10,
+  "surfaces": {
+    "lessons": {
+      "query_count": 5,
+      "errors": 0,
+      "project_id": "free-context-hub",
+      "generation": {
+        "rows_with_gt": 5,
+        "rows_judged": 5,
+        "rows_skipped": 0,
+        "metrics": {
+          "faithfulness": {
+            "mean": 0.9333,
+            "std": 0.1333,
+            "p10": 0.6667,
+            "fail_count": 1
+          },
+          "answer_relevancy": {
+            "mean": 0.6878,
+            "std": 0.1251,
+            "p10": 0.523,
+            "fail_count": 4
+          },
+          "context_precision": {
+            "mean": 1,
+            "std": 0,
+            "p10": 1,
+            "fail_count": 0
+          },
+          "context_recall": {
+            "mean": 0.6333,
+            "std": 0.2211,
+            "p10": 0.3333,
+            "fail_count": 4
+          },
+          "groundedness_self_eval": {
+            "mean": 1,
+            "std": 0,
+            "p10": 1,
+            "fail_count": 0
+          }
+        }
+      },
+      "metrics": {
+        "recall_at_5": 1,
+        "recall_at_10": 1,
+        "mrr": 1,
+        "ndcg_at_5": 1,
+        "ndcg_at_10": 1,
+        "duplication_rate_at_10": 0,
+        "duplication_rate_nearsemantic_at_10": 0,
+        "coverage_pct": 1,
+        "latency_p50_ms": 109,
+        "latency_p95_ms": 965,
+        "latency_mean_ms": 223
+      },
+      "per_query": [
+        {
+          "id": "lesson-pg-uuid-casing",
+          "group": "confident-hit",
+          "query": "how to handle pg UUID casing when building map lookups after RETURNING",
+          "top_k_keys": [
+            "68b2f2cb-2271-454e-bf7e-7831fafb9e3c",
+            "cd0db880-5c36-477f-9f15-6f85dca64596",
+            "6247caba-5aa7-4ce9-b4ac-3fcc9377246d",
+            "4a014c4c-5984-460e-bd68-cb7b0d6ff677",
+            "17320a37-4f2e-4708-8446-429d35f0f3fa",
+            "2097202f-4d46-4420-a088-d1351378286f",
+            "004444c4-3cb8-4405-85b8-120c73c6379d",
+            "61835c5d-d5c8-4d61-9fa0-3497aadee229",
+            "898c3ce8-80a6-4a63-9359-9deaf495633d",
+            "5258dbfe-b76d-42aa-b680-15eb9a7b83d7"
+          ],
+          "top_k_titles": [
+            "pg UUID cast RETURNING is always canonical lowercase — map keys must match",
+            "Dup-rate metric keyed on exact entity id is blind to same-title-different-UUID noise",
+            "Project CRUD: POST/PUT endpoints with validation",
+            "Sprint 15.12: tenant-scope via per-entity resolver middleware (404, not 403)",
+            "Three recurring bypass patterns in tenant-scope work — grep these in every authz PR",
+            "POST-REVIEW investigation can flip a sprint conclusion; inspect top-K composition when a metric surprises",
+            "Retrieval dedup keys should include project_id + lesson_type beyond content hash",
+            "Bundle export must filter owner_project_id to prevent built-in injection on import",
+            "Docker compose --force-recreate doesn't pick up local src changes; rebuild the image first",
+            "Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1"
+          ],
+          "top_k_snippets": [
+            "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…",
+            "The current duplication rate metric in src/qc/metrics.ts is flawed as it only considers exact entity IDs, ignoring same-title-different-UUID noise. This results in a dup-rate of 0 even when there are multiple near-duplicate lessons with distinct UUIDs. The first archived baselin…",
+            "Implemented POST and PUT endpoints for project management with validation rules including regex for project_id, color allow-list, input trimming, and error handling for duplicate IDs. Added a warning field for failed group additions during creation.",
+            "Implement per-entity resolver middleware for tenant isolation, returning 404 NOT_FOUND when resource belongs to another project or doesn't exist. For create routes, inject scope from BODY if missing, preventing unauthorized access. Enforce via apiKeyScope auth checks.",
+            "Three recurring bypass patterns in tenant-scope work identified for grep-checking in every new authz/tenant-scope PR: 1. 'if (project_id) assert' trap - service fn gates scope check behind falsy project_id, skipping check and unconstrained WHERE clause -> cross-tenant read/write…",
+            "Sprint 12.1e2 BUILD initially showed a clear winner with one caveat. A POST-REVIEW checkpoint revealed that the regression was an artifact due to goldenset-pollution fixture lessons displacing the target. The lesson is to inspect the TOP-K COMPOSITION of affected queries when me…",
+            "The current deduplication key implementation using `nearSemanticKey(title, snippet)` is insufficient as it collapses legitimate cross-project and cross-type variants. The fix involves updating the key to include `project_id` and `lesson_type`, resulting in a more precise dedupli…",
+            "The DEFERRED-023 change introduced taxonomy_profiles as a bundle entity. Built-in profiles have owner_project_id IS NULL, while custom profiles carry the owning project ID. The export filters WHERE owner_project_id=$1 ensure built-ins are never exported, preventing them from bei…",
+            "When making changes to src/ in a Docker-compose setup, you must rebuild the image using `docker compose build <service>` before running `docker compose up -d --force-recreate <service>`. This ensures that local source changes are incorporated into the new image. Failure to do so…",
+            "The codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[])` for multiple projects, avoiding the N+1 problem. This pattern should be app…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            965,
+            887,
+            109
+          ],
+          "latency_ms_median": 887,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast [1]. Therefore, map keys must match the canonical lowercase form [1].",
+            "contexts_used": [
+              {
+                "key": "68b2f2cb-2271-454e-bf7e-7831fafb9e3c",
+                "title": "pg UUID cast RETURNING is always canonical lowercase — map keys must match",
+                "snippet_preview": "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If",
+                "char_count": 280
+              },
+              {
+                "key": "cd0db880-5c36-477f-9f15-6f85dca64596",
+                "title": "Dup-rate metric keyed on exact entity id is blind to same-title-different-UUID noise",
+                "snippet_preview": "The current duplication rate metric in src/qc/metrics.ts is flawed as it only considers exact entity IDs, ignoring same-title-different-UUID noise. This results in a dup-rate of 0 even when there are ",
+                "char_count": 280
+              },
+              {
+                "key": "6247caba-5aa7-4ce9-b4ac-3fcc9377246d",
+                "title": "Project CRUD: POST/PUT endpoints with validation",
+                "snippet_preview": "Implemented POST and PUT endpoints for project management with validation rules including regex for project_id, color allow-list, input trimming, and error handling for duplicate IDs. Added a warning ",
+                "char_count": 249
+              },
+              {
+                "key": "4a014c4c-5984-460e-bd68-cb7b0d6ff677",
+                "title": "Sprint 15.12: tenant-scope via per-entity resolver middleware (404, not 403)",
+                "snippet_preview": "Implement per-entity resolver middleware for tenant isolation, returning 404 NOT_FOUND when resource belongs to another project or doesn't exist. For create routes, inject scope from BODY if missing, ",
+                "char_count": 268
+              },
+              {
+                "key": "17320a37-4f2e-4708-8446-429d35f0f3fa",
+                "title": "Three recurring bypass patterns in tenant-scope work — grep these in every authz PR",
+                "snippet_preview": "Three recurring bypass patterns in tenant-scope work identified for grep-checking in every new authz/tenant-scope PR: 1. 'if (project_id) assert' trap - service fn gates scope check behind falsy proje",
+                "char_count": 280
+              }
+            ],
+            "prompt_used": "You are answering a user question using ONLY the lessons provided below.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information that is not present in\n   the lessons. Treat your own training knowledge as off-limits. If a fact\n   isn't in a lesson below, it doesn't exist for this answer.\n2. CITE EVERY CLAIM: Every substantive claim in your answer MUST end with\n   a bracketed citation like [1] or [1,3] referring to the lesson number(s)\n   that support it. Claims without citations are not allowed.\n3. ABSTAIN WHEN UNSUPPORTED: If the lessons do NOT contain enough information\n   to answer the question, your ENTIRE answer must be exactly:\n       Not in context.\n   Do not pad, do not speculate, do not partially answer.\n4. NO MEMORY LEAK: Do not say \"as you know\" / \"as is well known\" / \"typically\"\n   / \"in general\" — those phrases signal use of training knowledge.\n\nQUESTION:\nhow to handle pg UUID casing when building map lookups after RETURNING\n\nLESSONS:\n[1] — pg UUID cast RETURNING is always canonical lowercase — map keys must match\nkey: 68b2f2cb-2271-454e-bf7e-7831fafb9e3c\nWhen using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…\n\n---\n\n[2] — Dup-rate metric keyed on exact entity id is blind to same-title-different-UUID noise\nkey: cd0db880-5c36-477f-9f15-6f85dca64596\nThe current duplication rate metric in src/qc/metrics.ts is flawed as it only considers exact entity IDs, ignoring same-title-different-UUID noise. This results in a dup-rate of 0 even when there are multiple near-duplicate lessons with distinct UUIDs. The first archived baselin…\n\n---\n\n[3] — Project CRUD: POST/PUT endpoints with validation\nkey: 6247caba-5aa7-4ce9-b4ac-3fcc9377246d\nImplemented POST and PUT endpoints for project management with validation rules including regex for project_id, color allow-list, input trimming, and error handling for duplicate IDs. Added a warning field for failed group additions during creation.\n\n---\n\n[4] — Sprint 15.12: tenant-scope via per-entity resolver middleware (404, not 403)\nkey: 4a014c4c-5984-460e-bd68-cb7b0d6ff677\nImplement per-entity resolver middleware for tenant isolation, returning 404 NOT_FOUND when resource belongs to another project or doesn't exist. For create routes, inject scope from BODY if missing, preventing unauthorized access. Enforce via apiKeyScope auth checks.\n\n---\n\n[5] — Three recurring bypass patterns in tenant-scope work — grep these in every authz PR\nkey: 17320a37-4f2e-4708-8446-429d35f0f3fa\nThree recurring bypass patterns in tenant-scope work identified for grep-checking in every new authz/tenant-scope PR: 1. 'if (project_id) assert' trap - service fn gates scope check behind falsy project_id, skipping check and unconstrained WHERE clause -> cross-tenant read/write…\n\nWrite a concise 2-4 sentence answer that:\n- Directly answers the question\n- Has a bracketed citation at the end of every claim\n- Combines multiple lessons when needed (e.g. \"X applies [1], and Y also\n  applies [3], so both checks are required\")\n- Says exactly \"Not in context.\" if the lessons don't cover the question\n\nANSWER:\n",
+            "synth_ms": 761,
+            "judge_ms": 11045,
+            "scores": {
+              "faithfulness": 0.6666666666666666,
+              "answer_relevancy": 0.5629934775189013,
+              "context_precision": 0.9999999999,
+              "context_recall": 0.5,
+              "groundedness_self_eval": 1
+            },
+            "reasons": {
+              "groundedness_self_eval": "The answer directly extracts the relevant information from Context [1] to explain why UUIDs are lowercase and how that affects Map keys."
+            },
+            "fail_reasons": [
+              "faithfulness<0.9",
+              "answer_relevancy<0.85",
+              "context_recall<0.75"
+            ]
+          }
+        },
+        {
+          "id": "lesson-undici-version-pinning",
+          "group": "confident-hit",
+          "query": "why must undici userland version match the Node bundled version",
+          "top_k_keys": [
+            "82e14086-dc76-40f5-81f5-e7ef0c4c97ef",
+            "68b2f2cb-2271-454e-bf7e-7831fafb9e3c",
+            "61835c5d-d5c8-4d61-9fa0-3497aadee229",
+            "fe395858-9efb-42db-ae30-6369d9dd9992",
+            "e15edaef-1d63-4cff-a9cc-7f972a0887d5",
+            "ac91bc6c-f467-4c37-b503-fec8e941ca9b",
+            "5258dbfe-b76d-42aa-b680-15eb9a7b83d7",
+            "b346feb2-67e6-4b19-aeb5-943f8698c0e4",
+            "cd0db880-5c36-477f-9f15-6f85dca64596",
+            "b1d76cc8-fd55-4457-b447-18314afc72f9"
+          ],
+          "top_k_titles": [
+            "undici userland version MUST match Node's bundled version for fetch dispatcher interop",
+            "pg UUID cast RETURNING is always canonical lowercase — map keys must match",
+            "Bundle export must filter owner_project_id to prevent built-in injection on import",
+            "Node ESM CLI main-guard needs pathToFileURL on Windows, not plain `file://` concat",
+            "index_project default excludes cover .git + node_modules only; dist/ .next/ .claude/ leak into the chunks table",
+            "Query-conditional salience needs composite relevance, not pure sem_score",
+            "Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1",
+            "Cross-encoder rerank via /v1/embeddings only works for bi-encoder-compatible models — gte wins, bge and jina fail",
+            "Dup-rate metric keyed on exact entity id is blind to same-title-different-UUID noise",
+            "Benchmark diff generator must consume noise_floor or the data is useless"
+          ],
+          "top_k_snippets": [
+            "Node's global fetch() requires the userland undici version to match its internally bundled version to avoid obscure errors. Node 23.11.1 bundles undici 6.21.2, so pinning userland undici to ^6.21.2 is recommended. Verify compatibility on Node upgrades as internal undici versions…",
+            "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…",
+            "The DEFERRED-023 change introduced taxonomy_profiles as a bundle entity. Built-in profiles have owner_project_id IS NULL, while custom profiles carry the owning project ID. The export filters WHERE owner_project_id=$1 ensure built-ins are never exported, preventing them from bei…",
+            "The guard condition `if (import.meta.url === \"file://\" + process.argv[1])` fails on Windows due to path format differences. The fix involves using `pathToFileURL` from node:url to normalize both sides of the comparison, ensuring consistent URL formats.",
+            "During Phase 12 Sprint 12.0.1, indexing the free-context-hub project ingested 3925 chunks but revealed ~4426 junk rows including dist/, .next/, and .claude/ files. The default exclude logic only covers .git and node_modules. A direct SQL query was used to purge these junk rows, …",
+            "When gating salience boosts on query-lesson match quality, use a composite relevance signal (max(sem_score, fts_score)) instead of pure semantic similarity to prevent legitimate FTS-only matches from being canceled. This ensures that either semantic or lexical matches count as '…",
+            "The codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[])` for multiple projects, avoiding the N+1 problem. This pattern should be app…",
+            "The rerankCrossEncoder code path in src/services/lessons.ts:605 uses /v1/embeddings to get independent embeddings for query + each candidate, then scores by cosine similarity. Sprint 12.1f tested 3 LM Studio rerank models against this pattern: gte-reranker-modernbert-base works …",
+            "The current duplication rate metric in src/qc/metrics.ts is flawed as it only considers exact entity IDs, ignoring same-title-different-UUID noise. This results in a dup-rate of 0 even when there are multiple near-duplicate lessons with distinct UUIDs. The first archived baselin…",
+            "The benchmark diff generator was not consuming noise_floor data, leading to incorrect regression flags. The fix involves teaching the comparison tooling to consume noise floor data and rendering within-floor deltas as '⚪ (within floor)'. This ensures that the data is both writte…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            144,
+            106,
+            97
+          ],
+          "latency_ms_median": 106,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "Node's global fetch() requires the userland undici version to match its internally bundled version to avoid obscure errors [1]. For example, Node 23.11.1 bundles undici 6.21.2, so pinning userland undici to ^6.21.2 is recommended [1].",
+            "contexts_used": [
+              {
+                "key": "82e14086-dc76-40f5-81f5-e7ef0c4c97ef",
+                "title": "undici userland version MUST match Node's bundled version for fetch dispatcher interop",
+                "snippet_preview": "Node's global fetch() requires the userland undici version to match its internally bundled version to avoid obscure errors. Node 23.11.1 bundles undici 6.21.2, so pinning userland undici to ^6.21.2 is",
+                "char_count": 280
+              },
+              {
+                "key": "68b2f2cb-2271-454e-bf7e-7831fafb9e3c",
+                "title": "pg UUID cast RETURNING is always canonical lowercase — map keys must match",
+                "snippet_preview": "When using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If",
+                "char_count": 280
+              },
+              {
+                "key": "61835c5d-d5c8-4d61-9fa0-3497aadee229",
+                "title": "Bundle export must filter owner_project_id to prevent built-in injection on import",
+                "snippet_preview": "The DEFERRED-023 change introduced taxonomy_profiles as a bundle entity. Built-in profiles have owner_project_id IS NULL, while custom profiles carry the owning project ID. The export filters WHERE ow",
+                "char_count": 280
+              },
+              {
+                "key": "fe395858-9efb-42db-ae30-6369d9dd9992",
+                "title": "Node ESM CLI main-guard needs pathToFileURL on Windows, not plain `file://` concat",
+                "snippet_preview": "The guard condition `if (import.meta.url === \"file://\" + process.argv[1])` fails on Windows due to path format differences. The fix involves using `pathToFileURL` from node:url to normalize both sides",
+                "char_count": 252
+              },
+              {
+                "key": "e15edaef-1d63-4cff-a9cc-7f972a0887d5",
+                "title": "index_project default excludes cover .git + node_modules only; dist/ .next/ .claude/ leak into the chunks table",
+                "snippet_preview": "During Phase 12 Sprint 12.0.1, indexing the free-context-hub project ingested 3925 chunks but revealed ~4426 junk rows including dist/, .next/, and .claude/ files. The default exclude logic only cover",
+                "char_count": 280
+              }
+            ],
+            "prompt_used": "You are answering a user question using ONLY the lessons provided below.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information that is not present in\n   the lessons. Treat your own training knowledge as off-limits. If a fact\n   isn't in a lesson below, it doesn't exist for this answer.\n2. CITE EVERY CLAIM: Every substantive claim in your answer MUST end with\n   a bracketed citation like [1] or [1,3] referring to the lesson number(s)\n   that support it. Claims without citations are not allowed.\n3. ABSTAIN WHEN UNSUPPORTED: If the lessons do NOT contain enough information\n   to answer the question, your ENTIRE answer must be exactly:\n       Not in context.\n   Do not pad, do not speculate, do not partially answer.\n4. NO MEMORY LEAK: Do not say \"as you know\" / \"as is well known\" / \"typically\"\n   / \"in general\" — those phrases signal use of training knowledge.\n\nQUESTION:\nwhy must undici userland version match the Node bundled version\n\nLESSONS:\n[1] — undici userland version MUST match Node's bundled version for fetch dispatcher interop\nkey: 82e14086-dc76-40f5-81f5-e7ef0c4c97ef\nNode's global fetch() requires the userland undici version to match its internally bundled version to avoid obscure errors. Node 23.11.1 bundles undici 6.21.2, so pinning userland undici to ^6.21.2 is recommended. Verify compatibility on Node upgrades as internal undici versions…\n\n---\n\n[2] — pg UUID cast RETURNING is always canonical lowercase — map keys must match\nkey: 68b2f2cb-2271-454e-bf7e-7831fafb9e3c\nWhen using `WHERE id = ANY($1::uuid[])` in pg-node and building a JavaScript Map keyed by the returned id, the map key is always the canonical lowercase form because pg canonicalizes UUIDs on cast. If the input array contains non-canonical (uppercase) UUIDs, pg matches them case…\n\n---\n\n[3] — Bundle export must filter owner_project_id to prevent built-in injection on import\nkey: 61835c5d-d5c8-4d61-9fa0-3497aadee229\nThe DEFERRED-023 change introduced taxonomy_profiles as a bundle entity. Built-in profiles have owner_project_id IS NULL, while custom profiles carry the owning project ID. The export filters WHERE owner_project_id=$1 ensure built-ins are never exported, preventing them from bei…\n\n---\n\n[4] — Node ESM CLI main-guard needs pathToFileURL on Windows, not plain `file://` concat\nkey: fe395858-9efb-42db-ae30-6369d9dd9992\nThe guard condition `if (import.meta.url === \"file://\" + process.argv[1])` fails on Windows due to path format differences. The fix involves using `pathToFileURL` from node:url to normalize both sides of the comparison, ensuring consistent URL formats.\n\n---\n\n[5] — index_project default excludes cover .git + node_modules only; dist/ .next/ .claude/ leak into the chunks table\nkey: e15edaef-1d63-4cff-a9cc-7f972a0887d5\nDuring Phase 12 Sprint 12.0.1, indexing the free-context-hub project ingested 3925 chunks but revealed ~4426 junk rows including dist/, .next/, and .claude/ files. The default exclude logic only covers .git and node_modules. A direct SQL query was used to purge these junk rows, …\n\nWrite a concise 2-4 sentence answer that:\n- Directly answers the question\n- Has a bracketed citation at the end of every claim\n- Combines multiple lessons when needed (e.g. \"X applies [1], and Y also\n  applies [3], so both checks are required\")\n- Says exactly \"Not in context.\" if the lessons don't cover the question\n\nANSWER:\n",
+            "synth_ms": 1964,
+            "judge_ms": 16579,
+            "scores": {
+              "faithfulness": 1,
+              "answer_relevancy": 0.8513572487410862,
+              "context_precision": 0.9999999999,
+              "context_recall": 0.6666666666666666,
+              "groundedness_self_eval": 1
+            },
+            "reasons": {
+              "groundedness_self_eval": "The answer is directly supported by context [1], which explains that matching versions is necessary to avoid obscure errors and provides the specific version example mentioned."
+            },
+            "fail_reasons": [
+              "context_recall<0.75"
+            ]
+          }
+        },
+        {
+          "id": "lesson-pyenv-python3-shim",
+          "group": "confident-hit",
+          "query": "pyenv-win python3.bat shim fails with multi-line -c bash arguments",
+          "top_k_keys": [
+            "8788dd3e-2f89-4bb5-b899-d9d3c362da11",
+            "f47de748-7a78-44e9-af6f-ef3f7a324004",
+            "fe395858-9efb-42db-ae30-6369d9dd9992",
+            "e1fac6c9-f893-4d95-b4e3-85e6fdbeae85",
+            "5258dbfe-b76d-42aa-b680-15eb9a7b83d7",
+            "2af9bb39-e127-4527-8453-4813a66ae28b",
+            "67bc4411-a8b4-4e37-ae62-fa843fe47f67",
+            "eb7409e5-d2bf-407b-9811-fca62a2c3ded",
+            "b85dc715-80d8-4f04-9efd-9bcd16a45dc3",
+            "669855e9-5098-4b05-8161-1155589e8ff2"
+          ],
+          "top_k_titles": [
+            "pyenv-win python3.bat shim corrupts multi-line -c args",
+            "Crash-isolation tests for batch sweeps must force a genuine thrown error, not a filter-excluded item",
+            "Node ESM CLI main-guard needs pathToFileURL on Windows, not plain `file://` concat",
+            "Sprint 15.5: compensating-cleanup pattern cho openDispute Step-3 UPDATE failure",
+            "Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1",
+            "GET /api/lessons returns rows under `items`, not `lessons` or `results`",
+            "Sprint 15.7: chaining contract — dual-emit task.deferred + single chain field in source event",
+            "Sprint 15.11: dispatch mechanical test-helper migration to a subagent",
+            "Sprint 15.8: chain dedup via subject_ref string-prefix — load-bearing convention",
+            "Sprint 13.5 — F3 core shipped via compressed AMAW; cumulative scope check closes 13.3-boundary debt"
+          ],
+          "top_k_snippets": [
+            "The python3.bat shim in pyenv-win corrupts multi-line -c arguments on Windows, causing silent IndentationErrors. A workaround is to use plain 'python' instead of 'python3' to avoid the issue.",
+            "Ensure crash-isolation tests force genuine errors in per-item transactions by planting real DB faults inside the bad item's transaction, not using filter-excluded items. Temporarily rethrow catch logic to verify test fails under mutation before reverting. Applies to all batch sw…",
+            "The guard condition `if (import.meta.url === \"file://\" + process.argv[1])` fails on Windows due to path format differences. The fix involves using `pathToFileURL` from node:url to normalize both sides of the comparison, ensuring consistent URL formats.",
+            "The Sprint 15.5 update addresses the issue of orphan records in the openDispute Step-3 UPDATE process. When a dispute request fails after being committed, compensating actions are required to clean up the orphaned data.",
+            "The codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[])` for multiple projects, avoiding the N+1 problem. This pattern should be app…",
+            "The API endpoint /api/lessons returns data under 'items', not 'lessons' or 'results'. Tests should read from body.items to avoid confusion and silent failures. Verify the field name against the service implementation, and if unsure, dump the response body in a test.",
+            "Phase 15 §C.4 chaining: positive request/motion outcomes emit task.posted; closing/closed topics emit task.deferred. Sprint 15.7 dual-emit pattern: source event (request.resolved/motion.tallied) carries chain:{kind:'posted'|'deferred',...} in payload AND a separate task.deferred…",
+            "An authz change that forbids self-asserted participant levels broke 165 of 657 tests — every setup helper that joined non-owner actors at coordination/authority. The fix is mechanical but spans 13 files with a consistent pattern (owner joins first as authority; others join execu…",
+            "Implement chain dedup by suppressing redundant task emissions when a motion's subject_ref starts with 'request_step:', ensuring only the request's handler emits tasks. This convention is critical for accurate chain handling in motions.ts:tallyMotion and coordinationSweep.ts:swee…",
+            "Sprint 13.5 shipped F3 core via compressed AMAW, closing the 13.3 boundary debt. A single adversary round identified three BLOCKs, all fixed inline; code‑review adversary skipped due to strong design coverage and e2e smoke. Scope Guard cleared, cumulative checks across 13.2‑13.5…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            163,
+            109,
+            117
+          ],
+          "latency_ms_median": 117,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "The pyenv-win python3.bat shim corrupts multi-line -c arguments on Windows, which results in silent IndentationErrors [1]. To avoid this issue, a workaround is to use plain 'python' instead of 'python3' [1].",
+            "contexts_used": [
+              {
+                "key": "8788dd3e-2f89-4bb5-b899-d9d3c362da11",
+                "title": "pyenv-win python3.bat shim corrupts multi-line -c args",
+                "snippet_preview": "The python3.bat shim in pyenv-win corrupts multi-line -c arguments on Windows, causing silent IndentationErrors. A workaround is to use plain 'python' instead of 'python3' to avoid the issue.",
+                "char_count": 191
+              },
+              {
+                "key": "f47de748-7a78-44e9-af6f-ef3f7a324004",
+                "title": "Crash-isolation tests for batch sweeps must force a genuine thrown error, not a filter-excluded item",
+                "snippet_preview": "Ensure crash-isolation tests force genuine errors in per-item transactions by planting real DB faults inside the bad item's transaction, not using filter-excluded items. Temporarily rethrow catch logi",
+                "char_count": 280
+              },
+              {
+                "key": "fe395858-9efb-42db-ae30-6369d9dd9992",
+                "title": "Node ESM CLI main-guard needs pathToFileURL on Windows, not plain `file://` concat",
+                "snippet_preview": "The guard condition `if (import.meta.url === \"file://\" + process.argv[1])` fails on Windows due to path format differences. The fix involves using `pathToFileURL` from node:url to normalize both sides",
+                "char_count": 252
+              },
+              {
+                "key": "e1fac6c9-f893-4d95-b4e3-85e6fdbeae85",
+                "title": "Sprint 15.5: compensating-cleanup pattern cho openDispute Step-3 UPDATE failure",
+                "snippet_preview": "The Sprint 15.5 update addresses the issue of orphan records in the openDispute Step-3 UPDATE process. When a dispute request fails after being committed, compensating actions are required to clean up",
+                "char_count": 219
+              },
+              {
+                "key": "5258dbfe-b76d-42aa-b680-15eb9a7b83d7",
+                "title": "Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1",
+                "snippet_preview": "The codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[",
+                "char_count": 280
+              }
+            ],
+            "prompt_used": "You are answering a user question using ONLY the lessons provided below.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information that is not present in\n   the lessons. Treat your own training knowledge as off-limits. If a fact\n   isn't in a lesson below, it doesn't exist for this answer.\n2. CITE EVERY CLAIM: Every substantive claim in your answer MUST end with\n   a bracketed citation like [1] or [1,3] referring to the lesson number(s)\n   that support it. Claims without citations are not allowed.\n3. ABSTAIN WHEN UNSUPPORTED: If the lessons do NOT contain enough information\n   to answer the question, your ENTIRE answer must be exactly:\n       Not in context.\n   Do not pad, do not speculate, do not partially answer.\n4. NO MEMORY LEAK: Do not say \"as you know\" / \"as is well known\" / \"typically\"\n   / \"in general\" — those phrases signal use of training knowledge.\n\nQUESTION:\npyenv-win python3.bat shim fails with multi-line -c bash arguments\n\nLESSONS:\n[1] — pyenv-win python3.bat shim corrupts multi-line -c args\nkey: 8788dd3e-2f89-4bb5-b899-d9d3c362da11\nThe python3.bat shim in pyenv-win corrupts multi-line -c arguments on Windows, causing silent IndentationErrors. A workaround is to use plain 'python' instead of 'python3' to avoid the issue.\n\n---\n\n[2] — Crash-isolation tests for batch sweeps must force a genuine thrown error, not a filter-excluded item\nkey: f47de748-7a78-44e9-af6f-ef3f7a324004\nEnsure crash-isolation tests force genuine errors in per-item transactions by planting real DB faults inside the bad item's transaction, not using filter-excluded items. Temporarily rethrow catch logic to verify test fails under mutation before reverting. Applies to all batch sw…\n\n---\n\n[3] — Node ESM CLI main-guard needs pathToFileURL on Windows, not plain `file://` concat\nkey: fe395858-9efb-42db-ae30-6369d9dd9992\nThe guard condition `if (import.meta.url === \"file://\" + process.argv[1])` fails on Windows due to path format differences. The fix involves using `pathToFileURL` from node:url to normalize both sides of the comparison, ensuring consistent URL formats.\n\n---\n\n[4] — Sprint 15.5: compensating-cleanup pattern cho openDispute Step-3 UPDATE failure\nkey: e1fac6c9-f893-4d95-b4e3-85e6fdbeae85\nThe Sprint 15.5 update addresses the issue of orphan records in the openDispute Step-3 UPDATE process. When a dispute request fails after being committed, compensating actions are required to clean up the orphaned data.\n\n---\n\n[5] — Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1\nkey: 5258dbfe-b76d-42aa-b680-15eb9a7b83d7\nThe codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[])` for multiple projects, avoiding the N+1 problem. This pattern should be app…\n\nWrite a concise 2-4 sentence answer that:\n- Directly answers the question\n- Has a bracketed citation at the end of every claim\n- Combines multiple lessons when needed (e.g. \"X applies [1], and Y also\n  applies [3], so both checks are required\")\n- Says exactly \"Not in context.\" if the lessons don't cover the question\n\nANSWER:\n",
+            "synth_ms": 1708,
+            "judge_ms": 14420,
+            "scores": {
+              "faithfulness": 1,
+              "answer_relevancy": 0.771734636760467,
+              "context_precision": 0.9999999999,
+              "context_recall": 0.6666666666666666,
+              "groundedness_self_eval": 1
+            },
+            "reasons": {
+              "groundedness_self_eval": "Every claim in the answer is directly supported by Context [1], which explicitly mentions the corruption of multi-line -c arguments, the resulting IndentationErrors, and the 'python' workaround."
+            },
+            "fail_reasons": [
+              "answer_relevancy<0.85",
+              "context_recall<0.75"
+            ]
+          }
+        },
+        {
+          "id": "lesson-npm-test-silent-skip",
+          "group": "confident-hit",
+          "query": "npm test script lists test files explicitly so new ones silently skip",
+          "top_k_keys": [
+            "0f4be646-18a0-4301-b329-301b12c0945e",
+            "29f1a41f-8c33-49b9-9492-1716bf79512d",
+            "eff18c7c-5296-466d-9fc8-711fcb9c7439",
+            "d6648258-41f0-41a7-a14e-8b1e01b3531b",
+            "eb7409e5-d2bf-407b-9811-fca62a2c3ded",
+            "5258dbfe-b76d-42aa-b680-15eb9a7b83d7",
+            "e87cd142-9fc3-4ef9-868f-11ed3e7577bf",
+            "17320a37-4f2e-4708-8446-429d35f0f3fa",
+            "5287a774-5761-412f-a150-31db7f2b3880",
+            "05fde055-3cef-41d4-a5d7-a65d6daeb442"
+          ],
+          "top_k_titles": [
+            "npm test script lists files explicitly — new test files silently skipped unless added",
+            "DEFERRED-008: explicit column lists in export/import silently drop new columns",
+            "DEFERRED-008: explicit column lists in export/import silently drop new columns",
+            "Sprint 15.7: test cleanup must delete chained tasks/artifacts before topics on carried-motion tests",
+            "Sprint 15.11: dispatch mechanical test-helper migration to a subagent",
+            "Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1",
+            "/review-impl adversarial review catches silent-false-confidence bugs POST-REVIEW misses",
+            "Three recurring bypass patterns in tenant-scope work — grep these in every authz PR",
+            "Cold-start hostile-actor adversary review is mandatory for authz primitives",
+            "NaN propagates silently through Math.max/Math.min clamp chains — use Number.isFinite"
+          ],
+          "top_k_snippets": [
+            "The `test` script in package.json uses explicit file paths instead of a glob, causing new test files to be silently skipped unless manually added. This leads to missing tests during the build process without any warnings or errors.",
+            "The Phase 11 exchange path (exportProject SELECT + importProject INSERT/UPDATE) uses EXPLICIT column lists. When migration 0052 added lesson_types.scope (NOT NULL DEFAULT 'global'), the explicit lists silently dropped it → imported profile-scoped types became global (scope-leak …",
+            "Phase 11 exchange path uses explicit column lists; migration 0052 added lesson_types.scope (NOT NULL DEFAULT global) but existing exported lists silently dropped it, causing imported profile-scoped types to become global. Fix involves adding scope to all three column lists and i…",
+            "After chain integration, tallyMotion(carried) and sweepExpiredMotions(carried) create new tasks/artifacts as side effects. The previous cleanup() in motions.test.ts only deleted votes/motions/coordination_events, leaving chained tasks that caused FK constraint violations when de…",
+            "An authz change that forbids self-asserted participant levels broke 165 of 657 tests — every setup helper that joined non-owner actors at coordination/authority. The fix is mechanical but spans 13 files with a consistent pattern (owner joins first as authority; others join execu…",
+            "The codebase's multi-project salience aggregation was optimized to reduce SQL roundtrips by batching project IDs. A new function, computeSalienceMultiProject, uses a single query with `= ANY($1::text[])` for multiple projects, avoiding the N+1 problem. This pattern should be app…",
+            "In Phase 12 Sprint 12.0, /review-impl caught 15 additional findings, including 6 MED and 6 LOW issues in benchmarking/measurement infrastructure. These bugs silently produce wrong numbers without crashing the system. Key examples include a dup-rate metric blind to certain pathol…",
+            "Three recurring bypass patterns in tenant-scope work identified for grep-checking in every new authz/tenant-scope PR: 1. 'if (project_id) assert' trap - service fn gates scope check behind falsy project_id, skipping check and unconstrained WHERE clause -> cross-tenant read/write…",
+            "Cold-start hostile-actor adversary review is mandatory for new authz primitives, governance changes, and destructive operations. Multi-pass reviews catch different classes of vulnerabilities beyond implementation coverage. Four passes saturated findings; skipping leads to critic…",
+            "NaN can propagate through Math.max/Math.min clamp chains, leading to silent errors in comparisons and sorting. Use Number.isFinite to guard against NaN values before clamping."
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            142,
+            100,
+            90
+          ],
+          "latency_ms_median": 100,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "The `test` script in `package.json` uses explicit file paths instead of a glob [1]. This causes new test files to be silently skipped unless they are manually added [1]. This behavior leads to missing tests during the build process without any warnings or errors [1].",
+            "contexts_used": [
+              {
+                "key": "0f4be646-18a0-4301-b329-301b12c0945e",
+                "title": "npm test script lists files explicitly — new test files silently skipped unless added",
+                "snippet_preview": "The `test` script in package.json uses explicit file paths instead of a glob, causing new test files to be silently skipped unless manually added. This leads to missing tests during the build process ",
+                "char_count": 231
+              },
+              {
+                "key": "29f1a41f-8c33-49b9-9492-1716bf79512d",
+                "title": "DEFERRED-008: explicit column lists in export/import silently drop new columns",
+                "snippet_preview": "The Phase 11 exchange path (exportProject SELECT + importProject INSERT/UPDATE) uses EXPLICIT column lists. When migration 0052 added lesson_types.scope (NOT NULL DEFAULT 'global'), the explicit lists",
+                "char_count": 280
+              },
+              {
+                "key": "eff18c7c-5296-466d-9fc8-711fcb9c7439",
+                "title": "DEFERRED-008: explicit column lists in export/import silently drop new columns",
+                "snippet_preview": "Phase 11 exchange path uses explicit column lists; migration 0052 added lesson_types.scope (NOT NULL DEFAULT global) but existing exported lists silently dropped it, causing imported profile-scoped ty",
+                "char_count": 280
+              },
+              {
+                "key": "d6648258-41f0-41a7-a14e-8b1e01b3531b",
+                "title": "Sprint 15.7: test cleanup must delete chained tasks/artifacts before topics on carried-motion tests",
+                "snippet_preview": "After chain integration, tallyMotion(carried) and sweepExpiredMotions(carried) create new tasks/artifacts as side effects. The previous cleanup() in motions.test.ts only deleted votes/motions/coordina",
+                "char_count": 280
+              },
+              {
+                "key": "eb7409e5-d2bf-407b-9811-fca62a2c3ded",
+                "title": "Sprint 15.11: dispatch mechanical test-helper migration to a subagent",
+                "snippet_preview": "An authz change that forbids self-asserted participant levels broke 165 of 657 tests — every setup helper that joined non-owner actors at coordination/authority. The fix is mechanical but spans 13 fil",
+                "char_count": 280
+              }
+            ],
+            "prompt_used": "You are answering a user question using ONLY the lessons provided below.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information that is not present in\n   the lessons. Treat your own training knowledge as off-limits. If a fact\n   isn't in a lesson below, it doesn't exist for this answer.\n2. CITE EVERY CLAIM: Every substantive claim in your answer MUST end with\n   a bracketed citation like [1] or [1,3] referring to the lesson number(s)\n   that support it. Claims without citations are not allowed.\n3. ABSTAIN WHEN UNSUPPORTED: If the lessons do NOT contain enough information\n   to answer the question, your ENTIRE answer must be exactly:\n       Not in context.\n   Do not pad, do not speculate, do not partially answer.\n4. NO MEMORY LEAK: Do not say \"as you know\" / \"as is well known\" / \"typically\"\n   / \"in general\" — those phrases signal use of training knowledge.\n\nQUESTION:\nnpm test script lists test files explicitly so new ones silently skip\n\nLESSONS:\n[1] — npm test script lists files explicitly — new test files silently skipped unless added\nkey: 0f4be646-18a0-4301-b329-301b12c0945e\nThe `test` script in package.json uses explicit file paths instead of a glob, causing new test files to be silently skipped unless manually added. This leads to missing tests during the build process without any warnings or errors.\n\n---\n\n[2] — DEFERRED-008: explicit column lists in export/import silently drop new columns\nkey: 29f1a41f-8c33-49b9-9492-1716bf79512d\nThe Phase 11 exchange path (exportProject SELECT + importProject INSERT/UPDATE) uses EXPLICIT column lists. When migration 0052 added lesson_types.scope (NOT NULL DEFAULT 'global'), the explicit lists silently dropped it → imported profile-scoped types became global (scope-leak …\n\n---\n\n[3] — DEFERRED-008: explicit column lists in export/import silently drop new columns\nkey: eff18c7c-5296-466d-9fc8-711fcb9c7439\nPhase 11 exchange path uses explicit column lists; migration 0052 added lesson_types.scope (NOT NULL DEFAULT global) but existing exported lists silently dropped it, causing imported profile-scoped types to become global. Fix involves adding scope to all three column lists and i…\n\n---\n\n[4] — Sprint 15.7: test cleanup must delete chained tasks/artifacts before topics on carried-motion tests\nkey: d6648258-41f0-41a7-a14e-8b1e01b3531b\nAfter chain integration, tallyMotion(carried) and sweepExpiredMotions(carried) create new tasks/artifacts as side effects. The previous cleanup() in motions.test.ts only deleted votes/motions/coordination_events, leaving chained tasks that caused FK constraint violations when de…\n\n---\n\n[5] — Sprint 15.11: dispatch mechanical test-helper migration to a subagent\nkey: eb7409e5-d2bf-407b-9811-fca62a2c3ded\nAn authz change that forbids self-asserted participant levels broke 165 of 657 tests — every setup helper that joined non-owner actors at coordination/authority. The fix is mechanical but spans 13 files with a consistent pattern (owner joins first as authority; others join execu…\n\nWrite a concise 2-4 sentence answer that:\n- Directly answers the question\n- Has a bracketed citation at the end of every claim\n- Combines multiple lessons when needed (e.g. \"X applies [1], and Y also\n  applies [3], so both checks are required\")\n- Says exactly \"Not in context.\" if the lessons don't cover the question\n\nANSWER:\n",
+            "synth_ms": 1233,
+            "judge_ms": 15072,
+            "scores": {
+              "faithfulness": 1,
+              "answer_relevancy": 0.5230381525346997,
+              "context_precision": 0.9999999999,
+              "context_recall": 0.3333333333333333,
+              "groundedness_self_eval": 1
+            },
+            "reasons": {
+              "groundedness_self_eval": "The answer is directly and completely supported by Context [1], which contains all the specific details mentioned."
+            },
+            "fail_reasons": [
+              "answer_relevancy<0.85",
+              "context_recall<0.75"
+            ]
+          }
+        },
+        {
+          "id": "lesson-api-lessons-items-shape",
+          "group": "confident-hit",
+          "query": "GET /api/lessons response shape uses items not lessons",
+          "top_k_keys": [
+            "2af9bb39-e127-4527-8453-4813a66ae28b",
+            "c73a8738-874f-4832-92eb-16e6765924ba",
+            "c0e76a3d-cf5c-456a-b064-8731f3f62bc7",
+            "f333214e-8e83-4049-a826-a7a5f4cf885a",
+            "004444c4-3cb8-4405-85b8-120c73c6379d",
+            "45c8cb44-9fb8-4dad-b825-5b1cd8b0a108",
+            "68696052-ea32-4097-904c-1fb059c90450",
+            "ac91bc6c-f467-4c37-b503-fec8e941ca9b",
+            "ee1ec705-1454-4662-9eda-d4d47f429352",
+            "a688cb2c-3ed5-4fdd-ad07-0a8f5f4f5d6c"
+          ],
+          "top_k_titles": [
+            "GET /api/lessons returns rows under `items`, not `lessons` or `results`",
+            "Test review lesson: Always validate API responses",
+            "Canonical lesson status slug is `pending-review` (hyphen) — never `pending_review`",
+            "gui-create-1776188570090",
+            "Retrieval dedup keys should include project_id + lesson_type beyond content hash",
+            "When guarding a lessons.status transition, mirror the guard on ALL sibling write paths (single + batch + MCP)",
+            "Phase 8 smoke test — custom type via REST",
+            "Query-conditional salience needs composite relevance, not pure sem_score",
+            "Salience blend is a no-op when no candidate lessons have access-log history — α irrelevant on bootstrap-only corpus",
+            "Access-frequency salience needs query-conditioning OR drop weak signals — naive rank-weighted logging creates popularity feedback loop"
+          ],
+          "top_k_snippets": [
+            "The API endpoint /api/lessons returns data under 'items', not 'lessons' or 'results'. Tests should read from body.items to avoid confusion and silent failures. Verify the field name against the service implementation, and if unsure, dump the response body in a test.",
+            "Ensure API response validation by checking status codes, verifying expected fields, and handling errors gracefully to prevent data processing issues.",
+            "The lesson status for a lesson awaiting human review is the slug `pending-review` WITH A HYPHEN. It is written by submit_for_review, stored in lessons.status, and matched by the REST API's ?status= filter. The canonical status set is: active, draft, pending-review, superseded, a…",
+            "GUI test lesson content gui-create-1776188570090",
+            "The current deduplication key implementation using `nearSemanticKey(title, snippet)` is insufficient as it collapses legitimate cross-project and cross-type variants. The fix involves updating the key to include `project_id` and `lesson_type`, resulting in a more precise dedupli…",
+            "The F2 review gate requires lessons in status 'pending-review' to be immutable except via approve/return. Three write paths — updateLessonStatus, batchUpdateLessonStatus, and MCP update_lesson_status — must each enforce the same guard. A missing guard on any path can bypass the …",
+            "Conduct a Phase 8 smoke test to verify that the custom lesson type API change functions correctly end-to-end following the removal of the CHECK constraint in migration 0040. Ensure all components interact seamlessly and data integrity is maintained.",
+            "When gating salience boosts on query-lesson match quality, use a composite relevance signal (max(sem_score, fts_score)) instead of pure semantic similarity to prevent legitimate FTS-only matches from being canceled. This ensures that either semantic or lexical matches count as '…",
+            "The blendHybridScore function in src/services/salience.ts short-circuits when no candidate lessons have access-log history, making α irrelevant. This occurs in fresh corpora, after truncating lesson_access_log, or with queries outside the guardrail audit-bootstrap set. Salience …",
+            "In Phase 12 Sprint 12.1c, adding `lesson_access_log` and related features led to a popularity feedback loop, causing MRR and nDCG drops. The issue arises from rank-weighted logs being too cheap, allowing broad-coverage lessons to dominate salience. Mitigation paths include query…"
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            130,
+            93,
+            94
+          ],
+          "latency_ms_median": 94,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "The `GET /api/lessons` endpoint returns data under the `items` key, rather than using `lessons` or `results` [1]. To avoid confusion and silent failures, tests should read from `body.items` [1].",
+            "contexts_used": [
+              {
+                "key": "2af9bb39-e127-4527-8453-4813a66ae28b",
+                "title": "GET /api/lessons returns rows under `items`, not `lessons` or `results`",
+                "snippet_preview": "The API endpoint /api/lessons returns data under 'items', not 'lessons' or 'results'. Tests should read from body.items to avoid confusion and silent failures. Verify the field name against the servic",
+                "char_count": 266
+              },
+              {
+                "key": "c73a8738-874f-4832-92eb-16e6765924ba",
+                "title": "Test review lesson: Always validate API responses",
+                "snippet_preview": "Ensure API response validation by checking status codes, verifying expected fields, and handling errors gracefully to prevent data processing issues.",
+                "char_count": 149
+              },
+              {
+                "key": "c0e76a3d-cf5c-456a-b064-8731f3f62bc7",
+                "title": "Canonical lesson status slug is `pending-review` (hyphen) — never `pending_review`",
+                "snippet_preview": "The lesson status for a lesson awaiting human review is the slug `pending-review` WITH A HYPHEN. It is written by submit_for_review, stored in lessons.status, and matched by the REST API's ?status= fi",
+                "char_count": 280
+              },
+              {
+                "key": "f333214e-8e83-4049-a826-a7a5f4cf885a",
+                "title": "gui-create-1776188570090",
+                "snippet_preview": "GUI test lesson content gui-create-1776188570090",
+                "char_count": 48
+              },
+              {
+                "key": "004444c4-3cb8-4405-85b8-120c73c6379d",
+                "title": "Retrieval dedup keys should include project_id + lesson_type beyond content hash",
+                "snippet_preview": "The current deduplication key implementation using `nearSemanticKey(title, snippet)` is insufficient as it collapses legitimate cross-project and cross-type variants. The fix involves updating the key",
+                "char_count": 280
+              }
+            ],
+            "prompt_used": "You are answering a user question using ONLY the lessons provided below.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information that is not present in\n   the lessons. Treat your own training knowledge as off-limits. If a fact\n   isn't in a lesson below, it doesn't exist for this answer.\n2. CITE EVERY CLAIM: Every substantive claim in your answer MUST end with\n   a bracketed citation like [1] or [1,3] referring to the lesson number(s)\n   that support it. Claims without citations are not allowed.\n3. ABSTAIN WHEN UNSUPPORTED: If the lessons do NOT contain enough information\n   to answer the question, your ENTIRE answer must be exactly:\n       Not in context.\n   Do not pad, do not speculate, do not partially answer.\n4. NO MEMORY LEAK: Do not say \"as you know\" / \"as is well known\" / \"typically\"\n   / \"in general\" — those phrases signal use of training knowledge.\n\nQUESTION:\nGET /api/lessons response shape uses items not lessons\n\nLESSONS:\n[1] — GET /api/lessons returns rows under `items`, not `lessons` or `results`\nkey: 2af9bb39-e127-4527-8453-4813a66ae28b\nThe API endpoint /api/lessons returns data under 'items', not 'lessons' or 'results'. Tests should read from body.items to avoid confusion and silent failures. Verify the field name against the service implementation, and if unsure, dump the response body in a test.\n\n---\n\n[2] — Test review lesson: Always validate API responses\nkey: c73a8738-874f-4832-92eb-16e6765924ba\nEnsure API response validation by checking status codes, verifying expected fields, and handling errors gracefully to prevent data processing issues.\n\n---\n\n[3] — Canonical lesson status slug is `pending-review` (hyphen) — never `pending_review`\nkey: c0e76a3d-cf5c-456a-b064-8731f3f62bc7\nThe lesson status for a lesson awaiting human review is the slug `pending-review` WITH A HYPHEN. It is written by submit_for_review, stored in lessons.status, and matched by the REST API's ?status= filter. The canonical status set is: active, draft, pending-review, superseded, a…\n\n---\n\n[4] — gui-create-1776188570090\nkey: f333214e-8e83-4049-a826-a7a5f4cf885a\nGUI test lesson content gui-create-1776188570090\n\n---\n\n[5] — Retrieval dedup keys should include project_id + lesson_type beyond content hash\nkey: 004444c4-3cb8-4405-85b8-120c73c6379d\nThe current deduplication key implementation using `nearSemanticKey(title, snippet)` is insufficient as it collapses legitimate cross-project and cross-type variants. The fix involves updating the key to include `project_id` and `lesson_type`, resulting in a more precise dedupli…\n\nWrite a concise 2-4 sentence answer that:\n- Directly answers the question\n- Has a bracketed citation at the end of every claim\n- Combines multiple lessons when needed (e.g. \"X applies [1], and Y also\n  applies [3], so both checks are required\")\n- Says exactly \"Not in context.\" if the lessons don't cover the question\n\nANSWER:\n",
+            "synth_ms": 1284,
+            "judge_ms": 14361,
+            "scores": {
+              "faithfulness": 1,
+              "answer_relevancy": 0.7300094528375252,
+              "context_precision": 0.9999999999,
+              "context_recall": 1,
+              "groundedness_self_eval": 1
+            },
+            "reasons": {
+              "groundedness_self_eval": "The answer is directly supported by Context [1], which explicitly states the endpoint returns data under 'items' and not 'lessons' or 'results', and advises reading from 'body.items'."
+            },
+            "fail_reasons": [
+              "answer_relevancy<0.85"
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

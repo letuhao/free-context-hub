@@ -1,0 +1,332 @@
+{
+  "surface": "lessons",
+  "project_id_suggested": "free-context-hub",
+  "version": "2026-06-16-rerank-stress-candidates",
+  "note": "CANDIDATES from M1 headroom mining. REQUIRE human review (set reviewed_by, fix/drop bad labels) before merging into qc/lessons-queries.json. _raw_rank/_source_title are provenance fields to strip on merge.",
+  "queries": [
+    {
+      "id": "lesson-stress-4a1e3c16",
+      "group": "rerank-stress-headroom",
+      "query": "How to ensure an active process uses original data instead of updated rules?",
+      "target_lesson_ids": [
+        "4a1e3c16-b9fa-46fe-bd94-c99c5ec32b44"
+      ],
+      "must_keywords": [
+        "sprint",
+        "persist",
+        "level"
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "_raw_rank": 13,
+      "_source_title": "Sprint 15.10: persist per-level body snapshot on request — honor B.7 snapshot-the-rules",
+      "_lesson_type": "decision"
+    },
+    {
+      "id": "lesson-stress-1eaa0a03",
+      "group": "rerank-stress-headroom",
+      "query": "How to safely stop processing all items in a collection without losing data or locking?",
+      "target_lesson_ids": [
+        "1eaa0a03-afd2-417e-8476-7dff5e681455"
+      ],
+      "must_keywords": [
+        "sprint",
+        "three",
+        "phase"
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "_raw_rank": 7,
+      "_source_title": "Sprint 15.6: three-phase closeTopic drain pattern",
+      "_lesson_type": "decision"
+    },
+    {
+      "id": "lesson-stress-289f24f9",
+      "group": "rerank-stress-headroom",
+      "query": "Why are some event messages using different keys for the same status information?",
+      "target_lesson_ids": [
+        "289f24f9-3e56-4e81-82ff-2aaaf4ceeea8"
+      ],
+      "must_keywords": [
+        "sprint",
+        "event",
+        "payload"
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "_raw_rank": 13,
+      "_source_title": "Sprint 15.10: event-payload field rename from degraded_to to escalated_to",
+      "_lesson_type": "workaround"
+    },
+    {
+      "id": "lesson-stress-004444c4",
+      "group": "rerank-stress-headroom",
+      "query": "Why are identical content items being merged when they belong to different owners or categories?",
+      "target_lesson_ids": [
+        "004444c4-3cb8-4405-85b8-120c73c6379d"
+      ],
+      "must_keywords": [
+        "retrieval",
+        "dedup",
+        "keys"
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "_raw_rank": 6,
+      "_source_title": "Retrieval dedup keys should include project_id + lesson_type beyond content hash",
+      "_lesson_type": "decision"
+    },
+    {
+      "id": "lesson-stress-beeef1e1",
+      "group": "rerank-stress-headroom",
+      "query": "How to prevent multiple instances from running the same cleanup job simultaneously?",
+      "target_lesson_ids": [
+        "beeef1e1-aa87-48c1-911d-235ad21ebfce"
+      ],
+      "must_keywords": [
+        "sprint",
+        "sweep",
+        "active"
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "_raw_rank": 5,
+      "_source_title": "Sprint 13.2 — F1 TTL sweep + Active Work GUI shipped via 6-round AMAW longrun (3 design + 3 code Adversary rounds, max-cap each)",
+      "_lesson_type": "decision"
+    },
+    {
+      "id": "lesson-stress-206e30df",
+      "group": "rerank-stress-headroom",
+      "query": "Why are background cleanup tasks blocking other scheduled maintenance processes for too long?",
+      "target_lesson_ids": [
+        "206e30df-829a-46f1-b51e-93145f9105fb"
+      ],
+      "must_keywords": [
+        "sprint",
+        "cycle",
+        "stuck"
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "_raw_rank": 7,
+      "_source_title": "Sprint 15.7: per-cycle K=10 cap on stuck-closing recovery — bound advisory-lock hold",
+      "_lesson_type": "workaround"
+    },
+    {
+      "id": "lesson-stress-d6648258",
+      "group": "rerank-stress-headroom",
+      "query": "Why does deleting parent records fail due to remaining linked child entries in tests?",
+      "target_lesson_ids": [
+        "d6648258-41f0-41a7-a14e-8b1e01b3531b"
+      ],
+      "must_keywords": [
+        "sprint",
+        "test",
+        "cleanup"
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "_raw_rank": 8,
+      "_source_title": "Sprint 15.7: test cleanup must delete chained tasks/artifacts before topics on carried-motion tests",
+      "_lesson_type": "workaround"
+    },
+    {
+      "id": "lesson-stress-1ef42f81",
+      "group": "rerank-stress-headroom",
+      "query": "Why does adding more difficult examples fail to lower my performance scores?",
+      "target_lesson_ids": [
+        "1ef42f81-29ba-4e5e-a18f-d91c5ebb6c18"
+      ],
+      "must_keywords": [
+        "broadening",
+        "saturated",
+        "goldenset"
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "_raw_rank": 4,
+      "_source_title": "Broadening a saturated goldenset may not dilute aggregate MRR if MRR uses best-rank-only",
+      "_lesson_type": "decision"
+    },
+    {
+      "id": "lesson-stress-abe242ea",
+      "group": "rerank-stress-headroom",
+      "query": "Why do certain pages flicker or show incorrect states during initial page load?",
+      "target_lesson_ids": [
+        "abe242ea-31ef-4d14-9245-92cfa16b8975"
+      ],
+      "must_keywords": [
+        "noprojectguard",
+        "hydration",
+        "safe"
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "_raw_rank": 5,
+      "_source_title": "NoProjectGuard: hydration-safe guard for data pages",
+      "_lesson_type": "decision"
+    },
+    {
+      "id": "lesson-stress-e87cd142",
+      "group": "rerank-stress-headroom",
+      "query": "Why are our measurement metrics producing incorrect values without triggering any system errors?",
+      "target_lesson_ids": [
+        "e87cd142-9fc3-4ef9-868f-11ed3e7577bf"
+      ],
+      "must_keywords": [
+        "review",
+        "impl",
+        "adversarial"
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "_raw_rank": 6,
+      "_source_title": "/review-impl adversarial review catches silent-false-confidence bugs POST-REVIEW misses",
+      "_lesson_type": "preference"
+    },
+    {
+      "id": "lesson-stress-a0792c20",
+      "group": "rerank-stress-headroom",
+      "query": "How to catch more bugs and errors during the final verification stage of development?",
+      "target_lesson_ids": [
+        "a0792c20-305b-4640-b6c7-befffcf5c3e1"
+      ],
+      "must_keywords": [
+        "invoke",
+        "review",
+        "impl"
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "_raw_rank": 15,
+      "_source_title": "Invoke /review-impl by default during POST-REVIEW; it earns its keep across sprint types",
+      "_lesson_type": "decision"
+    },
+    {
+      "id": "lesson-stress-17320a37",
+      "group": "rerank-stress-headroom",
+      "query": "How to prevent unauthorized access when a user provides incomplete or unverified identifiers?",
+      "target_lesson_ids": [
+        "17320a37-4f2e-4708-8446-429d35f0f3fa"
+      ],
+      "must_keywords": [
+        "three",
+        "recurring",
+        "bypass"
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "_raw_rank": 8,
+      "_source_title": "Three recurring bypass patterns in tenant-scope work — grep these in every authz PR",
+      "_lesson_type": "decision"
+    },
+    {
+      "id": "lesson-stress-57685eb8",
+      "group": "rerank-stress-headroom",
+      "query": "How to fix a module loading loop when two files require each other?",
+      "target_lesson_ids": [
+        "57685eb8-c4ba-4e78-8417-97fa9f3a395d"
+      ],
+      "must_keywords": [
+        "sprint",
+        "circular",
+        "intake"
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "_raw_rank": 14,
+      "_source_title": "Sprint 15.5: circular dep intake.ts/disputes.ts — dynamic import inside triageIntake",
+      "_lesson_type": "workaround"
+    },
+    {
+      "id": "lesson-stress-ee1ec705",
+      "group": "rerank-stress-headroom",
+      "query": "Why does adjusting the weight parameter fail to change results for new datasets?",
+      "target_lesson_ids": [
+        "ee1ec705-1454-4662-9eda-d4d47f429352"
+      ],
+      "must_keywords": [
+        "salience",
+        "blend",
+        "candidate"
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "_raw_rank": 15,
+      "_source_title": "Salience blend is a no-op when no candidate lessons have access-log history — α irrelevant on bootstrap-only corpus",
+      "_lesson_type": "decision"
+    },
+    {
+      "id": "lesson-stress-f690c505",
+      "group": "rerank-stress-headroom",
+      "query": "How to choose the right intensity of review cycles based on the level of risk?",
+      "target_lesson_ids": [
+        "f690c505-f146-4bcd-acf5-582bd441c731"
+      ],
+      "must_keywords": [
+        "phase",
+        "longrun",
+        "closeout"
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "_raw_rank": 12,
+      "_source_title": "Phase 13 longrun closeout: 6 sprints, 4 sessions, hybrid AMAW mode trade-offs across full/compressed/hyper-compressed",
+      "_lesson_type": "decision"
+    },
+    {
+      "id": "lesson-stress-e15edaef",
+      "group": "rerank-stress-headroom",
+      "query": "Why are build artifacts and session files being stored in the database?",
+      "target_lesson_ids": [
+        "e15edaef-1d63-4cff-a9cc-7f972a0887d5"
+      ],
+      "must_keywords": [
+        "index_project",
+        "default",
+        "excludes"
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "_raw_rank": 5,
+      "_source_title": "index_project default excludes cover .git + node_modules only; dist/ .next/ .claude/ leak into the chunks table",
+      "_lesson_type": "workaround"
+    },
+    {
+      "id": "lesson-stress-db9027fb",
+      "group": "rerank-stress-headroom",
+      "query": "How to accurately measure performance improvements when the baseline changes between test periods?",
+      "target_lesson_ids": [
+        "db9027fb-986b-4915-9dac-e6e5688c3ac1"
+      ],
+      "must_keywords": [
+        "ranking",
+        "metrics",
+        "delta"
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "_raw_rank": 6,
+      "_source_title": "A/B ranking metrics: delta-from-control, not raw cross-sprint MRR",
+      "_lesson_type": "decision"
+    },
+    {
+      "id": "lesson-stress-b1d76cc8",
+      "group": "rerank-stress-headroom",
+      "query": "Why are performance variations being flagged as regressions when they are actually within expected jitter?",
+      "target_lesson_ids": [
+        "b1d76cc8-fd55-4457-b447-18314afc72f9"
+      ],
+      "must_keywords": [
+        "benchmark",
+        "diff",
+        "generator"
+      ],
+      "answer_category": "standard",
+      "drafted_by": "llm",
+      "_raw_rank": 5,
+      "_source_title": "Benchmark diff generator must consume noise_floor or the data is useless",
+      "_lesson_type": "decision"
+    }
+  ]
+}

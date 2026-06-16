@@ -17,6 +17,7 @@ import {
   // services
   indexProject,
   searchCode,
+  defaultInteractiveRerankMode,
   tieredSearch,
   addLesson,
   deleteWorkspace,
@@ -867,9 +868,9 @@ function createMcpToolsServer() {
               .optional()
               .describe('When true, expand query via semantically similar lesson source_refs and boost those code paths (default: true).'),
             rerank_mode: z
-              .enum(['off', 'llm'])
+              .enum(['off', 'llm', 'api'])
               .optional()
-              .describe('Optional rerank mode for online interactive queries (default: off).'),
+              .describe('Optional rerank mode for online interactive queries. off | llm (generative) | api (cross-encoder). Default: derived from RERANK_TYPE (api → cross-encoder via local-rerank-service).'),
             hybrid_mode: z
               .enum(['off', 'lexical'])
               .optional()
@@ -906,7 +907,7 @@ function createMcpToolsServer() {
         includeSmoke: filters?.include_smoke,
         preferPaths: filters?.prefer_paths,
         qcNoCap: filters?.qc_no_cap,
-        rerankMode: filters?.rerank_mode,
+        rerankMode: filters?.rerank_mode ?? defaultInteractiveRerankMode(),
         lexicalBoost: filters?.lexical_boost,
         kgAssist: filters?.kg_assist,
         lessonToCode: filters?.lesson_to_code,

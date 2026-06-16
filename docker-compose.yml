@@ -114,6 +114,10 @@ services:
       # deterministic rerank instead.
       RERANK_TYPE: ${RERANK_TYPE:-generative}
       RERANK_MODEL: ${RERANK_MODEL:-}
+      # 2026-06-16: cross-encoder via local-rerank-service (Cohere /v1/rerank).
+      RERANK_API_PROTOCOL: ${RERANK_API_PROTOCOL:-cohere}
+      RERANK_BASE_URL: ${RERANK_BASE_URL:-}
+      RERANK_API_KEY: ${RERANK_API_KEY:-}
     ports:
       - "3000:3000"
       - "3001:3001"
