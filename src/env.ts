@@ -246,6 +246,11 @@ const EnvSchema = z.object({
    *  (caller falls back to base order). */
   RERANK_API_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(800),
   RERANK_CACHE_TTL_SECONDS: z.coerce.number().int().positive().optional().default(3600),
+  /** DEFERRED-030: cross-encoder relevance-score floor (0..1, inclusive lower bound)
+   *  for `RERANK_TYPE=api`. Docs whose cross-encoder score is strictly below this
+   *  value are DROPPED from the result set (off-topic rejection), not just demoted.
+   *  Default 0 = no floor = identical to pre-DEFERRED-030 behavior. */
+  RERANK_MIN_SCORE: z.coerce.number().min(0).max(1).optional().default(0),
 
   // Optional dedicated QA agent model endpoint for FAQ/RAPTOR synthesis.
   QA_AGENT_BASE_URL: z.string().min(1).optional(),

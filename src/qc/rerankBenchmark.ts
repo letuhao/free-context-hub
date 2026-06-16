@@ -1,13 +1,35 @@
 /**
- * Reranker model benchmark — tests lesson search quality with different rerankers.
- * Tests against 180 lessons with 33 queries.
+ * Reranker model benchmark — measures lesson-search RELEVANCE quality across
+ * different rerankers via recall@k + MRR against the Phase-12 golden set.
  *
- * NOTE: This script tests the reranker by directly calling it, NOT via MCP server.
- * It performs: semantic retrieval (via MCP) → then reranks locally with each model.
- * This avoids Docker rebuilds per model.
+ * DEFERRED-030 (2026-06-16) rewrite. Prior version measured pass/fail substring
+ * `expect` labels against the Phase-12 lesson set; current catalog differs and
+ * the labels are stale. This version:
+ *
+ *   1. Loads the labeled golden set from `qc/lessons-queries.json` (48 queries,
+ *      66 unique `target_lesson_ids`, all verified active in the current
+ *      catalog 2026-06-16). A "hit" is `match.lesson_id ∈ target_lesson_ids`,
+ *      i.e. true ground-truth label match, not a fuzzy substring.
+ *   2. Fetches the candidate pool with `rerank: false` so client-side rerankers
+ *      compare on the SAME raw retrieval pool. Without this, every row would
+ *      already be cross-encoder-reranked server-side (RERANK_TYPE=api,
+ *      shipped 2026-06-16) and the local rerank pass would just nudge an
+ *      already-optimal order — degenerating the A/B.
+ *   3. Computes proper IR metrics: recall@1 / @3 / @5 / @10 and MRR, per model.
+ *      Adversarial-miss queries (empty `target_lesson_ids`) are scored against
+ *      a SCORE FLOOR ("hit" iff top-1 score < ADVERSARIAL_SCORE_FLOOR).
+ *
+ * NOTE: This script tests the reranker by directly calling it, NOT via the
+ * server's RERANK_TYPE config. It performs: semantic retrieval (via MCP,
+ * `rerank: false`) → then reranks locally with each model. This avoids Docker
+ * rebuilds per model.
  *
  * Usage: npx tsx src/qc/rerankBenchmark.ts
+ *        # optional: RERANK_BENCH_MODELS='(no-rerank),(cross-encoder)bge-reranker-v2-m3'
+ *        # optional: RERANK_BENCH_OUTPUT=docs/benchmarks/<file>.json
  */
+import * as fs from 'fs';
+import * as path from 'path';
 import * as dotenv from 'dotenv';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -20,14 +42,15 @@ dotenv.config();
 const MCP_URL = process.env.MCP_SERVER_URL?.trim() || 'http://localhost:3000/mcp';
 const LLM_URL = process.env.RERANK_BASE_URL?.trim() || process.env.DISTILLATION_BASE_URL?.trim() || process.env.EMBEDDINGS_BASE_URL?.trim() || 'http://localhost:1234';
 const LLM_KEY = process.env.RERANK_API_KEY ?? process.env.DISTILLATION_API_KEY ?? process.env.EMBEDDINGS_API_KEY ?? '';
-// Cross-encoder (Cohere /v1/rerank) service — kept SEPARATE from LLM_URL so the
-// LLM rerankers above don't accidentally POST chat completions to it. Set
-// RERANK_SERVICE_URL=http://localhost:28417 (local-rerank-service) to measure it.
 const CE_URL = process.env.RERANK_SERVICE_URL?.trim() || 'http://localhost:28417';
 const CE_KEY = process.env.RERANK_SERVICE_TOKEN ?? '';
 const CE_MODEL = process.env.RERANK_SERVICE_MODEL?.trim() || 'bge-reranker-v2-m3';
 const CE_SENTINEL = '(cross-encoder)bge-reranker-v2-m3';
-const PID = 'free-context-hub';
+const PID = process.env.RERANK_BENCH_PROJECT_ID?.trim() || 'free-context-hub';
+const GOLDEN_PATH = process.env.RERANK_BENCH_GOLDEN_PATH?.trim() || 'qc/lessons-queries.json';
+const ADVERSARIAL_SCORE_FLOOR = Number(process.env.RERANK_BENCH_ADVERSARIAL_FLOOR ?? '0.5');
+const POOL_LIMIT = Math.max(20, Number(process.env.RERANK_BENCH_POOL_LIMIT ?? '20'));
+const RERANK_DEPTH = Math.max(5, Number(process.env.RERANK_BENCH_RERANK_DEPTH ?? '15'));
 
 const RerankOrderSchema = z.object({ order: z.array(z.number().int().nonnegative()) });
 
@@ -43,7 +66,15 @@ async function callMcp(client: Client, name: string, args: Record<string, unknow
 
 type Match = { lesson_id: string; title: string; content_snippet: string; score: number };
 
-/** Call reranker model directly via LM Studio chat API. */
+type GoldenQuery = {
+  id: string;
+  group: string;
+  query: string;
+  /** Empty array = adversarial-miss (no correct answer; verify abstention). */
+  target_lesson_ids: string[];
+};
+
+/** Call a generative reranker (LM Studio chat) directly. */
 async function rerankWithModel(model: string, query: string, candidates: Match[], maxTokens = 500): Promise<number[]> {
   const base = LLM_URL.replace(/\/$/, '');
   const url = `${base}/v1/chat/completions`;
@@ -61,11 +92,6 @@ async function rerankWithModel(model: string, query: string, candidates: Match[]
   try {
     const res = await fetch(url, {
       method: 'POST', headers, signal: ac.signal,
-      // Disable hidden thinking so reasoning models don't burn the output budget
-      // (verified working for LM Studio + Qwen3.x via the lore-weave SDK):
-      //   reasoning_effort:"none"  → the cross-provider kill switch LM Studio honors
-      //   chat_template_kwargs.enable_thinking:false → companion (llama.cpp/vLLM)
-      // Gemma 4 ignores BOTH — disable its reasoning in the LM Studio UI instead.
       body: JSON.stringify({
         model,
         messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
@@ -117,68 +143,129 @@ async function rerankWithCrossEncoder(query: string, candidates: Match[]): Promi
   }
 }
 
-type Q = { q: string; expect: string | null };
-const QUERIES: Q[] = [
-  { q: 'how does search work in this project', expect: 'tiered search' },
-  { q: 'what types of data chunks exist', expect: '12-kind' },
-  { q: 'authentication approach', expect: null },
-  { q: 'docker deployment issues', expect: 'Docker build cache' },
-  { q: 'caching problems after code changes', expect: 'Redis cache' },
-  { q: 'database migration gotchas', expect: 'CREATE INDEX CONCURRENTLY' },
-  { q: 'what is the main purpose of this project', expect: 'Persistent memory' },
-  { q: 'how are guardrails enforced', expect: 'lifecycle status' },
-  { q: 'what embedding model should I use', expect: 'qwen3-embedding-0.6b' },
-  { q: 'how does lesson search scoring work', expect: 'Hybrid search' },
-  { q: 'what search profiles are available', expect: 'Three search profiles' },
-  { q: 'my search returns old results after I changed scoring', expect: 'Redis' },
-  { q: 'why does the server crash on startup with new SQL file', expect: 'CONCURRENTLY' },
-  { q: 'I added a migration file but docker does not see it', expect: 'Docker build cache' },
-  { q: 'how does the system find test files for a function', expect: 'convention' },
-  { q: 'why is search returning wrong file types after classifier change', expect: 're-index' },
-  { q: 'which models were benchmarked for embeddings', expect: 'qwen3-embedding' },
-  { q: 'why not use a code-specific embedding model', expect: 'Code embedding models are wrong' },
-  { q: 'how does FTS query building work', expect: 'AND mode' },
-  { q: 'what languages does test file discovery support', expect: 'convention' },
-  { q: 'how does ripgrep handle missing binary in Docker', expect: 'circuit breaker' },
-  { q: 'should short tokens like db and env be searchable', expect: 'Short identifiers' },
-  { q: 'what happens to guardrails when a lesson is archived', expect: 'lifecycle status' },
-  { q: 'are tiered search and semantic search the same thing', expect: 'complementary' },
-  { q: 'what is the password policy', expect: 'password' },
-  { q: 'how does pagination work in the API', expect: 'cursor' },
-  { q: 'what CI/CD system do we use', expect: 'GitHub Actions' },
-  { q: 'how to prevent duplicate form submissions', expect: 'idempotency' },
-  { q: 'what frontend framework do we use', expect: 'React' },
-  { q: 'how to set up kubernetes deployment', expect: null },
-  { q: 'how to configure OAuth2 authentication', expect: null },
-  { q: 'what is our machine learning pipeline', expect: null },
-  { q: 'how does blockchain integration work', expect: null },
-];
+// ----------------------- Metrics -----------------------
+
+/** Per-query metrics record. */
+type QueryMetrics = {
+  query_id: string;
+  group: string;
+  is_adversarial: boolean;
+  /** 1-based rank of the first target hit in the reranked list, or null if no
+   *  target found in the pool.  For adversarial queries this is the rank of
+   *  the top-1 result regardless of identity (used only for the score floor). */
+  first_hit_rank: number | null;
+  /** Score of the top-1 reranked result (raw `score` from search_lessons —
+   *  not the reranker's relevance score, since we don't expose that here). */
+  top1_score: number;
+  /** For adversarial queries: did we PASS the score floor? i.e. top1_score <
+   *  ADVERSARIAL_SCORE_FLOOR (= correctly abstained on the no-answer query). */
+  adversarial_pass: boolean;
+};
+
+function computeQueryMetrics(q: GoldenQuery, reranked: Match[]): QueryMetrics {
+  const isAdv = q.target_lesson_ids.length === 0;
+  const top1 = reranked[0]?.score ?? 0;
+  if (isAdv) {
+    return {
+      query_id: q.id,
+      group: q.group,
+      is_adversarial: true,
+      first_hit_rank: reranked.length ? 1 : null,
+      top1_score: top1,
+      adversarial_pass: top1 < ADVERSARIAL_SCORE_FLOOR || reranked.length === 0,
+    };
+  }
+  const targets = new Set(q.target_lesson_ids.map(id => id.toLowerCase()));
+  let firstHit: number | null = null;
+  for (let i = 0; i < reranked.length; i++) {
+    if (targets.has(reranked[i]!.lesson_id.toLowerCase())) {
+      firstHit = i + 1; // 1-based
+      break;
+    }
+  }
+  return {
+    query_id: q.id,
+    group: q.group,
+    is_adversarial: false,
+    first_hit_rank: firstHit,
+    top1_score: top1,
+    adversarial_pass: false,
+  };
+}
+
+type ModelAggregate = {
+  model: string;
+  total_queries: number;
+  scored_queries: number;          // non-adversarial
+  adversarial_queries: number;
+  /** Recall@K for non-adversarial queries only. */
+  recall_at_1: number;
+  recall_at_3: number;
+  recall_at_5: number;
+  recall_at_10: number;
+  /** Mean Reciprocal Rank for non-adversarial queries (unranked target → 0). */
+  mrr: number;
+  /** Fraction of adversarial queries where top-1 score < floor (correct abstain). */
+  adversarial_pass_rate: number;
+  /** Mean latency ms per reranked query (excludes no-rerank baseline). */
+  mean_latency_ms: number;
+};
+
+function aggregate(model: string, perQ: QueryMetrics[], totalLatencyMs: number, isNoRerank: boolean): ModelAggregate {
+  const adv = perQ.filter(m => m.is_adversarial);
+  const scored = perQ.filter(m => !m.is_adversarial);
+  const hitAt = (k: number) => scored.filter(m => m.first_hit_rank !== null && m.first_hit_rank <= k).length / Math.max(1, scored.length);
+  const mrr = scored.reduce((sum, m) => sum + (m.first_hit_rank ? 1 / m.first_hit_rank : 0), 0) / Math.max(1, scored.length);
+  const advPass = adv.filter(m => m.adversarial_pass).length / Math.max(1, adv.length);
+  const meanLatency = isNoRerank ? 0 : totalLatencyMs / Math.max(1, perQ.length);
+  return {
+    model,
+    total_queries: perQ.length,
+    scored_queries: scored.length,
+    adversarial_queries: adv.length,
+    recall_at_1: hitAt(1),
+    recall_at_3: hitAt(3),
+    recall_at_5: hitAt(5),
+    recall_at_10: hitAt(10),
+    mrr,
+    adversarial_pass_rate: advPass,
+    mean_latency_ms: meanLatency,
+  };
+}
+
+// ----------------------- Main -----------------------
 
 async function main() {
-  const client = new Client({ name: 'rerank-bench', version: '1.0.0' }, { capabilities: {} });
+  // Step 0: load golden set.
+  const goldenAbs = path.isAbsolute(GOLDEN_PATH) ? GOLDEN_PATH : path.join(process.cwd(), GOLDEN_PATH);
+  const raw = JSON.parse(fs.readFileSync(goldenAbs, 'utf8'));
+  const queries = (raw.queries ?? []) as GoldenQuery[];
+  console.log(`Loaded ${queries.length} golden queries from ${path.relative(process.cwd(), goldenAbs)}`);
+  console.log(`  pool_limit=${POOL_LIMIT}  rerank_depth=${RERANK_DEPTH}  adversarial_floor=${ADVERSARIAL_SCORE_FLOOR}`);
+
+  const client = new Client({ name: 'rerank-bench', version: '2.0.0' }, { capabilities: {} });
   await client.connect(new StreamableHTTPClientTransport(new URL(MCP_URL), {}));
 
-  // Step 1: Pre-fetch all retrieval results (without server-side reranking — use raw scores).
-  // We disable server reranking by fetching with limit=20 so we get a wide pool.
-  console.log('Pre-fetching retrieval candidates for all queries...\n');
-  const preResults: Array<{ q: Q; matches: Match[] }> = [];
+  // Step 1: Pre-fetch the raw retrieval pool with rerank=false (DEFERRED-030).
+  console.log('\nPre-fetching raw retrieval pool (rerank=false) for all queries...');
+  const preResults: Array<{ q: GoldenQuery; matches: Match[] }> = [];
 
-  for (const q of QUERIES) {
+  for (const q of queries) {
     const r = await callMcp(client, 'search_lessons', {
-      project_id: PID, query: q.q, limit: 20, output_format: 'json_only',
+      project_id: PID,
+      query: q.query,
+      limit: POOL_LIMIT,
+      rerank: false,
+      output_format: 'json_only',
     }) as any;
     preResults.push({ q, matches: r?.matches || [] });
   }
   await client.close();
 
-  // Step 2: Test each reranker model.
-  // Default list = the original LLM reranker survey. Override with
-  // RERANK_BENCH_MODELS="(no-rerank),(cross-encoder)bge-reranker-v2-m3,<chat-model-id>"
-  // to test only the rerankers actually loaded in LM Studio. CE_SENTINEL selects
-  // the cross-encoder path; everything else is treated as an LM Studio chat model.
+  // Step 2: Test each reranker.
   const DEFAULT_MODELS = [
     '(no-rerank)',
-    CE_SENTINEL,                  // cross-encoder via local-rerank-service (Cohere /v1/rerank)
+    CE_SENTINEL,
     'qwen.qwen3-reranker-4b',
     'qwen3-reranker-0.6b',
     'qwen3-reranker-8b',
@@ -191,76 +278,75 @@ async function main() {
     ? process.env.RERANK_BENCH_MODELS.split(',').map(s => s.trim()).filter(Boolean)
     : DEFAULT_MODELS;
 
-  const results: Array<{ model: string; pass: number; total: number; avg: number; negAvg: number; gap: number; latency: number }> = [];
+  const aggregates: ModelAggregate[] = [];
 
   for (const model of MODELS) {
     const isNoRerank = model === '(no-rerank)';
-    console.log(`\n${'='.repeat(60)}`);
-    console.log(`  Reranker: ${model}`);
-    console.log('='.repeat(60));
+    console.log(`\n${'='.repeat(60)}\n  Reranker: ${model}\n${'='.repeat(60)}`);
 
-    let pass = 0;
-    const posScores: number[] = [];
-    const negScores: number[] = [];
+    const perQ: QueryMetrics[] = [];
     let totalLatency = 0;
 
     for (const { q, matches } of preResults) {
       let reranked = matches;
-
       if (!isNoRerank && matches.length >= 2) {
         const start = Date.now();
-        const top = matches.slice(0, 15);
+        const top = matches.slice(0, RERANK_DEPTH);
         const order = model === CE_SENTINEL
-          ? await rerankWithCrossEncoder(q.q, top)
-          : await rerankWithModel(model, q.q, top, 500);
+          ? await rerankWithCrossEncoder(q.query, top)
+          : await rerankWithModel(model, q.query, top, 500);
         totalLatency += Date.now() - start;
-        const rerankedTop = order.map(i => top[i]).filter(Boolean);
-        reranked = [...rerankedTop, ...matches.slice(15)];
+        const rerankedTop = order.map(i => top[i]).filter(Boolean) as Match[];
+        reranked = [...rerankedTop, ...matches.slice(RERANK_DEPTH)];
       }
 
-      const topMatch = reranked[0];
-      const score = topMatch?.score ?? 0;
+      const m = computeQueryMetrics(q, reranked);
+      perQ.push(m);
 
-      if (q.expect === null) {
-        negScores.push(score);
-      } else {
-        posScores.push(score);
-      }
-
-      let hit: boolean;
-      if (q.expect === null) {
-        hit = !topMatch || topMatch.score < 0.5;
-      } else {
-        hit = reranked.slice(0, 3).some((m: any) =>
-          ((m.title || '') + ' ' + (m.content_snippet || '')).toLowerCase().includes(q.expect!.toLowerCase())
-        );
-      }
-
-      const icon = hit ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m';
-      console.log(`  ${icon} ${q.q.slice(0, 55)}`);
-      if (!hit && q.expect) console.log(`        expected: ${q.expect}, got: ${topMatch?.title?.slice(0, 50) || '(none)'}`);
-      if (hit) pass++;
+      const hitIcon = m.is_adversarial
+        ? (m.adversarial_pass ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m')
+        : (m.first_hit_rank === null ? '\x1b[31mmiss\x1b[0m' : (m.first_hit_rank <= 3 ? `\x1b[32m@${m.first_hit_rank}\x1b[0m` : `\x1b[33m@${m.first_hit_rank}\x1b[0m`));
+      console.log(`  ${hitIcon}\t${q.id.padEnd(40)} ${q.group}`);
     }
 
-    const avgPos = posScores.length ? posScores.reduce((a, b) => a + b, 0) / posScores.length : 0;
-    const avgNeg = negScores.length ? negScores.reduce((a, b) => a + b, 0) / negScores.length : 0;
-    const avgLatency = isNoRerank ? 0 : totalLatency / QUERIES.filter(q => q.expect !== null).length;
-
-    console.log(`\n  Result: ${pass}/${QUERIES.length} | pos_avg=${avgPos.toFixed(3)} neg_avg=${avgNeg.toFixed(3)} gap=${(avgPos - avgNeg).toFixed(3)} | latency=${avgLatency.toFixed(0)}ms/query`);
-
-    results.push({ model, pass, total: QUERIES.length, avg: avgPos, negAvg: avgNeg, gap: avgPos - avgNeg, latency: avgLatency });
+    const agg = aggregate(model, perQ, totalLatency, isNoRerank);
+    aggregates.push(agg);
+    console.log(`\n  Result: R@1=${agg.recall_at_1.toFixed(3)} R@3=${agg.recall_at_3.toFixed(3)} R@5=${agg.recall_at_5.toFixed(3)} R@10=${agg.recall_at_10.toFixed(3)} | MRR=${agg.mrr.toFixed(3)} | adv_pass=${agg.adversarial_pass_rate.toFixed(3)} | latency=${agg.mean_latency_ms.toFixed(0)}ms`);
   }
 
-  // Summary table
-  console.log('\n' + '='.repeat(80));
-  console.log('  RERANKER BENCHMARK SUMMARY (180 lessons, 33 queries)');
-  console.log('='.repeat(80));
-  console.log('  Model                          | Pass  | Pos Avg | Neg Avg | Gap   | Latency');
-  console.log('  ' + '-'.repeat(76));
-  for (const r of results.sort((a, b) => b.pass - a.pass || b.gap - a.gap)) {
-    console.log(`  ${r.model.padEnd(32)} | ${String(r.pass).padStart(2)}/${r.total} | ${r.avg.toFixed(3)}   | ${r.negAvg.toFixed(3)}   | ${r.gap.toFixed(3)} | ${r.latency.toFixed(0)}ms`);
+  // Summary table.
+  console.log('\n' + '='.repeat(120));
+  console.log(`  RERANKER QUALITY SUMMARY (${queries.length} golden queries, ${PID}, pool=${POOL_LIMIT})`);
+  console.log('='.repeat(120));
+  console.log('  Model                                | R@1   | R@3   | R@5   | R@10  | MRR   | adv   | latency');
+  console.log('  ' + '-'.repeat(116));
+  const sorted = [...aggregates].sort((a, b) => b.recall_at_3 - a.recall_at_3 || b.mrr - a.mrr);
+  for (const r of sorted) {
+    console.log(
+      `  ${r.model.padEnd(36)} | ${r.recall_at_1.toFixed(3)} | ${r.recall_at_3.toFixed(3)} | ${r.recall_at_5.toFixed(3)} | ${r.recall_at_10.toFixed(3)} | ${r.mrr.toFixed(3)} | ${r.adversarial_pass_rate.toFixed(3)} | ${r.mean_latency_ms.toFixed(0)}ms`,
+    );
   }
-  console.log('='.repeat(80));
+  console.log('='.repeat(120));
+
+  // Optional JSON output.
+  const outPath = process.env.RERANK_BENCH_OUTPUT?.trim();
+  if (outPath) {
+    const abs = path.isAbsolute(outPath) ? outPath : path.join(process.cwd(), outPath);
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    const snapshot = {
+      version: '2026-06-16-deferred-030',
+      generated_at: new Date().toISOString(),
+      project_id: PID,
+      golden_set: path.relative(process.cwd(), goldenAbs).replace(/\\/g, '/'),
+      total_queries: queries.length,
+      pool_limit: POOL_LIMIT,
+      rerank_depth: RERANK_DEPTH,
+      adversarial_score_floor: ADVERSARIAL_SCORE_FLOOR,
+      aggregates: sorted,
+    };
+    fs.writeFileSync(abs, JSON.stringify(snapshot, null, 2));
+    console.log(`\nWrote snapshot → ${path.relative(process.cwd(), abs)}`);
+  }
 }
 
 main().catch(e => { console.error(e); process.exit(1); });

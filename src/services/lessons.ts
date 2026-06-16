@@ -514,6 +514,11 @@ export type SearchLessonsParams = {
   callerScope?: CallerScope;
   query: string;
   limit?: number;
+  /** DEFERRED-030: when explicitly `false`, skip the server-side rerank
+   *  dispatcher and return raw retrieval order. Default `true` (preserve
+   *  current behavior). Used by `src/qc/rerankBenchmark.ts` to fetch an
+   *  uncontaminated candidate pool when measuring client-side rerankers. */
+  rerank?: boolean;
   filters?: {
     lesson_type?: LessonType;
     tags_any?: string[];
@@ -768,9 +773,14 @@ export async function rerankExternalApi(query: string, candidates: RerankCandida
       return candidates.map(c => c.index);
     }
 
-    // json is sorted by score DESC; map server-side indices (into `texts`)
+    // DEFERRED-030: floor (TEI returns `{index, score}` — same semantics as Cohere).
+    const ranked = json.map(r => ({ index: r.index, relevanceScore: r.score }));
+    const filtered = applyRerankMinScore(ranked, env.RERANK_MIN_SCORE);
+    const droppedByFloor = ranked.length - filtered.length;
+
+    // filtered is sorted by score DESC; map server-side indices (into `texts`)
     // back to caller-supplied index fields.
-    const order = json
+    const order = filtered
       .map(r => candidates[r.index]?.index)
       .filter((v): v is number => v !== undefined);
 
@@ -778,10 +788,14 @@ export async function rerankExternalApi(query: string, candidates: RerankCandida
       query: query.slice(0, 60),
       candidates: candidates.length,
       top3: order.slice(0, 3),
-      top3_scores: json.slice(0, 3).map(r => r.score.toFixed(5)),
+      top3_scores: filtered.slice(0, 3).map(r => r.relevanceScore.toFixed(5)),
+      dropped_by_floor: droppedByFloor,
+      min_score: env.RERANK_MIN_SCORE,
       mode: 'external-api',
     }, 'lesson rerank: done');
 
+    // See rerankCohereApi: honor full-drop floor; otherwise base-order fallback.
+    if (order.length === 0 && droppedByFloor > 0) return [];
     return order;
   } catch (err) {
     logger.warn({ error: err instanceof Error ? err.message : String(err), url: `${baseUrl}/rerank` },
@@ -797,6 +811,19 @@ export async function rerankExternalApi(query: string, candidates: RerankCandida
  * with the TEI path). Maps server indices back to caller index fields. Failure
  * falls back to base order — same contract as the sibling rerankers.
  */
+/**
+ * DEFERRED-030: pure helper — given cohereRerank's ranked output, drop items
+ * whose relevance_score is strictly below `minScore`. `minScore=0` is the
+ * no-floor case and is a pass-through. Exported for unit testing.
+ */
+export function applyRerankMinScore<R extends { relevanceScore: number }>(
+  ranked: ReadonlyArray<R>,
+  minScore: number,
+): R[] {
+  if (!Number.isFinite(minScore) || minScore <= 0) return [...ranked];
+  return ranked.filter(r => r.relevanceScore >= minScore);
+}
+
 async function rerankCohereApi(query: string, candidates: RerankCandidate[]): Promise<number[]> {
   const env = getEnv();
   const baseUrl = env.RERANK_BASE_URL ?? 'http://127.0.0.1:28417';
@@ -811,15 +838,27 @@ async function rerankCohereApi(query: string, candidates: RerankCandidate[]): Pr
       model,
       timeoutMs: env.RERANK_API_TIMEOUT_MS,
     });
-    const order = ranked
+    // DEFERRED-030: enforce RERANK_MIN_SCORE floor before mapping — sub-floor
+    // candidates are DROPPED entirely (caller `searchLessons` removes them
+    // from the result set), not just demoted.
+    const filtered = applyRerankMinScore(ranked, env.RERANK_MIN_SCORE);
+    const droppedByFloor = ranked.length - filtered.length;
+    const order = filtered
       .map(r => candidates[r.index]?.index)
       .filter((v): v is number => v !== undefined);
     logger.info({
       candidates: candidates.length,
       top3: order.slice(0, 3),
-      top3_scores: ranked.slice(0, 3).map(r => r.relevanceScore.toFixed(4)),
+      top3_scores: filtered.slice(0, 3).map(r => r.relevanceScore.toFixed(4)),
+      dropped_by_floor: droppedByFloor,
+      min_score: env.RERANK_MIN_SCORE,
       mode: 'cohere-api',
     }, 'lesson rerank: done');
+    // Empty post-floor result: if the floor filtered EVERYTHING out, honor
+    // the filter (return empty → caller drops all reranked candidates).
+    // Empty WITHOUT a floor (degenerate cohereRerank response) → fall back
+    // to base order so we don't silently drop the entire pool.
+    if (order.length === 0 && droppedByFloor > 0) return [];
     return order.length ? order : candidates.map(c => c.index);
   } catch (err) {
     logger.warn({ error: err instanceof Error ? err.message : String(err), url: `${baseUrl}/v1/rerank` },
@@ -1154,8 +1193,14 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
 
   // LLM rerank: re-order top candidates for better ranking.
   // Dynamic budget: skip for small sets, scale up for large lesson bases.
+  //
+  // DEFERRED-030: `params.rerank === false` is an explicit opt-out (the benchmark
+  // harness uses it to fetch a raw pre-rerank pool so client-side reranker A/Bs
+  // measure the cross-encoder, not the cross-encoder on top of itself).
   const env = getEnv();
-  if (rerankBudget > 0 && matches.length >= 2 && rerankConfigured()) {
+  if (params.rerank === false) {
+    explanations.push('rerank: skipped (rerank=false on request)');
+  } else if (rerankBudget > 0 && matches.length >= 2 && rerankConfigured()) {
     try {
       const rerankCount = Math.min(matches.length, rerankBudget);
       const rerankCandidates = matches.slice(0, rerankCount).map((m, i) => ({
@@ -1166,12 +1211,16 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
 
       const rerankedOrder = await rerankLessons({ query: params.query, candidates: rerankCandidates });
 
-      // Apply reranked order to matches.
+      // Apply reranked order to matches. DEFERRED-030: dispatcher MAY return
+      // fewer indices than rerankCount when `RERANK_MIN_SCORE>0` filters
+      // off-topic candidates out of the cross-encoder result.
       const rerankedTop = rerankedOrder.map(i => matches[i]).filter(Boolean);
       const remaining = matches.slice(rerankCandidates.length);
+      const droppedByFloor = rerankCount - rerankedTop.length;
       matches = [...rerankedTop, ...remaining];
 
-      explanations.push(`reranked: top ${rerankCandidates.length}/${matches.length} candidates (budget=${rerankBudget}, total_lessons=${totalLessons})`);
+      const note = droppedByFloor > 0 ? `, dropped=${droppedByFloor} (min_score=${env.RERANK_MIN_SCORE})` : '';
+      explanations.push(`reranked: top ${rerankedTop.length}/${rerankCount} candidates (budget=${rerankBudget}, total_lessons=${totalLessons}${note})`);
     } catch (err) {
       explanations.push(`rerank skipped: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -1227,6 +1276,8 @@ export type SearchLessonsMultiParams = {
   callerScope?: CallerScope;
   query: string;
   limit?: number;
+  /** DEFERRED-030: see {@link SearchLessonsParams.rerank}. */
+  rerank?: boolean;
   filters?: {
     lesson_type?: LessonType;
     tags_any?: string[];
@@ -1247,7 +1298,7 @@ export async function searchLessonsMulti(params: SearchLessonsMultiParams): Prom
 
   // If only one project, delegate to single-project search (same perf path).
   if (projectIds.length === 1) {
-    return searchLessons({ projectId: projectIds[0], callerScope: params.callerScope, query: params.query, limit: params.limit, filters: params.filters });
+    return searchLessons({ projectId: projectIds[0], callerScope: params.callerScope, query: params.query, limit: params.limit, rerank: params.rerank, filters: params.filters });
   }
   if (projectIds.length === 0) {
     return { matches: [], explanations: ['no project_ids provided'] };
@@ -1437,9 +1488,11 @@ export async function searchLessonsMulti(params: SearchLessonsMultiParams): Prom
     explanations.push('salience: disabled via LESSONS_SALIENCE_DISABLED');
   }
 
-  // Rerank pass (same logic as single-project).
+  // Rerank pass (same logic as single-project). DEFERRED-030: rerank=false bypass.
   const env = getEnv();
-  if (rerankBudget > 0 && matches.length >= 2 && rerankConfigured()) {
+  if (params.rerank === false) {
+    explanations.push('rerank: skipped (rerank=false on request)');
+  } else if (rerankBudget > 0 && matches.length >= 2 && rerankConfigured()) {
     try {
       const rerankCount = Math.min(matches.length, rerankBudget);
       const rerankCandidates = matches.slice(0, rerankCount).map((m, i) => ({
@@ -1450,8 +1503,10 @@ export async function searchLessonsMulti(params: SearchLessonsMultiParams): Prom
       const rerankedOrder = await rerankLessons({ query: params.query, candidates: rerankCandidates });
       const rerankedTop = rerankedOrder.map(i => matches[i]).filter(Boolean);
       const remaining = matches.slice(rerankCandidates.length);
+      const droppedByFloor = rerankCount - rerankedTop.length;
       matches = [...rerankedTop, ...remaining];
-      explanations.push(`reranked: top ${rerankCandidates.length}/${matches.length} candidates (budget=${rerankBudget}, total_lessons=${totalLessons})`);
+      const note = droppedByFloor > 0 ? `, dropped=${droppedByFloor} (min_score=${env.RERANK_MIN_SCORE})` : '';
+      explanations.push(`reranked: top ${rerankedTop.length}/${rerankCount} candidates (budget=${rerankBudget}, total_lessons=${totalLessons}${note})`);
     } catch (err) {
       explanations.push(`rerank skipped: ${err instanceof Error ? err.message : String(err)}`);
     }

@@ -8,7 +8,7 @@
 - **Title:** Cross-encoder rerank — valid quality measurement (recall@k) + harness hygiene
 - **Trigger condition:** any RAG quality pass on rerank, OR before citing a rerank *quality*
   (not latency) number publicly / on a CV.
-- **Status:** OPEN (2026-06-16)
+- **Status:** RESOLVED 2026-06-16 (branch `deferred-030-rerank-quality`).
 - **Context:** Cross-encoder (`bge-reranker-v2-m3`) integration shipped + deployed
   (`RERANK_TYPE=api`, Cohere protocol). **Latency** is measured + solid (90 ms vs ~6.8 s general
   LLM vs 1.8 s Phase-12 ranker). **Quality is NOT validly measured** — three follow-ups:
@@ -17,6 +17,26 @@
   2. Add a raw-prefetch toggle so the harness baseline isn't itself cross-encoder-reranked now
      that `RERANK_TYPE=api` reranks server-side during `search_lessons`.
   3. v2: `min_rerank_score` floor using cross-encoder scores (off-topic rejection).
+- **Resolution:**
+  1. **Better than #1 — golden-set anchored.** Refactored `rerankBenchmark.ts` to load
+     `qc/lessons-queries.json` (48 queries, 66 `target_lesson_ids`, all 66 verified active in
+     current catalog 2026-06-16). True recall@1/3/5/10 + MRR per model, adversarial-pass rate
+     for no-answer queries. No manual relabeling needed — pre-existing labels are already
+     ground-truth.
+  2. New `rerank?: boolean` (default `true`) on `SearchLessonsParams` /
+     `SearchLessonsMultiParams`, threaded through MCP `search_lessons` tool + REST
+     `POST /api/lessons/search`. `false` = explicit bypass, logged in explanations. Benchmark
+     prefetches with `rerank: false` so client-side reranker A/Bs are uncontaminated.
+  3. New env `RERANK_MIN_SCORE` (0..1, default 0 = no floor = unchanged). Cohere + TEI
+     dispatchers drop docs whose relevance falls below the floor and log
+     `dropped=N (min_score=X)` in explanations. Pure-function helper `applyRerankMinScore`
+     (exported, 5 unit tests).
+- **Live measurement:** cross-encoder (bge-reranker-v2-m3) vs no-rerank baseline on the 48-query
+  golden set: R@10 +0.023, adversarial-pass 0.75 → **1.00**, R@3 −0.023 (single-query noise-floor
+  artifact). Latency 38 ms / query. See `docs/benchmarks/2026-06-16-rerank-quality-recall.md`.
+- **Files:** `src/env.ts`, `src/services/lessons.ts`, `src/api/routes/lessons.ts`,
+  `src/mcp/index.ts`, `src/qc/rerankBenchmark.ts`, `src/services/lessons.test.ts`.
+  Design: `docs/specs/2026-06-16-deferred-030-rerank-quality.md`.
 - **Source:** Spec [[2026-06-16-cross-encoder-rerank-integration]] · benchmark
   `docs/benchmarks/2026-06-16-cross-encoder-rerank-benchmark.md`. User opted "Deploy + clean
   re-measure (latency)" and deferred the label refresh.
