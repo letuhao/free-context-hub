@@ -56,11 +56,19 @@ function structured(res: any): any {
   return {};
 }
 
-/** submit_for_review is MCP-only — call it via the bootstrapped MCP client. */
+/** submit_for_review is MCP-only — call it via the bootstrapped MCP client.
+ *  Auto-inject workspace_token when ADMIN_TOKEN is set so the helper works
+ *  under both auth-off (dev) and auth-on (docker-compose.auth-test.yml). */
 async function submitForReview(mcp: any, projectId: string, lessonId: string, agentId: string): Promise<any> {
+  const { ADMIN_TOKEN } = await import('../shared/constants.js');
   const res = await mcp.callTool({
     name: 'submit_for_review',
-    arguments: { project_id: projectId, agent_id: agentId, lesson_id: lessonId },
+    arguments: {
+      project_id: projectId,
+      agent_id: agentId,
+      lesson_id: lessonId,
+      ...(ADMIN_TOKEN ? { workspace_token: ADMIN_TOKEN } : {}),
+    },
   });
   return structured(res);
 }

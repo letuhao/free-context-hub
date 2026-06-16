@@ -12,7 +12,7 @@
 
 import type { TestFn } from '../shared/testContext.js';
 import { pass, fail, skip } from '../shared/testContext.js';
-import { MCP_URL } from '../shared/constants.js';
+import { ADMIN_TOKEN, MCP_URL } from '../shared/constants.js';
 
 const GROUP = 'phase13-mcp';
 
@@ -37,13 +37,20 @@ interface McpCallResult {
 }
 
 async function callMcpTool(toolName: string, args: Record<string, any>): Promise<McpCallResult> {
+  // Auto-inject workspace_token when ADMIN_TOKEN is set (auth-on stack).
+  // Tests don't pass workspace_token explicitly because pre-DEFERRED-029 the
+  // dev stack ran with MCP_AUTH_ENABLED=false. With auth-on the resolver
+  // requires a token — inject ADMIN_TOKEN (env-token path, global scope).
+  const finalArgs = ADMIN_TOKEN && args.workspace_token === undefined
+    ? { ...args, workspace_token: ADMIN_TOKEN }
+    : args;
   const res = await fetch(MCP_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
     body: JSON.stringify({
       jsonrpc: '2.0',
       method: 'tools/call',
-      params: { name: toolName, arguments: args },
+      params: { name: toolName, arguments: finalArgs },
       id: 1,
     }),
   });
