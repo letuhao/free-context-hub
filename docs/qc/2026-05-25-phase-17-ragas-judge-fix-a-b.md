@@ -109,22 +109,32 @@ Minor negatives (lessons AR −0.04, global CP −0.03, code AR −0.01) are wit
 
 After v6 shipped, four follow-up commits addressed the loose ends:
 
-**Bug 3 — synthesizer hedge: prompt strengthened, NOT validated on Mistral-Nemo** ([commit `5a00ea8`](../../src/qc/templates/)). All 4 synthesizer templates now spell out the abstention rule explicitly: EITHER a fully-cited substantive answer OR the three-word literal `Not in context.` — never both. Templates also list the FORBIDDEN failure mode (substantive answer + hedge appended) so the model can pattern-match the rule.
+**Bug 3 — synthesizer hedge FIXED via anchor-effect framing** ([commits `5a00ea8` → `4a5c322`](../../src/qc/templates/)). Two attempts, one confirmed mechanism:
 
-v7 smoke baseline (code surface, 77 rows, [`2026-06-16-phase-17-baseline-v7-bug3-fix-code`](baselines/2026-06-16-phase-17-baseline-v7-bug3-fix-code.md)) showed the change had **no measurable effect** on Mistral-Nemo:
+**v7 attempt** (`5a00ea8`) — explicit FORBIDDEN wording with 4 mentions of `"Not in context."` in the prompt. Did NOT reduce hedge behavior:
 
-| Metric | v6 | v7 | Δ |
-|---|---:|---:|---:|
-| faithfulness | 0.50 | 0.51 | +0.01 (within ±0.05 noise) |
-| answer_relevancy | 0.65 | 0.69 | +0.04 |
-| context_precision | 0.18 | 0.18 | 0.00 |
-| context_recall | 0.36 | 0.37 | +0.01 |
-| refusal_correctness | 0.25 | 0.00 (n=2) | noise |
-| groundedness_self_eval | 0.77 | 0.76 | -0.01 |
+| Metric | v6 | v7 |
+|---|---:|---:|
+| faithfulness | 0.50 | 0.51 |
+| answer_relevancy | 0.65 | 0.69 |
+| **hedge count** | **14** | **15** ← went up |
+| pure refusals | 0 | 0 |
 
-**Hedged-refusal count moved 14 → 15** (UP). Spot-check on `s3-source-artifacts`: v7 added `"Not in context."` to a 5-sentence answer where v6 had no hedge. The explicit FORBIDDEN wording in the prompt appears to **anchor** Mistral-Nemo on the prohibited phrase rather than suppress it — a classic weak-model failure mode where negative examples prime the model toward the forbidden behavior.
+Spot-check on `s3-source-artifacts`: v7 added `"Not in context."` to a 5-sentence answer where v6 had no hedge. Explicit FORBIDDEN wording **anchored** Mistral-Nemo on the prohibited phrase — a classic weak-model failure mode where negative examples prime the model toward the forbidden behavior.
 
-The template change stays in place — it's conceptually correct and may help on stronger models — but is documented here as **not effective on Mistral-Nemo specifically**. Possible future framings: drop the literal "Not in context." from the rule (remove the anchor), or switch the refusal sentinel to something less common, or accept the model isn't strong enough to follow strict abstention.
+**v8 attempt** (`4a5c322`) — drop the FORBIDDEN example, drop the redundant final bullet, reduce mentions of `"Not in context."` from 4 → 1. **Hypothesis H1**: hedge behavior scales with literal-phrase mentions in the prompt. v6 had 2 mentions / 14 hedges; v7 had 4 mentions / 15 hedges; v8 has 1 mention / **6 hedges** — H1 confirmed.
+
+| Metric | v6 | v7 | v8 | Δ(v8−v6) |
+|---|---:|---:|---:|---:|
+| **hedge count** | 14 | 15 | **6** | **−8 (−57%)** |
+| pure refusals | 0 | 0 | **3** | +3 (synth now uses abstention correctly) |
+| answer_relevancy | 0.65 | 0.69 | **0.73** | **+0.08** (significant) |
+| faithfulness | 0.50 | 0.51 | 0.48 | −0.02 (noise; pure refusals score f=0 by ragas's strict reading) |
+| context_precision | 0.18 | 0.18 | 0.19 | +0.01 |
+| context_recall | 0.36 | 0.37 | 0.37 | +0.01 |
+| groundedness_self_eval | 0.77 | 0.76 | 0.77 | 0.00 |
+
+The v8 templates ship. **Lesson for future prompt engineering on weak models**: every literal mention of a special token (refusal sentinel, JSON keyword, output format) primes the model toward producing it. Reduce mentions to the minimum necessary for the model to know the token exists. Negative examples ("DO NOT do X") can be net-harmful when the model latches onto the X they shouldn't do.
 
 **Bug 2c — provenance ADDED** ([commit `3dcfadb`](../../services/ragas-judge/main.py)). The sidecar's `/health` now surfaces `judge_temperature` and `judge_seed`; `runBaseline.ts` bakes them into the manifest. Auditing v6's runtime config revealed `judge_temperature=0.0` (not 0.2 as initially assumed) — so the run-to-run jitter we observed in the 5-row probe came from somewhere else (probe-side: no seed pinned in ChatOpenAI() call; production: deterministic-ish since temp=0+seed=42). The underlying mechanism (instructor retry, mistral-nemo json_schema variance) remains uninvestigated — but the gap is now visible in every future baseline manifest.
 
@@ -136,7 +146,9 @@ The template change stays in place — it's conceptually correct and may help on
 
 **Bug 2c root mechanism.** The 5-row probe at temp=0 (no seed) gave different verdicts than the production baseline (temp=0 + seed=42). With provenance now in the manifest, future investigations can pin a fixed seed in standalone scripts to measure true determinism. Likely sources to inspect: instructor JSON schema retry loop, ragas's two-step claim-split + NLI handshake ordering, LM Studio json_schema mode variance under Mistral-Nemo.
 
-**Code refusal_correctness ceiling.** v6's `code refusal_correctness = 0.25` reflects 2 rows where the synthesizer over-refused. Bug 3 fix should address most of this; v7 smoke will quantify.
+**Code refusal_correctness ceiling.** v6's `code refusal_correctness = 0.25` reflects 2 rows where the synthesizer over-refused. v8 didn't move this (still 0.00 on n=2 — noise floor); a stronger experiment would need more no-answer rows in the goldenset.
+
+**Full-baseline confirmation deferred.** v7 and v8 are code-surface-only smokes (77 rows, ~22 min each). A full 4-surface v9 (152 rows, ~41 min) would confirm whether the anchor-effect framing generalizes to lessons/chunks/global. Likely yes given the prompts share the same structure, but not yet measured.
 
 ## Files changed
 
