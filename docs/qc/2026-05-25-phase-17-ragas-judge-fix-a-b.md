@@ -109,7 +109,22 @@ Minor negatives (lessons AR −0.04, global CP −0.03, code AR −0.01) are wit
 
 After v6 shipped, four follow-up commits addressed the loose ends:
 
-**Bug 3 — synthesizer hedge FIXED** ([commit `5a00ea8`](../../src/qc/templates/)). All 4 synthesizer templates now spell out the abstention rule explicitly: EITHER a fully-cited substantive answer OR the three-word literal `Not in context.` — never both. Templates also list the FORBIDDEN failure mode (substantive answer + hedge appended) so the model can pattern-match the rule. v7 smoke baseline measures the actual lift.
+**Bug 3 — synthesizer hedge: prompt strengthened, NOT validated on Mistral-Nemo** ([commit `5a00ea8`](../../src/qc/templates/)). All 4 synthesizer templates now spell out the abstention rule explicitly: EITHER a fully-cited substantive answer OR the three-word literal `Not in context.` — never both. Templates also list the FORBIDDEN failure mode (substantive answer + hedge appended) so the model can pattern-match the rule.
+
+v7 smoke baseline (code surface, 77 rows, [`2026-06-16-phase-17-baseline-v7-bug3-fix-code`](baselines/2026-06-16-phase-17-baseline-v7-bug3-fix-code.md)) showed the change had **no measurable effect** on Mistral-Nemo:
+
+| Metric | v6 | v7 | Δ |
+|---|---:|---:|---:|
+| faithfulness | 0.50 | 0.51 | +0.01 (within ±0.05 noise) |
+| answer_relevancy | 0.65 | 0.69 | +0.04 |
+| context_precision | 0.18 | 0.18 | 0.00 |
+| context_recall | 0.36 | 0.37 | +0.01 |
+| refusal_correctness | 0.25 | 0.00 (n=2) | noise |
+| groundedness_self_eval | 0.77 | 0.76 | -0.01 |
+
+**Hedged-refusal count moved 14 → 15** (UP). Spot-check on `s3-source-artifacts`: v7 added `"Not in context."` to a 5-sentence answer where v6 had no hedge. The explicit FORBIDDEN wording in the prompt appears to **anchor** Mistral-Nemo on the prohibited phrase rather than suppress it — a classic weak-model failure mode where negative examples prime the model toward the forbidden behavior.
+
+The template change stays in place — it's conceptually correct and may help on stronger models — but is documented here as **not effective on Mistral-Nemo specifically**. Possible future framings: drop the literal "Not in context." from the rule (remove the anchor), or switch the refusal sentinel to something less common, or accept the model isn't strong enough to follow strict abstention.
 
 **Bug 2c — provenance ADDED** ([commit `3dcfadb`](../../services/ragas-judge/main.py)). The sidecar's `/health` now surfaces `judge_temperature` and `judge_seed`; `runBaseline.ts` bakes them into the manifest. Auditing v6's runtime config revealed `judge_temperature=0.0` (not 0.2 as initially assumed) — so the run-to-run jitter we observed in the 5-row probe came from somewhere else (probe-side: no seed pinned in ChatOpenAI() call; production: deterministic-ish since temp=0+seed=42). The underlying mechanism (instructor retry, mistral-nemo json_schema variance) remains uninvestigated — but the gap is now visible in every future baseline manifest.
 
