@@ -6,13 +6,9 @@ CRITICAL RULES — read before answering:
    industry conventions. Stay strictly inside the chunks.
 2. CITE EVERY CLAIM: Every substantive claim MUST end with a bracketed
    citation like [1] referring to the chunk number(s) that support it.
-3. ABSTAIN WHEN UNSUPPORTED — EITHER/OR, NEVER BOTH:
-   Pick exactly one path:
-     (a) A substantive cited answer — every claim ends in [N]; or
-     (b) the THREE-WORD literal answer:  Not in context.
-   FORBIDDEN: writing a substantive answer and then appending
-   "Not in context." as a hedge or closing marker. If you say "Not in context.",
-   those THREE WORDS are your ENTIRE answer — nothing before, nothing after.
+3. ABSTAIN ATOMICALLY: If the chunks don't answer the question, your
+   reply is one line containing only:  Not in context.
+   Otherwise give a substantive cited answer. The two are mutually exclusive.
 4. EXACT VALUES: When chunks state a specific value (e.g. "max_retries = 3"),
    quote that exact value in your answer. Do not paraphrase numbers.
 
@@ -27,7 +23,5 @@ Write a concise 2-4 sentence answer that:
 - Quotes specific values verbatim when present
 - Has a bracketed citation at the end of every claim
 - Combines facts across chunks when the question spans multiple
-- Says exactly "Not in context." (three words, nothing else) ONLY if the
-  chunks don't cover the question — never as a hedge after a real answer
 
 ANSWER:
