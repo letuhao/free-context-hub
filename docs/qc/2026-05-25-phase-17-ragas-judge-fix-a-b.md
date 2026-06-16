@@ -105,22 +105,40 @@ Archive `snippet_preview` field unchanged — still 200 chars for display.
 
 Minor negatives (lessons AR −0.04, global CP −0.03, code AR −0.01) are within ragas non-determinism (Bug 2c, see below) and small enough that re-running v6 a second time would likely move them by ±0.05.
 
-## Known remaining issues
+## Polish round (post-v6) — Bug 3 fix + Bug 2c provenance
 
-These were identified during the audit but not fixed in this round:
+After v6 shipped, four follow-up commits addressed the loose ends:
 
-**Bug 2c — ragas non-determinism at temp=0.** Same input, same model, temp=0, different verdicts run-to-run. Probe showed `job-queue-postgres-claim` scoring 1.0 in one ragas call vs the baseline's 0.25. Likely sources: claim-splitter LLM call ordering, instructor JSON schema retry. Would need to force deterministic decoding or pin sampling parameters across both LLM calls.
+**Bug 3 — synthesizer hedge FIXED** ([commit `5a00ea8`](../../src/qc/templates/)). All 4 synthesizer templates now spell out the abstention rule explicitly: EITHER a fully-cited substantive answer OR the three-word literal `Not in context.` — never both. Templates also list the FORBIDDEN failure mode (substantive answer + hedge appended) so the model can pattern-match the rule. v7 smoke baseline measures the actual lift.
 
-**Bug 3 — refusal hedging.** The synthesizer is appending `"Not in context."` at the end of substantive answers (15/77 code rows, 1/48 lessons, 1/13 chunks, 1/14 global). Hedge bug, not measurement bug. Worth ~+0.01 lift on aggregate but cleaner output.
+**Bug 2c — provenance ADDED** ([commit `3dcfadb`](../../services/ragas-judge/main.py)). The sidecar's `/health` now surfaces `judge_temperature` and `judge_seed`; `runBaseline.ts` bakes them into the manifest. Auditing v6's runtime config revealed `judge_temperature=0.0` (not 0.2 as initially assumed) — so the run-to-run jitter we observed in the 5-row probe came from somewhere else (probe-side: no seed pinned in ChatOpenAI() call; production: deterministic-ish since temp=0+seed=42). The underlying mechanism (instructor retry, mistral-nemo json_schema variance) remains uninvestigated — but the gap is now visible in every future baseline manifest.
 
-**Code refusal_correctness still at 0.25.** Only 2 rows are scored for code refusal_correctness and both refuse-when-they-shouldn't because the synthesizer over-aborts. The Bug 3 fix would help here.
+**Bug 2 fix tests** ([commit `838254e`](../../src/qc/judgeContexts.test.ts)). Extracted `buildJudgeContexts()` into its own module + 8 TS tests + 5 Python tests covering the `File: <id>\n` prefix logic. Pins the snippet-window symmetry invariant so changing `DEFAULT_MAX_CHARS` in `genPipeline.ts` won't silently break judge/synth parity.
+
+**Housekeeping** ([commit `7155ee8`](../../.gitattributes)). `.gitattributes` enforces union-merge on `docs/audit/AUDIT_LOG.jsonl` (append-only, auto-resolves cherry-pick conflicts). `.gitignore` filters `services/ragas-judge/_*.json` scratch (canonical inputs live in `docs/qc/baselines/`).
+
+## Known remaining issues (still deferred)
+
+**Bug 2c root mechanism.** The 5-row probe at temp=0 (no seed) gave different verdicts than the production baseline (temp=0 + seed=42). With provenance now in the manifest, future investigations can pin a fixed seed in standalone scripts to measure true determinism. Likely sources to inspect: instructor JSON schema retry loop, ragas's two-step claim-split + NLI handshake ordering, LM Studio json_schema mode variance under Mistral-Nemo.
+
+**Code refusal_correctness ceiling.** v6's `code refusal_correctness = 0.25` reflects 2 rows where the synthesizer over-refused. Bug 3 fix should address most of this; v7 smoke will quantify.
 
 ## Files changed
 
-- [`services/ragas-judge/main.py:665`](../../services/ragas-judge/main.py) — Fix A
-- [`src/qc/runBaseline.ts:394`](../../src/qc/runBaseline.ts) — Fix B
+Bug 2 fix (v6):
+- [`services/ragas-judge/main.py:665`](../../services/ragas-judge/main.py) — Fix A (path-prefix on contexts)
+- [`src/qc/runBaseline.ts:394`](../../src/qc/runBaseline.ts) — Fix B (full-snippet to judge), later extracted into [`src/qc/judgeContexts.ts`](../../src/qc/judgeContexts.ts)
 - New baseline artifact: [`docs/qc/baselines/2026-05-24-phase-17-baseline-v6-judge-fix-a-b.{json,md}`](baselines/2026-05-24-phase-17-baseline-v6-judge-fix-a-b.md)
 - New audit scripts: [`services/ragas-judge/bug2_probe.py`](../../services/ragas-judge/bug2_probe.py), [`services/ragas-judge/bug2_probe_fix.py`](../../services/ragas-judge/bug2_probe_fix.py)
+
+Polish round (post-v6):
+- [`src/qc/templates/synthesizer.*.txt`](../../src/qc/templates/) — Bug 3 anti-hedge rules (4 templates)
+- [`src/qc/judgeContexts.ts`](../../src/qc/judgeContexts.ts) + [`judgeContexts.test.ts`](../../src/qc/judgeContexts.test.ts) — pure helper + 8 unit tests
+- [`services/ragas-judge/test_contexts_format.py`](../../services/ragas-judge/test_contexts_format.py) — 5 Python unit tests
+- [`services/ragas-judge/main.py`](../../services/ragas-judge/main.py) — Bug 2c: `/health` now surfaces `judge_temperature` + `judge_seed`
+- [`src/qc/genEvalTypes.ts`](../../src/qc/genEvalTypes.ts) — `GenManifest` carries judge sampling params
+- [`.gitattributes`](../../.gitattributes) — union-merge for AUDIT_LOG.jsonl
+- [`.gitignore`](../../.gitignore) — filter `services/ragas-judge/_*.json` scratch
 
 ## How to reproduce v6
 
