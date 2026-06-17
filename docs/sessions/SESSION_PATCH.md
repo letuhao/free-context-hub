@@ -1,3 +1,63 @@
+# CHECKPOINT — v12 closed won't-fix: chunks cp/cr "regression" is judge noise (2026-06-18)
+
+**Status:** v12 (a "v12" chunks synthesizer template to recover
+context_precision/context_recall) investigated and **CLOSED won't-fix**. The
+−0.076/−0.077 chunks cp/cr drop attributed to v11 is a **judge-noise artifact,
+not a template effect** — diagnosed before writing any template, then confirmed
+by measurement.
+
+**Root cause (causal, sufficient on its own):** cp/cr are computed by the
+ragas-judge sidecar from `(question, ground_truth, retrieved_contexts)` ONLY —
+the synthesized answer is never passed (`services/ragas-judge/main.py:585-614`).
+The chunks synthesizer template only changes the *answer*, so it is structurally
+incapable of moving cp/cr. Confirmed by three facts:
+- chunks retrieved contexts were **byte-identical** across the v6/v8/v11 runs
+  (compared `top_k_keys` in the three baseline JSONs);
+- v6 and v11 use the **byte-identical chunks template** (manifest hash
+  `a01005e0d102b2c1`) yet scored cp 0.563 vs 0.584 / cr 0.397 vs 0.372 — same
+  template + same contexts → different score = judge non-determinism;
+- the v11 doc's "v6 weaker chunks cp/cr by design" framing is incoherent: there
+  is no per-template cp/cr property to inherit.
+
+**Measurement (`src/qc/noiseFloorChunksCpCr.ts`, N=8, gemma judge temp=0
+seed=42):** fixed template + fixed contexts, re-scored cp/cr only, dummy answer.
+- context_precision surface-mean **range 0.146** (0.584–0.731), std 0.042 —
+  ~2× the claimed −0.076 regression. v8's 0.660 is an ordinary high draw
+  (repeat #6 hit 0.731). Row `chunk-cross-retry-auth-storage` flipped the full
+  **0.000↔1.000** on identical input.
+- context_recall back-to-back range 0.026 (stable; only one row jitters) — but
+  cp/cr being answer-independent means the template still cannot be the cause,
+  and v6/v11 same-template already differ 0.025; cross-run noise (hours apart,
+  model reloads) is wider than back-to-back.
+- Artifact: `docs/qc/baselines/2026-06-18-noise-floor-chunks-cp-cr.json`.
+
+**Deliverables:**
+- NEW `src/qc/noiseFloorChunksCpCr.ts` — reusable cp/cr judge-noise probe
+  (reuses callChunks + buildJudgeContexts + scoreOnce). tsc clean.
+- NEW `docs/qc/2026-06-18-chunks-cp-cr-noise-floor-v12-closeout.md` — full
+  analysis + reproduce steps.
+- Corrected in place: `docs/qc/2026-06-17-v11-hybrid-templates-results.md`
+  (3 correction banners — scope caveat, per-surface table, "one regression"
+  section, v12 follow-up all retracted).
+- `docs/deferred/DEFERRED.md` — DEFERRED-031 v12 line CLOSED; new **DEFERRED-034**
+  logs the *real* lever (retrieval-layer chunk ranking/rerank/granularity) with
+  a noise-floor warning for future A/Bs.
+
+**Validation:** tsc --noEmit clean; 125/125 qc unit tests pass. No existing
+source changed (only a new standalone script + docs).
+
+**Key learning:** before "fixing" a metric regression, verify the metric's
+inputs actually include the thing you plan to change. cp/cr never read the
+answer; a whole "v12 template" plan was built on the assumption they did. The
+v11 results doc propagated that assumption into DEFERRED-031. Root-cause-first
+(trace the data flow backward) caught it in minutes and converted a ~2h futile
+template exercise into a correct diagnosis.
+
+**Open follow-ups:** DEFERRED-034 (retrieval-layer chunks cp/cr, OPEN),
+Tradition C (optional), DEFERRED-032 SA bank (corpus-blocked).
+
+---
+
 # LONGRUN CHECKPOINT — Phase 17 wrap-up: v11 hybrid templates + DEFERRED-033 (2026-06-18)
 
 **Status:** Phase 17 (gen-eval pipeline + anti-hallucination Bug 3 work)
