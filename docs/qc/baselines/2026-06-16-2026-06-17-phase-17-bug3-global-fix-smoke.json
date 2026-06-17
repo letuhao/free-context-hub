@@ -1,0 +1,1066 @@
+{
+  "schema_version": "1.1",
+  "gen_manifest": {
+    "judge_endpoint": "http://host.docker.internal:1234/v1",
+    "judge_model_id": "mistralai/mistral-nemo-instruct-2407",
+    "judge_prompts_hash": "c0165a73c10c4e04",
+    "judge_temperature": 0,
+    "judge_seed": 42,
+    "answerer_endpoint": "http://localhost:1234/v1",
+    "answerer_model_id": "mistralai/mistral-nemo-instruct-2407",
+    "answerer_temperature": 0.2,
+    "answerer_seed": 42,
+    "answerer_max_tokens": 1024,
+    "synthesizer_prompt_hashes": {
+      "lessons": "12d937d2dd93cdee",
+      "code": "fa3d064302e85cd4",
+      "chunks": "4684749e32568cec",
+      "global": "6d762c40e5c5b6e9"
+    },
+    "synth_mode": "standard"
+  },
+  "tag": "2026-06-17-phase-17-bug3-global-fix-smoke",
+  "run_started_at": "2026-06-16T18:12:43.011Z",
+  "run_ended_at": "2026-06-16T18:15:20.561Z",
+  "elapsed_ms": 157550,
+  "git_commit": "979c7bb+dirty",
+  "git_branch": "deferred-030-rerank-quality",
+  "project_id": "free-context-hub",
+  "samples_per_query": 1,
+  "k": 10,
+  "surfaces": {
+    "global": {
+      "query_count": 14,
+      "errors": 0,
+      "project_id": "free-context-hub",
+      "generation": {
+        "rows_with_gt": 14,
+        "rows_judged": 10,
+        "rows_skipped": 0,
+        "metrics": {
+          "faithfulness": {
+            "mean": 0.3772,
+            "std": 0.2779,
+            "p10": 0,
+            "fail_count": 8
+          },
+          "answer_relevancy": {
+            "mean": 0.5145,
+            "std": 0.1397,
+            "p10": 0.3193,
+            "fail_count": 9
+          },
+          "context_precision": {
+            "mean": 0.1833,
+            "std": 0.3202,
+            "p10": 0,
+            "fail_count": 9
+          },
+          "context_recall": {
+            "mean": 0.2667,
+            "std": 0.3329,
+            "p10": 0,
+            "fail_count": 9
+          },
+          "groundedness_self_eval": {
+            "mean": 0.79,
+            "std": 0.1921,
+            "p10": 0.7,
+            "fail_count": 6
+          },
+          "refusal_correctness": {
+            "mean": 0.5,
+            "std": 0,
+            "p10": 0.5,
+            "fail_count": 1
+          }
+        }
+      },
+      "metrics": {
+        "recall_at_5": 0.4615,
+        "recall_at_10": 0.5385,
+        "mrr": 0.2906,
+        "ndcg_at_5": 0.3278,
+        "ndcg_at_10": 0.351,
+        "duplication_rate_at_10": 0,
+        "duplication_rate_nearsemantic_at_10": 0.15,
+        "coverage_pct": 0.5385,
+        "latency_p50_ms": 24,
+        "latency_p95_ms": 77,
+        "latency_mean_ms": 24
+      },
+      "per_query": [
+        {
+          "id": "global-retry-substr",
+          "group": "confident-hit",
+          "query": "retry",
+          "top_k_keys": [
+            "lesson:0ad1de1e-a524-465b-a380-baf21754a477",
+            "document:ff3bd284-571e-4bb5-a748-97db4e58529f",
+            "chunk:f379c8f6-1c30-4ca7-971d-76c8c573d9d5",
+            "guardrail:4abf93d6-cbca-4006-aee6-a143bd3e8979",
+            "lesson:757b1cc8-c151-47a3-a4cb-219cbfedf883",
+            "document:ca1d01ab-c97a-4cd4-95e8-6d4d3d68da60",
+            "chunk:79e04437-5277-48af-9f9a-e45a7c078771",
+            "guardrail:be30985a-e45b-47ce-82d2-f6a75dc282b8",
+            "lesson:a688cb2c-3ed5-4fdd-ad07-0a8f5f4f5d6c",
+            "document:63acaef2-02b1-4e46-8616-8011c64c1a71"
+          ],
+          "top_k_titles": [
+            "Test an unreachable concurrency branch by extracting the decision into an injectable seam, not by faking the race",
+            "Retry Strategy RFC.md",
+            "sample.docx / 1. Retry Strategy",
+            "Max retry attempts must be 3",
+            "Goldenset baseline runs pollute lesson_access_log; truncate before salience-sensitive measurement",
+            "Retry Strategy RFC.md",
+            "sample.png / Architecture Decision Records",
+            "Max retry attempts must be 3",
+            "Access-frequency salience needs query-conditioning OR drop weak signals — naive rank-weighted logging creates popularity feedback loop",
+            "Retry Strategy RFC.md"
+          ],
+          "top_k_snippets": [
+            "DEFERRED-003: the race_exhausted branch in claimArtifact only fires when the internal _claimArtifactOnce returns {__retr",
+            "Retry with exponential backoff",
+            "## 1. Retry Strategy\n\nAll external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second with a multiplier",
+            null,
+            "Every qc:baseline run writes consideration-search rows to lesson_access_log for each goldenset query's top-K hits (~40 q",
+            "Retry with exponential backoff",
+            "# Architecture Decision Records\n\nThis document captures key architectural decisions for the project.\n\n1. Retry Strategy\n\nAll external API calls must implement e",
+            null,
+            "Phase 12 Sprint 12.1c /review-impl MED-3. First biological-memory feature of Phase 12: added `lesson_access_log` append-",
+            "Retry with exponential backoff"
+          ],
+          "found_ranks": [
+            3
+          ],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            77
+          ],
+          "latency_ms_median": 77,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "[1] A lesson [1] describes how to test an unreachable concurrency branch in software development by extracting the decision into an injectable seam, which involves the term \"retry\" as part of the process.\n\n[2] Document [2] is a Retry Strategy RFC (Request for Comments) that discusses retry mechanisms, hence the appearance of the substring \"retry\".\n\n[3] A chunk [3] from a document titled \"sample.docx\" outlines a retry strategy for external API calls, specifying exponential backoff and a maximum of 3 retry attempts. The term \"retry\" is used in this context to describe the process of repeating an action if it fails.",
+            "contexts_used": [
+              {
+                "key": "lesson:0ad1de1e-a524-465b-a380-baf21754a477",
+                "title": "Test an unreachable concurrency branch by extracting the decision into an injectable seam, not by faking the race",
+                "snippet_preview": "DEFERRED-003: the race_exhausted branch in claimArtifact only fires when the internal _claimArtifactOnce returns {__retr",
+                "char_count": 120
+              },
+              {
+                "key": "document:ff3bd284-571e-4bb5-a748-97db4e58529f",
+                "title": "Retry Strategy RFC.md",
+                "snippet_preview": "Retry with exponential backoff",
+                "char_count": 30
+              },
+              {
+                "key": "chunk:f379c8f6-1c30-4ca7-971d-76c8c573d9d5",
+                "title": "sample.docx / 1. Retry Strategy",
+                "snippet_preview": "## 1. Retry Strategy\n\nAll external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second with a multiplier",
+                "char_count": 160
+              }
+            ],
+            "prompt_used": "You are describing what a SUBSTRING-SEARCH query surfaces against this project's corpus.\nThe query is a LITERAL substring; the items below are entities whose searchable text\nLITERALLY CONTAINS that substring (lessons, documents, chunks, guardrails, commits).\nItems may be UNRELATED to each other — substring co-occurrence is NOT a semantic match.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information not present in the matched\n   entities. Do NOT generalize beyond what each entity literally says.\n2. CITE EVERY CLAIM: Every substantive claim MUST end with a bracketed\n   citation like [1] referring to the matched-entity number(s).\n3. PER-ENTITY DESCRIPTION (do NOT synthesize across matches): describe each\n   matching entity using ONLY that entity's own text. Do NOT claim a \"common\n   theme\" unless multiple entities literally make the SAME proposition — not\n   merely share the same keyword. The whole point of substring search is that\n   matches CAN be coincidental keyword overlap, not topical kinship.\n4. ABSTAIN ATOMICALLY: If no entities meaningfully relate to the query intent,\n   your reply is one line containing only:  Not in context.\n   Otherwise give a substantive cited answer. The two are mutually exclusive.\n\nQUERY:\nretry\n\nMATCHED ENTITIES:\n[1] [lesson] — Test an unreachable concurrency branch by extracting the decision into an injectable seam, not by faking the race\nkey: lesson:0ad1de1e-a524-465b-a380-baf21754a477\nDEFERRED-003: the race_exhausted branch in claimArtifact only fires when the internal _claimArtifactOnce returns {__retr\n\n---\n\n[2] [document] — Retry Strategy RFC.md\nkey: document:ff3bd284-571e-4bb5-a748-97db4e58529f\nRetry with exponential backoff\n\n---\n\n[3] [chunk] — sample.docx / 1. Retry Strategy\nkey: chunk:f379c8f6-1c30-4ca7-971d-76c8c573d9d5\n## 1. Retry Strategy\n\nAll external API calls must implement exponential backoff with a maximum of 3 retry attempts. The base delay is 1 second with a multiplier\n\nWrite a concise 2-3 sentence answer that:\n- For each matching entity (or clearly-related cluster), describe WHAT it is\n  and WHY the substring appears there, citing the entity number\n- If matches span DIFFERENT topics, list them as separate topics rather than\n  fabricating a unifying theme\n- Do NOT extrapolate or add background — every claim must be directly\n  recoverable from a cited entity's own text\n\nANSWER:\n",
+            "synth_ms": 1612,
+            "judge_ms": 12583,
+            "scores": {
+              "faithfulness": 0.42857142857142855,
+              "answer_relevancy": 0.7063643752243705,
+              "context_precision": 0.3333333333,
+              "context_recall": 0.25,
+              "groundedness_self_eval": 0.7
+            },
+            "reasons": {
+              "groundedness_self_eval": "The answer correctly identifies 'retry' in all three provided contexts and explains how it's used in each. However, it doesn't explicitly mention the exponential backoff strategy mentioned in context [2] and [3], which is why it's not a full score."
+            },
+            "fail_reasons": [
+              "faithfulness<0.9",
+              "answer_relevancy<0.85",
+              "context_precision<0.8",
+              "context_recall<0.75",
+              "groundedness_self_eval<0.85"
+            ]
+          }
+        },
+        {
+          "id": "global-validation-substr",
+          "group": "confident-hit",
+          "query": "validation",
+          "top_k_keys": [
+            "lesson:61835c5d-d5c8-4d61-9fa0-3497aadee229",
+            "lesson:476aeed0-8363-4630-bd07-faf0edc573ba",
+            "lesson:44e38b7e-0ef9-4b0f-9754-d5dcc09f4e4d",
+            "lesson:f690c505-f146-4bcd-acf5-582bd441c731",
+            "lesson:669855e9-5098-4b05-8161-1155589e8ff2",
+            "lesson:c38a3ad5-6fe6-49c8-ae30-658ea7ed2113",
+            "lesson:898c3ce8-80a6-4a63-9359-9deaf495633d",
+            "lesson:4e28d4bc-5d6e-47c7-bda5-7b2dfb761736",
+            "lesson:6247caba-5aa7-4ce9-b4ac-3fcc9377246d"
+          ],
+          "top_k_titles": [
+            "Bundle export must filter owner_project_id to prevent built-in injection on import",
+            "Sprint 15.10: per-level body assignment via relational table (not JSON column)",
+            "Sprint 15.9: MCP outputSchema for chain field — flat-optional shape, not discriminated union",
+            "Phase 13 longrun closeout: 6 sprints, 4 sessions, hybrid AMAW mode trade-offs across full/compressed/hyper-compressed",
+            "Sprint 13.5 — F3 core shipped via compressed AMAW; cumulative scope check closes 13.3-boundary debt",
+            "LLM reranker at temp=0 drifts across container recreates — disable it for A/B measurement",
+            "Docker compose --force-recreate doesn't pick up local src changes; rebuild the image first",
+            "Code review workflow: review each file group separately after bulk implementation",
+            "Project CRUD: POST/PUT endpoints with validation"
+          ],
+          "top_k_snippets": [
+            "DEFERRED-023 added taxonomy_profiles as a bundle entity. Built-in profiles have owner_project_id IS NULL; custom profile",
+            "Sprint 15.10 Q1 design choice: new table doa_matrix_levels (matrix_id, level, body_id) with PK (matrix_id, level), FK to",
+            "DEFERRED-021 needed to declare the Sprint 15.7 chain field in MCP decide_request_step + tally_motion outputSchemas. The ",
+            "Phase 13 (Distillation Layer Foundations) longrun completed across 4 sessions and 6 sprints. Final state: 24/24 F1+F2+F3",
+            "Sprint 13.5 of Phase 13 closed F3 ACs 1-8 (taxonomy_profiles + codex-guardrail engine + lesson_type centralization) unde",
+            "Local LLM backends (LM Studio, llama.cpp, etc.) at temperature=0 are not fully deterministic across sessions despite gre",
+            "The mcp container in docker-compose.yml runs node /app/dist/index.js from a baked image (COPY . . at build time). docker",
+            "When implementing large features (20+ files), always follow up with a structured code review broken into focused groups ",
+            "Added POST /api/projects (create) and PUT /api/projects/:id (update) REST endpoints. Key validation: project_id must mat"
+          ],
+          "found_ranks": [
+            9
+          ],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2
+          ],
+          "latency_ms_samples": [
+            28
+          ],
+          "latency_ms_median": 28,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": [
+            "rank-order-inversion"
+          ],
+          "generation": {
+            "generated_answer": "[1] The first match is a lesson [1] that discusses preventing SQL injection by filtering 'owner_project_id' in bundle exports.\n[2] The second match is another lesson [2] detailing the design choice for Sprint 15.10, introducing a new table 'doa_matrix_levels'.\n[3] The third match is yet another lesson [3] describing the outputSchema changes made in Sprint 15.9 for the 'chain' field in MCP.",
+            "contexts_used": [
+              {
+                "key": "lesson:61835c5d-d5c8-4d61-9fa0-3497aadee229",
+                "title": "Bundle export must filter owner_project_id to prevent built-in injection on import",
+                "snippet_preview": "DEFERRED-023 added taxonomy_profiles as a bundle entity. Built-in profiles have owner_project_id IS NULL; custom profile",
+                "char_count": 120
+              },
+              {
+                "key": "lesson:476aeed0-8363-4630-bd07-faf0edc573ba",
+                "title": "Sprint 15.10: per-level body assignment via relational table (not JSON column)",
+                "snippet_preview": "Sprint 15.10 Q1 design choice: new table doa_matrix_levels (matrix_id, level, body_id) with PK (matrix_id, level), FK to",
+                "char_count": 120
+              },
+              {
+                "key": "lesson:44e38b7e-0ef9-4b0f-9754-d5dcc09f4e4d",
+                "title": "Sprint 15.9: MCP outputSchema for chain field — flat-optional shape, not discriminated union",
+                "snippet_preview": "DEFERRED-021 needed to declare the Sprint 15.7 chain field in MCP decide_request_step + tally_motion outputSchemas. The ",
+                "char_count": 120
+              }
+            ],
+            "prompt_used": "You are describing what a SUBSTRING-SEARCH query surfaces against this project's corpus.\nThe query is a LITERAL substring; the items below are entities whose searchable text\nLITERALLY CONTAINS that substring (lessons, documents, chunks, guardrails, commits).\nItems may be UNRELATED to each other — substring co-occurrence is NOT a semantic match.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information not present in the matched\n   entities. Do NOT generalize beyond what each entity literally says.\n2. CITE EVERY CLAIM: Every substantive claim MUST end with a bracketed\n   citation like [1] referring to the matched-entity number(s).\n3. PER-ENTITY DESCRIPTION (do NOT synthesize across matches): describe each\n   matching entity using ONLY that entity's own text. Do NOT claim a \"common\n   theme\" unless multiple entities literally make the SAME proposition — not\n   merely share the same keyword. The whole point of substring search is that\n   matches CAN be coincidental keyword overlap, not topical kinship.\n4. ABSTAIN ATOMICALLY: If no entities meaningfully relate to the query intent,\n   your reply is one line containing only:  Not in context.\n   Otherwise give a substantive cited answer. The two are mutually exclusive.\n\nQUERY:\nvalidation\n\nMATCHED ENTITIES:\n[1] [lesson] — Bundle export must filter owner_project_id to prevent built-in injection on import\nkey: lesson:61835c5d-d5c8-4d61-9fa0-3497aadee229\nDEFERRED-023 added taxonomy_profiles as a bundle entity. Built-in profiles have owner_project_id IS NULL; custom profile\n\n---\n\n[2] [lesson] — Sprint 15.10: per-level body assignment via relational table (not JSON column)\nkey: lesson:476aeed0-8363-4630-bd07-faf0edc573ba\nSprint 15.10 Q1 design choice: new table doa_matrix_levels (matrix_id, level, body_id) with PK (matrix_id, level), FK to\n\n---\n\n[3] [lesson] — Sprint 15.9: MCP outputSchema for chain field — flat-optional shape, not discriminated union\nkey: lesson:44e38b7e-0ef9-4b0f-9754-d5dcc09f4e4d\nDEFERRED-021 needed to declare the Sprint 15.7 chain field in MCP decide_request_step + tally_motion outputSchemas. The \n\nWrite a concise 2-3 sentence answer that:\n- For each matching entity (or clearly-related cluster), describe WHAT it is\n  and WHY the substring appears there, citing the entity number\n- If matches span DIFFERENT topics, list them as separate topics rather than\n  fabricating a unifying theme\n- Do NOT extrapolate or add background — every claim must be directly\n  recoverable from a cited entity's own text\n\nANSWER:\n",
+            "synth_ms": 1939,
+            "judge_ms": 11295,
+            "scores": {
+              "faithfulness": 0.3333333333333333,
+              "answer_relevancy": 0.3632193825233931,
+              "context_precision": 0,
+              "context_recall": 0,
+              "groundedness_self_eval": 0.7
+            },
+            "reasons": {
+              "groundedness_self_eval": "The answer accurately summarizes the main points from each context but introduces 'Sprint 15.9' which is not explicitly mentioned in any of the provided contexts."
+            },
+            "fail_reasons": [
+              "faithfulness<0.9",
+              "answer_relevancy<0.85",
+              "context_precision<0.8",
+              "context_recall<0.75",
+              "groundedness_self_eval<0.85"
+            ]
+          }
+        },
+        {
+          "id": "global-authentication-substr",
+          "group": "confident-hit",
+          "query": "Authentication",
+          "top_k_keys": [
+            "chunk:80f588e6-5b9a-4252-bb2d-9f06cdcf79c5"
+          ],
+          "top_k_titles": [
+            "sample.docx / 2. Authentication"
+          ],
+          "top_k_snippets": [
+            "## 2. Authentication\n\nAll endpoints require an API key in the Authorization header.\n\nThe API key format is `Bearer <key>` where the key is a SHA-256 hash. Keys "
+          ],
+          "found_ranks": [
+            1
+          ],
+          "graded_hits_in_rank_order": [
+            2
+          ],
+          "latency_ms_samples": [
+            26
+          ],
+          "latency_ms_median": 26,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "[1] [chunk] - This is a section of a document (sample.docx) titled \"Authentication\". The substring \"Authentication\" appears here because this section discusses the authentication process for API endpoints, requiring an API key in the Authorization header.",
+            "contexts_used": [
+              {
+                "key": "chunk:80f588e6-5b9a-4252-bb2d-9f06cdcf79c5",
+                "title": "sample.docx / 2. Authentication",
+                "snippet_preview": "## 2. Authentication\n\nAll endpoints require an API key in the Authorization header.\n\nThe API key format is `Bearer <key>` where the key is a SHA-256 hash. Keys ",
+                "char_count": 160
+              }
+            ],
+            "prompt_used": "You are describing what a SUBSTRING-SEARCH query surfaces against this project's corpus.\nThe query is a LITERAL substring; the items below are entities whose searchable text\nLITERALLY CONTAINS that substring (lessons, documents, chunks, guardrails, commits).\nItems may be UNRELATED to each other — substring co-occurrence is NOT a semantic match.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information not present in the matched\n   entities. Do NOT generalize beyond what each entity literally says.\n2. CITE EVERY CLAIM: Every substantive claim MUST end with a bracketed\n   citation like [1] referring to the matched-entity number(s).\n3. PER-ENTITY DESCRIPTION (do NOT synthesize across matches): describe each\n   matching entity using ONLY that entity's own text. Do NOT claim a \"common\n   theme\" unless multiple entities literally make the SAME proposition — not\n   merely share the same keyword. The whole point of substring search is that\n   matches CAN be coincidental keyword overlap, not topical kinship.\n4. ABSTAIN ATOMICALLY: If no entities meaningfully relate to the query intent,\n   your reply is one line containing only:  Not in context.\n   Otherwise give a substantive cited answer. The two are mutually exclusive.\n\nQUERY:\nAuthentication\n\nMATCHED ENTITIES:\n[1] [chunk] — sample.docx / 2. Authentication\nkey: chunk:80f588e6-5b9a-4252-bb2d-9f06cdcf79c5\n## 2. Authentication\n\nAll endpoints require an API key in the Authorization header.\n\nThe API key format is `Bearer <key>` where the key is a SHA-256 hash. Keys \n\nWrite a concise 2-3 sentence answer that:\n- For each matching entity (or clearly-related cluster), describe WHAT it is\n  and WHY the substring appears there, citing the entity number\n- If matches span DIFFERENT topics, list them as separate topics rather than\n  fabricating a unifying theme\n- Do NOT extrapolate or add background — every claim must be directly\n  recoverable from a cited entity's own text\n\nANSWER:\n",
+            "synth_ms": 2648,
+            "judge_ms": 9563,
+            "scores": {
+              "faithfulness": 1,
+              "answer_relevancy": 0.642342497219945,
+              "context_precision": 0.9999999999,
+              "context_recall": 1,
+              "groundedness_self_eval": 1
+            },
+            "reasons": {
+              "groundedness_self_eval": "The answer directly quotes and summarizes information from context [1], accurately reflecting the authentication process described in that section."
+            },
+            "fail_reasons": [
+              "answer_relevancy<0.85"
+            ]
+          }
+        },
+        {
+          "id": "global-max-retry-substr",
+          "group": "confident-hit",
+          "query": "Max retry",
+          "top_k_keys": [
+            "lesson:f142bda7-8a61-4d56-b4b4-d7f8035f6b06",
+            "guardrail:4abf93d6-cbca-4006-aee6-a143bd3e8979",
+            "lesson:cd0db880-5c36-477f-9f15-6f85dca64596",
+            "guardrail:be30985a-e45b-47ce-82d2-f6a75dc282b8",
+            "guardrail:d66e5221-5e7b-42d8-b8fc-d91c8d2ee76a",
+            "guardrail:9a34ef12-bb6d-42d3-bee3-7ff53c4d86b0",
+            "guardrail:544aae14-08aa-436c-b54b-c8ecda4587fe",
+            "guardrail:689aee2c-3043-459c-8c1b-5aec8135cba6",
+            "guardrail:a442e5e6-dd34-4495-b1d1-c4a8c0fabd46",
+            "guardrail:5a9982a8-83e4-40a1-a8f8-280fc519f19a"
+          ],
+          "top_k_titles": [
+            "Retrieval-layer changes silently propagate to downstream consumers (reflect tool example)",
+            "Max retry attempts must be 3",
+            "Dup-rate metric keyed on exact entity id is blind to same-title-different-UUID noise",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3",
+            "Max retry attempts must be 3"
+          ],
+          "top_k_snippets": [
+            "Phase 12 Sprint 12.1a /review-impl MED-4. The reflect MCP tool calls searchLessons({ limit: 12 }) and feeds the matches ",
+            null,
+            "Phase 12 Sprint 12.0 finding. The v0 `duplicationRateAtK` in src/qc/metrics.ts keys on the SurfaceItem.key which is the ",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "found_ranks": [
+            2
+          ],
+          "graded_hits_in_rank_order": [
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            25
+          ],
+          "latency_ms_median": 25,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "[1] The first match is a lesson (key: lesson:f142bda7-8a61-4d56-b4b4-d7f8035f6b06) that discusses changes in the retrieval layer, where \"retry\" might refer to retrying operations or requests [1].\n\n[2] The second match is a guardrail (key: guardrail:4abf93d6-cbca-4006-aee6-a143bd3e8979) that sets a limit on the maximum number of retry attempts, directly mentioning \"Max retry attempts must be 3\" [2].\n\n[3] The third match is another lesson (key: lesson:cd0db880-5c36-477f-9f15-6f85dca64596) that discusses a metric related to duplication rates, where \"retry\" could be inferred as part of the process being measured or controlled [3].",
+            "contexts_used": [
+              {
+                "key": "lesson:f142bda7-8a61-4d56-b4b4-d7f8035f6b06",
+                "title": "Retrieval-layer changes silently propagate to downstream consumers (reflect tool example)",
+                "snippet_preview": "Phase 12 Sprint 12.1a /review-impl MED-4. The reflect MCP tool calls searchLessons({ limit: 12 }) and feeds the matches ",
+                "char_count": 120
+              },
+              {
+                "key": "guardrail:4abf93d6-cbca-4006-aee6-a143bd3e8979",
+                "title": "Max retry attempts must be 3",
+                "char_count": 0
+              },
+              {
+                "key": "lesson:cd0db880-5c36-477f-9f15-6f85dca64596",
+                "title": "Dup-rate metric keyed on exact entity id is blind to same-title-different-UUID noise",
+                "snippet_preview": "Phase 12 Sprint 12.0 finding. The v0 `duplicationRateAtK` in src/qc/metrics.ts keys on the SurfaceItem.key which is the ",
+                "char_count": 120
+              }
+            ],
+            "prompt_used": "You are describing what a SUBSTRING-SEARCH query surfaces against this project's corpus.\nThe query is a LITERAL substring; the items below are entities whose searchable text\nLITERALLY CONTAINS that substring (lessons, documents, chunks, guardrails, commits).\nItems may be UNRELATED to each other — substring co-occurrence is NOT a semantic match.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information not present in the matched\n   entities. Do NOT generalize beyond what each entity literally says.\n2. CITE EVERY CLAIM: Every substantive claim MUST end with a bracketed\n   citation like [1] referring to the matched-entity number(s).\n3. PER-ENTITY DESCRIPTION (do NOT synthesize across matches): describe each\n   matching entity using ONLY that entity's own text. Do NOT claim a \"common\n   theme\" unless multiple entities literally make the SAME proposition — not\n   merely share the same keyword. The whole point of substring search is that\n   matches CAN be coincidental keyword overlap, not topical kinship.\n4. ABSTAIN ATOMICALLY: If no entities meaningfully relate to the query intent,\n   your reply is one line containing only:  Not in context.\n   Otherwise give a substantive cited answer. The two are mutually exclusive.\n\nQUERY:\nMax retry\n\nMATCHED ENTITIES:\n[1] [lesson] — Retrieval-layer changes silently propagate to downstream consumers (reflect tool example)\nkey: lesson:f142bda7-8a61-4d56-b4b4-d7f8035f6b06\nPhase 12 Sprint 12.1a /review-impl MED-4. The reflect MCP tool calls searchLessons({ limit: 12 }) and feeds the matches \n\n---\n\n[2] [guardrail] — Max retry attempts must be 3\nkey: guardrail:4abf93d6-cbca-4006-aee6-a143bd3e8979\n(empty snippet)\n\n---\n\n[3] [lesson] — Dup-rate metric keyed on exact entity id is blind to same-title-different-UUID noise\nkey: lesson:cd0db880-5c36-477f-9f15-6f85dca64596\nPhase 12 Sprint 12.0 finding. The v0 `duplicationRateAtK` in src/qc/metrics.ts keys on the SurfaceItem.key which is the \n\nWrite a concise 2-3 sentence answer that:\n- For each matching entity (or clearly-related cluster), describe WHAT it is\n  and WHY the substring appears there, citing the entity number\n- If matches span DIFFERENT topics, list them as separate topics rather than\n  fabricating a unifying theme\n- Do NOT extrapolate or add background — every claim must be directly\n  recoverable from a cited entity's own text\n\nANSWER:\n",
+            "synth_ms": 3889,
+            "judge_ms": 15185,
+            "scores": {
+              "faithfulness": 0,
+              "answer_relevancy": 0.6299267365794966,
+              "context_precision": 0,
+              "context_recall": 0,
+              "groundedness_self_eval": 0.7
+            },
+            "reasons": {
+              "groundedness_self_eval": "The answer accurately summarizes and connects information from all three provided contexts. It directly quotes or paraphrases key points about 'retry' from each context, demonstrating a strong grounding in the given information. However, it does not provide direct evidence for the use of 'Max retry' as a specific term in any of the contexts, which is why it's not scored as 1.0."
+            },
+            "fail_reasons": [
+              "faithfulness<0.9",
+              "answer_relevancy<0.85",
+              "context_precision<0.8",
+              "context_recall<0.75",
+              "groundedness_self_eval<0.85"
+            ]
+          }
+        },
+        {
+          "id": "global-architecture-substr",
+          "group": "confident-hit",
+          "query": "Architecture Decision",
+          "top_k_keys": [
+            "chunk:79e04437-5277-48af-9f9a-e45a7c078771",
+            "chunk:512d7a46-e7f5-45aa-b3e5-6902e3ca6cd8"
+          ],
+          "top_k_titles": [
+            "sample.png / Architecture Decision Records",
+            "sample.docx / Architecture Decision Records"
+          ],
+          "top_k_snippets": [
+            "# Architecture Decision Records\n\nThis document captures key architectural decisions for the project.\n\n1. Retry Strategy\n\nAll external API calls must implement e",
+            "# Architecture Decision Records\n\nThis document captures key architectural decisions for the project."
+          ],
+          "found_ranks": [
+            1,
+            2
+          ],
+          "graded_hits_in_rank_order": [
+            2,
+            2
+          ],
+          "latency_ms_samples": [
+            24
+          ],
+          "latency_ms_median": 24,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "[1] [chunk:79e04437-5277-48af-9f9a-e45a7c078771] is a document titled \"Architecture Decision Records\". The substring \"Architecture Decision\" appears in the title and within the content as it captures key architectural decisions for the project [1].\n\n[2] [chunk:512d7a46-e7f5-45aa-b3e5-6902e3ca6cd8] is another document also titled \"Architecture Decision Records\". The substring \"Architecture Decision\" is present in this document's title and content as well, serving the same purpose of recording key architectural decisions [2].",
+            "contexts_used": [
+              {
+                "key": "chunk:79e04437-5277-48af-9f9a-e45a7c078771",
+                "title": "sample.png / Architecture Decision Records",
+                "snippet_preview": "# Architecture Decision Records\n\nThis document captures key architectural decisions for the project.\n\n1. Retry Strategy\n\nAll external API calls must implement e",
+                "char_count": 160
+              },
+              {
+                "key": "chunk:512d7a46-e7f5-45aa-b3e5-6902e3ca6cd8",
+                "title": "sample.docx / Architecture Decision Records",
+                "snippet_preview": "# Architecture Decision Records\n\nThis document captures key architectural decisions for the project.",
+                "char_count": 100
+              }
+            ],
+            "prompt_used": "You are describing what a SUBSTRING-SEARCH query surfaces against this project's corpus.\nThe query is a LITERAL substring; the items below are entities whose searchable text\nLITERALLY CONTAINS that substring (lessons, documents, chunks, guardrails, commits).\nItems may be UNRELATED to each other — substring co-occurrence is NOT a semantic match.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information not present in the matched\n   entities. Do NOT generalize beyond what each entity literally says.\n2. CITE EVERY CLAIM: Every substantive claim MUST end with a bracketed\n   citation like [1] referring to the matched-entity number(s).\n3. PER-ENTITY DESCRIPTION (do NOT synthesize across matches): describe each\n   matching entity using ONLY that entity's own text. Do NOT claim a \"common\n   theme\" unless multiple entities literally make the SAME proposition — not\n   merely share the same keyword. The whole point of substring search is that\n   matches CAN be coincidental keyword overlap, not topical kinship.\n4. ABSTAIN ATOMICALLY: If no entities meaningfully relate to the query intent,\n   your reply is one line containing only:  Not in context.\n   Otherwise give a substantive cited answer. The two are mutually exclusive.\n\nQUERY:\nArchitecture Decision\n\nMATCHED ENTITIES:\n[1] [chunk] — sample.png / Architecture Decision Records\nkey: chunk:79e04437-5277-48af-9f9a-e45a7c078771\n# Architecture Decision Records\n\nThis document captures key architectural decisions for the project.\n\n1. Retry Strategy\n\nAll external API calls must implement e\n\n---\n\n[2] [chunk] — sample.docx / Architecture Decision Records\nkey: chunk:512d7a46-e7f5-45aa-b3e5-6902e3ca6cd8\n# Architecture Decision Records\n\nThis document captures key architectural decisions for the project.\n\nWrite a concise 2-3 sentence answer that:\n- For each matching entity (or clearly-related cluster), describe WHAT it is\n  and WHY the substring appears there, citing the entity number\n- If matches span DIFFERENT topics, list them as separate topics rather than\n  fabricating a unifying theme\n- Do NOT extrapolate or add background — every claim must be directly\n  recoverable from a cited entity's own text\n\nANSWER:\n",
+            "synth_ms": 2978,
+            "judge_ms": 11903,
+            "scores": {
+              "faithfulness": 0.5,
+              "answer_relevancy": 0.3229797680863366,
+              "context_precision": 0,
+              "context_recall": 0.5,
+              "groundedness_self_eval": 1
+            },
+            "reasons": {
+              "groundedness_self_eval": "The answer directly quotes and summarizes information from both provided contexts (1 and 2), accurately describing the purpose and content of each document."
+            },
+            "fail_reasons": [
+              "faithfulness<0.9",
+              "answer_relevancy<0.85",
+              "context_precision<0.8",
+              "context_recall<0.75"
+            ]
+          }
+        },
+        {
+          "id": "global-pgvector-substr",
+          "group": "confident-hit",
+          "query": "pgvector",
+          "top_k_keys": [
+            "lesson:05fde055-3cef-41d4-a5d7-a65d6daeb442",
+            "chunk:0a02f1bd-8108-4efa-8a9e-f2fcd75ad4e3",
+            "lesson:bb39fe5e-0345-4b98-976b-fe3b0743f169"
+          ],
+          "top_k_titles": [
+            "NaN propagates silently through Math.max/Math.min clamp chains — use Number.isFinite",
+            "sample.docx / 3. Data Storage",
+            "Baseline determinism holds for back-to-back runs only; hours-separated runs jitter by embeddings-service load"
+          ],
+          "top_k_snippets": [
+            "A common defensive clamp pattern `Math.max(0, Math.min(1, value))` does NOT guard against NaN. If `value` is NaN, the cl",
+            "## 3. Data Storage\n\nLessons are stored in PostgreSQL with pgvector for embeddings. Each lesson has a 768-dimensional vector embedding generated from its content",
+            "Phase 12 Sprint 12.0.1 MED-4. Sprint 12.0's determinism check ran two baselines seconds apart and got byte-identical qua"
+          ],
+          "found_ranks": [
+            2
+          ],
+          "graded_hits_in_rank_order": [
+            0,
+            2,
+            0
+          ],
+          "latency_ms_samples": [
+            23
+          ],
+          "latency_ms_median": 23,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "[1] The first match is a lesson (key: lesson:05fde055-3cef-41d4-a5d7-a65d6daeb442) discussing how to handle NaN values in mathematical clamp chains using `Number.isFinite`. The substring \"NaN\" appears due to the discussion on handling Not a Number (NaN) values [1].\n\n[2] The second match is a chunk of text (key: chunk:0a02f1bd-8108-4efa-8a9e-f2fcd75ad4e3) from a document describing data storage. It mentions that lessons are stored in PostgreSQL with pgvector for embeddings, which explains the appearance of \"pgvector\" [2].\n\n[3] The third match is another lesson (key: lesson:bb39fe5e-0345-4b98-976b-fe3b0743f169) that discusses determinism checks in a project's sprint. It mentions \"baselines\" and \"embeddings-service load\", which might be related to the previous mention of pgvector for embeddings, but it does not explicitly state the use of pgvector [3].",
+            "contexts_used": [
+              {
+                "key": "lesson:05fde055-3cef-41d4-a5d7-a65d6daeb442",
+                "title": "NaN propagates silently through Math.max/Math.min clamp chains — use Number.isFinite",
+                "snippet_preview": "A common defensive clamp pattern `Math.max(0, Math.min(1, value))` does NOT guard against NaN. If `value` is NaN, the cl",
+                "char_count": 120
+              },
+              {
+                "key": "chunk:0a02f1bd-8108-4efa-8a9e-f2fcd75ad4e3",
+                "title": "sample.docx / 3. Data Storage",
+                "snippet_preview": "## 3. Data Storage\n\nLessons are stored in PostgreSQL with pgvector for embeddings. Each lesson has a 768-dimensional vector embedding generated from its content",
+                "char_count": 160
+              },
+              {
+                "key": "lesson:bb39fe5e-0345-4b98-976b-fe3b0743f169",
+                "title": "Baseline determinism holds for back-to-back runs only; hours-separated runs jitter by embeddings-service load",
+                "snippet_preview": "Phase 12 Sprint 12.0.1 MED-4. Sprint 12.0's determinism check ran two baselines seconds apart and got byte-identical qua",
+                "char_count": 120
+              }
+            ],
+            "prompt_used": "You are describing what a SUBSTRING-SEARCH query surfaces against this project's corpus.\nThe query is a LITERAL substring; the items below are entities whose searchable text\nLITERALLY CONTAINS that substring (lessons, documents, chunks, guardrails, commits).\nItems may be UNRELATED to each other — substring co-occurrence is NOT a semantic match.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information not present in the matched\n   entities. Do NOT generalize beyond what each entity literally says.\n2. CITE EVERY CLAIM: Every substantive claim MUST end with a bracketed\n   citation like [1] referring to the matched-entity number(s).\n3. PER-ENTITY DESCRIPTION (do NOT synthesize across matches): describe each\n   matching entity using ONLY that entity's own text. Do NOT claim a \"common\n   theme\" unless multiple entities literally make the SAME proposition — not\n   merely share the same keyword. The whole point of substring search is that\n   matches CAN be coincidental keyword overlap, not topical kinship.\n4. ABSTAIN ATOMICALLY: If no entities meaningfully relate to the query intent,\n   your reply is one line containing only:  Not in context.\n   Otherwise give a substantive cited answer. The two are mutually exclusive.\n\nQUERY:\npgvector\n\nMATCHED ENTITIES:\n[1] [lesson] — NaN propagates silently through Math.max/Math.min clamp chains — use Number.isFinite\nkey: lesson:05fde055-3cef-41d4-a5d7-a65d6daeb442\nA common defensive clamp pattern `Math.max(0, Math.min(1, value))` does NOT guard against NaN. If `value` is NaN, the cl\n\n---\n\n[2] [chunk] — sample.docx / 3. Data Storage\nkey: chunk:0a02f1bd-8108-4efa-8a9e-f2fcd75ad4e3\n## 3. Data Storage\n\nLessons are stored in PostgreSQL with pgvector for embeddings. Each lesson has a 768-dimensional vector embedding generated from its content\n\n---\n\n[3] [lesson] — Baseline determinism holds for back-to-back runs only; hours-separated runs jitter by embeddings-service load\nkey: lesson:bb39fe5e-0345-4b98-976b-fe3b0743f169\nPhase 12 Sprint 12.0.1 MED-4. Sprint 12.0's determinism check ran two baselines seconds apart and got byte-identical qua\n\nWrite a concise 2-3 sentence answer that:\n- For each matching entity (or clearly-related cluster), describe WHAT it is\n  and WHY the substring appears there, citing the entity number\n- If matches span DIFFERENT topics, list them as separate topics rather than\n  fabricating a unifying theme\n- Do NOT extrapolate or add background — every claim must be directly\n  recoverable from a cited entity's own text\n\nANSWER:\n",
+            "synth_ms": 3677,
+            "judge_ms": 14690,
+            "scores": {
+              "faithfulness": 0.4,
+              "answer_relevancy": 0.3193017451571029,
+              "context_precision": 0.49999999995,
+              "context_recall": 0.6666666666666666,
+              "groundedness_self_eval": 0.7
+            },
+            "reasons": {
+              "groundedness_self_eval": "The answer accurately references specific contexts for each of its points, with only minor unsupported details such as the exact purpose or relation of 'baselines' and 'embeddings-service load' in context [3]."
+            },
+            "fail_reasons": [
+              "faithfulness<0.9",
+              "answer_relevancy<0.85",
+              "context_precision<0.8",
+              "context_recall<0.75",
+              "groundedness_self_eval<0.85"
+            ]
+          }
+        },
+        {
+          "id": "global-review-impl-substr",
+          "group": "confident-hit",
+          "query": "review-impl",
+          "top_k_keys": [
+            "lesson:7c632d4b-1486-4b11-910c-5214ad9e2d7d",
+            "guardrail:5287a774-5761-412f-a150-31db7f2b3880",
+            "lesson:f47de748-7a78-44e9-af6f-ef3f7a324004",
+            "guardrail:5c0b7b25-4a93-4961-bf64-e0c967438b24",
+            "lesson:c0e76a3d-cf5c-456a-b064-8731f3f62bc7",
+            "lesson:45c8cb44-9fb8-4dad-b825-5b1cd8b0a108",
+            "lesson:9875a2ee-fd66-4b05-9693-d7c41e366e94",
+            "lesson:ecf4aaf9-f36e-4dc3-bbac-4730e8e0dca5",
+            "lesson:500404f1-4284-442f-a8f5-960f6b3caca4",
+            "lesson:5258dbfe-b76d-42aa-b680-15eb9a7b83d7"
+          ],
+          "top_k_titles": [
+            "Governance state-machine primitives: gate each mutating op by its temporal window, not only by authorization",
+            "Cold-start hostile-actor adversary review is mandatory for authz primitives",
+            "Crash-isolation tests for batch sweeps must force a genuine thrown error, not a filter-excluded item",
+            "Sprints adding an authorization / governance primitive require a security-framed cold-start adversarial review",
+            "Canonical lesson status slug is `pending-review` (hyphen) — never `pending_review`",
+            "When guarding a lessons.status transition, mirror the guard on ALL sibling write paths (single + batch + MCP)",
+            "Opt-in Docker services via profiles — don't make measurement-only infra a hard dependency",
+            "Cross-topic goldenset queries with single loose targets degrade under corpus growth — use multi-target",
+            "Fire-and-forget DB writes need documented pool-sizing assumptions + future batching plan",
+            "Multi-project salience (and similar aggregations) need project_id = ANY(...) batching to avoid N+1"
+          ],
+          "top_k_snippets": [
+            "Phase 15 Sprint 15.4 (collective decision — motions/votes/tally/veto) REVIEW-DESIGN round 1 found a BLOCK: tallyMotion h",
+            null,
+            "When testing that a per-item batch sweep (e.g. sweepAbandonedClaims / sweepStalledSteps in src/services/coordinationSwee",
+            null,
+            "The lesson status for a lesson awaiting human review is the slug `pending-review` WITH A HYPHEN. It is written by submit",
+            "The F2 review gate (submit_for_review) depends on lessons in status 'pending-review' being immovable except through appr",
+            "Sprint 12.1g added a tei-rerank Docker service for QC measurement with TEI /rerank. It started on every `docker compose ",
+            "When a cross-topic goldenset query has a SINGLE target picked via keyword overlap rather than tight semantic anchoring, ",
+            "Phase 12 Sprint 12.1c /review-impl MED-2. Added 5 fire-and-forget `logLessonAccess` write paths in searchLessons, search",
+            "Phase 12 Sprint 12.1c /review-impl MED-1. Initial searchLessonsMulti salience path bucketed lesson_ids by project_id the"
+          ],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            23
+          ],
+          "latency_ms_median": 23,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "no-relevant-hit"
+          ],
+          "generation": {
+            "generated_answer": "[1] The first match is a lesson (key: lesson:7c632d4b-1486-4b11-910c-5214ad9e2d7d) discussing governance state-machine primitives, where the substring \"review\" appears in the context of a review-design round for tallying motions [1].\n\n[2] The second match is a guardrail (key: guardrail:5287a774-5761-412f-a150-31db7f2b3880) that mandates cold-start hostile-actor adversary review for authorization primitives, where \"review\" is used in the context of reviewing potential security threats [2].\n\n[3] The third match is another lesson (key: lesson:f47de748-7a78-44e9-af6f-ef3f7a324004) that provides guidance on crash-isolation tests for batch sweeps, where \"review\" appears in the context of testing per-item batch sweep operations [3].",
+            "contexts_used": [
+              {
+                "key": "lesson:7c632d4b-1486-4b11-910c-5214ad9e2d7d",
+                "title": "Governance state-machine primitives: gate each mutating op by its temporal window, not only by authorization",
+                "snippet_preview": "Phase 15 Sprint 15.4 (collective decision — motions/votes/tally/veto) REVIEW-DESIGN round 1 found a BLOCK: tallyMotion h",
+                "char_count": 120
+              },
+              {
+                "key": "guardrail:5287a774-5761-412f-a150-31db7f2b3880",
+                "title": "Cold-start hostile-actor adversary review is mandatory for authz primitives",
+                "char_count": 0
+              },
+              {
+                "key": "lesson:f47de748-7a78-44e9-af6f-ef3f7a324004",
+                "title": "Crash-isolation tests for batch sweeps must force a genuine thrown error, not a filter-excluded item",
+                "snippet_preview": "When testing that a per-item batch sweep (e.g. sweepAbandonedClaims / sweepStalledSteps in src/services/coordinationSwee",
+                "char_count": 120
+              }
+            ],
+            "prompt_used": "You are describing what a SUBSTRING-SEARCH query surfaces against this project's corpus.\nThe query is a LITERAL substring; the items below are entities whose searchable text\nLITERALLY CONTAINS that substring (lessons, documents, chunks, guardrails, commits).\nItems may be UNRELATED to each other — substring co-occurrence is NOT a semantic match.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information not present in the matched\n   entities. Do NOT generalize beyond what each entity literally says.\n2. CITE EVERY CLAIM: Every substantive claim MUST end with a bracketed\n   citation like [1] referring to the matched-entity number(s).\n3. PER-ENTITY DESCRIPTION (do NOT synthesize across matches): describe each\n   matching entity using ONLY that entity's own text. Do NOT claim a \"common\n   theme\" unless multiple entities literally make the SAME proposition — not\n   merely share the same keyword. The whole point of substring search is that\n   matches CAN be coincidental keyword overlap, not topical kinship.\n4. ABSTAIN ATOMICALLY: If no entities meaningfully relate to the query intent,\n   your reply is one line containing only:  Not in context.\n   Otherwise give a substantive cited answer. The two are mutually exclusive.\n\nQUERY:\nreview-impl\n\nMATCHED ENTITIES:\n[1] [lesson] — Governance state-machine primitives: gate each mutating op by its temporal window, not only by authorization\nkey: lesson:7c632d4b-1486-4b11-910c-5214ad9e2d7d\nPhase 15 Sprint 15.4 (collective decision — motions/votes/tally/veto) REVIEW-DESIGN round 1 found a BLOCK: tallyMotion h\n\n---\n\n[2] [guardrail] — Cold-start hostile-actor adversary review is mandatory for authz primitives\nkey: guardrail:5287a774-5761-412f-a150-31db7f2b3880\n(empty snippet)\n\n---\n\n[3] [lesson] — Crash-isolation tests for batch sweeps must force a genuine thrown error, not a filter-excluded item\nkey: lesson:f47de748-7a78-44e9-af6f-ef3f7a324004\nWhen testing that a per-item batch sweep (e.g. sweepAbandonedClaims / sweepStalledSteps in src/services/coordinationSwee\n\nWrite a concise 2-3 sentence answer that:\n- For each matching entity (or clearly-related cluster), describe WHAT it is\n  and WHY the substring appears there, citing the entity number\n- If matches span DIFFERENT topics, list them as separate topics rather than\n  fabricating a unifying theme\n- Do NOT extrapolate or add background — every claim must be directly\n  recoverable from a cited entity's own text\n\nANSWER:\n",
+            "synth_ms": 4481,
+            "judge_ms": 13282,
+            "scores": {
+              "faithfulness": 0,
+              "answer_relevancy": 0.5141507444616978,
+              "context_precision": 0,
+              "context_recall": 0,
+              "groundedness_self_eval": 1
+            },
+            "reasons": {
+              "groundedness_self_eval": "Every substantive claim in the answer is directly supported by one or more of the provided contexts. The answer accurately summarizes and connects information from all three contexts without introducing any unsupported details."
+            },
+            "fail_reasons": [
+              "faithfulness<0.9",
+              "answer_relevancy<0.85",
+              "context_precision<0.8",
+              "context_recall<0.75"
+            ]
+          }
+        },
+        {
+          "id": "global-undici-substr",
+          "group": "confident-hit",
+          "query": "undici",
+          "top_k_keys": [
+            "lesson:2097202f-4d46-4420-a088-d1351378286f",
+            "lesson:757b1cc8-c151-47a3-a4cb-219cbfedf883",
+            "lesson:82e14086-dc76-40f5-81f5-e7ef0c4c97ef"
+          ],
+          "top_k_titles": [
+            "POST-REVIEW investigation can flip a sprint conclusion; inspect top-K composition when a metric surprises",
+            "Goldenset baseline runs pollute lesson_access_log; truncate before salience-sensitive measurement",
+            "undici userland version MUST match Node's bundled version for fetch dispatcher interop"
+          ],
+          "top_k_snippets": [
+            "Sprint 12.1e2 BUILD produced what initially looked like a clear winner (HL=30, +0.0405 aggregate nDCG@10) with one cavea",
+            "Every qc:baseline run writes consideration-search rows to lesson_access_log for each goldenset query's top-K hits (~40 q",
+            "Passing a userland undici Agent as { dispatcher } to Node's global fetch() requires the userland undici version to match"
+          ],
+          "found_ranks": [
+            3
+          ],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            2
+          ],
+          "latency_ms_samples": [
+            24
+          ],
+          "latency_ms_median": 24,
+          "has_relevant_hit_in_top_k": true,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "[1] Entity [1] is a lesson about post-sprint review investigations, where the substring \"undici\" does not appear. It discusses flipping sprint conclusions based on metric surprises and inspecting top-K composition.\n[2] Entity [2] is another lesson, unrelated to the previous one, focusing on goldenset baseline runs polluting lesson_access_log. The substring \"undici\" is also absent here, as it discusses truncating consideration-search rows for salience-sensitive measurement.\n[3] Entity [3] is a lesson that directly relates to the query \"undici\". It explains that when using a userland undici Agent with Node's global fetch(), the userland undici version must match Node's bundled version for interoperability.",
+            "contexts_used": [
+              {
+                "key": "lesson:2097202f-4d46-4420-a088-d1351378286f",
+                "title": "POST-REVIEW investigation can flip a sprint conclusion; inspect top-K composition when a metric surprises",
+                "snippet_preview": "Sprint 12.1e2 BUILD produced what initially looked like a clear winner (HL=30, +0.0405 aggregate nDCG@10) with one cavea",
+                "char_count": 120
+              },
+              {
+                "key": "lesson:757b1cc8-c151-47a3-a4cb-219cbfedf883",
+                "title": "Goldenset baseline runs pollute lesson_access_log; truncate before salience-sensitive measurement",
+                "snippet_preview": "Every qc:baseline run writes consideration-search rows to lesson_access_log for each goldenset query's top-K hits (~40 q",
+                "char_count": 120
+              },
+              {
+                "key": "lesson:82e14086-dc76-40f5-81f5-e7ef0c4c97ef",
+                "title": "undici userland version MUST match Node's bundled version for fetch dispatcher interop",
+                "snippet_preview": "Passing a userland undici Agent as { dispatcher } to Node's global fetch() requires the userland undici version to match",
+                "char_count": 120
+              }
+            ],
+            "prompt_used": "You are describing what a SUBSTRING-SEARCH query surfaces against this project's corpus.\nThe query is a LITERAL substring; the items below are entities whose searchable text\nLITERALLY CONTAINS that substring (lessons, documents, chunks, guardrails, commits).\nItems may be UNRELATED to each other — substring co-occurrence is NOT a semantic match.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information not present in the matched\n   entities. Do NOT generalize beyond what each entity literally says.\n2. CITE EVERY CLAIM: Every substantive claim MUST end with a bracketed\n   citation like [1] referring to the matched-entity number(s).\n3. PER-ENTITY DESCRIPTION (do NOT synthesize across matches): describe each\n   matching entity using ONLY that entity's own text. Do NOT claim a \"common\n   theme\" unless multiple entities literally make the SAME proposition — not\n   merely share the same keyword. The whole point of substring search is that\n   matches CAN be coincidental keyword overlap, not topical kinship.\n4. ABSTAIN ATOMICALLY: If no entities meaningfully relate to the query intent,\n   your reply is one line containing only:  Not in context.\n   Otherwise give a substantive cited answer. The two are mutually exclusive.\n\nQUERY:\nundici\n\nMATCHED ENTITIES:\n[1] [lesson] — POST-REVIEW investigation can flip a sprint conclusion; inspect top-K composition when a metric surprises\nkey: lesson:2097202f-4d46-4420-a088-d1351378286f\nSprint 12.1e2 BUILD produced what initially looked like a clear winner (HL=30, +0.0405 aggregate nDCG@10) with one cavea\n\n---\n\n[2] [lesson] — Goldenset baseline runs pollute lesson_access_log; truncate before salience-sensitive measurement\nkey: lesson:757b1cc8-c151-47a3-a4cb-219cbfedf883\nEvery qc:baseline run writes consideration-search rows to lesson_access_log for each goldenset query's top-K hits (~40 q\n\n---\n\n[3] [lesson] — undici userland version MUST match Node's bundled version for fetch dispatcher interop\nkey: lesson:82e14086-dc76-40f5-81f5-e7ef0c4c97ef\nPassing a userland undici Agent as { dispatcher } to Node's global fetch() requires the userland undici version to match\n\nWrite a concise 2-3 sentence answer that:\n- For each matching entity (or clearly-related cluster), describe WHAT it is\n  and WHY the substring appears there, citing the entity number\n- If matches span DIFFERENT topics, list them as separate topics rather than\n  fabricating a unifying theme\n- Do NOT extrapolate or add background — every claim must be directly\n  recoverable from a cited entity's own text\n\nANSWER:\n",
+            "synth_ms": 3850,
+            "judge_ms": 11799,
+            "scores": {
+              "faithfulness": 0.3333333333333333,
+              "answer_relevancy": 0.510438646087413,
+              "context_precision": 0,
+              "context_recall": 0.25,
+              "groundedness_self_eval": 0.4
+            },
+            "reasons": {
+              "groundedness_self_eval": "The answer correctly identifies each context and provides a summary of their contents. However, it does not explicitly mention 'undici' in the summaries for contexts [1] and [2], which are present but not highlighted."
+            },
+            "fail_reasons": [
+              "faithfulness<0.9",
+              "answer_relevancy<0.85",
+              "context_precision<0.8",
+              "context_recall<0.75",
+              "groundedness_self_eval<0.85"
+            ]
+          }
+        },
+        {
+          "id": "global-workspace-substr",
+          "group": "coverage-probe",
+          "query": "workspace",
+          "top_k_keys": [
+            "lesson:62b4e10a-0019-40e5-ad0a-cb3690da2e5f",
+            "lesson:e15edaef-1d63-4cff-a9cc-7f972a0887d5"
+          ],
+          "top_k_titles": [
+            "DEFERRED-029 trust model: three-actor CallerScope (undefined/null/string)",
+            "index_project default excludes cover .git + node_modules only; dist/ .next/ .claude/ leak into the chunks table"
+          ],
+          "top_k_snippets": [
+            "DEFERRED-029 introduced a three-valued CallerScope type as the single source of truth for tenant isolation. After 9 PRs ",
+            "Phase 12 Sprint 12.0.1 MED-1. Running `register_workspace_root` + `index_project` against free-context-hub at /workspace"
+          ],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            24
+          ],
+          "latency_ms_median": 24,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "[1] The first match is a lesson (key: lesson:62b4e10a-0019-40e5-ad0a-cb3690da2e5f) that discusses DEFERRED-029, a trust model introducing a three-valued CallerScope type for tenant isolation. The substring \"workspace\" appears in the context of this lesson because it's discussing changes made after 9 pull requests (PRs), which often involve workspace-related operations [1].\n\n[2] The second match is another lesson (key: lesson:e15edaef-1d63-4cff-a9cc-7f972a0887d5) that describes the default behavior of `index_project`. Here, \"workspace\" appears because it's mentioned in the context of running this command against a workspace located at \"/workspace\" [2].",
+            "contexts_used": [
+              {
+                "key": "lesson:62b4e10a-0019-40e5-ad0a-cb3690da2e5f",
+                "title": "DEFERRED-029 trust model: three-actor CallerScope (undefined/null/string)",
+                "snippet_preview": "DEFERRED-029 introduced a three-valued CallerScope type as the single source of truth for tenant isolation. After 9 PRs ",
+                "char_count": 120
+              },
+              {
+                "key": "lesson:e15edaef-1d63-4cff-a9cc-7f972a0887d5",
+                "title": "index_project default excludes cover .git + node_modules only; dist/ .next/ .claude/ leak into the chunks table",
+                "snippet_preview": "Phase 12 Sprint 12.0.1 MED-1. Running `register_workspace_root` + `index_project` against free-context-hub at /workspace",
+                "char_count": 120
+              }
+            ],
+            "prompt_used": "You are describing what a SUBSTRING-SEARCH query surfaces against this project's corpus.\nThe query is a LITERAL substring; the items below are entities whose searchable text\nLITERALLY CONTAINS that substring (lessons, documents, chunks, guardrails, commits).\nItems may be UNRELATED to each other — substring co-occurrence is NOT a semantic match.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information not present in the matched\n   entities. Do NOT generalize beyond what each entity literally says.\n2. CITE EVERY CLAIM: Every substantive claim MUST end with a bracketed\n   citation like [1] referring to the matched-entity number(s).\n3. PER-ENTITY DESCRIPTION (do NOT synthesize across matches): describe each\n   matching entity using ONLY that entity's own text. Do NOT claim a \"common\n   theme\" unless multiple entities literally make the SAME proposition — not\n   merely share the same keyword. The whole point of substring search is that\n   matches CAN be coincidental keyword overlap, not topical kinship.\n4. ABSTAIN ATOMICALLY: If no entities meaningfully relate to the query intent,\n   your reply is one line containing only:  Not in context.\n   Otherwise give a substantive cited answer. The two are mutually exclusive.\n\nQUERY:\nworkspace\n\nMATCHED ENTITIES:\n[1] [lesson] — DEFERRED-029 trust model: three-actor CallerScope (undefined/null/string)\nkey: lesson:62b4e10a-0019-40e5-ad0a-cb3690da2e5f\nDEFERRED-029 introduced a three-valued CallerScope type as the single source of truth for tenant isolation. After 9 PRs \n\n---\n\n[2] [lesson] — index_project default excludes cover .git + node_modules only; dist/ .next/ .claude/ leak into the chunks table\nkey: lesson:e15edaef-1d63-4cff-a9cc-7f972a0887d5\nPhase 12 Sprint 12.0.1 MED-1. Running `register_workspace_root` + `index_project` against free-context-hub at /workspace\n\nWrite a concise 2-3 sentence answer that:\n- For each matching entity (or clearly-related cluster), describe WHAT it is\n  and WHY the substring appears there, citing the entity number\n- If matches span DIFFERENT topics, list them as separate topics rather than\n  fabricating a unifying theme\n- Do NOT extrapolate or add background — every claim must be directly\n  recoverable from a cited entity's own text\n\nANSWER:\n",
+            "synth_ms": 4116,
+            "judge_ms": 6900,
+            "scores": {
+              "context_precision": 0,
+              "context_recall": 0,
+              "groundedness_self_eval": 1,
+              "refusal_correctness": 0.5
+            },
+            "reasons": {
+              "groundedness_self_eval": "The answer directly quotes and explains the appearance of 'workspace' in both provided contexts without adding any unsupported details.",
+              "refusal_correctness": "The answer does not explicitly acknowledge the lack of a specific answer about 'workspace', but it accurately summarizes the occurrences of 'workspace' in the provided contexts without fabricating any information."
+            },
+            "skipped": [
+              "faithfulness",
+              "answer_relevancy"
+            ],
+            "skip_reason": "no_answer category: faithfulness/answer_relevancy have pathological semantics on refusals (replaced by refusal_correctness)",
+            "fail_reasons": [
+              "context_precision<0.8",
+              "context_recall<0.75",
+              "refusal_correctness<0.75"
+            ]
+          }
+        },
+        {
+          "id": "global-miss-zephyr",
+          "group": "adversarial-miss",
+          "query": "zephyr-ninja-pyramid-2026",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            22
+          ],
+          "latency_ms_median": 22,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "empty-result-set"
+          ],
+          "generation": {
+            "generated_answer": "Not in context.",
+            "contexts_used": [],
+            "prompt_used": "You are describing what a SUBSTRING-SEARCH query surfaces against this project's corpus.\nThe query is a LITERAL substring; the items below are entities whose searchable text\nLITERALLY CONTAINS that substring (lessons, documents, chunks, guardrails, commits).\nItems may be UNRELATED to each other — substring co-occurrence is NOT a semantic match.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information not present in the matched\n   entities. Do NOT generalize beyond what each entity literally says.\n2. CITE EVERY CLAIM: Every substantive claim MUST end with a bracketed\n   citation like [1] referring to the matched-entity number(s).\n3. PER-ENTITY DESCRIPTION (do NOT synthesize across matches): describe each\n   matching entity using ONLY that entity's own text. Do NOT claim a \"common\n   theme\" unless multiple entities literally make the SAME proposition — not\n   merely share the same keyword. The whole point of substring search is that\n   matches CAN be coincidental keyword overlap, not topical kinship.\n4. ABSTAIN ATOMICALLY: If no entities meaningfully relate to the query intent,\n   your reply is one line containing only:  Not in context.\n   Otherwise give a substantive cited answer. The two are mutually exclusive.\n\nQUERY:\nzephyr-ninja-pyramid-2026\n\nMATCHED ENTITIES:\n(no retrieval hits — answer should say \"Not in context\")\n\nWrite a concise 2-3 sentence answer that:\n- For each matching entity (or clearly-related cluster), describe WHAT it is\n  and WHY the substring appears there, citing the entity number\n- If matches span DIFFERENT topics, list them as separate topics rather than\n  fabricating a unifying theme\n- Do NOT extrapolate or add background — every claim must be directly\n  recoverable from a cited entity's own text\n\nANSWER:\n",
+            "synth_ms": 1592,
+            "judge_ms": 2,
+            "scores": {},
+            "error": "judge_failed: judge sidecar HTTP 422"
+          }
+        },
+        {
+          "id": "global-edge-multi-hop-1",
+          "group": "edge-multi-hop",
+          "query": "retry workflow",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            4
+          ],
+          "latency_ms_median": 4,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "generation": {
+            "generated_answer": "Not in context.",
+            "contexts_used": [],
+            "prompt_used": "You are describing what a SUBSTRING-SEARCH query surfaces against this project's corpus.\nThe query is a LITERAL substring; the items below are entities whose searchable text\nLITERALLY CONTAINS that substring (lessons, documents, chunks, guardrails, commits).\nItems may be UNRELATED to each other — substring co-occurrence is NOT a semantic match.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information not present in the matched\n   entities. Do NOT generalize beyond what each entity literally says.\n2. CITE EVERY CLAIM: Every substantive claim MUST end with a bracketed\n   citation like [1] referring to the matched-entity number(s).\n3. PER-ENTITY DESCRIPTION (do NOT synthesize across matches): describe each\n   matching entity using ONLY that entity's own text. Do NOT claim a \"common\n   theme\" unless multiple entities literally make the SAME proposition — not\n   merely share the same keyword. The whole point of substring search is that\n   matches CAN be coincidental keyword overlap, not topical kinship.\n4. ABSTAIN ATOMICALLY: If no entities meaningfully relate to the query intent,\n   your reply is one line containing only:  Not in context.\n   Otherwise give a substantive cited answer. The two are mutually exclusive.\n\nQUERY:\nretry workflow\n\nMATCHED ENTITIES:\n(no retrieval hits — answer should say \"Not in context\")\n\nWrite a concise 2-3 sentence answer that:\n- For each matching entity (or clearly-related cluster), describe WHAT it is\n  and WHY the substring appears there, citing the entity number\n- If matches span DIFFERENT topics, list them as separate topics rather than\n  fabricating a unifying theme\n- Do NOT extrapolate or add background — every claim must be directly\n  recoverable from a cited entity's own text\n\nANSWER:\n",
+            "synth_ms": 89,
+            "judge_ms": 2,
+            "scores": {},
+            "error": "judge_failed: judge sidecar HTTP 422"
+          }
+        },
+        {
+          "id": "global-edge-no-answer-1",
+          "group": "edge-no-answer",
+          "query": "obfuscation cipher quantum",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            4
+          ],
+          "latency_ms_median": 4,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "empty-result-set"
+          ],
+          "generation": {
+            "generated_answer": "Not in context.",
+            "contexts_used": [],
+            "prompt_used": "You are describing what a SUBSTRING-SEARCH query surfaces against this project's corpus.\nThe query is a LITERAL substring; the items below are entities whose searchable text\nLITERALLY CONTAINS that substring (lessons, documents, chunks, guardrails, commits).\nItems may be UNRELATED to each other — substring co-occurrence is NOT a semantic match.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information not present in the matched\n   entities. Do NOT generalize beyond what each entity literally says.\n2. CITE EVERY CLAIM: Every substantive claim MUST end with a bracketed\n   citation like [1] referring to the matched-entity number(s).\n3. PER-ENTITY DESCRIPTION (do NOT synthesize across matches): describe each\n   matching entity using ONLY that entity's own text. Do NOT claim a \"common\n   theme\" unless multiple entities literally make the SAME proposition — not\n   merely share the same keyword. The whole point of substring search is that\n   matches CAN be coincidental keyword overlap, not topical kinship.\n4. ABSTAIN ATOMICALLY: If no entities meaningfully relate to the query intent,\n   your reply is one line containing only:  Not in context.\n   Otherwise give a substantive cited answer. The two are mutually exclusive.\n\nQUERY:\nobfuscation cipher quantum\n\nMATCHED ENTITIES:\n(no retrieval hits — answer should say \"Not in context\")\n\nWrite a concise 2-3 sentence answer that:\n- For each matching entity (or clearly-related cluster), describe WHAT it is\n  and WHY the substring appears there, citing the entity number\n- If matches span DIFFERENT topics, list them as separate topics rather than\n  fabricating a unifying theme\n- Do NOT extrapolate or add background — every claim must be directly\n  recoverable from a cited entity's own text\n\nANSWER:\n",
+            "synth_ms": 89,
+            "judge_ms": 1,
+            "scores": {},
+            "error": "judge_failed: judge sidecar HTTP 422"
+          }
+        },
+        {
+          "id": "global-edge-contradictory-1",
+          "group": "edge-contradictory",
+          "query": "approval",
+          "top_k_keys": [
+            "lesson:b85dc715-80d8-4f04-9efd-9bcd16a45dc3",
+            "guardrail:84829ccb-2fe7-40a8-9d78-475ee1cb7b87",
+            "guardrail:aea98de0-aa19-432e-a2bd-f6cff9abb2e5",
+            "guardrail:f8de0a36-21f1-4638-9586-27e856b5abc4",
+            "guardrail:5c0b7b25-4a93-4961-bf64-e0c967438b24",
+            "guardrail:c5631a9b-dfd3-4f64-b85c-82b21a684079",
+            "guardrail:61e3a464-6ac7-4c55-a7be-b1336729d665",
+            "guardrail:aa615584-78a1-46e4-bf6f-9dbeaa7dfaf2",
+            "guardrail:70109c37-594c-4a29-966d-37ee578d5b7e",
+            "guardrail:aa544dec-ed98-41d0-8fdd-b7fe3fccac7c"
+          ],
+          "top_k_titles": [
+            "Sprint 15.8: chain dedup via subject_ref string-prefix — load-bearing convention",
+            "Guardrail: agent-gr-e2e-177955",
+            "Guardrail: block test gui-gr-1779550585281",
+            "Guardrail: agent-gr-e2e-177947",
+            "Sprints adding an authorization / governance primitive require a security-framed cold-start adversarial review",
+            "Guardrail: block test gui-gr-1776490852403",
+            "Guardrail: block test gui-gr-1776490733676",
+            "Guardrail: block test gui-gr-1776188570077",
+            "Guardrail: block test gui-gr-1776171161703",
+            "Guardrail: block test gui-gr-1776171045931"
+          ],
+          "top_k_snippets": [
+            "Without dedup, a collective approval emits TWO chained tasks: one from motion.tallied chain handler (15.7) + one from re",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            4
+          ],
+          "latency_ms_median": 4,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "no-relevant-hit"
+          ],
+          "generation": {
+            "generated_answer": "[1] The lesson \"Sprint 15.8: chain dedup via subject_ref string-prefix\" [1] discusses the process of deduplicating tasks in a workflow, where an approval action can trigger two chained tasks. This is why the substring \"approval\" appears in this context.\n\nThe other matched entities ([2] and [3]) are guardrails with empty snippets, so they do not provide any context for the substring \"approval\". Therefore, they are not in context for this query.",
+            "contexts_used": [
+              {
+                "key": "lesson:b85dc715-80d8-4f04-9efd-9bcd16a45dc3",
+                "title": "Sprint 15.8: chain dedup via subject_ref string-prefix — load-bearing convention",
+                "snippet_preview": "Without dedup, a collective approval emits TWO chained tasks: one from motion.tallied chain handler (15.7) + one from re",
+                "char_count": 120
+              },
+              {
+                "key": "guardrail:84829ccb-2fe7-40a8-9d78-475ee1cb7b87",
+                "title": "Guardrail: agent-gr-e2e-177955",
+                "char_count": 0
+              },
+              {
+                "key": "guardrail:aea98de0-aa19-432e-a2bd-f6cff9abb2e5",
+                "title": "Guardrail: block test gui-gr-1779550585281",
+                "char_count": 0
+              }
+            ],
+            "prompt_used": "You are describing what a SUBSTRING-SEARCH query surfaces against this project's corpus.\nThe query is a LITERAL substring; the items below are entities whose searchable text\nLITERALLY CONTAINS that substring (lessons, documents, chunks, guardrails, commits).\nItems may be UNRELATED to each other — substring co-occurrence is NOT a semantic match.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information not present in the matched\n   entities. Do NOT generalize beyond what each entity literally says.\n2. CITE EVERY CLAIM: Every substantive claim MUST end with a bracketed\n   citation like [1] referring to the matched-entity number(s).\n3. PER-ENTITY DESCRIPTION (do NOT synthesize across matches): describe each\n   matching entity using ONLY that entity's own text. Do NOT claim a \"common\n   theme\" unless multiple entities literally make the SAME proposition — not\n   merely share the same keyword. The whole point of substring search is that\n   matches CAN be coincidental keyword overlap, not topical kinship.\n4. ABSTAIN ATOMICALLY: If no entities meaningfully relate to the query intent,\n   your reply is one line containing only:  Not in context.\n   Otherwise give a substantive cited answer. The two are mutually exclusive.\n\nQUERY:\napproval\n\nMATCHED ENTITIES:\n[1] [lesson] — Sprint 15.8: chain dedup via subject_ref string-prefix — load-bearing convention\nkey: lesson:b85dc715-80d8-4f04-9efd-9bcd16a45dc3\nWithout dedup, a collective approval emits TWO chained tasks: one from motion.tallied chain handler (15.7) + one from re\n\n---\n\n[2] [guardrail] — Guardrail: agent-gr-e2e-177955\nkey: guardrail:84829ccb-2fe7-40a8-9d78-475ee1cb7b87\n(empty snippet)\n\n---\n\n[3] [guardrail] — Guardrail: block test gui-gr-1779550585281\nkey: guardrail:aea98de0-aa19-432e-a2bd-f6cff9abb2e5\n(empty snippet)\n\nWrite a concise 2-3 sentence answer that:\n- For each matching entity (or clearly-related cluster), describe WHAT it is\n  and WHY the substring appears there, citing the entity number\n- If matches span DIFFERENT topics, list them as separate topics rather than\n  fabricating a unifying theme\n- Do NOT extrapolate or add background — every claim must be directly\n  recoverable from a cited entity's own text\n\nANSWER:\n",
+            "synth_ms": 1239,
+            "judge_ms": 14288,
+            "scores": {
+              "faithfulness": 0.4,
+              "answer_relevancy": 0.6220525570548693,
+              "context_precision": 0,
+              "context_recall": 0,
+              "groundedness_self_eval": 0.7
+            },
+            "reasons": {
+              "groundedness_self_eval": "The answer correctly identifies context [1] as relevant to the substring 'approval', explaining how it discusses task deduplication in a workflow triggered by an approval action. However, it incorrectly dismisses contexts [2] and [3] due to their empty snippets, but they could still be relevant if they were part of a larger system or process related to task management or approvals."
+            },
+            "fail_reasons": [
+              "faithfulness<0.9",
+              "answer_relevancy<0.85",
+              "context_precision<0.8",
+              "context_recall<0.75",
+              "groundedness_self_eval<0.85"
+            ]
+          }
+        },
+        {
+          "id": "global-edge-paraphrase-1",
+          "group": "edge-paraphrase",
+          "query": "ADRs",
+          "top_k_keys": [],
+          "top_k_titles": [],
+          "top_k_snippets": [],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [],
+          "latency_ms_samples": [
+            24
+          ],
+          "latency_ms_median": 24,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [
+            "empty-result-set",
+            "no-relevant-hit"
+          ],
+          "generation": {
+            "generated_answer": "Not in context.",
+            "contexts_used": [],
+            "prompt_used": "You are describing what a SUBSTRING-SEARCH query surfaces against this project's corpus.\nThe query is a LITERAL substring; the items below are entities whose searchable text\nLITERALLY CONTAINS that substring (lessons, documents, chunks, guardrails, commits).\nItems may be UNRELATED to each other — substring co-occurrence is NOT a semantic match.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information not present in the matched\n   entities. Do NOT generalize beyond what each entity literally says.\n2. CITE EVERY CLAIM: Every substantive claim MUST end with a bracketed\n   citation like [1] referring to the matched-entity number(s).\n3. PER-ENTITY DESCRIPTION (do NOT synthesize across matches): describe each\n   matching entity using ONLY that entity's own text. Do NOT claim a \"common\n   theme\" unless multiple entities literally make the SAME proposition — not\n   merely share the same keyword. The whole point of substring search is that\n   matches CAN be coincidental keyword overlap, not topical kinship.\n4. ABSTAIN ATOMICALLY: If no entities meaningfully relate to the query intent,\n   your reply is one line containing only:  Not in context.\n   Otherwise give a substantive cited answer. The two are mutually exclusive.\n\nQUERY:\nADRs\n\nMATCHED ENTITIES:\n(no retrieval hits — answer should say \"Not in context\")\n\nWrite a concise 2-3 sentence answer that:\n- For each matching entity (or clearly-related cluster), describe WHAT it is\n  and WHY the substring appears there, citing the entity number\n- If matches span DIFFERENT topics, list them as separate topics rather than\n  fabricating a unifying theme\n- Do NOT extrapolate or add background — every claim must be directly\n  recoverable from a cited entity's own text\n\nANSWER:\n",
+            "synth_ms": 2231,
+            "judge_ms": 1,
+            "scores": {},
+            "error": "judge_failed: judge sidecar HTTP 422"
+          }
+        }
+      ]
+    }
+  }
+}

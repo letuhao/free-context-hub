@@ -1,14 +1,201 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 031 -->
+<!-- Next ID: 034 -->
+
+## DEFERRED-033
+
+- **Title:** Code-surface retrieval non-determinism — SQL ordering bugs in tieredRetriever
+- **Status:** RESOLVED (2026-06-17, same-day fix)
+- **What:** Comparing the v10 Tradition A and Tradition B baseline JSONs
+  on the `code` surface showed `recall@5` drift of −0.026 with same
+  answerer + same embeddings + same reranker — should have been
+  bit-identical. Forensic analysis of `per_query.top_k_keys` revealed
+  35/77 queries (45%) had **different candidate sets entirely** (0/35
+  were "same set, different order"), which a reranker cannot produce.
+- **Root cause:** five SQL queries in
+  `src/services/tieredRetriever.ts` lacked deterministic ordering:
+  3× `ORDER BY rank/distance LIMIT N` without secondary tiebreakers,
+  plus 2× path-match ILIKE queries with `LIMIT 50` and NO `ORDER BY`
+  at all (pure heap-scan order, shifts with MVCC visibility /
+  autovacuum). Plus the JS `candidates.sort()` in `fuse()` lacked a
+  path-ASC tertiary key, so same-tier-same-score candidates inherited
+  Set-insertion (i.e. SQL row-return) order.
+- **Trigger:** observed during v10 closeout retrieval comparison; was
+  open item #2 on `docs/qc/2026-06-17-v10-tradition-b-same-model-bias-results.md`.
+- **Fix:** appended `(file_path ASC, symbol_name ASC NULLS LAST)` to
+  each affected `ORDER BY`; added explicit `ORDER BY file_path ASC` to
+  the two heap-scan path-match queries; added `path < path` tertiary
+  key to the JS fuse-sort. 868/868 unit tests pass, tsc clean.
+- **Why this is OK to RESOLVE on entry:** the v10A / v10B headline
+  numbers don't shift (the −0.026 r@5 came from 2 gold items moving
+  across the rank-5 boundary, not the candidate-pool churn).
+  Future Phase-17 measurements on the code surface are now
+  bit-reproducible at the retrieval layer.
+- **Forensics doc:** `docs/qc/2026-06-17-code-surface-determinism-fix.md`
+
+## DEFERRED-032
+
+- **Title:** SA Competency Bank golden set has no corpus to ingest — baseline-blocked
+- **Status:** OPEN (2026-06-17)
+- **What:** `qc/competency-geneval.json` was compiled in a separate session
+  (chronologically around 2026-06-17 00:50, not produced by the
+  `deferred-030-rerank-quality` branch's work). It contains 294 statements
+  derived from a 42-item SA Competency Bank covering 41 sub-categories of
+  AI engineering / AWS ops / developer / language-runtime / solution
+  architecture. The set has 148 `standard` (grounded-confirm), 141
+  `false_premise` (hallucination probe), and 5 `no_answer` (abstention
+  probe) items. Each statement carries an ideal-answer + must-contain-facts
+  payload suitable for ragas faithfulness / answer_relevancy /
+  groundedness_self_eval / refusal_correctness evaluation.
+
+  The set's own metadata describes its corpus-dependency:
+  > HELD OUT from the RAG corpus — only `corpus/` docs are ingested; this
+  > set is the answer key.
+
+  **`corpus/` does not exist** in this repository (verified 2026-06-17).
+  Without an ingested corpus to ground answers in, running gen-eval on
+  the competency set measures only the answerer's prior knowledge, not
+  the system's RAG behavior — defeating the point of the held-out
+  answer-key methodology.
+
+- **Trigger condition:** when the corresponding corpus (the source
+  documents the competency bank was authored against) lands in
+  `corpus/` and gets ingested into `free-context-hub` as document
+  chunks. Until then, the golden set is preserved-as-data, not
+  preserved-as-baseline.
+- **Estimated size:** L — author or import the corpus material; ingest
+  via the document-extract job; populate `target_chunk_ids` in the
+  golden set (currently empty) for recall@k; run a baseline (~50 min on
+  Tradition B; ~80 min if also doing CoVe synth mode); document.
+- **Priority:** depends on the workstream that produced the bank. The
+  set is preserved here so it's not lost; a future session that
+  surfaces with the matching corpus can pick it up.
+- **Source:** discovered as untracked file during the `deferred-030-rerank-quality`
+  branch wrap-up (PR #35). Origin session not identified from this
+  branch's history. The competency set is preserved here to avoid
+  losing 294 hand-authored ideal answers; corpus + baseline work
+  deferred to the originating session.
+- **Files:** `qc/competency-geneval.json` (committed in PR #35 alongside
+  the v10 Tradition B + Tradition A baseline work — see commit body for
+  the find/preserve rationale).
+
+---
+
+
+## DEFERRED-031
+
+- **Title:** Global-surface synth: substring-search faithfulness / answer-relevancy trade-off
+  cannot be cleanly resolved with the current RAGAS metric framework
+- **Trigger condition:** any future Phase 17 metric framework change that decouples
+  "groundedness of substantive claims" from "presence of meta-claims," OR a switch to a
+  different judge (e.g. an NLI judge that scores propositions instead of substring
+  recoverability).
+- **Status:** OPEN (2026-06-17)
+- **Context:** Bug 3 v8 fix (Phase 17 closeout) reduced hedging across all surfaces by
+  ~55%. On the `lessons`, `code`, and `chunks` surfaces this was a net win
+  (`faith` neutral or up, `ar` up). On the **`global` surface**, `faith` dropped
+  **−0.119** while `ar` rose +0.097 (v9 vs v6, n=10). DEFERRED-030 closeout note
+  flagged "may need an ABSTAIN rule specific to substring-search semantics."
+- **⚠️ 2026-06-17 first investigation was contaminated by the baseline-
+  stack model-swap bug.** v1/v2 smoke iterations and the v9 reference
+  ran with worker leaking `DISTILLATION_MODEL=gemma` while the baseline
+  ran with mistral-nemo. Root cause + fix:
+  `docs/qc/2026-06-17-baseline-stack-bug-postmortem.md`. Both smokes
+  preserved as historical artifacts but their magnitudes (Δfaith +0.005,
+  Δar −0.126; Δfaith +0.128, Δar −0.268) are not trustworthy on their own.
+
+- **✅ 2026-06-17 v10 clean-stack baseline CONFIRMS the trade-off is REAL.**
+  After fixing the baseline-stack bug + switching baseline rerank to
+  match production (bge-reranker-v2-m3 via local-rerank-service), the
+  v10 full-152-row baseline measured global-surface faithfulness =
+  0.254 vs v9's 0.372 (Δ −0.118). The trade-off survives the clean
+  stack. Results in
+  `docs/qc/2026-06-17-v10-clean-stack-baseline-results.md`.
+
+- **⚠️ 2026-06-17 v10 Tradition B baseline REVISES the magnitude.** Re-
+  measured with gemma judge (instead of mistral-nemo same-model), global
+  faithfulness = **0.444**, not 0.254. The "−0.118 from v9" delta was
+  **~80% same-model bias artifact** — mistral-nemo judging mistral-nemo's
+  hedge-heavy global-surface answers harshly because both share the same
+  uncertainty calibration. A stronger independent judge sees those
+  answers as more substantively grounded. The trade-off vs lessons/code/
+  chunks (faith 0.45-0.90 on the same Tradition B run) is REAL but
+  smaller and more nuanced than originally framed. Results in
+  `docs/qc/2026-06-17-v10-tradition-b-same-model-bias-results.md`. The
+  "not fixable at template layer alone" hypothesis below is now
+  RETIRED — the metric framework is measurable; we just needed a
+  cross-judge to detach the answerer's hedging from the judge's
+  recognition of substance.
+
+- **🔬 2026-06-17 v6 Tradition B baseline DOWNGRADES Bug 3 v8 from
+  "net-positive" to "surface-mixed, net-negative catalog-wide."**
+  Re-ran the v6 template state under Tradition B (152 rows, gemma judge)
+  and compared head-to-head with v8 (=v10B). Catalog-wide weighted-mean
+  faithfulness: v6=0.620, v8=0.528, **Δ=−0.091**. v8 trades −0.091 faith
+  for +0.023 ar — a 4:1 unfavourable ratio. Per-surface: lessons mildly
+  negative (faith −0.084), code LARGELY negative (faith −0.116, grd
+  −0.105), chunks mixed (cp +0.097 / faith −0.041), global net-positive
+  (ar +0.121, grd +0.100). The "v8 net-positive on lessons/code/chunks"
+  claim from Phase 17 closeout was a same-model bias artifact —
+  mistral-nemo judge sympathetically credited mistral-nemo's hedge-light
+  v8 outputs. The hedge-RATE reduction (14→6 on code) is real
+  (judge-independent synth statistic); the QUALITY value of that
+  reduction was overstated. Surprising side finding: **v6 and v8 score
+  IDENTICAL global faith (0.439 vs 0.444)** — the global-surface gap is
+  neither a same-model bias artifact alone NOR a Bug 3 template effect.
+  It's intrinsic to substring-search semantics on ambiguous queries.
+  Full results: `docs/qc/2026-06-17-bug3-v6-vs-v8-tradition-b-results.md`.
+  Open follow-up: a hybrid-template v11 measurement (v6-lessons-code-
+  chunks + v8-global) under Tradition B would isolate the
+  surface-specific wins — separate PR, not bundled into PR #35.
+
+- **Pre-contamination-fix investigation result — NOT FIXABLE at the template layer alone:**
+  - Two iterations attempted on `synthesizer.global.txt` against the controlled
+    baseline stack (mistral-nemo answerer + mistral-nemo judge, seed=42, top-K=3,
+    n=10 smoke per iteration):
+    - **v1 (per-entity description, drop "common theme" framing):** Δfaith
+      +0.005 (noise), Δar **−0.126**. Model produced bullet-style answers that
+      tanked answer-relevancy without recovering faithfulness.
+    - **v2 (prose + silent-skip irrelevant matches + anti-fabrication):** Δfaith
+      **+0.128** (real lift), Δar **−0.268** (cratered). Model gamed the
+      silent-skip rule by writing minimal answers ("The search surfaces two
+      relevant entities: a lesson [1] and a document [2]." — 77 chars, no
+      substantive description). RAGAS faithfulness rises trivially when there
+      are fewer claims to ground; AR collapses because the answer doesn't
+      actually answer the user's question.
+  - **Root cause:** RAGAS `faithfulness` counts the FRACTION of claims that are
+    substring-recoverable from the contexts. Honest meta-claims ("entity X
+    is unrelated to the substring query") are scored as ungrounded because
+    "unrelated" is not in the context. Substring-search inherently surfaces
+    semantically-diverse matches, so any honest description either (a)
+    fabricates a unifying theme (low faith, high AR), (b) explicitly notes
+    diversity (low faith, OK AR), or (c) lists types without substance
+    (high faith, low AR). The metric framework rewards (a) the most.
+  - **Production decision (2026-06-17):** template REVERTED to v8 state on
+    branch `deferred-030-rerank-quality`. Both failed iterations preserved as
+    smoke baselines under `docs/qc/baselines/2026-06-16-2026-06-17-phase-17-bug3-global-fix*.{json,md}`
+    so a future attempt can compare against them.
+- **Estimated size:** M — likely requires either (a) a Phase 17.3 NLI-based judge
+  that scores propositions instead of substring recoverability, OR (b) a separate
+  "substring-search" metric that distinguishes substantive descriptions from
+  meta-claims about match irrelevance, OR (c) accept that global-surface gen-eval
+  is fundamentally noisy and use retrieval metrics only for that surface.
+- **Priority:** LOW — production behavior unchanged (template at v8); affects only
+  the `global` surface (10 of ~152 golden rows). Other surfaces (lessons, code,
+  chunks) unaffected by this gap.
+- **Sessions open:** 1
+- **Source:** Phase 17 closeout note (`docs/qc/2026-05-25-phase-17-ragas-judge-fix-a-b.md`)
+  + DEFERRED-030 follow-up investigation 2026-06-17.
+
+---
 
 ## DEFERRED-030
 
 - **Title:** Cross-encoder rerank — valid quality measurement (recall@k) + harness hygiene
 - **Trigger condition:** any RAG quality pass on rerank, OR before citing a rerank *quality*
   (not latency) number publicly / on a CV.
-- **Status:** OPEN (2026-06-16)
+- **Status:** RESOLVED 2026-06-16 (branch `deferred-030-rerank-quality`).
 - **Context:** Cross-encoder (`bge-reranker-v2-m3`) integration shipped + deployed
   (`RERANK_TYPE=api`, Cohere protocol). **Latency** is measured + solid (90 ms vs ~6.8 s general
   LLM vs 1.8 s Phase-12 ranker). **Quality is NOT validly measured** — three follow-ups:
@@ -17,6 +204,26 @@
   2. Add a raw-prefetch toggle so the harness baseline isn't itself cross-encoder-reranked now
      that `RERANK_TYPE=api` reranks server-side during `search_lessons`.
   3. v2: `min_rerank_score` floor using cross-encoder scores (off-topic rejection).
+- **Resolution:**
+  1. **Better than #1 — golden-set anchored.** Refactored `rerankBenchmark.ts` to load
+     `qc/lessons-queries.json` (48 queries, 66 `target_lesson_ids`, all 66 verified active in
+     current catalog 2026-06-16). True recall@1/3/5/10 + MRR per model, adversarial-pass rate
+     for no-answer queries. No manual relabeling needed — pre-existing labels are already
+     ground-truth.
+  2. New `rerank?: boolean` (default `true`) on `SearchLessonsParams` /
+     `SearchLessonsMultiParams`, threaded through MCP `search_lessons` tool + REST
+     `POST /api/lessons/search`. `false` = explicit bypass, logged in explanations. Benchmark
+     prefetches with `rerank: false` so client-side reranker A/Bs are uncontaminated.
+  3. New env `RERANK_MIN_SCORE` (0..1, default 0 = no floor = unchanged). Cohere + TEI
+     dispatchers drop docs whose relevance falls below the floor and log
+     `dropped=N (min_score=X)` in explanations. Pure-function helper `applyRerankMinScore`
+     (exported, 5 unit tests).
+- **Live measurement:** cross-encoder (bge-reranker-v2-m3) vs no-rerank baseline on the 48-query
+  golden set: R@10 +0.023, adversarial-pass 0.75 → **1.00**, R@3 −0.023 (single-query noise-floor
+  artifact). Latency 38 ms / query. See `docs/benchmarks/2026-06-16-rerank-quality-recall.md`.
+- **Files:** `src/env.ts`, `src/services/lessons.ts`, `src/api/routes/lessons.ts`,
+  `src/mcp/index.ts`, `src/qc/rerankBenchmark.ts`, `src/services/lessons.test.ts`.
+  Design: `docs/specs/2026-06-16-deferred-030-rerank-quality.md`.
 - **Source:** Spec [[2026-06-16-cross-encoder-rerank-integration]] · benchmark
   `docs/benchmarks/2026-06-16-cross-encoder-rerank-benchmark.md`. User opted "Deploy + clean
   re-measure (latency)" and deferred the label refresh.

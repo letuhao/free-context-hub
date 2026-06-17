@@ -68,7 +68,10 @@ router.post('/', requireRole('writer'), async (req, res, next) => {
 /** POST /api/lessons/search — semantic search lessons (single or multi-project) */
 router.post('/search', async (req, res, next) => {
   try {
-    const { project_id, project_ids, group_id, include_groups, query, filters, limit } = req.body;
+    const { project_id, project_ids, group_id, include_groups, query, filters, limit, rerank } = req.body;
+
+    // DEFERRED-030: accept optional `rerank: boolean` (default true = unchanged).
+    const rerankFlag = typeof rerank === 'boolean' ? rerank : undefined;
 
     // Priority: project_ids > group_id > project_id + include_groups > project_id alone
     let resolvedIds: string[] | null = null;
@@ -82,13 +85,13 @@ router.post('/search', async (req, res, next) => {
       if (include_groups) {
         resolvedIds = await resolveProjectIds(projectId, true);
       } else {
-        const result = await searchLessons({ projectId, callerScope: callerScopeOf(req), query, filters, limit });
+        const result = await searchLessons({ projectId, callerScope: callerScopeOf(req), query, filters, limit, rerank: rerankFlag });
         res.json(result);
         return;
       }
     }
 
-    const result = await searchLessonsMulti({ projectIds: resolvedIds, callerScope: callerScopeOf(req), query, filters, limit });
+    const result = await searchLessonsMulti({ projectIds: resolvedIds, callerScope: callerScopeOf(req), query, filters, limit, rerank: rerankFlag });
     res.json(result);
   } catch (e) { next(e); }
 });

@@ -1129,6 +1129,10 @@ function createMcpToolsServer() {
           })
           .optional(),
         limit: z.number().int().positive().optional().describe('Max number of matches to return (default: 10; max: 50).'),
+        rerank: z
+          .boolean()
+          .optional()
+          .describe('DEFERRED-030: set false to skip the server-side rerank dispatcher and return raw retrieval order. Default true (preserve current behavior). Used by rerankBenchmark.ts to fetch an uncontaminated candidate pool.'),
         output_format: OutputFormatSchema.default('auto_both').describe('Response format: auto_both | json_only | json_pretty | summary_only.'),
       }),
       outputSchema: z.object({
@@ -1147,7 +1151,7 @@ function createMcpToolsServer() {
         explanations: z.array(z.string()),
       }),
     },
-    async ({ workspace_token, project_id, project_ids, group_id, include_groups, query, filters, limit, output_format }) => {
+    async ({ workspace_token, project_id, project_ids, group_id, include_groups, query, filters, limit, rerank, output_format }) => {
       const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const filtersTyped = filters as { lesson_type?: any; tags_any?: string[]; include_all_statuses?: boolean } | undefined;
 
@@ -1167,13 +1171,13 @@ function createMcpToolsServer() {
           resolvedIds = await resolveProjectIds(projectId, true);
         } else {
           // Single project search (backwards compat — identical to previous behavior).
-          const result = await searchLessons({ projectId, callerScope, query, limit, filters: filtersTyped });
+          const result = await searchLessons({ projectId, callerScope, query, limit, rerank, filters: filtersTyped });
           const summary = `search_lessons: matches=${result.matches.length}`;
           return formatToolResponse(result, summary, output_format);
         }
       }
 
-      const result = await searchLessonsMulti({ projectIds: resolvedIds, callerScope, query, limit, filters: filtersTyped });
+      const result = await searchLessonsMulti({ projectIds: resolvedIds, callerScope, query, limit, rerank, filters: filtersTyped });
       const summary = `search_lessons: matches=${result.matches.length} (multi-project: ${resolvedIds.length})`;
       return formatToolResponse(result, summary, output_format);
     },

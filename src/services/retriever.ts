@@ -537,6 +537,13 @@ async function llmRerank(params: {
  * Returns a full permutation of candidate indices on success; THROWS on failure
  * (matching llmRerank) so the dispatcher's catch keeps base order and does not
  * cache a degraded order.
+ *
+ * DEFERRED-030 SCOPE NOTE: the lessons surface honors `RERANK_MIN_SCORE` as an
+ * off-topic floor (see `services/lessons.ts:applyRerankMinScore`); the code
+ * surface does NOT yet. When code-search rerank tuning needs the same floor,
+ * import `applyRerankMinScore` here and filter `ranked` before mapping —
+ * mirror the contract in `rerankCohereApi`. Until then, code-search rerank is
+ * "demote, don't drop".
  */
 async function apiRerank(params: {
   query: string;

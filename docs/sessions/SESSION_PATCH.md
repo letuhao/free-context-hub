@@ -1,3 +1,82 @@
+# HOUSEKEEPING — branch cleanup + ragas-judge image rebuild (2026-06-17)
+
+Two no-code-change debt items closed:
+
+- **A4 — stale branches removed.** `deferred-029-b-f` (last `27ba49a`) and
+  `phase-16-17-eval-judge-fix` (last `cb2ec26`) were leftovers from the failed
+  stacked-PR attempt earlier in the Phase 16/17 work. Their content survived
+  via PR #34 (the single-PR merge after the pivot). Verified `--is-ancestor`
+  of `origin/main` false but `git diff --stat main..<branch>` shows main
+  ahead by 100k+ lines (branches are STRICTLY behind). Deleted from origin +
+  local.
+- **A1 — ragas-judge sidecar image rebuilt.** Phase 17 Bug 2c provenance
+  (`HealthResponse.judge_temperature` + `judge_seed`) was committed to
+  `services/ragas-judge/main.py` but only landed in the RUNNING container
+  via `docker cp`. A `docker compose up -d --force-recreate ragas-judge`
+  would have wiped those changes by rolling back to the pre-Bug-2c image.
+  Fix: `docker compose build ragas-judge` + force-recreate. Verified
+  end-to-end: `curl http://localhost:3005/health` now returns
+  `"judge_temperature":0.0,"judge_seed":42` after a clean recreate, sourced
+  from the baked image. Persistence path closed.
+
+No commits — A4 was remote-only; A1 was an image-build against source
+already in main. PR #35 unchanged.
+
+---
+
+# LONGRUN CHECKPOINT — DEFERRED-030 rerank quality (2026-06-16)
+
+**Status:** **DEFERRED-030 cross-encoder rerank quality + harness hygiene** built
+on branch `deferred-030-rerank-quality` (cut from main after the Phase 16/17
+merge — PR #34, `23d014b`). **862/862 unit green** (+5 from 857 baseline);
+tsc clean; no migration.
+
+## Scope (DEFERRED-030 the 3 follow-ups)
+
+| Part | Concern | Resolution |
+|---|---|---|
+| A | Harness baseline is contaminated — server-side cross-encoder reranks the prefetch | New `rerank?: boolean` param on `searchLessons` / `searchLessonsMulti` (default `true` — back-compat). Threaded through MCP `search_lessons` tool + REST `POST /api/lessons/search`. `false` = explicit bypass, logged as `"rerank: skipped (rerank=false on request)"` in the result explanations. |
+| B | No off-topic rejection — even low-relevance items rank #1 | New env `RERANK_MIN_SCORE` (0..1, default 0 = no floor = unchanged). `rerankCohereApi` + `rerankExternalApi` drop docs whose cross-encoder relevance falls below the floor; explanation logs `dropped=N (min_score=X)`. New pure-function helper `applyRerankMinScore` exported for unit tests. |
+| C | `src/qc/rerankBenchmark.ts` measured the wrong thing — substring `expect` labels stale from the Phase-12 lesson set | Full rewrite: loads `qc/lessons-queries.json` (48 queries, 66 target_lesson_ids, all verified active in the current catalog). Computes recall@1/3/5/10 + MRR per model + adversarial-pass rate. Prefetches with `rerank: false` so client-side rerankers compare on the same raw pool. |
+
+## Live benchmark result (2 loaded models)
+
+| Model | R@1 | R@3 | R@5 | R@10 | MRR | adv_pass | latency |
+|---|---|---|---|---|---|---|---|
+| (no-rerank) | 0.841 | 0.909 | 0.909 | 0.909 | 0.874 | 0.750 | 0ms |
+| (cross-encoder) bge-reranker-v2-m3 | 0.841 | 0.886 | 0.886 | 0.932 | 0.870 | **1.000** | 38ms |
+
+Cross-encoder trades a noise-floor mid-tail dip (R@3/R@5 −0.023) for **+0.023
+R@10** and a clean **+0.250 adversarial-rejection** — every adversarial-miss
+query now correctly hesitates (top-1 score < 0.5). Production-acceptable
+38 ms / query. Full table + reading + reproduction recipe in
+`docs/benchmarks/2026-06-16-rerank-quality-recall.md`.
+
+## Files
+
+- **New env:** `RERANK_MIN_SCORE` in `src/env.ts`.
+- **Service:** `src/services/lessons.ts` — `SearchLessonsParams.rerank?`,
+  `SearchLessonsMultiParams.rerank?`, `applyRerankMinScore`, floor in
+  `rerankCohereApi` + `rerankExternalApi`, rerank-skip explanation in both
+  dispatcher call sites.
+- **MCP:** `src/mcp/index.ts` — `search_lessons` accepts `rerank: boolean`.
+- **REST:** `src/api/routes/lessons.ts` — `POST /api/lessons/search` reads
+  `body.rerank` and threads it through.
+- **Harness:** `src/qc/rerankBenchmark.ts` — rewrite.
+- **Tests:** `src/services/lessons.test.ts` — 5 new pure-function tests for
+  `applyRerankMinScore`.
+- **Docs:** `docs/specs/2026-06-16-deferred-030-rerank-quality.md` (DESIGN),
+  `docs/benchmarks/2026-06-16-rerank-quality-recall.md` +
+  `docs/benchmarks/2026-06-16-rerank-quality-recall.json` (live measurement).
+
+## What's next
+
+Single PR to main. After merge — DEFERRED-030 closes (OPEN → RESOLVED). Phase
+17.3 (NLI third judge) + 17.4 (retrieval HyDE/RRF/semantic chunking) remain
+deferred per Phase-17 closeout note — independent of this work.
+
+---
+
 # LONGRUN CHECKPOINT — DEFERRED-029 PR F (2026-05-23, session 3 cont.)
 
 **Status:** **DEFERRED-029 PR F — auth-ON E2E slice + TWO cold-start adversary

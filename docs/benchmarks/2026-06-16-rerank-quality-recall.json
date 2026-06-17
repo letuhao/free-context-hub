@@ -1,0 +1,38 @@
+{
+  "version": "2026-06-16-deferred-030",
+  "generated_at": "2026-06-16T17:07:09.227Z",
+  "project_id": "free-context-hub",
+  "golden_set": "qc/lessons-queries.json",
+  "total_queries": 48,
+  "pool_limit": 20,
+  "rerank_depth": 15,
+  "adversarial_score_floor": 0.5,
+  "aggregates": [
+    {
+      "model": "(no-rerank)",
+      "total_queries": 48,
+      "scored_queries": 44,
+      "adversarial_queries": 4,
+      "recall_at_1": 0.8409090909090909,
+      "recall_at_3": 0.9090909090909091,
+      "recall_at_5": 0.9090909090909091,
+      "recall_at_10": 0.9090909090909091,
+      "mrr": 0.8744146005509642,
+      "adversarial_pass_rate": 0.75,
+      "mean_latency_ms": 0
+    },
+    {
+      "model": "(cross-encoder)bge-reranker-v2-m3",
+      "total_queries": 48,
+      "scored_queries": 44,
+      "adversarial_queries": 4,
+      "recall_at_1": 0.8409090909090909,
+      "recall_at_3": 0.8863636363636364,
+      "recall_at_5": 0.8863636363636364,
+      "recall_at_10": 0.9318181818181818,
+      "mrr": 0.8698863636363636,
+      "adversarial_pass_rate": 1,
+      "mean_latency_ms": 37.875
+    }
+  ]
+}

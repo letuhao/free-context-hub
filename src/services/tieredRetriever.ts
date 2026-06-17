@@ -279,6 +279,10 @@ async function tier3FtsPath(params: {
   }
 
   const res = await params.pool.query(
+    // DEFERRED-033 determinism fix: append (file_path, symbol_name) as
+    // secondary keys. ts_rank ties are common (path-match rows share
+    // rank=0.0 by construction); without a deterministic tiebreaker the
+    // LIMIT cut returns a non-stable subset across runs.
     `SELECT c.file_path, c.chunk_kind, c.symbol_name,
             ts_rank(c.fts, to_tsquery('english', $2)) AS rank,
             substring(c.content, 1, 200) AS sample
@@ -287,7 +291,7 @@ async function tier3FtsPath(params: {
        AND c.fts IS NOT NULL
        AND c.fts @@ to_tsquery('english', $2)
        ${kindWhere}
-     ORDER BY rank DESC
+     ORDER BY rank DESC, c.file_path ASC, c.symbol_name ASC NULLS LAST
      LIMIT $3;`,
     queryParams,
   );
@@ -315,8 +319,13 @@ async function tier3FtsPath(params: {
     }
 
     const pathRes = await params.pool.query(
+      // DEFERRED-033 determinism fix: explicit ORDER BY file_path so the
+      // LIMIT 50 cut is stable. Original heap-scan order shifts across
+      // autovacuum / MVCC visibility — was the #1 source of code-surface
+      // top-k drift between baseline runs.
       `SELECT DISTINCT file_path, chunk_kind FROM chunks
-       WHERE project_id = $1 AND file_path ILIKE ANY($2::text[]) ${pathKindWhere} LIMIT 50;`,
+       WHERE project_id = $1 AND file_path ILIKE ANY($2::text[]) ${pathKindWhere}
+       ORDER BY file_path ASC LIMIT 50;`,
       pathParams,
     );
 
@@ -353,12 +362,17 @@ async function tier4Semantic(params: {
   }
 
   const res = await params.pool.query(
+    // DEFERRED-033 determinism fix: append (file_path, symbol_name) so
+    // float ties on cosine distance break deterministically. With
+    // 1024-dim embeddings ties are rare but not impossible — and
+    // pgvector indexes can return effective ties at very low
+    // discriminant values.
     `SELECT c.file_path, c.symbol_name, c.chunk_kind,
             GREATEST(0, 1 - (c.embedding <=> $2::vector)) AS score,
             substring(c.content, 1, 200) AS sample
      FROM chunks c
      WHERE c.project_id = $1 ${kindWhere}
-     ORDER BY c.embedding <=> $2::vector
+     ORDER BY c.embedding <=> $2::vector, c.file_path ASC, c.symbol_name ASC NULLS LAST
      LIMIT $3;`,
     queryParams,
   );
@@ -535,7 +549,13 @@ function mergeTierResults(
     const ta = tierPriority[a.tier] ?? 0;
     const tb = tierPriority[b.tier] ?? 0;
     if (ta !== tb) return tb - ta;
-    return b.score - a.score;
+    if (a.score !== b.score) return b.score - a.score;
+    // DEFERRED-033 determinism fix: path ASC as final tiebreaker so
+    // candidates that landed on identical (tier, score) — common when
+    // multiple files all hit only via path-match with fts_rank=0.01 —
+    // sort stably across runs instead of inheriting Set-insertion
+    // (i.e. SQL row-return) order.
+    return a.path < b.path ? -1 : a.path > b.path ? 1 : 0;
   });
 
   return candidates;
@@ -706,8 +726,11 @@ async function tierConventionMatch(params: {
     ]);
     if (directPatterns.length) {
       const res = await params.pool.query(
+        // DEFERRED-033 determinism fix: explicit ORDER BY file_path on
+        // LIMIT-truncated path-match query (heap-scan order otherwise).
         `SELECT DISTINCT file_path, substring(content, 1, 200) AS sample FROM chunks
-         WHERE project_id = $1 AND chunk_kind = 'test' AND file_path ILIKE ANY($2::text[]) LIMIT 50;`,
+         WHERE project_id = $1 AND chunk_kind = 'test' AND file_path ILIKE ANY($2::text[])
+         ORDER BY file_path ASC LIMIT 50;`,
         [params.projectId, directPatterns],
       );
       for (const row of (res.rows ?? []) as any[]) {
@@ -726,8 +749,11 @@ async function tierConventionMatch(params: {
   if (!testPatterns.length) return result;
 
   const res = await params.pool.query(
+    // DEFERRED-033 determinism fix: explicit ORDER BY file_path on
+    // LIMIT-truncated path-match query (heap-scan order otherwise).
     `SELECT DISTINCT file_path, substring(content, 1, 200) AS sample FROM chunks
-     WHERE project_id = $1 AND chunk_kind = 'test' AND file_path ILIKE ANY($2::text[]) LIMIT 50;`,
+     WHERE project_id = $1 AND chunk_kind = 'test' AND file_path ILIKE ANY($2::text[])
+     ORDER BY file_path ASC LIMIT 50;`,
     [params.projectId, testPatterns],
   );
 

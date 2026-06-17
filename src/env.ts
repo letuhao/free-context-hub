@@ -211,9 +211,13 @@ const EnvSchema = z.object({
   DISTILLATION_ENABLED: z
     .preprocess(v => parseBooleanEnv(v), z.boolean().optional())
     .default(false),
-  DISTILLATION_BASE_URL: z.string().min(1).optional(),
+  DISTILLATION_BASE_URL: z.preprocess(v => (v === '' ? undefined : v), z.string().min(1).optional()),
   DISTILLATION_API_KEY: z.string().optional(),
-  DISTILLATION_MODEL: z.string().min(1).optional(),
+  // 2026-06-17 baseline-stack fix: docker-compose's `${X-default}` propagates
+  // an empty value from .env.baseline as empty string (not "unset"). Preprocess
+  // empty string as undefined so .env.baseline can ACTUALLY disable
+  // distillation. Same pattern as RERANK_MODEL just below.
+  DISTILLATION_MODEL: z.preprocess(v => (v === '' ? undefined : v), z.string().min(1).optional()),
   DISTILLATION_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(12_000),
   REFLECT_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(5000),
 
@@ -246,11 +250,25 @@ const EnvSchema = z.object({
    *  (caller falls back to base order). */
   RERANK_API_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(800),
   RERANK_CACHE_TTL_SECONDS: z.coerce.number().int().positive().optional().default(3600),
+  /** DEFERRED-030: cross-encoder relevance-score floor (0..1, inclusive lower bound)
+   *  for `RERANK_TYPE=api`. Docs whose cross-encoder score is strictly below this
+   *  value are DROPPED from the result set (off-topic rejection), not just demoted.
+   *  Default 0 = no floor = identical to pre-DEFERRED-030 behavior.
+   *
+   *  SCOPE NOTE: this floor is enforced ONLY on the LESSONS surface (via
+   *  `rerankCohereApi`/`rerankExternalApi` in `services/lessons.ts`). The
+   *  code-search surface (`services/retriever.ts:apiRerank`) does NOT yet honor
+   *  it — a future code-search quality pass should thread the same env through
+   *  `apiRerank` or rename this knob to `RERANK_MIN_SCORE_LESSONS`. Tracked at
+   *  the call site (search `RERANK_MIN_SCORE` in retriever.ts). */
+  RERANK_MIN_SCORE: z.coerce.number().min(0).max(1).optional().default(0),
 
   // Optional dedicated QA agent model endpoint for FAQ/RAPTOR synthesis.
-  QA_AGENT_BASE_URL: z.string().min(1).optional(),
+  // 2026-06-17 baseline-stack fix: empty-string → undefined preprocess so
+  // .env.baseline can disable QA agent via empty value without zod erroring.
+  QA_AGENT_BASE_URL: z.preprocess(v => (v === '' ? undefined : v), z.string().min(1).optional()),
   QA_AGENT_API_KEY: z.string().optional(),
-  QA_AGENT_MODEL: z.string().min(1).optional(),
+  QA_AGENT_MODEL: z.preprocess(v => (v === '' ? undefined : v), z.string().min(1).optional()),
   QA_AGENT_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(12_000),
   /** One-shot summarization input cap; longer text uses head+tail excerpt (RAPTOR, qaSummarize). */
   QA_SUMMARIZE_MAX_INPUT_CHARS: z.coerce.number().int().positive().optional().default(120_000),
@@ -259,9 +277,10 @@ const EnvSchema = z.object({
 
   // Optional dedicated Builder/QC/Judge agent model endpoints for Phase 6+ loops.
   // All are optional and may fallback to DISTILLATION_* (then EMBEDDINGS_* in callers).
-  BUILDER_AGENT_BASE_URL: z.string().min(1).optional(),
+  // 2026-06-17 baseline-stack fix: empty-string preprocess (see DISTILLATION_MODEL).
+  BUILDER_AGENT_BASE_URL: z.preprocess(v => (v === '' ? undefined : v), z.string().min(1).optional()),
   BUILDER_AGENT_API_KEY: z.string().optional(),
-  BUILDER_AGENT_MODEL: z.string().min(1).optional(),
+  BUILDER_AGENT_MODEL: z.preprocess(v => (v === '' ? undefined : v), z.string().min(1).optional()),
   /** Single-pass / hierarchical builder memory chat; large repo samples need well above 12s on local LLMs. */
   BUILDER_AGENT_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(120_000),
   QC_AGENT_BASE_URL: z.string().min(1).optional(),
