@@ -17,8 +17,19 @@ const LM_STUDIO = process.env.LM_STUDIO_URL || 'http://localhost:1234';
 const MCP_URL = process.env.MCP_SERVER_URL || 'http://localhost:3000';
 const JUDGE_URL = process.env.RAGAS_JUDGE_URL || 'http://localhost:3005';
 
-const EXPECTED_CHAT = 'mistralai/mistral-nemo-instruct-2407';
-const EXPECTED_EMBED = 'text-embedding-bge-m3';
+// 2026-06-17: parametrized for Tradition A (mistral-nemo answerer+judge)
+// vs Tradition B (mistral-nemo answerer + gemma judge — eliminates same-
+// model bias per docs/qc/2026-05-24-phase-17-answerer-model-selection.md).
+// Set EXPECTED_ANSWERER + EXPECTED_JUDGE explicitly to override the
+// Tradition A defaults. EXPECTED_JUDGE defaults to EXPECTED_ANSWERER, so
+// existing Tradition A invocations need no change.
+const EXPECTED_ANSWERER = process.env.EXPECTED_ANSWERER_MODEL || 'mistralai/mistral-nemo-instruct-2407';
+const EXPECTED_JUDGE = process.env.EXPECTED_JUDGE_MODEL || EXPECTED_ANSWERER;
+const EXPECTED_EMBED = process.env.EXPECTED_EMBED_MODEL || 'text-embedding-bge-m3';
+// Backward-compat alias — older parts of this file still reference EXPECTED_CHAT
+// to mean "the answerer chat model." Keep them pointing at the answerer.
+const EXPECTED_CHAT = EXPECTED_ANSWERER;
+const TRADITION_B = EXPECTED_JUDGE !== EXPECTED_ANSWERER;
 
 const strict = process.argv.includes('--strict');
 

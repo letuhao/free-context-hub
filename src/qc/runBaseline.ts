@@ -131,6 +131,14 @@ function parseArgs(argv: string[]) {
   const synthMode = (args.get('synth-mode') ?? 'standard') as SynthMode;
   // Phase 17.x: skip preflight if explicitly requested (e.g. dev iteration).
   const skipPreflight = args.get('no-preflight') === 'true' || args.get('no-preflight') === '1';
+  // 2026-06-17: two-phase execution. Phase 1 = retrieval + synth (answerer
+  // model only); Phase 2 = judge (judge model only). With interleaved
+  // single-phase, every row swaps LM Studio answerer↔judge when the two
+  // are different models (Tradition B: mistral-nemo + gemma). Two-phase
+  // collapses to ONE swap mid-baseline (mistral-nemo idle → gemma loaded).
+  // Default false to keep Tradition A behavior bit-identical. Enable for
+  // Tradition B or any cross-model judge setup.
+  const deferJudge = args.get('defer-judge') === 'true' || args.get('defer-judge') === '1';
 
   return {
     tag,
@@ -145,6 +153,7 @@ function parseArgs(argv: string[]) {
     maxRows,
     synthMode,
     skipPreflight,
+    deferJudge,
   };
 }
 
@@ -236,7 +245,7 @@ async function evalQuery(
   k: number,
   samples: number,
   genEval?: GenEvalConfig,
-): Promise<PerQuery> {
+): Promise<{ row: PerQuery; pending?: PendingJudge }> {
   const { last, latencies } = await runSamples(() => dispatch(q.query, k), samples);
   const topK = last.items.slice(0, k);
   const targets = targetKeysFor(surface, q);
@@ -282,13 +291,16 @@ async function evalQuery(
   //   2. row has an ideal_answer (means it's a gen-eval-tagged row)
   //   3. retrieval didn't error
   let generation: GenResult | undefined = undefined;
+  let pending: PendingJudge | undefined = undefined;
   const shouldGenEval =
     genEval !== undefined &&
     genEval.mode !== 'off' &&
     q.ideal_answer !== undefined &&
     !last.error;
   if (shouldGenEval && genEval) {
-    generation = await runGenEvalForRow(surface, q, topK, genEval);
+    const out = await runGenEvalForRow(surface, q, topK, genEval);
+    generation = out.result;
+    pending = out.pending;
   } else if (genEval?.mode === 'on' && q.ideal_answer === undefined) {
     // Strict mode: row missing ideal_answer is a hard error
     generation = {
@@ -303,20 +315,23 @@ async function evalQuery(
   }
 
   return {
-    id: q.id,
-    group: q.group,
-    query: q.query,
-    top_k_keys: topK.map((x) => x.key),
-    top_k_titles: topK.map((x) => x.title),
-    top_k_snippets: topK.map((x) => (x.snippet ? x.snippet.slice(0, 300) : undefined)),
-    found_ranks,
-    graded_hits_in_rank_order: graded,
-    latency_ms_samples: latencies,
-    latency_ms_median: median,
-    has_relevant_hit_in_top_k,
-    friction_classes,
-    error: last.error,
-    ...(generation ? { generation } : {}),
+    row: {
+      id: q.id,
+      group: q.group,
+      query: q.query,
+      top_k_keys: topK.map((x) => x.key),
+      top_k_titles: topK.map((x) => x.title),
+      top_k_snippets: topK.map((x) => (x.snippet ? x.snippet.slice(0, 300) : undefined)),
+      found_ranks,
+      graded_hits_in_rank_order: graded,
+      latency_ms_samples: latencies,
+      latency_ms_median: median,
+      has_relevant_hit_in_top_k,
+      friction_classes,
+      error: last.error,
+      ...(generation ? { generation } : {}),
+    },
+    pending,
   };
 }
 
@@ -330,16 +345,39 @@ type GenEvalConfig = {
   topKContexts: number;
   /** Phase 17.2: 'standard' single-shot or 'cove' Chain-of-Verification. */
   synthMode: SynthMode;
+  /** 2026-06-17: when true, runGenEvalForRow returns the JudgeRequest in
+   *  `_pendingJudge` instead of calling the sidecar inline. The caller
+   *  (runAllSurfaces) drains all pending judges in a second phase, which
+   *  groups answerer calls and judge calls into separate windows so
+   *  LM Studio doesn't swap mistral-nemo↔gemma every row when the two
+   *  models differ (Tradition B). */
+  deferJudge: boolean;
+};
+
+/** Internal: when deferJudge=true, runGenEvalForRow returns this alongside
+ *  the synth-only result so the caller can run judge later. */
+type PendingJudge = {
+  request: JudgeRequest;
+  synth: {
+    generated_answer: string;
+    contexts_used: GenResult['contexts_used'];
+    prompt_used: string;
+    synth_ms: number;
+    cove?: import('./genEvalTypes.js').CoVeTrace;
+  };
 };
 
 /** Run synth + judge for a single row. Errors are captured into GenResult.error
- *  so they don't fail the whole baseline. */
+ *  so they don't fail the whole baseline.
+ *
+ *  When cfg.deferJudge is true, returns the synth-only GenResult AND a
+ *  PendingJudge sidecar so the caller can run judge in a separate phase. */
 async function runGenEvalForRow(
   surface: Surface,
   q: GoldenQuery,
   retrievalHits: SurfaceResult['items'],
   cfg: GenEvalConfig,
-): Promise<GenResult> {
+): Promise<{ result: GenResult; pending?: PendingJudge }> {
   // 1. Synthesize an answer using the top-K retrieval hits.
   //    Phase 17.2: CoVe mode runs the 4-step verification pipeline; standard
   //    runs the single-shot synthesizer.
@@ -367,16 +405,18 @@ async function runGenEvalForRow(
   // Synth failed → return error result without judge call.
   if (synthRes.error) {
     return {
-      generated_answer: synthRes.generated_answer,
-      contexts_used: synthRes.contexts_used,
-      prompt_used: synthRes.prompt_used,
-      synth_ms: synthRes.synth_ms,
-      judge_ms: 0,
-      scores: {},
-      error: synthRes.error,
-      ...((synthRes as unknown as { cove?: import('./genEvalTypes.js').CoVeTrace }).cove
-        ? { cove: (synthRes as unknown as { cove: import('./genEvalTypes.js').CoVeTrace }).cove }
-        : {}),
+      result: {
+        generated_answer: synthRes.generated_answer,
+        contexts_used: synthRes.contexts_used,
+        prompt_used: synthRes.prompt_used,
+        synth_ms: synthRes.synth_ms,
+        judge_ms: 0,
+        scores: {},
+        error: synthRes.error,
+        ...((synthRes as unknown as { cove?: import('./genEvalTypes.js').CoVeTrace }).cove
+          ? { cove: (synthRes as unknown as { cove: import('./genEvalTypes.js').CoVeTrace }).cove }
+          : {}),
+      },
     };
   }
 
@@ -405,9 +445,38 @@ async function runGenEvalForRow(
     options: { include_reasons: true },
   };
 
-  const t0 = Date.now();
   // Phase 17.2: capture cove trace from synth result (may be undefined)
   const coveTrace = (synthRes as unknown as { cove?: import('./genEvalTypes.js').CoVeTrace }).cove;
+
+  // 2026-06-17: defer judge for Tradition B. Caller will run all judges in
+  // a single LM-Studio-warm phase after all syntheses across all surfaces
+  // complete. The returned `result` has placeholder judge_ms=0 + empty
+  // scores; the Phase 2 drain populates them in-place.
+  if (cfg.deferJudge) {
+    return {
+      result: {
+        generated_answer: synthRes.generated_answer,
+        contexts_used: synthRes.contexts_used,
+        prompt_used: synthRes.prompt_used,
+        synth_ms: synthRes.synth_ms,
+        judge_ms: 0,
+        scores: {},
+        ...(coveTrace ? { cove: coveTrace } : {}),
+      },
+      pending: {
+        request: judgeReq,
+        synth: {
+          generated_answer: synthRes.generated_answer,
+          contexts_used: synthRes.contexts_used,
+          prompt_used: synthRes.prompt_used,
+          synth_ms: synthRes.synth_ms,
+          ...(coveTrace ? { cove: coveTrace } : {}),
+        },
+      },
+    };
+  }
+
+  const t0 = Date.now();
   try {
     const judgeRes = await scoreOnce(judgeReq, {
       baseUrl: cfg.judgeUrl,
@@ -415,29 +484,33 @@ async function runGenEvalForRow(
     });
     const judge_ms = Date.now() - t0;
     return {
-      generated_answer: synthRes.generated_answer,
-      contexts_used: synthRes.contexts_used,
-      prompt_used: synthRes.prompt_used,
-      synth_ms: synthRes.synth_ms,
-      judge_ms,
-      scores: judgeRes.scores,
-      reasons: Object.keys(judgeRes.reasons).length ? judgeRes.reasons : undefined,
-      skipped: judgeRes.skipped.length ? judgeRes.skipped : undefined,
-      skip_reason: judgeRes.skip_reason ?? undefined,
-      fail_reasons: detectFailReasons(judgeRes.scores),
-      ...(coveTrace ? { cove: coveTrace } : {}),
+      result: {
+        generated_answer: synthRes.generated_answer,
+        contexts_used: synthRes.contexts_used,
+        prompt_used: synthRes.prompt_used,
+        synth_ms: synthRes.synth_ms,
+        judge_ms,
+        scores: judgeRes.scores,
+        reasons: Object.keys(judgeRes.reasons).length ? judgeRes.reasons : undefined,
+        skipped: judgeRes.skipped.length ? judgeRes.skipped : undefined,
+        skip_reason: judgeRes.skip_reason ?? undefined,
+        fail_reasons: detectFailReasons(judgeRes.scores),
+        ...(coveTrace ? { cove: coveTrace } : {}),
+      },
     };
   } catch (err) {
     const judge_ms = Date.now() - t0;
     return {
-      generated_answer: synthRes.generated_answer,
-      contexts_used: synthRes.contexts_used,
-      prompt_used: synthRes.prompt_used,
-      synth_ms: synthRes.synth_ms,
-      judge_ms,
-      scores: {},
-      error: `judge_failed: ${err instanceof Error ? err.message : String(err)}`,
-      ...(coveTrace ? { cove: coveTrace } : {}),
+      result: {
+        generated_answer: synthRes.generated_answer,
+        contexts_used: synthRes.contexts_used,
+        prompt_used: synthRes.prompt_used,
+        synth_ms: synthRes.synth_ms,
+        judge_ms,
+        scores: {},
+        error: `judge_failed: ${err instanceof Error ? err.message : String(err)}`,
+        ...(coveTrace ? { cove: coveTrace } : {}),
+      },
     };
   }
 }
@@ -910,6 +983,10 @@ async function runAllSurfaces(
   // runs; elide the `/label` suffix so the log line reads `[baseline]`.
   const prefix = opts.label ? `[baseline/${opts.label}]` : '[baseline]';
   const perQueryPrefix = opts.label ? `[${opts.label}] ` : '';
+  // 2026-06-17 defer-judge mode: queues for the Phase 2 drain. Empty when
+  // genEval.deferJudge=false (current production / Tradition A path).
+  const pendingJudges: Array<{ surface: Surface; rowRef: PerQuery; pending: PendingJudge }> = [];
+  const pendingAggregates: Array<{ surface: Surface; perQuery: PerQuery[]; pid: string }> = [];
 
   for (const surface of opts.surfacesFilter) {
     const file = GOLDEN_FILES[surface];
@@ -947,7 +1024,7 @@ async function runAllSurfaces(
       // Phase 17.x: timestamp the row START so retry pauses between rows are
       // attributable. Flush so interactive `tail -f` sees this immediately.
       process.stdout.write(`[${ts()}]   ${perQueryPrefix}${surface}/${q.id} ... `);
-      const res = await evalQuery(surface, dispatch, q, opts.k, opts.samples, opts.genEval);
+      const { row: res, pending } = await evalQuery(surface, dispatch, q, opts.k, opts.samples, opts.genEval);
       const rowMs = Date.now() - rowStartMs;
       const frictionNote = res.friction_classes.length ? ', ' + res.friction_classes.join(';') : '';
       let genNote = '';
@@ -957,6 +1034,9 @@ async function runAllSurfaces(
         const timing = `s:${res.generation.synth_ms}ms+j:${res.generation.judge_ms}ms`;
         if (res.generation.error) {
           genNote = `, gen=ERR(${timing}, ${res.generation.error.slice(0, 60)})`;
+        } else if (pending) {
+          // 2026-06-17: defer-judge mode — scores will be filled by Phase 2.
+          genNote = `, gen[synth-only, s:${res.generation.synth_ms}ms, judge=DEFERRED]`;
         } else {
           const f = res.generation.scores.faithfulness;
           const fmt = (v: number | null | undefined) =>
@@ -968,11 +1048,69 @@ async function runAllSurfaces(
         `${res.found_ranks.length ? 'HIT@' + res.found_ranks.join(',') : 'MISS'} retrieval=${res.latency_ms_median}ms row_total=${rowMs}ms${frictionNote}${genNote}\n`,
       );
         perQuery.push(res);
+        if (pending) {
+          // Stash the (perQuery row reference, pending judge request) for
+          // Phase 2 to drain after all syntheses complete.
+          pendingJudges.push({ surface, rowRef: res, pending });
+        }
       }
     } finally {
       clearInterval(heartbeat);
     }
-    surfaces[surface] = aggregate(perQuery, pid);
+    // 2026-06-17: in defer-judge mode, don't aggregate until Phase 2 fills
+    // in judge scores. Aggregation happens AFTER the Phase 2 drain so the
+    // gen-eval metrics are present.
+    if (!opts.genEval?.deferJudge) {
+      surfaces[surface] = aggregate(perQuery, pid);
+    } else {
+      // Stash for post-Phase-2 aggregation.
+      pendingAggregates.push({ surface, perQuery, pid });
+    }
+  }
+
+  // 2026-06-17: Phase 2 judge drain. With Tradition B (answerer=mistral-nemo,
+  // judge=gemma), LM Studio swaps mistral-nemo↔gemma every row when judge
+  // runs inline. Two-phase mode collapses to ONE swap (mistral-nemo idle →
+  // gemma loaded once judge phase starts) which removes 99% of the swap
+  // overhead and keeps measurements free of mid-row contamination.
+  if (opts.genEval?.deferJudge && pendingJudges.length > 0) {
+    console.log(`[${ts()}] ${prefix} Phase 2 judge drain: ${pendingJudges.length} cached rows (mistral-nemo idle → judge model loaded once)`);
+    for (let i = 0; i < pendingJudges.length; i++) {
+      const { surface, rowRef, pending } = pendingJudges[i]!;
+      const t0 = Date.now();
+      try {
+        const judgeRes = await scoreOnce(pending.request, {
+          baseUrl: opts.genEval.judgeUrl,
+          timeoutMs: opts.genEval.judgeTimeoutMs,
+        });
+        const judge_ms = Date.now() - t0;
+        if (rowRef.generation) {
+          rowRef.generation.judge_ms = judge_ms;
+          rowRef.generation.scores = judgeRes.scores;
+          rowRef.generation.reasons = Object.keys(judgeRes.reasons).length ? judgeRes.reasons : undefined;
+          rowRef.generation.skipped = judgeRes.skipped.length ? judgeRes.skipped : undefined;
+          rowRef.generation.skip_reason = judgeRes.skip_reason ?? undefined;
+          rowRef.generation.fail_reasons = detectFailReasons(judgeRes.scores);
+        }
+        // Progress: print compact "every 10" + final score
+        if ((i + 1) % 10 === 0 || i + 1 === pendingJudges.length) {
+          const f = judgeRes.scores.faithfulness;
+          const fmt = (v: number | null | undefined) => v === null || v === undefined ? '—' : v.toFixed(2);
+          const ridPart = (pending.request.request_id ?? '').split('/').pop() ?? '';
+          console.log(`[${ts()}]   judge ${i + 1}/${pendingJudges.length} ${surface}/${ridPart} ${judge_ms}ms f=${fmt(f)}`);
+        }
+      } catch (err) {
+        const judge_ms = Date.now() - t0;
+        if (rowRef.generation) {
+          rowRef.generation.judge_ms = judge_ms;
+          rowRef.generation.error = `judge_failed: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      }
+    }
+    // Aggregate everything now that Phase 2 has filled in the scores.
+    for (const { surface, perQuery, pid } of pendingAggregates) {
+      surfaces[surface] = aggregate(perQuery, pid);
+    }
   }
 
   return { surfaces, primaryProjectId };
@@ -989,6 +1127,10 @@ async function preflightGenEval(opts: {
   expectedEmbeddings?: string;
   lmStudioUrl?: string;
   skip?: boolean;
+  /** 2026-06-17: when true (Tradition B / cross-model judge), allow the
+   *  sidecar judge_model to differ from answererModel. Two-phase mode
+   *  collapses the N-row swap storm to a single mid-baseline swap. */
+  deferJudge?: boolean;
 }): Promise<string | null> {
   if (opts.skip) return null;
   const lmStudio = opts.lmStudioUrl ?? 'http://localhost:1234';
@@ -1035,12 +1177,14 @@ async function preflightGenEval(opts: {
       const d = (await res.json()) as { status?: string; judge_model?: string };
       if (d.status !== 'ok') return `ragas-judge sidecar status='${d.status}', expected 'ok'`;
       // If the sidecar's judge_model doesn't match the answerer, every judge
-      // call would trigger an LM Studio model swap — strictly refuse.
-      if (d.judge_model && d.judge_model !== opts.answererModel) {
+      // call would trigger an LM Studio model swap — strictly refuse UNLESS
+      // defer-judge is on (two-phase mode collapses N swaps to 1).
+      if (d.judge_model && d.judge_model !== opts.answererModel && !opts.deferJudge) {
         return (
           `sidecar judge_model='${d.judge_model}' but baseline expects '${opts.answererModel}'.\n` +
           `   mismatch causes LM Studio to swap models on every judge call.\n` +
-          `   restart sidecar with: JUDGE_AGENT_MODEL=${opts.answererModel} docker compose --profile measurement up -d ragas-judge --force-recreate`
+          `   fix: either pin sidecar to '${opts.answererModel}' (Tradition A) OR rerun with --defer-judge=true (Tradition B).\n` +
+          `   to repin the sidecar: JUDGE_AGENT_MODEL=${opts.answererModel} docker compose --profile measurement up -d ragas-judge --force-recreate`
         );
       }
     } finally {
@@ -1093,6 +1237,7 @@ async function main() {
     maxRows,
     synthMode,
     skipPreflight,
+    deferJudge,
   } = parseArgs(process.argv.slice(2));
   const today = new Date().toISOString().slice(0, 10);
   const runStart = new Date();
@@ -1132,6 +1277,7 @@ async function main() {
       },
       topKContexts,
       synthMode,
+      deferJudge,
     };
 
     // Probe judge /health for manifest (best-effort; doesn't block run).
@@ -1169,6 +1315,7 @@ async function main() {
       expectedEmbeddings: process.env.EMBEDDINGS_MODEL ?? 'text-embedding-bge-m3',
       lmStudioUrl: 'http://localhost:1234',
       skip: skipPreflight,
+      deferJudge,
     });
     if (preflightFailure) {
       console.error('');

@@ -30,9 +30,23 @@
   match production (bge-reranker-v2-m3 via local-rerank-service), the
   v10 full-152-row baseline measured global-surface faithfulness =
   0.254 vs v9's 0.372 (Δ −0.118). The trade-off survives the clean
-  stack. The "not fixable at template layer alone" conclusion below
-  stands as a confirmed finding, not a hypothesis. Results in
+  stack. Results in
   `docs/qc/2026-06-17-v10-clean-stack-baseline-results.md`.
+
+- **⚠️ 2026-06-17 v10 Tradition B baseline REVISES the magnitude.** Re-
+  measured with gemma judge (instead of mistral-nemo same-model), global
+  faithfulness = **0.444**, not 0.254. The "−0.118 from v9" delta was
+  **~80% same-model bias artifact** — mistral-nemo judging mistral-nemo's
+  hedge-heavy global-surface answers harshly because both share the same
+  uncertainty calibration. A stronger independent judge sees those
+  answers as more substantively grounded. The trade-off vs lessons/code/
+  chunks (faith 0.45-0.90 on the same Tradition B run) is REAL but
+  smaller and more nuanced than originally framed. Results in
+  `docs/qc/2026-06-17-v10-tradition-b-same-model-bias-results.md`. The
+  "not fixable at template layer alone" hypothesis below is now
+  RETIRED — the metric framework is measurable; we just needed a
+  cross-judge to detach the answerer's hedging from the judge's
+  recognition of substance.
 
 - **Pre-contamination-fix investigation result — NOT FIXABLE at the template layer alone:**
   - Two iterations attempted on `synthesizer.global.txt` against the controlled
