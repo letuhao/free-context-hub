@@ -1,7 +1,56 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 032 -->
+<!-- Next ID: 033 -->
+
+## DEFERRED-032
+
+- **Title:** SA Competency Bank golden set has no corpus to ingest — baseline-blocked
+- **Status:** OPEN (2026-06-17)
+- **What:** `qc/competency-geneval.json` was compiled in a separate session
+  (chronologically around 2026-06-17 00:50, not produced by the
+  `deferred-030-rerank-quality` branch's work). It contains 294 statements
+  derived from a 42-item SA Competency Bank covering 41 sub-categories of
+  AI engineering / AWS ops / developer / language-runtime / solution
+  architecture. The set has 148 `standard` (grounded-confirm), 141
+  `false_premise` (hallucination probe), and 5 `no_answer` (abstention
+  probe) items. Each statement carries an ideal-answer + must-contain-facts
+  payload suitable for ragas faithfulness / answer_relevancy /
+  groundedness_self_eval / refusal_correctness evaluation.
+
+  The set's own metadata describes its corpus-dependency:
+  > HELD OUT from the RAG corpus — only `corpus/` docs are ingested; this
+  > set is the answer key.
+
+  **`corpus/` does not exist** in this repository (verified 2026-06-17).
+  Without an ingested corpus to ground answers in, running gen-eval on
+  the competency set measures only the answerer's prior knowledge, not
+  the system's RAG behavior — defeating the point of the held-out
+  answer-key methodology.
+
+- **Trigger condition:** when the corresponding corpus (the source
+  documents the competency bank was authored against) lands in
+  `corpus/` and gets ingested into `free-context-hub` as document
+  chunks. Until then, the golden set is preserved-as-data, not
+  preserved-as-baseline.
+- **Estimated size:** L — author or import the corpus material; ingest
+  via the document-extract job; populate `target_chunk_ids` in the
+  golden set (currently empty) for recall@k; run a baseline (~50 min on
+  Tradition B; ~80 min if also doing CoVe synth mode); document.
+- **Priority:** depends on the workstream that produced the bank. The
+  set is preserved here so it's not lost; a future session that
+  surfaces with the matching corpus can pick it up.
+- **Source:** discovered as untracked file during the `deferred-030-rerank-quality`
+  branch wrap-up (PR #35). Origin session not identified from this
+  branch's history. The competency set is preserved here to avoid
+  losing 294 hand-authored ideal answers; corpus + baseline work
+  deferred to the originating session.
+- **Files:** `qc/competency-geneval.json` (committed in PR #35 alongside
+  the v10 Tradition B + Tradition A baseline work — see commit body for
+  the find/preserve rationale).
+
+---
+
 
 ## DEFERRED-031
 
