@@ -128,6 +128,28 @@
   cross-judge to detach the answerer's hedging from the judge's
   recognition of substance.
 
+- **🔬 2026-06-17 v6 Tradition B baseline DOWNGRADES Bug 3 v8 from
+  "net-positive" to "surface-mixed, net-negative catalog-wide."**
+  Re-ran the v6 template state under Tradition B (152 rows, gemma judge)
+  and compared head-to-head with v8 (=v10B). Catalog-wide weighted-mean
+  faithfulness: v6=0.620, v8=0.528, **Δ=−0.091**. v8 trades −0.091 faith
+  for +0.023 ar — a 4:1 unfavourable ratio. Per-surface: lessons mildly
+  negative (faith −0.084), code LARGELY negative (faith −0.116, grd
+  −0.105), chunks mixed (cp +0.097 / faith −0.041), global net-positive
+  (ar +0.121, grd +0.100). The "v8 net-positive on lessons/code/chunks"
+  claim from Phase 17 closeout was a same-model bias artifact —
+  mistral-nemo judge sympathetically credited mistral-nemo's hedge-light
+  v8 outputs. The hedge-RATE reduction (14→6 on code) is real
+  (judge-independent synth statistic); the QUALITY value of that
+  reduction was overstated. Surprising side finding: **v6 and v8 score
+  IDENTICAL global faith (0.439 vs 0.444)** — the global-surface gap is
+  neither a same-model bias artifact alone NOR a Bug 3 template effect.
+  It's intrinsic to substring-search semantics on ambiguous queries.
+  Full results: `docs/qc/2026-06-17-bug3-v6-vs-v8-tradition-b-results.md`.
+  Open follow-up: a hybrid-template v11 measurement (v6-lessons-code-
+  chunks + v8-global) under Tradition B would isolate the
+  surface-specific wins — separate PR, not bundled into PR #35.
+
 - **Pre-contamination-fix investigation result — NOT FIXABLE at the template layer alone:**
   - Two iterations attempted on `synthesizer.global.txt` against the controlled
     baseline stack (mistral-nemo answerer + mistral-nemo judge, seed=42, top-K=3,
