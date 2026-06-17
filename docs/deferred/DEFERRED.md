@@ -128,6 +128,30 @@
   cross-judge to detach the answerer's hedging from the judge's
   recognition of substance.
 
+- **✅ 2026-06-17 v11 hybrid (v6-lessons/code/chunks + v8-global)
+  CONFIRMED as Pareto improvement over both pure-v6 and pure-v8.**
+  Catalog-wide weighted faith=0.618 (matches v6's 0.620 within noise,
+  beats v8 by +0.089); catalog-wide ar=0.798 (beats v6 by +0.035 AND
+  v8 by +0.013). Per-surface predictions all confirmed (lessons/code/
+  chunks track v6, global tracks v8). Side surprise: code ar=0.793
+  marginally beats both v6 (0.742) and v8 (0.789), suggesting a small
+  positive interaction effect from mixing v6 strict-abstention with
+  v8 global ABSTAIN signaling. One regression: chunks cp/cr drop by
+  −0.076/−0.077 vs pure-v8 (v6 has weaker chunks cp/cr by design;
+  v11 inherits that). Branch: `v11-hybrid-templates` off `deferred-030`.
+  Run had to be re-done after first attempt corrupted by LM Studio's
+  gemma-4 switching to reasoning-by-default between v6 and v11 runs,
+  exhausting max_tokens before structured output could close. Fixed
+  permanently via `reasoning_effort=none` monkey-patch in
+  `services/ragas-judge/main.py:_build_openai_client`. Results in
+  `docs/qc/2026-06-17-v11-hybrid-templates-results.md`. This downgrades
+  DEFERRED-031 in two ways: (1) "global gap is fundamental at template
+  layer" hypothesis is now FULLY RETIRED (v11 shows the gap is real but
+  bounded at ~0.45 faith and is mitigated by v8 global framing); (2) the
+  follow-up hybrid v11 PR is now MERGED — v11 is the new production
+  default. Remaining open: chunks cp/cr regression (potential v12 work)
+  and Tradition C measurement (still optional).
+
 - **🔬 2026-06-17 v6 Tradition B baseline DOWNGRADES Bug 3 v8 from
   "net-positive" to "surface-mixed, net-negative catalog-wide."**
   Re-ran the v6 template state under Tradition B (152 rows, gemma judge)
