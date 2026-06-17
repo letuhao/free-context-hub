@@ -224,12 +224,40 @@ def _build_openai_client(base_url: str, api_key: str, *, async_mode: bool = Fals
     from openai import AsyncOpenAI, OpenAI
 
     cls = AsyncOpenAI if async_mode else OpenAI
-    return cls(
+    client = cls(
         base_url=base_url,
         api_key=api_key,
         max_retries=0,  # we wrap our own retry; don't double-retry
         timeout=90.0,   # fail-fast on stuck connections
     )
+
+    # 2026-06-17 v11 hybrid baseline runtime fix.
+    # LM Studio's gemma-4 family enables reasoning-by-default. Every
+    # chat.completions.create dumps a long internal reasoning trace into
+    # `reasoning_content` BEFORE emitting visible content. With instructor's
+    # structured-output mode the budget gets exhausted (IncompleteOutputException:
+    # max_tokens length limit), the JSON never closes, and faithfulness scores
+    # come back as null. We can't tell ragas to set extra params on its internal
+    # chat calls, so we wrap the client's chat.completions.create here and
+    # inject extra_body={"reasoning_effort": "none"} on every request. For
+    # non-reasoning models (mistral-nemo etc.) LM Studio silently ignores it.
+    _orig_create = client.chat.completions.create
+
+    if async_mode:
+        async def _patched_create(*args, **kwargs):
+            extra_body = dict(kwargs.get("extra_body") or {})
+            extra_body.setdefault("reasoning_effort", "none")
+            kwargs["extra_body"] = extra_body
+            return await _orig_create(*args, **kwargs)
+    else:
+        def _patched_create(*args, **kwargs):  # type: ignore[no-redef]
+            extra_body = dict(kwargs.get("extra_body") or {})
+            extra_body.setdefault("reasoning_effort", "none")
+            kwargs["extra_body"] = extra_body
+            return _orig_create(*args, **kwargs)
+
+    client.chat.completions.create = _patched_create  # type: ignore[method-assign]
+    return client
 
 
 def _init_llm(cfg: Config):
