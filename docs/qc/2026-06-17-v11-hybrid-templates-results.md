@@ -25,8 +25,24 @@ wins, use v8 where v8 wins.
 | Answer relevancy | 0.763 | 0.786 | **0.798** | **+0.035** | **+0.013** |
 
 v11 matches v6's faith (within 0.002, noise floor) AND beats BOTH v6
-and v8 on answer relevancy. This is a strict Pareto win — no metric
-regresses against the better of v6/v8.
+and v8 on answer relevancy.
+
+**Noise-floor caveat (from /review-impl MED-3).** This run did not use
+`--control` (single-run, not duplicate-run). The +0.089 catalog faith
+lift over v8 is robust to any plausible per-run jitter. But the
++0.013 catalog ar lift over v8 is small enough to plausibly live in
+single-run noise — we have no quantified noise floor to confirm. The
+honest framing is: **v11 achieves faith parity with v6 (the better-faith
+template set) while keeping ar at-least-comparable to v8 (the
+better-ar-on-global template).** The "beats both on ar" claim should
+not be cited as load-bearing without a `--control` duplicate.
+
+**Per-surface scope caveat.** The Pareto win is **catalog-weighted on
+faith + ar.** Per-surface, **chunks cp drops −0.076 and chunks cr
+drops −0.077 vs pure-v8** — the price of switching chunks from v8 to v6.
+Net chunks impact is still positive (faith +0.043, grd +0.046) but
+operators evaluating v11 for chunk-heavy workloads should know about
+this regression. Logged as v12 follow-up below.
 
 ### Per-surface confirmation
 
@@ -73,9 +89,36 @@ Sidecar smoke-tested at faith=1.0 in ~3s before re-running v11
 (corrupted run was 50s per judge → null). Re-run elapsed 48.5 min vs
 52 min for v6-B and 51 min for v10B — back to expected.
 
-Corrupted artifacts moved to `/tmp/v11-broken-first-attempt.{json,md}`
-(not committed; reproducible by checking out templates + running with
-the pre-patch sidecar).
+Corrupted artifacts archived as forensic evidence at
+`docs/qc/baselines/_archive/2026-06-17-v11-broken-pre-reasoning-effort-patch.{json,md}`
+(see the `_archive/README.md` for the symptom shape).
+
+The sidecar patch ships with unit-test coverage —
+`services/ragas-judge/test_reasoning_effort_patch.py` (7 tests, pure
+stdlib). Tests verify the wrapper is installed on both async + sync
+paths, injects `extra_body["reasoning_effort"] = "none"` when caller
+doesn't set it, preserves caller's other `extra_body` keys, respects
+explicit caller override, and handles `extra_body=None` without
+crashing. Run inside the container:
+
+```
+docker exec free-context-hub-ragas-judge-1 \
+  sh -c "cd /app && python -m unittest test_reasoning_effort_patch -v"
+```
+
+If a future refactor of `_build_openai_client` drops the wrapper, these
+tests fail loudly instead of letting the bug silently re-surface as
+null faith scores in a baseline run.
+
+**Reproducibility note (CRLF on Windows).** Templates were materialized
+via `git show b52ca3a:path > path`, which produces CRLF on Windows. The
+manifest `synthesizer_prompt_hashes` cross-check confirms v11's lessons/
+code/chunks hashes equal v6's exactly (`13ac4e950489bde6` for lessons,
+`3a2ea1624ae0a1fc` for code, `a01005e0d102b2c1` for chunks) and v11's
+global hash equals v8's (`bbfc552fbd293364`). Node's `readFileSync`
+plus git's autocrlf normalize the bytes consistently across runs.
+Hash equality validates byte-for-byte template identity at the
+prompt-input layer — the relevant comparison surface.
 
 ## What ships with this commit
 

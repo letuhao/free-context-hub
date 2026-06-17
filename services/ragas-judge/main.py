@@ -232,15 +232,24 @@ def _build_openai_client(base_url: str, api_key: str, *, async_mode: bool = Fals
     )
 
     # 2026-06-17 v11 hybrid baseline runtime fix.
-    # LM Studio's gemma-4 family enables reasoning-by-default. Every
-    # chat.completions.create dumps a long internal reasoning trace into
-    # `reasoning_content` BEFORE emitting visible content. With instructor's
-    # structured-output mode the budget gets exhausted (IncompleteOutputException:
-    # max_tokens length limit), the JSON never closes, and faithfulness scores
-    # come back as null. We can't tell ragas to set extra params on its internal
-    # chat calls, so we wrap the client's chat.completions.create here and
-    # inject extra_body={"reasoning_effort": "none"} on every request. For
+    # LM Studio's gemma-4 family responds to OpenAI's `reasoning_effort` and
+    # enables reasoning-by-default. Every chat.completions.create dumps a long
+    # internal reasoning trace into `reasoning_content` BEFORE emitting visible
+    # content. With instructor's structured-output mode the budget gets
+    # exhausted (IncompleteOutputException: max_tokens length limit), the JSON
+    # never closes, and faithfulness scores come back as null. We can't tell
+    # ragas to set extra params on its internal chat calls, so we wrap the
+    # client's chat.completions.create here and inject
+    # extra_body={"reasoning_effort": "none"} on every request. For
     # non-reasoning models (mistral-nemo etc.) LM Studio silently ignores it.
+    #
+    # LIMITATION: this ONLY covers OpenAI's `reasoning_effort` convention. Other
+    # reasoning-control keys are NOT handled — extend this wrapper if you pin
+    # a judge model that uses:
+    #   - `thinking_budget` (some Qwen / Anthropic variants)
+    #   - `enable_thinking` (DeepSeek-R1 family)
+    # Without extension, that judge model would re-trigger the same null-faith
+    # failure mode. Test coverage: `test_reasoning_effort_patch.py`.
     _orig_create = client.chat.completions.create
 
     if async_mode:
