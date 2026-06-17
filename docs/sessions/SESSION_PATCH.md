@@ -1,3 +1,220 @@
+# CHECKPOINT — v12 closed won't-fix: chunks cp/cr "regression" is judge noise (2026-06-18)
+
+**Status:** v12 (a "v12" chunks synthesizer template to recover
+context_precision/context_recall) investigated and **CLOSED won't-fix**. The
+−0.076/−0.077 chunks cp/cr drop attributed to v11 is a **judge-noise artifact,
+not a template effect** — diagnosed before writing any template, then confirmed
+by measurement.
+
+**Root cause (causal, sufficient on its own):** cp/cr are computed by the
+ragas-judge sidecar from `(question, ground_truth, retrieved_contexts)` ONLY —
+the synthesized answer is never passed (`services/ragas-judge/main.py:585-614`).
+The chunks synthesizer template only changes the *answer*, so it is structurally
+incapable of moving cp/cr. Confirmed by three facts:
+- chunks retrieved contexts were **byte-identical** across the v6/v8/v11 runs
+  (compared `top_k_keys` in the three baseline JSONs);
+- v6 and v11 use the **byte-identical chunks template** (manifest hash
+  `a01005e0d102b2c1`) yet scored cp 0.563 vs 0.584 / cr 0.397 vs 0.372 — same
+  template + same contexts → different score = judge non-determinism;
+- the v11 doc's "v6 weaker chunks cp/cr by design" framing is incoherent: there
+  is no per-template cp/cr property to inherit.
+
+**Measurement (`src/qc/noiseFloorChunksCpCr.ts`, N=8, gemma judge temp=0
+seed=42):** fixed template + fixed contexts, re-scored cp/cr only, dummy answer.
+- context_precision surface-mean **range 0.146** (0.584–0.731), std 0.042 —
+  ~2× the claimed −0.076 regression. v8's 0.660 is an ordinary high draw
+  (repeat #6 hit 0.731). Row `chunk-cross-retry-auth-storage` flipped the full
+  **0.000↔1.000** on identical input.
+- context_recall back-to-back range 0.026 (stable; only one row jitters) — but
+  cp/cr being answer-independent means the template still cannot be the cause,
+  and v6/v11 same-template already differ 0.025; cross-run noise (hours apart,
+  model reloads) is wider than back-to-back.
+- Artifact: `docs/qc/baselines/2026-06-18-noise-floor-chunks-cp-cr.json`.
+
+**Deliverables:**
+- NEW `src/qc/noiseFloorChunksCpCr.ts` — reusable cp/cr judge-noise probe
+  (reuses callChunks + buildJudgeContexts + scoreOnce). tsc clean.
+- NEW `docs/qc/2026-06-18-chunks-cp-cr-noise-floor-v12-closeout.md` — full
+  analysis + reproduce steps.
+- Corrected in place: `docs/qc/2026-06-17-v11-hybrid-templates-results.md`
+  (3 correction banners — scope caveat, per-surface table, "one regression"
+  section, v12 follow-up all retracted).
+- `docs/deferred/DEFERRED.md` — DEFERRED-031 v12 line CLOSED; new **DEFERRED-034**
+  logs the *real* lever (retrieval-layer chunk ranking/rerank/granularity) with
+  a noise-floor warning for future A/Bs.
+
+**Validation:** tsc --noEmit clean; 125/125 qc unit tests pass. No existing
+source changed (only a new standalone script + docs).
+
+**Key learning:** before "fixing" a metric regression, verify the metric's
+inputs actually include the thing you plan to change. cp/cr never read the
+answer; a whole "v12 template" plan was built on the assumption they did. The
+v11 results doc propagated that assumption into DEFERRED-031. Root-cause-first
+(trace the data flow backward) caught it in minutes and converted a ~2h futile
+template exercise into a correct diagnosis.
+
+**Open follow-ups:** DEFERRED-034 (retrieval-layer chunks cp/cr, OPEN),
+Tradition C (optional), DEFERRED-032 SA bank (corpus-blocked).
+
+---
+
+# LONGRUN CHECKPOINT — Phase 17 wrap-up: v11 hybrid templates + DEFERRED-033 (2026-06-18)
+
+**Status:** Phase 17 (gen-eval pipeline + anti-hallucination Bug 3 work)
+effectively closed pending PR #37 merge. v11 hybrid (v6 lessons/code/chunks +
+v8 global) ships as new production default with full evidence trail.
+
+**Branches + PRs:**
+
+- `deferred-030-rerank-quality` (PR #35) — MERGED to main. 9 commits:
+  measurement infrastructure (`--defer-judge` two-phase, baseline-stack
+  invariant fix, code-surface determinism), v10 Tradition A/B baselines,
+  v6-vs-v8 Tradition B comparison, SA Competency Bank preserved.
+- `v11-hybrid-templates` (PR #36) — MERGED, **but into orphan**. PR #36's
+  base was `deferred-030-rerank-quality` (stacked design); both PRs
+  merged within 13 seconds of each other, GitHub didn't auto-retarget
+  the child base to main in time → v11 commits stuck on orphan branch.
+- `v11-hybrid-templates` (PR #37) — **OPEN, awaiting merge**. Catch-up PR
+  to land the 2 orphaned v11 commits (`e97bbeb` + `eb7ff38`) into main.
+  Same head as PR #36; just retargeted at main.
+
+**What landed via PR #35 (already in main, commit tip `d368586`):**
+
+1. `da3a246` — DEFERRED-030 base: rerank quality + harness hygiene
+2. `9bde651` — Review-impl fixes (5 findings)
+3. `402914b` — **Baseline-stack invariant root-cause fix.** docker-compose
+   `--env-file` flag affects substitution but NOT container env;
+   colon-hyphen `${X:-default}` substituted at file-parse time even when
+   `X=` empty; result: worker / mcp / sidecar leaked `DISTILLATION_MODEL`
+   etc. Fixed by adding explicit `environment:` blocks and using
+   single-hyphen `${X-default}`. Postmortem in
+   `docs/qc/2026-06-17-baseline-stack-bug-postmortem.md`.
+4. `7ffd17e` — v10 Tradition A baseline (mistral-nemo both, clean stack).
+5. `81cdde9` — Bug 2c CLOSED (seed=42 score-determinism confirmed; JSON
+   bit-identity not required for stable scoring).
+6. `0d7ea30` — v10 Tradition B + `--defer-judge` two-phase mode. Refactor
+   to `runBaseline.ts`: `runAllSurfaces` collects `PendingJudge` in
+   Phase 1, drains in Phase 2 after all syntheses complete. Collapses
+   304 LM Studio swaps → 1.
+7. `8872219` — SA Competency Bank preserved (294 statements) +
+   DEFERRED-032 logged (corpus-blocked).
+8. `faa114d` — **DEFERRED-033 RESOLVED same-day.** Code-surface
+   recall@5 −0.026 noise between v10A and v10B traced to
+   non-deterministic SQL in `tieredRetriever.ts`: 3× `ORDER BY rank/
+   distance LIMIT N` without secondary tiebreakers + 2× `LIMIT 50` path-
+   match queries with NO `ORDER BY`. Plus JS `candidates.sort()` in
+   `fuse()` lacked path tertiary key. Fixed all 5 SQL queries with
+   `(file_path ASC, symbol_name ASC NULLS LAST)` keys + JS sort with
+   `path < path` tiebreaker. Forensics:
+   `docs/qc/2026-06-17-code-surface-determinism-fix.md`.
+9. `d368586` — **Bug 3 v6 vs v8 under Tradition B — v8 net-negative,
+   not net-positive.** Re-ran v6 templates on Tradition B; head-to-
+   head vs v8 (=v10B). Catalog faith v6=0.620 / v8=0.528 / Δ=−0.091.
+   Per-surface: lessons NEG (faith −0.084), code LARGELY NEG (faith
+   −0.116, grd −0.105), chunks MIXED, global POS. Phase 17 closeout's
+   "v8 net-positive on lessons/code/chunks" claim was a same-model
+   bias artifact. Side finding: v6 and v8 score identical global
+   faith (0.439 vs 0.444) — global gap is intrinsic to substring-
+   search semantics, NOT a template effect. DEFERRED-031 updated.
+
+**What's orphaned on `deferred-030-rerank-quality` (waiting on PR #37):**
+
+10. `e97bbeb` — **v11 hybrid templates — Pareto win over v6 and v8 on
+    Tradition B.** Templates: lessons/code/chunks → v6 (revert from v8);
+    global → v8 (unchanged). Catalog faith v11=0.618 (matches v6 within
+    noise, +0.089 over v8). Catalog ar v11=0.798 (+0.035 over v6, +0.013
+    over v8). Per-surface predictions all confirmed via manifest
+    `synthesizer_prompt_hashes` cross-check. Sidecar patch shipped in
+    same commit: `_build_openai_client` wraps `client.chat.completions
+    .create` to inject `extra_body={"reasoning_effort": "none"}` on every
+    call — guards against LM Studio's gemma-4 default-reasoning mode
+    exhausting `max_tokens` mid-stream and returning `null` faith
+    scores. Found this bug DURING the v11 run: first attempt had
+    147/152 faith=null, judge calls ~50s vs expected ~14s.
+11. `eb7ff38` — **`/review-impl` fixes (MED-1/2/3 + LOW-4/5/6).**
+    MED-1: 7-test pytest coverage for the sidecar patch
+    (`services/ragas-judge/test_reasoning_effort_patch.py`) — installs
+    on async + sync, injects, preserves caller keys, respects override,
+    handles `None` safely. MED-2: PR description and closeout doc now
+    explicitly state Pareto win is catalog-weighted; chunks cp/cr drop
+    −0.076/−0.077 vs pure-v8 (logged as v12 follow-up). MED-3: +0.013
+    catalog ar lift over v8 framed as not load-bearing (no `--control`
+    duplicate). LOW-4: comment block lists `thinking_budget` and
+    `enable_thinking` as un-covered alternatives. LOW-5: corrupted first
+    attempt archived to `docs/qc/baselines/_archive/` with README.
+    LOW-6: CRLF/hash concern resolved via manifest hash cross-check.
+
+**Production-default template state (after PR #37 merges):**
+
+- `synthesizer.lessons.txt` → v6 framing (ABSTAIN WHEN UNSUPPORTED + closing bullet)
+- `synthesizer.code.txt` → v6 framing
+- `synthesizer.chunks.txt` → v6 framing
+- `synthesizer.global.txt` → v8 framing (ABSTAIN ATOMICALLY, terse single-mention)
+
+**Stack invariant + safety net:**
+
+- `services/ragas-judge/main.py:_build_openai_client` wraps both async and
+  sync OpenAI client `chat.completions.create` with `reasoning_effort=none`
+  default. Covers OpenAI's `reasoning_effort` convention only; future
+  judge models using `thinking_budget` / `enable_thinking` will need
+  separate handling (documented).
+- `test_reasoning_effort_patch.py` shipped — 7 tests guard the wrapper
+  against future refactors that might silently drop it. Same regression
+  shape (147/152 null faith) would be caught at unit-test time, not
+  baseline-postmortem time.
+- Forensic archive: `docs/qc/baselines/_archive/` now exists with the
+  corrupted-first-attempt v11 JSON/MD preserved + README explaining
+  symptom shape.
+
+**Three-baseline comparison reference table (all Tradition B, n=152,
+mistral-nemo answerer + gemma judge):**
+
+```
+metric    v6     v8     v11    Δ(v11−v6)  Δ(v11−v8)
+faith    0.620  0.528  0.618    −0.002    +0.089
+ar       0.763  0.786  0.798    +0.035    +0.013
+```
+
+**Open follow-ups (DEFERRED.md + handoff in `.remember/remember.md`):**
+
+- v12 chunks cp/cr fix (~2h, targeted) — close the last regression.
+  Hypothesis: v6 chunks template's stricter abstention drops borderline-
+  relevant citations; try v12 = v6 chunks + v8's context-acknowledgement bullet.
+- Tradition C measurement (gemma both) — optional cross-confirm of v11
+  verdict. ~1h.
+- DEFERRED-032 SA Competency Bank — BLOCKED on corpus material.
+- Strategic Phase 4 (Governance Benchmark) per ROADMAP — multi-session,
+  fresh design pass.
+
+**Cleanup after PR #37 merges:**
+
+- Delete `deferred-030-rerank-quality` (origin + local) — orphaned
+- Delete `v11-hybrid-templates` (origin + local) — was head of #37
+
+**Validation at session close:**
+
+- 868/868 TS unit tests pass on every commit
+- 7/7 Python sidecar tests pass on the patched container
+- `tsc --noEmit` clean
+- `git status` clean on `v11-hybrid-templates` (tip `eb7ff38`, pushed)
+
+**Key learnings (don't repeat next session):**
+
+- **Stacked PRs race condition** — don't trust GitHub to auto-retarget
+  base when two stacked PRs merge within seconds of each other. Either
+  wait for parent merge to fully propagate, or just open the child
+  against `main` from day one. Caused PR #37 catch-up cost today.
+- **LM Studio gemma-4 reasoning-by-default** — runtime state across
+  reloads can change. Permanent fix in sidecar; unit test guards it.
+- **Same-model judge bias is NOT uniform** — was +50pp on some metrics,
+  −22pp on others (per Tradition B vs A diff). Always cite cross-judge
+  measurement (Tradition B) for publication if both options exist.
+- **`/review-impl` catches what POST-REVIEW misses** — found MED-1 (no
+  unit test for the patch). Worth running before every consequential
+  merge.
+
+---
+
 # HOUSEKEEPING — branch cleanup + ragas-judge image rebuild (2026-06-17)
 
 Two no-code-change debt items closed:

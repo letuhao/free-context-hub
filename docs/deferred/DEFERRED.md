@@ -1,7 +1,35 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 034 -->
+<!-- Next ID: 035 -->
+
+## DEFERRED-034
+
+- **Title:** Raise chunks context_precision / context_recall (retrieval-layer, NOT template)
+- **Status:** OPEN (2026-06-18)
+- **Why this exists:** the v11 "chunks cp/cr regression" was misdiagnosed as a
+  synthesizer-template problem ("v12"). It is not — cp/cr are answer-independent
+  (scored from question + ground_truth + retrieved_contexts), so no template
+  change can move them. See DEFERRED-031 closeout (2026-06-18) and
+  `docs/qc/2026-06-18-chunks-cp-cr-noise-floor-v12-closeout.md`. The ONLY way to
+  genuinely raise chunks cp/cr is to improve the retrieved contexts themselves.
+- **Trigger condition:** a deliberate chunk-retrieval-quality push (e.g. when
+  chunk-heavy workloads become a priority, or a chunks-surface recall/precision
+  target is set).
+- **Levers (in rough priority order):**
+  1. Chunk reranking — apply the cross-encoder/bge-reranker to chunk candidates
+     (the lessons/code surfaces already rerank; confirm chunks path does too).
+  2. Chunk granularity — current chunker splits may be too coarse/fine for the
+     ground-truth claims; cp punishes irrelevant retrieved chunks, cr punishes
+     missing ones.
+  3. `top-k-contexts` tuning (currently 5) — more contexts trade cp for cr.
+  4. Embedding model / hybrid FTS weight on the chunks surface.
+- **Measurement gotcha:** cp/cr have a LARGE judge-noise floor (cp surface-mean
+  range 0.146 over N=8 identical-input re-scores; one row flips 0↔1). Any real
+  retrieval improvement must clear that band — use ≥3-run averaging or the
+  `--control` duplicate, and re-use `src/qc/noiseFloorChunksCpCr.ts` to
+  re-baseline the noise floor if the judge model changes.
+- **Effort:** M-L (retrieval change + re-baseline + noise-aware A/B).
 
 ## DEFERRED-033
 
@@ -149,8 +177,29 @@
   layer" hypothesis is now FULLY RETIRED (v11 shows the gap is real but
   bounded at ~0.45 faith and is mitigated by v8 global framing); (2) the
   follow-up hybrid v11 PR is now MERGED — v11 is the new production
-  default. Remaining open: chunks cp/cr regression (potential v12 work)
-  and Tradition C measurement (still optional).
+  default. Remaining open: ~~chunks cp/cr regression (potential v12 work)~~
+  (CLOSED 2026-06-18, see below) and Tradition C measurement (still optional).
+
+- **✅ 2026-06-18 chunks cp/cr "regression" CLOSED won't-fix — judge noise,
+  not a template effect (v12 retired).** The v11 results doc framed chunks
+  cp −0.076 / cr −0.077 vs pure-v8 as a template trade-off to fix with a "v12"
+  hybrid chunks template. That is **causally impossible**:
+  context_precision/context_recall are scored from
+  (question, ground_truth, retrieved_contexts) ONLY — the synthesized answer is
+  never passed (`services/ragas-judge/main.py:585-614`), so the chunks
+  synthesizer template cannot move them. Proof: (1) chunks contexts were
+  byte-identical across the v6/v8/v11 runs; (2) v6 and v11 use the
+  byte-identical chunks template (hash `a01005e0d102b2c1`) yet scored cp 0.563
+  vs 0.584 / cr 0.397 vs 0.372 — same template + same contexts → different
+  score = judge non-determinism. An N=8 same-input re-score
+  (`src/qc/noiseFloorChunksCpCr.ts`) measured a cp surface-mean noise band of
+  **0.146** (0.584–0.731), ~2× the claimed −0.076; one row swung the full
+  0.000↔1.000 on identical input. v8's 0.660 is an ordinary high draw.
+  Closeout + measurement:
+  `docs/qc/2026-06-18-chunks-cp-cr-noise-floor-v12-closeout.md`. v11 results
+  doc corrected in place. **NEW retrieval-layer follow-up** (the only real way
+  to raise chunks cp/cr): improve chunk ranking/rerank/granularity — logged as
+  DEFERRED-034 below.
 
 - **🔬 2026-06-17 v6 Tradition B baseline DOWNGRADES Bug 3 v8 from
   "net-positive" to "surface-mixed, net-negative catalog-wide."**

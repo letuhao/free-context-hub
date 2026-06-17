@@ -38,11 +38,21 @@ better-ar-on-global template).** The "beats both on ar" claim should
 not be cited as load-bearing without a `--control` duplicate.
 
 **Per-surface scope caveat.** The Pareto win is **catalog-weighted on
-faith + ar.** Per-surface, **chunks cp drops −0.076 and chunks cr
-drops −0.077 vs pure-v8** — the price of switching chunks from v8 to v6.
-Net chunks impact is still positive (faith +0.043, grd +0.046) but
-operators evaluating v11 for chunk-heavy workloads should know about
-this regression. Logged as v12 follow-up below.
+faith + ar.** Per-surface, chunks cp/cr appear to drop −0.076 / −0.077
+vs pure-v8.
+
+> ⚠️ **CORRECTION (2026-06-18).** The chunks cp/cr "drop" is a **judge-noise
+> artifact, NOT a template effect.** context_precision/context_recall are
+> computed from (question, ground_truth, retrieved_contexts) only — the
+> synthesized answer is never passed (`services/ragas-judge/main.py:585-614`),
+> so the chunks synthesizer template cannot move them. Retrieval was
+> byte-identical across the v6/v8/v11 runs, and v6/v11 use the byte-identical
+> chunks template (hash `a01005e0d102b2c1`) yet scored differently. An N=8
+> back-to-back re-score of the same inputs measured a cp surface-mean range of
+> **0.146** (0.584–0.731) — nearly 2× the claimed −0.076. v8's 0.660 is an
+> ordinary high draw. Full analysis + measurement:
+> `docs/qc/2026-06-18-chunks-cp-cr-noise-floor-v12-closeout.md`. The "v12"
+> follow-up below is CLOSED won't-fix.
 
 ### Per-surface confirmation
 
@@ -55,19 +65,24 @@ this regression. Logged as v12 follow-up below.
 | code | v6 | ar | 0.742 | 0.789 | **0.793** | beats both alone |
 | code | v6 | grd | 0.716 | 0.610 | 0.694 | ✓ keeps v6's +0.084 over v8 |
 | chunks | v6 | faith | 0.941 | 0.900 | 0.943 | ✓ matches v6 |
-| chunks | v6 | cp | 0.563 | 0.660 | 0.584 | regression: −0.076 vs v8 |
-| chunks | v6 | cr | 0.397 | 0.449 | 0.372 | regression: −0.077 vs v8 |
+| chunks | v6 | cp | 0.563 | 0.660 | 0.584 | ~~regression −0.076~~ → judge noise (band 0.146; see 2026-06-18 closeout) |
+| chunks | v6 | cr | 0.397 | 0.449 | 0.372 | ~~regression −0.077~~ → judge noise (answer-independent metric) |
 | chunks | v6 | grd | 0.839 | 0.808 | 0.854 | beats both alone |
 | global | v8 | faith | 0.439 | 0.444 | 0.450 | ✓ matches v8 |
 | global | v8 | ar | 0.540 | 0.661 | 0.678 | ✓ keeps v8's +0.137 over v6 |
 | global | v8 | grd | 0.430 | 0.530 | 0.500 | ✓ keeps most of v8's +0.100 |
 
-### One regression to call out
+### ~~One regression to call out~~ → RETRACTED (2026-06-18): judge noise
 
-chunks `cp` and `cr` dropped vs pure-v8 (−0.076, −0.077). v6 has
-weaker chunks cp/cr than v8 by design, and v11 inherits that. This is
-the cost of choosing v6 over v8 on chunks. Net chunks impact is still
-positive (faith +0.043, grd +0.046) but cp/cr trade-off is real.
+This section originally claimed chunks `cp`/`cr` dropped vs pure-v8 because
+"v6 has weaker chunks cp/cr by design, and v11 inherits that." **That is
+wrong.** cp/cr are answer-independent metrics — the chunks synthesizer
+template (the only thing v11 changed on this surface) cannot affect them.
+There is no per-template cp/cr property to "inherit": v6 and v11 use the
+byte-identical chunks template and still scored cp 0.563 vs 0.584 / cr 0.397
+vs 0.372 across two runs. An N=8 same-input re-score measured a cp noise band
+of 0.146 — the −0.076 "regression" is inside it. See
+`docs/qc/2026-06-18-chunks-cp-cr-noise-floor-v12-closeout.md`.
 
 ## Method note — first attempt was corrupted
 
@@ -154,11 +169,15 @@ other models or to mistral-nemo. The patch is judge-model-agnostic.
 - **Tradition C measurement (gemma both)** — still deferred. v11 has
   not been measured under same-model gemma-judge conditions; we don't
   know if the +0.013 ar lift is real or a Tradition B artifact.
-- **Chunks cp/cr regression** (−0.076 / −0.077 vs pure-v8) — likely
-  rooted in v6's stricter abstention language causing the answerer to
-  drop borderline-relevant context citations. A "v12" that adds the v8
-  context-acknowledgement bullet to the v6 chunks template (without the
-  rest of v8's framing) might recover cp/cr without losing faith.
+- ~~**Chunks cp/cr regression** → "v12" template fix~~ — **CLOSED won't-fix
+  (2026-06-18).** The hypothesis ("v6's stricter abstention causes the answerer
+  to drop borderline-relevant citations") is invalid: cp/cr never see the
+  answer, so no synthesizer-template change can move them. The −0.076/−0.077
+  is judge non-determinism (cp noise band measured at 0.146 over N=8
+  identical-input re-scores). Closeout:
+  `docs/qc/2026-06-18-chunks-cp-cr-noise-floor-v12-closeout.md`. If higher
+  chunks cp/cr is genuinely wanted, it is a retrieval-layer task (chunk
+  ranking/rerank/granularity), logged separately in DEFERRED.md.
 
 ## Artifacts
 
