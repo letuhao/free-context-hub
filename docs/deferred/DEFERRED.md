@@ -1,7 +1,38 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 033 -->
+<!-- Next ID: 034 -->
+
+## DEFERRED-033
+
+- **Title:** Code-surface retrieval non-determinism — SQL ordering bugs in tieredRetriever
+- **Status:** RESOLVED (2026-06-17, same-day fix)
+- **What:** Comparing the v10 Tradition A and Tradition B baseline JSONs
+  on the `code` surface showed `recall@5` drift of −0.026 with same
+  answerer + same embeddings + same reranker — should have been
+  bit-identical. Forensic analysis of `per_query.top_k_keys` revealed
+  35/77 queries (45%) had **different candidate sets entirely** (0/35
+  were "same set, different order"), which a reranker cannot produce.
+- **Root cause:** five SQL queries in
+  `src/services/tieredRetriever.ts` lacked deterministic ordering:
+  3× `ORDER BY rank/distance LIMIT N` without secondary tiebreakers,
+  plus 2× path-match ILIKE queries with `LIMIT 50` and NO `ORDER BY`
+  at all (pure heap-scan order, shifts with MVCC visibility /
+  autovacuum). Plus the JS `candidates.sort()` in `fuse()` lacked a
+  path-ASC tertiary key, so same-tier-same-score candidates inherited
+  Set-insertion (i.e. SQL row-return) order.
+- **Trigger:** observed during v10 closeout retrieval comparison; was
+  open item #2 on `docs/qc/2026-06-17-v10-tradition-b-same-model-bias-results.md`.
+- **Fix:** appended `(file_path ASC, symbol_name ASC NULLS LAST)` to
+  each affected `ORDER BY`; added explicit `ORDER BY file_path ASC` to
+  the two heap-scan path-match queries; added `path < path` tertiary
+  key to the JS fuse-sort. 868/868 unit tests pass, tsc clean.
+- **Why this is OK to RESOLVE on entry:** the v10A / v10B headline
+  numbers don't shift (the −0.026 r@5 came from 2 gold items moving
+  across the rank-5 boundary, not the candidate-pool churn).
+  Future Phase-17 measurements on the code surface are now
+  bit-reproducible at the retrieval layer.
+- **Forensics doc:** `docs/qc/2026-06-17-code-surface-determinism-fix.md`
 
 ## DEFERRED-032
 

@@ -161,10 +161,24 @@ output" but should never be the headline numbers for a Phase 17 claim.
 - **Re-run "Bug 3 v8 net-positive" comparison on Tradition B** to
   convert the directional claim into a number. v6 vs v8 on Tradition B
   would isolate the template effect from the judge effect.
-- **Investigate code surface recall_at_5 0.026 noise** between v10A and
+- ~~**Investigate code surface recall_at_5 0.026 noise** between v10A and
   v10B — same retrieval, same answerer should give bit-identical
   numbers. Likely cross-encoder tie-breaking; should pin a seed in
-  `local-rerank-service` config or note as unavoidable.
+  `local-rerank-service` config or note as unavoidable.~~ **RESOLVED
+  2026-06-17.** Root cause was NOT the reranker — 35/77 code queries
+  (45%) had different top-10 candidate POOLs (0/35 were "same set,
+  different order"), which a reranker cannot produce. Real cause:
+  non-deterministic SQL in `src/services/tieredRetriever.ts` — three
+  `ORDER BY rank/distance LIMIT N` clauses without secondary
+  tiebreakers, plus two `LIMIT 50` path-match queries with NO
+  `ORDER BY` at all (heap-scan order). Fixed by appending
+  `(file_path ASC, symbol_name ASC NULLS LAST)` to each ORDER BY and
+  adding explicit `ORDER BY file_path` to the two heap-scan queries.
+  Also added a path-ASC final tiebreaker to the JS fuse-sort that
+  merges tier results. 868/868 unit tests pass. See
+  `docs/qc/2026-06-17-code-surface-determinism-fix.md` for full
+  forensics. Future Tradition A↔B comparisons on the code surface
+  will be bit-identical at the retrieval layer.
 - **Decide where Tradition C (gemma both) sits.** Cross-encoder rerank
   geneval already used this. May want a single canonical Phase 17
   re-measurement on Tradition C for the rerank-quality vs
