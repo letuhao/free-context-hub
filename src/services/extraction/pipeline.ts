@@ -11,7 +11,7 @@ import { createModuleLogger } from '../../utils/logger.js';
 import { extractFast } from './fastText.js';
 import { extractQuality } from './qualityText.js';
 import { extractVision } from './visionExtract.js';
-import { chunkDocument } from './chunker.js';
+import { chunkDocument, chunkDocumentSemantic } from './chunker.js';
 import { assertCallerScope } from '../../core/security/callerScope.js';
 import type { CallerScope } from '../../core/security/callerScope.js';
 import type {
@@ -95,8 +95,12 @@ export async function runExtraction(params: {
       page.content = sanitizeExtractedContent(page.content);
     }
 
-    // 6. Chunk
-    const preChunks: PreChunk[] = chunkDocument(extraction, { template });
+    // 6. Chunk. Phase 17.4: 'semantic' splits on embedding-similarity drift
+    //    (async — needs per-sentence embeddings); other templates stay sync.
+    const preChunks: PreChunk[] =
+      template === 'semantic'
+        ? await chunkDocumentSemantic(extraction, embedTexts, {})
+        : chunkDocument(extraction, { template });
     if (preChunks.length === 0) {
       throw new Error('Chunking produced no chunks');
     }

@@ -4,7 +4,7 @@ export type ExtractionMode = 'fast' | 'quality' | 'vision';
 
 export type ChunkType = 'text' | 'table' | 'diagram_description' | 'mermaid' | 'code';
 
-export type ChunkTemplate = 'auto' | 'naive' | 'hierarchical';
+export type ChunkTemplate = 'auto' | 'naive' | 'hierarchical' | 'semantic';
 
 /** A single page of extracted content (markdown). */
 export interface ExtractedPage {

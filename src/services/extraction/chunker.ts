@@ -280,6 +280,141 @@ function splitIntoBlocks(content: string): { text: string; type: ChunkType }[] {
   return blocks;
 }
 
+// ─── Semantic chunker (Phase 17.4) ───────────────────────────────────────
+//
+// Splits TEXT on embedding-similarity drift instead of headings/token-budget:
+// embed each sentence, then start a new chunk where the cosine distance between
+// adjacent sentences exceeds a percentile threshold (a "semantic breakpoint" — the
+// LlamaIndex SemanticSplitter approach). Non-text blocks (code/table) stay atomic,
+// and any run is force-split at the token budget so a uniform-similarity document
+// can't produce one giant chunk. Needs embeddings → async, opt-in via template.
+
+/** Default percentile of adjacent-sentence distances above which a boundary is
+ *  cut. 95 = only the top 5% biggest topic-shifts split. Env-overridable. */
+function semanticBreakpointPercentile(): number {
+  const raw = Number(process.env.SEMANTIC_BREAKPOINT_PERCENTILE);
+  return Number.isFinite(raw) && raw > 0 && raw < 100 ? raw : 95;
+}
+
+/** Split a text run into sentences (keeps the terminator). Empty-safe. */
+export function splitSentences(text: string): string[] {
+  return text
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+function cosineDistance(a: number[], b: number[]): number {
+  let dot = 0, na = 0, nb = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i]! * b[i]!;
+    na += a[i]! * a[i]!;
+    nb += b[i]! * b[i]!;
+  }
+  if (na === 0 || nb === 0) return 1; // a zero vector is maximally distant
+  return 1 - dot / (Math.sqrt(na) * Math.sqrt(nb));
+}
+
+/** Value at percentile P (0..100) of `xs` using nearest-rank on a sorted copy. */
+export function percentile(xs: number[], p: number): number {
+  if (xs.length === 0) return 0;
+  const sorted = [...xs].sort((a, b) => a - b);
+  const idx = Math.min(sorted.length - 1, Math.max(0, Math.round((p / 100) * (sorted.length - 1))));
+  return sorted[idx]!;
+}
+
+/**
+ * Group a text run's sentences into chunks at semantic breakpoints.
+ * Pure given the embeddings — `embed` is injected for testability.
+ */
+async function semanticGroup(
+  sentences: string[],
+  pageNumber: number | null,
+  maxChars: number,
+  breakpointPct: number,
+  embed: (texts: string[]) => Promise<number[][]>,
+): Promise<PreChunk[]> {
+  if (sentences.length === 0) return [];
+  if (sentences.length === 1) {
+    return [{ content: sentences[0]!, page_number: pageNumber, heading: null, chunk_type: 'text' }];
+  }
+
+  const embeddings = await embed(sentences);
+  if (embeddings.length !== sentences.length) {
+    throw new Error(`semantic chunk: embedding count ${embeddings.length} != sentences ${sentences.length}`);
+  }
+
+  const distances: number[] = [];
+  for (let i = 1; i < sentences.length; i++) {
+    distances.push(cosineDistance(embeddings[i - 1]!, embeddings[i]!));
+  }
+  const threshold = percentile(distances, breakpointPct);
+
+  const chunks: PreChunk[] = [];
+  let buf: string[] = [];
+  let bufLen = 0;
+  const flush = () => {
+    if (buf.length) {
+      chunks.push({ content: buf.join(' '), page_number: pageNumber, heading: null, chunk_type: 'text' });
+      buf = [];
+      bufLen = 0;
+    }
+  };
+  for (let i = 0; i < sentences.length; i++) {
+    const s = sentences[i]!;
+    // Boundary BEFORE sentence i when its distance from i-1 is a top-percentile
+    // jump, or adding it would overflow the token budget.
+    if (buf.length > 0 && (bufLen + s.length + 1 > maxChars || (i > 0 && distances[i - 1]! > threshold))) {
+      flush();
+    }
+    buf.push(s);
+    bufLen += s.length + 1;
+  }
+  flush();
+  return chunks;
+}
+
+/**
+ * Semantic chunker (async). Splits text on embedding-similarity drift; keeps
+ * code/table blocks atomic (same as naive). `embed` is injected so the pipeline
+ * passes `embedTexts` and tests pass a stub.
+ */
+export async function chunkDocumentSemantic(
+  result: ExtractionResult,
+  embed: (texts: string[]) => Promise<number[][]>,
+  options?: { maxTokens?: number; breakpointPercentile?: number },
+): Promise<PreChunk[]> {
+  const maxChars = (options?.maxTokens ?? DEFAULT_MAX_TOKENS) * CHARS_PER_TOKEN;
+  const breakpointPct = options?.breakpointPercentile ?? semanticBreakpointPercentile();
+  const chunks: PreChunk[] = [];
+
+  for (const page of result.pages) {
+    if (!page.content.trim()) continue;
+    const blocks = splitIntoBlocks(page.content);
+    let textRun: string[] = []; // accumulated sentences across adjacent text blocks
+    const flushRun = async () => {
+      if (textRun.length) {
+        chunks.push(...(await semanticGroup(textRun, page.page_number, maxChars, breakpointPct, embed)));
+        textRun = [];
+      }
+    };
+    for (const block of blocks) {
+      if (block.type !== 'text') {
+        await flushRun();
+        chunks.push({ content: block.text.trim(), page_number: page.page_number, heading: null, chunk_type: block.type });
+      } else {
+        textRun.push(...splitSentences(block.text));
+      }
+    }
+    await flushRun();
+  }
+
+  logger.info({ chunks: chunks.length, pages: result.pages.length, template: 'semantic' }, 'document chunked (semantic)');
+  return chunks;
+}
+
 /** Detect chunk type from content (used for hierarchical sections). */
 function detectChunkType(content: string): ChunkType {
   // Mermaid fence has priority over generic code (matches ```mermaid prefix)
