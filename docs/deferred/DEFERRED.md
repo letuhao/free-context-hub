@@ -1,7 +1,39 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 036 -->
+<!-- Next ID: 038 -->
+<!-- NOTE: 036 is reserved by PR #40 (query-rewrite HyDE A/B); added there, not here. -->
+
+## DEFERRED-037
+
+- **Title:** Chunks synthesizer over-abstains on T/F-claim evaluation (template↔task mismatch)
+- **Status:** OPEN (2026-06-18)
+- **What:** The first grounded gen-eval on the ai-engineering corpus
+  (`aieng-corpus-v1`) surfaced that `src/qc/templates/synthesizer.chunks.txt` — a
+  CLOSED-BOOK Q&A template with aggressive anti-hallucination abstention ("ABSTAIN
+  WHEN UNSUPPORTED → say exactly 'Not in context.'") — **over-abstains** on the
+  competency bank's TRUE/FALSE-claim-evaluation task. **6 of 25 standard rows
+  falsely returned "Not in context." with the grounding chunk at RANK 1** (e.g.
+  AI-RAG-0001-s1: retrieved chunk literally says "a reranker cannot raise recall
+  beyond what retrieval supplied"; answer = "Not in context."). This drags standard
+  faithfulness 0.78→0.62 and answer_relevancy 0.64→0.48.
+- **Why it happens:** the template treats the input as a generic question and
+  abstains unless the answer appears near-verbatim; a T/F claim needs the answerer
+  to map the claim to supporting/refuting evidence and judge it, not look up a
+  verbatim answer. The caution is correct FOR THE PRODUCT (better abstain than
+  hallucinate) but wrong for claim verification.
+- **Trigger condition:** when benchmarking the competency bank (or any
+  claim-verification set) on the chunks surface; or before scaling the corpus to
+  the other 4 domains (the mismatch would understate every domain's score).
+- **Fix:** add a claim-evaluation synthesizer variant (supported / refuted / absent)
+  selectable for the competency task — OR pose competency queries as direct
+  questions. Then re-run `aieng-corpus-v1` and compare.
+- **Estimated size:** S/M — one template + a synth-template selector + a re-run.
+- **Priority:** MED — gates a fair reading of the corpus benchmark; the corpus and
+  retrieval themselves are already validated.
+- **Source:** `docs/qc/2026-06-18-aieng-corpus-geneval-results.md`.
+
+---
 
 ## DEFERRED-035
 
@@ -106,7 +138,16 @@
 ## DEFERRED-032
 
 - **Title:** SA Competency Bank golden set has no corpus to ingest — baseline-blocked
-- **Status:** OPEN (2026-06-17)
+- **Status:** PARTIALLY RESOLVED (2026-06-18) — **ai-engineering pilot DONE** (56 of
+  294 items). Authored an independent 8-doc corpus (`corpus/ai-engineering/`, 51
+  chunks), ingested, ran grounded gen-eval (`aieng-corpus-v1`): cr 0.88,
+  groundedness 0.98, abstention 1.00. Methodology proven end-to-end. Results +
+  template-mismatch finding: `docs/qc/2026-06-18-aieng-corpus-geneval-results.md`
+  (→ DEFERRED-037). **Remaining (still OPEN):** the other 4 domains (aws-ops,
+  developer, language-runtime, solution-architecture; 238 items) + `target_chunk_ids`
+  population for recall@k. Scale only after the DEFERRED-037 template fix, else
+  every domain's score is understated.
+- ~~**Status:** OPEN (2026-06-17)~~
 - **What:** `qc/competency-geneval.json` was compiled in a separate session
   (chronologically around 2026-06-17 00:50, not produced by the
   `deferred-030-rerank-quality` branch's work). It contains 294 statements
