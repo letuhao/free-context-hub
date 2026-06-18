@@ -196,18 +196,24 @@
 ## DEFERRED-035
 
 - **Title:** Per-caller wiring regression tests for the shared LLM client
-- **Status:** MOSTLY RESOLVED (2026-06-18) — the 3 highest-value LLM callers now have
+- **Status:** ✅ RESOLVED (2026-06-19) — the 3 highest-value LLM callers have
   injected-`fetchImpl` wiring tests asserting the real HTTP body
   (`src/services/llm/callerWiring.test.ts`): **distiller** (sends `DISTILLATION_MODEL`
   + base-url/key, parses the JSON), **vision** (multimodal `image_url` base64-PNG
   block + `VISION_MODEL`), **lessons generative rerank** (`RERANK_MODEL`, ranking
   prompt carries query+candidates, applies the returned order). Each caller gained an
-  optional `fetchImpl` test seam threaded to `chatComplete`. 985/985.
-  **REMAINING:** the `runBaseline.evalQuery` rewrite-wiring test (the addendum below)
-  is blocked — `runBaseline.ts` calls `main()` at module top level, so importing it
-  in a unit test would execute the runner. Testing `evalQuery` needs a small refactor
-  (guard the `main()` call behind an entry-point check) first; deferred as not worth
-  it for LOW-priority debt.
+  optional `fetchImpl` test seam threaded to `chatComplete`.
+  **The last piece (the `runBaseline.evalQuery` rewrite-wiring test) is now done.**
+  Unblocked by entry-point-guarding `main()` (`isEntryPoint()` compares
+  `import.meta.url` vs `pathToFileURL(argv[1])`, lowercased for Windows drive casing)
+  so importing the module no longer fires the runner — verified both directions live
+  (direct run still executes main; the test import does not). `evalQuery` is now
+  exported and threads an optional `fetchImpl` into `rewriteQuery` (production omits
+  it → real fetch, bit-identical). `src/qc/runBaseline.test.ts` (3 tests) pins the
+  addendum's three invariants via a counting stub fetch + recording dispatch: rewrite
+  computed ONCE per query (not per latency-sample), every sample dispatches the
+  REWRITTEN string, fallback dispatches the ORIGINAL, trace attached to the row.
+  993/993; tsc clean.
 - ~~**Status:** OPEN (2026-06-18)~~
 - **What:** The Phase-17.2 LLM in/out standardization migrated 11 chat call
   sites onto `src/services/llm/chatComplete`. `chatComplete` itself is unit-

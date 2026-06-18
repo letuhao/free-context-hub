@@ -1,3 +1,33 @@
+# CHECKPOINT — DEFERRED-035 evalQuery rewrite-wiring test (2026-06-19, session 8)
+
+**Branch:** none — committed directly to `main` (trunk-based; S-sized debt + tests).
+
+**Asked:** "continue DEFERRED-035." The 3 LLM-caller wiring tests were already done;
+the last open piece was the `runBaseline.evalQuery` rewrite-wiring test, blocked
+because `runBaseline.ts` fired `main()` at module top level (importing it would run
+the baseline runner — and pollute `npm test`).
+
+**Shipped — DEFERRED-035 now fully RESOLVED.** Entry-point-guarded `main()` via
+`isEntryPoint()` (`import.meta.url` vs `pathToFileURL(process.argv[1]).href`,
+lowercased for Windows drive-letter casing). Exported `evalQuery`; folded an optional
+`fetchImpl` into its `rewrite` param and threaded it into `rewriteQuery` (production
+omits it → real `fetch`, bit-identical — zero behavior change). New
+`src/qc/runBaseline.test.ts` (3 tests) pins the addendum's three invariants with a
+counting stub fetch + recording dispatch: **(1)** rewrite computed ONCE per query
+(samples=3 → 1 LLM call, not 3); **(2)** every sample dispatches the REWRITTEN string,
+and on fallback the ORIGINAL; **(3)** the trace is attached to the row. These catch
+the two named regressions (move `rewriteQuery` into the sample loop → `cap.calls===3`;
+dispatch `q.query` → wrong recorded queries). **Verified both guard directions live:**
+direct `npx tsx runBaseline.ts` still fires main (full `[baseline]` startup +
+queries); the test import does not (only dotenv logs). 993/993; tsc clean. Module
+load is otherwise side-effect-free (only `dotenv.config()` + consts). Files:
+`src/qc/runBaseline.ts`, `src/qc/runBaseline.test.ts`.
+
+**What's next:** DEFERRED-032 (scale corpus to 4 more domains) is the main remaining
+tracked debt. 17.3 NLI judge stays deferred (low ROI).
+
+---
+
 # CHECKPOINT — DEFERRED-040 CRLF source fix (.gitattributes) (2026-06-19, session 8)
 
 **Branch:** none — committed directly to `main` (trunk-based; XS/S config fix).

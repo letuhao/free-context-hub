@@ -19,6 +19,7 @@ import * as dotenv from 'dotenv';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 
 import { Client as McpClient } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -282,14 +283,19 @@ async function runSamples<T extends SurfaceResult>(
   return { last: last!, latencies };
 }
 
-async function evalQuery(
+// Exported for DEFERRED-035 wiring tests (runBaseline.test.ts). The module's
+// main() is entry-point-guarded (see bottom) so importing this for testing does
+// NOT fire the runner.
+export async function evalQuery(
   surface: Surface,
   dispatch: (query: string, k: number) => Promise<SurfaceResult>,
   q: GoldenQuery,
   k: number,
   samples: number,
   genEval?: GenEvalConfig,
-  rewrite?: { mode: ActiveRewriteMode; answerer: AnswererConfig },
+  // `fetchImpl` is a test-only seam threaded into rewriteQuery; production callers
+  // omit it → real fetch. Folded into the rewrite object since it's rewrite-scoped.
+  rewrite?: { mode: ActiveRewriteMode; answerer: AnswererConfig; fetchImpl?: typeof fetch },
 ): Promise<{ row: PerQuery; pending?: PendingJudge }> {
   // Phase 17: compute the query rewrite ONCE per query (not per latency-sample)
   // so every sample dispatches the same string. On fallback the trace's
@@ -298,7 +304,9 @@ async function evalQuery(
   let rewriteTrace: QueryRewriteTrace | undefined = undefined;
   let dispatchQuery = q.query;
   if (rewrite) {
-    rewriteTrace = await rewriteQuery(q.query, rewrite.mode, rewrite.answerer);
+    rewriteTrace = await rewriteQuery(q.query, rewrite.mode, rewrite.answerer, {
+      fetchImpl: rewrite.fetchImpl,
+    });
     dispatchQuery = rewriteTrace.rewritten_query;
   }
   const { last, latencies } = await runSamples(() => dispatch(dispatchQuery, k), samples);
@@ -1621,7 +1629,19 @@ function makeDispatcher(
   }
 }
 
-main().catch((e) => {
-  console.error('[baseline] FATAL', e);
-  process.exit(1);
-});
+/** True only when this module is the process entry point (run as a script),
+ *  false when imported (e.g. by runBaseline.test.ts). Guards main() so importing
+ *  evalQuery for unit tests doesn't execute the baseline runner. tsx-compatible;
+ *  lowercased to absorb Windows drive-letter casing (`d:` vs `D:`). */
+function isEntryPoint(): boolean {
+  const arg = process.argv[1];
+  if (!arg) return false;
+  return import.meta.url.toLowerCase() === pathToFileURL(arg).href.toLowerCase();
+}
+
+if (isEntryPoint()) {
+  main().catch((e) => {
+    console.error('[baseline] FATAL', e);
+    process.exit(1);
+  });
+}
