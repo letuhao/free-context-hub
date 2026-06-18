@@ -24,6 +24,7 @@ import { getDbPool } from '../db/client.js';
 import { callLessons } from './surfaces.js';
 import { embedTexts } from '../services/embedder.js';
 import { resolveGenModel } from '../env.js';
+import { chatComplete } from '../services/llm/index.js';
 
 dotenv.config();
 
@@ -52,32 +53,22 @@ async function genIndirectQuery(row: LessonRow): Promise<string | null> {
     `LESSON TITLE: ${row.title}\n\nLESSON CONTENT (excerpt):\n${row.content.slice(0, 1200)}\n\n` +
     `${row.quick_action ? `QUICK ACTION: ${row.quick_action}\n\n` : ''}Write the indirect question.`;
 
-  const ac = new AbortController();
-  const t = setTimeout(() => ac.abort(), 30000);
   try {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (GEN_KEY) headers.Authorization = `Bearer ${GEN_KEY}`;
-    const res = await fetch(`${GEN_URL}/v1/chat/completions`, {
-      method: 'POST', headers, signal: ac.signal,
-      body: JSON.stringify({
-        model: GEN_MODEL,
-        messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
-        temperature: 0.4,
-        max_tokens: 120,
-        reasoning_effort: 'none',
-        chat_template_kwargs: { enable_thinking: false },
-      }),
+    const { content } = await chatComplete({
+      baseUrl: GEN_URL,
+      apiKey: GEN_KEY || undefined,
+      model: GEN_MODEL,
+      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+      temperature: 0.4,
+      maxTokens: 120,
+      timeoutMs: 30000,
     });
-    if (!res.ok) return null;
-    const json = (await res.json()) as any;
-    const msg = json?.choices?.[0]?.message ?? {};
-    let q = String(msg.content ?? '').trim() || String(msg.reasoning_content ?? '').trim();
+    let q = content;
     q = q.replace(/^["'`]|["'`]$/g, '').replace(/\s+/g, ' ').trim();
     // Strip any leading "Question:" style prefixes.
     q = q.replace(/^(question|query)\s*[:\-]\s*/i, '').trim();
     return q.length >= 8 ? q : null;
   } catch { return null; }
-  finally { clearTimeout(t); }
 }
 
 function rankOf(items: Array<{ id: string }>, targetId: string): number {

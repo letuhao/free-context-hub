@@ -16,6 +16,7 @@ import * as dotenv from 'dotenv';
 import { readFile, writeFile } from 'node:fs/promises';
 import { getDbPool } from '../db/client.js';
 import { resolveGenModel } from '../env.js';
+import { chatComplete, extractJsonObject } from '../services/llm/index.js';
 
 dotenv.config();
 
@@ -35,33 +36,24 @@ async function draft(query: string, lesson: { title: string; content: string; qu
   const user =
     `QUESTION:\n${query}\n\nLESSON TITLE: ${lesson.title}\n\nLESSON CONTENT:\n${lesson.content.slice(0, 1500)}\n\n` +
     `${lesson.quick_action ? `QUICK ACTION: ${lesson.quick_action}\n\n` : ''}Return the JSON.`;
-  const ac = new AbortController();
-  const t = setTimeout(() => ac.abort(), 45000);
   try {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (GEN_KEY) headers.Authorization = `Bearer ${GEN_KEY}`;
-    const res = await fetch(`${GEN_URL}/v1/chat/completions`, {
-      method: 'POST', headers, signal: ac.signal,
-      body: JSON.stringify({
-        model: GEN_MODEL,
-        messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
-        temperature: 0.2, max_tokens: 600,
-        reasoning_effort: 'none', chat_template_kwargs: { enable_thinking: false },
-      }),
+    const { content: raw } = await chatComplete({
+      baseUrl: GEN_URL,
+      apiKey: GEN_KEY || undefined,
+      model: GEN_MODEL,
+      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+      temperature: 0.2,
+      maxTokens: 600,
+      timeoutMs: 45000,
     });
-    if (!res.ok) return null;
-    const json = (await res.json()) as any;
-    const raw = String(json?.choices?.[0]?.message?.content ?? '').trim();
-    const first = raw.indexOf('{'); const last = raw.lastIndexOf('}');
-    if (first < 0 || last <= first) return null;
-    const parsed = JSON.parse(raw.slice(first, last + 1));
+    if (!raw) return null;
+    const parsed = extractJsonObject(raw);
     const ideal = String(parsed.ideal_answer ?? '').trim();
     const facts = Array.isArray(parsed.must_contain_facts)
       ? parsed.must_contain_facts.map((s: any) => String(s).trim()).filter(Boolean)
       : [];
     return ideal && facts.length ? { ideal, facts } : null;
   } catch { return null; }
-  finally { clearTimeout(t); }
 }
 
 async function main() {

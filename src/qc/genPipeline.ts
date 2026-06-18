@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 import type { Surface } from './goldenTypes.js';
 import type { SurfaceItem } from './surfaces.js';
 import { promptHash, type GenContextUsed, type GenResult, type CoVeTrace } from './genEvalTypes.js';
-import { retryOnTransient } from './llmResilience.js';
+import { chatComplete } from '../services/llm/index.js';
 
 // Resolve template directory relative to THIS file so the pipeline works
 // regardless of CWD (tsx run from project root, vitest from anywhere, etc.).
@@ -131,86 +131,29 @@ function renderPrompt(
 }
 
 // ─── answerer LLM call (OpenAI-compatible) ───
-
-type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
-type ChatCompletionResponse = {
-  choices?: Array<{
-    message?: {
-      content?: string | null;
-      role?: string;
-      /** Reasoning-model field (qwen3.6, deepseek-r1, gemma-4 reasoning, o1).
-       *  When the model uses extended reasoning, structured/short outputs may
-       *  land here with `content` empty. We fall back to it. Mirrors the
-       *  Python sidecar's _compat reasoning-content shim. */
-      reasoning_content?: string | null;
-    };
-    finish_reason?: string;
-  }>;
-  usage?: { prompt_tokens?: number; completion_tokens?: number };
-  error?: { message?: string };
-};
+//
+// Phase 17.2: delegates to the shared `chatComplete` transport, which owns
+// reasoning-suppression (request side) + answer extraction (response side) so
+// the answerer never scores a model's leaked chain-of-thought. Retry policy
+// (3× exponential backoff for LM Studio's documented socket failures) and the
+// reasoning-content fallback are handled inside chatComplete.
 
 async function callAnswerer(
   prompt: string,
   cfg: AnswererConfig,
   fetchImpl: typeof fetch = fetch,
 ): Promise<{ content: string; finish_reason?: string }> {
-  const baseUrl = cfg.baseUrl.replace(/\/$/, '');
-  const url = baseUrl.endsWith('/v1') ? `${baseUrl}/chat/completions` : `${baseUrl}/v1/chat/completions`;
-
-  const body = JSON.stringify({
+  const res = await chatComplete({
+    baseUrl: cfg.baseUrl,
+    apiKey: cfg.apiKey,
     model: cfg.model,
-    messages: [{ role: 'user', content: prompt }] satisfies ChatMessage[],
+    messages: [{ role: 'user', content: prompt }],
     temperature: cfg.temperature,
     seed: cfg.seed,
-    max_tokens: cfg.maxTokens,
-    // Disable extended-reasoning mode for reasoning models (Gemma-4, qwen3.6,
-    // deepseek-r1, o1-class). When extended thinking is on, structured/short
-    // outputs land in `reasoning_content` and `content` is empty. We want
-    // direct answers in `content`. Non-reasoning models ignore this kwarg.
-    chat_template_kwargs: { enable_thinking: false },
-  });
-
-  // Phase 17.x: wrap with retryOnTransient. LM Studio has a documented 6-11%
-  // baseline failure rate from socket-level termination (ECONNRESET, EPIPE,
-  // "fetch failed"). Retry up to 3x with exponential backoff handles this
-  // cleanly without polluting per-row error rates.
-  return await retryOnTransient(
-    async () => {
-      const ctl = new AbortController();
-      const timer = setTimeout(() => ctl.abort(), cfg.timeoutMs);
-      try {
-        const res = await fetchImpl(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey}` },
-          body,
-          signal: ctl.signal,
-        });
-        if (!res.ok) {
-          const text = await res.text().catch(() => '<unreadable>');
-          // Throw with embedded status so retryOnTransient can classify (5xx → retry).
-          const err = new Error(`answerer HTTP ${res.status}: ${text.slice(0, 200)}`);
-          (err as { status?: number }).status = res.status;
-          throw err;
-        }
-        const data = (await res.json()) as ChatCompletionResponse;
-        if (data.error)
-          throw new Error(`answerer error: ${data.error.message ?? JSON.stringify(data.error)}`);
-        const choice = data.choices?.[0];
-        if (!choice || !choice.message)
-          throw new Error('answerer returned no choices/message');
-        // Reasoning-model fallback: when `content` is empty but `reasoning_content`
-        // has the answer (qwen3.6 / gemma-4 reasoning / deepseek-r1 / o1 etc.),
-        // promote it. Mirrors services/ragas-judge/_compat.py shim.
-        const rawContent = (choice.message.content ?? '').trim();
-        const rawReasoning = (choice.message.reasoning_content ?? '').trim();
-        const content = rawContent || rawReasoning;
-        return { content, finish_reason: choice.finish_reason };
-      } finally {
-        clearTimeout(timer);
-      }
-    },
-    {
+    maxTokens: cfg.maxTokens,
+    timeoutMs: cfg.timeoutMs,
+    fetchImpl,
+    retry: {
       maxAttempts: 3,
       baseDelayMs: 500,
       onRetry: (attempt, err, ms) => {
@@ -221,7 +164,8 @@ async function callAnswerer(
         );
       },
     },
-  );
+  });
+  return { content: res.content, finish_reason: res.finish_reason };
 }
 
 // ─── public pipeline ───

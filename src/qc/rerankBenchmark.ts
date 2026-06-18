@@ -36,6 +36,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import * as z from 'zod/v4';
 import { cohereRerank } from '../services/rerankClient.js';
+import { chatComplete, extractJsonObject } from '../services/llm/index.js';
 
 dotenv.config();
 
@@ -77,40 +78,30 @@ type GoldenQuery = {
 /** Call a generative reranker (LM Studio chat) directly. */
 async function rerankWithModel(model: string, query: string, candidates: Match[], maxTokens = 500): Promise<number[]> {
   const base = LLM_URL.replace(/\/$/, '');
-  const url = `${base}/v1/chat/completions`;
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (LLM_KEY) headers.Authorization = `Bearer ${LLM_KEY}`;
 
   const system = 'You are a ranking model. Re-rank candidates by how directly they answer the query. Output ONLY valid JSON: {"order":[...]} where order is an array of candidate indices (0-based), best match first. No extra keys, no markdown.';
   const user = `QUERY:\n${query}\n\nCANDIDATES:\n` +
     candidates.map((c, i) => `#${i} TITLE: ${c.title}\nSNIPPET: ${c.content_snippet}`).join('\n\n') +
     '\n\nReturn JSON.';
 
-  const ac = new AbortController();
-  const t = setTimeout(() => ac.abort(), 30000);
-
   try {
-    const res = await fetch(url, {
-      method: 'POST', headers, signal: ac.signal,
-      body: JSON.stringify({
-        model,
-        messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
-        temperature: 0.0,
-        max_tokens: maxTokens,
-        reasoning_effort: 'none',
-        chat_template_kwargs: { enable_thinking: false },
-      }),
+    const { content } = await chatComplete({
+      baseUrl: base,
+      apiKey: LLM_KEY || undefined,
+      model,
+      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+      temperature: 0.0,
+      maxTokens,
+      timeoutMs: 30000,
     });
-    if (!res.ok) return candidates.map((_, i) => i);
+    if (!content) return candidates.map((_, i) => i);
 
-    const json = (await res.json()) as any;
-    const content = json?.choices?.[0]?.message?.content ?? '';
-    const raw = content.trim();
-    const first = raw.indexOf('{');
-    const last = raw.lastIndexOf('}');
-    if (first < 0 || last <= first) return candidates.map((_, i) => i);
-
-    const parsed = JSON.parse(raw.slice(first, last + 1));
+    let parsed: unknown;
+    try {
+      parsed = extractJsonObject(content);
+    } catch {
+      return candidates.map((_, i) => i);
+    }
     const validated = RerankOrderSchema.safeParse(parsed);
     if (!validated.success) return candidates.map((_, i) => i);
 
@@ -124,7 +115,7 @@ async function rerankWithModel(model: string, query: string, candidates: Match[]
     return cleaned;
   } catch {
     return candidates.map((_, i) => i);
-  } finally { clearTimeout(t); }
+  }
 }
 
 /** Cross-encoder rerank via the shared Cohere boundary (local-rerank-service / cloud). */

@@ -6,6 +6,7 @@ import fg from 'fast-glob';
 import { getEnv, type Env } from '../env.js';
 import { upsertGeneratedDocument } from './generatedDocs.js';
 import { createModuleLogger } from '../utils/logger.js';
+import { chatComplete } from './llm/index.js';
 
 const logger = createModuleLogger('builderMemory');
 
@@ -18,12 +19,9 @@ function builderBaseUrl(): string {
   ).replace(/\/$/, '');
 }
 
-function builderHeaders(): Record<string, string> {
+function builderApiKey(): string | undefined {
   const env = getEnv();
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  const key = env.BUILDER_AGENT_API_KEY ?? env.DISTILLATION_API_KEY ?? env.EMBEDDINGS_API_KEY;
-  if (key) headers.Authorization = `Bearer ${key}`;
-  return headers;
+  return env.BUILDER_AGENT_API_KEY ?? env.DISTILLATION_API_KEY ?? env.EMBEDDINGS_API_KEY;
 }
 
 function builderModel(): string | null {
@@ -74,14 +72,6 @@ async function sampleRepoForPrompt(root: string): Promise<string> {
   return parts.join('\n\n');
 }
 
-type ChatCompletionJson = {
-  error?: { message?: string; type?: string; code?: string };
-  choices?: Array<{
-    message?: { content?: string };
-    finish_reason?: string;
-  }>;
-};
-
 /** Shared OpenAI-compatible chat for single-pass and large-repo map-reduce steps. */
 export async function builderChatCompletion(input: {
   system: string;
@@ -98,73 +88,24 @@ export async function builderChatCompletion(input: {
     );
     return null;
   }
-  const base = builderBaseUrl().endsWith('/') ? builderBaseUrl() : `${builderBaseUrl()}/`;
-  const url = new URL('v1/chat/completions', base).toString();
-  const ac = new AbortController();
-  const t = setTimeout(() => ac.abort(), builderTimeoutMs());
   const maxTokens = input.maxTokens ?? 4096;
   try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: builderHeaders(),
-      signal: ac.signal,
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: input.system },
-          { role: 'user', content: input.user },
-        ],
-        temperature: 0.2,
-        max_tokens: maxTokens,
-      }),
+    // Phase 17.2: shared transport — reasoning-suppression + answer extraction.
+    const { content: out, finish_reason } = await chatComplete({
+      baseUrl: builderBaseUrl(),
+      apiKey: builderApiKey(),
+      model,
+      messages: [
+        { role: 'system', content: input.system },
+        { role: 'user', content: input.user },
+      ],
+      temperature: 0.2,
+      maxTokens,
+      timeoutMs: builderTimeoutMs(),
     });
-    const rawText = await res.text().catch(() => '');
-    if (!res.ok) {
-      let detail = rawText.slice(0, 400);
-      try {
-        const err = JSON.parse(rawText) as ChatCompletionJson;
-        if (err?.error?.message) detail = err.error.message;
-      } catch {
-        /* keep raw */
-      }
-      logger.warn(
-        {
-          status: res.status,
-          model,
-          chat_url: url,
-          error_detail: detail,
-        },
-        'builder memory chat HTTP error — no artifact will be written for this step',
-      );
-      return null;
-    }
-    let json: ChatCompletionJson;
-    try {
-      json = JSON.parse(rawText) as ChatCompletionJson;
-    } catch {
-      logger.warn({ model, chat_url: url, body_preview: rawText.slice(0, 200) }, 'builder memory chat invalid JSON body');
-      return null;
-    }
-    if (json?.error) {
-      logger.warn(
-        { model, chat_url: url, api_error: json.error },
-        'builder memory chat error object in 200 body — no artifact for this step',
-      );
-      return null;
-    }
-    const choice0 = json?.choices?.[0];
-    const msg = (choice0?.message ?? {}) as { content?: string; reasoning_content?: string };
-    // Phase 14: fall back to reasoning_content for reasoning models (nemotron etc.)
-    const out = String(msg.content ?? '').trim() || String(msg.reasoning_content ?? '').trim();
-    const finishReason = choice0?.finish_reason;
     if (!out) {
       logger.warn(
-        {
-          model,
-          chat_url: url,
-          finish_reason: finishReason ?? null,
-          choices_length: json?.choices?.length ?? 0,
-        },
+        { model, finish_reason: finish_reason ?? null },
         'builder memory chat empty or missing message.content — check model / context length / API',
       );
       return null;
@@ -179,15 +120,12 @@ export async function builderChatCompletion(input: {
         is_timeout: isAbort,
         timeout_ms: builderTimeoutMs(),
         model,
-        chat_url: url,
       },
       isAbort
         ? 'builder memory chat aborted (timeout) — increase BUILDER_AGENT_TIMEOUT_MS or reduce prompt size'
-        : 'builder memory chat network/runtime error',
+        : 'builder memory chat network/runtime/HTTP error — no artifact will be written for this step',
     );
     return null;
-  } finally {
-    clearTimeout(t);
   }
 }
 

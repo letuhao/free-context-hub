@@ -4,18 +4,16 @@ import {
   excerptForSummarization,
   scaledSummaryCharBudget,
 } from '../utils/llmCompletionBudget.js';
+import { chatComplete } from './llm/index.js';
 
 function qaBaseUrl(): string {
   const env = getEnv();
   return (env.QA_AGENT_BASE_URL?.trim() || env.DISTILLATION_BASE_URL?.trim() || env.EMBEDDINGS_BASE_URL).replace(/\/$/, '');
 }
 
-function qaHeaders(): Record<string, string> {
+function qaApiKey(): string | undefined {
   const env = getEnv();
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  const key = env.QA_AGENT_API_KEY ?? env.DISTILLATION_API_KEY ?? env.EMBEDDINGS_API_KEY;
-  if (key) headers.Authorization = `Bearer ${key}`;
-  return headers;
+  return env.QA_AGENT_API_KEY ?? env.DISTILLATION_API_KEY ?? env.EMBEDDINGS_API_KEY;
 }
 
 function qaModel(): string | null {
@@ -45,40 +43,28 @@ export async function qaSummarize(params: { text: string; maxChars?: number }): 
   const maxTokens = completionTokensForOutputChars(maxChars, {
     maxTokens: env.LLM_COMPLETION_MAX_TOKENS_CAP,
   });
-  const base = qaBaseUrl().endsWith('/') ? qaBaseUrl() : `${qaBaseUrl()}/`;
-  const url = new URL('v1/chat/completions', base).toString();
-  const ac = new AbortController();
-  const t = setTimeout(() => ac.abort(), env.QA_AGENT_TIMEOUT_MS);
   try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: qaHeaders(),
-      signal: ac.signal,
-      body: JSON.stringify({
-        model,
-        messages: [
-          {
-            role: 'system',
-            content:
-              'You summarize technical content for retrieval. Keep concrete symbols, filenames, APIs, and constraints. No markdown fences.',
-          },
-          { role: 'user', content: userContent },
-        ],
-        temperature: 0.1,
-        max_tokens: maxTokens,
-      }),
+    // Phase 17.2: shared transport — reasoning-suppression + answer extraction.
+    const { content: out } = await chatComplete({
+      baseUrl: qaBaseUrl(),
+      apiKey: qaApiKey(),
+      model,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You summarize technical content for retrieval. Keep concrete symbols, filenames, APIs, and constraints. No markdown fences.',
+        },
+        { role: 'user', content: userContent },
+      ],
+      temperature: 0.1,
+      maxTokens,
+      timeoutMs: env.QA_AGENT_TIMEOUT_MS,
     });
-    if (!res.ok) return null;
-    const json = (await res.json()) as any;
-    const msg = json?.choices?.[0]?.message ?? {};
-    // Phase 14: fall back to reasoning_content for reasoning models (nemotron etc.)
-    const out = String(msg.content ?? '').trim() || String(msg.reasoning_content ?? '').trim();
     if (!out) return null;
     return out.length > maxChars ? `${out.slice(0, maxChars)}…` : out;
   } catch {
     return null;
-  } finally {
-    clearTimeout(t);
   }
 }
 
@@ -104,39 +90,27 @@ export async function qaAnswerFromEvidence(params: {
   const maxTokens = completionTokensForOutputChars(maxChars, {
     maxTokens: env.LLM_COMPLETION_MAX_TOKENS_CAP,
   });
-  const base = qaBaseUrl().endsWith('/') ? qaBaseUrl() : `${qaBaseUrl()}/`;
-  const url = new URL('v1/chat/completions', base).toString();
-  const ac = new AbortController();
-  const t = setTimeout(() => ac.abort(), env.QA_AGENT_TIMEOUT_MS);
   try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: qaHeaders(),
-      signal: ac.signal,
-      body: JSON.stringify({
-        model,
-        messages: [
-          {
-            role: 'system',
-            content:
-              'Answer only from provided evidence. Cite file paths inline using backticks. If evidence is insufficient, say so explicitly.',
-          },
-          { role: 'user', content: `Question: ${params.question}\n\nEvidence:\n${ctx}\n\nReturn concise answer.` },
-        ],
-        temperature: 0.1,
-        max_tokens: maxTokens,
-      }),
+    // Phase 17.2: shared transport — reasoning-suppression + answer extraction.
+    const { content: out } = await chatComplete({
+      baseUrl: qaBaseUrl(),
+      apiKey: qaApiKey(),
+      model,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'Answer only from provided evidence. Cite file paths inline using backticks. If evidence is insufficient, say so explicitly.',
+        },
+        { role: 'user', content: `Question: ${params.question}\n\nEvidence:\n${ctx}\n\nReturn concise answer.` },
+      ],
+      temperature: 0.1,
+      maxTokens,
+      timeoutMs: env.QA_AGENT_TIMEOUT_MS,
     });
-    if (!res.ok) return null;
-    const json = (await res.json()) as any;
-    const msg = json?.choices?.[0]?.message ?? {};
-    // Phase 14: fall back to reasoning_content for reasoning models (nemotron etc.)
-    const out = String(msg.content ?? '').trim() || String(msg.reasoning_content ?? '').trim();
     if (!out) return null;
     return out.length > maxChars ? `${out.slice(0, maxChars)}…` : out;
   } catch {
     return null;
-  } finally {
-    clearTimeout(t);
   }
 }

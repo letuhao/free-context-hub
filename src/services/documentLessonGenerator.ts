@@ -1,5 +1,6 @@
 import { getEnv } from '../env.js';
 import { createModuleLogger } from '../utils/logger.js';
+import { chatComplete } from './llm/index.js';
 
 const logger = createModuleLogger('doc-lesson-gen');
 
@@ -27,9 +28,7 @@ export async function generateLessonsFromDocument(params: {
 
   const maxLessons = Math.min(params.maxLessons ?? 5, 10);
   const baseUrl = (env.DISTILLATION_BASE_URL?.trim() || env.EMBEDDINGS_BASE_URL).replace(/\/$/, '');
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  const key = env.DISTILLATION_API_KEY ?? env.EMBEDDINGS_API_KEY;
-  if (key) headers.Authorization = `Bearer ${key}`;
+  const apiKey = env.DISTILLATION_API_KEY ?? env.EMBEDDINGS_API_KEY;
 
   // Truncate very long docs to stay within token limits.
   const content = params.docContent.slice(0, 8000);
@@ -57,30 +56,19 @@ Content:
 ${content}`;
 
   try {
-    const res = await fetch(`${baseUrl}/v1/chat/completions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.3,
-        max_tokens: 2000,
-      }),
-      signal: AbortSignal.timeout(45_000),
+    // Phase 17.2: shared transport — reasoning-suppression + answer extraction.
+    const { content: text } = await chatComplete({
+      baseUrl,
+      apiKey,
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.3,
+      maxTokens: 2000,
+      timeoutMs: 45_000,
     });
-
-    if (!res.ok) {
-      const txt = await res.text().catch(() => '');
-      return { status: 'error', error: `LLM returned HTTP ${res.status}: ${txt.slice(0, 200)}` };
-    }
-
-    const json = (await res.json()) as any;
-    const msg = json?.choices?.[0]?.message ?? {};
-    // Phase 14: fall back to reasoning_content for reasoning models (nemotron etc.)
-    const text = String(msg.content ?? '').trim() || String(msg.reasoning_content ?? '').trim();
 
     const match = text.match(/\{[\s\S]*\}/);
     if (!match) {

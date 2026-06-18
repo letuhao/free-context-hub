@@ -10,6 +10,7 @@ import { decomposeQuery } from '../utils/queryDecomposer.js';
 import { getLanguageSearchHints, getProjectDominantLanguage } from '../utils/languageHints.js';
 import { buildFtsQuery } from '../utils/ftsTokenizer.js';
 import { cohereRerank } from './rerankClient.js';
+import { chatComplete, extractJsonObject } from './llm/index.js';
 import { createModuleLogger } from '../utils/logger.js';
 import { assertCallerScope } from '../core/security/callerScope.js';
 import type { CallerScope } from '../core/security/callerScope.js';
@@ -449,12 +450,9 @@ function chatBaseUrl(): string {
   return (env.RERANK_BASE_URL?.trim() || env.DISTILLATION_BASE_URL?.trim() || env.EMBEDDINGS_BASE_URL).replace(/\/$/, '');
 }
 
-function chatHeaders(): Record<string, string> {
+function chatApiKey(): string | undefined {
   const env = getEnv();
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  const key = env.RERANK_API_KEY ?? env.DISTILLATION_API_KEY ?? env.EMBEDDINGS_API_KEY;
-  if (key) headers.Authorization = `Bearer ${key}`;
-  return headers;
+  return env.RERANK_API_KEY ?? env.DISTILLATION_API_KEY ?? env.EMBEDDINGS_API_KEY;
 }
 
 async function llmRerank(params: {
@@ -466,11 +464,7 @@ async function llmRerank(params: {
   const model = env.RERANK_MODEL ?? env.DISTILLATION_MODEL;
   if (!model) throw new Error('RERANK_MODEL or DISTILLATION_MODEL must be configured for rerank_mode=llm');
 
-  const base = chatBaseUrl().endsWith('/') ? chatBaseUrl() : `${chatBaseUrl()}/`;
-  const url = new URL('v1/chat/completions', base).toString();
-  const ac = new AbortController();
-  const t = setTimeout(() => ac.abort(), params.timeoutMs);
-  try {
+  {
     const system =
       'You are a ranking model. Re-rank candidates by how directly they answer the query. ' +
       'Output ONLY valid JSON: {"order":[...]} where order is an array of candidate indices (0-based), ' +
@@ -480,34 +474,21 @@ async function llmRerank(params: {
       params.candidates.map((c, i) => `#${i} PATH: ${c.path}\nSNIPPET: ${c.snippet}`).join('\n\n') +
       `\n\nReturn JSON.`;
 
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: chatHeaders(),
-      signal: ac.signal,
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: user },
-        ],
-        temperature: 0.0,
-        max_tokens: env.RERANK_LLM_MAX_TOKENS,
-      }),
+    // Phase 17.2: shared transport — reasoning-suppression + answer extraction.
+    const { content } = await chatComplete({
+      baseUrl: chatBaseUrl(),
+      apiKey: chatApiKey(),
+      model,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+      ],
+      temperature: 0.0,
+      maxTokens: env.RERANK_LLM_MAX_TOKENS,
+      timeoutMs: params.timeoutMs,
     });
-    if (!res.ok) {
-      const txt = await res.text().catch(() => '');
-      throw new Error(`[rerank] HTTP ${res.status}: ${txt}`);
-    }
-    const json = (await res.json()) as any;
-    const msg = json?.choices?.[0]?.message ?? {};
-    // Phase 14: fall back to reasoning_content for reasoning models (nemotron etc.)
-    const content = String(msg.content ?? '').trim() || String(msg.reasoning_content ?? '').trim();
     if (!content) throw new Error('[rerank] missing content (and reasoning_content also empty)');
-    const raw = content;
-    const first = raw.indexOf('{');
-    const last = raw.lastIndexOf('}');
-    if (first < 0 || last <= first) throw new Error('[rerank] no JSON object found');
-    const parsed = JSON.parse(raw.slice(first, last + 1)) as unknown;
+    const parsed = extractJsonObject(content) as unknown;
     const validated = RerankOrderSchema.safeParse(parsed);
     if (!validated.success) throw new Error('[rerank] invalid schema');
     const order = validated.data.order;
@@ -525,8 +506,6 @@ async function llmRerank(params: {
     // Append any missing indices to keep deterministic permutation.
     for (let i = 0; i < n; i++) if (!seen.has(i)) cleaned.push(i);
     return cleaned;
-  } finally {
-    clearTimeout(t);
   }
 }
 

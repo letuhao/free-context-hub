@@ -1,5 +1,6 @@
 import { getEnv } from '../env.js';
 import { createModuleLogger } from '../utils/logger.js';
+import { chatComplete } from './llm/index.js';
 
 const logger = createModuleLogger('lesson-improver');
 
@@ -27,9 +28,7 @@ export async function improveLessonContent(params: {
   }
 
   const baseUrl = (env.DISTILLATION_BASE_URL?.trim() || env.EMBEDDINGS_BASE_URL).replace(/\/$/, '');
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  const key = env.DISTILLATION_API_KEY ?? env.EMBEDDINGS_API_KEY;
-  if (key) headers.Authorization = `Bearer ${key}`;
+  const apiKey = env.DISTILLATION_API_KEY ?? env.EMBEDDINGS_API_KEY;
 
   const targetText = params.selectedText ?? params.content;
 
@@ -63,31 +62,20 @@ ${params.content}
 Instruction: ${params.instruction}`;
 
   try {
-    const res = await fetch(`${baseUrl}/v1/chat/completions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.3,
-        // Phase 14 round-2 fix: bumped 1500 → 5000 for reasoning models.
-        max_tokens: 5000,
-      }),
-      signal: AbortSignal.timeout(180_000),
+    // Phase 17.2: shared transport — reasoning-suppression + answer extraction.
+    const { content: text } = await chatComplete({
+      baseUrl,
+      apiKey,
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.3,
+      // Phase 14 round-2 fix: bumped 1500 → 5000 for reasoning models.
+      maxTokens: 5000,
+      timeoutMs: 180_000,
     });
-
-    if (!res.ok) {
-      const txt = await res.text().catch(() => '');
-      return { status: 'error', error: `LLM returned HTTP ${res.status}: ${txt.slice(0, 200)}` };
-    }
-
-    const json = (await res.json()) as any;
-    const msg = json?.choices?.[0]?.message ?? {};
-    // Phase 14: fall back to reasoning_content for reasoning models (nemotron etc.)
-    const text = String(msg.content ?? '').trim() || String(msg.reasoning_content ?? '').trim();
 
     // Parse JSON from response (may have markdown fences).
     const match = text.match(/\{[\s\S]*\}/);
