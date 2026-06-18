@@ -1,0 +1,13 @@
+# Phase 17.3 — NLI judge sidecar dependencies.
+#
+# torch is NOT pinned here — the Dockerfile pre-installs the CPU-only build from
+# the PyTorch CPU index BEFORE this file, so sentence-transformers' torch>=1.11
+# constraint is satisfied without pulling the multi-GB CUDA wheel.
+
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+pydantic==2.10.4
+sentence-transformers==5.6.0
+
+# Test-only
+pytest==8.3.4

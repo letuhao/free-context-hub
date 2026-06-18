@@ -1,3 +1,52 @@
+# CHECKPOINT — Phase 17.3 NLI fact-checking judge (2026-06-19, session 8)
+
+**Branch:** none — committed directly to `main` (trunk-based). XL task, full workflow
+(design → build → verify → A/B → close).
+
+**Asked:** "let's clear 17.3 NLI judge." Offered close-as-won't-fix vs cheap-validation
+vs build-full; **user chose Build full NLI judge.**
+
+**Shipped — 17.3 RESOLVED + DEFERRED-031 RESOLVED.** Built a cross-encoder NLI judge to
+fix the global-surface faithfulness defect (RAGAS penalizes honest meta-claims —
+"the query surfaces lessons; the common theme is X" — as ungrounded).
+
+- **Service** `services/nli-judge/` — FastAPI + `sentence-transformers` CrossEncoder
+  (`cross-encoder/nli-deberta-v3-small`, labels contradiction/entailment/neutral),
+  self-contained (NO LM Studio dep; model baked into the image). `/health` + `/entail`
+  + `/score` (sentence-split claims → per-claim NLI → strict/lenient/contradiction-rate).
+  Pure scoring core `scoring.py` with 6 unit tests. Dockerfile (CPU torch from the
+  PyTorch CPU index + baked model) + `docker-compose.yml` `nli-judge` service
+  (`--profile measurement`, host :3006).
+- **TS** `src/qc/nliScore.ts` client (timeout + transient-only retry, fetchImpl seam;
+  4 wiring tests) + `src/qc/nliGlobalAb.ts` A/B runner. `NliMetricName` kept SEPARATE
+  from `judge.ts`'s ragas-bound `MetricName` (a pointer comment in judge.ts explains why
+  — adding them there would leak into a ragas request that rejects them).
+- **A/B (live service, 14 global rows of the v11-hybrid archive):** RAGAS faith mean
+  **0.450** vs NLI **contradiction-rate 0.093** → global faithfulness as
+  `1 − contradiction_rate` = **0.907**. NLI cleanly separates real hallucination
+  (contradiction; Eiffel-Tower probe → 0.999) from honest meta-claims. **Strict
+  (entailment-only) NLI = 0.259, WORSE than RAGAS — not adopted.** Verdict: NLI
+  contradiction-rate is the right fidelity signal for the global surface; advisory /
+  measurement-profile only (production + default baseline unchanged). The one Phase-17
+  lever that paid off. Results: `docs/qc/2026-06-19-phase-17.3-nli-judge-results.md`;
+  design `docs/specs/2026-06-19-phase-17.3-nli-judge.md`.
+
+**VERIFY catch (important):** `npm test` uses an EXPLICIT file list, not a glob — so
+last task's `runBaseline.test.ts` was NEVER running in the suite (the entry guard's
+whole point was unrealized). Added BOTH `runBaseline.test.ts` and `nliScore.test.ts` to
+`package.json`. Suite now **1000/1000** (was silently 993), tsc clean. Feasibility was
+de-risked up front (PyPI + HuggingFace reachable despite SSL interception; model loads;
+label mapping verified on hand examples) before building. The **service was verified
+live** (uvicorn from a local venv — /health + /entail + /score + the full A/B all ran
+against the real model); the **Docker image built (exit 0, 3.1GB) and the container ran
+with the baked model** — `/health loaded:true` (no runtime network) + `/entail` smoke
+passed.
+
+**What's next:** DEFERRED-032 (scale corpus to 4 more domains) is the main remaining
+tracked debt. All Phase-17 levers now closed.
+
+---
+
 # CHECKPOINT — DEFERRED-035 evalQuery rewrite-wiring test (2026-06-19, session 8)
 
 **Branch:** none — committed directly to `main` (trunk-based; S-sized debt + tests).

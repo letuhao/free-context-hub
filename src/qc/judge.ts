@@ -36,6 +36,12 @@ export type MetricName =
   /** Phase 17.1 C3: second judge of groundedness (single-call, cheap). */
   | 'groundedness_self_eval';
 
+// Phase 17.3 — NLI-sourced metrics (nli_faithfulness_strict/lenient,
+// nli_contradiction_rate) are a SEPARATE family in src/qc/nliScore.ts. They are
+// NOT part of this union because they come from the nli-judge sidecar (port 3006),
+// not the ragas /score sidecar — adding them here would let them leak into a ragas
+// request that rejects them. See NliMetricName in nliScore.ts.
+
 export type JudgeContext = {
   /** Optional stable id (lesson_id / chunk_id / file path / etc.) for traceability. */
   id?: string;

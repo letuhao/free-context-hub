@@ -30,13 +30,18 @@
 
 - **Title:** Phase 17.3 (NLI third judge) + 17.4 semantic chunking — deferred as low-ROI
 - **Status:** DEFERRED (2026-06-18) — explicitly assessed, not forgotten.
-- **17.3 NLI fact-checker:** an entailment-based third judge (scores propositions vs
-  the context via NLI, instead of RAGAS faithfulness's substring-recoverability).
-  Would fix the metric noise on the **global** surface (honest "X is unrelated"
-  meta-claims scored as ungrounded — see the DEFERRED-030-followup global entry).
-  **Why deferred:** needs a new NLI model + sidecar (substantial infra) to fix a gap
-  affecting only the `global` surface — ~10 of 152 golden rows. Big cost, narrow
-  payoff. Revisit only if global-surface gen-eval becomes important.
+- **17.3 NLI fact-checker:** ✅ RESOLVED (2026-06-19) — BUILT (user chose "build full
+  NLI judge" over close-as-won't-fix). Cross-encoder NLI sidecar
+  (`services/nli-judge`, `cross-encoder/nli-deberta-v3-small`, dockerized, model baked,
+  `/health`+`/entail`+`/score`, 6 scoring tests) + TS client `src/qc/nliScore.ts`
+  (4 wiring tests) + A/B runner `src/qc/nliGlobalAb.ts`. A/B on the 14 global rows
+  proved NLI's **contradiction-rate** is the right fidelity signal where RAGAS
+  faithfulness was measuring substring-recoverability of honest meta-claims: global
+  faithfulness `1 − contradiction_rate` = 0.907 vs RAGAS 0.450, while still catching
+  fabrication (contradiction). This **resolves DEFERRED-031** (the gap 17.3 targeted).
+  Advisory/measurement-profile only — production + default baseline unchanged. This was
+  the one Phase-17 lever that paid off (CoVe/HyDE/RRF/semantic all came back
+  neutral-to-negative). Results: `docs/qc/2026-06-19-phase-17.3-nli-judge-results.md`.
 - **17.4 semantic chunking:** RESOLVED — built (`chunkDocumentSemantic`,
   `template: 'semantic'`, `SEMANTIC_BREAKPOINT_PERCENTILE` env, off by default,
   7 unit tests) + A/B'd: **NET-NEGATIVE** (faithfulness 0.91→0.81, context_recall
@@ -409,7 +414,22 @@
   "groundedness of substantive claims" from "presence of meta-claims," OR a switch to a
   different judge (e.g. an NLI judge that scores propositions instead of substring
   recoverability).
-- **Status:** OPEN (2026-06-17)
+- **Status:** ✅ RESOLVED (2026-06-19) — via the **Phase-17.3 NLI judge** (DEFERRED-039;
+  the trigger's "NLI judge" path). Built a cross-encoder NLI sidecar
+  (`services/nli-judge`, `cross-encoder/nli-deberta-v3-small`) and A/B'd it against RAGAS
+  faithfulness on the 14 global rows. **Finding:** RAGAS faithfulness (0.450 mean) was
+  measuring the wrong thing on this surface — it penalizes honest meta-claims ("the query
+  surfaces lessons; the common theme is X") as ungrounded. NLI separates real
+  hallucination (**contradiction**, mean rate **0.093** — honest answers don't contradict
+  their contexts) from honest non-entailment. **Fix: global-surface faithfulness =
+  `1 − nli_contradiction_rate` (mean 0.907 vs RAGAS 0.450)** — advisory/measurement-profile
+  only; production + default baseline unchanged. Honest limit: NLI `neutral` can't catch
+  an *on-topic silent* fabrication, but *off-topic* ones register as contradiction, and
+  contradiction-rate is the meaningful signal for a "describe-what-was-retrieved" surface.
+  Strict (entailment-only) NLI = 0.259, WORSE than RAGAS — not adopted. Other surfaces keep
+  RAGAS. Results: `docs/qc/2026-06-19-phase-17.3-nli-judge-results.md`. Design:
+  `docs/specs/2026-06-19-phase-17.3-nli-judge.md`.
+- ~~**Status:** OPEN (2026-06-17)~~
 - **Context:** Bug 3 v8 fix (Phase 17 closeout) reduced hedging across all surfaces by
   ~55%. On the `lessons`, `code`, and `chunks` surfaces this was a net win
   (`faith` neutral or up, `ar` up). On the **`global` surface**, `faith` dropped

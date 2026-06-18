@@ -353,6 +353,26 @@ services:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
+  # Phase 17.3 — NLI fact-checking judge. Scores answer claims vs contexts with a
+  # cross-encoder NLI model (entailment/contradiction/neutral). Self-contained —
+  # NO LM Studio dependency (model baked into the image at build). Measurement
+  # profile only. Start with: docker compose --profile measurement up -d nli-judge
+  nli-judge:
+    profiles: ["measurement"]
+    build:
+      context: ./services/nli-judge
+      dockerfile: Dockerfile
+      args:
+        # Bake a different NLI model by overriding this at build time.
+        NLI_MODEL: ${NLI_MODEL-cross-encoder/nli-deberta-v3-small}
+    environment:
+      NLI_MODEL: ${NLI_MODEL-cross-encoder/nli-deberta-v3-small}
+      NLI_MAX_LENGTH: ${NLI_MAX_LENGTH-512}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "3006:8000"
+    restart: unless-stopped
+
   # Optional S3-compatible storage (MinIO) for future indexing phases.
   # Start with: docker compose --profile s3 up -d
   minio:
