@@ -1,8 +1,48 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 038 -->
+<!-- Next ID: 039 -->
 <!-- NOTE: 036 is reserved by PR #40 (query-rewrite HyDE A/B); added there, not here. -->
+
+## DEFERRED-038
+
+- **Title:** Production chunk/lesson RAG feeds the 240-char display preview to the LLM (same truncation bug DEFERRED-037 fixed for QC)
+- **Status:** OPEN (2026-06-18)
+- **What:** DEFERRED-037 proved that feeding the synthesizer the 240-char
+  `content_snippet` display preview (instead of the full chunk) causes
+  false-abstention — a grounding fact past char 240 reads as "Not in context"
+  (standard faithfulness 0.62→0.82 once the full chunk was fed). The fix
+  (`snippetMaxChars`) was made **opt-in** (default stays 240 for GUI display) and
+  wired only into the QC harness. **The same bug exists in production LLM paths
+  that were NOT changed:**
+  - **`src/api/routes/chat.ts:94-109`** — the chat `search_documents` tool calls
+    `searchChunks(...)` with no `snippetMaxChars` and returns `content_snippet`
+    (240 chars) to the **chat LLM**. The production chat assistant therefore
+    can't ground on any fact past char 240 of a chunk — the exact failure mode the
+    benchmark surfaced. **Primary fix target.**
+  - **`src/mcp/index.ts:1832`** — the `reflect` MCP tool feeds `searchLessons`
+    `content_snippet` (capped at 280 via `makeSnippet`, `src/services/lessons.ts:
+    1167/1477`) into LLM synthesis. Parallel issue on the LESSONS surface; lessons
+    are shorter so impact is smaller, but the class is identical.
+- **Fix:** pass a wide window when the consumer is an LLM answerer (not a GUI list):
+  `searchChunks({ ..., snippetMaxChars: 2000 })` in chat.ts; add an analogous
+  option to `searchLessons` / `makeSnippet` for the reflect path. Keep the 240/280
+  defaults for display callers (GUI search results, dedup-key input).
+- **Tradeoff to weigh (why it's a deliberate change, not a default flip):** wider
+  context = more input tokens per RAG turn (cost + latency) and, past the synth
+  cap (~1000 chars/context), the "lost in the middle" effect. Right answer is
+  probably full-chunk for chunk-RAG (chunks are bounded ~600 chars) but a measured
+  cap for lessons. Verify with the chat path on a few real queries before/after.
+- **Trigger condition:** next work on chat-RAG answer quality, or any report of the
+  assistant saying "not in context" when the doc clearly contains the fact.
+- **Estimated size:** S — 1-line per call site + a quick before/after on the chat
+  path. Lessons variant is M (needs a `makeSnippet` width option threaded).
+- **Priority:** MED — real product-quality bug (the assistant under-answers), but
+  not data-loss/security; default behavior is safe (abstains rather than
+  hallucinates).
+- **Source:** DEFERRED-037 fix (`ce9110d`) + this scan; raised by the user.
+
+---
 
 ## DEFERRED-037
 
