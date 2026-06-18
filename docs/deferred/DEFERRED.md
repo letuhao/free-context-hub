@@ -44,9 +44,32 @@
   13/13, reordered 11/13; wider pool improved result completeness 3→5 on two
   rows). Shipped on architectural-consistency + completeness grounds, not a
   metric win. Closeout: `docs/qc/2026-06-18-deferred-034-chunks-rerank-closeout.md`.
-  **Still OPEN:** chunk granularity / re-chunking (the real `cr` lever) and
-  `searchChunksMulti` rerank parity. The chunks reranker will show real value on
-  a larger corpus / buried-relevant queries.
+- **Update (2026-06-18, session 4): `searchChunksMulti` rerank parity DONE.**
+  The multi-project chunk-search path lacked the reranker (it already had dedup).
+  Extracted the shared post-retrieval pipeline `postProcessChunkMatches` (rerank
+  → dedup → trim) + pure `chunkRerankActive`, used by BOTH `searchChunks` and
+  `searchChunksMulti`, so they can't drift. Multi gained the `rerank?` param +
+  wide-pool + 1000-char rerank window. Unit: `chunkRerankActive` gating (3
+  cases) + the single-project refactor guarded by 61 existing chunks/lessons
+  tests; 953/953 suite. Live-verified the 2-project path: `rerank=true` → wide
+  pool (11/2 projects), rerank fires (`reranked: 11 candidates (pool=30)`),
+  dedup, trim; `rerank=false` → narrow pool + correct bypass explanation; cold
+  rerank service → graceful no-rerank fallback. Design:
+  `docs/specs/2026-06-18-deferred-034-multi-rerank-parity.md`.
+- **Update (2026-06-18, session 4): chunk granularity / re-chunking RE-DEFERRED
+  — NOT measurable on the current corpus (corpus-bound, not granularity-bound).**
+  DB + per-row diagnosis: the chunks corpus is **11 chunks total** (avg 272
+  chars, min 100/max 524) across 3 sample files (`test-data/sample.{docx,pdf,png}`),
+  **3 of which are vision-extraction failures** → ~8 usable tiny chunks. Per-row
+  cr on the v11 baseline shows the bottleneck is corpus content, not slicing:
+  e.g. `chunk-retry-strategy-overview` scores **cr=0 with cp=0.92** (retrieval
+  precise, but the ground-truth claims simply aren't in any chunk). Re-chunking
+  8 tiny chunks cannot (a) add absent facts, nor (b) clear the 0.146 cr
+  judge-noise floor (top-5 already retrieves ~half the corpus), and would break
+  every `target_chunk_ids` (new UUIDs) for zero measurable gain. The real `cr`
+  lever is **corpus expansion** (more/richer documents — overlaps DEFERRED-032's
+  corpus-blocked SA bank), NOT chunk granularity. Trigger: a larger ingested
+  corpus exists. Until then, granularity work is unmeasurable.
 - **Status (original):** OPEN (2026-06-18)
 - **Why this exists:** the v11 "chunks cp/cr regression" was misdiagnosed as a
   synthesizer-template problem ("v12"). It is not — cp/cr are answer-independent
