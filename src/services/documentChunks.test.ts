@@ -14,7 +14,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { dedupChunkMatches, reorderByRerank } from './documentChunks.js';
+import { dedupChunkMatches, reorderByRerank, chunkRerankActive } from './documentChunks.js';
+import { _resetEnvCacheForTest } from '../env.js';
 
 type ChunkFixture = {
   chunk_id: string;
@@ -198,4 +199,41 @@ test('reorderByRerank', async (t) => {
   await t.test('empty pool → empty result', () => {
     assert.deepEqual(reorderByRerank([], [0, 1]), []);
   });
+});
+
+// DEFERRED-034 — chunkRerankActive gates rerank for BOTH single- and
+// multi-project chunk search. Controls env via the test-only cache-bust.
+test('chunkRerankActive — rerank gating (single + multi parity)', async (t) => {
+  const snapshot = {
+    RERANK_TYPE: process.env.RERANK_TYPE,
+    CHUNKS_RERANK_DISABLED: process.env.CHUNKS_RERANK_DISABLED,
+    DISTILLATION_ENABLED: process.env.DISTILLATION_ENABLED,
+    RERANK_MODEL: process.env.RERANK_MODEL,
+  };
+  const setEnv = (o: Record<string, string | undefined>) => {
+    for (const [k, v] of Object.entries(o)) {
+      if (v === undefined) delete (process.env as Record<string, string | undefined>)[k];
+      else process.env[k] = v;
+    }
+    _resetEnvCacheForTest();
+  };
+  try {
+    await t.test('rerank:false → false even when configured (explicit bypass)', () => {
+      setEnv({ RERANK_TYPE: 'api', CHUNKS_RERANK_DISABLED: undefined });
+      assert.equal(chunkRerankActive(false), false);
+    });
+
+    await t.test('configured (RERANK_TYPE=api) + not disabled → true', () => {
+      setEnv({ RERANK_TYPE: 'api', CHUNKS_RERANK_DISABLED: undefined });
+      assert.equal(chunkRerankActive(undefined), true);
+      assert.equal(chunkRerankActive(true), true);
+    });
+
+    await t.test('CHUNKS_RERANK_DISABLED=true → false even when configured (kill-switch)', () => {
+      setEnv({ RERANK_TYPE: 'api', CHUNKS_RERANK_DISABLED: 'true' });
+      assert.equal(chunkRerankActive(undefined), false);
+    });
+  } finally {
+    setEnv(snapshot);
+  }
 });

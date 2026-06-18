@@ -1,8 +1,8 @@
 # CHECKPOINT — DEFERRED-032 ai-engineering corpus (2026-06-18, session 6)
 
-**Branch:** `deferred-032-ai-eng-corpus` (off main). NOTE: sessions 4–5 (DEFERRED-034
-multi-rerank parity + the query-rewrite lever + HyDE A/B) are on **PR #40**, not yet
-merged — their SESSION_PATCH entries land when #40 merges.
+**Branch:** `deferred-032-ai-eng-corpus` (off main; later merged updated main after
+PR #40 landed — sessions 4–5 below cover the DEFERRED-034 parity + query-rewrite
+lever + HyDE A/B that came in via #40).
 
 **Asked:** "what's next" → corpus expansion (DEFERRED-032), ai-engineering pilot.
 Meta-finding driving it: every Phase-17 lever (CoVe, HyDE) came back flat partly
@@ -53,6 +53,113 @@ at the data layer (s1 top chunk 240→**823 chars**, grounding fact absent→pre
 answer-quality lift transitively proven by the corpus benchmark. Rebuilt + redeployed
 the mcp/api container so it's live. Commit `30b9775`. **Remaining:** the `reflect`
 tool's lesson-snippet path (M, lower impact) stays open under DEFERRED-038.
+---
+
+# CHECKPOINT — Query-rewrite A/B lever shipped (2026-06-18, session 5)
+
+**Branch:** `deferred-034-chunk-granularity` (continued — small enough to not warrant
+a new branch/PR per user). Lever built, not yet committed at time of writing.
+
+**Asked:** "tiếp tục Query rewrite" — the 4th Phase-17 A/B lever, now measurable
+because gen-eval is clean of reasoning-leak. User chose **both** techniques
+(expand + HyDE) over a single mode.
+
+**What it is:** a *retrieval-side* transform applied to the golden query BEFORE
+the retriever, parallel to CoVe (synth-side). `--rewrite-mode none|expand|hyde`:
+- **expand** — LLM rewrites the question into a keyword/synonym-rich query.
+- **hyde** — LLM writes a hypothetical answer passage; retrieve on that (Gao 2022).
+
+**Why cleanly measurable:** PRIMARY signal is the answer-INDEPENDENT retrieval
+metrics (recall@k/MRR/nDCG), which read `dispatch(rewrittenQuery)` directly — zero
+exposure to the reasoning-leak class that invalidated CoVe v1. Runs with gen-eval
+OFF (cleanest) or ON. Verify-metric-inputs holds: the metric that moves IS the one
+whose input changed ([[verify-metric-inputs]]).
+
+**Shipped:**
+- `src/qc/queryRewrite.ts` — `parseRewriteMode`, pure `parseRewrittenQuery`
+  (expand=first line, hyde=joined passage capped 2000 chars), `rewriteQuery`
+  (uses shared `chatComplete` → consistent reasoning-suppression; **graceful
+  fallback** to the original query on any LLM error / empty parse, never blocks a
+  row), template loaders + hashes.
+- Two templates: `templates/query-rewrite.{expand,hyde}.txt`.
+- runBaseline threading: `--rewrite-mode` flag, extracted `buildAnswererConfig()`
+  (so rewrite works with gen-eval off), per-query rewrite computed ONCE (not
+  per-sample), `rewrite` trace on each row (keeps original `query` for
+  provenance), top-level `rewrite_manifest` in JSON + markdown, per-row `rw[]`
+  terminal note, **loud warning on an unrecognized `--rewrite-mode`** (typo guard).
+- 22 unit tests (`queryRewrite.test.ts`, registered in `npm test`).
+
+**Verify:** tsc clean; **975/975** unit; live smoke on lessons — expand & hyde both
+HIT@1 with sensible rewrites, trace + manifest serialize to JSON/MD, fallback path
+exercised, typo warns, no-flag is bit-identical (clean row, no manifest). Design:
+`docs/specs/2026-06-18-query-rewrite-lever.md`.
+
+**Deferred:** the actual A/B *measurement run* (none vs expand vs hyde across the
+full golden set) — out of scope here, logged as DEFERRED-036.
+
+**`/review-impl` (commit d37549a) — all 6 findings fixed:**
+- MED-1 (`--control` + rewrite double-runs the LLM at temp>0 → noise floor
+  conflates retrieval jitter with rewrite-LLM sampling): documented in spec +
+  DEFERRED-036 — measurement runs must pin `ANSWERER_AGENT_TEMPERATURE=0`.
+- MED-2 (refactored gen-eval answerer build not live-verified): ran a gen-eval-ON
+  1-row smoke — answerer answered, judge scored (f=1.00/cp=1.00), rewrite composed,
+  `gen_manifest` answerer fields intact. ✓
+- LOW-3 (evalQuery rewrite wiring untested): folded into DEFERRED-035.
+- LOW-4 (hyde passage in `global` GET querystring is URL-length fragile):
+  documented (local-stack only) in spec + `HYDE_MAX_CHARS` comment.
+- LOW-5 (markdown showed original query, not dispatched): added a "dispatched
+  query" column to per-query detail when the lever is active (pipe-escaped,
+  ‖fallback flag).
+- COSMETIC-6 (`unwrapQuotes` left a dangling unbalanced quote): hardened + test.
+
+Re-verified: tsc clean; **976/976** unit. Commits: `d37549a` (lever) + review-fix
+commit.
+
+**DEFERRED-036 RESOLVED — "does HyDE increase quality?" → NO.** Ran the 3-way A/B
+on lessons (48 queries, retrieval-only, answerer temp=0 per MED-1). Verdict:
+rewrite is net-negative on ranking. MRR none **0.856** → expand 0.772 → **hyde
+0.751** (−0.105, far beyond the 0.026 noise floor); nDCG@5/@10 down for both; hyde
+only nudges recall@10 + coverage +0.022 (at the floor) by dragging hits *down* the
+ranking — a bad trade where the top hit matters. Cause: bge-m3 already embeds the
+raw question well, and HyDE writes plausible passages even for adversarial
+intentional-miss rows → spurious near-matches. Lessons is the *best case* for HyDE
+(most semantic surface) and it still lost → won't help the lexical surfaces.
+**Recommendation: keep production on the raw query; lever stays as a harness tool.**
+Writeup `docs/qc/2026-06-18-hyde-ab-results.md`. Also fixed a false-positive
+typo-warning (explicit `--rewrite-mode none` wrongly warned).
+
+**Next:** move on — Phase 17 levers (CoVe, query-rewrite) both measured
+metric-neutral-to-negative; the gen-eval pipeline + harness are the durable win.
+
+---
+
+# CHECKPOINT — DEFERRED-034 closed out (2026-06-18, session 4)
+
+**Branch:** `deferred-034-chunk-granularity` off merged main (PR #39 landed).
+Commit **26e6d27**.
+
+**Asked:** "tiếp tục 34" (chunk granularity, the cr lever). CLARIFY found the
+task-as-asked isn't measurable, and pivoted to the shippable open item.
+
+**Diagnosis (chunk granularity → re-deferred):** the chunks corpus is **11
+chunks total** (avg 272 chars, 3 vision-extraction failures = ~8 usable) across
+`test-data/sample.{docx,pdf,png}`. Per-row cr proves the bottleneck is corpus
+CONTENT, not slicing — `chunk-retry-strategy-overview` scores **cr=0 with
+cp=0.92** (precise retrieval, gt claims simply absent). Re-chunking can't add
+absent facts nor clear the 0.146 cr noise floor on 11 chunks, and would break
+every `target_chunk_ids`. Real cr lever = **corpus expansion** (overlaps
+DEFERRED-032). Re-deferred with DB + per-row evidence.
+
+**Shipped (searchChunksMulti rerank parity):** multi-project chunk search had
+dedup but no reranker (single got it in PR #39). Extracted the shared
+`postProcessChunkMatches` (rerank → dedup → trim) + pure `chunkRerankActive`,
+used by BOTH paths so they can't drift. Multi gained `rerank?` param + wide pool
++ 1000-char rerank window. tsc clean; 953/953; live 2-project smoke confirms the
+reranked path fires + graceful fallback. Design:
+`docs/specs/2026-06-18-deferred-034-multi-rerank-parity.md`.
+
+**Theme continued:** verify the experiment is even runnable before doing the
+work — same discipline as the CoVe/cp-cr arcs ([[verify-metric-inputs]]).
 
 ---
 
