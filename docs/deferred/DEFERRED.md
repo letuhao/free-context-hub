@@ -15,6 +15,14 @@
   51. **Fix:** `normalizeNewlines()` (CRLF/CR → LF) at the top of `chunkDocument` +
   `chunkDocumentSemantic` + a CRLF regression test. Verified: corpus re-ingests as 51
   chunks again. Found via the DEFERRED-039 semantic-chunking A/B.
+- **Source fix (2026-06-19):** the *origin* of the CRLF was `core.autocrlf=true`
+  smudging every checkout to CRLF (661/1101 tracked files were `w/crlf` in the
+  working tree, all `i/lf` in the index). Pinned text files to LF via
+  `.gitattributes` (`* text=auto eol=lf`), overriding per-machine autocrlf so
+  checkouts stay LF and the "LF will be replaced by CRLF" commit warnings stop. Index
+  was already 100% LF so the commit was `.gitattributes`-only (zero content
+  renormalization); working tree refreshed to LF (`0` files `w/crlf` after). Belt +
+  suspenders: the chunker is robust to CRLF *and* the repo no longer produces it.
 
 ---
 

@@ -1,3 +1,28 @@
+# CHECKPOINT — DEFERRED-040 CRLF source fix (.gitattributes) (2026-06-19, session 8)
+
+**Branch:** none — committed directly to `main` (trunk-based; XS/S config fix).
+
+**Asked:** "let's solve DEFERRED-040." The chunker half was already RESOLVED
+(`normalizeNewlines`, `59af763`); this closes the *source* of the CRLF.
+
+**Shipped.** Root cause of the CRLF that broke heading-aware chunking was
+`core.autocrlf=true` smudging checkouts to CRLF — `git ls-files --eol` showed
+**661/1101** tracked files `w/crlf` in the working tree, all `i/lf` in the index.
+Added `* text=auto eol=lf` to `.gitattributes` (overrides per-machine autocrlf →
+checkouts stay LF; kills the "LF will be replaced by CRLF" commit warnings), kept the
+prior `AUDIT_LOG merge=union` rule, added explicit binary pins. Index was already
+100% LF, so renormalize staged **zero content** — commit was `.gitattributes`-only
+(`57a3470`). Refreshed the working tree to LF (`git rm --cached -r . && git reset
+--hard`) → `0` files `w/crlf` after. No `.bat`/`.cmd` exist, so nothing legitimately
+needs CRLF. Chunker tests 8/8 (incl. CRLF regression). DEFERRED-040 fully closed:
+chunker is CRLF-robust **and** the repo no longer produces CRLF.
+
+**What's next:** open tracked debt is DEFERRED-032 (scale corpus to 4 more domains)
+and the DEFERRED-035 evalQuery-wiring test (needs a small runBaseline entry-guard
+refactor). DEFERRED-039 17.3 NLI judge stays deferred (low ROI).
+
+---
+
 # CHECKPOINT — DEFERRED-038 lessons-snippet path (2026-06-18, session 7)
 
 **Branch:** `deferred-038-lessons-snippet` (off updated main, post-#41 — sequenced
