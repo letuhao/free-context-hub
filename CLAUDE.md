@@ -342,6 +342,34 @@ Enhanced with Superpowers worktree isolation.
   - On completion: merge/PR/discard decision with user
 - **Always:** `check_guardrails` before push
 
+#### Branch sequencing — NEVER cut parallel branches from `main` (MANDATORY)
+
+**The 2026-06-18 mistake (do not repeat):** PR #40 and PR #41 were both branched
+from the same `main` and both edited the same shared "hub" files. When #40 merged,
+#41 conflicted — wasting tokens to resolve and risking a merge bug. This is
+**always avoidable**.
+
+**Rule:** before starting a new branch, check whether its work will touch any file
+an open/unmerged branch already touches. The usual hub files that collide:
+`src/qc/runBaseline.ts`, `src/qc/genEvalTypes.ts`, `docs/deferred/DEFERRED.md`,
+`docs/sessions/SESSION_PATCH.md`, `package.json` (test list), shared service files.
+
+If there is ANY overlap (or the new work depends on the open branch), pick one:
+1. **Sequence (preferred):** finish + merge the open branch to `main` first, then
+   branch the new work from the updated `main`. No overlap can exist.
+2. **Stack:** branch the new work *from the open branch* (`git checkout -b new
+   open-branch`), not from `main`. The new branch already contains the open one's
+   changes, so there is nothing to conflict on. Note the PR must target the open
+   branch (or be rebased onto `main` after the parent merges).
+
+**Only** cut a second branch from `main` when the two are provably disjoint (no
+shared file). When unsure, sequence.
+
+**Append-only docs are conflict magnets:** `SESSION_PATCH.md` and `DEFERRED.md` are
+edited by *every* task (both prepend to the top / bump the `Next ID`). Two branches
+that both touch them WILL conflict on those files even if the code is disjoint —
+another reason to sequence rather than parallelize.
+
 ---
 
 ### Session Patch Update Rule (always)
