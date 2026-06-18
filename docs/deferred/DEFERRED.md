@@ -6,7 +6,18 @@
 ## DEFERRED-034
 
 - **Title:** Raise chunks context_precision / context_recall (retrieval-layer, NOT template)
-- **Status:** OPEN (2026-06-18)
+- **Status:** PARTIALLY ADDRESSED (2026-06-18) — reranker + wide-pool + relevance
+  gate shipped on the chunks surface (default-ON, like lessons/code). cp/cr came
+  out **metric-neutral** on the 13-row corpus (cp Δ−0.013 / cr Δ+0.009, both
+  inside the 0.146 judge-noise band): most targets already rank-1, so reranking
+  has little headroom and noise swamps it. Mechanism verified (rerank fired
+  13/13, reordered 11/13; wider pool improved result completeness 3→5 on two
+  rows). Shipped on architectural-consistency + completeness grounds, not a
+  metric win. Closeout: `docs/qc/2026-06-18-deferred-034-chunks-rerank-closeout.md`.
+  **Still OPEN:** chunk granularity / re-chunking (the real `cr` lever) and
+  `searchChunksMulti` rerank parity. The chunks reranker will show real value on
+  a larger corpus / buried-relevant queries.
+- **Status (original):** OPEN (2026-06-18)
 - **Why this exists:** the v11 "chunks cp/cr regression" was misdiagnosed as a
   synthesizer-template problem ("v12"). It is not — cp/cr are answer-independent
   (scored from question + ground_truth + retrieved_contexts), so no template

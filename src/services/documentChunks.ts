@@ -11,14 +11,54 @@
  */
 
 import { getDbPool } from '../db/client.js';
+import { getEnv } from '../env.js';
 import { embedTexts } from './embedder.js';
 import { buildFtsQuery } from '../utils/ftsTokenizer.js';
 import { createModuleLogger } from '../utils/logger.js';
 import { nearSemanticKey } from '../utils/nearSemanticKey.js';
 import { assertCallerScope, assertCallerScopeMulti } from '../core/security/callerScope.js';
 import type { CallerScope } from '../core/security/callerScope.js';
+// DEFERRED-034: reuse the shared (lesson-agnostic) rerank dispatcher so the
+// chunks surface reranks like lessons/code. No cycle — lessons does not import
+// this module.
+import { rerankCandidates, rerankConfigured } from './lessons.js';
 
 const logger = createModuleLogger('document-chunks-search');
+
+/** DEFERRED-034 server-side kill-switch + A/B knob (mirrors CHUNKS_DEDUP_DISABLED). */
+function isChunksRerankDisabled(): boolean {
+  return process.env.CHUNKS_RERANK_DISABLED === 'true';
+}
+
+/** Candidate pool fetched before reranking down to `limit`. Wider = more room
+ *  for the reranker to promote a buried-relevant chunk. */
+function chunksRerankPool(): number {
+  const raw = Number(process.env.CHUNKS_RERANK_POOL);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 30;
+}
+
+/**
+ * DEFERRED-034 — apply a rerank dispatcher's index order to the candidate pool.
+ *
+ * `order` is a list of indices into `pool` (as returned by `rerankCandidates`).
+ * Indices the dispatcher omits were evicted by `RERANK_MIN_SCORE` (off-topic) —
+ * those chunks are dropped, which is the precision (cp) lever. Out-of-range and
+ * duplicate indices are ignored defensively. On rerank failure the dispatcher
+ * returns the identity order, so this returns the pool unchanged.
+ *
+ * Pure function — no I/O. Caller trims the result to `limit`.
+ */
+export function reorderByRerank<T>(pool: ReadonlyArray<T>, order: ReadonlyArray<number>): T[] {
+  const seen = new Set<number>();
+  const out: T[] = [];
+  for (const i of order) {
+    if (Number.isInteger(i) && i >= 0 && i < pool.length && !seen.has(i)) {
+      seen.add(i);
+      out.push(pool[i]!);
+    }
+  }
+  return out;
+}
 
 export type ChunkTypeFilter = 'text' | 'table' | 'code' | 'diagram_description' | 'mermaid';
 
@@ -34,6 +74,10 @@ export interface SearchChunksParams {
   docIds?: string[];
   /** Minimum semantic score (0..1) — filter out weak matches. */
   minScore?: number;
+  /** DEFERRED-034: when explicitly `false`, skip the server-side rerank and
+   *  return raw hybrid-retrieval order (used by the A/B harness for an
+   *  uncontaminated pool). Default true (rerank when configured). */
+  rerank?: boolean;
 }
 
 export interface ChunkMatch {
@@ -150,6 +194,13 @@ export async function searchChunks(params: SearchChunksParams): Promise<SearchCh
   const limit = Math.min(Math.max(params.limit ?? 10, 1), 100);
   const minScore = params.minScore ?? 0;
 
+  // DEFERRED-034: rerank when configured and not opted out. When active, fetch a
+  // WIDER candidate pool (so the reranker has room to promote a buried-relevant
+  // chunk into the top `limit`), then rerank down to `limit` below.
+  const rerankActive =
+    params.rerank !== false && rerankConfigured() && !isChunksRerankDisabled();
+  const fetchSize = rerankActive ? Math.min(Math.max(limit, chunksRerankPool()), 100) : limit;
+
   // Tokenize for FTS
   const queryTokens = params.query.match(/[A-Za-z_][A-Za-z0-9_]{1,}/g) ?? [];
   const ftsQuery = buildFtsQuery(queryTokens, 'or');
@@ -201,7 +252,7 @@ export async function searchChunks(params: SearchChunksParams): Promise<SearchCh
     whereParts.push(`c.doc_id = ANY($${sqlParams.length}::uuid[])`);
   }
 
-  sqlParams.push(limit);
+  sqlParams.push(fetchSize);
   const limitParam = `$${sqlParams.length}`;
 
   // Hybrid score: semantic + 0.30 * fts. If embedding failed, score is
@@ -285,6 +336,45 @@ export async function searchChunks(params: SearchChunksParams): Promise<SearchCh
     }))
     .filter((m) => m.score >= minScore);
 
+  // DEFERRED-034 — rerank the wide candidate pool, then trim to `limit`. Mirrors
+  // the lessons/code surfaces (chunks was the only surface without rerank).
+  // Reorders so a buried-relevant chunk is promoted into the top `limit`, and
+  // drops candidates the dispatcher evicted via RERANK_MIN_SCORE (precision
+  // lever). On rerank failure the dispatcher returns identity order → no-op.
+  if (rerankActive && matches.length > 1) {
+    try {
+      const order = await rerankCandidates({
+        query: params.query,
+        candidates: matches.map((m, i) => ({
+          index: i,
+          title: m.heading ? `${m.doc_name} / ${m.heading}` : m.doc_name,
+          snippet: m.content_snippet,
+        })),
+      });
+      const before = matches.length;
+      matches = reorderByRerank(matches, order);
+      const dropped = before - matches.length;
+      const env = getEnv();
+      explanations.push(
+        dropped > 0
+          ? `reranked: ${matches.length}/${before} (dropped ${dropped} via min_score=${env.RERANK_MIN_SCORE})`
+          : `reranked: ${matches.length} candidates (pool=${fetchSize})`,
+      );
+    } catch (err) {
+      explanations.push(
+        `rerank skipped: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  } else if (params.rerank === false) {
+    explanations.push('rerank: skipped (rerank=false on request)');
+  } else if (!rerankActive) {
+    explanations.push(
+      isChunksRerankDisabled()
+        ? 'rerank: disabled via CHUNKS_RERANK_DISABLED'
+        : 'rerank: not configured (RERANK_TYPE unset)',
+    );
+  }
+
   // Sprint 12.1b — near-semantic dedup. Collapses same-(project, chunk_type,
   // doc_name+heading, snippet) clusters. Opt-out via CHUNKS_DEDUP_DISABLED=true.
   // Always emit an explanation so operators can distinguish "dedup ON with no
@@ -301,6 +391,12 @@ export async function searchChunks(params: SearchChunksParams): Promise<SearchCh
         : `dedup: enabled, 0 collapsed (all ${before} chunks already distinct)`,
     );
   }
+
+  // DEFERRED-034: trim the reranked + deduped pool down to the requested page
+  // size. Dedup runs on the full pool first so unique chunks beyond `limit`
+  // can fill slots vacated by collapsed near-duplicates. No-op when rerank is
+  // inactive (fetchSize === limit).
+  if (matches.length > limit) matches = matches.slice(0, limit);
 
   logger.info(
     { project: params.projectId, matches: matches.length, min_score: minScore },

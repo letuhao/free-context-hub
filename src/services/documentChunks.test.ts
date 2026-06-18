@@ -14,7 +14,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { dedupChunkMatches } from './documentChunks.js';
+import { dedupChunkMatches, reorderByRerank } from './documentChunks.js';
 
 type ChunkFixture = {
   chunk_id: string;
@@ -164,5 +164,38 @@ test('dedupChunkMatches', async (t) => {
       out.map((x) => x.chunk_id),
       ['dup0', 'uniq-alpha', 'uniq-beta', 'uniq-gamma', 'uniq-delta', 'uniq-epsilon', 'uniq-zeta', 'uniq-eta'],
     );
+  });
+});
+
+// DEFERRED-034 — reorderByRerank pure helper. The rerank dispatcher returns an
+// array of indices into the candidate pool; this applies that order, drops
+// indices the dispatcher omitted (RERANK_MIN_SCORE evicted them), and ignores
+// any out-of-range / duplicate indices defensively.
+test('reorderByRerank', async (t) => {
+  const pool = ['a', 'b', 'c', 'd', 'e'];
+
+  await t.test('full reorder applies the dispatcher order', () => {
+    assert.deepEqual(reorderByRerank(pool, [2, 0, 4, 1, 3]), ['c', 'a', 'e', 'b', 'd']);
+  });
+
+  await t.test('identity order (rerank fallback) returns pool unchanged', () => {
+    assert.deepEqual(reorderByRerank(pool, [0, 1, 2, 3, 4]), pool);
+  });
+
+  await t.test('partial order (RERANK_MIN_SCORE dropped tail) evicts omitted items', () => {
+    // dispatcher kept only the 2 on-topic candidates → the rest are evicted
+    assert.deepEqual(reorderByRerank(pool, [3, 1]), ['d', 'b']);
+  });
+
+  await t.test('out-of-range and duplicate indices are ignored', () => {
+    assert.deepEqual(reorderByRerank(pool, [1, 1, 9, -1, 0]), ['b', 'a']);
+  });
+
+  await t.test('empty order → empty result (caller treats as no survivors)', () => {
+    assert.deepEqual(reorderByRerank(pool, []), []);
+  });
+
+  await t.test('empty pool → empty result', () => {
+    assert.deepEqual(reorderByRerank([], [0, 1]), []);
   });
 });

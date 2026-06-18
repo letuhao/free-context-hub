@@ -894,14 +894,20 @@ async function rerankCohereApi(query: string, candidates: RerankCandidate[]): Pr
  *  do NOT require DISTILLATION_ENABLED — that flag gates only the generative LLM
  *  path. Conflating them silently disabled cross-encoder lesson rerank whenever
  *  distillation was off, making rerank A/Bs measure no-rerank-vs-no-rerank. */
-function rerankConfigured(): boolean {
+export function rerankConfigured(): boolean {
   const env = getEnv();
   if (env.RERANK_TYPE === 'api' || env.RERANK_TYPE === 'cross-encoder') return true;
   return Boolean((env.RERANK_MODEL || env.DISTILLATION_MODEL) && env.DISTILLATION_ENABLED);
 }
 
-/** Dispatch to the correct reranker based on RERANK_TYPE. */
-async function rerankLessons(params: {
+/**
+ * Dispatch to the correct reranker based on RERANK_TYPE.
+ *
+ * Generic over candidate kind: only reads `query` + `candidates`
+ * (`{index,title,snippet}`). Shared with the chunks surface (DEFERRED-034) —
+ * was named `rerankLessons` historically but is lesson-agnostic.
+ */
+export async function rerankCandidates(params: {
   query: string;
   candidates: RerankCandidate[];
 }): Promise<number[]> {
@@ -1230,13 +1236,13 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
   })) {
     try {
       const rerankCount = Math.min(matches.length, rerankBudget);
-      const rerankCandidates = matches.slice(0, rerankCount).map((m, i) => ({
+      const rerankCandidateList = matches.slice(0, rerankCount).map((m, i) => ({
         index: i,
         title: m.title,
         snippet: m.content_snippet,
       }));
 
-      const rerankedOrder = await rerankLessons({ query: params.query, candidates: rerankCandidates });
+      const rerankedOrder = await rerankCandidates({ query: params.query, candidates: rerankCandidateList });
 
       // Apply reranked order to matches. DEFERRED-030: dispatcher MAY return
       // fewer indices than rerankCount — EITHER because `RERANK_MIN_SCORE>0`
@@ -1244,7 +1250,7 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
       // a short response. Distinguish in the explanation so a debug reader
       // can tell which mechanism dropped items.
       const rerankedTop = rerankedOrder.map(i => matches[i]).filter(Boolean);
-      const remaining = matches.slice(rerankCandidates.length);
+      const remaining = matches.slice(rerankCandidateList.length);
       const delta = rerankCount - rerankedTop.length;
       matches = [...rerankedTop, ...remaining];
 
@@ -1533,14 +1539,14 @@ export async function searchLessonsMulti(params: SearchLessonsMultiParams): Prom
   })) {
     try {
       const rerankCount = Math.min(matches.length, rerankBudget);
-      const rerankCandidates = matches.slice(0, rerankCount).map((m, i) => ({
+      const rerankCandidateList = matches.slice(0, rerankCount).map((m, i) => ({
         index: i,
         title: m.title,
         snippet: m.content_snippet,
       }));
-      const rerankedOrder = await rerankLessons({ query: params.query, candidates: rerankCandidates });
+      const rerankedOrder = await rerankCandidates({ query: params.query, candidates: rerankCandidateList });
       const rerankedTop = rerankedOrder.map(i => matches[i]).filter(Boolean);
-      const remaining = matches.slice(rerankCandidates.length);
+      const remaining = matches.slice(rerankCandidateList.length);
       const delta = rerankCount - rerankedTop.length;
       matches = [...rerankedTop, ...remaining];
       const note = delta > 0
