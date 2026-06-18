@@ -9,7 +9,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { chunkDocumentSemantic, splitSentences, percentile } from './chunker.js';
+import { chunkDocument, chunkDocumentSemantic, splitSentences, percentile } from './chunker.js';
 import type { ExtractionResult } from './types.js';
 
 const page = (content: string): ExtractionResult => ({
@@ -26,6 +26,19 @@ const clusterEmbed = async (texts: string[]): Promise<number[][]> =>
     if (s.includes('beta')) return [0, 1, 0];
     return [0, 0, 1];
   });
+
+test('hierarchical chunking is CRLF-robust (regression)', () => {
+  // A CRLF document must still split on its `##` headings. Before the fix the
+  // heading regex silently failed on `\r`-terminated lines → 0 headings → naive
+  // fallback (the corpus 51→16-chunk regression that surfaced this).
+  const md = '# Title\r\n\r\n## Section A\r\n\r\nAlpha body.\r\n\r\n## Section B\r\n\r\nBeta body.\r\n';
+  const result: ExtractionResult = { mode: 'fast' as any, pages: [{ page_number: 1, content: md } as any], total_pages: 1 };
+  const chunks = chunkDocument(result, { template: 'hierarchical' });
+  const headings = chunks.map((c) => c.heading).filter(Boolean);
+  assert.ok(headings.includes('Section A') && headings.includes('Section B'), `headings detected on CRLF, got ${JSON.stringify(headings)}`);
+  // and no stray \r leaked into the chunk content
+  assert.ok(!chunks.some((c) => c.content.includes('\r')), 'CRLF normalized out of chunk content');
+});
 
 test('splitSentences', () => {
   assert.deepEqual(splitSentences('A one. B two! C three?'), ['A one.', 'B two!', 'C three?']);

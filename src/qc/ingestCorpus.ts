@@ -76,7 +76,9 @@ async function main() {
     const extracted = await api('POST', `/api/documents/${docId}/extract`, {
       project_id: PROJECT,
       mode: 'fast',
-      template: 'hierarchical',
+      // DEFERRED-039: CHUNK_TEMPLATE env selects the chunker (hierarchical default,
+      // 'semantic' for the Phase-17.4 A/B).
+      template: process.env.CHUNK_TEMPLATE?.trim() || 'hierarchical',
     });
     // runExtraction returns { status:'ok', mode, chunks: DocumentChunk[], pages }.
     const n = Array.isArray(extracted.chunks) ? extracted.chunks.length : (extracted.chunk_count ?? 0);

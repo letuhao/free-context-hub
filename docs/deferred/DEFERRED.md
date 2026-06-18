@@ -1,7 +1,22 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 040 -->
+<!-- Next ID: 041 -->
+
+## DEFERRED-040
+
+- **Title:** Chunker heading detection silently broke on CRLF documents
+- **Status:** ✅ RESOLVED (2026-06-18). `chunkDocument`'s heading regex
+  `^(#{1,3})\s+(.+)$` failed on `\r`-terminated lines (JS `.` doesn't match `\r`,
+  `$` doesn't match before it), so a **CRLF document detected 0 headings → naive
+  fallback** instead of heading-aware hierarchical chunking. Affected any
+  Windows-authored / pasted / git-autocrlf'd doc in production. **Surfaced** when the
+  ai-eng corpus (autocrlf'd to CRLF mid-session) re-ingested as 16 chunks instead of
+  51. **Fix:** `normalizeNewlines()` (CRLF/CR → LF) at the top of `chunkDocument` +
+  `chunkDocumentSemantic` + a CRLF regression test. Verified: corpus re-ingests as 51
+  chunks again. Found via the DEFERRED-039 semantic-chunking A/B.
+
+---
 
 ## DEFERRED-039
 
@@ -14,11 +29,14 @@
   **Why deferred:** needs a new NLI model + sidecar (substantial infra) to fix a gap
   affecting only the `global` surface — ~10 of 152 golden rows. Big cost, narrow
   payoff. Revisit only if global-surface gen-eval becomes important.
-- **17.4 semantic chunking:** split documents on embedding-similarity drift instead
-  of the current hierarchical (headings) / naive (token-budget) chunkers.
-  **Why deferred:** uncertain payoff — the hierarchical chunker already yields
-  concept-level chunks that scored context_recall **0.99** on the ai-eng corpus.
-  Little headroom to justify a new chunker mode now.
+- **17.4 semantic chunking:** RESOLVED — built (`chunkDocumentSemantic`,
+  `template: 'semantic'`, `SEMANTIC_BREAKPOINT_PERCENTILE` env, off by default,
+  7 unit tests) + A/B'd: **NET-NEGATIVE** (faithfulness 0.91→0.81, context_recall
+  0.99→0.85, cp 0.87→0.78). Semantic merged the corpus into 22 topic-blended chunks
+  vs hierarchical's 51 concept-clean ones; heading-aware chunking wins on structured
+  docs. Kept off-by-default (niche: unstructured docs). Writeup:
+  `docs/qc/2026-06-18-semantic-chunking-ab-results.md`. **Bonus:** the investigation
+  surfaced + fixed a real CRLF chunker bug (see DEFERRED-040).
 - **17.4 HyDE:** RESOLVED — built as the query-rewrite lever, measured net-negative
   (DEFERRED-036). **17.4 RRF:** RESOLVED — built (`CHUNKS_FUSION=rrf`, `rrfFuse()`,
   off by default, unit-tested) + A/B'd: **metric-NEUTRAL** (v2 weighted vs v3 RRF,

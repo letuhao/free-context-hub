@@ -40,13 +40,18 @@ export function chunkDocument(
   for (const page of result.pages) {
     if (!page.content.trim()) continue;
 
+    // Normalize CRLF/CR → LF first. The heading regex (`.` + `$`) silently fails
+    // on `\r`-terminated lines, so a CRLF document (Windows-authored / git
+    // autocrlf) would detect 0 headings and fall back to naive chunking.
+    const content = normalizeNewlines(page.content);
+
     const useHierarchical =
       template === 'hierarchical' ||
-      (template === 'auto' && hasHeadings(page.content));
+      (template === 'auto' && hasHeadings(content));
 
     const pageChunks = useHierarchical
-      ? hierarchicalChunk(page.content, page.page_number, maxTokens)
-      : naiveChunk(page.content, page.page_number, maxTokens, overlapTokens);
+      ? hierarchicalChunk(content, page.page_number, maxTokens)
+      : naiveChunk(content, page.page_number, maxTokens, overlapTokens);
 
     chunks.push(...pageChunks);
   }
@@ -57,6 +62,13 @@ export function chunkDocument(
   );
 
   return chunks;
+}
+
+/** Normalize CRLF/CR line endings to LF. Critical before any `^...$` line regex —
+ *  JS `.` does not match `\r` and `$` does not match before it, so `\r`-terminated
+ *  lines silently break heading/block detection. */
+function normalizeNewlines(s: string): string {
+  return s.replace(/\r\n?/g, '\n');
 }
 
 /** Detect if markdown contains at least one heading. */
@@ -392,7 +404,7 @@ export async function chunkDocumentSemantic(
 
   for (const page of result.pages) {
     if (!page.content.trim()) continue;
-    const blocks = splitIntoBlocks(page.content);
+    const blocks = splitIntoBlocks(normalizeNewlines(page.content));
     let textRun: string[] = []; // accumulated sentences across adjacent text blocks
     const flushRun = async () => {
       if (textRun.length) {
