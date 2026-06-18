@@ -84,7 +84,10 @@ const GOLDEN_FILES: Record<Surface, string> = {
   // shipped golden file.
   lessons: process.env.QC_LESSONS_FILE?.trim() || 'qc/lessons-queries.json',
   code: 'qc/queries.json',
-  chunks: 'qc/chunks-queries.json',
+  // 2026-06-18 (DEFERRED-032): QC_CHUNKS_FILE overrides the chunks golden set so a
+  // gen-eval run can target the competency bank (qc/competency-geneval.json)
+  // against the ai-engineering corpus without touching the shipped golden file.
+  chunks: process.env.QC_CHUNKS_FILE?.trim() || 'qc/chunks-queries.json',
   global: 'qc/global-queries.json',
 };
 

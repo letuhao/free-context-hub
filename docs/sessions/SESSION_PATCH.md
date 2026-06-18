@@ -1,3 +1,37 @@
+# CHECKPOINT — DEFERRED-032 ai-engineering corpus (2026-06-18, session 6)
+
+**Branch:** `deferred-032-ai-eng-corpus` (off main). NOTE: sessions 4–5 (DEFERRED-034
+multi-rerank parity + the query-rewrite lever + HyDE A/B) are on **PR #40**, not yet
+merged — their SESSION_PATCH entries land when #40 merges.
+
+**Asked:** "what's next" → corpus expansion (DEFERRED-032), ai-engineering pilot.
+Meta-finding driving it: every Phase-17 lever (CoVe, HyDE) came back flat partly
+because measurement is **corpus-bound** — the old chunks corpus was a degenerate
+11-chunk / 3-vision-failure set.
+
+**Built — real, independent ai-engineering corpus:**
+- `corpus/ai-engineering/{01..08}.md` — 8 docs (~3900 words), one per sub-category,
+  covering the 56 ai-eng competency items. **Independence discipline:** authored
+  from the topic in natural prose, NOT by copying `must_contain_facts` (which would
+  make the bench measure copy-retrieval — the leakage AI-EVAL-0001-s4 tests for).
+- **Abstention preserved:** the 2 `no_answer` facts (GPT-4=128k, pgvector
+  efConstruction=64) deliberately EXCLUDED — grep-verified absent.
+- Ingested via the real HTTP path (`src/qc/ingestCorpus.ts`, idempotent
+  delete+recreate): 8 docs → **51 concept-level chunks** (hierarchical), bge-m3
+  embedded. ~5× richer than the old corpus.
+- Wiring: `QC_CHUNKS_FILE` env override (mirrors `QC_LESSONS_FILE`) points the
+  chunks golden set at `qc/competency-geneval.json`; `--groups 'ai-engineering/*'`
+  scopes to the 56 items.
+
+**Measurement:** full 56-row gen-eval baseline (answerer temp=0 per MED-1, judge
+gemma-4) running — `tag=aieng-corpus-v1`. 3-row smoke confirmed grounded retrieval
++ all metrics scoring (f=0.75–1.00, gse=1.00). Results writeup to follow.
+
+Design: `docs/specs/2026-06-18-deferred-032-ai-eng-corpus.md`. Commits: `b2454af`
+(corpus) + ingestion-tooling.
+
+---
+
 # CHECKPOINT — LLM chat in/out standardized (architecture fix) (2026-06-18, session 3)
 
 **Branch:** `fix-model-swap-orchestration`. Commit **ab53ed5**.
