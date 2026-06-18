@@ -32,8 +32,16 @@ chars of CoT now returns "Not in context." (15 chars, no leak markers) in 417ms
 vs 7058ms — gemma stops reasoning because suppression now reaches it. tsc clean;
 **946/946 unit** (889 prior + 41 llm-module + 16 groupFilter).
 
-**In flight:** re-running the CoVe edge-case A/B on this clean output (now VALID)
-to finally answer "is CoVe actually worse" without the leak confound.
+**CoVe re-run result (clean, VALID — supersedes the v1 "SHELVE"):** 0/25 CoT-leak
+in both arms (was 9/25 + 8/25). CoVe is **metric-neutral**: the v1 catastrophes
+were all leak artifacts — answer_relevancy "collapse" → now +0.06..+0.09,
+"abstention broke" (refusal 1.0→0.0) → now 1.0=1.0. The only residual (lessons
+faithfulness −0.29) is judge noise: 2/8 rows flip, and the biggest
+(`lesson-edge-multi-hop-1`) has byte-identical answers in both arms scoring 1 vs
+0. Verdict: NOT productionized (neutral at ~4× cost); harness kept. Closeout +
+clean v2 tables: `docs/qc/2026-06-18-cove-edge-ab-shelve.md`. Two findings
+vindicated the user's skepticism twice: read the RAW output (leak), and a metric
+delta on small N can be judge noise ([[verify-metric-inputs]], [[read-raw-llm-output]]).
 
 ---
 

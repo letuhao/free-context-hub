@@ -1,11 +1,60 @@
-# CoVe synthesizer — edge-case A/B → ⚠️ MEASUREMENT INVALIDATED (2026-06-18)
+# CoVe synthesizer — edge-case A/B (2026-06-18)
 
-> **⚠️ RETRACTION (2026-06-18, same day).** The SHELVE verdict below is
-> **WITHDRAWN** — the measurement is invalid. Reading the raw answer text (not
-> just the aggregate scores) revealed the deltas are dominated by two bugs, not
-> CoVe's intrinsic behavior. **No ship/shelve verdict is warranted until a clean
-> re-measurement.** Diagnosis at the top; the original (invalid) analysis is kept
-> below as the record of what the bugs produced.
+> **✅ FINAL VERDICT (2026-06-18): CoVe is metric-NEUTRAL on the edge set — not
+> the net-negative the first run claimed. Not productionized (no demonstrated
+> benefit at ~4× LLM cost); the validated harness is kept.**
+>
+> Three runs total, and the verdict only stabilized once the measurement was
+> made valid:
+> 1. **v1 run → "SHELVE, net-negative"** — WRONG (see retraction below). The
+>    answerer (gemma-qat) leaked chain-of-thought into the answer field because
+>    reasoning suppression never reached it; 9/25 standard + 8/25 cove answers
+>    were raw CoT dumps. RAGAS scored the leak, not the answer.
+> 2. **Architecture fix** — standardized LLM in/out behind `src/services/llm/`
+>    so every chat caller suppresses reasoning on the request and extracts a
+>    clean answer (commit `ab53ed5`). Verified: the row that dumped 4162 chars
+>    of CoT now returns "Not in context." (15 chars).
+> 3. **v2 run (clean, leak-free: 0/25 CoT in both arms) → NEUTRAL.** Every v1
+>    "regression" dissolves:
+>    - answer_relevancy "collapse" (lessons −0.39 / code −0.25 / chunks −0.30)
+>      → now **+0.06 to +0.09** (CoVe marginally *helps* relevance).
+>    - "abstention broke" (refusal_correctness 1.0→0.0) → now **1.0 = 1.0**.
+>    - remaining lessons faithfulness −0.29 is **judge noise**: 2 of 8 rows flip
+>      1→0, and the largest (`lesson-edge-multi-hop-1`) has **byte-identical
+>      answers in both arms** ("Not in context.") scoring faithfulness 1 vs 0 —
+>      same answer, different score = non-determinism, not a CoVe effect.
+>    - cp/cr unchanged (answer-independent, as expected).
+>
+> **Clean v2 per-surface means** (answerer=judge=gemma-4-26b-a4b-qat, leak-free):
+>
+> | Surface | Metric | standard | cove | Δ |
+> |---|---|---:|---:|---:|
+> | lessons (8) | faithfulness | 0.81 | 0.52 | −0.29 (noise, 2 rows) |
+> | | answer_relevancy | 0.33 | 0.42 | +0.09 |
+> | | refusal_correctness | 1.00 | 1.00 | 0 |
+> | code (10) | faithfulness | 0.63 | 0.63 | 0 |
+> | | answer_relevancy | 0.00 | 0.09 | +0.09 |
+> | chunks (3) | faithfulness / AR | 1.00 / 0.67 | 1.00 / 0.67 | 0 / 0 |
+> | global (1) | answer_relevancy | 0.35 | 0.41 | +0.06 |
+>
+> Artifacts: `2026-06-18-cove-ab-{standard,cove}-edge-v2.{json,md}` (clean) vs
+> `…-edge.{json,md}` (v1, leak-contaminated — kept as the record).
+>
+> **Why not pursue CoVe further now:** on this edge set CoVe is neutral at ~4×
+> cost, and most edge rows are correct abstentions where the verification step
+> has nothing to audit. A meaningful CoVe evaluation needs a larger,
+> answer-bearing corpus (not abstention-heavy) where judge noise averages out.
+> Two real follow-ups if revisited: (a) skip the plan/verify steps when the
+> draft is a pure refusal (no claims), (b) average ≥3 runs per arm to clear the
+> faithfulness noise floor.
+>
+> ---
+>
+> **⚠️ RETRACTION of the v1 SHELVE verdict (kept for the record).** The original
+> analysis below concluded "net-negative → SHELVE" from v1 aggregates. That run
+> was invalid (reasoning-leak + a CoVe refusal-handling rough edge). The clean
+> v2 re-run above supersedes it. The original (invalid) analysis is retained as
+> the record of what the bugs produced.
 >
 > **Confound 1 — answerer leaks chain-of-thought into the answer (BOTH arms).**
 > The answerer was `gemma-4-26b-a4b-qat`, which **ignores `enable_thinking:false`
