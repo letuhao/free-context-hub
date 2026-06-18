@@ -78,6 +78,8 @@ const DEFAULT_FILES: { path: string; surface: Surface }[] = [
   { path: 'qc/queries.json', surface: 'code' },
   { path: 'qc/lessons-queries.json', surface: 'lessons' },
   { path: 'qc/chunks-queries.json', surface: 'chunks' },
+  // DEFERRED-034: the default chunks golden (ai-engineering, matched to the corpus).
+  { path: 'qc/chunks-queries.aieng.json', surface: 'chunks' },
   { path: 'qc/global-queries.json', surface: 'global' },
 ];
 

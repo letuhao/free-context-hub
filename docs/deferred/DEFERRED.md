@@ -262,7 +262,24 @@
 ## DEFERRED-034
 
 - **Title:** Raise chunks context_precision / context_recall (retrieval-layer, NOT template)
-- **Status:** PARTIALLY ADDRESSED (2026-06-18) — reranker + wide-pool + relevance
+- **Status:** ✅ RESOLVED (2026-06-19) — **the "low chunks cp/cr" was a golden↔corpus
+  mismatch, NOT a retrieval gap.** The prior "corpus-bound (032)" diagnosis was wrong:
+  pulling the actual chunk content (DB) showed the legacy `qc/chunks-queries.json` answer
+  key CONTRADICTS the ingested `test-data/sample.*` chunks (golden 100ms/jitter-0.2/
+  editor,viewer vs corpus 1000ms/jitter-true/writer,reader), and the target chunks are
+  retrieved at rank 1 — so `cr≈0` was a **false negative from a wrong answer key**, not
+  truncation (the retry chunk is 166 chars < 240) and not missing corpus. Proof the
+  pipeline is fine: the same chunks pipeline scores **cr 0.994** on the matched
+  ai-engineering corpus (`aieng-corpus-v2`). **Fix:** made the matched ai-engineering set
+  the default chunks golden (`qc/chunks-queries.aieng.json`, 56 rows; `runBaseline`
+  `GOLDEN_FILES.chunks` re-pointed; added to `validateGoldenSet`; fixed an R4 violation in
+  2 `no_answer` rows in the master `competency-geneval.json`). Legacy `chunks-queries.json`
+  retained for the retrieval/noise probes (its `target_chunk_ids` are valid). Verified:
+  default chunks baseline now `cr=1.00` (was ≈0); 1000/1000; tsc clean. The rerank/
+  wide-pool/granularity levers below were chasing a phantom — **no retrieval change was
+  needed.** Closeout: `docs/qc/2026-06-19-deferred-034-chunks-golden-mismatch-closeout.md`.
+  Residual (more domains + `target_chunk_ids` for recall@k) belongs to DEFERRED-032.
+- ~~**Status:** PARTIALLY ADDRESSED (2026-06-18)~~ — reranker + wide-pool + relevance
   gate shipped on the chunks surface (default-ON, like lessons/code). cp/cr came
   out **metric-neutral** on the 13-row corpus (cp Δ−0.013 / cr Δ+0.009, both
   inside the 0.146 judge-noise band): most targets already rank-1, so reranking
@@ -364,6 +381,13 @@
   developer, language-runtime, solution-architecture; 238 items) + `target_chunk_ids`
   population for recall@k. Scale only after the DEFERRED-037 template fix, else
   every domain's score is understated.
+- **Update (2026-06-19, via DEFERRED-034):** the ai-engineering set is now the
+  **default chunks golden** (`qc/chunks-queries.aieng.json`, re-pointed in
+  `runBaseline`), replacing the broken `chunks-queries.json`. This makes the default
+  chunks baseline's gen-eval cp/cr/faithfulness valid (cr 0.994). **`target_chunk_ids`
+  population (for retrieval recall@k/MRR) is now explicitly part of THIS item** — the
+  ai-eng rows have empty `target_chunk_ids`, so retrieval metrics are N/A until populated
+  (gen-eval metrics are unaffected). Run the set with `--synth-template claim-eval`.
 - ~~**Status:** OPEN (2026-06-17)~~
 - **What:** `qc/competency-geneval.json` was compiled in a separate session
   (chronologically around 2026-06-17 00:50, not produced by the

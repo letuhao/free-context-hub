@@ -94,10 +94,15 @@ const GOLDEN_FILES: Record<Surface, string> = {
   // shipped golden file.
   lessons: process.env.QC_LESSONS_FILE?.trim() || 'qc/lessons-queries.json',
   code: 'qc/queries.json',
-  // 2026-06-18 (DEFERRED-032): QC_CHUNKS_FILE overrides the chunks golden set so a
-  // gen-eval run can target the competency bank (qc/competency-geneval.json)
-  // against the ai-engineering corpus without touching the shipped golden file.
-  chunks: process.env.QC_CHUNKS_FILE?.trim() || 'qc/chunks-queries.json',
+  // DEFERRED-034 (2026-06-19): the default chunks golden is the ai-engineering set,
+  // which is MATCHED to the ingested corpus/ai-engineering/ chunks (cr 0.994). The
+  // old qc/chunks-queries.json targets test-data/sample.* fixtures whose ingested
+  // content CONTRADICTS its must_contain_facts (golden↔corpus mismatch → cr~0 was a
+  // false-negative artifact, not a retrieval gap). The legacy file is retained for
+  // the retrieval/noise probes (chunksRerankAbProbe, noiseFloorChunksCpCr) — its
+  // target_chunk_ids ARE valid; only its gen-eval facts are stale.
+  // QC_CHUNKS_FILE still overrides for ad-hoc A/Bs.
+  chunks: process.env.QC_CHUNKS_FILE?.trim() || 'qc/chunks-queries.aieng.json',
   global: 'qc/global-queries.json',
 };
 

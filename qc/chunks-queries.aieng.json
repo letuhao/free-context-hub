@@ -1,0 +1,1745 @@
+{
+  "version": "2026-06-19-aieng-chunks",
+  "surface": "chunks",
+  "project_id_suggested": "free-context-hub",
+  "notes": [
+    "DEFERRED-034 resolution: the default chunks golden set. Derived from the",
+    "ai-engineering subset of qc/competency-geneval.json (groups ai-engineering/*),",
+    "which is MATCHED to the ingested corpus/ai-engineering/ chunks (51 chunks).",
+    "Replaces qc/chunks-queries.json as the runBaseline default: that legacy set",
+    "targets test-data/sample.* fixtures whose ingested chunk content CONTRADICTS its",
+    "must_contain_facts (100ms vs 1000ms, jitter 0.2 vs true, editor/viewer vs",
+    "writer/reader), so its gen-eval cp/cr were a false-negative artifact (cr~0).",
+    "This matched set scores cr 0.994 (aieng-corpus-v2). KNOWN GAP (DEFERRED-032):",
+    "target_chunk_ids are empty here, so retrieval recall@k/MRR are N/A until populated;",
+    "gen-eval cp/cr/faithfulness/answer_relevancy ARE valid."
+  ],
+  "queries": [
+    {
+      "id": "AI-LLM-0001-s1",
+      "group": "ai-engineering/llm-fundamentals",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"LLMs operate on tokens (subword units), not whole words, so token count differs from word count.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "True. A token is typically a subword piece (~0.75 words/token in English); cost and context limits are measured in tokens.",
+      "must_contain_facts": [
+        "The claim is True.",
+        "A token is typically a subword piece (~0.75 words/token in English); cost and context limits are measured in tokens."
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-LLM-0001",
+        "statement_n": 1,
+        "domain": "ai-engineering",
+        "subdomain": "llm-fundamentals",
+        "topic": "tokens-context-embeddings",
+        "cognitive_level": "understand",
+        "difficulty": 2,
+        "polarity": "supports",
+        "verdict": true,
+        "corpus_source": [
+          "corpus/ai-engineering/llm-fundamentals/tokens-context-embeddings.md#tokens--words"
+        ],
+        "claim_text": "LLMs operate on tokens (subword units), not whole words, so token count differs from word count."
+      }
+    },
+    {
+      "id": "AI-LLM-0001-s2",
+      "group": "ai-engineering/llm-fundamentals",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"A large enough context window removes the need for retrieval (RAG).\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. Bigger contexts cost more/latency and suffer 'lost in the middle' degradation; targeted retrieval usually beats stuffing everything in.",
+      "must_contain_facts": [
+        "The claim is False.",
+        "Bigger contexts cost more/latency and suffer 'lost in the middle' degradation; targeted retrieval usually beats stuffing everything in."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-LLM-0001",
+        "statement_n": 2,
+        "domain": "ai-engineering",
+        "subdomain": "llm-fundamentals",
+        "topic": "tokens-context-embeddings",
+        "cognitive_level": "understand",
+        "difficulty": 2,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/llm-fundamentals/tokens-context-embeddings.md#context-window--limits-and-scaling"
+        ],
+        "claim_text": "A large enough context window removes the need for retrieval (RAG)."
+      }
+    },
+    {
+      "id": "AI-LLM-0001-s3",
+      "group": "ai-engineering/llm-fundamentals",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Setting temperature to 0 guarantees byte-identical outputs across model versions, hardware, and backends.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. Temp 0 ≈ greedy, but floating-point non-associativity, batching, and kernel differences cause nondeterminism even at temp 0.",
+      "must_contain_facts": [
+        "The claim is False.",
+        "Temp 0 ≈ greedy, but floating-point non-associativity, batching, and kernel differences cause nondeterminism even at temp 0."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-LLM-0001",
+        "statement_n": 3,
+        "domain": "ai-engineering",
+        "subdomain": "llm-fundamentals",
+        "topic": "tokens-context-embeddings",
+        "cognitive_level": "understand",
+        "difficulty": 2,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/llm-fundamentals/tokens-context-embeddings.md#decoding-and-temperature"
+        ],
+        "claim_text": "Setting temperature to 0 guarantees byte-identical outputs across model versions, hardware, and backends."
+      }
+    },
+    {
+      "id": "AI-LLM-0001-s4",
+      "group": "ai-engineering/llm-fundamentals",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Embeddings store retrievable facts as a knowledge base of true statements.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. Embeddings encode semantic similarity (geometry of meaning), not facts; you retrieve the source TEXT by vector proximity, then a model reads it.",
+      "must_contain_facts": [
+        "The claim is False.",
+        "Embeddings encode semantic similarity (geometry of meaning), not facts; you retrieve the source TEXT by vector proximity, then a model reads it."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-LLM-0001",
+        "statement_n": 4,
+        "domain": "ai-engineering",
+        "subdomain": "llm-fundamentals",
+        "topic": "tokens-context-embeddings",
+        "cognitive_level": "understand",
+        "difficulty": 2,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/llm-fundamentals/tokens-context-embeddings.md#embeddings"
+        ],
+        "claim_text": "Embeddings store retrievable facts as a knowledge base of true statements."
+      }
+    },
+    {
+      "id": "AI-LLM-0001-s5",
+      "group": "ai-engineering/llm-fundamentals",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Models recall information placed in the middle of a long context less reliably than information at the start or end ('lost in the middle').\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "True. The documented 'lost in the middle' positional effect: mid-context information is recalled worse.",
+      "must_contain_facts": [
+        "The claim is True.",
+        "The documented 'lost in the middle' positional effect: mid-context information is recalled worse."
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-LLM-0001",
+        "statement_n": 5,
+        "domain": "ai-engineering",
+        "subdomain": "llm-fundamentals",
+        "topic": "tokens-context-embeddings",
+        "cognitive_level": "understand",
+        "difficulty": 2,
+        "polarity": "supports",
+        "verdict": true,
+        "corpus_source": [
+          "corpus/ai-engineering/llm-fundamentals/tokens-context-embeddings.md#context-window--limits-and-scaling"
+        ],
+        "claim_text": "Models recall information placed in the middle of a long context less reliably than information at the start or end ('lost in the middle')."
+      }
+    },
+    {
+      "id": "AI-LLM-0001-s6",
+      "group": "ai-engineering/llm-fundamentals",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"An LLM is fundamentally a next-token predictor with no built-in model of truth, which is why it can produce fluent but false output.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "True. LLMs generate statistically likely continuations; truth/grounding is an external addition, not inherent — hence hallucination.",
+      "must_contain_facts": [
+        "The claim is True.",
+        "LLMs generate statistically likely continuations; truth/grounding is an external addition, not inherent — hence hallucination."
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-LLM-0001",
+        "statement_n": 6,
+        "domain": "ai-engineering",
+        "subdomain": "llm-fundamentals",
+        "topic": "tokens-context-embeddings",
+        "cognitive_level": "understand",
+        "difficulty": 2,
+        "polarity": "supports",
+        "verdict": true,
+        "corpus_source": [
+          "corpus/ai-engineering/llm-fundamentals/tokens-context-embeddings.md#what-an-llm-is-and-isnt"
+        ],
+        "claim_text": "An LLM is fundamentally a next-token predictor with no built-in model of truth, which is why it can produce fluent but false output."
+      }
+    },
+    {
+      "id": "AI-LLM-0001-s7",
+      "group": "ai-engineering/llm-fundamentals",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"GPT-4's maximum context window is exactly 128,000 tokens.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "[NO_ANSWER] The provided context does not contain information to verify this claim, so it cannot be confirmed or refuted from the available sources.",
+      "must_contain_facts": [],
+      "answer_style": "concise",
+      "answer_category": "no_answer",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-LLM-0001",
+        "statement_n": 7,
+        "domain": "ai-engineering",
+        "subdomain": "llm-fundamentals",
+        "topic": "tokens-context-embeddings",
+        "cognitive_level": "understand",
+        "difficulty": 2,
+        "polarity": "absent",
+        "verdict": false,
+        "corpus_source": [],
+        "claim_text": "GPT-4's maximum context window is exactly 128,000 tokens."
+      }
+    },
+    {
+      "id": "AI-RAG-0001-s1",
+      "group": "ai-engineering/rag",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Reranking reorders the retrieved candidate pool but cannot raise recall beyond what retrieval already fetched.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "True. If the right document isn't in the retrieved set, no reranker can surface it; reranking improves precision/ordering (MRR/nDCG/context_precision), not recall.",
+      "must_contain_facts": [
+        "The claim is True.",
+        "If the right document isn't in the retrieved set, no reranker can surface it; reranking improves precision/ordering (MRR/nDCG/context_precision), not recall."
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-RAG-0001",
+        "statement_n": 1,
+        "domain": "ai-engineering",
+        "subdomain": "rag",
+        "topic": "retrieval-rerank-eval",
+        "cognitive_level": "analyze",
+        "difficulty": 4,
+        "polarity": "supports",
+        "verdict": true,
+        "corpus_source": [
+          "corpus/ai-engineering/rag/retrieval-rerank-eval.md#the-critical-reranking-fact-verified-first-hand-this-project"
+        ],
+        "claim_text": "Reranking reorders the retrieved candidate pool but cannot raise recall beyond what retrieval already fetched."
+      }
+    },
+    {
+      "id": "AI-RAG-0001-s2",
+      "group": "ai-engineering/rag",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Adding a reranker increases recall@k of the underlying retrieval.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. Reranking only reorders the existing candidate pool; it cannot add documents retrieval missed, so recall@k of retrieval is unchanged.",
+      "must_contain_facts": [
+        "The claim is False.",
+        "Reranking only reorders the existing candidate pool; it cannot add documents retrieval missed, so recall@k of retrieval is unchanged."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-RAG-0001",
+        "statement_n": 2,
+        "domain": "ai-engineering",
+        "subdomain": "rag",
+        "topic": "retrieval-rerank-eval",
+        "cognitive_level": "analyze",
+        "difficulty": 4,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/rag/retrieval-rerank-eval.md#the-critical-reranking-fact-verified-first-hand-this-project"
+        ],
+        "claim_text": "Adding a reranker increases recall@k of the underlying retrieval."
+      }
+    },
+    {
+      "id": "AI-RAG-0001-s3",
+      "group": "ai-engineering/rag",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"A cross-encoder scores each (query, document) pair jointly and is more accurate but slower than a bi-encoder.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "True. Bi-encoders embed query/docs independently (fast ANN); cross-encoders jointly score pairs (more accurate, slower) — they are not the same.",
+      "must_contain_facts": [
+        "The claim is True.",
+        "Bi-encoders embed query/docs independently (fast ANN); cross-encoders jointly score pairs (more accurate, slower) — they are not the same."
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-RAG-0001",
+        "statement_n": 3,
+        "domain": "ai-engineering",
+        "subdomain": "rag",
+        "topic": "retrieval-rerank-eval",
+        "cognitive_level": "analyze",
+        "difficulty": 4,
+        "polarity": "supports",
+        "verdict": true,
+        "corpus_source": [
+          "corpus/ai-engineering/rag/retrieval-rerank-eval.md#retrieval-vs-reranking-two-stages"
+        ],
+        "claim_text": "A cross-encoder scores each (query, document) pair jointly and is more accurate but slower than a bi-encoder."
+      }
+    },
+    {
+      "id": "AI-RAG-0001-s4",
+      "group": "ai-engineering/rag",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"A cross-encoder is just a type of bi-encoder.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. The defining difference is joint query-document scoring (cross-encoder) vs independent embedding (bi-encoder); they are distinct architectures.",
+      "must_contain_facts": [
+        "The claim is False.",
+        "The defining difference is joint query-document scoring (cross-encoder) vs independent embedding (bi-encoder); they are distinct architectures."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-RAG-0001",
+        "statement_n": 4,
+        "domain": "ai-engineering",
+        "subdomain": "rag",
+        "topic": "retrieval-rerank-eval",
+        "cognitive_level": "analyze",
+        "difficulty": 4,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/rag/retrieval-rerank-eval.md#retrieval-vs-reranking-two-stages"
+        ],
+        "claim_text": "A cross-encoder is just a type of bi-encoder."
+      }
+    },
+    {
+      "id": "AI-RAG-0001-s5",
+      "group": "ai-engineering/rag",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"recall@k directly measures the quality of the final generated answer.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. recall@k is a RETRIEVAL metric; a perfect retrieval can still be followed by a bad generation. Answer quality needs separate evaluation.",
+      "must_contain_facts": [
+        "The claim is False.",
+        "recall@k is a RETRIEVAL metric; a perfect retrieval can still be followed by a bad generation. Answer quality needs separate evaluation."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-RAG-0001",
+        "statement_n": 5,
+        "domain": "ai-engineering",
+        "subdomain": "rag",
+        "topic": "retrieval-rerank-eval",
+        "cognitive_level": "analyze",
+        "difficulty": 4,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/rag/retrieval-rerank-eval.md#retrieval-metrics-and-what-they-dont-measure"
+        ],
+        "claim_text": "recall@k directly measures the quality of the final generated answer."
+      }
+    },
+    {
+      "id": "AI-RAG-0001-s6",
+      "group": "ai-engineering/rag",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Putting more chunks into the context window always improves answer quality.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. Beyond a point more chunks add noise, cost, latency, and trigger 'lost in the middle' — more is not automatically better.",
+      "must_contain_facts": [
+        "The claim is False.",
+        "Beyond a point more chunks add noise, cost, latency, and trigger 'lost in the middle' — more is not automatically better."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-RAG-0001",
+        "statement_n": 6,
+        "domain": "ai-engineering",
+        "subdomain": "rag",
+        "topic": "retrieval-rerank-eval",
+        "cognitive_level": "analyze",
+        "difficulty": 4,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/rag/retrieval-rerank-eval.md#retrieval-metrics-and-what-they-dont-measure"
+        ],
+        "claim_text": "Putting more chunks into the context window always improves answer quality."
+      }
+    },
+    {
+      "id": "AI-RAG-0001-s7",
+      "group": "ai-engineering/rag",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Hybrid retrieval combines lexical (BM25) and vector search, often fusing rankings with Reciprocal Rank Fusion.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "True. Hybrid search catches both keyword and semantic matches; RRF is a common rank-fusion method.",
+      "must_contain_facts": [
+        "The claim is True.",
+        "Hybrid search catches both keyword and semantic matches; RRF is a common rank-fusion method."
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-RAG-0001",
+        "statement_n": 7,
+        "domain": "ai-engineering",
+        "subdomain": "rag",
+        "topic": "retrieval-rerank-eval",
+        "cognitive_level": "analyze",
+        "difficulty": 4,
+        "polarity": "supports",
+        "verdict": true,
+        "corpus_source": [
+          "corpus/ai-engineering/rag/retrieval-rerank-eval.md#retrieval-vs-reranking-two-stages"
+        ],
+        "claim_text": "Hybrid retrieval combines lexical (BM25) and vector search, often fusing rankings with Reciprocal Rank Fusion."
+      }
+    },
+    {
+      "id": "AI-VEC-0001-s1",
+      "group": "ai-engineering/vector-retrieval",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Approximate Nearest Neighbor (ANN) search trades a little recall for large speedups and does not guarantee the exact nearest neighbors.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "True. ANN returns probably-near results fast; only brute-force exact search guarantees true nearest neighbors.",
+      "must_contain_facts": [
+        "The claim is True.",
+        "ANN returns probably-near results fast; only brute-force exact search guarantees true nearest neighbors."
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-VEC-0001",
+        "statement_n": 1,
+        "domain": "ai-engineering",
+        "subdomain": "vector-retrieval",
+        "topic": "ann-hnsw-similarity",
+        "cognitive_level": "understand",
+        "difficulty": 3,
+        "polarity": "supports",
+        "verdict": true,
+        "corpus_source": [
+          "corpus/ai-engineering/vector-retrieval/ann-hnsw-similarity.md#approximate-vs-exact-nearest-neighbors"
+        ],
+        "claim_text": "Approximate Nearest Neighbor (ANN) search trades a little recall for large speedups and does not guarantee the exact nearest neighbors."
+      }
+    },
+    {
+      "id": "AI-VEC-0001-s2",
+      "group": "ai-engineering/vector-retrieval",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"An ANN index like HNSW always returns the exact nearest neighbors.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. ANN is approximate by design; its results are not always identical to a full exact search (the recall/speed trade-off is tunable).",
+      "must_contain_facts": [
+        "The claim is False.",
+        "ANN is approximate by design; its results are not always identical to a full exact search (the recall/speed trade-off is tunable)."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-VEC-0001",
+        "statement_n": 2,
+        "domain": "ai-engineering",
+        "subdomain": "vector-retrieval",
+        "topic": "ann-hnsw-similarity",
+        "cognitive_level": "understand",
+        "difficulty": 3,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/vector-retrieval/ann-hnsw-similarity.md#approximate-vs-exact-nearest-neighbors"
+        ],
+        "claim_text": "An ANN index like HNSW always returns the exact nearest neighbors."
+      }
+    },
+    {
+      "id": "AI-VEC-0001-s3",
+      "group": "ai-engineering/vector-retrieval",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"The similarity metric (cosine, dot, L2) must match what the embedding model was trained/normalized for; not every metric works with every model.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "True. Using cosine on vectors meant for dot product (or vice versa) degrades retrieval; for normalized vectors cosine and dot coincide.",
+      "must_contain_facts": [
+        "The claim is True.",
+        "Using cosine on vectors meant for dot product (or vice versa) degrades retrieval; for normalized vectors cosine and dot coincide."
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-VEC-0001",
+        "statement_n": 3,
+        "domain": "ai-engineering",
+        "subdomain": "vector-retrieval",
+        "topic": "ann-hnsw-similarity",
+        "cognitive_level": "understand",
+        "difficulty": 3,
+        "polarity": "supports",
+        "verdict": true,
+        "corpus_source": [
+          "corpus/ai-engineering/vector-retrieval/ann-hnsw-similarity.md#similarity-metrics-must-match-the-model"
+        ],
+        "claim_text": "The similarity metric (cosine, dot, L2) must match what the embedding model was trained/normalized for; not every metric works with every model."
+      }
+    },
+    {
+      "id": "AI-VEC-0001-s4",
+      "group": "ai-engineering/vector-retrieval",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Any distance metric works equally well with any embedding model.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. The metric must match the model's training/normalization; mismatched metrics degrade quality.",
+      "must_contain_facts": [
+        "The claim is False.",
+        "The metric must match the model's training/normalization; mismatched metrics degrade quality."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-VEC-0001",
+        "statement_n": 4,
+        "domain": "ai-engineering",
+        "subdomain": "vector-retrieval",
+        "topic": "ann-hnsw-similarity",
+        "cognitive_level": "understand",
+        "difficulty": 3,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/vector-retrieval/ann-hnsw-similarity.md#similarity-metrics-must-match-the-model"
+        ],
+        "claim_text": "Any distance metric works equally well with any embedding model."
+      }
+    },
+    {
+      "id": "AI-VEC-0001-s5",
+      "group": "ai-engineering/vector-retrieval",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"HNSW is a multi-layer proximity graph that delivers strong recall/latency but uses more memory and is costlier to build than simpler indexes.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "True. HNSW's layered graph gives excellent recall/latency at higher memory and build cost; tuned by M/efConstruction/efSearch.",
+      "must_contain_facts": [
+        "The claim is True.",
+        "HNSW's layered graph gives excellent recall/latency at higher memory and build cost; tuned by M/efConstruction/efSearch."
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-VEC-0001",
+        "statement_n": 5,
+        "domain": "ai-engineering",
+        "subdomain": "vector-retrieval",
+        "topic": "ann-hnsw-similarity",
+        "cognitive_level": "understand",
+        "difficulty": 3,
+        "polarity": "supports",
+        "verdict": true,
+        "corpus_source": [
+          "corpus/ai-engineering/vector-retrieval/ann-hnsw-similarity.md#hnsw"
+        ],
+        "claim_text": "HNSW is a multi-layer proximity graph that delivers strong recall/latency but uses more memory and is costlier to build than simpler indexes."
+      }
+    },
+    {
+      "id": "AI-VEC-0001-s6",
+      "group": "ai-engineering/vector-retrieval",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Higher embedding dimensionality is always strictly better, with no cost to index size or search speed.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. Higher dimensions increase index size, memory, and search cost (and can suffer the curse of dimensionality); it's a trade-off, not strictly better.",
+      "must_contain_facts": [
+        "The claim is False.",
+        "Higher dimensions increase index size, memory, and search cost (and can suffer the curse of dimensionality); it's a trade-off, not strictly better."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-VEC-0001",
+        "statement_n": 6,
+        "domain": "ai-engineering",
+        "subdomain": "vector-retrieval",
+        "topic": "ann-hnsw-similarity",
+        "cognitive_level": "understand",
+        "difficulty": 3,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/vector-retrieval/ann-hnsw-similarity.md#dimensionality-trade-offs"
+        ],
+        "claim_text": "Higher embedding dimensionality is always strictly better, with no cost to index size or search speed."
+      }
+    },
+    {
+      "id": "AI-VEC-0001-s7",
+      "group": "ai-engineering/vector-retrieval",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"In pgvector, the default HNSW efConstruction parameter value is 64.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "[NO_ANSWER] The provided context does not contain information to verify this claim, so it cannot be confirmed or refuted from the available sources.",
+      "must_contain_facts": [],
+      "answer_style": "concise",
+      "answer_category": "no_answer",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-VEC-0001",
+        "statement_n": 7,
+        "domain": "ai-engineering",
+        "subdomain": "vector-retrieval",
+        "topic": "ann-hnsw-similarity",
+        "cognitive_level": "understand",
+        "difficulty": 3,
+        "polarity": "absent",
+        "verdict": false,
+        "corpus_source": [],
+        "claim_text": "In pgvector, the default HNSW efConstruction parameter value is 64."
+      }
+    },
+    {
+      "id": "AI-AGENT-0001-s1",
+      "group": "ai-engineering/agentic-ai",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"In function/tool calling, the model emits a structured request, but the host application executes the tool — the model does not run it.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "True. The model only requests a tool call (name + JSON args); the host executes it and feeds the result back — the basis for agent safety/control.",
+      "must_contain_facts": [
+        "The claim is True.",
+        "The model only requests a tool call (name + JSON args); the host executes it and feeds the result back — the basis for agent safety/control."
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-AGENT-0001",
+        "statement_n": 1,
+        "domain": "ai-engineering",
+        "subdomain": "agentic-ai",
+        "topic": "toolcall-mcp-react",
+        "cognitive_level": "analyze",
+        "difficulty": 3,
+        "polarity": "supports",
+        "verdict": true,
+        "corpus_source": [
+          "corpus/ai-engineering/agentic-ai/toolcall-mcp-react.md#functiontool-calling--who-actually-runs-the-tool"
+        ],
+        "claim_text": "In function/tool calling, the model emits a structured request, but the host application executes the tool — the model does not run it."
+      }
+    },
+    {
+      "id": "AI-AGENT-0001-s2",
+      "group": "ai-engineering/agentic-ai",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"The model itself executes the function and runs the tool code directly.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. The model does not execute tools; it requests calls and the host/application performs the execution.",
+      "must_contain_facts": [
+        "The claim is False.",
+        "The model does not execute tools; it requests calls and the host/application performs the execution."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-AGENT-0001",
+        "statement_n": 2,
+        "domain": "ai-engineering",
+        "subdomain": "agentic-ai",
+        "topic": "toolcall-mcp-react",
+        "cognitive_level": "analyze",
+        "difficulty": 3,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/agentic-ai/toolcall-mcp-react.md#functiontool-calling--who-actually-runs-the-tool"
+        ],
+        "claim_text": "The model itself executes the function and runs the tool code directly."
+      }
+    },
+    {
+      "id": "AI-AGENT-0001-s3",
+      "group": "ai-engineering/agentic-ai",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Tool output returned to the agent should be treated as untrusted input, because it can contain prompt injection.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "True. Returned content can carry 'ignore your instructions' injections; it must be treated as untrusted data, not trusted instructions.",
+      "must_contain_facts": [
+        "The claim is True.",
+        "Returned content can carry 'ignore your instructions' injections; it must be treated as untrusted data, not trusted instructions."
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-AGENT-0001",
+        "statement_n": 3,
+        "domain": "ai-engineering",
+        "subdomain": "agentic-ai",
+        "topic": "toolcall-mcp-react",
+        "cognitive_level": "analyze",
+        "difficulty": 3,
+        "polarity": "supports",
+        "verdict": true,
+        "corpus_source": [
+          "corpus/ai-engineering/agentic-ai/toolcall-mcp-react.md#safety-and-reliability-of-agents"
+        ],
+        "claim_text": "Tool output returned to the agent should be treated as untrusted input, because it can contain prompt injection."
+      }
+    },
+    {
+      "id": "AI-AGENT-0001-s4",
+      "group": "ai-engineering/agentic-ai",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Giving an agent more tools always makes it a better agent.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. A large tool set increases choice confusion, prompt size, and error rate; curated, well-described tools beat a sprawling toolbox.",
+      "must_contain_facts": [
+        "The claim is False.",
+        "A large tool set increases choice confusion, prompt size, and error rate; curated, well-described tools beat a sprawling toolbox."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-AGENT-0001",
+        "statement_n": 4,
+        "domain": "ai-engineering",
+        "subdomain": "agentic-ai",
+        "topic": "toolcall-mcp-react",
+        "cognitive_level": "analyze",
+        "difficulty": 3,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/agentic-ai/toolcall-mcp-react.md#safety-and-reliability-of-agents"
+        ],
+        "claim_text": "Giving an agent more tools always makes it a better agent."
+      }
+    },
+    {
+      "id": "AI-AGENT-0001-s5",
+      "group": "ai-engineering/agentic-ai",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"The ReAct pattern guarantees the model will not hallucinate tool arguments.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. ReAct structures a reason+act+observe loop but does not validate calls; the model can still emit wrong/invented tool arguments.",
+      "must_contain_facts": [
+        "The claim is False.",
+        "ReAct structures a reason+act+observe loop but does not validate calls; the model can still emit wrong/invented tool arguments."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-AGENT-0001",
+        "statement_n": 5,
+        "domain": "ai-engineering",
+        "subdomain": "agentic-ai",
+        "topic": "toolcall-mcp-react",
+        "cognitive_level": "analyze",
+        "difficulty": 3,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/agentic-ai/toolcall-mcp-react.md#react"
+        ],
+        "claim_text": "The ReAct pattern guarantees the model will not hallucinate tool arguments."
+      }
+    },
+    {
+      "id": "AI-AGENT-0001-s6",
+      "group": "ai-engineering/agentic-ai",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"MCP (Model Context Protocol) standardizes how applications expose tools and resources to LLMs, while the host still mediates execution.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "True. MCP is a common interface for exposing tools/resources/prompts; it defines the contract, the host mediates execution.",
+      "must_contain_facts": [
+        "The claim is True.",
+        "MCP is a common interface for exposing tools/resources/prompts; it defines the contract, the host mediates execution."
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-AGENT-0001",
+        "statement_n": 6,
+        "domain": "ai-engineering",
+        "subdomain": "agentic-ai",
+        "topic": "toolcall-mcp-react",
+        "cognitive_level": "analyze",
+        "difficulty": 3,
+        "polarity": "supports",
+        "verdict": true,
+        "corpus_source": [
+          "corpus/ai-engineering/agentic-ai/toolcall-mcp-react.md#mcp-model-context-protocol"
+        ],
+        "claim_text": "MCP (Model Context Protocol) standardizes how applications expose tools and resources to LLMs, while the host still mediates execution."
+      }
+    },
+    {
+      "id": "AI-AGENT-0001-s7",
+      "group": "ai-engineering/agentic-ai",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Schema-constrained (structured) output guarantees the tool arguments are semantically correct.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. Structured output reduces MALFORMED calls (valid JSON/required fields) but does not guarantee the arguments are semantically correct.",
+      "must_contain_facts": [
+        "The claim is False.",
+        "Structured output reduces MALFORMED calls (valid JSON/required fields) but does not guarantee the arguments are semantically correct."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-AGENT-0001",
+        "statement_n": 7,
+        "domain": "ai-engineering",
+        "subdomain": "agentic-ai",
+        "topic": "toolcall-mcp-react",
+        "cognitive_level": "analyze",
+        "difficulty": 3,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/agentic-ai/toolcall-mcp-react.md#safety-and-reliability-of-agents"
+        ],
+        "claim_text": "Schema-constrained (structured) output guarantees the tool arguments are semantically correct."
+      }
+    },
+    {
+      "id": "AI-EVAL-0001-s1",
+      "group": "ai-engineering/llm-evaluation",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"ragas 'faithfulness' measures whether an answer is grounded in the retrieved context, not whether it is factually correct in the real world.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "True. An answer can be faithful to wrong context (factually wrong but faithful) or factually true yet unfaithful — faithfulness ≠ factual correctness.",
+      "must_contain_facts": [
+        "The claim is True.",
+        "An answer can be faithful to wrong context (factually wrong but faithful) or factually true yet unfaithful — faithfulness ≠ factual correctness."
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-EVAL-0001",
+        "statement_n": 1,
+        "domain": "ai-engineering",
+        "subdomain": "llm-evaluation",
+        "topic": "ragas-judge-pitfalls",
+        "cognitive_level": "evaluate",
+        "difficulty": 4,
+        "polarity": "supports",
+        "verdict": true,
+        "corpus_source": [
+          "corpus/ai-engineering/llm-evaluation/ragas-judge-pitfalls.md#rag-quality-metrics-ragas"
+        ],
+        "claim_text": "ragas 'faithfulness' measures whether an answer is grounded in the retrieved context, not whether it is factually correct in the real world."
+      }
+    },
+    {
+      "id": "AI-EVAL-0001-s2",
+      "group": "ai-engineering/llm-evaluation",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"An LLM-as-judge is deterministic and free of systematic bias.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. LLM judges are non-deterministic and carry position, verbosity, and self-enhancement (self-preference) biases; scores are noisy estimates.",
+      "must_contain_facts": [
+        "The claim is False.",
+        "LLM judges are non-deterministic and carry position, verbosity, and self-enhancement (self-preference) biases; scores are noisy estimates."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-EVAL-0001",
+        "statement_n": 2,
+        "domain": "ai-engineering",
+        "subdomain": "llm-evaluation",
+        "topic": "ragas-judge-pitfalls",
+        "cognitive_level": "evaluate",
+        "difficulty": 4,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/llm-evaluation/ragas-judge-pitfalls.md#llm-as-judge-is-non-deterministic-and-biased"
+        ],
+        "claim_text": "An LLM-as-judge is deterministic and free of systematic bias."
+      }
+    },
+    {
+      "id": "AI-EVAL-0001-s3",
+      "group": "ai-engineering/llm-evaluation",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Using the same model as both the answerer and the judge can inflate scores via self-preference bias.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "True. When the model that generated an answer also judges it, results bias upward (self-enhancement); use a different judge or human anchoring.",
+      "must_contain_facts": [
+        "The claim is True.",
+        "When the model that generated an answer also judges it, results bias upward (self-enhancement); use a different judge or human anchoring."
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-EVAL-0001",
+        "statement_n": 3,
+        "domain": "ai-engineering",
+        "subdomain": "llm-evaluation",
+        "topic": "ragas-judge-pitfalls",
+        "cognitive_level": "evaluate",
+        "difficulty": 4,
+        "polarity": "supports",
+        "verdict": true,
+        "corpus_source": [
+          "corpus/ai-engineering/llm-evaluation/ragas-judge-pitfalls.md#pitfalls-that-invalidate-evaluations-learned-first-hand-this-project"
+        ],
+        "claim_text": "Using the same model as both the answerer and the judge can inflate scores via self-preference bias."
+      }
+    },
+    {
+      "id": "AI-EVAL-0001-s4",
+      "group": "ai-engineering/llm-evaluation",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Labeling the system's own outputs as the gold standard is a sound evaluation method.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. That is label leakage/circularity — the eval then measures consistency with itself, not correctness. The gold standard must be independent/held-out.",
+      "must_contain_facts": [
+        "The claim is False.",
+        "That is label leakage/circularity — the eval then measures consistency with itself, not correctness. The gold standard must be independent/held-out."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-EVAL-0001",
+        "statement_n": 4,
+        "domain": "ai-engineering",
+        "subdomain": "llm-evaluation",
+        "topic": "ragas-judge-pitfalls",
+        "cognitive_level": "evaluate",
+        "difficulty": 4,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/llm-evaluation/ragas-judge-pitfalls.md#pitfalls-that-invalidate-evaluations-learned-first-hand-this-project"
+        ],
+        "claim_text": "Labeling the system's own outputs as the gold standard is a sound evaluation method."
+      }
+    },
+    {
+      "id": "AI-EVAL-0001-s5",
+      "group": "ai-engineering/llm-evaluation",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"On a small, high-variance evaluation set, a tiny metric difference within the noise floor counts as a real improvement.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. A sub-noise-floor gap is not a real win; report variance / use enough samples before claiming a result.",
+      "must_contain_facts": [
+        "The claim is False.",
+        "A sub-noise-floor gap is not a real win; report variance / use enough samples before claiming a result."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-EVAL-0001",
+        "statement_n": 5,
+        "domain": "ai-engineering",
+        "subdomain": "llm-evaluation",
+        "topic": "ragas-judge-pitfalls",
+        "cognitive_level": "evaluate",
+        "difficulty": 4,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/llm-evaluation/ragas-judge-pitfalls.md#pitfalls-that-invalidate-evaluations-learned-first-hand-this-project"
+        ],
+        "claim_text": "On a small, high-variance evaluation set, a tiny metric difference within the noise floor counts as a real improvement."
+      }
+    },
+    {
+      "id": "AI-EVAL-0001-s6",
+      "group": "ai-engineering/llm-evaluation",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Context precision is sensitive to reranking — improving the ranking of relevant chunks raises it.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "True. context_precision rewards relevant chunks ranked higher, so better ordering (reranking) raises it.",
+      "must_contain_facts": [
+        "The claim is True.",
+        "context_precision rewards relevant chunks ranked higher, so better ordering (reranking) raises it."
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-EVAL-0001",
+        "statement_n": 6,
+        "domain": "ai-engineering",
+        "subdomain": "llm-evaluation",
+        "topic": "ragas-judge-pitfalls",
+        "cognitive_level": "evaluate",
+        "difficulty": 4,
+        "polarity": "supports",
+        "verdict": true,
+        "corpus_source": [
+          "corpus/ai-engineering/llm-evaluation/ragas-judge-pitfalls.md#rag-quality-metrics-ragas"
+        ],
+        "claim_text": "Context precision is sensitive to reranking — improving the ranking of relevant chunks raises it."
+      }
+    },
+    {
+      "id": "AI-EVAL-0001-s7",
+      "group": "ai-engineering/llm-evaluation",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Faithfulness and real-world factual correctness are the same metric.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. Faithfulness = grounded-in-context; an answer faithful to wrong context is factually wrong yet faithful. They are distinct.",
+      "must_contain_facts": [
+        "The claim is False.",
+        "Faithfulness = grounded-in-context; an answer faithful to wrong context is factually wrong yet faithful. They are distinct."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-EVAL-0001",
+        "statement_n": 7,
+        "domain": "ai-engineering",
+        "subdomain": "llm-evaluation",
+        "topic": "ragas-judge-pitfalls",
+        "cognitive_level": "evaluate",
+        "difficulty": 4,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/llm-evaluation/ragas-judge-pitfalls.md#rag-quality-metrics-ragas"
+        ],
+        "claim_text": "Faithfulness and real-world factual correctness are the same metric."
+      }
+    },
+    {
+      "id": "AI-PROMPT-0001-s1",
+      "group": "ai-engineering/prompt-context-engineering",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Chain-of-Thought prompting improves multi-step reasoning but does not reliably fix factual hallucination.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "True. CoT improves the reasoning process; a model can still reason fluently to a confident wrong answer — grounding/retrieval addresses facts.",
+      "must_contain_facts": [
+        "The claim is True.",
+        "CoT improves the reasoning process; a model can still reason fluently to a confident wrong answer — grounding/retrieval addresses facts."
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-PROMPT-0001",
+        "statement_n": 1,
+        "domain": "ai-engineering",
+        "subdomain": "prompt-context-engineering",
+        "topic": "patterns-structured-reasoning",
+        "cognitive_level": "analyze",
+        "difficulty": 3,
+        "polarity": "supports",
+        "verdict": true,
+        "corpus_source": [
+          "corpus/ai-engineering/prompt-context-engineering/patterns-structured-reasoning.md#chain-of-thought-cot"
+        ],
+        "claim_text": "Chain-of-Thought prompting improves multi-step reasoning but does not reliably fix factual hallucination."
+      }
+    },
+    {
+      "id": "AI-PROMPT-0001-s2",
+      "group": "ai-engineering/prompt-context-engineering",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Adding more few-shot examples always improves results.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. Past a point examples add tokens/cost and can bias toward surface patterns or hurt; quality/representativeness beats quantity.",
+      "must_contain_facts": [
+        "The claim is False.",
+        "Past a point examples add tokens/cost and can bias toward surface patterns or hurt; quality/representativeness beats quantity."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-PROMPT-0001",
+        "statement_n": 2,
+        "domain": "ai-engineering",
+        "subdomain": "prompt-context-engineering",
+        "topic": "patterns-structured-reasoning",
+        "cognitive_level": "analyze",
+        "difficulty": 3,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/prompt-context-engineering/patterns-structured-reasoning.md#zero-shot-vs-few-shot"
+        ],
+        "claim_text": "Adding more few-shot examples always improves results."
+      }
+    },
+    {
+      "id": "AI-PROMPT-0001-s3",
+      "group": "ai-engineering/prompt-context-engineering",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Writing 'return JSON' in the prompt guarantees valid, schema-conforming JSON output.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. Without constrained/structured decoding (schema enforcement, grammar, function-calling), the model can still emit malformed or schema-violating output.",
+      "must_contain_facts": [
+        "The claim is False.",
+        "Without constrained/structured decoding (schema enforcement, grammar, function-calling), the model can still emit malformed or schema-violating output."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-PROMPT-0001",
+        "statement_n": 3,
+        "domain": "ai-engineering",
+        "subdomain": "prompt-context-engineering",
+        "topic": "patterns-structured-reasoning",
+        "cognitive_level": "analyze",
+        "difficulty": 3,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/prompt-context-engineering/patterns-structured-reasoning.md#structured--json-output"
+        ],
+        "claim_text": "Writing 'return JSON' in the prompt guarantees valid, schema-conforming JSON output."
+      }
+    },
+    {
+      "id": "AI-PROMPT-0001-s4",
+      "group": "ai-engineering/prompt-context-engineering",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Prompt wording alone reliably turns a model into a trustworthy source of true facts.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. Prompting shapes behavior/format; hallucination is mitigated by grounding (RAG), verification, and constraints — not prompt wording alone.",
+      "must_contain_facts": [
+        "The claim is False.",
+        "Prompting shapes behavior/format; hallucination is mitigated by grounding (RAG), verification, and constraints — not prompt wording alone."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-PROMPT-0001",
+        "statement_n": 4,
+        "domain": "ai-engineering",
+        "subdomain": "prompt-context-engineering",
+        "topic": "patterns-structured-reasoning",
+        "cognitive_level": "analyze",
+        "difficulty": 3,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/prompt-context-engineering/patterns-structured-reasoning.md#honest-framing"
+        ],
+        "claim_text": "Prompt wording alone reliably turns a model into a trustworthy source of true facts."
+      }
+    },
+    {
+      "id": "AI-PROMPT-0001-s5",
+      "group": "ai-engineering/prompt-context-engineering",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Leaving a model's reasoning/thinking mode enabled when it isn't needed can burn the token budget and degrade output.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "True. First-hand finding: a model spent its budget on reasoning tokens and returned empty/at-limit output until thinking was disabled.",
+      "must_contain_facts": [
+        "The claim is True.",
+        "First-hand finding: a model spent its budget on reasoning tokens and returned empty/at-limit output until thinking was disabled."
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-PROMPT-0001",
+        "statement_n": 5,
+        "domain": "ai-engineering",
+        "subdomain": "prompt-context-engineering",
+        "topic": "patterns-structured-reasoning",
+        "cognitive_level": "analyze",
+        "difficulty": 3,
+        "polarity": "supports",
+        "verdict": true,
+        "corpus_source": [
+          "corpus/ai-engineering/prompt-context-engineering/patterns-structured-reasoning.md#reasoning-control-first-hand-finding-this-project"
+        ],
+        "claim_text": "Leaving a model's reasoning/thinking mode enabled when it isn't needed can burn the token budget and degrade output."
+      }
+    },
+    {
+      "id": "AI-PROMPT-0001-s6",
+      "group": "ai-engineering/prompt-context-engineering",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Where key instructions/data sit in the context affects how reliably the model uses them (position effects).\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "True. Due to 'lost in the middle', placement (often best at start or end) affects how reliably the model uses information.",
+      "must_contain_facts": [
+        "The claim is True.",
+        "Due to 'lost in the middle', placement (often best at start or end) affects how reliably the model uses information."
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-PROMPT-0001",
+        "statement_n": 6,
+        "domain": "ai-engineering",
+        "subdomain": "prompt-context-engineering",
+        "topic": "patterns-structured-reasoning",
+        "cognitive_level": "analyze",
+        "difficulty": 3,
+        "polarity": "supports",
+        "verdict": true,
+        "corpus_source": [
+          "corpus/ai-engineering/prompt-context-engineering/patterns-structured-reasoning.md#roles-and-context-order"
+        ],
+        "claim_text": "Where key instructions/data sit in the context affects how reliably the model uses them (position effects)."
+      }
+    },
+    {
+      "id": "AI-PROMPT-0001-s7",
+      "group": "ai-engineering/prompt-context-engineering",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"How to toggle reasoning/thinking mode is identical across all models and backends.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. Reasoning control is model- and backend-specific (a UI/flag for some, an API parameter for others, and some models ignore the parameter entirely).",
+      "must_contain_facts": [
+        "The claim is False.",
+        "Reasoning control is model- and backend-specific (a UI/flag for some, an API parameter for others, and some models ignore the parameter entirely)."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-PROMPT-0001",
+        "statement_n": 7,
+        "domain": "ai-engineering",
+        "subdomain": "prompt-context-engineering",
+        "topic": "patterns-structured-reasoning",
+        "cognitive_level": "analyze",
+        "difficulty": 3,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/prompt-context-engineering/patterns-structured-reasoning.md#reasoning-control-first-hand-finding-this-project"
+        ],
+        "claim_text": "How to toggle reasoning/thinking mode is identical across all models and backends."
+      }
+    },
+    {
+      "id": "AI-PROD-0001-s1",
+      "group": "ai-engineering/productionizing-llms",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Guardrails (input/output filtering, grounding, abstention) reduce but do not eliminate hallucination.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "True. A model can still produce confident, well-formed, ungrounded claims that pass filters; guardrails are risk reduction, not elimination.",
+      "must_contain_facts": [
+        "The claim is True.",
+        "A model can still produce confident, well-formed, ungrounded claims that pass filters; guardrails are risk reduction, not elimination."
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-PROD-0001",
+        "statement_n": 1,
+        "domain": "ai-engineering",
+        "subdomain": "productionizing-llms",
+        "topic": "serving-cost-guardrails",
+        "cognitive_level": "evaluate",
+        "difficulty": 4,
+        "polarity": "supports",
+        "verdict": true,
+        "corpus_source": [
+          "corpus/ai-engineering/productionizing-llms/serving-cost-guardrails.md#guardrails-and-their-limits"
+        ],
+        "claim_text": "Guardrails (input/output filtering, grounding, abstention) reduce but do not eliminate hallucination."
+      }
+    },
+    {
+      "id": "AI-PROD-0001-s2",
+      "group": "ai-engineering/productionizing-llms",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"RAG entirely removes hallucination.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. RAG reduces but does not remove hallucination; the model can still misread, over-extrapolate from, or ignore retrieved context.",
+      "must_contain_facts": [
+        "The claim is False.",
+        "RAG reduces but does not remove hallucination; the model can still misread, over-extrapolate from, or ignore retrieved context."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-PROD-0001",
+        "statement_n": 2,
+        "domain": "ai-engineering",
+        "subdomain": "productionizing-llms",
+        "topic": "serving-cost-guardrails",
+        "cognitive_level": "evaluate",
+        "difficulty": 4,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/productionizing-llms/serving-cost-guardrails.md#guardrails-and-their-limits"
+        ],
+        "claim_text": "RAG entirely removes hallucination."
+      }
+    },
+    {
+      "id": "AI-PROD-0001-s3",
+      "group": "ai-engineering/productionizing-llms",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"A general chat LLM used as a reranker is an efficient choice compared to a dedicated cross-encoder.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. An LLM-as-reranker is generation-bound (slow/expensive); this project found a dedicated cross-encoder ~20x faster/cheaper at comparable-or-better quality.",
+      "must_contain_facts": [
+        "The claim is False.",
+        "An LLM-as-reranker is generation-bound (slow/expensive); this project found a dedicated cross-encoder ~20x faster/cheaper at comparable-or-better quality."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-PROD-0001",
+        "statement_n": 3,
+        "domain": "ai-engineering",
+        "subdomain": "productionizing-llms",
+        "topic": "serving-cost-guardrails",
+        "cognitive_level": "evaluate",
+        "difficulty": 4,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/productionizing-llms/serving-cost-guardrails.md#cost"
+        ],
+        "claim_text": "A general chat LLM used as a reranker is an efficient choice compared to a dedicated cross-encoder."
+      }
+    },
+    {
+      "id": "AI-PROD-0001-s4",
+      "group": "ai-engineering/productionizing-llms",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Continuous (dynamic) batching and KV-cache are techniques that raise LLM serving throughput.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "True. Batching keeps the GPU busy (throughput); KV-cache avoids recomputing the prefix each step (and prefix caching reuses shared prefixes).",
+      "must_contain_facts": [
+        "The claim is True.",
+        "Batching keeps the GPU busy (throughput); KV-cache avoids recomputing the prefix each step (and prefix caching reuses shared prefixes)."
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-PROD-0001",
+        "statement_n": 4,
+        "domain": "ai-engineering",
+        "subdomain": "productionizing-llms",
+        "topic": "serving-cost-guardrails",
+        "cognitive_level": "evaluate",
+        "difficulty": 4,
+        "polarity": "supports",
+        "verdict": true,
+        "corpus_source": [
+          "corpus/ai-engineering/productionizing-llms/serving-cost-guardrails.md#serving-latency-and-throughput"
+        ],
+        "claim_text": "Continuous (dynamic) batching and KV-cache are techniques that raise LLM serving throughput."
+      }
+    },
+    {
+      "id": "AI-PROD-0001-s5",
+      "group": "ai-engineering/productionizing-llms",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"LLM serving cost is roughly proportional to the number of tokens processed (input + output).\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "True. Cost scales with tokens; levers include shorter prompts/outputs, caching, smaller models, and retrieval to avoid huge contexts.",
+      "must_contain_facts": [
+        "The claim is True.",
+        "Cost scales with tokens; levers include shorter prompts/outputs, caching, smaller models, and retrieval to avoid huge contexts."
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-PROD-0001",
+        "statement_n": 5,
+        "domain": "ai-engineering",
+        "subdomain": "productionizing-llms",
+        "topic": "serving-cost-guardrails",
+        "cognitive_level": "evaluate",
+        "difficulty": 4,
+        "polarity": "supports",
+        "verdict": true,
+        "corpus_source": [
+          "corpus/ai-engineering/productionizing-llms/serving-cost-guardrails.md#cost"
+        ],
+        "claim_text": "LLM serving cost is roughly proportional to the number of tokens processed (input + output)."
+      }
+    },
+    {
+      "id": "AI-PROD-0001-s6",
+      "group": "ai-engineering/productionizing-llms",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Bigger serving batches always reduce per-request latency.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. There is a latency-vs-throughput tension: bigger batches raise throughput but can raise per-request latency.",
+      "must_contain_facts": [
+        "The claim is False.",
+        "There is a latency-vs-throughput tension: bigger batches raise throughput but can raise per-request latency."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-PROD-0001",
+        "statement_n": 6,
+        "domain": "ai-engineering",
+        "subdomain": "productionizing-llms",
+        "topic": "serving-cost-guardrails",
+        "cognitive_level": "evaluate",
+        "difficulty": 4,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/productionizing-llms/serving-cost-guardrails.md#serving-latency-and-throughput"
+        ],
+        "claim_text": "Bigger serving batches always reduce per-request latency."
+      }
+    },
+    {
+      "id": "AI-PROD-0001-s7",
+      "group": "ai-engineering/productionizing-llms",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Production LLM systems should track tokens, latency, cost, and groundedness/refusal rates over time.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "True. You cannot manage hallucination or cost you don't measure; observability tracks these signals and watches for regressions/drift.",
+      "must_contain_facts": [
+        "The claim is True.",
+        "You cannot manage hallucination or cost you don't measure; observability tracks these signals and watches for regressions/drift."
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-PROD-0001",
+        "statement_n": 7,
+        "domain": "ai-engineering",
+        "subdomain": "productionizing-llms",
+        "topic": "serving-cost-guardrails",
+        "cognitive_level": "evaluate",
+        "difficulty": 4,
+        "polarity": "supports",
+        "verdict": true,
+        "corpus_source": [
+          "corpus/ai-engineering/productionizing-llms/serving-cost-guardrails.md#observability"
+        ],
+        "claim_text": "Production LLM systems should track tokens, latency, cost, and groundedness/refusal rates over time."
+      }
+    },
+    {
+      "id": "AI-ML-0001-s1",
+      "group": "ai-engineering/ml-mlops-basics",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Fine-tuning is the default fix for a model giving wrong or outdated facts.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. A knowledge/freshness problem maps to RAG (update the index, get citations); fine-tuning bakes knowledge in (goes stale, no citations) and changes behavior/style.",
+      "must_contain_facts": [
+        "The claim is False.",
+        "A knowledge/freshness problem maps to RAG (update the index, get citations); fine-tuning bakes knowledge in (goes stale, no citations) and changes behavior/style."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-ML-0001",
+        "statement_n": 1,
+        "domain": "ai-engineering",
+        "subdomain": "ml-mlops-basics",
+        "topic": "train-eval-drift-decision",
+        "cognitive_level": "analyze",
+        "difficulty": 3,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/ml-mlops-basics/train-eval-drift-decision.md#rag-vs-fine-tuning-vs-prompting-the-decision"
+        ],
+        "claim_text": "Fine-tuning is the default fix for a model giving wrong or outdated facts."
+      }
+    },
+    {
+      "id": "AI-ML-0001-s2",
+      "group": "ai-engineering/ml-mlops-basics",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"A knowledge/freshness gap is best addressed with RAG, while fine-tuning is for changing behavior, style, or a specialized skill.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "True. Knowledge problem → RAG; behavior problem → fine-tune; quick steering → prompt — and they compose.",
+      "must_contain_facts": [
+        "The claim is True.",
+        "Knowledge problem → RAG; behavior problem → fine-tune; quick steering → prompt — and they compose."
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-ML-0001",
+        "statement_n": 2,
+        "domain": "ai-engineering",
+        "subdomain": "ml-mlops-basics",
+        "topic": "train-eval-drift-decision",
+        "cognitive_level": "analyze",
+        "difficulty": 3,
+        "polarity": "supports",
+        "verdict": true,
+        "corpus_source": [
+          "corpus/ai-engineering/ml-mlops-basics/train-eval-drift-decision.md#rag-vs-fine-tuning-vs-prompting-the-decision"
+        ],
+        "claim_text": "A knowledge/freshness gap is best addressed with RAG, while fine-tuning is for changing behavior, style, or a specialized skill."
+      }
+    },
+    {
+      "id": "AI-ML-0001-s3",
+      "group": "ai-engineering/ml-mlops-basics",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"High training accuracy by itself proves the model will generalize well.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. High training accuracy can be a symptom of overfitting (memorizing noise) with poor generalization; judge on held-out data.",
+      "must_contain_facts": [
+        "The claim is False.",
+        "High training accuracy can be a symptom of overfitting (memorizing noise) with poor generalization; judge on held-out data."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-ML-0001",
+        "statement_n": 3,
+        "domain": "ai-engineering",
+        "subdomain": "ml-mlops-basics",
+        "topic": "train-eval-drift-decision",
+        "cognitive_level": "analyze",
+        "difficulty": 3,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/ml-mlops-basics/train-eval-drift-decision.md#overfitting-vs-underfitting"
+        ],
+        "claim_text": "High training accuracy by itself proves the model will generalize well."
+      }
+    },
+    {
+      "id": "AI-ML-0001-s4",
+      "group": "ai-engineering/ml-mlops-basics",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Evaluating a model on its training data gives a valid estimate of generalization.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. Never evaluate on training data; doing so (or leakage into training) yields optimistically biased results that collapse in production.",
+      "must_contain_facts": [
+        "The claim is False.",
+        "Never evaluate on training data; doing so (or leakage into training) yields optimistically biased results that collapse in production."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-ML-0001",
+        "statement_n": 4,
+        "domain": "ai-engineering",
+        "subdomain": "ml-mlops-basics",
+        "topic": "train-eval-drift-decision",
+        "cognitive_level": "analyze",
+        "difficulty": 3,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/ml-mlops-basics/train-eval-drift-decision.md#train--validation--test-split-and-leakage"
+        ],
+        "claim_text": "Evaluating a model on its training data gives a valid estimate of generalization."
+      }
+    },
+    {
+      "id": "AI-ML-0001-s5",
+      "group": "ai-engineering/ml-mlops-basics",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"Data drift is a shift in the input distribution, while concept drift is a change in the input-to-target relationship.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "True. Data drift = input distribution shifts; concept drift = the right answer (input→target relationship) changes; both need monitoring + updating.",
+      "must_contain_facts": [
+        "The claim is True.",
+        "Data drift = input distribution shifts; concept drift = the right answer (input→target relationship) changes; both need monitoring + updating."
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-ML-0001",
+        "statement_n": 5,
+        "domain": "ai-engineering",
+        "subdomain": "ml-mlops-basics",
+        "topic": "train-eval-drift-decision",
+        "cognitive_level": "analyze",
+        "difficulty": 3,
+        "polarity": "supports",
+        "verdict": true,
+        "corpus_source": [
+          "corpus/ai-engineering/ml-mlops-basics/train-eval-drift-decision.md#concept-and-data-drift"
+        ],
+        "claim_text": "Data drift is a shift in the input distribution, while concept drift is a change in the input-to-target relationship."
+      }
+    },
+    {
+      "id": "AI-ML-0001-s6",
+      "group": "ai-engineering/ml-mlops-basics",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"A train/validation/test split exists partly to detect and avoid overfitting and data leakage.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "True. Train fits, validation tunes/selects, test gives an untouched generalization estimate; leakage biases results optimistically.",
+      "must_contain_facts": [
+        "The claim is True.",
+        "Train fits, validation tunes/selects, test gives an untouched generalization estimate; leakage biases results optimistically."
+      ],
+      "answer_style": "concise",
+      "answer_category": "standard",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-ML-0001",
+        "statement_n": 6,
+        "domain": "ai-engineering",
+        "subdomain": "ml-mlops-basics",
+        "topic": "train-eval-drift-decision",
+        "cognitive_level": "analyze",
+        "difficulty": 3,
+        "polarity": "supports",
+        "verdict": true,
+        "corpus_source": [
+          "corpus/ai-engineering/ml-mlops-basics/train-eval-drift-decision.md#train--validation--test-split-and-leakage"
+        ],
+        "claim_text": "A train/validation/test split exists partly to detect and avoid overfitting and data leakage."
+      }
+    },
+    {
+      "id": "AI-ML-0001-s7",
+      "group": "ai-engineering/ml-mlops-basics",
+      "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"A deployed model needs no monitoring because its accuracy is fixed at training time.\"",
+      "target_chunk_ids": [],
+      "must_keywords": [],
+      "ideal_answer": "False. Models degrade as the world changes (data/concept drift); production models need monitoring and retraining — a deployed model is not 'done'.",
+      "must_contain_facts": [
+        "The claim is False.",
+        "Models degrade as the world changes (data/concept drift); production models need monitoring and retraining — a deployed model is not 'done'."
+      ],
+      "answer_style": "concise",
+      "answer_category": "false_premise",
+      "drafted_by": "competency-bank-compiler",
+      "reviewed_by": "adversarial-cold-start-review",
+      "_meta": {
+        "item_id": "AI-ML-0001",
+        "statement_n": 7,
+        "domain": "ai-engineering",
+        "subdomain": "ml-mlops-basics",
+        "topic": "train-eval-drift-decision",
+        "cognitive_level": "analyze",
+        "difficulty": 3,
+        "polarity": "refutes",
+        "verdict": false,
+        "corpus_source": [
+          "corpus/ai-engineering/ml-mlops-basics/train-eval-drift-decision.md#concept-and-data-drift"
+        ],
+        "claim_text": "A deployed model needs no monitoring because its accuracy is fixed at training time."
+      }
+    }
+  ]
+}

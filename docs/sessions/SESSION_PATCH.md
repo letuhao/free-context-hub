@@ -1,3 +1,35 @@
+# CHECKPOINT — DEFERRED-034 chunks cp/cr was a broken golden set (2026-06-19, session 8)
+
+**Branch:** none — committed directly to `main` (trunk-based).
+
+**Asked:** "let's do 034" (the remainder I'd called "not independently clearable").
+
+**Shipped — 034 RESOLVED, and it overturned the documented diagnosis.** The prior
+entry said chunks `cr≈0` was **corpus-bound** (blocked on 032). Wrong. Per "verify
+metric inputs first," I pulled the actual chunk content from the DB: the legacy
+`qc/chunks-queries.json` answer key **contradicts** the ingested `test-data/sample.*`
+chunks (golden 100ms/jitter-0.2/editor,viewer vs corpus 1000ms/jitter-true/writer,reader),
+and the target chunks are **retrieved at rank 1** — so `cr=0` was a **false negative
+from a wrong answer key**, not retrieval, not truncation (retry chunk is 166 chars < 240),
+not missing corpus. Proof the pipeline is fine: same chunks pipeline scores **cr 0.994**
+on the matched ai-engineering corpus.
+
+**Fix (adopt ai-eng as default — user's choice):** new `qc/chunks-queries.aieng.json`
+(56 rows, matched to `corpus/ai-engineering/`); `runBaseline` `GOLDEN_FILES.chunks`
+re-pointed to it; added to `validateGoldenSet`. Validating the extracted set surfaced an
+R4 bug (2 `no_answer` rows carried a meta-statement in `must_contain_facts`) — fixed in
+the master `competency-geneval.json` too. Legacy `chunks-queries.json` **retained** (its
+`target_chunk_ids` are valid; used by `chunksRerankAbProbe` + `noiseFloorChunksCpCr`).
+**Verified:** default chunks baseline now `cr=1.00` (was ≈0), faithfulness 0.75–1.00,
+0 gen errors; tsc clean; 1000/1000. The rerank/granularity levers 034 listed were chasing
+a phantom — no retrieval change needed. Residual (more domains + `target_chunk_ids` for
+recall@k) → DEFERRED-032. Closeout:
+`docs/qc/2026-06-19-deferred-034-chunks-golden-mismatch-closeout.md`.
+
+**Backlog now:** only DEFERRED-032 (corpus expansion + `target_chunk_ids`) remains open.
+
+---
+
 # CHECKPOINT — Phase 17.3 NLI fact-checking judge (2026-06-19, session 8)
 
 **Branch:** none — committed directly to `main` (trunk-based). XL task, full workflow

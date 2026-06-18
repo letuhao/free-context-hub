@@ -202,9 +202,7 @@
       "target_chunk_ids": [],
       "must_keywords": [],
       "ideal_answer": "[NO_ANSWER] The provided context does not contain information to verify this claim, so it cannot be confirmed or refuted from the available sources.",
-      "must_contain_facts": [
-        "the context does not contain this information"
-      ],
+      "must_contain_facts": [],
       "answer_style": "concise",
       "answer_category": "no_answer",
       "drafted_by": "competency-bank-compiler",
@@ -633,9 +631,7 @@
       "target_chunk_ids": [],
       "must_keywords": [],
       "ideal_answer": "[NO_ANSWER] The provided context does not contain information to verify this claim, so it cannot be confirmed or refuted from the available sources.",
-      "must_contain_facts": [
-        "the context does not contain this information"
-      ],
+      "must_contain_facts": [],
       "answer_style": "concise",
       "answer_category": "no_answer",
       "drafted_by": "competency-bank-compiler",
