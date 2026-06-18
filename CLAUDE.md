@@ -333,16 +333,32 @@ Phase      │ What Happens
 
 ## Git Workflow
 
-Enhanced with Superpowers worktree isolation.
+**This is a SOLO repo in active development → trunk-based by default. Commit to
+`main`.** (Decided 2026-06-18 after branch-per-fix ceremony proved pure overhead.)
 
-- **Small tasks:** work on current branch (default)
-- **Large features (>5 files, >1 hour):** prefer `git worktree` for isolation
-  - Create worktree with clean baseline
-  - Verify tests pass before starting
-  - On completion: merge/PR/discard decision with user
-- **Always:** `check_guardrails` before push
+PRs and feature branches solve *team* problems — peer review, parallel work, CI
+gating. With one developer most of that value is absent, so **do NOT spin a branch
+or PR per change.** Defaults:
 
-#### Branch sequencing — NEVER cut parallel branches from `main` (MANDATORY)
+- **Default (almost everything): commit directly to `main`**, small and often. No
+  branch, no PR. This includes routine features, fixes, refactors, docs.
+- **Branch + PR ONLY when there's a real reason** — and say which:
+  1. **Risky / experimental / possibly-throwaway** work you may want to discard
+     without polluting `main`.
+  2. A **large feature** you want to keep off `main` until it's coherent.
+  3. **CI is wired to PRs** and you want it to gate the merge.
+  4. The **user explicitly asks** for a PR / review checkpoint.
+- When unsure whether something is "risky enough" to branch → it usually isn't.
+  Commit to `main`.
+- **Never** open multiple branches/PRs for one session's incremental work — that's
+  the ceremony this rule exists to kill. Batch onto `main` (or one branch if
+  isolation is genuinely needed).
+- **Always:** `check_guardrails` before push (and before merging a PR to `main`).
+- **Deploy ceremony is separate from landing code** — only rebuild/redeploy the
+  container when the change must be *live* (e.g. to verify an MCP/API path); don't
+  rebuild just to commit. Batch deploys.
+
+#### When you DO branch: sequencing — NEVER cut parallel branches from `main` (MANDATORY)
 
 **The 2026-06-18 mistake (do not repeat):** PR #40 and PR #41 were both branched
 from the same `main` and both edited the same shared "hub" files. When #40 merged,
