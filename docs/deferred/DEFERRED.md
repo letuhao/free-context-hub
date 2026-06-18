@@ -59,6 +59,15 @@
 - **Priority:** LOW — `chatComplete` contract is guarded; the gap is per-caller
   drift, not the shared layer.
 - **Source:** `/review-impl` of commit `ab53ed5` (MED-2).
+- **2026-06-18 addendum (review LOW-3 of `d37549a`):** the query-rewrite wiring in
+  `runBaseline.evalQuery` shares this gap. Three invariants — rewrite computed
+  ONCE per query (not per latency-sample), fallback dispatches the ORIGINAL query,
+  trace attached to the row — live in module-private `evalQuery` with no injected
+  `fetchImpl`. A refactor moving `rewriteQuery` inside the `runSamples` closure
+  (→ N× LLM calls/query) or dispatching `q.query` instead of `dispatchQuery` would
+  pass `tsc` + the full unit suite. `queryRewrite.ts` itself IS unit-tested
+  (`parseRewrittenQuery`, `rewriteQuery` fallback); the untested part is the
+  runBaseline call site. Fold the evalQuery wiring test into this item.
 
 ---
 

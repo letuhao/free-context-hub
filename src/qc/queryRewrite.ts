@@ -35,7 +35,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATE_DIR = path.join(__dirname, 'templates');
 
 /** hyde passages longer than this are truncated before they become the
- *  retrieval query — a runaway generation should not dominate the embedding. */
+ *  retrieval query — a runaway generation should not dominate the embedding.
+ *  NOTE (review LOW-4): the `global` surface dispatches the query in a GET
+ *  querystring, so a 2000-char hyde passage → ~2.5KB URL. Safe on the local
+ *  Node/Express API (16KB header default); treat hyde+global as local-only
+ *  behind a stricter proxy. lessons/code/chunks use POST bodies (unaffected). */
 export const HYDE_MAX_CHARS = 2000;
 
 export type RewriteMode = 'none' | 'expand' | 'hyde';
@@ -94,10 +98,15 @@ export async function allRewriteTemplateHashes(): Promise<{ expand: string; hyde
 
 const LABEL_RE = /^\s*(?:rewritten\s+query|search\s+query|hypothetical\s+answer|query|answer)\s*:\s*/i;
 
-/** Strip a wrapping pair of matching quotes/backticks (single layer). */
+/** Strip wrapping quotes/backticks. Handles a balanced pair (single layer) AND
+ *  a dangling leading/trailing quote the LLM left unmatched — an unbalanced
+ *  `"retry strategy` should not embed a stray quote into the retrieval query. */
 function unwrapQuotes(s: string): string {
-  const m = /^(["'`])([\s\S]*)\1$/.exec(s.trim());
-  return m ? m[2]!.trim() : s.trim();
+  const t = s.trim();
+  const balanced = /^(["'`])([\s\S]*)\1$/.exec(t);
+  if (balanced) return balanced[2]!.trim();
+  // Unbalanced: drop a single leading and/or trailing quote char if present.
+  return t.replace(/^["'`]+/, '').replace(/["'`]+$/, '').trim();
 }
 
 /**

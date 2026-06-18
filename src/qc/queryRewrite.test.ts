@@ -71,6 +71,12 @@ test('parseRewrittenQuery — expand', async (t) => {
     assert.equal(parseRewrittenQuery("'retry strategy'", 'expand'), 'retry strategy');
   });
 
+  await t.test('strips an UNBALANCED dangling quote (review #6)', () => {
+    // LLM emits an opening quote but no closing one — must not embed a stray ".
+    assert.equal(parseRewrittenQuery('"retry strategy', 'expand'), 'retry strategy');
+    assert.equal(parseRewrittenQuery('retry strategy"', 'expand'), 'retry strategy');
+  });
+
   await t.test('takes the first non-empty line for expand', () => {
     assert.equal(parseRewrittenQuery('\n\nfirst real line\nsecond line', 'expand'), 'first real line');
   });

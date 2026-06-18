@@ -112,6 +112,27 @@ Bit-identical default: `rewriteMode === 'none'` ⇒ no answerer call, no trace,
   and the dispatched retrieval used it; repeat `--rewrite-mode hyde`. Cold/failed
   LLM → `fallback:true`, run still completes.
 
+## Measurement caveats (from /review-impl of d37549a)
+
+- **`--control` + rewrite double-runs the LLM (review MED-1).** Under `--control`,
+  `runAllSurfaces` runs twice and each run freshly rewrites every query. At
+  answerer `temperature=0.2` the seed is not reliably honored (the gen-eval
+  manifest already documents "~5% jitter even with the seed pinned"), so the two
+  runs can produce *different* rewritten queries → different retrieval. The
+  resulting noise floor then conflates retrieval tie-breaking with rewrite-LLM
+  sampling, and is NOT comparable to a rewrite-off floor. **For any rewrite
+  measurement run (DEFERRED-036): pin `ANSWERER_AGENT_TEMPERATURE=0`** so the
+  rewrite is deterministic and the `--control` floor reflects retrieval only — or
+  explicitly label the floor as "includes rewrite sampling variance."
+
+- **HyDE passage on the `global` surface is URL-length fragile (review LOW-4).**
+  `callGlobal` puts the query in a GET querystring (`&q=...`); a 2000-char HyDE
+  passage → ~2.5KB URL. Fine for the local Node/Express API (16KB header default),
+  but a stricter proxy in front of the API could 414/truncate. The lessons / code
+  / chunks surfaces use MCP POST bodies and are unaffected. Treat `--rewrite-mode
+  hyde --surfaces global` as **local-stack only** until the global adapter moves
+  the query to a POST body.
+
 ## Out of scope
 
 - A/B *measurement run* (none vs expand vs hyde across the full golden set) — that's

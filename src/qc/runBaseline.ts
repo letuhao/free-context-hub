@@ -888,8 +888,13 @@ function renderMarkdown(archive: BaselineArchive): string {
     if (!a) continue;
     lines.push(`## ${s} — per-query detail`);
     lines.push('');
-    lines.push('| id | group | found@ | friction | p50 ms |');
-    lines.push('|---|---|---|---|---:|');
+    // Phase 17: when the rewrite lever ran, show what was ACTUALLY dispatched
+    // (the row's `query` stays the original golden query for provenance, so a
+    // reader debugging a MISS would otherwise not see the rewrite that caused
+    // it). `‖fallback` flags rows where the LLM failed → original was used.
+    const showRewrite = !!rewrite_manifest;
+    lines.push(showRewrite ? '| id | group | found@ | friction | dispatched query | p50 ms |' : '| id | group | found@ | friction | p50 ms |');
+    lines.push(showRewrite ? '|---|---|---|---|---|---:|' : '|---|---|---|---|---:|');
     for (const q of a.per_query) {
       const found = q.found_ranks.length ? q.found_ranks.join(',') : '—';
       const friction = q.friction_classes.length
@@ -897,7 +902,16 @@ function renderMarkdown(archive: BaselineArchive): string {
         : q.has_relevant_hit_in_top_k
         ? 'clean'
         : '—';
-      lines.push(`| ${q.id} | ${q.group} | ${found} | ${friction} | ${q.latency_ms_median} |`);
+      if (showRewrite) {
+        const rw = q.rewrite;
+        // Escape pipes so a rewritten query never breaks the table.
+        const dispatched = rw
+          ? `${rw.rewritten_query.replace(/\|/g, '\\|').slice(0, 80)}${rw.fallback ? ' ‖fallback' : ''}`
+          : '—';
+        lines.push(`| ${q.id} | ${q.group} | ${found} | ${friction} | ${dispatched} | ${q.latency_ms_median} |`);
+      } else {
+        lines.push(`| ${q.id} | ${q.group} | ${found} | ${friction} | ${q.latency_ms_median} |`);
+      }
     }
     lines.push('');
   }

@@ -40,7 +40,25 @@ exercised, typo warns, no-flag is bit-identical (clean row, no manifest). Design
 **Deferred:** the actual A/B *measurement run* (none vs expand vs hyde across the
 full golden set) — out of scope here, logged as DEFERRED-036.
 
-**Next:** run the 3-way A/B (DEFERRED-036), or commit the lever as-is.
+**`/review-impl` (commit d37549a) — all 6 findings fixed:**
+- MED-1 (`--control` + rewrite double-runs the LLM at temp>0 → noise floor
+  conflates retrieval jitter with rewrite-LLM sampling): documented in spec +
+  DEFERRED-036 — measurement runs must pin `ANSWERER_AGENT_TEMPERATURE=0`.
+- MED-2 (refactored gen-eval answerer build not live-verified): ran a gen-eval-ON
+  1-row smoke — answerer answered, judge scored (f=1.00/cp=1.00), rewrite composed,
+  `gen_manifest` answerer fields intact. ✓
+- LOW-3 (evalQuery rewrite wiring untested): folded into DEFERRED-035.
+- LOW-4 (hyde passage in `global` GET querystring is URL-length fragile):
+  documented (local-stack only) in spec + `HYDE_MAX_CHARS` comment.
+- LOW-5 (markdown showed original query, not dispatched): added a "dispatched
+  query" column to per-query detail when the lever is active (pipe-escaped,
+  ‖fallback flag).
+- COSMETIC-6 (`unwrapQuotes` left a dangling unbalanced quote): hardened + test.
+
+Re-verified: tsc clean; **976/976** unit. Commits: `d37549a` (lever) + review-fix
+commit.
+
+**Next:** run the 3-way A/B (DEFERRED-036), or move on.
 
 ---
 
