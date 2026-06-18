@@ -37,6 +37,46 @@ function chunksRerankPool(): number {
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 30;
 }
 
+/** Phase 17.4 — fusion method for the hybrid sem+fts candidate pool. Default
+ *  'weighted' (the `sem + 0.30*fts` sum the SQL computes). Set `CHUNKS_FUSION=rrf`
+ *  to re-rank the pool by Reciprocal Rank Fusion instead (A/B knob). */
+function chunksFusionMode(): 'weighted' | 'rrf' {
+  return process.env.CHUNKS_FUSION === 'rrf' ? 'rrf' : 'weighted';
+}
+
+/**
+ * Phase 17.4 — Reciprocal Rank Fusion. Re-rank a candidate pool by RRF rather
+ * than the weighted-sum hybrid score. Each candidate scores
+ *   Σ_list 1 / (k + rank_in_list)
+ * over the lists it appears in: the sem list (candidates with `sem_score>0`,
+ * ranked by sem_score desc) and the fts list (`fts_score>0`, ranked by fts_score
+ * desc). Rank-based fusion is robust when sem/fts magnitudes aren't comparable
+ * (the weighted sum can let a high-magnitude sem score swamp an exact keyword
+ * hit). Returns indices into `items`, best-first; ties keep input order. Pure.
+ *
+ * NOTE: the pool is already top-N by weighted-sum (the SQL ORDER BY), so this
+ * measures rank- vs score-fusion *ordering* on a shared candidate set, not a
+ * from-scratch two-list fusion. Sufficient for the A/B; documented as such.
+ */
+export function rrfFuse(
+  items: ReadonlyArray<{ sem_score: number; fts_score: number }>,
+  k = 60,
+): number[] {
+  const rankIn = (key: 'sem_score' | 'fts_score'): Map<number, number> => {
+    const idx = items.map((_, i) => i).filter((i) => items[i]![key] > 0);
+    idx.sort((a, b) => items[b]![key] - items[a]![key] || a - b);
+    const m = new Map<number, number>();
+    idx.forEach((i, r) => m.set(i, r + 1)); // 1-based rank
+    return m;
+  };
+  const semRank = rankIn('sem_score');
+  const ftsRank = rankIn('fts_score');
+  const rrf = (i: number): number =>
+    (semRank.has(i) ? 1 / (k + semRank.get(i)!) : 0) +
+    (ftsRank.has(i) ? 1 / (k + ftsRank.get(i)!) : 0);
+  return items.map((_, i) => i).sort((a, b) => rrf(b) - rrf(a) || a - b);
+}
+
 /**
  * DEFERRED-034 — apply a rerank dispatcher's index order to the candidate pool.
  *
@@ -287,7 +327,11 @@ export async function searchChunks(params: SearchChunksParams): Promise<SearchCh
   // WIDER candidate pool (so the reranker has room to promote a buried-relevant
   // chunk into the top `limit`), then rerank down to `limit` below.
   const rerankActive = chunkRerankActive(params.rerank);
-  const fetchSize = rerankActive ? Math.min(Math.max(limit, chunksRerankPool()), 100) : limit;
+  // Phase 17.4: RRF re-ranks the wide pool too, so fetch wide when EITHER rerank
+  // or RRF fusion is active (else RRF would only reorder the top-`limit`).
+  const fusionRrf = chunksFusionMode() === 'rrf';
+  const fetchSize =
+    rerankActive || fusionRrf ? Math.min(Math.max(limit, chunksRerankPool()), 100) : limit;
 
   // Tokenize for FTS
   const queryTokens = params.query.match(/[A-Za-z_][A-Za-z0-9_]{1,}/g) ?? [];
@@ -435,6 +479,15 @@ export async function searchChunks(params: SearchChunksParams): Promise<SearchCh
       };
     })
     .filter((m) => m.score >= minScore);
+
+  // Phase 17.4: when CHUNKS_FUSION=rrf, re-rank the pool by Reciprocal Rank Fusion
+  // (rank-based) instead of the weighted-sum order the SQL produced. Runs BEFORE
+  // rerank/dedup/trim so the downstream pipeline sees the RRF order.
+  if (fusionRrf && matches.length > 1) {
+    const order = rrfFuse(matches.map((m) => ({ sem_score: m.sem_score, fts_score: m.fts_score })));
+    matches = order.map((i) => matches[i]!);
+    explanations.push(`fusion: RRF (k=60) reordered ${matches.length} candidates`);
+  }
 
   // DEFERRED-034 — rerank the wide candidate pool → near-semantic dedup → trim
   // to `limit`, via the shared post-retrieval pipeline (same one

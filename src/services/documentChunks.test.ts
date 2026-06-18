@@ -14,7 +14,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { dedupChunkMatches, reorderByRerank, chunkRerankActive } from './documentChunks.js';
+import { dedupChunkMatches, reorderByRerank, chunkRerankActive, rrfFuse } from './documentChunks.js';
 import { _resetEnvCacheForTest } from '../env.js';
 
 type ChunkFixture = {
@@ -198,6 +198,55 @@ test('reorderByRerank', async (t) => {
 
   await t.test('empty pool → empty result', () => {
     assert.deepEqual(reorderByRerank([], [0, 1]), []);
+  });
+});
+
+// Phase 17.4 — rrfFuse: rank-based fusion of the sem+fts candidate pool.
+test('rrfFuse', async (t) => {
+  await t.test('empty / single → trivial', () => {
+    assert.deepEqual(rrfFuse([]), []);
+    assert.deepEqual(rrfFuse([{ sem_score: 0.5, fts_score: 0 }]), [0]);
+  });
+
+  await t.test('candidate strong in BOTH signals beats single-signal ones', () => {
+    // A: rank1 sem + rank1 fts; B: rank2 sem only; C: rank2 fts only.
+    const order = rrfFuse([
+      { sem_score: 0.9, fts_score: 0.5 }, // A (idx 0)
+      { sem_score: 0.8, fts_score: 0 }, //   B (idx 1)
+      { sem_score: 0, fts_score: 0.4 }, //   C (idx 2)
+    ]);
+    assert.equal(order[0], 0, 'dual-signal A ranks first');
+  });
+
+  await t.test('RRF promotes a dual-signal hit that weighted-sum would rank below', () => {
+    // Weighted (sem + 0.30*fts): A=0.95, B=0.70 → A first.
+    // RRF: A only in sem (rank1)=1/61; B in sem(rank2)+fts(rank1)=1/62+1/61 → B first.
+    const items = [
+      { sem_score: 0.95, fts_score: 0 }, // A (idx 0) — strong sem only
+      { sem_score: 0.40, fts_score: 1.0 }, // B (idx 1) — both signals
+    ];
+    const order = rrfFuse(items);
+    assert.equal(order[0], 1, 'RRF favors the candidate present in both lists');
+    // sanity: weighted-sum would have ranked A (0) first
+    assert.ok(0.95 > 0.4 + 0.3 * 1.0);
+  });
+
+  await t.test('ties keep input order (determinism)', () => {
+    // Two symmetric single-signal candidates, each rank1 in its own list.
+    const order = rrfFuse([
+      { sem_score: 0.9, fts_score: 0 },
+      { sem_score: 0, fts_score: 0.9 },
+    ]);
+    assert.deepEqual(order, [0, 1]);
+  });
+
+  await t.test('a candidate absent from both lists (all-zero) sinks to the bottom', () => {
+    const order = rrfFuse([
+      { sem_score: 0, fts_score: 0 }, // idx 0 — no signal
+      { sem_score: 0.5, fts_score: 0 }, // idx 1 — sem
+    ]);
+    assert.equal(order[0], 1);
+    assert.equal(order[1], 0);
   });
 });
 

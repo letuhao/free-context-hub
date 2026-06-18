@@ -1,7 +1,33 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 039 -->
+<!-- Next ID: 040 -->
+
+## DEFERRED-039
+
+- **Title:** Phase 17.3 (NLI third judge) + 17.4 semantic chunking — deferred as low-ROI
+- **Status:** DEFERRED (2026-06-18) — explicitly assessed, not forgotten.
+- **17.3 NLI fact-checker:** an entailment-based third judge (scores propositions vs
+  the context via NLI, instead of RAGAS faithfulness's substring-recoverability).
+  Would fix the metric noise on the **global** surface (honest "X is unrelated"
+  meta-claims scored as ungrounded — see the DEFERRED-030-followup global entry).
+  **Why deferred:** needs a new NLI model + sidecar (substantial infra) to fix a gap
+  affecting only the `global` surface — ~10 of 152 golden rows. Big cost, narrow
+  payoff. Revisit only if global-surface gen-eval becomes important.
+- **17.4 semantic chunking:** split documents on embedding-similarity drift instead
+  of the current hierarchical (headings) / naive (token-budget) chunkers.
+  **Why deferred:** uncertain payoff — the hierarchical chunker already yields
+  concept-level chunks that scored context_recall **0.99** on the ai-eng corpus.
+  Little headroom to justify a new chunker mode now.
+- **17.4 HyDE:** already RESOLVED — built as the query-rewrite lever, measured
+  net-negative (DEFERRED-036). **17.4 RRF:** being built + A/B'd now (not deferred).
+- **Trigger condition:** 17.3 → global-surface measurement becomes a priority; 17.4
+  semantic chunking → a corpus where heading/token chunking measurably underperforms.
+- **Priority:** LOW.
+- **Source:** `docs/qc/2026-05-24-phase-17-answerer-model-selection.md` §Follow-up;
+  assessed 2026-06-18.
+
+---
 
 ## DEFERRED-038
 

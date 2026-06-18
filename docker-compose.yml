@@ -129,6 +129,9 @@ services:
       # deterministic rerank instead.
       RERANK_TYPE: ${RERANK_TYPE-generative}
       RERANK_MODEL: ${RERANK_MODEL-}
+      # Phase 17.4: chunk hybrid-fusion A/B knob. Unset/weighted = sem+0.30*fts
+      # (default); 'rrf' = Reciprocal Rank Fusion. Used to measure RRF vs weighted.
+      CHUNKS_FUSION: ${CHUNKS_FUSION-}
       # 2026-06-16: cross-encoder via local-rerank-service (Cohere /v1/rerank).
       RERANK_API_PROTOCOL: ${RERANK_API_PROTOCOL-cohere}
       RERANK_BASE_URL: ${RERANK_BASE_URL-}
