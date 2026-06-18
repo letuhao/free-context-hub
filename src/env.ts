@@ -17,7 +17,8 @@ export function parseBooleanEnv(v: unknown): boolean | undefined {
 }
 
 /** Copy deprecated `PHASE6_*` into canonical keys when the latter are unset (backward compatibility). */
-function migrateLegacyEnvKeys(raw: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+// Exported for unit tests (env-fill rule). Pure function.
+export function migrateLegacyEnvKeys(raw: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const pairs: Array<[string, string]> = [
     ['KNOWLEDGE_LOOP_ENABLED', 'PHASE6_KNOWLEDGE_LOOP_ENABLED'],
     ['QUALITY_EVAL_MIN_RECALL_AT3', 'PHASE6_MIN_RECALL_AT3'],
@@ -35,6 +36,17 @@ function migrateLegacyEnvKeys(raw: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
     if (out[canonical] === undefined && out[legacy] !== undefined) {
       out[canonical] = out[legacy];
     }
+  }
+  // CHAT_MODEL is the canonical chat model. Fill DISTILLATION_MODEL from it when
+  // DISTILLATION_MODEL is genuinely UNSET, so EVERY `env.DISTILLATION_MODEL`
+  // reader (chat.ts, distiller, vision, lessons rerank, …) honors CHAT_MODEL
+  // without per-call-site changes — making it a real single source of truth.
+  // An EXPLICIT DISTILLATION_MODEL (including the empty string `.env.baseline`
+  // uses to disable the distillation worker during measurement) is preserved as
+  // a deliberate override. So: set CHAT_MODEL alone for normal use; set
+  // DISTILLATION_MODEL only to deviate the worker from the chat model.
+  if (out.CHAT_MODEL !== undefined && out.CHAT_MODEL.trim() !== '' && out.DISTILLATION_MODEL === undefined) {
+    out.DISTILLATION_MODEL = out.CHAT_MODEL;
   }
   return out;
 }
@@ -262,12 +274,14 @@ const EnvSchema = z.object({
    *  value are DROPPED from the result set (off-topic rejection), not just demoted.
    *  Default 0 = no floor = identical to pre-DEFERRED-030 behavior.
    *
-   *  SCOPE NOTE: this floor is enforced ONLY on the LESSONS surface (via
-   *  `rerankCohereApi`/`rerankExternalApi` in `services/lessons.ts`). The
-   *  code-search surface (`services/retriever.ts:apiRerank`) does NOT yet honor
-   *  it — a future code-search quality pass should thread the same env through
-   *  `apiRerank` or rename this knob to `RERANK_MIN_SCORE_LESSONS`. Tracked at
-   *  the call site (search `RERANK_MIN_SCORE` in retriever.ts). */
+   *  SCOPE NOTE: enforced inside the shared dispatcher
+   *  (`rerankCohereApi`/`rerankExternalApi` in `services/lessons.ts`), so it now
+   *  applies to BOTH the LESSONS surface AND the CHUNKS surface (DEFERRED-034
+   *  routes chunks through the same dispatcher). The code-search surface
+   *  (`services/retriever.ts:apiRerank`) does NOT yet honor it. Default 0 = no
+   *  floor (off). Setting it to tune lessons will also evict sub-floor chunks —
+   *  intended (off-topic rejection), but be aware of the cross-surface coupling.
+   *  A future split could rename this to per-surface knobs. */
   RERANK_MIN_SCORE: z.coerce.number().min(0).max(1).optional().default(0),
 
   // Optional dedicated QA agent model endpoint for FAQ/RAPTOR synthesis.
@@ -570,29 +584,39 @@ export function _resetEnvCacheForTest(): void {
 // subsystems name different chat models, LM Studio ping-pongs — unloading and
 // reloading on every alternating call. The fix is orchestration-side: every
 // chat caller derives its model from ONE source so LM Studio is only ever asked
-// for a single chat model (plus the one embedding model). The judge defaults to
-// the same chat model (so realtime QC shares the loaded model, zero swap); set
-// JUDGE_AGENT_MODEL only for a deliberate cross-judge measurement, which should
-// run in the deferred-judge phase (one swap per run, not per row).
+// for a single chat model (plus the one embedding model).
 //
-// Resolution order keeps back-compat: CHAT_MODEL is preferred, but a repo that
-// only set DISTILLATION_MODEL keeps working unchanged.
+// TWO layers make CHAT_MODEL canonical:
+//   1. The env-fill in migrateLegacyEnvKeys() copies CHAT_MODEL into
+//      DISTILLATION_MODEL when the latter is unset — so the PRODUCTION chat
+//      callers that read `env.DISTILLATION_MODEL` directly (chat.ts, distiller,
+//      vision, lessons rerank) honor CHAT_MODEL with no call-site changes.
+//   2. The resolvers below are for the QC/baseline scripts, which want explicit
+//      ANSWERER_AGENT_MODEL / GEN_MODEL overrides to win over the chat model.
+//
+// The JUDGE model is chosen at the CONTAINER level (docker-compose sets the
+// ragas-judge sidecar's JUDGE_AGENT_MODEL, defaulting to ${CHAT_MODEL-…}). TS
+// never picks the judge model — it only HTTP-calls the sidecar — so there is no
+// resolveJudgeModel() here on purpose.
+//
+// Resolution keeps back-compat: a repo that only set DISTILLATION_MODEL works
+// unchanged (resolveChatModel falls back to it).
 // ---------------------------------------------------------------------------
 
-/** The one chat/distillation model every LM-Studio chat caller should use. */
+/** The one chat/distillation model every LM-Studio chat caller should use.
+ *  After the env-fill, `env.DISTILLATION_MODEL` already equals CHAT_MODEL for
+ *  normal setups; this keeps the explicit precedence for clarity + the
+ *  DISTILLATION-only back-compat case. */
 export function resolveChatModel(env: Env = getEnv()): string | undefined {
   return env.CHAT_MODEL ?? env.DISTILLATION_MODEL;
 }
 
-/** Baseline/gen-eval answerer. Falls back to the canonical chat model. */
+/** Baseline/gen-eval answerer. Explicit ANSWERER_AGENT_MODEL wins, else the
+ *  canonical chat model. (Deliberately does NOT fall back to JUDGE_AGENT_MODEL:
+ *  the answerer should track the CHAT model, not the judge — a cross-judge run
+ *  sets JUDGE_AGENT_MODEL alone and the answerer stays on chat.) */
 export function resolveAnswererModel(env: Env = getEnv()): string | undefined {
   return env.ANSWERER_AGENT_MODEL ?? resolveChatModel(env);
-}
-
-/** RAG judge. Defaults to the chat model so it SHARES the loaded instance
- *  (no swap). Override JUDGE_AGENT_MODEL only for cross-judge measurement. */
-export function resolveJudgeModel(env: Env = getEnv()): string | undefined {
-  return env.JUDGE_AGENT_MODEL ?? resolveChatModel(env);
 }
 
 /** One-off generation scripts (stress-query mining, ideal-answer drafting).

@@ -317,23 +317,35 @@ export async function searchChunks(params: SearchChunksParams): Promise<SearchCh
     explanations.push('semantic only (no keyword tokens)');
   }
 
+  // DEFERRED-034 /review-impl MED-2: the reranker must score on the SAME text
+  // window the judge/synthesizer see (buildJudgeContexts JUDGE_SNIPPET_MAX_CHARS
+  // = 1000), not the 240-char display snippet — otherwise a chunk whose relevant
+  // passage sits past char 240 gets mis-ranked. Capture the wide window here
+  // (full `content` is dropped when we build the ChunkMatch below).
+  const RERANK_SNIPPET_MAX_CHARS = 1000;
+  const rerankTextByChunk = new Map<string, string>();
+
   let matches: ChunkMatch[] = (res.rows ?? [])
-    .map((r: any) => ({
-      chunk_id: String(r.chunk_id),
-      doc_id: String(r.doc_id),
-      project_id: String(r.project_id),
-      chunk_index: Number(r.chunk_index),
-      content_snippet: snippet(String(r.content)),
-      page_number: r.page_number !== null ? Number(r.page_number) : null,
-      heading: r.heading ?? null,
-      chunk_type: String(r.chunk_type),
-      extraction_mode: r.extraction_mode ?? null,
-      doc_name: String(r.doc_name),
-      doc_type: String(r.doc_type),
-      sem_score: Number(r.sem_score),
-      fts_score: Number(r.fts_score),
-      score: Number(r.score),
-    }))
+    .map((r: any) => {
+      const chunkId = String(r.chunk_id);
+      rerankTextByChunk.set(chunkId, String(r.content ?? '').slice(0, RERANK_SNIPPET_MAX_CHARS));
+      return {
+        chunk_id: chunkId,
+        doc_id: String(r.doc_id),
+        project_id: String(r.project_id),
+        chunk_index: Number(r.chunk_index),
+        content_snippet: snippet(String(r.content)),
+        page_number: r.page_number !== null ? Number(r.page_number) : null,
+        heading: r.heading ?? null,
+        chunk_type: String(r.chunk_type),
+        extraction_mode: r.extraction_mode ?? null,
+        doc_name: String(r.doc_name),
+        doc_type: String(r.doc_type),
+        sem_score: Number(r.sem_score),
+        fts_score: Number(r.fts_score),
+        score: Number(r.score),
+      };
+    })
     .filter((m) => m.score >= minScore);
 
   // DEFERRED-034 — rerank the wide candidate pool, then trim to `limit`. Mirrors
@@ -348,7 +360,7 @@ export async function searchChunks(params: SearchChunksParams): Promise<SearchCh
         candidates: matches.map((m, i) => ({
           index: i,
           title: m.heading ? `${m.doc_name} / ${m.heading}` : m.doc_name,
-          snippet: m.content_snippet,
+          snippet: rerankTextByChunk.get(m.chunk_id) ?? m.content_snippet,
         })),
       });
       const before = matches.length;
@@ -365,9 +377,13 @@ export async function searchChunks(params: SearchChunksParams): Promise<SearchCh
         `rerank skipped: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
+  } else if (rerankActive) {
+    // rerankActive but ≤1 candidate — nothing to reorder (COSMETIC-1: emit a
+    // breadcrumb so the absence of a "reranked:" line isn't ambiguous).
+    explanations.push(`rerank: skipped (${matches.length} candidate${matches.length === 1 ? '' : 's'})`);
   } else if (params.rerank === false) {
     explanations.push('rerank: skipped (rerank=false on request)');
-  } else if (!rerankActive) {
+  } else {
     explanations.push(
       isChunksRerankDisabled()
         ? 'rerank: disabled via CHUNKS_RERANK_DISABLED'

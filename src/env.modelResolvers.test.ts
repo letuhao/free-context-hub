@@ -12,8 +12,8 @@ import test from 'node:test';
 import {
   resolveChatModel,
   resolveAnswererModel,
-  resolveJudgeModel,
   resolveGenModel,
+  migrateLegacyEnvKeys,
   type Env,
 } from './env.js';
 
@@ -49,17 +49,6 @@ test('model resolvers — single source of truth', async (t) => {
     );
   });
 
-  await t.test('judge defaults to the chat model → SHARES the loaded instance (no swap)', () => {
-    assert.equal(resolveJudgeModel(env({ CHAT_MODEL: 'gemma-qat' })), 'gemma-qat');
-  });
-
-  await t.test('judge honors its explicit override (deliberate cross-judge run)', () => {
-    assert.equal(
-      resolveJudgeModel(env({ CHAT_MODEL: 'gemma-qat', JUDGE_AGENT_MODEL: 'mistral' })),
-      'mistral',
-    );
-  });
-
   await t.test('gen scripts default to the chat model', () => {
     const prev = process.env.GEN_MODEL;
     delete process.env.GEN_MODEL;
@@ -75,8 +64,42 @@ test('model resolvers — single source of truth', async (t) => {
     const models = new Set([
       resolveChatModel(e),
       resolveAnswererModel(e),
-      resolveJudgeModel(e),
+      resolveGenModel(e),
     ]);
     assert.equal(models.size, 1, 'every chat role must resolve to the same model');
+  });
+});
+
+// MED-1: the env-fill makes CHAT_MODEL canonical for the PRODUCTION chat callers
+// that read env.DISTILLATION_MODEL directly (chat.ts, distiller, vision, …).
+test('migrateLegacyEnvKeys — CHAT_MODEL fills DISTILLATION_MODEL', async (t) => {
+  await t.test('CHAT_MODEL set + DISTILLATION_MODEL unset → filled', () => {
+    const out = migrateLegacyEnvKeys({ CHAT_MODEL: 'gemma-qat' } as NodeJS.ProcessEnv);
+    assert.equal(out.DISTILLATION_MODEL, 'gemma-qat');
+  });
+
+  await t.test('explicit DISTILLATION_MODEL wins (deliberate worker override)', () => {
+    const out = migrateLegacyEnvKeys(
+      { CHAT_MODEL: 'gemma-qat', DISTILLATION_MODEL: 'other' } as NodeJS.ProcessEnv,
+    );
+    assert.equal(out.DISTILLATION_MODEL, 'other');
+  });
+
+  await t.test('explicit EMPTY DISTILLATION_MODEL preserved (.env.baseline disables worker)', () => {
+    const out = migrateLegacyEnvKeys(
+      { CHAT_MODEL: 'mistral-nemo', DISTILLATION_MODEL: '' } as NodeJS.ProcessEnv,
+    );
+    assert.equal(out.DISTILLATION_MODEL, '', 'empty string must NOT be overwritten');
+  });
+
+  await t.test('CHAT_MODEL unset → DISTILLATION_MODEL untouched (back-compat)', () => {
+    const out = migrateLegacyEnvKeys({ DISTILLATION_MODEL: 'legacy' } as NodeJS.ProcessEnv);
+    assert.equal(out.DISTILLATION_MODEL, 'legacy');
+    assert.equal(out.CHAT_MODEL, undefined);
+  });
+
+  await t.test('blank CHAT_MODEL does not fill', () => {
+    const out = migrateLegacyEnvKeys({ CHAT_MODEL: '   ' } as NodeJS.ProcessEnv);
+    assert.equal(out.DISTILLATION_MODEL, undefined);
   });
 });
