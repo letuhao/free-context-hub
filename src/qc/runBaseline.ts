@@ -52,6 +52,7 @@ import {
   runGenPipeline,
   runGenPipelineCoVe,
   allTemplateHashes,
+  templateHash,
   allCoVeTemplateHashes,
   type AnswererConfig,
 } from './genPipeline.js';
@@ -92,7 +93,10 @@ const GOLDEN_FILES: Record<Surface, string> = {
   // shipped golden file.
   lessons: process.env.QC_LESSONS_FILE?.trim() || 'qc/lessons-queries.json',
   code: 'qc/queries.json',
-  chunks: 'qc/chunks-queries.json',
+  // 2026-06-18 (DEFERRED-032): QC_CHUNKS_FILE overrides the chunks golden set so a
+  // gen-eval run can target the competency bank (qc/competency-geneval.json)
+  // against the ai-engineering corpus without touching the shipped golden file.
+  chunks: process.env.QC_CHUNKS_FILE?.trim() || 'qc/chunks-queries.json',
   global: 'qc/global-queries.json',
 };
 
@@ -143,6 +147,11 @@ function parseArgs(argv: string[]) {
   // Phase 17.2: synthesizer mode. 'standard' is the Phase 16.3+17.1 single-shot
   // synth; 'cove' is Chain-of-Verification 4-step. CoVe is ~3-4× LLM cost.
   const synthMode = (args.get('synth-mode') ?? 'standard') as SynthMode;
+  // DEFERRED-037: optional synthesizer-template variant, e.g.
+  // `--synth-template claim-eval` loads synthesizer.chunks.claim-eval.txt (a
+  // claim-verification task template) instead of the generic closed-book Q&A
+  // default. Absent → default template. Mainly for the competency T/F-claim set.
+  const synthTemplate = args.get('synth-template')?.trim() || undefined;
   // Phase 17: retrieval-side query-rewrite lever. 'none' = dispatch the golden
   // query verbatim (bit-identical default); 'expand' = LLM keyword/synonym
   // rewrite; 'hyde' = LLM hypothetical-answer passage. Costs 1 extra LLM call
@@ -181,6 +190,7 @@ function parseArgs(argv: string[]) {
     maxRows,
     groupsFilter,
     synthMode,
+    synthTemplate,
     rewriteMode,
     skipPreflight,
     deferJudge,
@@ -391,6 +401,8 @@ type GenEvalConfig = {
   topKContexts: number;
   /** Phase 17.2: 'standard' single-shot or 'cove' Chain-of-Verification. */
   synthMode: SynthMode;
+  /** DEFERRED-037: synthesizer-template variant (e.g. 'claim-eval'); undefined → default. */
+  synthTemplate?: string;
   /** 2026-06-17: when true, runGenEvalForRow returns the JudgeRequest in
    *  `_pendingJudge` instead of calling the sidecar inline. The caller
    *  (runAllSurfaces) drains all pending judges in a second phase, which
@@ -444,6 +456,7 @@ async function runGenEvalForRow(
             question: q.query,
             retrievalHits,
             topK: cfg.topKContexts,
+            templateVariant: cfg.synthTemplate,
           },
           cfg.answerer,
         );
@@ -1352,6 +1365,7 @@ async function main() {
     maxRows,
     groupsFilter,
     synthMode,
+    synthTemplate,
     rewriteMode,
     skipPreflight,
     deferJudge,
@@ -1382,12 +1396,24 @@ async function main() {
       answerer,
       topKContexts,
       synthMode,
+      synthTemplate,
       deferJudge,
     };
 
     // Probe judge /health for manifest (best-effort; doesn't block run).
     const probe = await probeJudgeManifest(judgeUrl);
     const synthHashes = await allTemplateHashes();
+    // DEFERRED-037: when a synth-template variant is active, pin its hash too so a
+    // cross-baseline diff sees the active template, not just the defaults.
+    if (synthTemplate) {
+      for (const s of ['lessons', 'code', 'chunks', 'global'] as Surface[]) {
+        try {
+          synthHashes[`${s}:${synthTemplate}`] = await templateHash(s, synthTemplate);
+        } catch {
+          /* variant only exists for some surfaces (e.g. chunks) — skip missing */
+        }
+      }
+    }
     const coveHashes = synthMode === 'cove' ? await allCoVeTemplateHashes() : undefined;
     genManifest = {
       judge_endpoint: probe.judge_endpoint ?? judgeUrl,
@@ -1405,10 +1431,11 @@ async function main() {
       answerer_max_tokens: answererMaxTokens,
       synthesizer_prompt_hashes: synthHashes,
       synth_mode: synthMode,
+      ...(synthTemplate ? { synth_template: synthTemplate } : {}),
       ...(coveHashes ? { cove_prompt_hashes: coveHashes } : {}),
     };
     console.log(
-      `[${ts()}] [baseline] gen-eval enabled: answerer=${answererModel} @ ${answererBaseUrl}, judge=${probe.judge_model ?? 'unknown'} @ ${judgeUrl}, top-K=${topKContexts}, synth-mode=${synthMode}`,
+      `[${ts()}] [baseline] gen-eval enabled: answerer=${answererModel} @ ${answererBaseUrl}, judge=${probe.judge_model ?? 'unknown'} @ ${judgeUrl}, top-K=${topKContexts}, synth-mode=${synthMode}${synthTemplate ? `, synth-template=${synthTemplate}` : ''}`,
     );
 
     // Phase 17.x: preflight check — refuse to start if LM Studio doesn't have

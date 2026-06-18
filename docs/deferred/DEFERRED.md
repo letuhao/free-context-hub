@@ -1,7 +1,97 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 037 -->
+<!-- Next ID: 039 -->
+
+## DEFERRED-038
+
+- **Title:** Production chunk/lesson RAG feeds the 240-char display preview to the LLM (same truncation bug DEFERRED-037 fixed for QC)
+- **Status:** PARTIALLY RESOLVED (2026-06-18) — **chat chunk-RAG path DONE.**
+  `src/api/routes/chat.ts:94` (the chat `search_documents` tool) now passes
+  `snippetMaxChars: 2000` → the chat answerer receives the full chunk. Verified at
+  the data layer: the s1 query's top chunk went 240→**823 chars** and now contains
+  the grounding fact (absent at 240); answer-quality lift transitively proven by
+  the aieng-corpus benchmark (faithfulness 0.62→0.82, same searchChunks→answerer
+  mechanism). **REMAINING (still OPEN):** the `reflect` MCP tool
+  (`src/mcp/index.ts:1832`) feeds 280-char lesson snippets via `searchLessons` —
+  needs a `makeSnippet` width option threaded through `searchLessons`
+  (`src/services/lessons.ts:1167/1477`); M-sized, lower impact (lessons are short).
+- ~~**Status:** OPEN (2026-06-18)~~
+- **What:** DEFERRED-037 proved that feeding the synthesizer the 240-char
+  `content_snippet` display preview (instead of the full chunk) causes
+  false-abstention — a grounding fact past char 240 reads as "Not in context"
+  (standard faithfulness 0.62→0.82 once the full chunk was fed). The fix
+  (`snippetMaxChars`) was made **opt-in** (default stays 240 for GUI display) and
+  wired only into the QC harness. **The same bug exists in production LLM paths
+  that were NOT changed:**
+  - **`src/api/routes/chat.ts:94-109`** — the chat `search_documents` tool calls
+    `searchChunks(...)` with no `snippetMaxChars` and returns `content_snippet`
+    (240 chars) to the **chat LLM**. The production chat assistant therefore
+    can't ground on any fact past char 240 of a chunk — the exact failure mode the
+    benchmark surfaced. **Primary fix target.**
+  - **`src/mcp/index.ts:1832`** — the `reflect` MCP tool feeds `searchLessons`
+    `content_snippet` (capped at 280 via `makeSnippet`, `src/services/lessons.ts:
+    1167/1477`) into LLM synthesis. Parallel issue on the LESSONS surface; lessons
+    are shorter so impact is smaller, but the class is identical.
+- **Fix:** pass a wide window when the consumer is an LLM answerer (not a GUI list):
+  `searchChunks({ ..., snippetMaxChars: 2000 })` in chat.ts; add an analogous
+  option to `searchLessons` / `makeSnippet` for the reflect path. Keep the 240/280
+  defaults for display callers (GUI search results, dedup-key input).
+- **Tradeoff to weigh (why it's a deliberate change, not a default flip):** wider
+  context = more input tokens per RAG turn (cost + latency) and, past the synth
+  cap (~1000 chars/context), the "lost in the middle" effect. Right answer is
+  probably full-chunk for chunk-RAG (chunks are bounded ~600 chars) but a measured
+  cap for lessons. Verify with the chat path on a few real queries before/after.
+- **Trigger condition:** next work on chat-RAG answer quality, or any report of the
+  assistant saying "not in context" when the doc clearly contains the fact.
+- **Estimated size:** S — 1-line per call site + a quick before/after on the chat
+  path. Lessons variant is M (needs a `makeSnippet` width option threaded).
+- **Priority:** MED — real product-quality bug (the assistant under-answers), but
+  not data-loss/security; default behavior is safe (abstains rather than
+  hallucinates).
+- **Source:** DEFERRED-037 fix (`ce9110d`) + this scan; raised by the user.
+
+---
+
+## DEFERRED-037
+
+- **Title:** Chunks synthesizer over-abstains on T/F-claim evaluation (template↔task mismatch)
+- **Status:** ✅ RESOLVED (2026-06-18). Root cause was deeper than the title: TWO
+  causes — (1) **context truncation** — `searchChunks` fed the synthesizer the
+  240-char display preview, not the chunk, so facts past char 240 read as "Not in
+  context" (fixed: `snippetMaxChars` option → MCP `snippet_max_chars` → QC
+  callChunks requests 2000); (2) **template mismatch** (fixed: `claim-eval`
+  template). Re-measure `aieng-corpus-v2`: standard false-abstentions **6/25→0/25**,
+  faithfulness **0.76→0.91**, context_recall 0.88→0.99, **refusal_correctness
+  1.00→1.00 preserved** (true-abstention intact). Commit `ce9110d`. Results:
+  `docs/qc/2026-06-18-aieng-corpus-geneval-results.md` (Update section).
+- ~~**Status:** OPEN (2026-06-18)~~
+- **What:** The first grounded gen-eval on the ai-engineering corpus
+  (`aieng-corpus-v1`) surfaced that `src/qc/templates/synthesizer.chunks.txt` — a
+  CLOSED-BOOK Q&A template with aggressive anti-hallucination abstention ("ABSTAIN
+  WHEN UNSUPPORTED → say exactly 'Not in context.'") — **over-abstains** on the
+  competency bank's TRUE/FALSE-claim-evaluation task. **6 of 25 standard rows
+  falsely returned "Not in context." with the grounding chunk at RANK 1** (e.g.
+  AI-RAG-0001-s1: retrieved chunk literally says "a reranker cannot raise recall
+  beyond what retrieval supplied"; answer = "Not in context."). This drags standard
+  faithfulness 0.78→0.62 and answer_relevancy 0.64→0.48.
+- **Why it happens:** the template treats the input as a generic question and
+  abstains unless the answer appears near-verbatim; a T/F claim needs the answerer
+  to map the claim to supporting/refuting evidence and judge it, not look up a
+  verbatim answer. The caution is correct FOR THE PRODUCT (better abstain than
+  hallucinate) but wrong for claim verification.
+- **Trigger condition:** when benchmarking the competency bank (or any
+  claim-verification set) on the chunks surface; or before scaling the corpus to
+  the other 4 domains (the mismatch would understate every domain's score).
+- **Fix:** add a claim-evaluation synthesizer variant (supported / refuted / absent)
+  selectable for the competency task — OR pose competency queries as direct
+  questions. Then re-run `aieng-corpus-v1` and compare.
+- **Estimated size:** S/M — one template + a synth-template selector + a re-run.
+- **Priority:** MED — gates a fair reading of the corpus benchmark; the corpus and
+  retrieval themselves are already validated.
+- **Source:** `docs/qc/2026-06-18-aieng-corpus-geneval-results.md`.
+
+---
 
 ## DEFERRED-036
 
@@ -174,7 +264,16 @@
 ## DEFERRED-032
 
 - **Title:** SA Competency Bank golden set has no corpus to ingest — baseline-blocked
-- **Status:** OPEN (2026-06-17)
+- **Status:** PARTIALLY RESOLVED (2026-06-18) — **ai-engineering pilot DONE** (56 of
+  294 items). Authored an independent 8-doc corpus (`corpus/ai-engineering/`, 51
+  chunks), ingested, ran grounded gen-eval (`aieng-corpus-v1`): cr 0.88,
+  groundedness 0.98, abstention 1.00. Methodology proven end-to-end. Results +
+  template-mismatch finding: `docs/qc/2026-06-18-aieng-corpus-geneval-results.md`
+  (→ DEFERRED-037). **Remaining (still OPEN):** the other 4 domains (aws-ops,
+  developer, language-runtime, solution-architecture; 238 items) + `target_chunk_ids`
+  population for recall@k. Scale only after the DEFERRED-037 template fix, else
+  every domain's score is understated.
+- ~~**Status:** OPEN (2026-06-17)~~
 - **What:** `qc/competency-geneval.json` was compiled in a separate session
   (chronologically around 2026-06-17 00:50, not produced by the
   `deferred-030-rerank-quality` branch's work). It contains 294 statements

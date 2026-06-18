@@ -133,6 +133,11 @@ export async function callChunks(
       project_id: projectId,
       query,
       limit: k,
+      // DEFERRED-037: request the FULL chunk (wide snippet), not the 240-char
+      // display preview — otherwise the synthesizer/judge get a truncated context
+      // and a chunk whose grounding fact sits past char 240 reads as "Not in
+      // context." Synth caps at 1000 chars/context; chunks here are ≤~600.
+      snippet_max_chars: 2000,
       output_format: 'json_only',
     });
     const matches = Array.isArray(r?.matches) ? r.matches : [];

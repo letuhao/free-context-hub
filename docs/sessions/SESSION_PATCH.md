@@ -1,3 +1,60 @@
+# CHECKPOINT — DEFERRED-032 ai-engineering corpus (2026-06-18, session 6)
+
+**Branch:** `deferred-032-ai-eng-corpus` (off main; later merged updated main after
+PR #40 landed — sessions 4–5 below cover the DEFERRED-034 parity + query-rewrite
+lever + HyDE A/B that came in via #40).
+
+**Asked:** "what's next" → corpus expansion (DEFERRED-032), ai-engineering pilot.
+Meta-finding driving it: every Phase-17 lever (CoVe, HyDE) came back flat partly
+because measurement is **corpus-bound** — the old chunks corpus was a degenerate
+11-chunk / 3-vision-failure set.
+
+**Built — real, independent ai-engineering corpus:**
+- `corpus/ai-engineering/{01..08}.md` — 8 docs (~3900 words), one per sub-category,
+  covering the 56 ai-eng competency items. **Independence discipline:** authored
+  from the topic in natural prose, NOT by copying `must_contain_facts` (which would
+  make the bench measure copy-retrieval — the leakage AI-EVAL-0001-s4 tests for).
+- **Abstention preserved:** the 2 `no_answer` facts (GPT-4=128k, pgvector
+  efConstruction=64) deliberately EXCLUDED — grep-verified absent.
+- Ingested via the real HTTP path (`src/qc/ingestCorpus.ts`, idempotent
+  delete+recreate): 8 docs → **51 concept-level chunks** (hierarchical), bge-m3
+  embedded. ~5× richer than the old corpus.
+- Wiring: `QC_CHUNKS_FILE` env override (mirrors `QC_LESSONS_FILE`) points the
+  chunks golden set at `qc/competency-geneval.json`; `--groups 'ai-engineering/*'`
+  scopes to the 56 items.
+
+**Measurement:** full 56-row gen-eval baseline (answerer temp=0 per MED-1, judge
+gemma-4) running — `tag=aieng-corpus-v1`. 3-row smoke confirmed grounded retrieval
++ all metrics scoring (f=0.75–1.00, gse=1.00). Results writeup to follow.
+
+Design: `docs/specs/2026-06-18-deferred-032-ai-eng-corpus.md`. Commits: `b2454af`
+(corpus) + ingestion-tooling.
+
+**v1 finding → DEFERRED-037 fixed (same session).** v1 gen-eval surfaced
+answer_relevancy 0.53 / standard-faithfulness 0.62. Reading the raw output (not the
+aggregate) found the over-abstention had TWO causes: (1) **context truncation** —
+`searchChunks` fed the synthesizer the 240-char display preview, not the chunk, so
+a grounding fact past char 240 read as "Not in context" (the codebase already used
+a wide window for RERANKING but fed generation the preview); (2) a generic-Q&A
+**template mismatch** on the T/F-claim task. Fixed both: `snippetMaxChars` option
+(→ MCP `snippet_max_chars` → QC callChunks requests 2000, full chunk to the
+answerer) + a `claim-eval` synthesizer template (`--synth-template`). Required an
+MCP docker rebuild (`NPM_STRICT_SSL=false` escape hatch for the npm-install SSL
+failure). Re-measure `aieng-corpus-v2`: **standard false-abstentions 6/25→0/25,
+faithfulness 0.76→0.91, context_recall 0.88→0.99, refusal_correctness 1.00→1.00
+PRESERVED** (true-abstention intact — the critical safety check). Commit `ce9110d`.
+**ai-engineering corpus quality now confirmed strong.**
+
+**DEFERRED-038 (prod chat RAG) — chat path fixed + deployed.** The same 240-char
+truncation existed in the live chat assistant: `src/api/routes/chat.ts:94`
+(`search_documents` tool) called `searchChunks` without `snippetMaxChars`, feeding
+the chat answerer the display preview. Now passes `snippetMaxChars: 2000`. Verified
+at the data layer (s1 top chunk 240→**823 chars**, grounding fact absent→present);
+answer-quality lift transitively proven by the corpus benchmark. Rebuilt + redeployed
+the mcp/api container so it's live. Commit `30b9775`. **Remaining:** the `reflect`
+tool's lesson-snippet path (M, lower impact) stays open under DEFERRED-038.
+---
+
 # CHECKPOINT — Query-rewrite A/B lever shipped (2026-06-18, session 5)
 
 **Branch:** `deferred-034-chunk-granularity` (continued — small enough to not warrant

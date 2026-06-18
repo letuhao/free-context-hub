@@ -45,28 +45,38 @@ export type GenPipelineInput = {
   topK?: number;
   /** Truncate per-context snippet to this many chars before sending. */
   maxCharsPerContext?: number;
+  /** DEFERRED-037: optional synthesizer-template variant, e.g. 'claim-eval' loads
+   *  `synthesizer.<surface>.claim-eval.txt` instead of the default. Absent → default. */
+  templateVariant?: string;
 };
 
 // ─── template loading (with one-shot cache) ───
 
-const _templateCache = new Map<Surface, string>();
-const _hashCache = new Map<Surface, string>();
+const _templateCache = new Map<string, string>();
+const _hashCache = new Map<string, string>();
 
-export async function loadTemplate(surface: Surface): Promise<string> {
-  const cached = _templateCache.get(surface);
+/** Cache/file key — `<surface>` for the default, `<surface>.<variant>` otherwise. */
+function templateKey(surface: Surface, variant?: string): string {
+  return variant ? `${surface}.${variant}` : surface;
+}
+
+export async function loadTemplate(surface: Surface, variant?: string): Promise<string> {
+  const key = templateKey(surface, variant);
+  const cached = _templateCache.get(key);
   if (cached !== undefined) return cached;
-  const file = path.join(TEMPLATE_DIR, `synthesizer.${surface}.txt`);
+  const file = path.join(TEMPLATE_DIR, `synthesizer.${key}.txt`);
   const content = await fs.readFile(file, 'utf-8');
-  _templateCache.set(surface, content);
+  _templateCache.set(key, content);
   return content;
 }
 
-export async function templateHash(surface: Surface): Promise<string> {
-  const cached = _hashCache.get(surface);
+export async function templateHash(surface: Surface, variant?: string): Promise<string> {
+  const key = templateKey(surface, variant);
+  const cached = _hashCache.get(key);
   if (cached !== undefined) return cached;
-  const t = await loadTemplate(surface);
+  const t = await loadTemplate(surface, variant);
   const h = promptHash(t);
-  _hashCache.set(surface, h);
+  _hashCache.set(key, h);
   return h;
 }
 
@@ -197,7 +207,7 @@ export async function runGenPipeline(
 
   let template: string;
   try {
-    template = await loadTemplate(input.surface);
+    template = await loadTemplate(input.surface, input.templateVariant);
   } catch (err) {
     return {
       generated_answer: '',

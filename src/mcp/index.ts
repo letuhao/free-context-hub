@@ -1216,6 +1216,12 @@ function createMcpToolsServer() {
           .boolean()
           .optional()
           .describe('DEFERRED-034: set false to skip the server-side rerank dispatcher and return raw hybrid-retrieval order. Default true (rerank when RERANK_TYPE is configured). Used by the A/B harness for an uncontaminated pool.'),
+        snippet_max_chars: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe('DEFERRED-037: width of content_snippet in chars (default 240, a display preview). Pass a wide value (e.g. 2000) for RAG/gen-eval so the answerer receives the full chunk, not a preview that can truncate the grounding fact away.'),
         output_format: OutputFormatSchema.default('auto_both').describe('Response format: auto_both | json_only | json_pretty | summary_only.'),
       }),
       outputSchema: z.object({
@@ -1239,7 +1245,7 @@ function createMcpToolsServer() {
         explanations: z.array(z.string()),
       }),
     },
-    async ({ workspace_token, project_id, query, chunk_types, doc_ids, limit, min_score, rerank, output_format }) => {
+    async ({ workspace_token, project_id, query, chunk_types, doc_ids, limit, min_score, rerank, snippet_max_chars, output_format }) => {
       const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       const result = await searchChunks({
@@ -1251,6 +1257,7 @@ function createMcpToolsServer() {
         docIds: doc_ids,
         minScore: min_score,
         rerank,
+        snippetMaxChars: snippet_max_chars,
       });
       const summary = `search_document_chunks: matches=${result.matches.length}`;
       return formatToolResponse(result as any, summary, output_format);
