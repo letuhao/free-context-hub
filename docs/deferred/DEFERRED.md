@@ -1,7 +1,36 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 036 -->
+<!-- Next ID: 037 -->
+
+## DEFERRED-036
+
+- **Title:** Query-rewrite A/B measurement run (none vs expand vs hyde)
+- **Status:** OPEN (2026-06-18)
+- **What:** The query-rewrite lever is built + verified (`--rewrite-mode
+  none|expand|hyde`, `src/qc/queryRewrite.ts`, design
+  `docs/specs/2026-06-18-query-rewrite-lever.md`), but the actual A/B
+  *measurement* — running the full golden set 3 ways and comparing
+  recall@k/MRR/nDCG/coverage (+ gen-eval as secondary) — has not been run. The
+  PRIMARY readout is the answer-INDEPENDENT retrieval metrics, so this is clean
+  even on a controlled stack.
+- **Why deferred:** shipping the lever and running the experiment are separate
+  steps (same split as the CoVe lever). The measurement wants a controlled
+  baseline stack (`start-baseline-stack.sh`) + `--control` for a noise floor, and
+  is best run deliberately, not as a smoke.
+- **Trigger condition:** when measuring retrieval-quality levers for a Phase-17
+  writeup, or before deciding whether to wire query rewrite into the production
+  retrieval path.
+- **How to run:** `--rewrite-mode expand` and `--rewrite-mode hyde` vs a `none`
+  baseline, same tag family, ideally `--control` each + `--groups edge-*` for the
+  hallucination-prone rows. Compare per-surface recall@k/MRR; watch the noise
+  floor (cp/cr ≈ 0.146/row, retrieval metrics ≈ 0.026/row from tie-breaking).
+- **Estimated size:** S — no code; 3 baseline runs + a diff writeup under
+  `docs/qc/`.
+- **Priority:** MED — the lever is inert until measured; this is the payoff step.
+- **Source:** Query-rewrite lever build (2026-06-18, session 5).
+
+---
 
 ## DEFERRED-035
 

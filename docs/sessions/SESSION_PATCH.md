@@ -1,3 +1,49 @@
+# CHECKPOINT — Query-rewrite A/B lever shipped (2026-06-18, session 5)
+
+**Branch:** `deferred-034-chunk-granularity` (continued — small enough to not warrant
+a new branch/PR per user). Lever built, not yet committed at time of writing.
+
+**Asked:** "tiếp tục Query rewrite" — the 4th Phase-17 A/B lever, now measurable
+because gen-eval is clean of reasoning-leak. User chose **both** techniques
+(expand + HyDE) over a single mode.
+
+**What it is:** a *retrieval-side* transform applied to the golden query BEFORE
+the retriever, parallel to CoVe (synth-side). `--rewrite-mode none|expand|hyde`:
+- **expand** — LLM rewrites the question into a keyword/synonym-rich query.
+- **hyde** — LLM writes a hypothetical answer passage; retrieve on that (Gao 2022).
+
+**Why cleanly measurable:** PRIMARY signal is the answer-INDEPENDENT retrieval
+metrics (recall@k/MRR/nDCG), which read `dispatch(rewrittenQuery)` directly — zero
+exposure to the reasoning-leak class that invalidated CoVe v1. Runs with gen-eval
+OFF (cleanest) or ON. Verify-metric-inputs holds: the metric that moves IS the one
+whose input changed ([[verify-metric-inputs]]).
+
+**Shipped:**
+- `src/qc/queryRewrite.ts` — `parseRewriteMode`, pure `parseRewrittenQuery`
+  (expand=first line, hyde=joined passage capped 2000 chars), `rewriteQuery`
+  (uses shared `chatComplete` → consistent reasoning-suppression; **graceful
+  fallback** to the original query on any LLM error / empty parse, never blocks a
+  row), template loaders + hashes.
+- Two templates: `templates/query-rewrite.{expand,hyde}.txt`.
+- runBaseline threading: `--rewrite-mode` flag, extracted `buildAnswererConfig()`
+  (so rewrite works with gen-eval off), per-query rewrite computed ONCE (not
+  per-sample), `rewrite` trace on each row (keeps original `query` for
+  provenance), top-level `rewrite_manifest` in JSON + markdown, per-row `rw[]`
+  terminal note, **loud warning on an unrecognized `--rewrite-mode`** (typo guard).
+- 22 unit tests (`queryRewrite.test.ts`, registered in `npm test`).
+
+**Verify:** tsc clean; **975/975** unit; live smoke on lessons — expand & hyde both
+HIT@1 with sensible rewrites, trace + manifest serialize to JSON/MD, fallback path
+exercised, typo warns, no-flag is bit-identical (clean row, no manifest). Design:
+`docs/specs/2026-06-18-query-rewrite-lever.md`.
+
+**Deferred:** the actual A/B *measurement run* (none vs expand vs hyde across the
+full golden set) — out of scope here, logged as DEFERRED-036.
+
+**Next:** run the 3-way A/B (DEFERRED-036), or commit the lever as-is.
+
+---
+
 # CHECKPOINT — DEFERRED-034 closed out (2026-06-18, session 4)
 
 **Branch:** `deferred-034-chunk-granularity` off merged main (PR #39 landed).

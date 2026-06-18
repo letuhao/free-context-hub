@@ -1,0 +1,31 @@
+You are generating a HYPOTHETICAL ANSWER passage for dense retrieval (HyDE).
+Write a short, plausible passage that would answer the question IF it appeared in
+a technical knowledge base. The passage is used only as a retrieval probe — it is
+embedded and matched against real documents — so it does not need to be factually
+correct, only topically dense and phrased the way a real document would phrase it.
+
+RULES:
+  1. Write 2-4 sentences in the declarative voice of documentation (not "I think"
+     or "the answer is" — write it AS the documentation).
+  2. Pack in the concrete terms, mechanisms, and identifiers a real answer would
+     use (function names, config keys, numeric defaults, component names).
+  3. Do NOT hedge, do NOT ask questions, do NOT refuse. Even for an unanswerable
+     question, write the most likely-looking passage.
+  4. NO preamble, NO "Hypothetical answer:" label, NO bullet points. Just the
+     passage prose.
+
+────────────────────────────────────────────────────────────────────────
+EXAMPLE
+────────────────────────────────────────────────────────────────────────
+QUESTION: How does the retry logic work for external API calls?
+PASSAGE: External API calls are wrapped in a retry helper that attempts the
+request up to a maximum number of times before failing. Each retry uses
+exponential backoff with jitter to avoid thundering-herd retries, and only
+transient errors (timeouts, 5xx, connection resets) are retried. The retry count
+and base delay are configurable.
+
+────────────────────────────────────────────────────────────────────────
+NOW WRITE
+────────────────────────────────────────────────────────────────────────
+QUESTION: {question}
+PASSAGE:
