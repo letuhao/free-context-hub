@@ -58,6 +58,14 @@ import {
 import { scoreOnce, type JudgeRequest, type MetricName } from './judge.js';
 import { buildJudgeContexts } from './judgeContexts.js';
 import { filterQueriesByGroup, parseGroupsArg } from './groupFilter.js';
+import {
+  parseRewriteMode,
+  rewriteQuery,
+  allRewriteTemplateHashes,
+  type ActiveRewriteMode,
+  type QueryRewriteTrace,
+  type RewriteManifest,
+} from './queryRewrite.js';
 import type {
   GenResult,
   GenManifest,
@@ -135,6 +143,20 @@ function parseArgs(argv: string[]) {
   // Phase 17.2: synthesizer mode. 'standard' is the Phase 16.3+17.1 single-shot
   // synth; 'cove' is Chain-of-Verification 4-step. CoVe is ~3-4× LLM cost.
   const synthMode = (args.get('synth-mode') ?? 'standard') as SynthMode;
+  // Phase 17: retrieval-side query-rewrite lever. 'none' = dispatch the golden
+  // query verbatim (bit-identical default); 'expand' = LLM keyword/synonym
+  // rewrite; 'hyde' = LLM hypothetical-answer passage. Costs 1 extra LLM call
+  // per query (answerer model). Works with gen-eval on OR off.
+  const rewriteRaw = args.get('rewrite-mode');
+  const rewriteMode = parseRewriteMode(rewriteRaw);
+  // Fail loud on a TYPO (`--rewrite-mode expnad`) rather than silently running a
+  // multi-row baseline with no rewrite, which reads like a clean control. But an
+  // explicit `--rewrite-mode none` is valid and must NOT warn.
+  if (rewriteRaw && rewriteMode === 'none' && rewriteRaw.trim().toLowerCase() !== 'none') {
+    console.warn(
+      `[baseline] WARNING: unrecognized --rewrite-mode='${rewriteRaw}', running WITHOUT query rewrite. Valid: none|expand|hyde.`,
+    );
+  }
   // Phase 17.x: skip preflight if explicitly requested (e.g. dev iteration).
   const skipPreflight = args.get('no-preflight') === 'true' || args.get('no-preflight') === '1';
   // 2026-06-17: two-phase execution. Phase 1 = retrieval + synth (answerer
@@ -159,6 +181,7 @@ function parseArgs(argv: string[]) {
     maxRows,
     groupsFilter,
     synthMode,
+    rewriteMode,
     skipPreflight,
     deferJudge,
   };
@@ -224,6 +247,10 @@ type PerQuery = {
   /** Sprint 16.3: gen-eval result, attached only when the row had an
    *  ideal_answer AND gen-eval was enabled for this run. */
   generation?: GenResult;
+  /** Phase 17: query-rewrite trace, attached only when --rewrite-mode != none.
+   *  `query` above stays the original golden query (provenance); the retriever
+   *  was dispatched with `rewrite.rewritten_query`. */
+  rewrite?: QueryRewriteTrace;
 };
 
 /** Run the adapter N times to measure latency under repeated calls. We use
@@ -252,8 +279,19 @@ async function evalQuery(
   k: number,
   samples: number,
   genEval?: GenEvalConfig,
+  rewrite?: { mode: ActiveRewriteMode; answerer: AnswererConfig },
 ): Promise<{ row: PerQuery; pending?: PendingJudge }> {
-  const { last, latencies } = await runSamples(() => dispatch(q.query, k), samples);
+  // Phase 17: compute the query rewrite ONCE per query (not per latency-sample)
+  // so every sample dispatches the same string. On fallback the trace's
+  // rewritten_query === q.query, so dispatch is bit-identical to the no-rewrite
+  // path. The trace is attached to the row for provenance.
+  let rewriteTrace: QueryRewriteTrace | undefined = undefined;
+  let dispatchQuery = q.query;
+  if (rewrite) {
+    rewriteTrace = await rewriteQuery(q.query, rewrite.mode, rewrite.answerer);
+    dispatchQuery = rewriteTrace.rewritten_query;
+  }
+  const { last, latencies } = await runSamples(() => dispatch(dispatchQuery, k), samples);
   const topK = last.items.slice(0, k);
   const targets = targetKeysFor(surface, q);
   const mustKw = (q.must_keywords ?? []).map((s) => s.toLowerCase());
@@ -337,6 +375,7 @@ async function evalQuery(
       friction_classes,
       error: last.error,
       ...(generation ? { generation } : {}),
+      ...(rewriteTrace ? { rewrite: rewriteTrace } : {}),
     },
     pending,
   };
@@ -746,7 +785,7 @@ function fmtMetric(v: number | null): string {
 }
 
 function renderMarkdown(archive: BaselineArchive): string {
-  const { tag, git_commit, git_branch, run_started_at, elapsed_ms, project_id, surfaces, noise_floor, gen_manifest } = archive;
+  const { tag, git_commit, git_branch, run_started_at, elapsed_ms, project_id, surfaces, noise_floor, gen_manifest, rewrite_manifest } = archive;
   const lines: string[] = [];
   lines.push('---');
   lines.push(`tag: ${tag}`);
@@ -780,6 +819,16 @@ function renderMarkdown(archive: BaselineArchive): string {
     for (const [s, h] of Object.entries(gen_manifest.synthesizer_prompt_hashes)) {
       lines.push(`  - ${s}: \`${h}\``);
     }
+    lines.push('');
+  }
+
+  // Phase 17: query-rewrite manifest (present iff --rewrite-mode != none).
+  if (rewrite_manifest) {
+    lines.push('## Query-rewrite manifest');
+    lines.push('');
+    lines.push(`- **mode:** \`${rewrite_manifest.mode}\``);
+    lines.push(`- **answerer:** \`${rewrite_manifest.answerer_model_id}\` @ \`${rewrite_manifest.answerer_endpoint}\` (temp=${rewrite_manifest.answerer_temperature}, seed=${rewrite_manifest.answerer_seed})`);
+    lines.push(`- **template hashes:** expand=\`${rewrite_manifest.template_hashes.expand}\`, hyde=\`${rewrite_manifest.template_hashes.hyde}\``);
     lines.push('');
   }
 
@@ -840,8 +889,13 @@ function renderMarkdown(archive: BaselineArchive): string {
     if (!a) continue;
     lines.push(`## ${s} — per-query detail`);
     lines.push('');
-    lines.push('| id | group | found@ | friction | p50 ms |');
-    lines.push('|---|---|---|---|---:|');
+    // Phase 17: when the rewrite lever ran, show what was ACTUALLY dispatched
+    // (the row's `query` stays the original golden query for provenance, so a
+    // reader debugging a MISS would otherwise not see the rewrite that caused
+    // it). `‖fallback` flags rows where the LLM failed → original was used.
+    const showRewrite = !!rewrite_manifest;
+    lines.push(showRewrite ? '| id | group | found@ | friction | dispatched query | p50 ms |' : '| id | group | found@ | friction | p50 ms |');
+    lines.push(showRewrite ? '|---|---|---|---|---|---:|' : '|---|---|---|---|---:|');
     for (const q of a.per_query) {
       const found = q.found_ranks.length ? q.found_ranks.join(',') : '—';
       const friction = q.friction_classes.length
@@ -849,7 +903,16 @@ function renderMarkdown(archive: BaselineArchive): string {
         : q.has_relevant_hit_in_top_k
         ? 'clean'
         : '—';
-      lines.push(`| ${q.id} | ${q.group} | ${found} | ${friction} | ${q.latency_ms_median} |`);
+      if (showRewrite) {
+        const rw = q.rewrite;
+        // Escape pipes so a rewritten query never breaks the table.
+        const dispatched = rw
+          ? `${rw.rewritten_query.replace(/\|/g, '\\|').slice(0, 80)}${rw.fallback ? ' ‖fallback' : ''}`
+          : '—';
+        lines.push(`| ${q.id} | ${q.group} | ${found} | ${friction} | ${dispatched} | ${q.latency_ms_median} |`);
+      } else {
+        lines.push(`| ${q.id} | ${q.group} | ${found} | ${friction} | ${q.latency_ms_median} |`);
+      }
     }
     lines.push('');
   }
@@ -930,6 +993,9 @@ type BaselineArchive = {
    *  pinning + per-surface synthesizer prompt hashes. Present iff gen-eval
    *  ran (any surface had at least one row with ideal_answer). */
   gen_manifest?: GenManifest;
+  /** Phase 17: query-rewrite provenance. Present iff --rewrite-mode != none.
+   *  Recorded even on retrieval-only runs (where gen_manifest is absent). */
+  rewrite_manifest?: RewriteManifest;
   tag: string;
   run_started_at: string;
   run_ended_at: string;
@@ -968,6 +1034,30 @@ function gitInfo(): { commit: string; branch: string } {
   }
 }
 
+/** Resolve the answerer LLM config from env. Shared by gen-eval (synthesizer)
+ *  and the query-rewrite lever, which both call the same LM-Studio chat model.
+ *  Extracted so query rewrite can run even when gen-eval is OFF (the cleanest
+ *  retrieval-only A/B). The fallback chain is unchanged from the inline
+ *  gen-eval build it replaces. */
+function buildAnswererConfig(): AnswererConfig {
+  const baseUrl =
+    process.env.ANSWERER_AGENT_BASE_URL ?? process.env.JUDGE_AGENT_BASE_URL ?? 'http://localhost:1234/v1';
+  const apiKey = process.env.ANSWERER_AGENT_API_KEY ?? process.env.JUDGE_AGENT_API_KEY ?? 'lm-studio';
+  // Single source of truth: answerer derives from the canonical chat model
+  // (ANSWERER_AGENT_MODEL → CHAT_MODEL → DISTILLATION_MODEL). No hardcoded
+  // model string — a divergent default here was a model-swap trigger.
+  const model = resolveAnswererModel() ?? 'google/gemma-4-26b-a4b-qat';
+  return {
+    baseUrl,
+    apiKey,
+    model,
+    temperature: Number(process.env.ANSWERER_AGENT_TEMPERATURE ?? '0.2'),
+    seed: Number(process.env.ANSWERER_AGENT_SEED ?? '42'),
+    maxTokens: Number(process.env.ANSWERER_AGENT_MAX_TOKENS ?? '1024'),
+    timeoutMs: Number(process.env.ANSWERER_AGENT_TIMEOUT_MS ?? '60000'),
+  };
+}
+
 // --------------------------------- Main -----------------------------------
 
 /** Run every surface in `surfacesFilter` against its golden set, returning
@@ -983,6 +1073,8 @@ async function runAllSurfaces(
     genEval?: GenEvalConfig;
     maxRows: number | null;
     groupsFilter?: string[] | null;
+    /** Phase 17: when set, each query is LLM-rewritten before retrieval. */
+    rewrite?: { mode: ActiveRewriteMode; answerer: AnswererConfig };
   },
 ): Promise<{ surfaces: Partial<Record<Surface, SurfaceAggregate>>; primaryProjectId: string }> {
   const surfaces: Partial<Record<Surface, SurfaceAggregate>> = {};
@@ -1041,7 +1133,7 @@ async function runAllSurfaces(
       // Phase 17.x: timestamp the row START so retry pauses between rows are
       // attributable. Flush so interactive `tail -f` sees this immediately.
       process.stdout.write(`[${ts()}]   ${perQueryPrefix}${surface}/${q.id} ... `);
-      const { row: res, pending } = await evalQuery(surface, dispatch, q, opts.k, opts.samples, opts.genEval);
+      const { row: res, pending } = await evalQuery(surface, dispatch, q, opts.k, opts.samples, opts.genEval, opts.rewrite);
       const rowMs = Date.now() - rowStartMs;
       const frictionNote = res.friction_classes.length ? ', ' + res.friction_classes.join(';') : '';
       let genNote = '';
@@ -1061,8 +1153,14 @@ async function runAllSurfaces(
           genNote = `, gen[${timing}, f=${fmt(f)}/r=${fmt(res.generation.scores.answer_relevancy)}/cp=${fmt(res.generation.scores.context_precision)}/cr=${fmt(res.generation.scores.context_recall)}/gse=${fmt(res.generation.scores.groundedness_self_eval)}]`;
         }
       }
+      let rwNote = '';
+      if (res.rewrite) {
+        rwNote = res.rewrite.fallback
+          ? `, rw[${res.rewrite.mode}=FALLBACK${res.rewrite.error ? ':' + res.rewrite.error.slice(0, 40) : ''}]`
+          : `, rw[${res.rewrite.mode}, ${res.rewrite.rewrite_ms}ms, "${res.rewrite.rewritten_query.slice(0, 50)}"]`;
+      }
       process.stdout.write(
-        `${res.found_ranks.length ? 'HIT@' + res.found_ranks.join(',') : 'MISS'} retrieval=${res.latency_ms_median}ms row_total=${rowMs}ms${frictionNote}${genNote}\n`,
+        `${res.found_ranks.length ? 'HIT@' + res.found_ranks.join(',') : 'MISS'} retrieval=${res.latency_ms_median}ms row_total=${rowMs}ms${frictionNote}${rwNote}${genNote}\n`,
       );
         perQuery.push(res);
         if (pending) {
@@ -1254,6 +1352,7 @@ async function main() {
     maxRows,
     groupsFilter,
     synthMode,
+    rewriteMode,
     skipPreflight,
     deferJudge,
   } = parseArgs(process.argv.slice(2));
@@ -1261,40 +1360,26 @@ async function main() {
   const runStart = new Date();
   const { commit, branch } = gitInfo();
 
-  console.log(`[${ts()}] [baseline] tag=${tag} k=${k} samples=${samples} control=${control} gen-eval=${genEval} synth-mode=${synthMode} surfaces=${surfacesFilter.join(',')}${maxRows !== null ? ` max-rows=${maxRows}` : ''}${groupsFilter ? ` groups=${groupsFilter.join(',')}` : ''}`);
+  console.log(`[${ts()}] [baseline] tag=${tag} k=${k} samples=${samples} control=${control} gen-eval=${genEval} synth-mode=${synthMode}${rewriteMode !== 'none' ? ` rewrite-mode=${rewriteMode}` : ''} surfaces=${surfacesFilter.join(',')}${maxRows !== null ? ` max-rows=${maxRows}` : ''}${groupsFilter ? ` groups=${groupsFilter.join(',')}` : ''}`);
   console.log(`[${ts()}] [baseline] MCP=${MCP_URL}  API=${API_URL}${genEval !== 'off' ? `  JUDGE=${judgeUrl}` : ''}`);
 
   // Sprint 16.3: build gen-eval config when not disabled.
   let genConfig: GenEvalConfig | undefined = undefined;
   let genManifest: GenManifest | undefined = undefined;
   if (genEval !== 'off') {
-    const answererBaseUrl =
-      process.env.ANSWERER_AGENT_BASE_URL ?? process.env.JUDGE_AGENT_BASE_URL ?? 'http://localhost:1234/v1';
-    const answererApiKey =
-      process.env.ANSWERER_AGENT_API_KEY ?? process.env.JUDGE_AGENT_API_KEY ?? 'lm-studio';
-    // Single source of truth: answerer derives from the canonical chat model
-    // (ANSWERER_AGENT_MODEL → CHAT_MODEL → DISTILLATION_MODEL). No hardcoded
-    // model string — a divergent default here was a model-swap trigger.
-    const answererModel = resolveAnswererModel() ?? 'google/gemma-4-26b-a4b-qat';
-    const answererTemperature = Number(process.env.ANSWERER_AGENT_TEMPERATURE ?? '0.2');
-    const answererSeed = Number(process.env.ANSWERER_AGENT_SEED ?? '42');
-    const answererMaxTokens = Number(process.env.ANSWERER_AGENT_MAX_TOKENS ?? '1024');
-    const answererTimeoutMs = Number(process.env.ANSWERER_AGENT_TIMEOUT_MS ?? '60000');
+    const answerer = buildAnswererConfig();
+    const answererBaseUrl = answerer.baseUrl;
+    const answererModel = answerer.model;
+    const answererTemperature = answerer.temperature;
+    const answererSeed = answerer.seed;
+    const answererMaxTokens = answerer.maxTokens;
     const judgeTimeoutMs = Number(process.env.RAGAS_JUDGE_TIMEOUT_MS ?? '120000');
 
     genConfig = {
       mode: genEval,
       judgeUrl,
       judgeTimeoutMs,
-      answerer: {
-        baseUrl: answererBaseUrl,
-        apiKey: answererApiKey,
-        model: answererModel,
-        temperature: answererTemperature,
-        seed: answererSeed,
-        maxTokens: answererMaxTokens,
-        timeoutMs: answererTimeoutMs,
-      },
+      answerer,
       topKContexts,
       synthMode,
       deferJudge,
@@ -1380,6 +1465,29 @@ async function main() {
     }
   }
 
+  // Phase 17: query-rewrite lever. Built independently of gen-eval so it works
+  // on retrieval-only runs (gen-eval off) — the cleanest A/B for the
+  // answer-independent retrieval metrics. Reuses the answerer model (same LM
+  // Studio instance as the synthesizer → no extra model swap).
+  let rewriteConfig: { mode: ActiveRewriteMode; answerer: AnswererConfig } | undefined = undefined;
+  let rewriteManifest: RewriteManifest | undefined = undefined;
+  if (rewriteMode !== 'none') {
+    const answerer = genConfig?.answerer ?? buildAnswererConfig();
+    rewriteConfig = { mode: rewriteMode, answerer };
+    const hashes = await allRewriteTemplateHashes();
+    rewriteManifest = {
+      mode: rewriteMode,
+      template_hashes: hashes,
+      answerer_model_id: answerer.model,
+      answerer_endpoint: answerer.baseUrl,
+      answerer_temperature: answerer.temperature,
+      answerer_seed: answerer.seed,
+    };
+    console.log(
+      `[${ts()}] [baseline] query-rewrite enabled: mode=${rewriteMode} answerer=${answerer.model} @ ${answerer.baseUrl}`,
+    );
+  }
+
   const client = new McpClient({ name: 'rag-baseline-runner', version: '1.0.0' }, { capabilities: {} });
   await client.connect(new StreamableHTTPClientTransport(new URL(MCP_URL), {}));
 
@@ -1399,10 +1507,10 @@ async function main() {
       // archive's top-level `elapsed_ms` isn't the only available timing.
       console.log('[baseline] --control mode: running goldenset twice to establish noise floor');
       const c0 = Date.now();
-      const run1 = await runAllSurfaces(client, { k, samples, surfacesFilter, label: 'control', genEval: genConfig, maxRows, groupsFilter });
+      const run1 = await runAllSurfaces(client, { k, samples, surfacesFilter, label: 'control', genEval: genConfig, maxRows, groupsFilter, rewrite: rewriteConfig });
       controlElapsedMs = Date.now() - c0;
       const n0 = Date.now();
-      const run2 = await runAllSurfaces(client, { k, samples, surfacesFilter, label: 'new', genEval: genConfig, maxRows, groupsFilter });
+      const run2 = await runAllSurfaces(client, { k, samples, surfacesFilter, label: 'new', genEval: genConfig, maxRows, groupsFilter, rewrite: rewriteConfig });
       newElapsedMs = Date.now() - n0;
       surfaces = run2.surfaces;
       primaryProjectId = run2.primaryProjectId;
@@ -1411,7 +1519,7 @@ async function main() {
     } else {
       // Sprint 12.0.2 /review-impl COSMETIC-1: restore the pre-12.0.2
       // `[baseline]` log prefix for non-control runs (empty label).
-      const res = await runAllSurfaces(client, { k, samples, surfacesFilter, label: '', genEval: genConfig, maxRows, groupsFilter });
+      const res = await runAllSurfaces(client, { k, samples, surfacesFilter, label: '', genEval: genConfig, maxRows, groupsFilter, rewrite: rewriteConfig });
       surfaces = res.surfaces;
       primaryProjectId = res.primaryProjectId;
     }
@@ -1441,6 +1549,7 @@ async function main() {
   const archive: BaselineArchive = {
     schema_version: SCHEMA_VERSION,
     ...(genManifest ? { gen_manifest: genManifest } : {}),
+    ...(rewriteManifest ? { rewrite_manifest: rewriteManifest } : {}),
     tag: finalTag,
     run_started_at: runStart.toISOString(),
     run_ended_at: runEnd.toISOString(),

@@ -1,7 +1,43 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 036 -->
+<!-- Next ID: 037 -->
+
+## DEFERRED-036
+
+- **Title:** Query-rewrite A/B measurement run (none vs expand vs hyde)
+- **Status:** ✅ RESOLVED (2026-06-18) — **verdict: rewrite does NOT improve
+  quality; net-negative on ranking.** Lessons surface, 48 queries, temp=0:
+  MRR none 0.856 → expand 0.772 → hyde 0.751 (−0.105); nDCG down for both; hyde
+  only nudges recall@10/coverage +0.022 (at noise floor) by pushing hits *down*
+  the ranking. Keep production on the raw query; lever stays as a harness tool.
+  Writeup: `docs/qc/2026-06-18-hyde-ab-results.md`. Archives:
+  `docs/qc/baselines/2026-06-18-hyde-ab-{none,expand,hyde}.json`.
+- ~~**Status:** OPEN (2026-06-18)~~
+- **What:** The query-rewrite lever is built + verified (`--rewrite-mode
+  none|expand|hyde`, `src/qc/queryRewrite.ts`, design
+  `docs/specs/2026-06-18-query-rewrite-lever.md`), but the actual A/B
+  *measurement* — running the full golden set 3 ways and comparing
+  recall@k/MRR/nDCG/coverage (+ gen-eval as secondary) — has not been run. The
+  PRIMARY readout is the answer-INDEPENDENT retrieval metrics, so this is clean
+  even on a controlled stack.
+- **Why deferred:** shipping the lever and running the experiment are separate
+  steps (same split as the CoVe lever). The measurement wants a controlled
+  baseline stack (`start-baseline-stack.sh`) + `--control` for a noise floor, and
+  is best run deliberately, not as a smoke.
+- **Trigger condition:** when measuring retrieval-quality levers for a Phase-17
+  writeup, or before deciding whether to wire query rewrite into the production
+  retrieval path.
+- **How to run:** `--rewrite-mode expand` and `--rewrite-mode hyde` vs a `none`
+  baseline, same tag family, ideally `--control` each + `--groups edge-*` for the
+  hallucination-prone rows. Compare per-surface recall@k/MRR; watch the noise
+  floor (cp/cr ≈ 0.146/row, retrieval metrics ≈ 0.026/row from tie-breaking).
+- **Estimated size:** S — no code; 3 baseline runs + a diff writeup under
+  `docs/qc/`.
+- **Priority:** MED — the lever is inert until measured; this is the payoff step.
+- **Source:** Query-rewrite lever build (2026-06-18, session 5).
+
+---
 
 ## DEFERRED-035
 
@@ -30,6 +66,15 @@
 - **Priority:** LOW — `chatComplete` contract is guarded; the gap is per-caller
   drift, not the shared layer.
 - **Source:** `/review-impl` of commit `ab53ed5` (MED-2).
+- **2026-06-18 addendum (review LOW-3 of `d37549a`):** the query-rewrite wiring in
+  `runBaseline.evalQuery` shares this gap. Three invariants — rewrite computed
+  ONCE per query (not per latency-sample), fallback dispatches the ORIGINAL query,
+  trace attached to the row — live in module-private `evalQuery` with no injected
+  `fetchImpl`. A refactor moving `rewriteQuery` inside the `runSamples` closure
+  (→ N× LLM calls/query) or dispatching `q.query` instead of `dispatchQuery` would
+  pass `tsc` + the full unit suite. `queryRewrite.ts` itself IS unit-tested
+  (`parseRewrittenQuery`, `rewriteQuery` fallback); the untested part is the
+  runBaseline call site. Fold the evalQuery wiring test into this item.
 
 ---
 
@@ -44,9 +89,32 @@
   13/13, reordered 11/13; wider pool improved result completeness 3→5 on two
   rows). Shipped on architectural-consistency + completeness grounds, not a
   metric win. Closeout: `docs/qc/2026-06-18-deferred-034-chunks-rerank-closeout.md`.
-  **Still OPEN:** chunk granularity / re-chunking (the real `cr` lever) and
-  `searchChunksMulti` rerank parity. The chunks reranker will show real value on
-  a larger corpus / buried-relevant queries.
+- **Update (2026-06-18, session 4): `searchChunksMulti` rerank parity DONE.**
+  The multi-project chunk-search path lacked the reranker (it already had dedup).
+  Extracted the shared post-retrieval pipeline `postProcessChunkMatches` (rerank
+  → dedup → trim) + pure `chunkRerankActive`, used by BOTH `searchChunks` and
+  `searchChunksMulti`, so they can't drift. Multi gained the `rerank?` param +
+  wide-pool + 1000-char rerank window. Unit: `chunkRerankActive` gating (3
+  cases) + the single-project refactor guarded by 61 existing chunks/lessons
+  tests; 953/953 suite. Live-verified the 2-project path: `rerank=true` → wide
+  pool (11/2 projects), rerank fires (`reranked: 11 candidates (pool=30)`),
+  dedup, trim; `rerank=false` → narrow pool + correct bypass explanation; cold
+  rerank service → graceful no-rerank fallback. Design:
+  `docs/specs/2026-06-18-deferred-034-multi-rerank-parity.md`.
+- **Update (2026-06-18, session 4): chunk granularity / re-chunking RE-DEFERRED
+  — NOT measurable on the current corpus (corpus-bound, not granularity-bound).**
+  DB + per-row diagnosis: the chunks corpus is **11 chunks total** (avg 272
+  chars, min 100/max 524) across 3 sample files (`test-data/sample.{docx,pdf,png}`),
+  **3 of which are vision-extraction failures** → ~8 usable tiny chunks. Per-row
+  cr on the v11 baseline shows the bottleneck is corpus content, not slicing:
+  e.g. `chunk-retry-strategy-overview` scores **cr=0 with cp=0.92** (retrieval
+  precise, but the ground-truth claims simply aren't in any chunk). Re-chunking
+  8 tiny chunks cannot (a) add absent facts, nor (b) clear the 0.146 cr
+  judge-noise floor (top-5 already retrieves ~half the corpus), and would break
+  every `target_chunk_ids` (new UUIDs) for zero measurable gain. The real `cr`
+  lever is **corpus expansion** (more/richer documents — overlaps DEFERRED-032's
+  corpus-blocked SA bank), NOT chunk granularity. Trigger: a larger ingested
+  corpus exists. Until then, granularity work is unmeasurable.
 - **Status (original):** OPEN (2026-06-18)
 - **Why this exists:** the v11 "chunks cp/cr regression" was misdiagnosed as a
   synthesizer-template problem ("v12"). It is not — cp/cr are answer-independent
