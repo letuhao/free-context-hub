@@ -45,6 +45,15 @@ faithfulness 0.76→0.91, context_recall 0.88→0.99, refusal_correctness 1.00�
 PRESERVED** (true-abstention intact — the critical safety check). Commit `ce9110d`.
 **ai-engineering corpus quality now confirmed strong.**
 
+**DEFERRED-038 (prod chat RAG) — chat path fixed + deployed.** The same 240-char
+truncation existed in the live chat assistant: `src/api/routes/chat.ts:94`
+(`search_documents` tool) called `searchChunks` without `snippetMaxChars`, feeding
+the chat answerer the display preview. Now passes `snippetMaxChars: 2000`. Verified
+at the data layer (s1 top chunk 240→**823 chars**, grounding fact absent→present);
+answer-quality lift transitively proven by the corpus benchmark. Rebuilt + redeployed
+the mcp/api container so it's live. Commit `30b9775`. **Remaining:** the `reflect`
+tool's lesson-snippet path (M, lower impact) stays open under DEFERRED-038.
+
 ---
 
 # CHECKPOINT — LLM chat in/out standardized (architecture fix) (2026-06-18, session 3)
