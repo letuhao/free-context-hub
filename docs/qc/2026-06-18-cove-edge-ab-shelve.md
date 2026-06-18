@@ -1,10 +1,50 @@
-# CoVe synthesizer — edge-case A/B → SHELVE (2026-06-18)
+# CoVe synthesizer — edge-case A/B → ⚠️ MEASUREMENT INVALIDATED (2026-06-18)
 
-**Status:** Chain-of-Verification (CoVe) synthesizer measured at scale on the
-hallucination-prone edge-case rows and **shelved**. CoVe is net-negative on
-every answer-dependent metric; nothing improved. The code stays as a validated
-experiment harness (`runGenPipelineCoVe`, `--synth-mode cove`) but is **not**
-wired into the production synth path and is not recommended.
+> **⚠️ RETRACTION (2026-06-18, same day).** The SHELVE verdict below is
+> **WITHDRAWN** — the measurement is invalid. Reading the raw answer text (not
+> just the aggregate scores) revealed the deltas are dominated by two bugs, not
+> CoVe's intrinsic behavior. **No ship/shelve verdict is warranted until a clean
+> re-measurement.** Diagnosis at the top; the original (invalid) analysis is kept
+> below as the record of what the bugs produced.
+>
+> **Confound 1 — answerer leaks chain-of-thought into the answer (BOTH arms).**
+> The answerer was `gemma-4-26b-a4b-qat`, which **ignores `enable_thinking:false`
+> at the API level** (CLAUDE.md explicitly warns: "Gemma 4 ignores request-level
+> no-think params — disable reasoning in the LM Studio UI"). Reasoning was NOT
+> disabled in the LM Studio UI for this run, so **9/25 standard answers and 8/25
+> cove answers are raw CoT/scaffolding dumps** (up to ~4 400 chars of "Constraint
+> 1… Lesson [1]: Discusses… Wait, let me re-read…") instead of answers. RAGAS
+> answer_relevancy correctly tanks on those — but it is scoring reasoning leak,
+> not answer quality. This poisons ANY gemma-answerer synth eval, both arms.
+>
+> **Methodological miss:** CoVe is a **synth-fidelity** question, which the
+> model-tradition table (`docs/qc/model-selection-tradition.md`) says to measure
+> on **Tradition A/B (mistral-nemo answerer — no reasoning-by-default)**. I used
+> **Tradition C (gemma both sides)**, which is for *retrieval* quality. Wrong
+> answerer for the question.
+>
+> **Confound 2 — CoVe mishandles refusal drafts.** When the draft is a correct
+> refusal ("Not in context.", i.e. NO claims to audit), the plan-verifications
+> step should be skipped and the draft kept verbatim. Instead it runs, the
+> answerer emits prompt-echo (`parseVerificationQuestions` accepts non-question
+> lines → 6/25 verification sets are garbage), and the revise step **replaces a
+> correct refusal with a fabricated answer** — which is exactly the
+> refusal_correctness 1.0→0.0 "regression." That is a CoVe-implementation gap in
+> OUR pipeline, not evidence about CoVe-the-method.
+>
+> **Corrected next step (not yet run):** re-measure with `mistral-nemo` answerer
+> (Tradition B: mistral answerer + gemma judge + `--defer-judge`) so the answer
+> field is clean by construction, AND add a refusal-skip guard to
+> `runGenPipelineCoVe` (if draft has no auditable claims, keep the draft). Only
+> then is a standard-vs-cove delta interpretable. The `--groups` harness flag and
+> the stack work from this session stand; the *verdict* does not.
+
+---
+
+**Status (ORIGINAL — INVALID, see retraction above):** Chain-of-Verification
+(CoVe) synthesizer measured at scale on the hallucination-prone edge-case rows
+and **shelved**. CoVe is net-negative on every answer-dependent metric; nothing
+improved.
 
 ## Why this experiment
 

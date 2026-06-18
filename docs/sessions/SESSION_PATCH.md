@@ -20,24 +20,36 @@ zero swap → arms differ ONLY by synth-mode). Stack brought up via
 CHAT_MODEL single-source default (**live proof the session-2 model-swap fix
 propagates to containers**).
 
-**Result — CoVe net-negative on every answer-dependent metric, none improved:**
-- answer_relevancy collapses uniformly: lessons 0.51→0.12, code 0.25→0.00,
-  chunks 0.98→0.68 (revise step pads with verification meta-commentary).
-- faithfulness flat/down everywhere (lessons 0.79→0.67, code 0.63→0.50).
-- **Abstention got WORSE** (the opposite of CoVe's purpose): the no-answer row
-  standard correctly refused (refusal 1.0), CoVe fabricated an answer (0.0).
-- Cost ~8× (50–62s/row vs ~7s) for strictly worse quality.
-- Control: cp/cr (answer-independent) barely moved between arms → harness
-  isolated the synth effect cleanly ([[verify-metric-inputs]] applied).
+**First-pass result said "CoVe net-negative → SHELVE" — but that verdict was
+RETRACTED the same day** after the user pushed back ("cẩn thận phương pháp đo
+hoặc implement CoVe sai"). Reading the raw answer TEXT (not just scores) showed
+the measurement is **invalid**:
+- **Confound 1 (both arms):** gemma-qat answerer ignores `enable_thinking:false`
+  and leaks chain-of-thought into the answer field — 9/25 standard + 8/25 cove
+  answers are raw CoT dumps (≤4 400 chars). RAGAS AR correctly tanks on those,
+  but it's scoring reasoning-leak, not answer quality. CLAUDE.md warns exactly
+  this ("disable reasoning in the LM Studio UI"); I didn't verify the UI state.
+- **Methodological miss:** CoVe is a SYNTH-fidelity question → Tradition A/B
+  (mistral-nemo answerer, no reasoning-by-default). I used Tradition C (gemma),
+  which is for RETRIEVAL. Wrong answerer.
+- **Confound 2 (CoVe bug):** on a refusal draft ("Not in context.", no claims),
+  the plan step shouldn't run; instead it echoes prompt text (6/25 garbage
+  verification sets) and revise replaces a correct refusal with a fabricated
+  answer → the refusal 1.0→0.0 "regression" is OUR bug, not CoVe-the-method.
 
-**Decision: SHELVE.** Code kept as a validated harness; NOT wired to production.
-Closeout: `docs/qc/2026-06-18-cove-edge-ab-shelve.md`. ROADMAP Phase-17 status
-updated (17.2 measured+shelved; remaining levers are retrieval-layer:
-DEFERRED-034 chunk granularity, query rewrite).
+**Decision: NO verdict yet.** Closeout `docs/qc/2026-06-18-cove-edge-ab-shelve.md`
+now carries a RETRACTION banner; ROADMAP Phase-17 marked "first A/B invalidated,
+re-measure pending". The `--groups` harness flag + stack work STAND.
 
-**Next:** the model-swap fix containers are now live (mcp+judge on `-qat`).
-Open: push/PR (deferred), DEFERRED-034 chunk granularity, query rewrite,
-global-surface 422-on-empty harness wart.
+**Corrected next step (not yet run):** re-measure with mistral-nemo answerer
+(Tradition B + `--defer-judge`, judge stays gemma-qat) so the answer field is
+clean, AND add a refusal-skip guard to `runGenPipelineCoVe`. Lesson: read the
+RAW OUTPUT before trusting aggregate metrics — [[verify-metric-inputs]] extends
+to "verify the model's output is even a valid answer, not reasoning leak."
+
+**Other open:** push/PR (deferred), DEFERRED-034 chunk granularity, query
+rewrite, global-surface 422-on-empty harness wart. Model-swap fix containers
+are live (mcp+judge on `-qat`).
 
 ---
 
