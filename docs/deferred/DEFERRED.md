@@ -7,7 +7,16 @@
 ## DEFERRED-037
 
 - **Title:** Chunks synthesizer over-abstains on T/F-claim evaluation (template↔task mismatch)
-- **Status:** OPEN (2026-06-18)
+- **Status:** ✅ RESOLVED (2026-06-18). Root cause was deeper than the title: TWO
+  causes — (1) **context truncation** — `searchChunks` fed the synthesizer the
+  240-char display preview, not the chunk, so facts past char 240 read as "Not in
+  context" (fixed: `snippetMaxChars` option → MCP `snippet_max_chars` → QC
+  callChunks requests 2000); (2) **template mismatch** (fixed: `claim-eval`
+  template). Re-measure `aieng-corpus-v2`: standard false-abstentions **6/25→0/25**,
+  faithfulness **0.76→0.91**, context_recall 0.88→0.99, **refusal_correctness
+  1.00→1.00 preserved** (true-abstention intact). Commit `ce9110d`. Results:
+  `docs/qc/2026-06-18-aieng-corpus-geneval-results.md` (Update section).
+- ~~**Status:** OPEN (2026-06-18)~~
 - **What:** The first grounded gen-eval on the ai-engineering corpus
   (`aieng-corpus-v1`) surfaced that `src/qc/templates/synthesizer.chunks.txt` — a
   CLOSED-BOOK Q&A template with aggressive anti-hallucination abstention ("ABSTAIN

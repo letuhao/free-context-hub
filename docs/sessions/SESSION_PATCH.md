@@ -30,6 +30,21 @@ gemma-4) running — `tag=aieng-corpus-v1`. 3-row smoke confirmed grounded retri
 Design: `docs/specs/2026-06-18-deferred-032-ai-eng-corpus.md`. Commits: `b2454af`
 (corpus) + ingestion-tooling.
 
+**v1 finding → DEFERRED-037 fixed (same session).** v1 gen-eval surfaced
+answer_relevancy 0.53 / standard-faithfulness 0.62. Reading the raw output (not the
+aggregate) found the over-abstention had TWO causes: (1) **context truncation** —
+`searchChunks` fed the synthesizer the 240-char display preview, not the chunk, so
+a grounding fact past char 240 read as "Not in context" (the codebase already used
+a wide window for RERANKING but fed generation the preview); (2) a generic-Q&A
+**template mismatch** on the T/F-claim task. Fixed both: `snippetMaxChars` option
+(→ MCP `snippet_max_chars` → QC callChunks requests 2000, full chunk to the
+answerer) + a `claim-eval` synthesizer template (`--synth-template`). Required an
+MCP docker rebuild (`NPM_STRICT_SSL=false` escape hatch for the npm-install SSL
+failure). Re-measure `aieng-corpus-v2`: **standard false-abstentions 6/25→0/25,
+faithfulness 0.76→0.91, context_recall 0.88→0.99, refusal_correctness 1.00→1.00
+PRESERVED** (true-abstention intact — the critical safety check). Commit `ce9110d`.
+**ai-engineering corpus quality now confirmed strong.**
+
 ---
 
 # CHECKPOINT — LLM chat in/out standardized (architecture fix) (2026-06-18, session 3)

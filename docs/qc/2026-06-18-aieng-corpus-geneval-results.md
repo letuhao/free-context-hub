@@ -84,6 +84,37 @@ a false claim aligns better with the abstain-leaning template.
   vocabulary-mismatch regime where rewrite classically helps (unlike the clean
   lessons queries where it lost).
 
+## Update — DEFERRED-037 fixed (v2, 2026-06-18)
+
+Re-ran with both fixes (`aieng-corpus-v2`): full-chunk context (`snippet_max_chars=
+2000`) + the `claim-eval` template. The over-abstention had **two** causes, found
+by reading the raw context fed to the model:
+
+1. **Context truncation (the real cause):** `searchChunks` fed the synthesizer the
+   240-char display preview, not the chunk; facts past char 240 read as "Not in
+   context." Fixed with a `snippetMaxChars` option (full chunk to the answerer).
+2. **Template↔task mismatch:** generic Q&A template over-abstains on T/F claims.
+   Fixed with `synthesizer.chunks.claim-eval.txt`.
+
+| metric | v1 | v2 | Δ |
+|---|---:|---:|---:|
+| faithfulness (ALL) | 0.762 | **0.909** | +0.147 |
+| faithfulness (standard) | 0.622 | **0.821** | +0.199 |
+| answer_relevancy (ALL) | 0.527 | **0.654** | +0.127 |
+| context_recall (ALL) | 0.881 | **0.994** | +0.113 |
+| groundedness_self_eval | 0.984 | **1.000** | +0.016 |
+| **refusal_correctness (no_answer)** | 1.000 | **1.000** | **preserved ✓** |
+
+**Standard false-abstentions: 6/25 → 0/25.** Critically, `refusal_correctness`
+stayed **1.000** — the 2 `no_answer` rows (GPT-4=128k, pgvector=64) STILL abstain.
+The fix removed false-abstention without breaking true-abstention (the
+specific-value guard + corpus exclusion held). 0 gen errors.
+
+Remaining `answer_relevancy 0.654` is the ragas-metric vs T/F-verdict fit, not a
+quality gap — faithfulness 0.91 / groundedness 1.00 are the trustworthy signals and
+are excellent. **Corpus quality on ai-engineering is now confirmed strong.**
+Archive: `docs/qc/baselines/2026-06-18-aieng-corpus-v2.json`. → DEFERRED-037 RESOLVED.
+
 ## Reproduce
 
 ```bash
