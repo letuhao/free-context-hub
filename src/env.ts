@@ -218,6 +218,13 @@ const EnvSchema = z.object({
   // empty string as undefined so .env.baseline can ACTUALLY disable
   // distillation. Same pattern as RERANK_MODEL just below.
   DISTILLATION_MODEL: z.preprocess(v => (v === '' ? undefined : v), z.string().min(1).optional()),
+  // Canonical chat-model identity (single source of truth). Every LM-Studio
+  // chat caller — distillation/chat, baseline answerer, gen scripts, and the
+  // judge (unless explicitly overridden) — resolves to this via resolveChatModel().
+  // Set ONE value here so LM Studio is never asked for a second chat model
+  // (which forces JIT auto-evict / VRAM swap). Falls back to DISTILLATION_MODEL
+  // for back-compat when unset. See resolveChatModel/resolveJudgeModel below.
+  CHAT_MODEL: z.preprocess(v => (v === '' ? undefined : v), z.string().min(1).optional()),
   DISTILLATION_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(12_000),
   REFLECT_TIMEOUT_MS: z.coerce.number().int().positive().optional().default(5000),
 
@@ -553,5 +560,44 @@ export function getEnv(raw: NodeJS.ProcessEnv = process.env): Env {
  *  directly from `../env.js`. */
 export function _resetEnvCacheForTest(): void {
   _cachedEnv = null;
+}
+
+// ---------------------------------------------------------------------------
+// Canonical LM Studio model resolvers (single source of truth).
+//
+// WHY: LM Studio JIT-loads whatever `model` key a request names and (with
+// Auto-Evict, or under VRAM pressure) unloads the previous one. If different
+// subsystems name different chat models, LM Studio ping-pongs — unloading and
+// reloading on every alternating call. The fix is orchestration-side: every
+// chat caller derives its model from ONE source so LM Studio is only ever asked
+// for a single chat model (plus the one embedding model). The judge defaults to
+// the same chat model (so realtime QC shares the loaded model, zero swap); set
+// JUDGE_AGENT_MODEL only for a deliberate cross-judge measurement, which should
+// run in the deferred-judge phase (one swap per run, not per row).
+//
+// Resolution order keeps back-compat: CHAT_MODEL is preferred, but a repo that
+// only set DISTILLATION_MODEL keeps working unchanged.
+// ---------------------------------------------------------------------------
+
+/** The one chat/distillation model every LM-Studio chat caller should use. */
+export function resolveChatModel(env: Env = getEnv()): string | undefined {
+  return env.CHAT_MODEL ?? env.DISTILLATION_MODEL;
+}
+
+/** Baseline/gen-eval answerer. Falls back to the canonical chat model. */
+export function resolveAnswererModel(env: Env = getEnv()): string | undefined {
+  return env.ANSWERER_AGENT_MODEL ?? resolveChatModel(env);
+}
+
+/** RAG judge. Defaults to the chat model so it SHARES the loaded instance
+ *  (no swap). Override JUDGE_AGENT_MODEL only for cross-judge measurement. */
+export function resolveJudgeModel(env: Env = getEnv()): string | undefined {
+  return env.JUDGE_AGENT_MODEL ?? resolveChatModel(env);
+}
+
+/** One-off generation scripts (stress-query mining, ideal-answer drafting).
+ *  Reads GEN_MODEL from raw env for script-local override, else canonical. */
+export function resolveGenModel(env: Env = getEnv()): string | undefined {
+  return process.env.GEN_MODEL?.trim() || resolveChatModel(env);
 }
 

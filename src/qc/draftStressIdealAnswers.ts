@@ -15,12 +15,14 @@
 import * as dotenv from 'dotenv';
 import { readFile, writeFile } from 'node:fs/promises';
 import { getDbPool } from '../db/client.js';
+import { resolveGenModel } from '../env.js';
 
 dotenv.config();
 
 const GEN_URL = (process.env.GEN_BASE_URL?.trim() || 'http://localhost:1234').replace(/\/$/, '');
 const GEN_KEY = process.env.GEN_API_KEY ?? '';
-const GEN_MODEL = process.env.GEN_MODEL?.trim() || 'google/gemma-4-26b-a4b-qat';
+// Single source of truth: GEN_MODEL override, else the canonical chat model.
+const GEN_MODEL = resolveGenModel() ?? 'google/gemma-4-26b-a4b-qat';
 
 type Cand = { id: string; query: string; target_lesson_ids: string[]; must_keywords?: string[] };
 

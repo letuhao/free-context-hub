@@ -23,13 +23,15 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { getDbPool } from '../db/client.js';
 import { callLessons } from './surfaces.js';
 import { embedTexts } from '../services/embedder.js';
+import { resolveGenModel } from '../env.js';
 
 dotenv.config();
 
 const MCP_URL = process.env.MCP_SERVER_URL?.trim() || 'http://localhost:3000/mcp';
 const GEN_URL = (process.env.GEN_BASE_URL?.trim() || 'http://localhost:1234').replace(/\/$/, '');
 const GEN_KEY = process.env.GEN_API_KEY ?? '';
-const GEN_MODEL = process.env.GEN_MODEL?.trim() || 'google/gemma-4-26b-a4b-qat';
+// Single source of truth: GEN_MODEL override, else the canonical chat model.
+const GEN_MODEL = resolveGenModel() ?? 'google/gemma-4-26b-a4b-qat';
 const PID = process.env.QC_PROJECT_ID?.trim() || 'free-context-hub';
 const SAMPLE = Number(process.env.STRESS_SAMPLE ?? '80');
 const POOL_K = 20;                 // candidate pool depth

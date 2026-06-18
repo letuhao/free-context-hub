@@ -539,7 +539,41 @@ For any sprint that introduces an **authorization primitive**, **tenant-isolatio
 Enforced via guardrail (`5c0b7b25`) and reusable lesson `5287a774`. See
 `docs/deferred-029-closeout.md` § "Architectural lessons" for the four-pass pattern.
 
+## Model orchestration — single source of truth (`CHAT_MODEL`)
+
+**2026-06-18 structural fix.** LM Studio JIT-loads whatever `model` key a request
+names and (Auto-Evict / VRAM pressure) unloads the previous one. The model-swap
+thrash was an *orchestration* bug, not an LM Studio bug: subsystems named THREE
+different gemma builds (`-a4b`, `-qat`, `-it`), so LM Studio ping-ponged. Fixed by
+making every chat caller derive from ONE canonical model:
+
+- **`CHAT_MODEL`** (`.env`) is the single source of truth. Resolvers in
+  `src/env.ts` — `resolveChatModel` / `resolveAnswererModel` / `resolveJudgeModel`
+  / `resolveGenModel` — derive every chat caller from it (`CHAT_MODEL` →
+  `DISTILLATION_MODEL` for back-compat). **No hardcoded model strings** in
+  `runBaseline.ts`, the gen scripts, or the sidecar default.
+- **The judge defaults to the chat model** (`JUDGE_AGENT_MODEL ?? CHAT_MODEL`), so
+  realtime QC SHARES the loaded instance → zero swap. Steady state = 2 LM Studio
+  models (chat + embedding). The reranker is a separate service (port 28417), not
+  an LM Studio slot.
+- **Judge as an optional phase.** Set `JUDGE_AGENT_MODEL` ≠ chat ONLY for a
+  deliberate cross-judge measurement (e.g. Tradition B), and run it via
+  `--defer-judge` so the chat→judge swap happens ONCE per run, not per row.
+- `docker-compose.yml` defaults `DISTILLATION_MODEL` and `JUDGE_AGENT_MODEL` to
+  `${CHAT_MODEL-…}` so setting `CHAT_MODEL` once propagates to every container.
+- Guard: `src/env.modelResolvers.test.ts`.
+
+To change the chat model, edit the single `CHAT_MODEL` line. To check for
+drift: `grep -rn "gemma-4-26b" src/` should return only fallback literals.
+
 ## Baseline-stack invariant (Phase 17.x)
+
+> **Mostly superseded (2026-06-18).** Model-NAME consistency is now structural
+> (see `CHAT_MODEL` above) — the `start-baseline-stack.sh` ceremony is no longer
+> needed to PREVENT name drift. What still matters for a clean baseline: the
+> models are actually loaded, reasoning-by-default is off (gemma), and the
+> distillation worker isn't firing background swaps. `.env.baseline` still pins a
+> dedicated measurement model set (mistral-nemo) for reproducible published runs.
 
 **Before running `npm run qc:baseline:gen`, the LM Studio + sidecar stack
 must be in a controlled state.** Otherwise LM Studio's auto-unload will swap
@@ -550,10 +584,13 @@ and contaminating measurement.
 **The invariant:**
 
 1. LM Studio has **exactly two models loaded** simultaneously:
-   - Chat model (e.g. `mistralai/mistral-nemo-instruct-2407`) — answerer, judge, reranker all share it
+   - Chat model (`CHAT_MODEL`, e.g. `mistralai/mistral-nemo-instruct-2407` for
+     baselines or `google/gemma-4-26b-a4b-qat` in dev) — answerer + judge share it
    - Embeddings model (`text-embedding-bge-m3`)
-2. **All chat callers** (answerer, judge sidecar, MCP reranker, distillation worker) point at the SAME chat model so no swap is ever triggered.
-3. The ragas-judge sidecar's `JUDGE_AGENT_MODEL` env matches what the runner sets `ANSWERER_AGENT_MODEL` to.
+2. **All chat callers derive from `CHAT_MODEL`** (now structural via resolvers) so
+   no swap is ever triggered. A different judge → run via `--defer-judge`.
+3. The ragas-judge sidecar's `JUDGE_AGENT_MODEL` defaults to `CHAT_MODEL`; set it
+   explicitly only for a cross-judge run.
 4. `DISTILLATION_MODEL` is unset/empty during baseline (worker no-ops; prevents background swap).
 
 **Enforcement:**

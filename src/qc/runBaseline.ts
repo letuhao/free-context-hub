@@ -35,6 +35,7 @@ import {
 import type { GradedHit } from './metrics.js';
 import type { GoldenQuery, GoldenSet, Surface } from './goldenTypes.js';
 import { normalizePath } from './goldenTypes.js';
+import { resolveAnswererModel } from '../env.js';
 import {
   callLessons,
   callCode,
@@ -1254,8 +1255,10 @@ async function main() {
       process.env.ANSWERER_AGENT_BASE_URL ?? process.env.JUDGE_AGENT_BASE_URL ?? 'http://localhost:1234/v1';
     const answererApiKey =
       process.env.ANSWERER_AGENT_API_KEY ?? process.env.JUDGE_AGENT_API_KEY ?? 'lm-studio';
-    const answererModel =
-      process.env.ANSWERER_AGENT_MODEL ?? process.env.JUDGE_AGENT_MODEL ?? 'google/gemma-4-26b-a4b';
+    // Single source of truth: answerer derives from the canonical chat model
+    // (ANSWERER_AGENT_MODEL → CHAT_MODEL → DISTILLATION_MODEL). No hardcoded
+    // model string — a divergent default here was a model-swap trigger.
+    const answererModel = resolveAnswererModel() ?? 'google/gemma-4-26b-a4b-qat';
     const answererTemperature = Number(process.env.ANSWERER_AGENT_TEMPERATURE ?? '0.2');
     const answererSeed = Number(process.env.ANSWERER_AGENT_SEED ?? '42');
     const answererMaxTokens = Number(process.env.ANSWERER_AGENT_MAX_TOKENS ?? '1024');

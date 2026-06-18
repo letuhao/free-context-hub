@@ -57,8 +57,13 @@ class Config:
                 )
             ),
             judge_api_key=os.environ.get("JUDGE_AGENT_API_KEY", "lm-studio"),
+            # Single source of truth: default to the canonical chat model
+            # (CHAT_MODEL) so the judge SHARES the loaded chat instance and never
+            # triggers an LM Studio swap. docker-compose passes JUDGE_AGENT_MODEL
+            # from the canonical env. Override only for a deliberate cross-judge
+            # measurement (which should run in the deferred-judge phase).
             judge_model=os.environ.get(
-                "JUDGE_AGENT_MODEL", "google/gemma-4-26b-a4b-it"
+                "JUDGE_AGENT_MODEL", "google/gemma-4-26b-a4b-qat"
             ),
             # Gemma 4 26B-A4B at temp=0 degenerates into token-repetition loops when
             # producing schema-constrained output. 0.2 is the lowest temp that

@@ -118,7 +118,7 @@ services:
       # gemma-flavored faq.build / knowledge.loop / raptor.build jobs DURING
       # baseline runs, swapping mistral-nemo out of LM Studio mid-measurement
       # (lmstudio-bug-tracker#945).
-      DISTILLATION_MODEL: ${DISTILLATION_MODEL-google/gemma-4-26b-a4b-qat}
+      DISTILLATION_MODEL: ${DISTILLATION_MODEL-${CHAT_MODEL-google/gemma-4-26b-a4b-qat}}
       DISTILLATION_ENABLED: ${DISTILLATION_ENABLED-true}
       BUILDER_AGENT_MODEL: ${BUILDER_AGENT_MODEL-}
       QA_AGENT_MODEL: ${QA_AGENT_MODEL-}
@@ -189,7 +189,7 @@ services:
       # while a baseline runs with mistral-nemo, swapping models mid-run.
       # Single-hyphen syntax + explicit environment lines so .env.baseline
       # can ACTUALLY propagate empty values to the container.
-      DISTILLATION_MODEL: ${DISTILLATION_MODEL-google/gemma-4-26b-a4b-qat}
+      DISTILLATION_MODEL: ${DISTILLATION_MODEL-${CHAT_MODEL-google/gemma-4-26b-a4b-qat}}
       DISTILLATION_ENABLED: ${DISTILLATION_ENABLED-true}
       BUILDER_AGENT_MODEL: ${BUILDER_AGENT_MODEL-}
       QA_AGENT_MODEL: ${QA_AGENT_MODEL-}
@@ -324,7 +324,10 @@ services:
       # contamination CLAUDE.md warned about.
       JUDGE_AGENT_BASE_URL: ${JUDGE_AGENT_BASE_URL-http://host.docker.internal:1234/v1}
       JUDGE_AGENT_API_KEY: ${JUDGE_AGENT_API_KEY-lm-studio}
-      JUDGE_AGENT_MODEL: ${JUDGE_AGENT_MODEL-google/gemma-4-26b-a4b-it}
+      # Single source of truth: judge defaults to the canonical CHAT_MODEL so it
+      # SHARES the loaded chat instance (no LM Studio swap). Set CHAT_MODEL in
+      # .env once; override JUDGE_AGENT_MODEL only for a deliberate cross-judge run.
+      JUDGE_AGENT_MODEL: ${JUDGE_AGENT_MODEL-${CHAT_MODEL-google/gemma-4-26b-a4b-qat}}
       JUDGE_TEMPERATURE: ${JUDGE_TEMPERATURE-0.0}
       JUDGE_SEED: ${JUDGE_SEED-42}
       JUDGE_TIMEOUT_S: ${JUDGE_TIMEOUT_S-60}
