@@ -19,8 +19,15 @@
   **Why deferred:** uncertain payoff — the hierarchical chunker already yields
   concept-level chunks that scored context_recall **0.99** on the ai-eng corpus.
   Little headroom to justify a new chunker mode now.
-- **17.4 HyDE:** already RESOLVED — built as the query-rewrite lever, measured
-  net-negative (DEFERRED-036). **17.4 RRF:** being built + A/B'd now (not deferred).
+- **17.4 HyDE:** RESOLVED — built as the query-rewrite lever, measured net-negative
+  (DEFERRED-036). **17.4 RRF:** RESOLVED — built (`CHUNKS_FUSION=rrf`, `rrfFuse()`,
+  off by default, unit-tested) + A/B'd: **metric-NEUTRAL** (v2 weighted vs v3 RRF,
+  all deltas ≤0.007 within noise; RRF changes the top-5 set in 89% of queries but
+  cr is saturated at 0.99 so it's a wash). Kept off-by-default; production stays on
+  weighted-sum. Writeup: `docs/qc/2026-06-18-rrf-fusion-ab-results.md`. The one
+  untested regime where RRF might help (lexical-mismatch / identifier queries on a
+  recall-headroom surface) is noted there but not pursued — CoVe/HyDE/RRF all
+  came back neutral-to-negative, so retrieval-lever ROI here is low.
 - **Trigger condition:** 17.3 → global-surface measurement becomes a priority; 17.4
   semantic chunking → a corpus where heading/token chunking measurably underperforms.
 - **Priority:** LOW.
