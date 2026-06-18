@@ -58,7 +58,21 @@ full golden set) — out of scope here, logged as DEFERRED-036.
 Re-verified: tsc clean; **976/976** unit. Commits: `d37549a` (lever) + review-fix
 commit.
 
-**Next:** run the 3-way A/B (DEFERRED-036), or move on.
+**DEFERRED-036 RESOLVED — "does HyDE increase quality?" → NO.** Ran the 3-way A/B
+on lessons (48 queries, retrieval-only, answerer temp=0 per MED-1). Verdict:
+rewrite is net-negative on ranking. MRR none **0.856** → expand 0.772 → **hyde
+0.751** (−0.105, far beyond the 0.026 noise floor); nDCG@5/@10 down for both; hyde
+only nudges recall@10 + coverage +0.022 (at the floor) by dragging hits *down* the
+ranking — a bad trade where the top hit matters. Cause: bge-m3 already embeds the
+raw question well, and HyDE writes plausible passages even for adversarial
+intentional-miss rows → spurious near-matches. Lessons is the *best case* for HyDE
+(most semantic surface) and it still lost → won't help the lexical surfaces.
+**Recommendation: keep production on the raw query; lever stays as a harness tool.**
+Writeup `docs/qc/2026-06-18-hyde-ab-results.md`. Also fixed a false-positive
+typo-warning (explicit `--rewrite-mode none` wrongly warned).
+
+**Next:** move on — Phase 17 levers (CoVe, query-rewrite) both measured
+metric-neutral-to-negative; the gen-eval pipeline + harness are the durable win.
 
 ---
 

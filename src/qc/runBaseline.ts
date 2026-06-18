@@ -149,9 +149,10 @@ function parseArgs(argv: string[]) {
   // per query (answerer model). Works with gen-eval on OR off.
   const rewriteRaw = args.get('rewrite-mode');
   const rewriteMode = parseRewriteMode(rewriteRaw);
-  if (rewriteRaw && rewriteMode === 'none') {
-    // Fail loud on a typo (`--rewrite-mode expnad`) rather than silently running
-    // a multi-row baseline with no rewrite, which reads like a clean control.
+  // Fail loud on a TYPO (`--rewrite-mode expnad`) rather than silently running a
+  // multi-row baseline with no rewrite, which reads like a clean control. But an
+  // explicit `--rewrite-mode none` is valid and must NOT warn.
+  if (rewriteRaw && rewriteMode === 'none' && rewriteRaw.trim().toLowerCase() !== 'none') {
     console.warn(
       `[baseline] WARNING: unrecognized --rewrite-mode='${rewriteRaw}', running WITHOUT query rewrite. Valid: none|expand|hyde.`,
     );

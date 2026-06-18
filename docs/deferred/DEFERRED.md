@@ -6,7 +6,14 @@
 ## DEFERRED-036
 
 - **Title:** Query-rewrite A/B measurement run (none vs expand vs hyde)
-- **Status:** OPEN (2026-06-18)
+- **Status:** ✅ RESOLVED (2026-06-18) — **verdict: rewrite does NOT improve
+  quality; net-negative on ranking.** Lessons surface, 48 queries, temp=0:
+  MRR none 0.856 → expand 0.772 → hyde 0.751 (−0.105); nDCG down for both; hyde
+  only nudges recall@10/coverage +0.022 (at noise floor) by pushing hits *down*
+  the ranking. Keep production on the raw query; lever stays as a harness tool.
+  Writeup: `docs/qc/2026-06-18-hyde-ab-results.md`. Archives:
+  `docs/qc/baselines/2026-06-18-hyde-ab-{none,expand,hyde}.json`.
+- ~~**Status:** OPEN (2026-06-18)~~
 - **What:** The query-rewrite lever is built + verified (`--rewrite-mode
   none|expand|hyde`, `src/qc/queryRewrite.ts`, design
   `docs/specs/2026-06-18-query-rewrite-lever.md`), but the actual A/B
