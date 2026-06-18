@@ -1,3 +1,26 @@
+# CHECKPOINT — DEFERRED-038 lessons-snippet path (2026-06-18, session 7)
+
+**Branch:** `deferred-038-lessons-snippet` (off updated main, post-#41 — sequenced
+per the new CLAUDE.md branch rule, so NO parallel-branch conflict this time).
+
+**Asked:** "what's next" → finish DEFERRED-038 (the lessons/`reflect` path).
+
+**Shipped — completes DEFERRED-038.** The `reflect` MCP tool and the chat
+`search_lessons` tool fed the LLM the 280-char display preview of a lesson (snippet
+source = `summary` else `content`), truncating any decision past char 280 — same
+class as the chunks/chat bug, lessons surface. Added `snippetMaxChars` to
+`searchLessons`/`searchLessonsMulti` (default 280, backward-compatible); the two
+LLM-synthesis callers now request 2000 (full lesson, no drill-in there). The MCP
+`search_lessons` tool + REST keep 280 (agent drills in via `get_lesson`). Impact:
+**106/709 (15%)** of lessons exceed 280 (p90 306, max 2868). Verified at the data
+layer (long-source lesson 280→2000); 976/976; tsc clean; rebuilt + redeployed.
+Commit `61601a3`. DEFERRED-038 now RESOLVED (both surfaces).
+
+**Process note:** branched from updated main AFTER #41 merged — the sequencing fix
+from the prior friction worked; clean PR expected.
+
+---
+
 # CHECKPOINT — DEFERRED-032 ai-engineering corpus (2026-06-18, session 6)
 
 **Branch:** `deferred-032-ai-eng-corpus` (off main; later merged updated main after

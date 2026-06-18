@@ -6,16 +6,21 @@
 ## DEFERRED-038
 
 - **Title:** Production chunk/lesson RAG feeds the 240-char display preview to the LLM (same truncation bug DEFERRED-037 fixed for QC)
-- **Status:** PARTIALLY RESOLVED (2026-06-18) — **chat chunk-RAG path DONE.**
-  `src/api/routes/chat.ts:94` (the chat `search_documents` tool) now passes
-  `snippetMaxChars: 2000` → the chat answerer receives the full chunk. Verified at
-  the data layer: the s1 query's top chunk went 240→**823 chars** and now contains
-  the grounding fact (absent at 240); answer-quality lift transitively proven by
-  the aieng-corpus benchmark (faithfulness 0.62→0.82, same searchChunks→answerer
-  mechanism). **REMAINING (still OPEN):** the `reflect` MCP tool
-  (`src/mcp/index.ts:1832`) feeds 280-char lesson snippets via `searchLessons` —
-  needs a `makeSnippet` width option threaded through `searchLessons`
-  (`src/services/lessons.ts:1167/1477`); M-sized, lower impact (lessons are short).
+- **Status:** ✅ RESOLVED (2026-06-18). BOTH surfaces fixed via a backward-compatible
+  `snippetMaxChars` option (default unchanged for GUI/agent display; LLM-synthesis
+  callers request the full item):
+  - **chunks/chat** (`src/api/routes/chat.ts:94`, `search_documents` tool) →
+    `snippetMaxChars: 2000`. Verified: s1 top chunk 240→**823 chars**, grounding
+    fact absent→present; lift proven by the aieng-corpus benchmark (faithfulness
+    0.62→0.82). Commit `30b9775`.
+  - **lessons** (`reflect` MCP tool + chat `search_lessons` tool) →
+    `snippetMaxChars: 2000` on `searchLessons`/`searchLessonsMulti`. The snippet
+    source is `summary`-else-`content`; **106/709 (15%)** of lessons exceed 280
+    (p90 306, max 2868). Verified: a long-source lesson's snippet 280→**2000**.
+    Commit `61601a3`. Branch `deferred-038-lessons-snippet`.
+  - The MCP `search_lessons` tool + REST endpoint keep the 280 display default —
+    the agent can drill in via `get_lesson`, so not the bug.
+  Both fixes deployed (container rebuilt). 976/976; tsc clean.
 - ~~**Status:** OPEN (2026-06-18)~~
 - **What:** DEFERRED-037 proved that feeding the synthesizer the 240-char
   `content_snippet` display preview (instead of the full chunk) causes
