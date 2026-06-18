@@ -518,6 +518,12 @@ export type SearchLessonsParams = {
     tags_any?: string[];
     include_all_statuses?: boolean;
   };
+  /** DEFERRED-038: width of `content_snippet` in chars. Default 280 (a display
+   *  preview for the GUI / agent search lists). LLM-SYNTHESIS callers (the
+   *  `reflect` tool, the chat `search_lessons` tool) must pass a wide value
+   *  (e.g. 2000) so the answerer receives the full lesson, not a preview that
+   *  truncates the decision/content away. Backward-compatible default. */
+  snippetMaxChars?: number;
 };
 
 export type SearchLessonsResult = {
@@ -1164,7 +1170,7 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
       project_id: String(r.project_id),
       lesson_type: String(r.lesson_type) as LessonType,
       title: String(r.title),
-      content_snippet: makeSnippet(snippetSource, 280),
+      content_snippet: makeSnippet(snippetSource, params.snippetMaxChars ?? 280),
       tags: (r.tags ?? []) as string[],
       score: Number(r.score),
       status: String(r.status ?? 'active') as LessonStatus,
@@ -1317,6 +1323,8 @@ export type SearchLessonsMultiParams = {
     tags_any?: string[];
     include_all_statuses?: boolean;
   };
+  /** DEFERRED-038: see {@link SearchLessonsParams.snippetMaxChars}. */
+  snippetMaxChars?: number;
 };
 
 /**
@@ -1332,7 +1340,7 @@ export async function searchLessonsMulti(params: SearchLessonsMultiParams): Prom
 
   // If only one project, delegate to single-project search (same perf path).
   if (projectIds.length === 1) {
-    return searchLessons({ projectId: projectIds[0], callerScope: params.callerScope, query: params.query, limit: params.limit, rerank: params.rerank, filters: params.filters });
+    return searchLessons({ projectId: projectIds[0], callerScope: params.callerScope, query: params.query, limit: params.limit, rerank: params.rerank, filters: params.filters, snippetMaxChars: params.snippetMaxChars });
   }
   if (projectIds.length === 0) {
     return { matches: [], explanations: ['no project_ids provided'] };
@@ -1474,7 +1482,7 @@ export async function searchLessonsMulti(params: SearchLessonsMultiParams): Prom
       project_id: String(r.project_id),
       lesson_type: String(r.lesson_type) as LessonType,
       title: String(r.title),
-      content_snippet: makeSnippet(snippetSource, 280),
+      content_snippet: makeSnippet(snippetSource, params.snippetMaxChars ?? 280),
       tags: (r.tags ?? []) as string[],
       score: Number(r.score),
       status: String(r.status ?? 'active') as LessonStatus,

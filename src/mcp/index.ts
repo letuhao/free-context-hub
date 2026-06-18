@@ -1828,6 +1828,11 @@ function createMcpToolsServer() {
         query: topic,
         limit: 12,
         filters: { include_all_statuses: false },
+        // DEFERRED-038: feed the reflection synthesis the FULL lesson, not the
+        // 280-char display preview. The bullets below go straight into an LLM
+        // prompt with no drill-in, so a truncated lesson loses the actual
+        // decision/content (most lessons are short, but ~14% exceed 280 chars).
+        snippetMaxChars: 2000,
       });
       const bullets = retrieved.matches.map(m => `- ${m.title}: ${m.content_snippet}`);
 

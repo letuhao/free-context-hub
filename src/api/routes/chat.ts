@@ -64,7 +64,11 @@ Be concise and direct. Use markdown formatting.`,
           }),
           execute: async ({ query }) => {
             logger.info({ projectId, query }, 'chat tool: search_lessons');
-            return searchLessons({ projectId, callerScope: callerScopeOf(req), query, limit: 5 });
+            // DEFERRED-038: feed the chat answerer the FULL lesson, not the
+            // 280-char display preview (mirrors the search_documents fix). A
+            // lesson whose decision/content sits past char 280 otherwise can't
+            // be grounded on by the assistant.
+            return searchLessons({ projectId, callerScope: callerScopeOf(req), query, limit: 5, snippetMaxChars: 2000 });
           },
         }),
         check_guardrails: tool({
