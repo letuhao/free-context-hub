@@ -7,7 +7,17 @@
 ## DEFERRED-038
 
 - **Title:** Production chunk/lesson RAG feeds the 240-char display preview to the LLM (same truncation bug DEFERRED-037 fixed for QC)
-- **Status:** OPEN (2026-06-18)
+- **Status:** PARTIALLY RESOLVED (2026-06-18) — **chat chunk-RAG path DONE.**
+  `src/api/routes/chat.ts:94` (the chat `search_documents` tool) now passes
+  `snippetMaxChars: 2000` → the chat answerer receives the full chunk. Verified at
+  the data layer: the s1 query's top chunk went 240→**823 chars** and now contains
+  the grounding fact (absent at 240); answer-quality lift transitively proven by
+  the aieng-corpus benchmark (faithfulness 0.62→0.82, same searchChunks→answerer
+  mechanism). **REMAINING (still OPEN):** the `reflect` MCP tool
+  (`src/mcp/index.ts:1832`) feeds 280-char lesson snippets via `searchLessons` —
+  needs a `makeSnippet` width option threaded through `searchLessons`
+  (`src/services/lessons.ts:1167/1477`); M-sized, lower impact (lessons are short).
+- ~~**Status:** OPEN (2026-06-18)~~
 - **What:** DEFERRED-037 proved that feeding the synthesizer the 240-char
   `content_snippet` display preview (instead of the full chunk) causes
   false-abstention — a grounding fact past char 240 reads as "Not in context"

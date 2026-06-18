@@ -97,6 +97,13 @@ Be concise and direct. Use markdown formatting.`,
               query,
               limit: 5,
               chunkTypes: chunk_types as any,
+              // DEFERRED-038: feed the chat answerer the FULL chunk, not the
+              // 240-char display preview. A grounding fact past char 240 otherwise
+              // reads as "Not in context" (proven by the aieng-corpus benchmark:
+              // standard faithfulness 0.62→0.82 once the full chunk was fed).
+              // 2000 ≈ the chunker's max chunk size, so this is full-chunk without
+              // unbounded growth; 5 chunks × ≤2000 ≈ 2.5k context tokens/turn.
+              snippetMaxChars: 2000,
             });
             // Return a shape optimized for the LLM: doc name + page + heading + snippet
             return {
