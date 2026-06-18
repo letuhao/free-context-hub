@@ -57,6 +57,7 @@ import {
 } from './genPipeline.js';
 import { scoreOnce, type JudgeRequest, type MetricName } from './judge.js';
 import { buildJudgeContexts } from './judgeContexts.js';
+import { filterQueriesByGroup, parseGroupsArg } from './groupFilter.js';
 import type {
   GenResult,
   GenManifest,
@@ -127,6 +128,10 @@ function parseArgs(argv: string[]) {
   // Limit per-surface row count — useful for smoke runs.
   const maxRowsRaw = args.get('max-rows');
   const maxRows = maxRowsRaw ? Number(maxRowsRaw) : null;
+  // Phase 17.2: restrict the run to specific golden `group` values (exact or
+  // `prefix-*`), e.g. `--groups edge-*` for the 25 hallucination-prone
+  // edge-case rows. Absent → run all groups. Applied before --max-rows.
+  const groupsFilter = parseGroupsArg(args.get('groups'));
   // Phase 17.2: synthesizer mode. 'standard' is the Phase 16.3+17.1 single-shot
   // synth; 'cove' is Chain-of-Verification 4-step. CoVe is ~3-4× LLM cost.
   const synthMode = (args.get('synth-mode') ?? 'standard') as SynthMode;
@@ -152,6 +157,7 @@ function parseArgs(argv: string[]) {
     judgeUrl,
     topKContexts,
     maxRows,
+    groupsFilter,
     synthMode,
     skipPreflight,
     deferJudge,
@@ -976,6 +982,7 @@ async function runAllSurfaces(
     label: string;
     genEval?: GenEvalConfig;
     maxRows: number | null;
+    groupsFilter?: string[] | null;
   },
 ): Promise<{ surfaces: Partial<Record<Surface, SurfaceAggregate>>; primaryProjectId: string }> {
   const surfaces: Partial<Record<Surface, SurfaceAggregate>> = {};
@@ -999,13 +1006,22 @@ async function runAllSurfaces(
     const set = JSON.parse(setRaw) as GoldenSet;
     const pid = set.project_id_suggested ?? primaryProjectId;
     if (surface === 'lessons') primaryProjectId = pid;
-    console.log(`[${ts()}] ${prefix} ${surface}: ${set.queries.length} queries against project=${pid}`);
+
+    // Phase 17.2: --groups filter (applied before --max-rows). When no group
+    // matches on a surface (e.g. edge-* on a surface with none), this surface
+    // contributes 0 rows — logged so an empty run is visible.
+    const grouped = filterQueriesByGroup(set.queries, opts.groupsFilter);
+    const groupSuffix = opts.groupsFilter
+      ? ` (filtered to ${grouped.length}/${set.queries.length} by groups=${opts.groupsFilter.join(',')})`
+      : '';
+    console.log(`[${ts()}] ${prefix} ${surface}: ${grouped.length} queries against project=${pid}${groupSuffix}`);
+    if (opts.groupsFilter && grouped.length === 0) continue;
 
     const dispatch = makeDispatcher(surface, client, pid);
     const perQuery: PerQuery[] = [];
     // Sprint 16.3: --max-rows truncation for smoke runs.
     const queriesToRun =
-      opts.maxRows !== null ? set.queries.slice(0, opts.maxRows) : set.queries;
+      opts.maxRows !== null ? grouped.slice(0, opts.maxRows) : grouped;
 
     // Phase 17.x: heartbeat every 30s prints "still alive" so an operator
     // tailing the log can tell the difference between "row is taking a while"
@@ -1236,6 +1252,7 @@ async function main() {
     judgeUrl,
     topKContexts,
     maxRows,
+    groupsFilter,
     synthMode,
     skipPreflight,
     deferJudge,
@@ -1244,7 +1261,7 @@ async function main() {
   const runStart = new Date();
   const { commit, branch } = gitInfo();
 
-  console.log(`[${ts()}] [baseline] tag=${tag} k=${k} samples=${samples} control=${control} gen-eval=${genEval} synth-mode=${synthMode} surfaces=${surfacesFilter.join(',')}${maxRows !== null ? ` max-rows=${maxRows}` : ''}`);
+  console.log(`[${ts()}] [baseline] tag=${tag} k=${k} samples=${samples} control=${control} gen-eval=${genEval} synth-mode=${synthMode} surfaces=${surfacesFilter.join(',')}${maxRows !== null ? ` max-rows=${maxRows}` : ''}${groupsFilter ? ` groups=${groupsFilter.join(',')}` : ''}`);
   console.log(`[${ts()}] [baseline] MCP=${MCP_URL}  API=${API_URL}${genEval !== 'off' ? `  JUDGE=${judgeUrl}` : ''}`);
 
   // Sprint 16.3: build gen-eval config when not disabled.
@@ -1382,10 +1399,10 @@ async function main() {
       // archive's top-level `elapsed_ms` isn't the only available timing.
       console.log('[baseline] --control mode: running goldenset twice to establish noise floor');
       const c0 = Date.now();
-      const run1 = await runAllSurfaces(client, { k, samples, surfacesFilter, label: 'control', genEval: genConfig, maxRows });
+      const run1 = await runAllSurfaces(client, { k, samples, surfacesFilter, label: 'control', genEval: genConfig, maxRows, groupsFilter });
       controlElapsedMs = Date.now() - c0;
       const n0 = Date.now();
-      const run2 = await runAllSurfaces(client, { k, samples, surfacesFilter, label: 'new', genEval: genConfig, maxRows });
+      const run2 = await runAllSurfaces(client, { k, samples, surfacesFilter, label: 'new', genEval: genConfig, maxRows, groupsFilter });
       newElapsedMs = Date.now() - n0;
       surfaces = run2.surfaces;
       primaryProjectId = run2.primaryProjectId;
@@ -1394,7 +1411,7 @@ async function main() {
     } else {
       // Sprint 12.0.2 /review-impl COSMETIC-1: restore the pre-12.0.2
       // `[baseline]` log prefix for non-control runs (empty label).
-      const res = await runAllSurfaces(client, { k, samples, surfacesFilter, label: '', genEval: genConfig, maxRows });
+      const res = await runAllSurfaces(client, { k, samples, surfacesFilter, label: '', genEval: genConfig, maxRows, groupsFilter });
       surfaces = res.surfaces;
       primaryProjectId = res.primaryProjectId;
     }

@@ -1,3 +1,46 @@
+# CHECKPOINT — CoVe synthesizer measured at scale → SHELVE (2026-06-18, session 3)
+
+**Branch:** `fix-model-swap-orchestration` (continues; NOT pushed, no PR per user).
+
+**Task:** "Phase 17 còn nợ feature nào" → user picked **CoVe synthesizer**.
+CLARIFY found CoVe was **already built + wired** (`runGenPipelineCoVe`,
+`cove.*.txt`, `--synth-mode cove`, manifest) and 1-row smoke-tested 2026-05-24,
+but **never A/B'd at scale**. So the owed work was the *experiment*, not code.
+
+**Built (the one piece missing):** `--groups <exact|prefix-*>` filter on
+`runBaseline.ts` (`src/qc/groupFilter.ts` + `parseGroupsArg`, 16 TDD tests) to
+run a baseline against a golden subset without a throwaway file. tsc clean,
+155/155 qc + 16 new. Live-verified ("filtered to 8/48 by groups=edge-*").
+
+**Experiment:** standard vs cove on the **25 edge-case rows** (`edge-*`:
+no-answer/multi-hop/distractor/contradictory/paraphrase — where CoVe should
+bite). answerer = judge = `gemma-4-26b-a4b-qat` (Tradition-C, single model →
+zero swap → arms differ ONLY by synth-mode). Stack brought up via
+`docker compose up -d --build mcp ragas-judge` — judge inherited `-qat` from the
+CHAT_MODEL single-source default (**live proof the session-2 model-swap fix
+propagates to containers**).
+
+**Result — CoVe net-negative on every answer-dependent metric, none improved:**
+- answer_relevancy collapses uniformly: lessons 0.51→0.12, code 0.25→0.00,
+  chunks 0.98→0.68 (revise step pads with verification meta-commentary).
+- faithfulness flat/down everywhere (lessons 0.79→0.67, code 0.63→0.50).
+- **Abstention got WORSE** (the opposite of CoVe's purpose): the no-answer row
+  standard correctly refused (refusal 1.0), CoVe fabricated an answer (0.0).
+- Cost ~8× (50–62s/row vs ~7s) for strictly worse quality.
+- Control: cp/cr (answer-independent) barely moved between arms → harness
+  isolated the synth effect cleanly ([[verify-metric-inputs]] applied).
+
+**Decision: SHELVE.** Code kept as a validated harness; NOT wired to production.
+Closeout: `docs/qc/2026-06-18-cove-edge-ab-shelve.md`. ROADMAP Phase-17 status
+updated (17.2 measured+shelved; remaining levers are retrieval-layer:
+DEFERRED-034 chunk granularity, query rewrite).
+
+**Next:** the model-swap fix containers are now live (mcp+judge on `-qat`).
+Open: push/PR (deferred), DEFERRED-034 chunk granularity, query rewrite,
+global-surface 422-on-empty harness wart.
+
+---
+
 # CHECKPOINT — model-swap root cause fixed + chunks rerank shipped (2026-06-18, session 2)
 
 **Branch:** `fix-model-swap-orchestration` (2 commits, NOT pushed, no PR yet per user).

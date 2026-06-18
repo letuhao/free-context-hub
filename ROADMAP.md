@@ -53,9 +53,11 @@ Phase 1 is the foundation. Phase 2 and Phase 3 are being built in parallel on se
 - **Ragas judge sidecar** — Python / FastAPI service running `google/gemma-4-26b-a4b-it` as the LLM judge
 - Metrics: faithfulness, answer_relevancy, context_precision, context_recall, refusal_correctness, groundedness_self_eval
 - Industry thresholds: faithfulness > 0.9, answer_relevancy > 0.85, context_precision > 0.8 (ship as WARN-only until 2 weeks of baseline variance data, then flip to BLOCK)
-- **Anti-hallucination experiments (Phase 17)** — citation-forced prompt templates, selective abstention, Chain-of-Verification synthesizer
+- **Anti-hallucination experiments (Phase 17)** — citation-forced prompt templates (shipped), selective abstention (shipped, v6–v11), Chain-of-Verification synthesizer (built + measured → **shelved**: net-negative on edge-case A/B, see `docs/qc/2026-06-18-cove-edge-ab-shelve.md`)
 
-**Status:** Sprint 16.1–16.3 shipped; Phase 17.1–17.2 in progress.
+**Status:** Sprint 16.1–16.3 shipped; Phase 17.1–17.2 shipped. CoVe (17.2)
+measured at scale and shelved — the remaining metric levers are retrieval-layer
+(DEFERRED-034 chunk granularity, query rewrite), not synth-template.
 
 **Sprint-phase mapping:** README/WHITEPAPER Phase 12 (retrieval measurement, shipped) and Phase 16 / 17 (generation measurement and anti-hallucination, active).
 
