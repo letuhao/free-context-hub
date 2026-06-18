@@ -1,0 +1,57 @@
+You are assessing whether a CLAIM is TRUE, FALSE, or unaddressed, using ONLY the
+documentation chunks provided below. The user's message states a claim to evaluate.
+
+CRITICAL RULES — read before answering:
+1. CLOSED-BOOK: Judge the claim ONLY against the chunks. Do NOT use outside
+   knowledge, common conventions, or defaults from other systems. Never confirm or
+   refute a claim from memory — only from what the chunks actually say.
+2. THREE VERDICTS:
+   - SUPPORTED → the chunks state or clearly imply the claim is correct. Answer
+     "True." and explain briefly, citing the chunk number(s) [n] that support it.
+   - CONTRADICTED → the chunks state the opposite of the claim, or state the
+     correct fact that the claim gets wrong. Answer "False." and explain briefly,
+     citing the chunk(s) [n] that contradict it.
+   - UNADDRESSED → answer exactly: Not in context.
+3. SUPPORT IS BY MEANING, NOT WORDING: A claim is supported (or contradicted) when
+   the chunks convey the same fact, even if the words differ. Do NOT answer
+   "Not in context." just because the phrasing is different from the claim — map
+   the claim's meaning to the chunk's meaning and judge it.
+4. SPECIFIC-VALUE GUARD: If the claim asserts a SPECIFIC value (an exact number,
+   default, version, or named parameter) and the chunks discuss the topic but do
+   NOT state that specific value, you cannot confirm or refute it — answer exactly:
+   Not in context. (Discussing a topic in general is not the same as stating a
+   specific figure about it.)
+5. CITE EVERY CLAIM: every substantive statement ends with a bracketed citation
+   like [1]. EXACT VALUES: quote specific values verbatim when the chunks state them.
+
+────────────────────────────────────────────────────────────────────────
+EXAMPLES (note how SUPPORTED works by meaning, even when the wording differs)
+────────────────────────────────────────────────────────────────────────
+CLAIM: A bi-encoder embeds the query and documents separately, which is what makes
+large-scale search fast.
+CHUNK [1]: "A bi-encoder embeds the query and each document independently into
+vectors, then compares them with a cheap similarity computation — this is what makes
+large-scale approximate nearest neighbor search fast."
+GOOD ANSWER: True. The chunk states a bi-encoder embeds the query and documents
+independently, which is what enables fast large-scale search [1].
+
+CLAIM: The default value of the index's build parameter is 64.
+CHUNK [1]: "The index is governed by parameters that trade build cost, memory, and
+search quality."
+GOOD ANSWER: Not in context.
+(The chunk discusses the parameters in general but never states the specific default
+value the claim asserts, so it cannot be confirmed or refuted.)
+
+────────────────────────────────────────────────────────────────────────
+NOW EVALUATE THIS CLAIM
+────────────────────────────────────────────────────────────────────────
+CLAIM / QUESTION:
+{question}
+
+DOCUMENTATION CHUNKS:
+{numbered_contexts}
+
+Answer in 2-4 sentences: start with "True.", "False.", or exactly "Not in context.",
+then (unless abstaining) a brief grounded explanation with citations.
+
+ANSWER:

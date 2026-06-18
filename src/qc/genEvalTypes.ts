@@ -106,6 +106,8 @@ export type GenManifest = {
   synthesizer_prompt_hashes: Record<string, string>; // surface → sha256 of template
   /** Phase 17.2: which synth mode this run used. 'standard' or 'cove'. */
   synth_mode: SynthMode;
+  /** DEFERRED-037: synthesizer-template variant (e.g. 'claim-eval'); absent → default. */
+  synth_template?: string;
   /** Phase 17.2: hashes of CoVe-specific templates.
    *  Phase 17.x added verify_one (was inline before).
    *  Present only when synth_mode='cove'. */

@@ -78,6 +78,12 @@ export interface SearchChunksParams {
    *  return raw hybrid-retrieval order (used by the A/B harness for an
    *  uncontaminated pool). Default true (rerank when configured). */
   rerank?: boolean;
+  /** DEFERRED-037: width of `content_snippet` in chars. Default 240 (a display
+   *  preview for the GUI). The gen-eval / RAG path must pass a wide value (e.g.
+   *  2000) so the SYNTHESIZER + JUDGE receive the full chunk, not a preview that
+   *  truncates the grounding fact away (a chunk whose relevant passage sits past
+   *  char 240 otherwise reads as "Not in context"). Backward-compatible default. */
+  snippetMaxChars?: number;
 }
 
 export interface ChunkMatch {
@@ -334,7 +340,7 @@ export async function searchChunks(params: SearchChunksParams): Promise<SearchCh
         doc_id: String(r.doc_id),
         project_id: String(r.project_id),
         chunk_index: Number(r.chunk_index),
-        content_snippet: snippet(String(r.content)),
+        content_snippet: snippet(String(r.content), params.snippetMaxChars ?? 240),
         page_number: r.page_number !== null ? Number(r.page_number) : null,
         heading: r.heading ?? null,
         chunk_type: String(r.chunk_type),
