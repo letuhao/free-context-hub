@@ -1,3 +1,42 @@
+# CHECKPOINT — LLM chat in/out standardized (architecture fix) (2026-06-18, session 3)
+
+**Branch:** `fix-model-swap-orchestration`. Commit **ab53ed5**.
+
+**Trigger:** investigating the invalid CoVe A/B, the user named the real problem:
+"model reasoning hay không kệ nó — ta phải lấy đúng phần trả lời. Chưa chuẩn hóa
+in/out, đây là vấn đề kiến trúc." Correct. The reasoning-leak wasn't a config
+issue; it was ~11 chat call sites across 8 files each rolling their own
+`fetch('/v1/chat/completions')` with divergent/absent reasoning-suppression +
+ad-hoc output extraction. Only the ragas-judge sidecar had the working knob
+(`reasoning_effort:'none'`).
+
+**Built `src/services/llm/`:**
+- `chatComplete` — ONE transport. Request side ALWAYS injects reasoning
+  suppression (`reasoning_effort:'none'` = the knob LM Studio gemma-4 honors +
+  `chat_template_kwargs.enable_thinking:false` for qwen3). Response normalized
+  via `extractAnswerText`. Multimodal + signal + timeout + optional retry.
+- `extractAnswerText`/`stripReasoningBlocks` — strip `<think>`/`<reasoning>`
+  (incl. unclosed truncated openers) + `reasoning_content` fallback.
+- `json` — `extractJsonObject/Array` (hardened balanced-brace, from distiller)
+  shared by all JSON callers.
+- `resilience` — relocated from `src/qc/llmResilience.ts` (transport, not qc);
+  old path is a re-export shim (genPipeline/judge unchanged).
+
+**Migrated all 11 sites:** genPipeline.callAnswerer (+3 CoVe steps), distiller
+(4 fns), lessonImprover, qaAgent(2), builderMemory, documentLessonGenerator,
+vision (multimodal; keeps fence-strip + reasoning-fallback observability via
+`res.raw`), retriever rerank, lessons (aliases + generative rerank), 3 qc scripts.
+
+**Live-verified the leak fix:** the qc answerer row that previously dumped 4162
+chars of CoT now returns "Not in context." (15 chars, no leak markers) in 417ms
+vs 7058ms — gemma stops reasoning because suppression now reaches it. tsc clean;
+**946/946 unit** (889 prior + 41 llm-module + 16 groupFilter).
+
+**In flight:** re-running the CoVe edge-case A/B on this clean output (now VALID)
+to finally answer "is CoVe actually worse" without the leak confound.
+
+---
+
 # CHECKPOINT — CoVe synthesizer measured at scale → SHELVE (2026-06-18, session 3)
 
 **Branch:** `fix-model-swap-orchestration` (continues; NOT pushed, no PR per user).
