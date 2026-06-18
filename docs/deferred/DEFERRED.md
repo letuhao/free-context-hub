@@ -29,7 +29,11 @@
 ## DEFERRED-039
 
 - **Title:** Phase 17.3 (NLI third judge) + 17.4 semantic chunking — deferred as low-ROI
-- **Status:** DEFERRED (2026-06-18) — explicitly assessed, not forgotten.
+- **Status:** ✅ RESOLVED (2026-06-19) — all sub-items closed: **17.3 NLI judge BUILT**
+  (paid off — resolves DEFERRED-031; see below), 17.4 semantic chunking (net-negative),
+  17.4 HyDE (net-negative, DEFERRED-036), 17.4 RRF (metric-neutral). Every Phase-17
+  retrieval/judge lever is now built + measured + decided. The NLI judge was the one win.
+- ~~**Status:** DEFERRED (2026-06-18) — explicitly assessed, not forgotten.~~
 - **17.3 NLI fact-checker:** ✅ RESOLVED (2026-06-19) — BUILT (user chose "build full
   NLI judge" over close-as-won't-fix). Cross-encoder NLI sidecar
   (`services/nli-judge`, `cross-encoder/nli-deberta-v3-small`, dockerized, model baked,
