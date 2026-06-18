@@ -1,3 +1,65 @@
+# CHECKPOINT — model-swap root cause fixed + chunks rerank shipped (2026-06-18, session 2)
+
+**Branch:** `fix-model-swap-orchestration` (2 commits, NOT pushed, no PR yet per user).
+Prereq context: PR #38 (v12 closeout) merged to main; 79 stale branches cleaned
+(39 local + 40 remote, all verified merged); origin now = main + worktree.
+
+## Commit B (3109363) — Fix LM Studio model-swap thrash (root cause = orchestration)
+
+User pushed back on an earlier mis-framing ("fix LM Studio settings"). Correct
+diagnosis: LM Studio behaves correctly; the bug is OUR orchestration naming
+**three** different gemma builds — `-a4b` (runBaseline answerer hardcode), `-qat`
+(distillation/.env/gen-scripts), `-it` (judge sidecar default + docker-compose).
+LM Studio JIT-loads whichever `model` key a request names and auto-evicts the
+previous under VRAM pressure → ping-pong on every alternating call. Web-confirmed
+mechanism: JIT loading + Auto-Evict ("at most 1 JIT model") + 60min idle TTL;
+no `ttl`/keep-alive anywhere in the code.
+
+Fix — single source of truth, every chat caller derives from ONE model:
+- `CHAT_MODEL` env + `resolveChatModel/Answerer/Judge/Gen` in `src/env.ts`
+  (CHAT_MODEL → DISTILLATION_MODEL back-compat). Removed all hardcoded model
+  strings (runBaseline, gen scripts ×2, sidecar `config.py`).
+- Judge defaults to chat (`JUDGE_AGENT_MODEL ?? CHAT_MODEL`) → realtime QC SHARES
+  the loaded instance, **zero swap**. Steady state = 2 LM Studio models
+  (chat + bge-m3); reranker is a separate service (28417), not an LM Studio slot.
+- Cross-judge measurement is opt-in via `--defer-judge` (one swap/run, not /row).
+- `docker-compose.yml`: DISTILLATION_MODEL + JUDGE_AGENT_MODEL default to
+  `${CHAT_MODEL-…}`. `.env`/`.env.baseline` pin CHAT_MODEL (=gemma-qat / mistral-nemo).
+- CLAUDE.md: new "Model orchestration — single source of truth" section;
+  baseline-stack ceremony marked mostly-superseded (consistency now structural).
+- Verify: tsc clean; **885/885 unit**; resolver test (10 cases,
+  `src/env.modelResolvers.test.ts`); live resolve under `.env` = **1 distinct
+  chat model** (gemma-4-26b-a4b-qat).
+
+## Commit A (DEFERRED-034) — chunks retrieval reranker + wide-pool + relevance gate
+
+Chunks was the only retrieval surface without a reranker (the real cp/cr lever
+v12 couldn't touch). Wired through the shared dispatcher (rerankLessons →
+exported `rerankCandidates`); wide pool (CHUNKS_RERANK_POOL=30) → rerank → trim;
+`rerank` param + `CHUNKS_RERANK_DISABLED`; pure `reorderByRerank` (TDD 6 cases);
+MCP `search_document_chunks` rerank param; in-process A/B probe.
+
+A/B result — **honest, metric-neutral**:
+- Mechanism ✅: rerank fired 13/13, reordered top-5 on 11/13; wider pool improved
+  completeness 3→5 on two under-retrieved rows.
+- cp/cr quality: cp Δ−0.013 / cr Δ+0.009, **both inside the 0.146 judge-noise
+  band** (on-arm cp alone spanned 0.615–0.756 across 3 passes). Most targets
+  already rank-1 → no headroom; noise swamps any effect.
+- Decision (user): ship **default-ON** on architectural-consistency +
+  completeness grounds, NOT a metric win. Closeout:
+  `docs/qc/2026-06-18-deferred-034-chunks-rerank-closeout.md`.
+- Caveat: rerank service times out on first cold call (1800ms) → graceful
+  no-rerank fallback until warm (all surfaces, predates this).
+- DEFERRED-034 → PARTIALLY ADDRESSED; still open: chunk granularity (real cr
+  lever) + searchChunksMulti rerank parity.
+
+**Ops note:** started `free-context-hub-db` container for the probes (the stack
+was down; host busy with infra-* project). Left running.
+
+**Not done:** push + PR (user deferred). Run `npm test` needs DB + EMBEDDINGS_BASE_URL=localhost.
+
+---
+
 # CHECKPOINT — v12 closed won't-fix: chunks cp/cr "regression" is judge noise (2026-06-18)
 
 **Status:** v12 (a "v12" chunks synthesizer template to recover
