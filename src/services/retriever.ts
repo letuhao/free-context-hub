@@ -464,49 +464,47 @@ async function llmRerank(params: {
   const model = env.RERANK_MODEL ?? env.DISTILLATION_MODEL;
   if (!model) throw new Error('RERANK_MODEL or DISTILLATION_MODEL must be configured for rerank_mode=llm');
 
-  {
-    const system =
-      'You are a ranking model. Re-rank candidates by how directly they answer the query. ' +
-      'Output ONLY valid JSON: {"order":[...]} where order is an array of candidate indices (0-based), ' +
-      'a permutation (or prefix) of 0..N-1. No extra keys, no markdown.';
-    const user =
-      `QUERY:\n${params.query}\n\nCANDIDATES:\n` +
-      params.candidates.map((c, i) => `#${i} PATH: ${c.path}\nSNIPPET: ${c.snippet}`).join('\n\n') +
-      `\n\nReturn JSON.`;
+  const system =
+    'You are a ranking model. Re-rank candidates by how directly they answer the query. ' +
+    'Output ONLY valid JSON: {"order":[...]} where order is an array of candidate indices (0-based), ' +
+    'a permutation (or prefix) of 0..N-1. No extra keys, no markdown.';
+  const user =
+    `QUERY:\n${params.query}\n\nCANDIDATES:\n` +
+    params.candidates.map((c, i) => `#${i} PATH: ${c.path}\nSNIPPET: ${c.snippet}`).join('\n\n') +
+    `\n\nReturn JSON.`;
 
-    // Phase 17.2: shared transport — reasoning-suppression + answer extraction.
-    const { content } = await chatComplete({
-      baseUrl: chatBaseUrl(),
-      apiKey: chatApiKey(),
-      model,
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
-      ],
-      temperature: 0.0,
-      maxTokens: env.RERANK_LLM_MAX_TOKENS,
-      timeoutMs: params.timeoutMs,
-    });
-    if (!content) throw new Error('[rerank] missing content (and reasoning_content also empty)');
-    const parsed = extractJsonObject(content) as unknown;
-    const validated = RerankOrderSchema.safeParse(parsed);
-    if (!validated.success) throw new Error('[rerank] invalid schema');
-    const order = validated.data.order;
-    const n = params.candidates.length;
-    const seen = new Set<number>();
-    const cleaned: number[] = [];
-    for (const idx of order) {
-      if (idx >= 0 && idx < n && !seen.has(idx)) {
-        seen.add(idx);
-        cleaned.push(idx);
-      }
+  // Phase 17.2: shared transport — reasoning-suppression + answer extraction.
+  const { content } = await chatComplete({
+    baseUrl: chatBaseUrl(),
+    apiKey: chatApiKey(),
+    model,
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ],
+    temperature: 0.0,
+    maxTokens: env.RERANK_LLM_MAX_TOKENS,
+    timeoutMs: params.timeoutMs,
+  });
+  if (!content) throw new Error('[rerank] missing content (and reasoning_content also empty)');
+  const parsed = extractJsonObject(content) as unknown;
+  const validated = RerankOrderSchema.safeParse(parsed);
+  if (!validated.success) throw new Error('[rerank] invalid schema');
+  const order = validated.data.order;
+  const n = params.candidates.length;
+  const seen = new Set<number>();
+  const cleaned: number[] = [];
+  for (const idx of order) {
+    if (idx >= 0 && idx < n && !seen.has(idx)) {
+      seen.add(idx);
+      cleaned.push(idx);
     }
-    // Fallback: if model returns empty, keep base order.
-    if (!cleaned.length) return Array.from({ length: n }, (_, i) => i);
-    // Append any missing indices to keep deterministic permutation.
-    for (let i = 0; i < n; i++) if (!seen.has(i)) cleaned.push(i);
-    return cleaned;
   }
+  // Fallback: if model returns empty, keep base order.
+  if (!cleaned.length) return Array.from({ length: n }, (_, i) => i);
+  // Append any missing indices to keep deterministic permutation.
+  for (let i = 0; i < n; i++) if (!seen.has(i)) cleaned.push(i);
+  return cleaned;
 }
 
 /**

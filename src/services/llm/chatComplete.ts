@@ -60,12 +60,28 @@ export type ChatCompleteResult = {
 /** Cross-family reasoning-suppression knobs. `reasoning_effort:'none'` is the
  *  one LM Studio's gemma-4 honors (proven by the ragas-judge sidecar);
  *  `chat_template_kwargs.enable_thinking:false` covers the qwen3 family.
- *  Non-reasoning models (mistral-nemo etc.) ignore both. */
-function reasoningSuppressionBody(): Record<string, unknown> {
+ *  Non-reasoning models (mistral-nemo etc.) ignore both.
+ *
+ *  PORTABILITY: both are LM-Studio / vLLM conventions, NOT OpenAI-standard
+ *  (`reasoning_effort:'none'` is not a valid OpenAI enum value; OpenAI/Azure or a
+ *  strict vLLM may 400 on either). The shared client therefore targets an
+ *  LM-Studio-compatible endpoint that ignores unknown params. To point a caller
+ *  at a strict endpoint, set `LLM_REASONING_SUPPRESS=off` (process-wide) or pass
+ *  `suppressReasoning:false` per call. */
+function reasoningSuppressionBody(): { reasoning_effort: string; chat_template_kwargs: Record<string, unknown> } {
   return {
     reasoning_effort: 'none',
     chat_template_kwargs: { enable_thinking: false },
   };
+}
+
+/** Process-wide default for reasoning suppression. Default ON (LM-Studio
+ *  posture). Set `LLM_REASONING_SUPPRESS` to off/false/0/no to disable globally
+ *  for a strict OpenAI/Azure/vLLM endpoint. Read from process.env directly (not
+ *  the typed env) so this transport stays decoupled and test-safe. */
+function suppressReasoningDefault(): boolean {
+  const v = (process.env.LLM_REASONING_SUPPRESS ?? '').trim().toLowerCase();
+  return !(v === 'off' || v === 'false' || v === '0' || v === 'no');
 }
 
 function buildUrl(baseUrl: string): string {
@@ -86,14 +102,23 @@ async function once(params: ChatCompleteParams): Promise<ChatCompleteResult> {
   const fetchImpl = params.fetchImpl ?? fetch;
   const url = buildUrl(params.baseUrl);
 
+  const suppress = params.suppressReasoning ?? suppressReasoningDefault();
+  const suppression = suppress ? reasoningSuppressionBody() : undefined;
+  // Deep-merge chat_template_kwargs so an `extraBody` caller can ADD keys
+  // without silently dropping the injected `enable_thinking:false`.
+  const templateKwargs = {
+    ...(suppression?.chat_template_kwargs ?? {}),
+    ...((params.extraBody?.chat_template_kwargs as Record<string, unknown> | undefined) ?? {}),
+  };
   const body: Record<string, unknown> = {
     model: params.model,
     messages: params.messages,
     ...(params.temperature !== undefined ? { temperature: params.temperature } : {}),
     ...(params.seed !== undefined ? { seed: params.seed } : {}),
     ...(params.maxTokens !== undefined ? { max_tokens: params.maxTokens } : {}),
-    ...(params.suppressReasoning === false ? {} : reasoningSuppressionBody()),
+    ...(suppression ? { reasoning_effort: suppression.reasoning_effort } : {}),
     ...(params.extraBody ?? {}),
+    ...(Object.keys(templateKwargs).length ? { chat_template_kwargs: templateKwargs } : {}),
   };
 
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };

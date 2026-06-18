@@ -19,6 +19,12 @@
  *
  * extractAnswerText canNOT rescue undelimited reasoning — that is the request
  * layer's job. It handles the delimited/`reasoning_content` cases uniformly.
+ *
+ * ASSUMPTION: `<think>` / `<reasoning>` / `<thinking>` / `<thought>` tags are
+ * reasoning DELIMITERS, never literal answer content. An answer that legitimately
+ * discusses such a tag (e.g. a doc about the `<think>` element) would be stripped.
+ * Acceptable for technical-RAG answers in this codebase; revisit if a surface
+ * starts returning markup-about-reasoning-tags as the substantive answer.
  */
 
 export type RawChatMessage = {

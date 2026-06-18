@@ -10,7 +10,7 @@
 
 import { getEnv } from '../../env.js';
 import { createModuleLogger } from '../../utils/logger.js';
-import { chatComplete } from '../llm/index.js';
+import { chatComplete, stripReasoningBlocks } from '../llm/index.js';
 
 const logger = createModuleLogger('extraction:vision');
 
@@ -130,11 +130,13 @@ async function callVisionOnce(params: {
   });
 
   let markdown = content;
-  // chatComplete already fell back to reasoning_content when content was empty
-  // (thinking models like glm-4.6v-flash can burn the whole budget on
-  // reasoning). Re-derive the flag for the truncation/observability warnings.
+  // chatComplete falls back to reasoning_content when `content` strips to empty
+  // (thinking models like glm-4.6v-flash can burn the whole budget on reasoning,
+  // leaving content="" OR content="<think>…</think>"). Mirror that exact
+  // condition — strip first, THEN check — so the flag is accurate even when
+  // content was non-empty-but-pure-reasoning.
   const usedReasoningFallback =
-    !String((raw as { content?: unknown }).content ?? '').trim() &&
+    !stripReasoningBlocks(String((raw as { content?: unknown }).content ?? '')).trim() &&
     !!String((raw as { reasoning_content?: unknown }).reasoning_content ?? '').trim();
 
   // Strip outer ```markdown ... ``` fences if the model wrapped its output

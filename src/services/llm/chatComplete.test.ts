@@ -59,6 +59,50 @@ test('chatComplete', async (t) => {
     assert.equal(cap.body.chat_template_kwargs, undefined);
   });
 
+  await t.test('LLM_REASONING_SUPPRESS=off disables globally (no explicit param)', async () => {
+    const prev = process.env.LLM_REASONING_SUPPRESS;
+    process.env.LLM_REASONING_SUPPRESS = 'off';
+    try {
+      const cap = {} as Captured;
+      await chatComplete({
+        baseUrl: 'http://x:1234', model: 'm', messages: [{ role: 'user', content: 'hi' }],
+        fetchImpl: fakeFetch({ content: 'a' }, { capture: cap }),
+      });
+      assert.equal(cap.body.reasoning_effort, undefined);
+      assert.equal(cap.body.chat_template_kwargs, undefined);
+    } finally {
+      if (prev === undefined) delete process.env.LLM_REASONING_SUPPRESS;
+      else process.env.LLM_REASONING_SUPPRESS = prev;
+    }
+  });
+
+  await t.test('explicit suppressReasoning:true overrides env off-switch', async () => {
+    const prev = process.env.LLM_REASONING_SUPPRESS;
+    process.env.LLM_REASONING_SUPPRESS = 'off';
+    try {
+      const cap = {} as Captured;
+      await chatComplete({
+        baseUrl: 'http://x:1234', model: 'm', messages: [{ role: 'user', content: 'hi' }],
+        suppressReasoning: true,
+        fetchImpl: fakeFetch({ content: 'a' }, { capture: cap }),
+      });
+      assert.equal(cap.body.reasoning_effort, 'none');
+    } finally {
+      if (prev === undefined) delete process.env.LLM_REASONING_SUPPRESS;
+      else process.env.LLM_REASONING_SUPPRESS = prev;
+    }
+  });
+
+  await t.test('extraBody chat_template_kwargs is deep-merged (keeps enable_thinking)', async () => {
+    const cap = {} as Captured;
+    await chatComplete({
+      baseUrl: 'http://x:1234', model: 'm', messages: [{ role: 'user', content: 'hi' }],
+      extraBody: { chat_template_kwargs: { foo: 'bar' } },
+      fetchImpl: fakeFetch({ content: 'a' }, { capture: cap }),
+    });
+    assert.deepEqual(cap.body.chat_template_kwargs, { enable_thinking: false, foo: 'bar' });
+  });
+
   await t.test('builds /v1/chat/completions URL, handles trailing slash and /v1 suffix', async () => {
     for (const [base, want] of [
       ['http://x:1234', 'http://x:1234/v1/chat/completions'],

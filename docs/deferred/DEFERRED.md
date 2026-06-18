@@ -1,7 +1,37 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 035 -->
+<!-- Next ID: 036 -->
+
+## DEFERRED-035
+
+- **Title:** Per-caller wiring regression tests for the shared LLM client
+- **Status:** OPEN (2026-06-18)
+- **What:** The Phase-17.2 LLM in/out standardization migrated 11 chat call
+  sites onto `src/services/llm/chatComplete`. `chatComplete` itself is unit-
+  tested (transport, reasoning-suppression on/off, env off-switch, URL building,
+  deep-merge, multimodal passthrough). But **no test pins each CALLER's wiring** —
+  that distiller passes `DISTILLATION_MODEL` + the right base-url/key, that vision
+  sends the multimodal image block, that lessons rerank uses JSON-mode, etc. A
+  future edit that mis-wires a caller (wrong model var, dropped apiKey) would pass
+  `tsc` and the full unit suite, because those paths are unmocked I/O. Caught
+  today only by the live baseline runs (which exercise genPipeline + rerank) and
+  the `/review-impl` pass (MED-2).
+- **Why deferred:** most callers read env + open DB pools at module scope and
+  don't accept an injectable `fetchImpl`, so adding wiring tests means light
+  refactors (thread an optional `fetchImpl`/config) across 8 files — disproportio-
+  nate to the risk given `chatComplete` is tested and the live baselines cover the
+  hot paths.
+- **Trigger condition:** next change touching `src/services/llm/` consumers, OR a
+  reported regression in a distillation / vision / rerank path.
+- **Estimated size:** M — thread `fetchImpl` into the 3 highest-value callers
+  (distiller, vision, lessons rerank) + injected-fetch tests asserting the request
+  body (model/url/key/JSON-mode).
+- **Priority:** LOW — `chatComplete` contract is guarded; the gap is per-caller
+  drift, not the shared layer.
+- **Source:** `/review-impl` of commit `ab53ed5` (MED-2).
+
+---
 
 ## DEFERRED-034
 
