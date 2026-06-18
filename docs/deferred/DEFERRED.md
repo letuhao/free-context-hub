@@ -1,12 +1,53 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 035 -->
+<!-- Next ID: 036 -->
+
+## DEFERRED-035
+
+- **Title:** Per-caller wiring regression tests for the shared LLM client
+- **Status:** OPEN (2026-06-18)
+- **What:** The Phase-17.2 LLM in/out standardization migrated 11 chat call
+  sites onto `src/services/llm/chatComplete`. `chatComplete` itself is unit-
+  tested (transport, reasoning-suppression on/off, env off-switch, URL building,
+  deep-merge, multimodal passthrough). But **no test pins each CALLER's wiring** —
+  that distiller passes `DISTILLATION_MODEL` + the right base-url/key, that vision
+  sends the multimodal image block, that lessons rerank uses JSON-mode, etc. A
+  future edit that mis-wires a caller (wrong model var, dropped apiKey) would pass
+  `tsc` and the full unit suite, because those paths are unmocked I/O. Caught
+  today only by the live baseline runs (which exercise genPipeline + rerank) and
+  the `/review-impl` pass (MED-2).
+- **Why deferred:** most callers read env + open DB pools at module scope and
+  don't accept an injectable `fetchImpl`, so adding wiring tests means light
+  refactors (thread an optional `fetchImpl`/config) across 8 files — disproportio-
+  nate to the risk given `chatComplete` is tested and the live baselines cover the
+  hot paths.
+- **Trigger condition:** next change touching `src/services/llm/` consumers, OR a
+  reported regression in a distillation / vision / rerank path.
+- **Estimated size:** M — thread `fetchImpl` into the 3 highest-value callers
+  (distiller, vision, lessons rerank) + injected-fetch tests asserting the request
+  body (model/url/key/JSON-mode).
+- **Priority:** LOW — `chatComplete` contract is guarded; the gap is per-caller
+  drift, not the shared layer.
+- **Source:** `/review-impl` of commit `ab53ed5` (MED-2).
+
+---
 
 ## DEFERRED-034
 
 - **Title:** Raise chunks context_precision / context_recall (retrieval-layer, NOT template)
-- **Status:** OPEN (2026-06-18)
+- **Status:** PARTIALLY ADDRESSED (2026-06-18) — reranker + wide-pool + relevance
+  gate shipped on the chunks surface (default-ON, like lessons/code). cp/cr came
+  out **metric-neutral** on the 13-row corpus (cp Δ−0.013 / cr Δ+0.009, both
+  inside the 0.146 judge-noise band): most targets already rank-1, so reranking
+  has little headroom and noise swamps it. Mechanism verified (rerank fired
+  13/13, reordered 11/13; wider pool improved result completeness 3→5 on two
+  rows). Shipped on architectural-consistency + completeness grounds, not a
+  metric win. Closeout: `docs/qc/2026-06-18-deferred-034-chunks-rerank-closeout.md`.
+  **Still OPEN:** chunk granularity / re-chunking (the real `cr` lever) and
+  `searchChunksMulti` rerank parity. The chunks reranker will show real value on
+  a larger corpus / buried-relevant queries.
+- **Status (original):** OPEN (2026-06-18)
 - **Why this exists:** the v11 "chunks cp/cr regression" was misdiagnosed as a
   synthesizer-template problem ("v12"). It is not — cp/cr are answer-independent
   (scored from question + ground_truth + retrieved_contexts), so no template

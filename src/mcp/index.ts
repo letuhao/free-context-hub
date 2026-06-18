@@ -1212,6 +1212,10 @@ function createMcpToolsServer() {
           .max(1)
           .optional()
           .describe('Minimum hybrid score to keep a match (0..1). Use 0.3 to filter noise.'),
+        rerank: z
+          .boolean()
+          .optional()
+          .describe('DEFERRED-034: set false to skip the server-side rerank dispatcher and return raw hybrid-retrieval order. Default true (rerank when RERANK_TYPE is configured). Used by the A/B harness for an uncontaminated pool.'),
         output_format: OutputFormatSchema.default('auto_both').describe('Response format: auto_both | json_only | json_pretty | summary_only.'),
       }),
       outputSchema: z.object({
@@ -1235,7 +1239,7 @@ function createMcpToolsServer() {
         explanations: z.array(z.string()),
       }),
     },
-    async ({ workspace_token, project_id, query, chunk_types, doc_ids, limit, min_score, output_format }) => {
+    async ({ workspace_token, project_id, query, chunk_types, doc_ids, limit, min_score, rerank, output_format }) => {
       const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       const result = await searchChunks({
@@ -1246,6 +1250,7 @@ function createMcpToolsServer() {
         chunkTypes: chunk_types as any,
         docIds: doc_ids,
         minScore: min_score,
+        rerank,
       });
       const summary = `search_document_chunks: matches=${result.matches.length}`;
       return formatToolResponse(result as any, summary, output_format);

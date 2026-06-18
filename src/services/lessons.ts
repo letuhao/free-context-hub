@@ -6,6 +6,7 @@ import { linkLessonToSymbols, upsertLessonNode } from '../kg/linker.js';
 import { deleteProjectGraph } from '../kg/projectGraph.js';
 import { embedTexts } from './embedder.js';
 import { cohereRerank } from './rerankClient.js';
+import { chatComplete, extractJsonArray } from './llm/index.js';
 import { distillLesson } from './distiller.js';
 import { rebuildProjectSnapshot } from './snapshot.js';
 import { expandForFtsIndex, buildFtsQuery } from '../utils/ftsTokenizer.js';
@@ -157,39 +158,32 @@ async function generateSearchAliases(title: string, content: string): Promise<st
   if (!model) return '';
 
   const baseUrl = (env.DISTILLATION_BASE_URL?.trim() || env.EMBEDDINGS_BASE_URL).replace(/\/$/, '');
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  const key = env.DISTILLATION_API_KEY ?? env.EMBEDDINGS_API_KEY;
-  if (key) headers.Authorization = `Bearer ${key}`;
+  const apiKey = env.DISTILLATION_API_KEY ?? env.EMBEDDINGS_API_KEY;
 
   try {
-    const res = await fetch(`${baseUrl}/v1/chat/completions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: 'Generate 3 alternative search queries that would help find this lesson. Include: 1) a question form, 2) keywords only, 3) a synonym/paraphrase. Output ONLY a JSON array of 3 strings.' },
-          { role: 'user', content: `Title: ${title}\nContent: ${content.slice(0, 500)}` },
-        ],
-        temperature: 0.3,
-        // Phase 14 round-2 fix: bumped from 200 to 3000 to accommodate reasoning
-        // models (nemotron-3-nano) that consume budget on chain-of-thought before
-        // emitting the final JSON array. 200 tokens was nearly always empty content
-        // + truncated reasoning_content → silent alias loss after Phase 14 swap.
-        max_tokens: 3000,
-      }),
-      signal: AbortSignal.timeout(180000),
+    // Phase 17.2: shared transport — reasoning-suppression + answer extraction.
+    const { content: text } = await chatComplete({
+      baseUrl,
+      apiKey,
+      model,
+      messages: [
+        { role: 'system', content: 'Generate 3 alternative search queries that would help find this lesson. Include: 1) a question form, 2) keywords only, 3) a synonym/paraphrase. Output ONLY a JSON array of 3 strings.' },
+        { role: 'user', content: `Title: ${title}\nContent: ${content.slice(0, 500)}` },
+      ],
+      temperature: 0.3,
+      // Phase 14 round-2 fix: bumped from 200 to 3000 to accommodate reasoning
+      // models (nemotron-3-nano) that consume budget on chain-of-thought before
+      // emitting the final JSON array. (Reasoning suppression now also applied.)
+      maxTokens: 3000,
+      timeoutMs: 180000,
     });
-
-    if (!res.ok) return '';
-    const json = (await res.json()) as any;
-    const msg = json?.choices?.[0]?.message ?? {};
-    // Phase 14: fall back to reasoning_content for reasoning models (nemotron etc.)
-    const text = (String(msg.content ?? '').trim() || String(msg.reasoning_content ?? '').trim()) ?? '';
-    // Parse JSON array from response (may have markdown fences).
-    const match = text.match(/\[[\s\S]*\]/);
-    if (!match) return '';
-    const arr = JSON.parse(match[0]) as string[];
+    if (!text) return '';
+    let arr: unknown;
+    try {
+      arr = extractJsonArray(text);
+    } catch {
+      return '';
+    }
     if (!Array.isArray(arr)) return '';
     const aliases = arr.filter((s: unknown) => typeof s === 'string').slice(0, 3).join(' | ');
     logger.info({ title: title.slice(0, 50), aliases: aliases.slice(0, 100) }, 'generated search aliases');
@@ -559,10 +553,15 @@ function rerankBaseUrl(): string {
   return (env.RERANK_BASE_URL?.trim() || env.DISTILLATION_BASE_URL?.trim() || env.EMBEDDINGS_BASE_URL).replace(/\/$/, '');
 }
 
-function rerankHeaders(): Record<string, string> {
+function rerankApiKey(): string | undefined {
   const env = getEnv();
+  return env.RERANK_API_KEY ?? env.DISTILLATION_API_KEY ?? env.EMBEDDINGS_API_KEY;
+}
+
+// Headers for the cross-encoder embedding rerank path (/v1/embeddings, not chat).
+function rerankHeaders(): Record<string, string> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  const key = env.RERANK_API_KEY ?? env.DISTILLATION_API_KEY ?? env.EMBEDDINGS_API_KEY;
+  const key = rerankApiKey();
   if (key) headers.Authorization = `Bearer ${key}`;
   return headers;
 }
@@ -576,10 +575,7 @@ async function rerankGenerative(query: string, candidates: RerankCandidate[]): P
   const model = env.RERANK_MODEL ?? env.DISTILLATION_MODEL;
   if (!model) return candidates.map(c => c.index);
 
-  const url = `${rerankBaseUrl()}/v1/chat/completions`;
-  const ac = new AbortController();
   const timeoutMs = (env.RERANK_TIMEOUT_MS ?? 10000) + 5000;
-  const t = setTimeout(() => ac.abort(), timeoutMs);
 
   try {
     const system =
@@ -593,17 +589,16 @@ async function rerankGenerative(query: string, candidates: RerankCandidate[]): P
       `\n\nThe search query is: ${query}\n` +
       `Rank the ${candidates.length} passages above. The most relevant passage should be listed first.`;
 
-    const res = await fetch(url, {
-      method: 'POST', headers: rerankHeaders(), signal: ac.signal,
-      body: JSON.stringify({ model, messages: [{ role: 'system', content: system }, { role: 'user', content: user }], temperature: 0.0, max_tokens: env.RERANK_LLM_MAX_TOKENS }),
+    // Phase 17.2: shared transport — reasoning-suppression + answer extraction.
+    const { content } = await chatComplete({
+      baseUrl: rerankBaseUrl(),
+      apiKey: rerankApiKey(),
+      model,
+      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+      temperature: 0.0,
+      maxTokens: env.RERANK_LLM_MAX_TOKENS,
+      timeoutMs,
     });
-
-    if (!res.ok) { logger.warn({ status: res.status }, 'generative rerank: HTTP error'); return candidates.map(c => c.index); }
-
-    const json = (await res.json()) as any;
-    const msg = json?.choices?.[0]?.message ?? {};
-    // Phase 14: fall back to reasoning_content for reasoning models (nemotron etc.)
-    const content = String(msg.content ?? '').trim() || String(msg.reasoning_content ?? '').trim();
     if (!content) return candidates.map(c => c.index);
 
     const raw = content;
@@ -643,7 +638,7 @@ async function rerankGenerative(query: string, candidates: RerankCandidate[]): P
   } catch (err) {
     logger.warn({ error: err instanceof Error ? err.message : String(err) }, 'generative rerank: failed');
     return candidates.map(c => c.index);
-  } finally { clearTimeout(t); }
+  }
 }
 
 /**
@@ -894,14 +889,20 @@ async function rerankCohereApi(query: string, candidates: RerankCandidate[]): Pr
  *  do NOT require DISTILLATION_ENABLED — that flag gates only the generative LLM
  *  path. Conflating them silently disabled cross-encoder lesson rerank whenever
  *  distillation was off, making rerank A/Bs measure no-rerank-vs-no-rerank. */
-function rerankConfigured(): boolean {
+export function rerankConfigured(): boolean {
   const env = getEnv();
   if (env.RERANK_TYPE === 'api' || env.RERANK_TYPE === 'cross-encoder') return true;
   return Boolean((env.RERANK_MODEL || env.DISTILLATION_MODEL) && env.DISTILLATION_ENABLED);
 }
 
-/** Dispatch to the correct reranker based on RERANK_TYPE. */
-async function rerankLessons(params: {
+/**
+ * Dispatch to the correct reranker based on RERANK_TYPE.
+ *
+ * Generic over candidate kind: only reads `query` + `candidates`
+ * (`{index,title,snippet}`). Shared with the chunks surface (DEFERRED-034) —
+ * was named `rerankLessons` historically but is lesson-agnostic.
+ */
+export async function rerankCandidates(params: {
   query: string;
   candidates: RerankCandidate[];
 }): Promise<number[]> {
@@ -1230,13 +1231,13 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
   })) {
     try {
       const rerankCount = Math.min(matches.length, rerankBudget);
-      const rerankCandidates = matches.slice(0, rerankCount).map((m, i) => ({
+      const rerankCandidateList = matches.slice(0, rerankCount).map((m, i) => ({
         index: i,
         title: m.title,
         snippet: m.content_snippet,
       }));
 
-      const rerankedOrder = await rerankLessons({ query: params.query, candidates: rerankCandidates });
+      const rerankedOrder = await rerankCandidates({ query: params.query, candidates: rerankCandidateList });
 
       // Apply reranked order to matches. DEFERRED-030: dispatcher MAY return
       // fewer indices than rerankCount — EITHER because `RERANK_MIN_SCORE>0`
@@ -1244,7 +1245,7 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
       // a short response. Distinguish in the explanation so a debug reader
       // can tell which mechanism dropped items.
       const rerankedTop = rerankedOrder.map(i => matches[i]).filter(Boolean);
-      const remaining = matches.slice(rerankCandidates.length);
+      const remaining = matches.slice(rerankCandidateList.length);
       const delta = rerankCount - rerankedTop.length;
       matches = [...rerankedTop, ...remaining];
 
@@ -1533,14 +1534,14 @@ export async function searchLessonsMulti(params: SearchLessonsMultiParams): Prom
   })) {
     try {
       const rerankCount = Math.min(matches.length, rerankBudget);
-      const rerankCandidates = matches.slice(0, rerankCount).map((m, i) => ({
+      const rerankCandidateList = matches.slice(0, rerankCount).map((m, i) => ({
         index: i,
         title: m.title,
         snippet: m.content_snippet,
       }));
-      const rerankedOrder = await rerankLessons({ query: params.query, candidates: rerankCandidates });
+      const rerankedOrder = await rerankCandidates({ query: params.query, candidates: rerankCandidateList });
       const rerankedTop = rerankedOrder.map(i => matches[i]).filter(Boolean);
-      const remaining = matches.slice(rerankCandidates.length);
+      const remaining = matches.slice(rerankCandidateList.length);
       const delta = rerankCount - rerankedTop.length;
       matches = [...rerankedTop, ...remaining];
       const note = delta > 0

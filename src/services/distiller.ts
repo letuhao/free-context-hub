@@ -1,68 +1,7 @@
 import { getEnv } from '../env.js';
 import * as z from 'zod/v4';
 import { completionTokensForOutputChars, excerptForSummarization } from '../utils/llmCompletionBudget.js';
-
-function chatBaseUrl(): string {
-  const env = getEnv();
-  return (env.DISTILLATION_BASE_URL?.trim() || env.EMBEDDINGS_BASE_URL).replace(/\/$/, '');
-}
-
-function chatHeaders(): Record<string, string> {
-  const env = getEnv();
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  const key = env.DISTILLATION_API_KEY ?? env.EMBEDDINGS_API_KEY;
-  if (key) headers.Authorization = `Bearer ${key}`;
-  return headers;
-}
-
-/** Extract a JSON object from model output. Phase 14: hardened for reasoning models
- *  whose reasoning_content may include multiple {...} blocks (intermediate thoughts).
- *  Strategy: scan all top-level {...} substrings (balanced brace tracking, respecting strings),
- *  try parsing each from longest to shortest, return first valid parse.
- */
-function extractJsonObject(text: string): any {
-  const raw = String(text ?? '').trim();
-  // Strip markdown code fences if present
-  const fenced = raw.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
-  if (fenced) {
-    try { return JSON.parse(fenced[1]); } catch { /* fall through */ }
-  }
-  // Find all balanced top-level {...} substrings.
-  const candidates: string[] = [];
-  let depth = 0;
-  let start = -1;
-  let inStr = false;
-  let escape = false;
-  for (let i = 0; i < raw.length; i++) {
-    const c = raw[i];
-    if (escape) { escape = false; continue; }
-    if (c === '\\') { escape = true; continue; }
-    if (c === '"') { inStr = !inStr; continue; }
-    if (inStr) continue;
-    if (c === '{') {
-      if (depth === 0) start = i;
-      depth++;
-    } else if (c === '}') {
-      depth--;
-      if (depth === 0 && start >= 0) {
-        candidates.push(raw.slice(start, i + 1));
-        start = -1;
-      }
-    }
-  }
-  // Try longest candidate first (usually the most complete object)
-  candidates.sort((a, b) => b.length - a.length);
-  for (const cand of candidates) {
-    try { return JSON.parse(cand); } catch { /* try next */ }
-  }
-  // Fallback: first-to-last brace slice (legacy behavior)
-  const first = raw.indexOf('{');
-  const last = raw.lastIndexOf('}');
-  if (first >= 0 && last > first) {
-    return JSON.parse(raw.slice(first, last + 1));
-  }
-  throw new Error('No parseable JSON object found in model output');
-}
+import { chatComplete, extractJsonObject } from './llm/index.js';
 
 async function chatCompletion(params: {
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
@@ -74,42 +13,22 @@ async function chatCompletion(params: {
   const model = env.DISTILLATION_MODEL;
   if (!model) throw new Error('DISTILLATION_MODEL is not configured');
 
-  const base = chatBaseUrl().endsWith('/') ? chatBaseUrl() : `${chatBaseUrl()}/`;
-  const url = new URL('v1/chat/completions', base).toString();
-  const ac = new AbortController();
-  const t = setTimeout(() => ac.abort(), params.timeoutMs);
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: chatHeaders(),
-      signal: ac.signal,
-      body: JSON.stringify({
-        model,
-        messages: params.messages,
-        temperature: params.temperature ?? 0.2,
-        max_tokens: params.max_tokens ?? 600,
-      }),
-    });
-    if (!res.ok) {
-      const txt = await res.text().catch(() => '');
-      throw new Error(`[chat] HTTP ${res.status}: ${txt}`);
-    }
-    const json = (await res.json()) as any;
-    const message = json?.choices?.[0]?.message ?? {};
-    let content = String(message.content ?? '').trim();
-    // Phase 14: reasoning models (e.g. nvidia/nemotron-3-nano) put output in
-    // `reasoning_content` and may leave `content` empty when max_tokens runs
-    // out during reasoning. Mirror the vision.ts fallback pattern.
-    if (!content) {
-      content = String(message.reasoning_content ?? '').trim();
-    }
-    if (!content) {
-      throw new Error('[chat] Missing choices[0].message.content (and reasoning_content also empty)');
-    }
-    return content;
-  } finally {
-    clearTimeout(t);
+  // Phase 17.2: shared transport — standardized reasoning-suppression + answer
+  // extraction (was an inline fetch with no suppression; reasoning models like
+  // gemma-4 leaked chain-of-thought into the distilled output).
+  const { content } = await chatComplete({
+    baseUrl: env.DISTILLATION_BASE_URL?.trim() || env.EMBEDDINGS_BASE_URL,
+    apiKey: env.DISTILLATION_API_KEY ?? env.EMBEDDINGS_API_KEY,
+    model,
+    messages: params.messages,
+    temperature: params.temperature ?? 0.2,
+    maxTokens: params.max_tokens ?? 600,
+    timeoutMs: params.timeoutMs,
+  });
+  if (!content) {
+    throw new Error('[chat] Missing choices[0].message.content (and reasoning_content also empty)');
   }
+  return content;
 }
 
 export type DistillLessonResult = {

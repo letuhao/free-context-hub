@@ -10,6 +10,7 @@
 
 import { getEnv } from '../../env.js';
 import { createModuleLogger } from '../../utils/logger.js';
+import { chatComplete, stripReasoningBlocks } from '../llm/index.js';
 
 const logger = createModuleLogger('extraction:vision');
 
@@ -95,15 +96,23 @@ async function callVisionOnce(params: {
     throw new Error('No vision base URL configured. Set VISION_BASE_URL env var.');
   }
 
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   const apiKey = env.VISION_API_KEY || env.DISTILLATION_API_KEY || env.EMBEDDINGS_API_KEY;
-  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
 
   // Convert PNG buffer to base64 data URI for the image_url content block
   const base64 = params.imagePng.toString('base64');
   const dataUri = `data:image/png;base64,${base64}`;
 
-  const body = {
+  logger.info(
+    { model, baseUrl, imageBytes: params.imagePng.length, maxTokens: params.maxTokens, timeout_ms: env.VISION_TIMEOUT_MS },
+    'vision extraction request',
+  );
+
+  // Phase 17.2: shared transport — request-side reasoning-suppression + timeout
+  // composition. Vision keeps its own markdown-fence strip + reasoning-fallback
+  // observability (derived from the raw message below).
+  const { content, finish_reason: finishReason, usage, raw } = await chatComplete({
+    baseUrl,
+    apiKey,
     model,
     messages: [
       {
@@ -115,49 +124,20 @@ async function callVisionOnce(params: {
       },
     ],
     temperature: env.VISION_TEMPERATURE,
-    max_tokens: params.maxTokens,
-  };
-
-  // Compose timeout signal with caller signal
-  const timeoutSignal = AbortSignal.timeout(env.VISION_TIMEOUT_MS);
-  const signal = params.signal
-    ? anySignal([params.signal, timeoutSignal])
-    : timeoutSignal;
-
-  const url = `${baseUrl}/v1/chat/completions`;
-  logger.info(
-    { model, url, imageBytes: params.imagePng.length, maxTokens: params.maxTokens, timeout_ms: env.VISION_TIMEOUT_MS },
-    'vision extraction request',
-  );
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-    signal,
+    maxTokens: params.maxTokens,
+    signal: params.signal,
+    timeoutMs: env.VISION_TIMEOUT_MS,
   });
 
-  if (!res.ok) {
-    const txt = await res.text().catch(() => '');
-    const err: any = new Error(`Vision model returned HTTP ${res.status}: ${txt.slice(0, 300)}`);
-    err.statusCode = res.status;
-    throw err;
-  }
-
-  const json = (await res.json()) as any;
-  const message = json?.choices?.[0]?.message ?? {};
-  const finishReason: string | undefined = json?.choices?.[0]?.finish_reason;
-
-  // Issue #2 fix: empty content (not just nullish) falls back to reasoning_content.
-  // Thinking models like glm-4.6v-flash sometimes burn the whole token budget on
-  // reasoning and return content="" — we still want to use reasoning_content as a
-  // last resort rather than fail.
-  let markdown = String(message.content ?? '').trim();
-  let usedReasoningFallback = false;
-  if (!markdown) {
-    markdown = String(message.reasoning_content ?? '').trim();
-    if (markdown) usedReasoningFallback = true;
-  }
+  let markdown = content;
+  // chatComplete falls back to reasoning_content when `content` strips to empty
+  // (thinking models like glm-4.6v-flash can burn the whole budget on reasoning,
+  // leaving content="" OR content="<think>…</think>"). Mirror that exact
+  // condition — strip first, THEN check — so the flag is accurate even when
+  // content was non-empty-but-pure-reasoning.
+  const usedReasoningFallback =
+    !stripReasoningBlocks(String((raw as { content?: unknown }).content ?? '')).trim() &&
+    !!String((raw as { reasoning_content?: unknown }).reasoning_content ?? '').trim();
 
   // Strip outer ```markdown ... ``` fences if the model wrapped its output
   if (markdown.startsWith('```')) {
@@ -179,7 +159,7 @@ async function callVisionOnce(params: {
         model,
         max_tokens: params.maxTokens,
         chars: markdown.length,
-        usage: json?.usage,
+        usage,
         used_reasoning_fallback: usedReasoningFallback,
       },
       'vision response truncated by max_tokens — extraction may be incomplete',
@@ -192,15 +172,15 @@ async function callVisionOnce(params: {
     );
   }
 
-  const usage = json?.usage;
   logger.info(
     { model, chars: markdown.length, usage, finish_reason: finishReason, fallback: usedReasoningFallback },
     'vision extraction complete',
   );
 
+  const u = usage as { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | undefined;
   return {
     markdown,
-    usage: usage ? { prompt_tokens: usage.prompt_tokens, completion_tokens: usage.completion_tokens, total_tokens: usage.total_tokens } : undefined,
+    usage: u ? { prompt_tokens: u.prompt_tokens, completion_tokens: u.completion_tokens, total_tokens: u.total_tokens } : undefined,
     finish_reason: finishReason,
     used_reasoning_fallback: usedReasoningFallback,
   };
@@ -210,24 +190,11 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Combine multiple AbortSignals into one (any aborts → result aborts). */
-function anySignal(signals: AbortSignal[]): AbortSignal {
-  const ctrl = new AbortController();
-  for (const s of signals) {
-    if (s.aborted) {
-      ctrl.abort(s.reason);
-      return ctrl.signal;
-    }
-    s.addEventListener('abort', () => ctrl.abort(s.reason), { once: true });
-  }
-  return ctrl.signal;
-}
-
 /** Decide whether a vision error is worth retrying. */
 function isTransientError(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
   const msg = err.message.toLowerCase();
-  const status = (err as any).statusCode as number | undefined;
+  const status = ((err as any).statusCode ?? (err as any).status) as number | undefined;
   // 5xx, network errors, timeouts are transient
   if (status && status >= 500) return true;
   if (msg.includes('timeout') || msg.includes('aborted')) return true;

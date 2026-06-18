@@ -1,3 +1,167 @@
+# CHECKPOINT — LLM chat in/out standardized (architecture fix) (2026-06-18, session 3)
+
+**Branch:** `fix-model-swap-orchestration`. Commit **ab53ed5**.
+
+**Trigger:** investigating the invalid CoVe A/B, the user named the real problem:
+"model reasoning hay không kệ nó — ta phải lấy đúng phần trả lời. Chưa chuẩn hóa
+in/out, đây là vấn đề kiến trúc." Correct. The reasoning-leak wasn't a config
+issue; it was ~11 chat call sites across 8 files each rolling their own
+`fetch('/v1/chat/completions')` with divergent/absent reasoning-suppression +
+ad-hoc output extraction. Only the ragas-judge sidecar had the working knob
+(`reasoning_effort:'none'`).
+
+**Built `src/services/llm/`:**
+- `chatComplete` — ONE transport. Request side ALWAYS injects reasoning
+  suppression (`reasoning_effort:'none'` = the knob LM Studio gemma-4 honors +
+  `chat_template_kwargs.enable_thinking:false` for qwen3). Response normalized
+  via `extractAnswerText`. Multimodal + signal + timeout + optional retry.
+- `extractAnswerText`/`stripReasoningBlocks` — strip `<think>`/`<reasoning>`
+  (incl. unclosed truncated openers) + `reasoning_content` fallback.
+- `json` — `extractJsonObject/Array` (hardened balanced-brace, from distiller)
+  shared by all JSON callers.
+- `resilience` — relocated from `src/qc/llmResilience.ts` (transport, not qc);
+  old path is a re-export shim (genPipeline/judge unchanged).
+
+**Migrated all 11 sites:** genPipeline.callAnswerer (+3 CoVe steps), distiller
+(4 fns), lessonImprover, qaAgent(2), builderMemory, documentLessonGenerator,
+vision (multimodal; keeps fence-strip + reasoning-fallback observability via
+`res.raw`), retriever rerank, lessons (aliases + generative rerank), 3 qc scripts.
+
+**Live-verified the leak fix:** the qc answerer row that previously dumped 4162
+chars of CoT now returns "Not in context." (15 chars, no leak markers) in 417ms
+vs 7058ms — gemma stops reasoning because suppression now reaches it. tsc clean;
+**946/946 unit** (889 prior + 41 llm-module + 16 groupFilter).
+
+**CoVe re-run result (clean, VALID — supersedes the v1 "SHELVE"):** 0/25 CoT-leak
+in both arms (was 9/25 + 8/25). CoVe is **metric-neutral**: the v1 catastrophes
+were all leak artifacts — answer_relevancy "collapse" → now +0.06..+0.09,
+"abstention broke" (refusal 1.0→0.0) → now 1.0=1.0. The only residual (lessons
+faithfulness −0.29) is judge noise: 2/8 rows flip, and the biggest
+(`lesson-edge-multi-hop-1`) has byte-identical answers in both arms scoring 1 vs
+0. Verdict: NOT productionized (neutral at ~4× cost); harness kept. Closeout +
+clean v2 tables: `docs/qc/2026-06-18-cove-edge-ab-shelve.md`. Two findings
+vindicated the user's skepticism twice: read the RAW output (leak), and a metric
+delta on small N can be judge noise ([[verify-metric-inputs]], [[read-raw-llm-output]]).
+
+---
+
+# CHECKPOINT — CoVe synthesizer measured at scale → SHELVE (2026-06-18, session 3)
+
+**Branch:** `fix-model-swap-orchestration` (continues; NOT pushed, no PR per user).
+
+**Task:** "Phase 17 còn nợ feature nào" → user picked **CoVe synthesizer**.
+CLARIFY found CoVe was **already built + wired** (`runGenPipelineCoVe`,
+`cove.*.txt`, `--synth-mode cove`, manifest) and 1-row smoke-tested 2026-05-24,
+but **never A/B'd at scale**. So the owed work was the *experiment*, not code.
+
+**Built (the one piece missing):** `--groups <exact|prefix-*>` filter on
+`runBaseline.ts` (`src/qc/groupFilter.ts` + `parseGroupsArg`, 16 TDD tests) to
+run a baseline against a golden subset without a throwaway file. tsc clean,
+155/155 qc + 16 new. Live-verified ("filtered to 8/48 by groups=edge-*").
+
+**Experiment:** standard vs cove on the **25 edge-case rows** (`edge-*`:
+no-answer/multi-hop/distractor/contradictory/paraphrase — where CoVe should
+bite). answerer = judge = `gemma-4-26b-a4b-qat` (Tradition-C, single model →
+zero swap → arms differ ONLY by synth-mode). Stack brought up via
+`docker compose up -d --build mcp ragas-judge` — judge inherited `-qat` from the
+CHAT_MODEL single-source default (**live proof the session-2 model-swap fix
+propagates to containers**).
+
+**First-pass result said "CoVe net-negative → SHELVE" — but that verdict was
+RETRACTED the same day** after the user pushed back ("cẩn thận phương pháp đo
+hoặc implement CoVe sai"). Reading the raw answer TEXT (not just scores) showed
+the measurement is **invalid**:
+- **Confound 1 (both arms):** gemma-qat answerer ignores `enable_thinking:false`
+  and leaks chain-of-thought into the answer field — 9/25 standard + 8/25 cove
+  answers are raw CoT dumps (≤4 400 chars). RAGAS AR correctly tanks on those,
+  but it's scoring reasoning-leak, not answer quality. CLAUDE.md warns exactly
+  this ("disable reasoning in the LM Studio UI"); I didn't verify the UI state.
+- **Methodological miss:** CoVe is a SYNTH-fidelity question → Tradition A/B
+  (mistral-nemo answerer, no reasoning-by-default). I used Tradition C (gemma),
+  which is for RETRIEVAL. Wrong answerer.
+- **Confound 2 (CoVe bug):** on a refusal draft ("Not in context.", no claims),
+  the plan step shouldn't run; instead it echoes prompt text (6/25 garbage
+  verification sets) and revise replaces a correct refusal with a fabricated
+  answer → the refusal 1.0→0.0 "regression" is OUR bug, not CoVe-the-method.
+
+**Decision: NO verdict yet.** Closeout `docs/qc/2026-06-18-cove-edge-ab-shelve.md`
+now carries a RETRACTION banner; ROADMAP Phase-17 marked "first A/B invalidated,
+re-measure pending". The `--groups` harness flag + stack work STAND.
+
+**Corrected next step (not yet run):** re-measure with mistral-nemo answerer
+(Tradition B + `--defer-judge`, judge stays gemma-qat) so the answer field is
+clean, AND add a refusal-skip guard to `runGenPipelineCoVe`. Lesson: read the
+RAW OUTPUT before trusting aggregate metrics — [[verify-metric-inputs]] extends
+to "verify the model's output is even a valid answer, not reasoning leak."
+
+**Other open:** push/PR (deferred), DEFERRED-034 chunk granularity, query
+rewrite, global-surface 422-on-empty harness wart. Model-swap fix containers
+are live (mcp+judge on `-qat`).
+
+---
+
+# CHECKPOINT — model-swap root cause fixed + chunks rerank shipped (2026-06-18, session 2)
+
+**Branch:** `fix-model-swap-orchestration` (2 commits, NOT pushed, no PR yet per user).
+Prereq context: PR #38 (v12 closeout) merged to main; 79 stale branches cleaned
+(39 local + 40 remote, all verified merged); origin now = main + worktree.
+
+## Commit B (3109363) — Fix LM Studio model-swap thrash (root cause = orchestration)
+
+User pushed back on an earlier mis-framing ("fix LM Studio settings"). Correct
+diagnosis: LM Studio behaves correctly; the bug is OUR orchestration naming
+**three** different gemma builds — `-a4b` (runBaseline answerer hardcode), `-qat`
+(distillation/.env/gen-scripts), `-it` (judge sidecar default + docker-compose).
+LM Studio JIT-loads whichever `model` key a request names and auto-evicts the
+previous under VRAM pressure → ping-pong on every alternating call. Web-confirmed
+mechanism: JIT loading + Auto-Evict ("at most 1 JIT model") + 60min idle TTL;
+no `ttl`/keep-alive anywhere in the code.
+
+Fix — single source of truth, every chat caller derives from ONE model:
+- `CHAT_MODEL` env + `resolveChatModel/Answerer/Judge/Gen` in `src/env.ts`
+  (CHAT_MODEL → DISTILLATION_MODEL back-compat). Removed all hardcoded model
+  strings (runBaseline, gen scripts ×2, sidecar `config.py`).
+- Judge defaults to chat (`JUDGE_AGENT_MODEL ?? CHAT_MODEL`) → realtime QC SHARES
+  the loaded instance, **zero swap**. Steady state = 2 LM Studio models
+  (chat + bge-m3); reranker is a separate service (28417), not an LM Studio slot.
+- Cross-judge measurement is opt-in via `--defer-judge` (one swap/run, not /row).
+- `docker-compose.yml`: DISTILLATION_MODEL + JUDGE_AGENT_MODEL default to
+  `${CHAT_MODEL-…}`. `.env`/`.env.baseline` pin CHAT_MODEL (=gemma-qat / mistral-nemo).
+- CLAUDE.md: new "Model orchestration — single source of truth" section;
+  baseline-stack ceremony marked mostly-superseded (consistency now structural).
+- Verify: tsc clean; **885/885 unit**; resolver test (10 cases,
+  `src/env.modelResolvers.test.ts`); live resolve under `.env` = **1 distinct
+  chat model** (gemma-4-26b-a4b-qat).
+
+## Commit A (DEFERRED-034) — chunks retrieval reranker + wide-pool + relevance gate
+
+Chunks was the only retrieval surface without a reranker (the real cp/cr lever
+v12 couldn't touch). Wired through the shared dispatcher (rerankLessons →
+exported `rerankCandidates`); wide pool (CHUNKS_RERANK_POOL=30) → rerank → trim;
+`rerank` param + `CHUNKS_RERANK_DISABLED`; pure `reorderByRerank` (TDD 6 cases);
+MCP `search_document_chunks` rerank param; in-process A/B probe.
+
+A/B result — **honest, metric-neutral**:
+- Mechanism ✅: rerank fired 13/13, reordered top-5 on 11/13; wider pool improved
+  completeness 3→5 on two under-retrieved rows.
+- cp/cr quality: cp Δ−0.013 / cr Δ+0.009, **both inside the 0.146 judge-noise
+  band** (on-arm cp alone spanned 0.615–0.756 across 3 passes). Most targets
+  already rank-1 → no headroom; noise swamps any effect.
+- Decision (user): ship **default-ON** on architectural-consistency +
+  completeness grounds, NOT a metric win. Closeout:
+  `docs/qc/2026-06-18-deferred-034-chunks-rerank-closeout.md`.
+- Caveat: rerank service times out on first cold call (1800ms) → graceful
+  no-rerank fallback until warm (all surfaces, predates this).
+- DEFERRED-034 → PARTIALLY ADDRESSED; still open: chunk granularity (real cr
+  lever) + searchChunksMulti rerank parity.
+
+**Ops note:** started `free-context-hub-db` container for the probes (the stack
+was down; host busy with infra-* project). Left running.
+
+**Not done:** push + PR (user deferred). Run `npm test` needs DB + EMBEDDINGS_BASE_URL=localhost.
+
+---
+
 # CHECKPOINT — v12 closed won't-fix: chunks cp/cr "regression" is judge noise (2026-06-18)
 
 **Status:** v12 (a "v12" chunks synthesizer template to recover
