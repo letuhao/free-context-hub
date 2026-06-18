@@ -1,3 +1,33 @@
+# CHECKPOINT — DEFERRED-034 closed out (2026-06-18, session 4)
+
+**Branch:** `deferred-034-chunk-granularity` off merged main (PR #39 landed).
+Commit **26e6d27**.
+
+**Asked:** "tiếp tục 34" (chunk granularity, the cr lever). CLARIFY found the
+task-as-asked isn't measurable, and pivoted to the shippable open item.
+
+**Diagnosis (chunk granularity → re-deferred):** the chunks corpus is **11
+chunks total** (avg 272 chars, 3 vision-extraction failures = ~8 usable) across
+`test-data/sample.{docx,pdf,png}`. Per-row cr proves the bottleneck is corpus
+CONTENT, not slicing — `chunk-retry-strategy-overview` scores **cr=0 with
+cp=0.92** (precise retrieval, gt claims simply absent). Re-chunking can't add
+absent facts nor clear the 0.146 cr noise floor on 11 chunks, and would break
+every `target_chunk_ids`. Real cr lever = **corpus expansion** (overlaps
+DEFERRED-032). Re-deferred with DB + per-row evidence.
+
+**Shipped (searchChunksMulti rerank parity):** multi-project chunk search had
+dedup but no reranker (single got it in PR #39). Extracted the shared
+`postProcessChunkMatches` (rerank → dedup → trim) + pure `chunkRerankActive`,
+used by BOTH paths so they can't drift. Multi gained `rerank?` param + wide pool
++ 1000-char rerank window. tsc clean; 953/953; live 2-project smoke confirms the
+reranked path fires + graceful fallback. Design:
+`docs/specs/2026-06-18-deferred-034-multi-rerank-parity.md`.
+
+**Theme continued:** verify the experiment is even runnable before doing the
+work — same discipline as the CoVe/cp-cr arcs ([[verify-metric-inputs]]).
+
+---
+
 # CHECKPOINT — LLM chat in/out standardized (architecture fix) (2026-06-18, session 3)
 
 **Branch:** `fix-model-swap-orchestration`. Commit **ab53ed5**.
