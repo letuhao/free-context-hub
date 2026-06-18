@@ -8,6 +8,8 @@ async function chatCompletion(params: {
   max_tokens?: number;
   temperature?: number;
   timeoutMs: number;
+  /** DEFERRED-035: injectable fetch for caller-wiring tests. */
+  fetchImpl?: typeof fetch;
 }): Promise<string> {
   const env = getEnv();
   const model = env.DISTILLATION_MODEL;
@@ -24,6 +26,7 @@ async function chatCompletion(params: {
     temperature: params.temperature ?? 0.2,
     maxTokens: params.max_tokens ?? 600,
     timeoutMs: params.timeoutMs,
+    fetchImpl: params.fetchImpl,
   });
   if (!content) {
     throw new Error('[chat] Missing choices[0].message.content (and reasoning_content also empty)');
@@ -46,7 +49,10 @@ function distillMaxTokens(title: string, content: string): number {
   return Math.min(8000, Math.max(2000, Math.ceil(n / 2.5)));
 }
 
-export async function distillLesson(input: { title: string; content: string }): Promise<DistillLessonResult> {
+export async function distillLesson(
+  input: { title: string; content: string },
+  opts?: { fetchImpl?: typeof fetch },
+): Promise<DistillLessonResult> {
   const env = getEnv();
   const system =
     'You are a careful context engineer. Output ONLY valid JSON with keys "summary" and "quick_action". ' +
@@ -64,6 +70,7 @@ export async function distillLesson(input: { title: string; content: string }): 
     max_tokens: distillMaxTokens(input.title, input.content),
     temperature: 0.2,
     timeoutMs: env.DISTILLATION_TIMEOUT_MS,
+    fetchImpl: opts?.fetchImpl,
   });
 
   const parsed = extractJsonObject(out) as any;

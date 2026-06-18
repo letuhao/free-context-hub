@@ -576,7 +576,7 @@ function rerankHeaders(): Record<string, string> {
  * Generative reranker: sends all candidates to a chat model, gets JSON order back.
  * Works with: qwen3-reranker-4b, zerank-2, any chat/instruct model.
  */
-async function rerankGenerative(query: string, candidates: RerankCandidate[]): Promise<number[]> {
+async function rerankGenerative(query: string, candidates: RerankCandidate[], fetchImpl?: typeof fetch): Promise<number[]> {
   const env = getEnv();
   const model = env.RERANK_MODEL ?? env.DISTILLATION_MODEL;
   if (!model) return candidates.map(c => c.index);
@@ -604,6 +604,7 @@ async function rerankGenerative(query: string, candidates: RerankCandidate[]): P
       temperature: 0.0,
       maxTokens: env.RERANK_LLM_MAX_TOKENS,
       timeoutMs,
+      fetchImpl,
     });
     if (!content) return candidates.map(c => c.index);
 
@@ -911,6 +912,8 @@ export function rerankConfigured(): boolean {
 export async function rerankCandidates(params: {
   query: string;
   candidates: RerankCandidate[];
+  /** DEFERRED-035: injectable fetch for caller-wiring tests (generative path). */
+  fetchImpl?: typeof fetch;
 }): Promise<number[]> {
   const env = getEnv();
 
@@ -936,7 +939,7 @@ export async function rerankCandidates(params: {
   }
 
   if (!env.DISTILLATION_ENABLED) return params.candidates.map(c => c.index);
-  return rerankGenerative(params.query, params.candidates);
+  return rerankGenerative(params.query, params.candidates, params.fetchImpl);
 }
 
 /**

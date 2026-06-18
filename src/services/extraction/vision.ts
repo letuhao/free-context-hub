@@ -48,6 +48,8 @@ export async function extractPageVision(params: {
   maxTokens?: number;
   /** AbortSignal for cancellation (defaults to env.VISION_TIMEOUT_MS) */
   signal?: AbortSignal;
+  /** DEFERRED-035: injectable fetch for caller-wiring tests. */
+  fetchImpl?: typeof fetch;
 }): Promise<VisionResult> {
   const env = getEnv();
   const maxTokens = params.maxTokens ?? env.VISION_MAX_TOKENS;
@@ -79,6 +81,7 @@ async function callVisionOnce(params: {
   prompt?: string;
   maxTokens: number;
   signal?: AbortSignal;
+  fetchImpl?: typeof fetch;
 }): Promise<VisionResult> {
   const env = getEnv();
   const model = env.VISION_MODEL || env.DISTILLATION_MODEL;
@@ -127,6 +130,7 @@ async function callVisionOnce(params: {
     maxTokens: params.maxTokens,
     signal: params.signal,
     timeoutMs: env.VISION_TIMEOUT_MS,
+    fetchImpl: params.fetchImpl,
   });
 
   let markdown = content;

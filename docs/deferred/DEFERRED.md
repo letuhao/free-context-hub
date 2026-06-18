@@ -170,7 +170,19 @@
 ## DEFERRED-035
 
 - **Title:** Per-caller wiring regression tests for the shared LLM client
-- **Status:** OPEN (2026-06-18)
+- **Status:** MOSTLY RESOLVED (2026-06-18) — the 3 highest-value LLM callers now have
+  injected-`fetchImpl` wiring tests asserting the real HTTP body
+  (`src/services/llm/callerWiring.test.ts`): **distiller** (sends `DISTILLATION_MODEL`
+  + base-url/key, parses the JSON), **vision** (multimodal `image_url` base64-PNG
+  block + `VISION_MODEL`), **lessons generative rerank** (`RERANK_MODEL`, ranking
+  prompt carries query+candidates, applies the returned order). Each caller gained an
+  optional `fetchImpl` test seam threaded to `chatComplete`. 985/985.
+  **REMAINING:** the `runBaseline.evalQuery` rewrite-wiring test (the addendum below)
+  is blocked — `runBaseline.ts` calls `main()` at module top level, so importing it
+  in a unit test would execute the runner. Testing `evalQuery` needs a small refactor
+  (guard the `main()` call behind an entry-point check) first; deferred as not worth
+  it for LOW-priority debt.
+- ~~**Status:** OPEN (2026-06-18)~~
 - **What:** The Phase-17.2 LLM in/out standardization migrated 11 chat call
   sites onto `src/services/llm/chatComplete`. `chatComplete` itself is unit-
   tested (transport, reasoning-suppression on/off, env off-switch, URL building,
