@@ -14,6 +14,7 @@ import { ContextHubError } from '../core/errors.js';
 import { getEnv } from '../env.js';
 import { getRootPrincipal, seedRootPrincipal, type Principal } from './principals.js';
 import { createBootstrapRootKey } from './apiKeys.js';
+import { countUnmigratedCoordinationActors } from './migrateCoordinationActors.js';
 
 /** Constant-time, length-independent secret comparison (hash both to a fixed 32 bytes first). */
 function secretsMatch(a: string, b: string): boolean {
@@ -123,6 +124,16 @@ export async function assertEnforceReady(): Promise<Principal> {
     throw new ContextHubError(
       'CONFLICT',
       'not enforce-ready: root exists but has no usable credential. Re-run `npm run bootstrap:root` to reissue before enabling enforcement.',
+    );
+  }
+  // [F1f.4 / F1-adv #5] Enabling auth-ON while the coordination substrate still holds legacy string
+  // actor_ids would strand claims/votes/proxies under principal-keyed comparisons. Refuse until the
+  // namespace migration has run.
+  const unmigrated = await countUnmigratedCoordinationActors();
+  if (unmigrated > 0) {
+    throw new ContextHubError(
+      'CONFLICT',
+      `not enforce-ready: ${unmigrated} coordination actor_id(s) are not principals. Run \`npm run migrate:coordination-actors\` before enabling enforcement.`,
     );
   }
   return root;
