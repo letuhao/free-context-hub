@@ -1,6 +1,7 @@
 # PLAN — Actor Data Boundary F1 (Identity + out-of-band root)
 
-**Status:** PLAN · **Date:** 2026-06-19 · **Branch:** `feature/actor-data-boundary`
+**Status:** ✅ COMPLETE (2026-06-19) — F1a–F1f all shipped + F1-adv saturated to CLEAR (4 passes),
+committed through `51a371d`, full suite 1071/1071. See SESSION_PATCH "F1 COMPLETE" checkpoint. · **Date:** 2026-06-19 · **Branch:** `feature/actor-data-boundary`
 **Parent specs:** [`-FOUNDATION.md`](../specs/2026-06-19-actor-data-boundary-FOUNDATION.md) (F1 build plan),
 [`-mcp-fe-design.md`](../specs/2026-06-19-actor-data-boundary-mcp-fe-design.md) (vocabulary + external surface).
 **Size:** L (schema + API contract + auth). Full 12 phases, no skips. Per-sub-phase cold-start

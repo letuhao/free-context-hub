@@ -6,9 +6,12 @@
 ## DEFERRED-043
 
 - **Title:** Unify the Phase-15 coordination actor_id namespace onto `principal_id` (auth-ON prerequisite)
-- **Status:** OPEN (2026-06-19). Surfaced by the F1-adv pass-1 cross-cutting adversary. **Blocks
-  enabling `MCP_AUTH_ENABLED=true` on any deployment with existing Phase-15 coordination state** —
-  NOT a live issue under the default auth-OFF posture (F1e is a no-op there).
+- **Status:** **RESOLVED (2026-06-19) — superseded by F1f** (user chose "full migration now"). Target
+  fields are validated as principals (F1f.2); `migrate:coordination-actors` rewrites legacy string
+  actors → principals across ~19 cols + 2 text[] arrays (F1f.3); `assertEnforceReady` gates on a clean
+  substrate (F1f.4); reserved `system:`/`motion:` sentinels are exempted at migrate/gate AND reserved
+  at the write boundary (F1-adv pass 3). Committed through `51a371d`. The remaining auth-ON enablement
+  step (hard boot-gate) is the separate F4 item.
 - **Context:** Phase-15 stores actor identity as free-text strings compared by exact equality
   (`claims.actor_id`, `body_members.actor_id`, `votes.actor_id`, `proxies.principal/proxy`,
   `topic_participants.actor_id`). F1e (commit 556959e/fb5cbc6/42d93a9) makes the *acting caller* a

@@ -1,3 +1,46 @@
+# CHECKPOINT — Actor data-boundary F1 COMPLETE (2026-06-19, session 10)
+
+**Branch:** `feature/actor-data-boundary`. **F1 (identity substrate) is DONE** — all sub-phases built
+TDD-first, each gated by a cold-start adversary, plus a saturating multi-pass at the end. Built via
+`/loop` (self-paced). Committed through `51a371d`. Full unit suite **1071/1071, tsc clean.**
+
+**What F1 delivers:** identity is real instead of asserted. A `principals` table is the single subject;
+credentials bind to principals; a root of trust is established out-of-band; the acting identity is
+derived from the credential (un-spoofable when auth is ON); and the entire coordination actor
+namespace is unified onto principals.
+
+**Sub-phases (each adversary-cleared):**
+- **F1a** `principals` substrate — migration 0064 (opaque UUID id, kind/status, single-root guard),
+  service. Adv: root un-brickable, `retired` terminal.
+- **F1b** api_keys↔principal binding — active-gated `validateApiKey`, atomic bind, root fail-closed.
+- **F1c** out-of-band root bootstrap — migration 0065 (`is_bootstrap`), `ROOT_BOOTSTRAP_TOKEN`,
+  `bootstrap:root` CLI, atomic root-key rotation, `assertEnforceReady` lockout guard.
+- **F1d** authenticated-principal resolution — `resolveActingPrincipal`, `resolveMcpCaller`,
+  `whoami`, `ASSERTED_IDENTITY_REJECTED`/`CREDENTIAL_EXPIRED`.
+- **F1e** stop trusting asserted actor_id — `resolveActingActor` wired into ~24 MCP handlers
+  (caller fields).
+- **F1f** namespace unification (user chose "full migration now" after F1-adv pass 1 found the
+  free-text actor_id split): target/reference fields validated as principals (F1f.1/.2); data
+  migration `migrate:coordination-actors` (F1f.3, ~19 cols + 2 text[] arrays, idempotent,
+  sentinel-aware); `assertEnforceReady` coordination gate (F1f.4); reserved `system:`/`motion:`
+  prefixes (F1-adv pass 3).
+- **F1-adv** saturating multi-pass: CRITICAL+2HIGH → MED+LOW → HIGH → **CLEAR** (4 passes). Every
+  HIGH/MED fixed in-phase.
+
+**Migrations added:** 0064 (principals), 0065 (api_key bootstrap marker). **New CLIs:**
+`npm run bootstrap:root`, `npm run migrate:coordination-actors`.
+
+**Deferred to F4 (enforcement posture):** hard boot-gate of `MCP_AUTH_ENABLED` on `assertEnforceReady`;
+`MCP_LEGACY_TOKEN_DISABLED` default flip. **DEFERRED-043 RESOLVED** (superseded by F1f).
+
+**Not from F1 (left as-is):** the competency-eval corpus committed separately (`b737085`).
+
+**What's next:** F2 (delegation + scope / `authorize()` + grants) per the FOUNDATION plan; or build the
+FE pages (identity/delegation/authorization/access-control-v2 drafts). Auth stays OFF until F4 wires
+the boot-gate; before any auth-ON rollout run `bootstrap:root` then `migrate:coordination-actors`.
+
+---
+
 # CHECKPOINT — Actor data-boundary F1d: authenticated-principal resolution SHIPPED (2026-06-19, session 10)
 
 **Branch:** `feature/actor-data-boundary`. **F1d landed (commit `ce942f4`).** `/loop` self-paced.
