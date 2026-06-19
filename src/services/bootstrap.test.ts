@@ -179,6 +179,30 @@ test('bootstrapRoot: reissue ROTATES — old key dies, exactly one live root cre
   assert.equal(live.rows[0].n, 1, 'exactly one live root credential after rotation');
 });
 
+test('hasUsableRootCredential agrees with validateApiKey for the bootstrap key (predicate-drift guard) [review-impl #1]', async (t) => {
+  if (await foreignRoot(t)) return;
+  const res = await bootstrapRoot({ presentedToken: TOKEN, display_name: ROOT_NAME });
+  const key = (res as { key: string }).key;
+  assert.equal(await hasUsableRootCredential(), true);
+  assert.ok(await validateApiKey(key), 'both agree the root key is usable');
+
+  // revoke -> both predicates must agree it is gone (catches future divergence)
+  const pool = getDbPool();
+  await pool.query(`UPDATE api_keys SET revoked = true WHERE created_by = 'bootstrap:root'`);
+  assert.equal(await hasUsableRootCredential(), false);
+  assert.equal(await validateApiKey(key), null, 'both agree the revoked root key is unusable');
+});
+
+test('assertEnforceReady: ready when the legacy token is SET but DISABLED (hardened) [review-impl #3]', async (t) => {
+  if (await foreignRoot(t)) return;
+  await bootstrapRoot({ presentedToken: TOKEN, display_name: ROOT_NAME });
+  const env = getEnv() as MutableEnv;
+  env.CONTEXT_HUB_WORKSPACE_TOKEN = 'legacy-present-but-hardened';
+  env.MCP_LEGACY_TOKEN_DISABLED = true;
+  const ready = await assertEnforceReady();
+  assert.equal(ready.is_root, true);
+});
+
 test('assertEnforceReady: refuses while the legacy global-admin token is live [adversary #1]', async (t) => {
   if (await foreignRoot(t)) return;
   await bootstrapRoot({ presentedToken: TOKEN, display_name: ROOT_NAME });

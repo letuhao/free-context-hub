@@ -99,6 +99,11 @@ export async function assertEnforceReady(): Promise<Principal> {
   // principal or the is_bootstrap gate — so while it is live, the data boundary is not actually
   // enforced (the marker design is bypassable). A deployment is not enforce-ready until that
   // bypass is off. [F1c adversary #1] (Hard boot-gating of MCP_AUTH_ENABLED on this check is F4.)
+  //
+  // DRIFT WARNING [review-impl]: this `token && !disabled` predicate MUST stay in sync with the two
+  // auth fast-paths that actually honor the legacy token — src/mcp/auth.ts (resolveMcpCallerScope)
+  // and src/api/middleware/auth.ts (bearerAuth). If you change how the legacy bypass is gated there,
+  // update this guard too, or enforce-ready will mis-report.
   const env = getEnv();
   if (env.CONTEXT_HUB_WORKSPACE_TOKEN && !env.MCP_LEGACY_TOKEN_DISABLED) {
     throw new ContextHubError(
