@@ -1,3 +1,111 @@
+# CHECKPOINT — Actor data-boundary: DESIGN PHASE CLOSED (2026-06-19, session 9)
+
+**Branch:** `feature/actor-data-boundary`. **Design phase complete — no code yet; F1 starts next, clean.**
+
+Closed the full design pile in one pass after the FE+MCP coverage eval:
+- **G1 (HIGH) closed** — `docs/gui-drafts/pages/bootstrap.html`: first-run root establishment
+  out-of-band (`ROOT_BOOTSTRAP_TOKEN` / `npm run bootstrap:root`) → operator principal → enforcement
+  flip with a lockout guard (verifies you can sign in before locking the door).
+- **G2 (HIGH) closed** — `docs/gui-drafts/components/sidebar-v3-governance.html`: Governance nav group
+  (Identity / Delegation / Authorization / NHI Access Review + disabled Codices), Settings sub-tree
+  (Access Control, Sessions & Security), signed-in-as account footer, IA route map, scope-gated visibility.
+- **G3/G6/G11 (MED) resolved** as contracts in `-mcp-fe-design.md` §3b: `CREDENTIAL_EXPIRED` error +
+  `whoami.expires_at` (no retry-loop); agent self-service bounded by subtree incl. `mint_ephemeral_key`
+  (durable keys + human registration stay human/REST); "Rebind" removed → revoke+reissue (true rebind is
+  root-only + re-auth + `credential.rebind` audit, shipped OFF).
+- **G4/G5/G7/G8/G10 (LOW) → DEFERRED-042** (per-page polish during FE build; no backend blocker).
+
+**Design deliverable (final):** 4 specs (`-FOUNDATION`, `-mcp-fe-design`, `-standards-gap`,
+`-fe-mcp-eval`) + 10 draft HTML (identity, delegation, authorization, access-control-v2, login,
+register, sessions, nhi-access-review, bootstrap, sidebar-v3-governance) + v1–v5 governance-OS research
+track retained. **DEFERRED-041 → DESIGNED; DEFERRED-042 opened.**
+
+**What's next:** **F1 code** TDD-first — `principals` (opaque id, kind, status) + `api_keys→principal`
++ out-of-band root (token/CLI + lockout-guarded enforce) + stop-trusting-asserted-`actor_id`. Per-phase
+cold-start adversary against the CODE. Then F2 (grants/scope) · F3 (attribute+fence) · F-AUTH
+(human login/MFA/session, parallel to F2/F3) · NHI hardening (rides F1).
+
+---
+
+# CHECKPOINT — Actor data-boundary: industry-standards gap + human-auth/NHI design (2026-06-19, session 9)
+
+**Branch:** `feature/actor-data-boundary` (still design only; no code yet).
+
+**Why:** user asked to web-search industry standards and noticed the design had "no register/login
+screen." Correct — the foundation + first design pass covered the *authorization/delegation/machine*
+axis (ahead of the curve for agent governance) but had **zero human-authentication axis**.
+
+**Web search → standards anchored:** NIST 800-63B (AAL1 single / **AAL2 = MFA** / AAL3 hardware;
+session re-auth 30d@AAL1, 12h+15min-idle@AAL3), OWASP ASVS V6 (soft/hard lockout, ≤100 fails/hr,
+reset-never-locks, ≥12-char passwords, anti-automation), and NHI governance best-practice
+(short-lived/ephemeral creds, rotation+expiry, log-based access review "used in last 90d?", named owner).
+
+**Gap reading:** ahead on agent governance (agents = API-key machine identity, the modern pattern,
+no human login needed); behind on the **human operator** browser login = exactly DEFERRED-041. NHI
+hardening (rotation enforce, ephemeral keys, unused-90d review) was also only partial.
+
+**User decision:** add **both** human-auth screens **and** NHI hardening to this design pass.
+
+**Produced (1 spec + 4 HTML drafts):**
+- `docs/specs/2026-06-19-actor-data-boundary-standards-gap.md` — the gap table + the model extension:
+  *principal stays the single subject; humans add `password+MFA → session`, agents keep `api_key`* —
+  **no change to `authorize()`/grants**. New objects: `human_credentials`, `mfa_factors`, `sessions`,
+  `invites`, verify/reset tokens; NHI fields (enforced expiry, ephemeral keys, rotation, last-used
+  review). New REST `/api/auth/*` + `/api/invites` + `/api/access-review`. Sequenced as phase F-AUTH
+  (after F1, parallel to F2/F3); NHI hardening rides on F1.
+- `docs/gui-drafts/pages/login.html` — login, MFA challenge (AAL2), soft-lockout, forgot-password, auth-off notice.
+- `docs/gui-drafts/pages/register.html` — invite accept, password policy meter, email verify, MFA enroll (TOTP/WebAuthn), backup codes, admin issue-invite.
+- `docs/gui-drafts/pages/sessions.html` — active sessions (revoke, current device, AAL badge) + deployment auth policy (require-MFA, re-auth/idle windows, lockout).
+- `docs/gui-drafts/pages/nhi-access-review.html` — credential review (age/last-used/expiry/rotation), unused-90d → revoke, rotate-with-overlap modal, ephemeral key mint.
+
+**DEFERRED-041 → DESIGNED** (was OPEN); build pending as F-AUTH.
+
+**Out of scope (DLF-growth):** SSO/SAML/OIDC federation, IAL identity-proofing, risk-based/adaptive
+auth, SCIM — all attach to the same principal+session model later without a rewrite.
+
+**What's next:** still F1 code first (identity substrate everything else needs), then F2/F3 + F-AUTH
+in parallel. Drafts → real pages follow the backend phases.
+
+---
+
+# CHECKPOINT — Actor data-boundary: MCP + FE design pass (2026-06-19, session 9)
+
+**Branch:** `feature/actor-data-boundary` (still design only; no code yet).
+
+**Why:** before starting F1 code, the foundation had no external-surface design — the user flagged
+"first feature build lacks MCP and FE design… huge feature with a lot of audit and explanation."
+Surveyed the existing `docs/gui-drafts/` house style (Tailwind CDN, dark zinc, draft-comment →
+breadcrumb → header → stat row → tabs → cards/timeline → slide-over/modal, alt states under `mt-12`).
+The two existing pages this feature reshapes: `access-control.html` (keys carry role+project string)
+and `agent-audit.html` (timeline of *asserted* actor names).
+
+**Produced (1 spec + 4 HTML drafts):**
+- `docs/specs/2026-06-19-actor-data-boundary-mcp-fe-design.md` — shared vocabulary (Principal, Scope
+  {global|project|topic|task}, Capability {read⊂write⊂admin, delegate}, Grant, `authorize()` with
+  machine-readable reasons), the MCP tool surface (`whoami`, `explain_authorization`, `list_principals`,
+  `list_grants`, `grant_capability`, `revoke_grant`) and the **F1 breaking note** (stop trusting
+  asserted `actor_id`; derive principal from credential; reject mismatch when auth ON, honor when OFF).
+- `docs/gui-drafts/pages/identity.html` — principal directory; root marked axiomatic/out-of-band;
+  auth on/off posture banner; principal slide-over (bound keys + grants).
+- `docs/gui-drafts/pages/delegation.html` — the delegation **tree** + flat table; grant modal with
+  live "within your subtree" check + the upward/sideways-reject state; scope-coverage explainer.
+- `docs/gui-drafts/pages/authorization.html` — decision log (ALLOW/DENY + reason token + matched grant
+  / failed condition) and the **"why" inspector** (simulate X·action·resource → evaluation chain);
+  reasons: COVERING_GRANT, OUT_OF_SCOPE, NO_COVERING_GRANT, PRINCIPAL_INACTIVE, ROOT_SHORT_CIRCUIT,
+  ASSERTED_IDENTITY_REJECTED.
+- `docs/gui-drafts/pages/access-control-v2.html` — rework: keys **bind to a principal**; effective-access
+  matrix is *derived from grants* (not an editable RBAC table); generate-key modal binds a principal.
+
+**Design invariants the drafts enforce:** never a bare verdict (always show the reason + matched grant /
+failed condition); root is visually distinct and labeled out-of-band everywhere; posture banner always
+visible (dev-mode allow must never be mistaken for a real grant). Codices left as a disabled "later" tab.
+
+**What's next:** start **F1** code (migrations + principal/identity + root config + stop-trusting-id)
+TDD-first, per-phase cold-start adversary against the CODE. Drafts → real `gui/src/app/{identity,
+delegation,authorization}/page.tsx` + `settings/access` rework follow the backend phases.
+
+---
+
 # CHECKPOINT — Actor data-boundary: 5 design rounds → cleared foundation (2026-06-19, session 9)
 
 **Branch:** `feature/actor-data-boundary` (design only; no code yet).

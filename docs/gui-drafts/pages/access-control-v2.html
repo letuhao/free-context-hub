@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: Access Control v2 (keys → principals)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen font-sans">
+  <div class="p-6">
+    <p class="text-xs text-zinc-600 mb-4">Draft: pages/access-control-v2 | Source: gui/src/app/settings/access/page.tsx (rework) | Spec: docs/specs/2026-06-19-actor-data-boundary-mcp-fe-design.md</p>
+
+    <!-- Breadcrumb -->
+    <div class="flex items-center gap-1.5 text-xs text-zinc-500 mb-4">
+      <span>Settings</span>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      <span class="text-zinc-400">Access Control</span>
+    </div>
+
+    <!-- Page Header -->
+    <div class="flex items-center justify-between mb-5">
+      <div>
+        <h1 class="text-lg font-semibold text-zinc-100">Access Control</h1>
+        <p class="text-xs text-zinc-500 mt-0.5">A credential authenticates <em>to a principal</em>. The principal &mdash; not the key &mdash; carries authority, through its grants.</p>
+      </div>
+    </div>
+
+    <!-- What changed callout -->
+    <div class="bg-blue-500/5 border border-blue-500/20 rounded-lg p-3.5 mb-6">
+      <div class="flex items-start gap-2.5">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-blue-400 shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        <div class="text-[11px] text-zinc-400 leading-relaxed">
+          <span class="text-zinc-200 font-medium">What changed (foundation F1):</span>
+          a key no longer carries a free-floating <code class="text-zinc-500">role</code> + project string. It now <span class="text-blue-300">binds to a principal</span>, and authority comes from that principal's
+          <a class="text-blue-300 underline decoration-dotted">grants</a>. The old built-in roles (admin/writer/reader) map to seed grants on the bound principal &mdash; same effect, but now auditable and revocable per-scope.
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex gap-1 mb-6 border-b border-zinc-800 pb-px">
+      <button class="px-4 py-2 text-xs font-medium text-blue-400 border-b-2 border-blue-400">API Keys</button>
+      <button class="px-4 py-2 text-xs text-zinc-500 hover:text-zinc-300">Effective Access</button>
+    </div>
+
+    <!-- ── API KEYS ── -->
+    <div class="mb-8">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-sm font-semibold text-zinc-200">API Keys</h2>
+          <p class="text-xs text-zinc-500 mt-0.5">Tokens that authenticate MCP clients and API consumers to a principal</p>
+        </div>
+        <button class="px-4 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white font-medium transition-colors flex items-center gap-1.5">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Generate Key
+        </button>
+      </div>
+
+      <div class="space-y-3">
+        <!-- Key bound to agent principal -->
+        <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-sm font-medium text-zinc-200">Production Agent Key</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">active</span>
+              </div>
+              <!-- principal binding -->
+              <div class="flex items-center gap-2 mt-1.5 mb-1.5">
+                <span class="text-[10px] text-zinc-600">binds to</span>
+                <a class="flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded bg-violet-500/10 text-violet-300 hover:bg-violet-500/20">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg>
+                  claude-code
+                  <span class="text-[9px] text-violet-400/70">agent</span>
+                </a>
+                <span class="text-[10px] text-zinc-600">→ 3 grants</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <code class="text-[11px] font-mono text-zinc-500 bg-zinc-950 px-2 py-0.5 rounded">chub_sk_prod_...a3f8</code>
+                <button class="text-[10px] text-zinc-600 hover:text-zinc-400">Copy prefix</button>
+              </div>
+              <div class="flex items-center gap-3 mt-2 text-[10px] text-zinc-600">
+                <span>Created 30 days ago</span>
+                <span>Last used 5 minutes ago</span>
+              </div>
+            </div>
+            <div class="flex gap-2 shrink-0">
+              <button class="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Rebind</button>
+              <button class="text-xs text-zinc-500 hover:text-red-400 transition-colors">Revoke</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Key bound to scoped agent -->
+        <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-sm font-medium text-zinc-200">CI/CD Read-Only</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">active</span>
+              </div>
+              <div class="flex items-center gap-2 mt-1.5 mb-1.5">
+                <span class="text-[10px] text-zinc-600">binds to</span>
+                <a class="flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded bg-violet-500/10 text-violet-300 hover:bg-violet-500/20">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg>
+                  ci-indexer
+                  <span class="text-[9px] text-violet-400/70">agent</span>
+                </a>
+                <span class="text-[10px] text-zinc-600">→ 1 grant: read @ topic:phase-17-eval</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <code class="text-[11px] font-mono text-zinc-500 bg-zinc-950 px-2 py-0.5 rounded">chub_sk_ci_...b7e2</code>
+                <button class="text-[10px] text-zinc-600 hover:text-zinc-400">Copy prefix</button>
+              </div>
+              <div class="flex items-center gap-3 mt-2 text-[10px] text-zinc-600">
+                <span>Created 14 days ago</span>
+                <span>Last used 2 hours ago</span>
+              </div>
+            </div>
+            <div class="flex gap-2 shrink-0">
+              <button class="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Rebind</button>
+              <button class="text-xs text-zinc-500 hover:text-red-400 transition-colors">Revoke</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Key bound to suspended principal -->
+        <div class="bg-zinc-900 border border-amber-500/20 rounded-lg p-4">
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-sm font-medium text-zinc-300">Cursor Dev Key</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">active</span>
+              </div>
+              <div class="flex items-center gap-2 mt-1.5 mb-1">
+                <span class="text-[10px] text-zinc-600">binds to</span>
+                <a class="flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 hover:bg-amber-500/20">
+                  cursor-agent
+                  <span class="text-[9px]">suspended</span>
+                </a>
+              </div>
+              <p class="text-[11px] text-amber-300/80">Key is valid, but the bound principal is suspended &mdash; every request denies (<code class="text-amber-300">PRINCIPAL_INACTIVE</code>). Suspend the principal, not the key, to freeze an actor.</p>
+            </div>
+            <div class="flex gap-2 shrink-0">
+              <button class="text-xs text-zinc-500 hover:text-red-400 transition-colors">Revoke</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Revoked key -->
+        <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4 opacity-60">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-sm font-medium text-zinc-400 line-through">Old Dev Key</span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400">revoked</span>
+            <span class="text-[10px] text-zinc-600">was bound to old-migration-bot</span>
+          </div>
+          <div class="text-[10px] text-zinc-600">Revoked 7 days ago</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <h2 class="text-sm font-medium text-zinc-400 mt-12 mb-3">Tab 2: Effective Access (per principal, read-only — sourced from grants)</h2>
+
+    <div class="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+      <table class="w-full text-xs">
+        <thead>
+          <tr class="border-b border-zinc-800">
+            <th class="text-left px-4 py-3 text-zinc-500 font-medium">Principal</th>
+            <th class="text-center px-4 py-3 text-zinc-500 font-medium">read</th>
+            <th class="text-center px-4 py-3 text-zinc-500 font-medium">write</th>
+            <th class="text-center px-4 py-3 text-zinc-500 font-medium">admin</th>
+            <th class="text-center px-4 py-3 text-zinc-500 font-medium">delegate</th>
+            <th class="text-left px-4 py-3 text-zinc-500 font-medium">at scope</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="border-b border-zinc-800/50">
+            <td class="px-4 py-2.5 text-amber-200">root <span class="text-[10px] text-amber-400">axiomatic</span></td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+            <td class="px-4 py-2.5 text-zinc-400">global (by axiom, not a grant)</td>
+          </tr>
+          <tr class="border-b border-zinc-800/50">
+            <td class="px-4 py-2.5 text-zinc-300">Le Tu Hao <span class="text-[10px] text-sky-400">human</span></td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+            <td class="px-4 py-2.5 text-zinc-400">global</td>
+          </tr>
+          <tr class="border-b border-zinc-800/50">
+            <td class="px-4 py-2.5 text-zinc-300">claude-code <span class="text-[10px] text-violet-400">agent</span></td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+            <td class="text-center text-zinc-600">&mdash;</td>
+            <td class="text-center text-zinc-600">&mdash;</td>
+            <td class="px-4 py-2.5 text-zinc-400">project:free-context-hub (+ task:T-4821)</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2.5 text-zinc-300">ci-indexer <span class="text-[10px] text-violet-400">agent</span></td>
+            <td class="text-center text-emerald-400">&#10003;</td>
+            <td class="text-center text-zinc-600">&mdash;</td>
+            <td class="text-center text-zinc-600">&mdash;</td>
+            <td class="text-center text-zinc-600">&mdash;</td>
+            <td class="px-4 py-2.5 text-zinc-400">topic:phase-17-eval</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="text-[11px] text-zinc-600 mt-2">This matrix is <em>derived</em> from active grants on the <a class="text-blue-300 underline decoration-dotted">Delegation</a> page &mdash; it is not an editable RBAC table. To change access, grant or revoke.</p>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <h2 class="text-sm font-medium text-zinc-400 mt-12 mb-3">Generate Key Modal (binds to a principal)</h2>
+
+    <div class="w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl">
+      <div class="px-6 pt-5 pb-4 border-b border-zinc-800">
+        <h2 class="text-base font-semibold text-zinc-100">Generate API Key</h2>
+        <p class="text-xs text-zinc-500 mt-0.5">The key authenticates as the chosen principal. Authority comes from that principal's grants &mdash; set those on the Delegation page.</p>
+      </div>
+      <div class="px-6 py-5 space-y-4">
+        <div>
+          <label class="block text-xs text-zinc-400 mb-1.5">Key name <span class="text-red-400">*</span></label>
+          <input type="text" placeholder="e.g. Production Agent" class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-zinc-600 transition-colors" />
+        </div>
+        <div>
+          <label class="block text-xs text-zinc-400 mb-1.5">Bind to principal <span class="text-red-400">*</span></label>
+          <select class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-300 outline-none appearance-none cursor-pointer focus:border-zinc-600">
+            <option>claude-code (agent)</option>
+            <option>ci-indexer (agent)</option>
+            <option>— Create new agent principal —</option>
+          </select>
+          <p class="text-[10px] text-zinc-600 mt-1">No principal? Choose "create new" to register one, then grant it scope on the Delegation page.</p>
+        </div>
+        <div>
+          <label class="block text-xs text-zinc-400 mb-1.5">Expiration</label>
+          <select class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-300 outline-none appearance-none cursor-pointer focus:border-zinc-600">
+            <option>Never</option>
+            <option>30 days</option>
+            <option>90 days</option>
+            <option>1 year</option>
+          </select>
+        </div>
+        <div class="bg-zinc-950 border border-zinc-800 rounded-md p-2.5 text-[11px] text-zinc-500">
+          This key will inherit <span class="text-zinc-300">claude-code</span>'s grants: <span class="text-blue-300">write @ project:free-context-hub</span>, <span class="text-zinc-400">read @ topic:phase-17-eval</span>, <span class="text-blue-300">write @ task:T-4821</span>.
+        </div>
+      </div>
+      <div class="px-6 py-4 border-t border-zinc-800 flex justify-end gap-2">
+        <button class="px-3 py-1.5 text-xs border border-zinc-700 rounded-md text-zinc-400">Cancel</button>
+        <button class="px-4 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white font-medium">Generate</button>
+      </div>
+    </div>
+
+    <!-- Key reveal -->
+    <div class="w-full max-w-lg mt-4 bg-amber-500/5 border border-amber-500/20 rounded-lg p-4">
+      <div class="flex items-center gap-2 mb-2">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-amber-400"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span class="text-xs text-amber-400 font-medium">Copy this key now — it won't be shown again</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <code class="flex-1 text-sm font-mono text-zinc-200 bg-zinc-950 px-3 py-2 rounded-md border border-zinc-800 select-all">chub_sk_prod_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6</code>
+        <button class="px-3 py-2 text-xs bg-zinc-800 border border-zinc-700 rounded-md text-zinc-300 hover:bg-zinc-700 transition-colors">Copy</button>
+      </div>
+      <p class="text-[10px] text-zinc-600 mt-2">Authenticates as <span class="text-violet-300">claude-code</span>. Asserting any other identity in a request payload will be rejected while auth is on.</p>
+    </div>
+
+  </div>
+</body>
+</html>

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: First-run Bootstrap (root + enforcement)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen font-sans">
+  <div class="p-6">
+    <p class="text-xs text-zinc-600 mb-6">Draft: pages/bootstrap | Source: gui/src/app/bootstrap/page.tsx | Spec: docs/specs/2026-06-19-actor-data-boundary-mcp-fe-design.md (G1) | Closes eval gap G1 — root configured out-of-band at install</p>
+
+    <!-- Stepper -->
+    <div class="w-full max-w-md mb-6">
+      <div class="flex items-center gap-2 text-[11px]">
+        <span class="px-2 py-0.5 rounded-full bg-blue-600 text-white">1 Root</span>
+        <span class="flex-1 h-px bg-zinc-800"></span>
+        <span class="px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400">2 You</span>
+        <span class="flex-1 h-px bg-zinc-800"></span>
+        <span class="px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400">3 Enforce</span>
+      </div>
+    </div>
+
+    <!-- ── Step 0: no-root detected ── -->
+    <h2 class="text-sm font-medium text-zinc-400 mb-3">State 0 — First run detected (no root configured)</h2>
+    <div class="w-full max-w-md bg-zinc-900 border border-amber-500/20 rounded-xl p-6 mb-8">
+      <div class="flex items-center gap-2 mb-2">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-amber-400"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+        <h1 class="text-base font-semibold text-zinc-100">Set up the trust anchor</h1>
+      </div>
+      <p class="text-xs text-zinc-400 mb-3">This deployment has no <span class="text-amber-300">root</span> yet. The root is the out-of-band trust anchor — only the holder of <code class="text-zinc-400">DATABASE_URL</code> can establish it. You are reaching this page from <span class="text-zinc-300">localhost</span> with enforcement off, which is the install-time window.</p>
+      <div class="bg-zinc-950 border border-zinc-800 rounded-md p-2.5 text-[11px] text-zinc-500 mb-4">
+        To confirm you hold the deployment secret, paste the value of <code class="text-zinc-400">ROOT_BOOTSTRAP_TOKEN</code> (printed once in the server logs at first start). This proves out-of-band possession — it is not a password and is consumed on use.
+      </div>
+      <label class="block text-xs text-zinc-400 mb-1.5">Bootstrap token</label>
+      <input type="password" placeholder="rbt_…" class="w-full px-3 py-2 mb-4 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-zinc-600" />
+      <button class="w-full px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 rounded-lg text-white font-medium">Establish root &amp; continue</button>
+      <p class="text-[10px] text-zinc-600 mt-3">Prefer the CLI? <code class="text-zinc-500">npm run bootstrap:root</code> does the same, headless. Either path seeds exactly one root principal; running it again is a no-op once root exists.</p>
+    </div>
+
+    <!-- ── Step 2: create your human principal ── -->
+    <h2 class="text-sm font-medium text-zinc-400 mt-12 mb-3">Step 2 — Create your operator account (first human principal)</h2>
+    <div class="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-8">
+      <h1 class="text-base font-semibold text-zinc-100 mb-1">Create your account</h1>
+      <p class="text-xs text-zinc-500 mb-4">Root is the anchor, not a daily login. Create a human principal with <span class="text-blue-300">delegate @ global</span> for everyday operation — root is used only to recover or re-seed.</p>
+      <label class="block text-xs text-zinc-400 mb-1.5">Email</label>
+      <input type="email" value="letuhao1994@gmail.com" class="w-full px-3 py-2 mb-3 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 outline-none focus:border-zinc-600" />
+      <label class="block text-xs text-zinc-400 mb-1.5">Password <span class="text-zinc-600">(≥12 chars)</span></label>
+      <input type="password" value="················" class="w-full px-3 py-2 mb-3 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 outline-none focus:border-zinc-600" />
+      <div class="flex items-center gap-2 mb-4 text-[11px] text-zinc-500">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-blue-400"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        You'll enroll MFA next — required before enforcement turns on.
+      </div>
+      <button class="w-full px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 rounded-lg text-white font-medium">Create &amp; enroll MFA</button>
+    </div>
+
+    <!-- ── Step 3: flip enforcement with lockout guard ── -->
+    <h2 class="text-sm font-medium text-zinc-400 mt-12 mb-3">Step 3 — Turn on enforcement (with lockout guard)</h2>
+    <div class="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-4">
+      <h1 class="text-base font-semibold text-zinc-100 mb-1">Enable enforcement</h1>
+      <p class="text-xs text-zinc-500 mb-4">Flipping <code class="text-zinc-400">MCP_AUTH_ENABLED=true</code> requires every caller to authenticate. We verify you won't lock yourself out first.</p>
+
+      <div class="space-y-2 mb-4">
+        <div class="flex items-center gap-2 bg-zinc-950 border border-zinc-800 rounded-md px-3 py-2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-emerald-400"><polyline points="20 6 9 17 4 12"/></svg>
+          <span class="text-xs text-zinc-300">Root established</span>
+        </div>
+        <div class="flex items-center gap-2 bg-zinc-950 border border-zinc-800 rounded-md px-3 py-2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-emerald-400"><polyline points="20 6 9 17 4 12"/></svg>
+          <span class="text-xs text-zinc-300">Your account can sign in <span class="text-zinc-500">(verified — test login succeeded in this browser)</span></span>
+        </div>
+        <div class="flex items-center gap-2 bg-zinc-950 border border-zinc-800 rounded-md px-3 py-2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-emerald-400"><polyline points="20 6 9 17 4 12"/></svg>
+          <span class="text-xs text-zinc-300">MFA enrolled (AAL2 reachable)</span>
+        </div>
+        <div class="flex items-center gap-2 bg-zinc-950 border border-zinc-800 rounded-md px-3 py-2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-amber-400"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span class="text-xs text-zinc-400">Agent keys present: 0 — agents will need keys after this</span>
+        </div>
+      </div>
+
+      <label class="flex items-start gap-2 mb-4 cursor-pointer">
+        <input type="checkbox" class="w-3.5 h-3.5 mt-0.5 rounded border-zinc-700 bg-zinc-800 accent-blue-500" />
+        <span class="text-[11px] text-zinc-400">I understand that after enabling, the console requires login and all MCP/API callers must present a credential. Root recovery remains available out-of-band.</span>
+      </label>
+      <button class="w-full px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 rounded-lg text-white font-medium">Enable enforcement</button>
+    </div>
+    <p class="text-[11px] text-zinc-600 max-w-md">If you'd rather stay single-operator: skip this step. Enforcement stays off, the console is open as root/dev, and this is valid until you expose the gateway to an untrusted network.</p>
+
+    <!-- ── Done ── -->
+    <h2 class="text-sm font-medium text-zinc-400 mt-12 mb-3">Done — enforcement ON</h2>
+    <div class="w-full max-w-md bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-6">
+      <div class="flex items-center gap-2 mb-1">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-emerald-400"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        <h1 class="text-base font-semibold text-emerald-200">You're set up</h1>
+      </div>
+      <p class="text-xs text-zinc-400 mb-3">Enforcement is on. You're signed in as <span class="text-sky-300">Le Tu Hao</span> (delegate @ global). Next: register agents and grant them scope.</p>
+      <div class="flex gap-2">
+        <button class="flex-1 px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white font-medium">Go to Identity</button>
+        <button class="px-3 py-1.5 text-xs border border-zinc-700 rounded-md text-zinc-300 hover:bg-zinc-800">Invite a teammate</button>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

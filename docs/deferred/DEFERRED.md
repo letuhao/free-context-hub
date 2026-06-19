@@ -1,13 +1,35 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 042 -->
+<!-- Next ID: 043 -->
+
+## DEFERRED-042
+
+- **Title:** Actor data-boundary FE — LOW polish gaps from the coverage eval
+- **Status:** OPEN (2026-06-19). Build-time polish; not a design blocker.
+- **Context:** The FE+MCP coverage eval (`docs/specs/2026-06-19-actor-data-boundary-fe-mcp-eval.md`)
+  closed the HIGH/MED gaps (bootstrap, nav, three contracts) but parked five LOW items:
+  - **G4** empty / first-run states (zero principals, zero grants) for identity/delegation/authorization.
+  - **G5** "lost both factors" admin-assisted MFA reset path (backup-code + forgot-password exist; the
+    fully-locked-out human needs an admin/root reset flow).
+  - **G7** dual-credential principal UX — one principal holding both a session (human) and api_key(s);
+    the model allows it (kind=attribute) but no screen shows it.
+  - **G8** scale: delegation tree collapse/virtualization + authorization decision-log windowing for
+    thousands of grants / millions of rows (filters exist; rendering doesn't scale yet).
+  - **G10** i18n — drafts are English; the operator is Vietnamese. Decide locale strategy for the
+    governance surfaces.
+- **Trigger condition:** when building the real `gui/src/app/{identity,delegation,authorization}` pages
+  and `settings/{access,sessions}` — fold these in per page. None blocks F1/F2/F3/F-AUTH backend work.
+- **Scope when picked up:** per-page polish during FE implementation; no new backend.
 
 ## DEFERRED-041
 
 - **Title:** Browser session-login auth for the GUI (true human auth boundary)
-- **Status:** OPEN (2026-06-19). Surfaced by the cold-start security review of the
-  single-port gateway consolidation.
+- **Status:** DESIGNED (2026-06-19). Surfaced by the cold-start security review of the
+  single-port gateway consolidation; now designed as phase **F-AUTH** of the actor
+  data-boundary foundation. Build pending. Design:
+  `docs/specs/2026-06-19-actor-data-boundary-standards-gap.md` + drafts
+  `docs/gui-drafts/pages/{login,register,sessions}.html`.
 - **Context:** The single-port gateway made the GUI the one external entrypoint, and
   the hardening pass added a cross-site guard (`gui/src/proxy.ts`), CORS lockdown,
   loopback-only infra publish, and an auth-off startup warning. But it did NOT create
@@ -29,6 +51,13 @@
   same-origin state-changing requests; revisit defaulting `MCP_AUTH_ENABLED=true` for
   non-loopback gateway bindings. See the security-review findings in the
   single-port-gateway session patch.
+- **Designed scope (2026-06-19):** model = principal is the single subject; humans add
+  `password+MFA → session`, agents keep `api_key` (both authenticate to a principal, no
+  change to `authorize()`/grants). New tables: `human_credentials`, `mfa_factors`,
+  `sessions`, `invites`, email-verify/reset tokens. Standards targeted: NIST 800-63B
+  AAL2 (MFA) + session re-auth/idle windows; OWASP ASVS V6 (soft/hard lockout,
+  ≤100 fails/hr, reset-never-locks, ≥12-char passwords). REST endpoints under
+  `/api/auth/*` + admin `/api/invites`. Sequenced as F-AUTH (after F1, parallel to F2/F3).
 
 ---
 
