@@ -127,7 +127,7 @@ import { isFeatureEnabled } from '../services/featureToggles.js';
 import { searchChunks } from '../services/documentChunks.js';
 import { logLessonAccess, isSalienceDisabled, type AccessLogEntry } from '../services/salience.js';
 import { getDbPool } from '../db/client.js';
-import { resolveMcpCallerScope, resolveMcpCaller, resolveActingActor, type McpCaller } from './auth.js';
+import { resolveMcpCallerScope, resolveMcpCaller, resolveActingActor, resolveTargetActor, resolveTargetActors, type McpCaller } from './auth.js';
 import { getPrincipal } from '../services/principals.js';
 import type { CallerScope } from '../core/index.js';
 
@@ -179,6 +179,23 @@ async function resolveActingActorOrThrow(
   assertedActorId?: string | null,
 ): Promise<{ scope: CallerScope; actingPrincipalId: string | null }> {
   try { return await resolveActingActor(token, assertedActorId); }
+  catch (e) {
+    if (e instanceof ContextHubError) throw new McpError(CONTEXT_HUB_TO_MCP_CODE[e.code] ?? ErrorCode.InternalError, e.message);
+    throw e;
+  }
+}
+
+/** F1f: validate a TARGET/reference actor (member, vote-owner, proxy delegate, veto holder, dispute
+ *  party) is an active principal under auth-ON; passthrough under auth-OFF. McpError-mapped. */
+async function resolveTargetActorOrThrow(actorId: string): Promise<string> {
+  try { return await resolveTargetActor(actorId); }
+  catch (e) {
+    if (e instanceof ContextHubError) throw new McpError(CONTEXT_HUB_TO_MCP_CODE[e.code] ?? ErrorCode.InternalError, e.message);
+    throw e;
+  }
+}
+async function resolveTargetActorsOrThrow(actorIds: readonly string[]): Promise<string[]> {
+  try { return await resolveTargetActors(actorIds); }
   catch (e) {
     if (e instanceof ContextHubError) throw new McpError(CONTEXT_HUB_TO_MCP_CODE[e.code] ?? ErrorCode.InternalError, e.message);
     throw e;
@@ -3870,7 +3887,9 @@ function createMcpToolsServer() {
     },
     async ({ workspace_token, project_id, name, quorum, threshold, veto_holders, created_by, output_format }) => {
       const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, created_by);
-      const r = await createBody({ project_id, callerScope, name, quorum, threshold, veto_holders, created_by: actingPrincipalId ?? created_by });
+      // (F1f) veto_holders are target identity references — require active principals under auth-ON.
+      const vetoHolders = veto_holders ? await resolveTargetActorsOrThrow(veto_holders) : veto_holders;
+      const r = await createBody({ project_id, callerScope, name, quorum, threshold, veto_holders: vetoHolders, created_by: actingPrincipalId ?? created_by });
       const summary = `create_decision_body: body_id=${r.body_id} name=${r.name}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3896,9 +3915,11 @@ function createMcpToolsServer() {
     },
     async ({ workspace_token, body_id, actor_id, vote_weight, output_format }) => {
       // actor_id is the TARGET member being added (data), not the caller's identity — authenticate
-      // the caller (scope + reject unbound under auth-ON) but do NOT rewrite actor_id.
+      // the caller (scope + reject unbound under auth-ON), and (F1f) require the member to be an
+      // active principal under auth-ON so membership comparisons are principal-keyed.
       const { scope: callerScope } = await resolveActingActorOrThrow(workspace_token);
-      const r = await addBodyMember({ body_id, callerScope, actor_id, vote_weight });
+      const memberId = await resolveTargetActorOrThrow(actor_id);
+      const r = await addBodyMember({ body_id, callerScope, actor_id: memberId, vote_weight });
       const summary = `add_body_member: body=${body_id} actor=${actor_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3925,9 +3946,14 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, body_id, principal, proxy, granted_by, output_format }) => {
-      // granted_by is the delegating caller (must equal principal); principal/proxy are targets.
+      // principal == granted_by == the delegating CALLER (only self-delegation); proxy is the target
+      // delegate. (F1f) Resolve the caller for both principal+granted_by under auth-ON; validate the
+      // proxy is an active principal. Auth-OFF: principal stays caller-supplied (behavior unchanged).
       const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, granted_by);
-      const r = await grantProxy({ body_id, callerScope, principal, proxy, granted_by: actingPrincipalId ?? granted_by });
+      const self = actingPrincipalId ?? granted_by;
+      const proxyId = await resolveTargetActorOrThrow(proxy);
+      const resolvedPrincipal = getEnv().MCP_AUTH_ENABLED ? self : principal;
+      const r = await grantProxy({ body_id, callerScope, principal: resolvedPrincipal, proxy: proxyId, granted_by: self });
       const summary = `grant_proxy: body=${body_id} principal=${principal} proxy=${proxy} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -4154,10 +4180,13 @@ function createMcpToolsServer() {
       const caster = proxy_for ?? actor_id;
       const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, caster);
       const resolvedCaster = actingPrincipalId ?? caster;
+      // (F1f) In the proxy branch the vote OWNER (actor_id) is a target reference — require it to be
+      // an active principal under auth-ON so the votes/membership rows are principal-keyed.
+      const ownerId = proxy_for ? await resolveTargetActorOrThrow(actor_id) : resolvedCaster;
       const r = await castVote({
         callerScope,
         motion_id,
-        actor_id: proxy_for ? actor_id : resolvedCaster,
+        actor_id: ownerId,
         choice: choice as 'for' | 'against' | 'abstain',
         proxy_for: proxy_for ? resolvedCaster : undefined,
       });
@@ -4290,7 +4319,8 @@ function createMcpToolsServer() {
           actor_id: actingActor,
           topic_id,
           subject_ref: subject_ref ?? '',
-          parties: parties ?? [],
+          // (F1f) dispute parties are target identity references — active principals under auth-ON.
+          parties: await resolveTargetActorsOrThrow(parties ?? []),
           procedure: (procedure ?? 'unilateral') as 'unilateral' | 'collective',
           submitted_by: submitted_by ?? actingActor,
           kind,
@@ -4426,7 +4456,9 @@ function createMcpToolsServer() {
     },
     async ({ workspace_token, topic_id, subject_ref, parties, procedure, submitted_by, kind, weight, output_format }) => {
       const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, submitted_by);
-      const result = await openDispute({ topic_id, callerScope, subject_ref, parties, procedure, submitted_by: actingPrincipalId ?? submitted_by, kind, weight });
+      // (F1f) dispute parties are target identity references — require active principals under auth-ON.
+      const resolvedParties = parties ? await resolveTargetActorsOrThrow(parties) : parties;
+      const result = await openDispute({ topic_id, callerScope, subject_ref, parties: resolvedParties, procedure, submitted_by: actingPrincipalId ?? submitted_by, kind, weight });
       const summary = `open_dispute: topic=${topic_id} id=${result.dispute.dispute_id}`;
       return formatToolResponse(result, summary, output_format);
     },

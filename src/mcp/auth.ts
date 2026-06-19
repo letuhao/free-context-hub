@@ -24,6 +24,7 @@ import { ContextHubError, getEnv } from '../core/index.js';
 import type { CallerScope } from '../core/index.js';
 import { validateApiKey, classifyCredentialFailure } from '../services/apiKeys.js';
 import { resolveActingPrincipal } from '../services/actingPrincipal.js';
+import { isActivePrincipal } from '../services/principals.js';
 import { createModuleLogger } from '../utils/logger.js';
 
 const logger = createModuleLogger('mcp-auth');
@@ -128,4 +129,28 @@ export async function resolveActingActor(
     );
   }
   return { scope: caller.scope, actingPrincipalId: acting };
+}
+
+/**
+ * Actor Data Boundary F1f — validate a TARGET/reference actor field (a member being added, a vote
+ * owner, a proxy delegate, a veto holder) — identity the caller NAMES rather than claims as their
+ * own. Under auth-ON the target MUST be an existing active principal (so the coordination substrate
+ * is uniformly principal-keyed and ownership/membership comparisons hold); under auth-OFF it is a
+ * free string, unchanged. Returns the value to persist.
+ */
+export async function resolveTargetActor(actorId: string): Promise<string> {
+  if (!getEnv().MCP_AUTH_ENABLED) return actorId;
+  if (!(await isActivePrincipal(actorId))) {
+    throw new ContextHubError(
+      'BAD_REQUEST',
+      `target actor "${actorId}" is not an active principal; pass a principal_id (see list_principals / whoami).`,
+    );
+  }
+  return actorId;
+}
+
+export async function resolveTargetActors(actorIds: readonly string[]): Promise<string[]> {
+  const out: string[] = [];
+  for (const a of actorIds) out.push(await resolveTargetActor(a));
+  return out;
 }

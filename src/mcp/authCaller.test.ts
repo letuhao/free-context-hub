@@ -7,7 +7,7 @@
 
 import assert from 'node:assert/strict';
 import test, { before, after, beforeEach } from 'node:test';
-import { resolveMcpCaller, resolveActingActor } from './auth.js';
+import { resolveMcpCaller, resolveActingActor, resolveTargetActor } from './auth.js';
 import { createPrincipal, setPrincipalStatus } from '../services/principals.js';
 import { createApiKey, revokeApiKey } from '../services/apiKeys.js';
 import { ContextHubError } from '../core/errors.js';
@@ -148,4 +148,43 @@ test('resolveActingActor: auth-OFF -> honors asserted (dev behavior unchanged)',
   await authOff();
   const { actingPrincipalId } = await resolveActingActor(undefined, 'dev-agent');
   assert.equal(actingPrincipalId, 'dev-agent');
+});
+
+// ── resolveTargetActor (F1f — validate a named target identity) ───────────────
+
+test('resolveTargetActor: auth-OFF -> passthrough (free string unchanged)', async () => {
+  await authOff();
+  assert.equal(await resolveTargetActor('legacy-member-name'), 'legacy-member-name');
+});
+
+test('resolveTargetActor: auth-ON + active principal -> returns it', async () => {
+  await authOn();
+  const p = await createPrincipal({ kind: 'agent', display_name: `${PREFIX}target` });
+  assert.equal(await resolveTargetActor(p.principal_id), p.principal_id);
+});
+
+test('resolveTargetActor: auth-ON + legacy string (non-principal) -> BAD_REQUEST', async () => {
+  await authOn();
+  await assert.rejects(
+    () => resolveTargetActor('worker-3'),
+    (e: unknown) => e instanceof ContextHubError && e.code === 'BAD_REQUEST',
+  );
+});
+
+test('resolveTargetActor: auth-ON + suspended principal -> BAD_REQUEST', async () => {
+  await authOn();
+  const p = await createPrincipal({ kind: 'agent', display_name: `${PREFIX}tsus` });
+  await setPrincipalStatus(p.principal_id, 'suspended');
+  await assert.rejects(
+    () => resolveTargetActor(p.principal_id),
+    (e: unknown) => e instanceof ContextHubError && e.code === 'BAD_REQUEST',
+  );
+});
+
+test('resolveTargetActor: auth-ON + unknown UUID -> BAD_REQUEST', async () => {
+  await authOn();
+  await assert.rejects(
+    () => resolveTargetActor('00000000-0000-0000-0000-000000000000'),
+    (e: unknown) => e instanceof ContextHubError && e.code === 'BAD_REQUEST',
+  );
 });

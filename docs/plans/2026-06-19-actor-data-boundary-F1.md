@@ -119,6 +119,29 @@ coordination actor_ids are resolvable principals" so auth can't be flipped into 
 Pending the user's scope decision (defer-to-F4 / narrow-F1e / full-migration-now), F1-adv passes 2–4
 are paused — they would only echo facets of this same finding.
 
+## F1f — namespace unification (user decision: "full migration now", supersedes DEFERRED-043)
+**Architecture: REWRITE to UUIDs** (not an alias layer). The steady state is uniform — every
+coordination actor field holds a `principal_id`, comparisons stay string-equality (now UUID↔UUID), so
+service comparison logic is UNCHANGED. Principals are global subjects (no project column); "validate
+target" = "exists + active" (tenant-scoping is F2 grant territory, not here).
+
+- **F1f.1 — target-actor validation helper.** `isActivePrincipal(id)` in principals.ts;
+  `resolveTargetActor(actorId)` / `resolveTargetActors([...])` in mcp/auth.ts: auth-ON → the actor MUST
+  be an existing active principal (else BAD_REQUEST); auth-OFF → passthrough (unchanged). Tests.
+- **F1f.2 — wire target/owner/member fields.** add_body_member (member), cast_vote (vote-owner in the
+  proxy branch), grant_proxy (principal = caller → resolve via acting; proxy = target → validate),
+  create_decision_body (veto_holders[]), and any other identity REFERENCE field. Under auth-ON these
+  must be principal UUIDs; auth-OFF unchanged.
+- **F1f.3 — data migration.** A migration that, per distinct legacy string actor_id across the
+  coordination tables (claims, body_members, votes, proxies, topic_participants, tasks.created_by,
+  requests.submitted_by, motions.proposed_by/second_by, decision_bodies.*, intake/dispute), creates an
+  imported principal (kind='agent', display_name=string, status='active') and rewrites the column to
+  the principal_id. Idempotent; a no-op on empty/already-UUID data. (Operators bind credentials to the
+  imported principals out-of-band to act as them under auth-ON.)
+- **F1f.4 — enforce-ready gate.** `assertEnforceReady` also refuses if any live coordination actor_id
+  is not a resolvable principal (so auth can't be flipped into a stranded board) — closes F1-adv #5.
+- **F1f-adv — saturating multi-pass** over F1f, then resume the paused F1-adv passes 2–4 over all F1.
+
 ## Out of F1 scope (later phases)
 Grants/`authorize()` (F2), human-agent attribute + Board fence (F3), enforcement-flip FE + live
 auth-ON CI denial (F4), human password/MFA/session (F-AUTH), grant/revoke MCP tools, ephemeral keys.

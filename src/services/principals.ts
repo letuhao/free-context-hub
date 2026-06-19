@@ -12,6 +12,7 @@
  *     can never produce a root. At most one root exists (DB partial unique index).
  */
 
+import { validate as isUuid } from 'uuid';
 import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
 
@@ -80,6 +81,17 @@ export async function getPrincipal(principalId: string): Promise<Principal | nul
     [principalId],
   );
   return res.rows[0] ?? null;
+}
+
+/**
+ * Actor Data Boundary F1f — true iff `principalId` is an existing ACTIVE principal. UUID-guarded:
+ * a non-UUID legacy actor string returns false (never a pg 22P02), so under auth-ON a target field
+ * carrying a legacy string is correctly rejected as "not a principal".
+ */
+export async function isActivePrincipal(principalId: string | null | undefined): Promise<boolean> {
+  if (typeof principalId !== 'string' || !isUuid(principalId)) return false;
+  const p = await getPrincipal(principalId);
+  return p !== null && p.status === 'active';
 }
 
 export async function getRootPrincipal(): Promise<Principal | null> {
