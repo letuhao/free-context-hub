@@ -1,7 +1,32 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 043 -->
+<!-- Next ID: 044 -->
+
+## DEFERRED-043
+
+- **Title:** Unify the Phase-15 coordination actor_id namespace onto `principal_id` (auth-ON prerequisite)
+- **Status:** OPEN (2026-06-19). Surfaced by the F1-adv pass-1 cross-cutting adversary. **Blocks
+  enabling `MCP_AUTH_ENABLED=true` on any deployment with existing Phase-15 coordination state** —
+  NOT a live issue under the default auth-OFF posture (F1e is a no-op there).
+- **Context:** Phase-15 stores actor identity as free-text strings compared by exact equality
+  (`claims.actor_id`, `body_members.actor_id`, `votes.actor_id`, `proxies.principal/proxy`,
+  `topic_participants.actor_id`). F1e (commit 556959e/fb5cbc6/42d93a9) makes the *acting caller* a
+  principal UUID under auth-ON, but the *stored/target* fields aren't resolved and old rows aren't
+  migrated. At the auth-ON flip this strands claims, disenfranchises voters, and breaks proxy
+  delegation (see plan `docs/plans/2026-06-19-actor-data-boundary-F1.md` — "F1-adv pass 1" section).
+- **Scope when picked up (the reconciliation):**
+  1. Resolve the TARGET/owner/member identity fields through the same chokepoint (add_body_member's
+     member, cast_vote's vote-owner, grant_proxy's principal, join_topic participant) — and validate
+     they resolve to an existing ACTIVE in-tenant principal (the F1d contract #3 the proxy/member
+     paths currently skip).
+  2. Fix grant_proxy: `principal` IS the caller (self-delegation) — resolve it, don't pass raw.
+  3. Data migration: map legacy string `actor_id`s → `principal_id` (or an alias table), so historical
+     coordination rows compare correctly once auth is on.
+  4. Gate `assertEnforceReady` on "all live coordination actor_ids are resolvable principals" so an
+     operator cannot flip enforcement into a stranded board (F1-adv finding #5).
+- **Trigger condition:** before F4 declares any deployment enforce-ready, or before the first auth-ON
+  rollout — whichever comes first. Pairs with the F4 deferrals (hard boot-gate, legacy-token default).
 
 ## DEFERRED-042
 

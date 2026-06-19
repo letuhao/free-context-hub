@@ -92,6 +92,33 @@ refuses while the legacy `CONTEXT_HUB_WORKSPACE_TOKEN` global-admin bypass is li
 - **#1 — legacy default:** consider flipping `MCP_LEGACY_TOKEN_DISABLED` default to true (or requiring
   it for enforce-ready at boot). Back-compat decision (DEFERRED-029 kept it false for migration).
 
+## F1-adv pass 1 — CRITICAL cross-cutting finding (the actor_id namespace split)
+A cold-start integration adversary found the one thing the per-phase reviews structurally couldn't:
+**Phase-15's coordination substrate stores actor identity as free-text strings** (`claims.actor_id`,
+`body_members.actor_id`, `votes.actor_id`, `proxies.principal/proxy`, `topic_participants.actor_id`)
+compared by exact equality. F1e makes the *acting* field a principal UUID under auth-ON, but the
+*stored/target* fields are NOT resolved and existing rows are NOT migrated. Consequences **at the
+auth-ON transition** (not under auth-OFF — F1e is a behavioral no-op there):
+- a task claimed under auth-OFF can't be completed/released under auth-ON (UUID ≠ stored string) →
+  holder locked out;
+- `add_body_member` stores the member as a raw string but `cast_vote` resolves the voter to a UUID →
+  membership check fails → electorate disenfranchised;
+- `grant_proxy` resolves `granted_by` to a UUID but `principal` stays raw → the `granted_by==principal`
+  self-delegation invariant becomes unsatisfiable; (also: `principal` IS the caller here and should be
+  resolved too — a genuine F1e wiring inconsistency, fix folded into whichever option is chosen);
+- `cast_vote` proxy branch persists the unresolved vote-OWNER into `votes.actor_id` + the event log.
+
+**Why this is NOT a live regression:** default posture is auth-OFF; F1e changes nothing there. The
+hazard is the auth-ON flip, which is **F4 (enforcement posture)** — already deferred and already noted
+to need a reconciliation step. F1's AC ("auth-OFF unchanged") holds.
+
+**RESOLUTION = a distinct effort (see DEFERRED-043):** make `principal_id` the universal actor
+namespace across Phase-15 — resolve the target/owner/member fields through the same chokepoint, add a
+data migration (legacy string actor_id → principal_id), and gate `assertEnforceReady` on "all
+coordination actor_ids are resolvable principals" so auth can't be flipped into a stranded board.
+Pending the user's scope decision (defer-to-F4 / narrow-F1e / full-migration-now), F1-adv passes 2–4
+are paused — they would only echo facets of this same finding.
+
 ## Out of F1 scope (later phases)
 Grants/`authorize()` (F2), human-agent attribute + Board fence (F3), enforcement-flip FE + live
 auth-ON CI denial (F4), human password/MFA/session (F-AUTH), grant/revoke MCP tools, ephemeral keys.
