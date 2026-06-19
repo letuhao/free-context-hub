@@ -135,6 +135,7 @@ import type { CallerScope } from '../core/index.js';
 // ── MCP error boundary: convert ContextHubError → McpError at protocol edge ──
 const CONTEXT_HUB_TO_MCP_CODE: Record<string, number> = {
   UNAUTHORIZED: ErrorCode.InvalidParams,
+  FORBIDDEN: ErrorCode.InvalidParams,
   BAD_REQUEST: ErrorCode.InvalidParams,
   NOT_FOUND: ErrorCode.InvalidParams,
   CONFLICT: ErrorCode.InvalidParams,

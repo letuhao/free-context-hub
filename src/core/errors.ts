@@ -9,6 +9,11 @@ export class ContextHubError extends Error {
   constructor(
     public readonly code:
       | 'UNAUTHORIZED'
+      // Actor Data Boundary F2: authenticated but NOT authorized — authorize() denied (no covering
+      // grant / insufficient capability). 403-shaped. Distinct from UNAUTHORIZED (401, missing/invalid
+      // credential). Handlers map a no-leak deny (read of a specific resource / OUT_OF_SCOPE) to
+      // NOT_FOUND instead; FORBIDDEN is for write/admin/delegate denials where existence isn't secret.
+      | 'FORBIDDEN'
       | 'BAD_REQUEST'
       | 'NOT_FOUND'
       | 'INTERNAL'
