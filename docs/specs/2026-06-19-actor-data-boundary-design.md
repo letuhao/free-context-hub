@@ -1,6 +1,11 @@
 # DESIGN — Explicit Actor / Project / Task Data Boundaries (Phases A–E)
 
-**Status:** DESIGN (awaiting human approval before BUILD)
+**Status:** ⚠️ SUPERSEDED by `2026-06-19-actor-data-boundary-design-v2.md` (2026-06-19). Kept for
+history. v2 rebuilds the identity/authority model on DLF primitives (sealed Codices, Role/Topic/
+Appointment/Instance, refer-back, tier-crossing) after the 46-scenario red-team. The §14a static
+fixes here are retained in v2; the RBAC *shape* is replaced.
+
+**Status (original):** DESIGN (awaiting human approval before BUILD)
 **Branch:** `feature/actor-data-boundary`
 **Date:** 2026-06-19
 **CLARIFY spec:** `docs/specs/2026-06-19-actor-data-boundary.md`
