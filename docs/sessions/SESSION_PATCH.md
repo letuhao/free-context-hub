@@ -1,3 +1,29 @@
+# CHECKPOINT — Actor data-boundary F1d: authenticated-principal resolution SHIPPED (2026-06-19, session 10)
+
+**Branch:** `feature/actor-data-boundary`. **F1d landed (commit `ce942f4`).** `/loop` self-paced.
+Also committed separately: the unrelated competency-eval corpus (`b737085`) the user OK'd.
+
+**F1d — the acting identity is now un-spoofable (DONE, verified, adversary-cleared):**
+- `resolveActingPrincipal` (pure): auth ON + bound credential → asserted must equal authenticated
+  (case-insensitive) else `ASSERTED_IDENTITY_REJECTED`; auth ON + unbound → honor asserted only when
+  `allowUnboundAssertion` (default fail-closed); auth OFF → honor asserted / root-dev fallback.
+- `mcp/auth.ts resolveMcpCaller` → `{scope, principalId, expiresAt}` (scope-only delegates); surfaces
+  `CREDENTIAL_EXPIRED` for expired/revoked creds. `classifyCredentialFailure` in apiKeys.
+- `whoami` MCP tool → caller's authenticated principal.
+- New codes `ASSERTED_IDENTITY_REJECTED` (403) + `CREDENTIAL_EXPIRED` (401).
+- **Adversary (identity chokepoint) found 2 HIGH + 3 MED, all fixed:** HIGH unbound-credential
+  impersonation → gated behind `allowUnboundAssertion`; HIGH principal-lifecycle info leak →
+  `principal_inactive` folded to generic UNAUTHORIZED; MED UUID canonical compare; MED #3 (validate
+  asserted vs active principal) + #4 (single-query refactor) → **F1e contracts (in plan)**.
+- **33/33 F1d unit tests, tsc clean.**
+
+**What's next:** **F1e** — stop trusting asserted `actor_id`: apply `resolveActingPrincipal` at the MCP
+boundary for the ~19 asserted-identity tools + `appendEvent`. MUSTs from F1d adversary: pass
+`allowUnboundAssertion = !MCP_LEGACY_TOKEN_DISABLED`; validate any honored-asserted value resolves to an
+active in-tenant principal before persisting. Then F1-adv (saturating multi-pass over all F1 code).
+
+---
+
 # CHECKPOINT — Actor data-boundary F1c: out-of-band root bootstrap SHIPPED (2026-06-19, session 10)
 
 **Branch:** `feature/actor-data-boundary`. **F1c landed (commit `67761ac`).** `/loop` self-paced.
