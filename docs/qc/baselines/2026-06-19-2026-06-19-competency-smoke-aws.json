@@ -1,0 +1,872 @@
+{
+  "schema_version": "1.1",
+  "gen_manifest": {
+    "judge_endpoint": "http://host.docker.internal:1234/v1",
+    "judge_model_id": "google/gemma-4-26b-a4b-qat",
+    "judge_prompts_hash": "c0165a73c10c4e04",
+    "judge_temperature": 0,
+    "judge_seed": 42,
+    "answerer_endpoint": "http://localhost:1234/v1",
+    "answerer_model_id": "google/gemma-4-26b-a4b-qat",
+    "answerer_temperature": 0.2,
+    "answerer_seed": 42,
+    "answerer_max_tokens": 1024,
+    "synthesizer_prompt_hashes": {
+      "lessons": "13ac4e950489bde6",
+      "code": "3a2ea1624ae0a1fc",
+      "chunks": "a01005e0d102b2c1",
+      "global": "9816150d043baca5"
+    },
+    "synth_mode": "standard"
+  },
+  "tag": "2026-06-19-competency-smoke-aws",
+  "run_started_at": "2026-06-19T10:47:39.063Z",
+  "run_ended_at": "2026-06-19T10:50:01.195Z",
+  "elapsed_ms": 142132,
+  "git_commit": "0c8f8f1+dirty",
+  "git_branch": "feature/actor-data-boundary",
+  "project_id": "free-context-hub",
+  "samples_per_query": 1,
+  "k": 10,
+  "surfaces": {
+    "chunks": {
+      "query_count": 7,
+      "errors": 0,
+      "project_id": "free-context-hub",
+      "generation": {
+        "rows_with_gt": 7,
+        "rows_judged": 7,
+        "rows_skipped": 0,
+        "metrics": {
+          "faithfulness": {
+            "mean": 0.8595,
+            "std": 0.0925,
+            "p10": 0.75,
+            "fail_count": 5
+          },
+          "answer_relevancy": {
+            "mean": 0.6256,
+            "std": 0.0879,
+            "p10": 0.4839,
+            "fail_count": 7
+          },
+          "context_precision": {
+            "mean": 1,
+            "std": 0,
+            "p10": 1,
+            "fail_count": 0
+          },
+          "context_recall": {
+            "mean": 1,
+            "std": 0,
+            "p10": 1,
+            "fail_count": 0
+          },
+          "groundedness_self_eval": {
+            "mean": 1,
+            "std": 0,
+            "p10": 1,
+            "fail_count": 0
+          }
+        }
+      },
+      "metrics": {
+        "recall_at_5": 0,
+        "recall_at_10": 0,
+        "mrr": 0,
+        "ndcg_at_5": 0,
+        "ndcg_at_10": 0,
+        "duplication_rate_at_10": 0,
+        "duplication_rate_nearsemantic_at_10": 0,
+        "coverage_pct": 0,
+        "latency_p50_ms": 151,
+        "latency_p95_ms": 1047,
+        "latency_mean_ms": 277
+      },
+      "per_query": [
+        {
+          "id": "AWS-STO-0001-s1",
+          "group": "aws-ops/storage",
+          "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"S3 provides strong read-after-write consistency for new-object PUTs in all Regions: a GET immediately after a successful PUT returns the latest data.\"",
+          "top_k_keys": [
+            "f1c81c5d-35e4-4913-a4bb-beebacf501f7",
+            "d54ea0d6-02ca-46bf-9108-f01afa9f68fc",
+            "d9c4199c-3e8f-4284-bb1d-471b1ce21eab",
+            "fecae52c-7bdb-40ec-8765-cc9a15764315",
+            "f4041894-b591-447a-8062-81b0daed31d9",
+            "12244759-8015-4302-9fd2-bb4b8ffcd72b",
+            "eca83071-d726-4a3d-8c94-69f0fcaa2d2e",
+            "cc241c03-f22c-4f1a-bb68-9a331b8b1aa2",
+            "5c82c44d-c334-42de-a5cd-c136de45ae36",
+            "36d2e00a-f220-4019-abb1-2a60ac0a64d7"
+          ],
+          "top_k_titles": [
+            "corpus:aws-ops/09-storage / S3 consistency model",
+            "corpus:aws-ops/03-databases / Read consistency (a precise, commonly-misstated fact)",
+            "corpus:solution-architecture/04-distributed-systems / Consistency models",
+            "corpus:aws-ops/09-storage / Amazon S3 — object storage",
+            "corpus:ai-engineering/05-llm-evaluation / Faithfulness is grounding, not factual correctness",
+            "corpus:ai-engineering/01-llm-fundamentals / Why models hallucinate",
+            "corpus:solution-architecture/03-data-architecture / Event Sourcing (ES)",
+            "corpus:solution-architecture/04-distributed-systems / Exactly-once: delivery vs processing",
+            "corpus:ai-engineering/06-prompt-context-engineering / \"Return JSON\" does not guarantee valid JSON",
+            "corpus:ai-engineering/05-llm-evaluation / Context precision rewards good ordering"
+          ],
+          "top_k_snippets": [
+            "### S3 consistency model S3 provides **strong read-after-write consistency** for PUT and DELETE of objects, in **all Regions**, automatically and at no extra cost. This applies to **new objects and overwrites of existing objects**: any GET or LIST issued after a successful write returns the latest d",
+            "### Read consistency (a precise, commonly-misstated fact) DynamoDB table and LSI reads offer two modes: **eventually consistent (the DEFAULT)** and **strongly consistent (opt-in)**. By default a read may not reflect a very recent write; repeating the read shortly after returns the latest value. **St",
+            "## Consistency models - **Strong/linearizable** — reads always reflect the latest committed write (appears as a single copy). - **Eventual** — replicas converge eventually; reads may be stale meanwhile. - **Causal** — operations with a cause-effect relationship are seen in order, but unrelated ops m",
+            "## Amazon S3 — object storage S3 is an **object store** (not a filesystem and not a block device): data is stored as objects in flat buckets, addressed by key, and accessed over an HTTP API. It is designed for **11 nines (99.999999999%) of durability** for S3 Standard by redundantly storing objects ",
+            "## Faithfulness is grounding, not factual correctness In RAG evaluation, **faithfulness** measures whether an answer is supported by the retrieved context — whether every claim in the answer can be traced to the provided passages. It does **not** measure whether the answer is true in the real world.",
+            "## Why models hallucinate At its core an LLM is a **next-token predictor**: it generates the statistically likely continuation of the text so far. It has no built-in model of truth. Fluency and confidence are properties of the language distribution it learned, not evidence of correctness — which is ",
+            "## Event Sourcing (ES) Event Sourcing stores **the full sequence of state-changing events as the source of truth**, instead of only the current state. Current state is **derived by replaying** events. Key properties: - Events are an **append-only, immutable log** — **you do not edit past events**; y",
+            "## Exactly-once: delivery vs processing **Exactly-once *delivery* over an unreliable network is impossible** (the two-generals problem): a sender can't know if a message arrived without an ack, and the ack can be lost. The achievable goal is **exactly-once *processing*** = **at-least-once delivery +",
+            "## \"Return JSON\" does not guarantee valid JSON Writing \"return JSON\" or \"respond only with JSON\" in a prompt makes valid output *more likely* but does not **guarantee** it. Without constrained decoding — schema enforcement, a grammar, or function-calling that restricts the token space — the model ca",
+            "## Context precision rewards good ordering **Context precision** rewards relevant chunks being ranked **higher** in the retrieved context. Because it is sensitive to ordering, improving the rank of relevant chunks — for instance by reranking — raises context precision. This makes it a useful signal "
+          ],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            1047
+          ],
+          "latency_ms_median": 1047,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "TRUE. S3 provides **strong read-after-write consistency** for PUT and DELETE of objects in **all Regions**, automatically and at no extra cost [1]. This applies to **new objects and overwrites of existing objects**, meaning any GET issued after a successful write returns the latest data [1].",
+            "contexts_used": [
+              {
+                "key": "f1c81c5d-35e4-4913-a4bb-beebacf501f7",
+                "title": "corpus:aws-ops/09-storage / S3 consistency model",
+                "snippet_preview": "### S3 consistency model S3 provides **strong read-after-write consistency** for PUT and DELETE of objects, in **all Regions**, automatically and at no extra cost. This applies to **new objects and ov",
+                "char_count": 1096
+              },
+              {
+                "key": "d54ea0d6-02ca-46bf-9108-f01afa9f68fc",
+                "title": "corpus:aws-ops/03-databases / Read consistency (a precise, commonly-misstated fact)",
+                "snippet_preview": "### Read consistency (a precise, commonly-misstated fact) DynamoDB table and LSI reads offer two modes: **eventually consistent (the DEFAULT)** and **strongly consistent (opt-in)**. By default a read ",
+                "char_count": 790
+              },
+              {
+                "key": "d9c4199c-3e8f-4284-bb1d-471b1ce21eab",
+                "title": "corpus:solution-architecture/04-distributed-systems / Consistency models",
+                "snippet_preview": "## Consistency models - **Strong/linearizable** — reads always reflect the latest committed write (appears as a single copy). - **Eventual** — replicas converge eventually; reads may be stale meanwhil",
+                "char_count": 351
+              },
+              {
+                "key": "fecae52c-7bdb-40ec-8765-cc9a15764315",
+                "title": "corpus:aws-ops/09-storage / Amazon S3 — object storage",
+                "snippet_preview": "## Amazon S3 — object storage S3 is an **object store** (not a filesystem and not a block device): data is stored as objects in flat buckets, addressed by key, and accessed over an HTTP API. It is des",
+                "char_count": 599
+              },
+              {
+                "key": "f4041894-b591-447a-8062-81b0daed31d9",
+                "title": "corpus:ai-engineering/05-llm-evaluation / Faithfulness is grounding, not factual correctness",
+                "snippet_preview": "## Faithfulness is grounding, not factual correctness In RAG evaluation, **faithfulness** measures whether an answer is supported by the retrieved context — whether every claim in the answer can be tr",
+                "char_count": 748
+              }
+            ],
+            "prompt_used": "You are answering a user question using ONLY the documentation chunks provided below.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information not present in the chunks.\n   Do NOT add common-knowledge background, defaults from other projects, or\n   industry conventions. Stay strictly inside the chunks.\n2. CITE EVERY CLAIM: Every substantive claim MUST end with a bracketed\n   citation like [1] referring to the chunk number(s) that support it.\n3. ABSTAIN WHEN UNSUPPORTED: If the chunks do NOT contain the answer, your\n   ENTIRE answer must be exactly:\n       Not in context.\n4. EXACT VALUES: When chunks state a specific value (e.g. \"max_retries = 3\"),\n   quote that exact value in your answer. Do not paraphrase numbers.\n\nQUESTION:\nState whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"S3 provides strong read-after-write consistency for new-object PUTs in all Regions: a GET immediately after a successful PUT returns the latest data.\"\n\nDOCUMENTATION CHUNKS:\n[1] — corpus:aws-ops/09-storage / S3 consistency model\nkey: f1c81c5d-35e4-4913-a4bb-beebacf501f7\n### S3 consistency model S3 provides **strong read-after-write consistency** for PUT and DELETE of objects, in **all Regions**, automatically and at no extra cost. This applies to **new objects and overwrites of existing objects**: any GET or LIST issued after a successful write returns the latest data (a just-written object appears in a listing immediately; a just-deleted object is gone immediately). Reads on object metadata/HEAD, ACLs, tags, and S3 Select are also strongly consistent. Two nuances worth holding precisely: (1) **updates are atomic per key** — a concurrent reader gets either the old or new object, never a partial/corrupt one — but there is **no cross-key atomicity and no object locking for concurrent writers** (with two simultaneous PUTs to one key, **last writer wins** by timestamp). (2) **Bucket configurations** (not object data) have an **eventual consistency** model — e.g. just-enabled versioning may take a short time to propagate. Historically (before December 2020\n[...truncated]\n\n---\n\n[2] — corpus:aws-ops/03-databases / Read consistency (a precise, commonly-misstated fact)\nkey: d54ea0d6-02ca-46bf-9108-f01afa9f68fc\n### Read consistency (a precise, commonly-misstated fact) DynamoDB table and LSI reads offer two modes: **eventually consistent (the DEFAULT)** and **strongly consistent (opt-in)**. By default a read may not reflect a very recent write; repeating the read shortly after returns the latest value. **Strong consistency is requested explicitly** by setting `ConsistentRead = true` on `GetItem`/`Query`/`Scan`, and it **costs twice as much** (eventually consistent reads are half the price). Crucially, **strongly consistent reads are NOT supported on Global Secondary Indexes (GSIs) or Streams** — **all GSI and Stream reads are eventually consistent**, regardless of the parameter. Global tables (multi-Region) replicate typically within a second and are eventually consistent across Regions.\n\n---\n\n[3] — corpus:solution-architecture/04-distributed-systems / Consistency models\nkey: d9c4199c-3e8f-4284-bb1d-471b1ce21eab\n## Consistency models - **Strong/linearizable** — reads always reflect the latest committed write (appears as a single copy). - **Eventual** — replicas converge eventually; reads may be stale meanwhile. - **Causal** — operations with a cause-effect relationship are seen in order, but unrelated ops may differ across replicas (a useful middle ground).\n\n---\n\n[4] — corpus:aws-ops/09-storage / Amazon S3 — object storage\nkey: fecae52c-7bdb-40ec-8765-cc9a15764315\n## Amazon S3 — object storage S3 is an **object store** (not a filesystem and not a block device): data is stored as objects in flat buckets, addressed by key, and accessed over an HTTP API. It is designed for **11 nines (99.999999999%) of durability** for S3 Standard by redundantly storing objects across multiple devices and Availability Zones within a Region. It offers multiple **storage classes** (Standard, Standard-IA, One Zone-IA, Glacier tiers, Intelligent-Tiering) and **lifecycle policies** to transition or expire objects automatically — the cost/access trade-off is explicit per class.\n\n---\n\n[5] — corpus:ai-engineering/05-llm-evaluation / Faithfulness is grounding, not factual correctness\nkey: f4041894-b591-447a-8062-81b0daed31d9\n## Faithfulness is grounding, not factual correctness In RAG evaluation, **faithfulness** measures whether an answer is supported by the retrieved context — whether every claim in the answer can be traced to the provided passages. It does **not** measure whether the answer is true in the real world. These come apart in both directions. An answer can be perfectly faithful to *wrong* context: the retrieved passage is mistaken, the model repeats it accurately, and the answer is faithful yet factually false. Conversely, an answer can state a real-world truth the context never mentioned, which is factually correct but **unfaithful**. Faithfulness and factual correctness are distinct metrics, and conflating them produces misleading evaluations.\n\nWrite a concise 2-4 sentence answer that:\n- Directly addresses the question using only chunk content\n- Quotes specific values verbatim when present\n- Has a bracketed citation at the end of every claim\n- Combines facts across chunks when the question spans multiple\n- Says exactly \"Not in context.\" if the chunks don't cover the question\n\nANSWER:\n",
+            "synth_ms": 15816,
+            "judge_ms": 13128,
+            "scores": {
+              "faithfulness": 0.8333333333333334,
+              "answer_relevancy": 0.6666468596216705,
+              "context_precision": 0.9999999999,
+              "context_recall": 1,
+              "groundedness_self_eval": 1
+            },
+            "reasons": {
+              "groundedness_self_eval": "The answer is perfectly grounded in Context [1], which explicitly confirms that S3 provides strong read-after-write consistency for PUT and DELETE of objects in all Regions for both new objects and overwrites."
+            },
+            "fail_reasons": [
+              "faithfulness<0.9",
+              "answer_relevancy<0.85"
+            ]
+          }
+        },
+        {
+          "id": "AWS-STO-0001-s2",
+          "group": "aws-ops/storage",
+          "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"S3 is eventually consistent for new objects, so a read right after writing a brand-new object may return 'not found'.\"",
+          "top_k_keys": [
+            "f1c81c5d-35e4-4913-a4bb-beebacf501f7",
+            "f4041894-b591-447a-8062-81b0daed31d9",
+            "d54ea0d6-02ca-46bf-9108-f01afa9f68fc",
+            "12244759-8015-4302-9fd2-bb4b8ffcd72b",
+            "07485945-ae54-408d-bb55-0227b75f2a5a",
+            "f8e842a5-5874-414e-80e4-fd59c564d6d7",
+            "8c75c69b-969b-49c7-b2f6-b420b0fcc62a",
+            "fecae52c-7bdb-40ec-8765-cc9a15764315",
+            "d9c4199c-3e8f-4284-bb1d-471b1ce21eab",
+            "dadf6c69-3b37-4d7a-9742-e9adbd79b752"
+          ],
+          "top_k_titles": [
+            "corpus:aws-ops/09-storage / S3 consistency model",
+            "corpus:ai-engineering/05-llm-evaluation / Faithfulness is grounding, not factual correctness",
+            "corpus:aws-ops/03-databases / Read consistency (a precise, commonly-misstated fact)",
+            "corpus:ai-engineering/01-llm-fundamentals / Why models hallucinate",
+            "corpus:ai-engineering/06-prompt-context-engineering / Prompting shapes behavior, it does not create truth",
+            "corpus:ai-engineering/01-llm-fundamentals / Embeddings encode meaning, not facts",
+            "corpus:solution-architecture/04-distributed-systems / CAP theorem (the precise framing)",
+            "corpus:aws-ops/09-storage / Amazon S3 — object storage",
+            "corpus:solution-architecture/04-distributed-systems / Consistency models",
+            "corpus:developer/08-testing / What coverage proves (and doesn't)"
+          ],
+          "top_k_snippets": [
+            "### S3 consistency model S3 provides **strong read-after-write consistency** for PUT and DELETE of objects, in **all Regions**, automatically and at no extra cost. This applies to **new objects and overwrites of existing objects**: any GET or LIST issued after a successful write returns the latest d",
+            "## Faithfulness is grounding, not factual correctness In RAG evaluation, **faithfulness** measures whether an answer is supported by the retrieved context — whether every claim in the answer can be traced to the provided passages. It does **not** measure whether the answer is true in the real world.",
+            "### Read consistency (a precise, commonly-misstated fact) DynamoDB table and LSI reads offer two modes: **eventually consistent (the DEFAULT)** and **strongly consistent (opt-in)**. By default a read may not reflect a very recent write; repeating the read shortly after returns the latest value. **St",
+            "## Why models hallucinate At its core an LLM is a **next-token predictor**: it generates the statistically likely continuation of the text so far. It has no built-in model of truth. Fluency and confidence are properties of the language distribution it learned, not evidence of correctness — which is ",
+            "## Prompting shapes behavior, it does not create truth Careful prompt wording shapes a model's behavior, tone, and format, but it does not turn the model into a trustworthy source of true facts. Hallucination is mitigated by **grounding** the model in real sources, by verification steps, and by cons",
+            "## Embeddings encode meaning, not facts An **embedding** is a vector that places a piece of text at a point in a high-dimensional space so that semantically similar texts land near each other. It is easy to misread embeddings as a database of true statements. They are not. Embeddings encode the *geo",
+            "## CAP theorem (the precise framing) CAP says a distributed data store cannot simultaneously guarantee all three of **Consistency** (every read sees the most recent write or an error), **Availability** (every request to a non-failing node gets a response, possibly stale), and **Partition tolerance**",
+            "## Amazon S3 — object storage S3 is an **object store** (not a filesystem and not a block device): data is stored as objects in flat buckets, addressed by key, and accessed over an HTTP API. It is designed for **11 nines (99.999999999%) of durability** for S3 Standard by redundantly storing objects ",
+            "## Consistency models - **Strong/linearizable** — reads always reflect the latest committed write (appears as a single copy). - **Eventual** — replicas converge eventually; reads may be stale meanwhile. - **Causal** — operations with a cause-effect relationship are seen in order, but unrelated ops m",
+            "## What coverage proves (and doesn't) **Code coverage** measures which lines/branches were **executed** by tests — not whether the behavior was **asserted** or correct. **100% coverage does NOT mean bug-free or fully tested**: code can be executed without any meaningful assertion, and coverage says "
+          ],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            155
+          ],
+          "latency_ms_median": 155,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "The claim is FALSE. S3 provides **strong read-after-write consistency** for PUT and DELETE of objects in **all Regions** [1]. This consistency applies to **new objects and overwrites of existing objects**, meaning any GET or LIST issued after a successful write returns the latest data [1].",
+            "contexts_used": [
+              {
+                "key": "f1c81c5d-35e4-4913-a4bb-beebacf501f7",
+                "title": "corpus:aws-ops/09-storage / S3 consistency model",
+                "snippet_preview": "### S3 consistency model S3 provides **strong read-after-write consistency** for PUT and DELETE of objects, in **all Regions**, automatically and at no extra cost. This applies to **new objects and ov",
+                "char_count": 1096
+              },
+              {
+                "key": "f4041894-b591-447a-8062-81b0daed31d9",
+                "title": "corpus:ai-engineering/05-llm-evaluation / Faithfulness is grounding, not factual correctness",
+                "snippet_preview": "## Faithfulness is grounding, not factual correctness In RAG evaluation, **faithfulness** measures whether an answer is supported by the retrieved context — whether every claim in the answer can be tr",
+                "char_count": 748
+              },
+              {
+                "key": "d54ea0d6-02ca-46bf-9108-f01afa9f68fc",
+                "title": "corpus:aws-ops/03-databases / Read consistency (a precise, commonly-misstated fact)",
+                "snippet_preview": "### Read consistency (a precise, commonly-misstated fact) DynamoDB table and LSI reads offer two modes: **eventually consistent (the DEFAULT)** and **strongly consistent (opt-in)**. By default a read ",
+                "char_count": 790
+              },
+              {
+                "key": "12244759-8015-4302-9fd2-bb4b8ffcd72b",
+                "title": "corpus:ai-engineering/01-llm-fundamentals / Why models hallucinate",
+                "snippet_preview": "## Why models hallucinate At its core an LLM is a **next-token predictor**: it generates the statistically likely continuation of the text so far. It has no built-in model of truth. Fluency and confid",
+                "char_count": 604
+              },
+              {
+                "key": "07485945-ae54-408d-bb55-0227b75f2a5a",
+                "title": "corpus:ai-engineering/06-prompt-context-engineering / Prompting shapes behavior, it does not create truth",
+                "snippet_preview": "## Prompting shapes behavior, it does not create truth Careful prompt wording shapes a model's behavior, tone, and format, but it does not turn the model into a trustworthy source of true facts. Hallu",
+                "char_count": 446
+              }
+            ],
+            "prompt_used": "You are answering a user question using ONLY the documentation chunks provided below.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information not present in the chunks.\n   Do NOT add common-knowledge background, defaults from other projects, or\n   industry conventions. Stay strictly inside the chunks.\n2. CITE EVERY CLAIM: Every substantive claim MUST end with a bracketed\n   citation like [1] referring to the chunk number(s) that support it.\n3. ABSTAIN WHEN UNSUPPORTED: If the chunks do NOT contain the answer, your\n   ENTIRE answer must be exactly:\n       Not in context.\n4. EXACT VALUES: When chunks state a specific value (e.g. \"max_retries = 3\"),\n   quote that exact value in your answer. Do not paraphrase numbers.\n\nQUESTION:\nState whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"S3 is eventually consistent for new objects, so a read right after writing a brand-new object may return 'not found'.\"\n\nDOCUMENTATION CHUNKS:\n[1] — corpus:aws-ops/09-storage / S3 consistency model\nkey: f1c81c5d-35e4-4913-a4bb-beebacf501f7\n### S3 consistency model S3 provides **strong read-after-write consistency** for PUT and DELETE of objects, in **all Regions**, automatically and at no extra cost. This applies to **new objects and overwrites of existing objects**: any GET or LIST issued after a successful write returns the latest data (a just-written object appears in a listing immediately; a just-deleted object is gone immediately). Reads on object metadata/HEAD, ACLs, tags, and S3 Select are also strongly consistent. Two nuances worth holding precisely: (1) **updates are atomic per key** — a concurrent reader gets either the old or new object, never a partial/corrupt one — but there is **no cross-key atomicity and no object locking for concurrent writers** (with two simultaneous PUTs to one key, **last writer wins** by timestamp). (2) **Bucket configurations** (not object data) have an **eventual consistency** model — e.g. just-enabled versioning may take a short time to propagate. Historically (before December 2020\n[...truncated]\n\n---\n\n[2] — corpus:ai-engineering/05-llm-evaluation / Faithfulness is grounding, not factual correctness\nkey: f4041894-b591-447a-8062-81b0daed31d9\n## Faithfulness is grounding, not factual correctness In RAG evaluation, **faithfulness** measures whether an answer is supported by the retrieved context — whether every claim in the answer can be traced to the provided passages. It does **not** measure whether the answer is true in the real world. These come apart in both directions. An answer can be perfectly faithful to *wrong* context: the retrieved passage is mistaken, the model repeats it accurately, and the answer is faithful yet factually false. Conversely, an answer can state a real-world truth the context never mentioned, which is factually correct but **unfaithful**. Faithfulness and factual correctness are distinct metrics, and conflating them produces misleading evaluations.\n\n---\n\n[3] — corpus:aws-ops/03-databases / Read consistency (a precise, commonly-misstated fact)\nkey: d54ea0d6-02ca-46bf-9108-f01afa9f68fc\n### Read consistency (a precise, commonly-misstated fact) DynamoDB table and LSI reads offer two modes: **eventually consistent (the DEFAULT)** and **strongly consistent (opt-in)**. By default a read may not reflect a very recent write; repeating the read shortly after returns the latest value. **Strong consistency is requested explicitly** by setting `ConsistentRead = true` on `GetItem`/`Query`/`Scan`, and it **costs twice as much** (eventually consistent reads are half the price). Crucially, **strongly consistent reads are NOT supported on Global Secondary Indexes (GSIs) or Streams** — **all GSI and Stream reads are eventually consistent**, regardless of the parameter. Global tables (multi-Region) replicate typically within a second and are eventually consistent across Regions.\n\n---\n\n[4] — corpus:ai-engineering/01-llm-fundamentals / Why models hallucinate\nkey: 12244759-8015-4302-9fd2-bb4b8ffcd72b\n## Why models hallucinate At its core an LLM is a **next-token predictor**: it generates the statistically likely continuation of the text so far. It has no built-in model of truth. Fluency and confidence are properties of the language distribution it learned, not evidence of correctness — which is exactly why a model can produce well-formed, confident, and false output. Truthfulness is an **external** addition: grounding the model in retrieved sources, verifying claims, and constraining outputs. Nothing inside the next-token objective makes the model prefer true continuations over plausible ones.\n\n---\n\n[5] — corpus:ai-engineering/06-prompt-context-engineering / Prompting shapes behavior, it does not create truth\nkey: 07485945-ae54-408d-bb55-0227b75f2a5a\n## Prompting shapes behavior, it does not create truth Careful prompt wording shapes a model's behavior, tone, and format, but it does not turn the model into a trustworthy source of true facts. Hallucination is mitigated by **grounding** the model in real sources, by verification steps, and by constraints — not by clever instructions alone. A prompt that says \"only state true facts\" does not give the model a way to know which facts are true.\n\nWrite a concise 2-4 sentence answer that:\n- Directly addresses the question using only chunk content\n- Quotes specific values verbatim when present\n- Has a bracketed citation at the end of every claim\n- Combines facts across chunks when the question spans multiple\n- Says exactly \"Not in context.\" if the chunks don't cover the question\n\nANSWER:\n",
+            "synth_ms": 1451,
+            "judge_ms": 17403,
+            "scores": {
+              "faithfulness": 0.8,
+              "answer_relevancy": 0.4839330261760708,
+              "context_precision": 0.9999999999,
+              "context_recall": 1,
+              "groundedness_self_eval": 1
+            },
+            "reasons": {
+              "groundedness_self_eval": "The answer correctly identifies the claim as false and uses specific details from Context [1] to explain that S3 provides strong read-after-write consistency for new objects and overwrites."
+            },
+            "fail_reasons": [
+              "faithfulness<0.9",
+              "answer_relevancy<0.85"
+            ]
+          }
+        },
+        {
+          "id": "AWS-STO-0001-s3",
+          "group": "aws-ops/storage",
+          "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"S3 is an object store accessed over an HTTP API, not a mountable POSIX filesystem.\"",
+          "top_k_keys": [
+            "fecae52c-7bdb-40ec-8765-cc9a15764315",
+            "2973a826-cb46-432e-8164-4c0b6fed90c6",
+            "f4041894-b591-447a-8062-81b0daed31d9",
+            "1a1ad545-72af-4f86-b97a-1f556412845c",
+            "f1c81c5d-35e4-4913-a4bb-beebacf501f7",
+            "80584b78-b4d6-4c61-b1e5-dc1e02a9e656",
+            "f8e842a5-5874-414e-80e4-fd59c564d6d7",
+            "21ad8aa6-9731-4beb-b898-776952d81d2a",
+            "a93eb6e3-4f77-4e2a-81a0-541f0467ad56",
+            "eca83071-d726-4a3d-8c94-69f0fcaa2d2e"
+          ],
+          "top_k_titles": [
+            "corpus:aws-ops/09-storage / Amazon S3 — object storage",
+            "corpus:aws-ops/09-storage / Choosing between them",
+            "corpus:ai-engineering/05-llm-evaluation / Faithfulness is grounding, not factual correctness",
+            "corpus:aws-ops/09-storage",
+            "corpus:aws-ops/09-storage / S3 consistency model",
+            "corpus:aws-ops/09-storage / Amazon EFS — shared file storage",
+            "corpus:ai-engineering/01-llm-fundamentals / Embeddings encode meaning, not facts",
+            "corpus:aws-ops/05-iam-security / Identity vs resource policies — union within an account",
+            "corpus:developer/01-api-design / Safe vs idempotent (two different properties)",
+            "corpus:solution-architecture/03-data-architecture / Event Sourcing (ES)"
+          ],
+          "top_k_snippets": [
+            "## Amazon S3 — object storage S3 is an **object store** (not a filesystem and not a block device): data is stored as objects in flat buckets, addressed by key, and accessed over an HTTP API. It is designed for **11 nines (99.999999999%) of durability** for S3 Standard by redundantly storing objects ",
+            "## Choosing between them - **Object data, web-scale, durable, API-accessed** → **S3** (not a mountable filesystem). - **Single-instance, low-latency block disk in one AZ** → **EBS** (multi-AZ only via snapshots). - **Shared POSIX filesystem mounted by many clients across AZs** → **EFS** (NFS, multi-",
+            "## Faithfulness is grounding, not factual correctness In RAG evaluation, **faithfulness** measures whether an answer is supported by the retrieved context — whether every claim in the answer can be traced to the provided passages. It does **not** measure whether the answer is true in the real world.",
+            "--- id: corpus/aws-ops/storage/s3-ebs-efs domain: aws-ops subdomain: storage topic: s3-ebs-efs sources: - \"AWS S3 User Guide — What is S3 + data consistency model (read 2026-06-16, © Amazon, paraphrased)\" - \"AWS EBS User Guide — What is Amazon EBS (read 2026-06-16, © Amazon, paraphrased)\" - \"AWS EFS",
+            "### S3 consistency model S3 provides **strong read-after-write consistency** for PUT and DELETE of objects, in **all Regions**, automatically and at no extra cost. This applies to **new objects and overwrites of existing objects**: any GET or LIST issued after a successful write returns the latest d",
+            "## Amazon EFS — shared file storage EFS is a **serverless, elastic, shared file system** speaking the **NFS (v4.1/v4.0)** protocol. It is **multi-AZ** (highly available and durable across AZs within a Region by design) and can be **mounted concurrently by many compute clients** — EC2, ECS, EKS, Lamb",
+            "## Embeddings encode meaning, not facts An **embedding** is a vector that places a piece of text at a point in a high-dimensional space so that semantically similar texts land near each other. It is easy to misread embeddings as a database of true statements. They are not. Embeddings encode the *geo",
+            "## Identity vs resource policies — union within an account **Identity-based policies** attach to a principal (user/role); **resource-based policies** attach to a resource (e.g. an S3 bucket policy). For a request **within the same account**, the effective permissions are the **union**: if the action",
+            "## Safe vs idempotent (two different properties) - **Safe** — the method is read-only; it does not change server state. Per RFC 9110 the safe methods are **GET, HEAD, OPTIONS, TRACE** (GET/HEAD are the everyday ones). - **Idempotent** — making the request N times has the **same effect as making it o",
+            "## Event Sourcing (ES) Event Sourcing stores **the full sequence of state-changing events as the source of truth**, instead of only the current state. Current state is **derived by replaying** events. Key properties: - Events are an **append-only, immutable log** — **you do not edit past events**; y"
+          ],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            151
+          ],
+          "latency_ms_median": 151,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "TRUE. S3 is an object store that is not a filesystem and not a block device [1]. It is accessed over an HTTP API and is not a mountable filesystem [1, 2].",
+            "contexts_used": [
+              {
+                "key": "fecae52c-7bdb-40ec-8765-cc9a15764315",
+                "title": "corpus:aws-ops/09-storage / Amazon S3 — object storage",
+                "snippet_preview": "## Amazon S3 — object storage S3 is an **object store** (not a filesystem and not a block device): data is stored as objects in flat buckets, addressed by key, and accessed over an HTTP API. It is des",
+                "char_count": 599
+              },
+              {
+                "key": "2973a826-cb46-432e-8164-4c0b6fed90c6",
+                "title": "corpus:aws-ops/09-storage / Choosing between them",
+                "snippet_preview": "## Choosing between them - **Object data, web-scale, durable, API-accessed** → **S3** (not a mountable filesystem). - **Single-instance, low-latency block disk in one AZ** → **EBS** (multi-AZ only via",
+                "char_count": 304
+              },
+              {
+                "key": "f4041894-b591-447a-8062-81b0daed31d9",
+                "title": "corpus:ai-engineering/05-llm-evaluation / Faithfulness is grounding, not factual correctness",
+                "snippet_preview": "## Faithfulness is grounding, not factual correctness In RAG evaluation, **faithfulness** measures whether an answer is supported by the retrieved context — whether every claim in the answer can be tr",
+                "char_count": 748
+              },
+              {
+                "key": "1a1ad545-72af-4f86-b97a-1f556412845c",
+                "title": "corpus:aws-ops/09-storage",
+                "snippet_preview": "--- id: corpus/aws-ops/storage/s3-ebs-efs domain: aws-ops subdomain: storage topic: s3-ebs-efs sources: - \"AWS S3 User Guide — What is S3 + data consistency model (read 2026-06-16, © Amazon, paraphras",
+                "char_count": 534
+              },
+              {
+                "key": "f1c81c5d-35e4-4913-a4bb-beebacf501f7",
+                "title": "corpus:aws-ops/09-storage / S3 consistency model",
+                "snippet_preview": "### S3 consistency model S3 provides **strong read-after-write consistency** for PUT and DELETE of objects, in **all Regions**, automatically and at no extra cost. This applies to **new objects and ov",
+                "char_count": 1096
+              }
+            ],
+            "prompt_used": "You are answering a user question using ONLY the documentation chunks provided below.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information not present in the chunks.\n   Do NOT add common-knowledge background, defaults from other projects, or\n   industry conventions. Stay strictly inside the chunks.\n2. CITE EVERY CLAIM: Every substantive claim MUST end with a bracketed\n   citation like [1] referring to the chunk number(s) that support it.\n3. ABSTAIN WHEN UNSUPPORTED: If the chunks do NOT contain the answer, your\n   ENTIRE answer must be exactly:\n       Not in context.\n4. EXACT VALUES: When chunks state a specific value (e.g. \"max_retries = 3\"),\n   quote that exact value in your answer. Do not paraphrase numbers.\n\nQUESTION:\nState whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"S3 is an object store accessed over an HTTP API, not a mountable POSIX filesystem.\"\n\nDOCUMENTATION CHUNKS:\n[1] — corpus:aws-ops/09-storage / Amazon S3 — object storage\nkey: fecae52c-7bdb-40ec-8765-cc9a15764315\n## Amazon S3 — object storage S3 is an **object store** (not a filesystem and not a block device): data is stored as objects in flat buckets, addressed by key, and accessed over an HTTP API. It is designed for **11 nines (99.999999999%) of durability** for S3 Standard by redundantly storing objects across multiple devices and Availability Zones within a Region. It offers multiple **storage classes** (Standard, Standard-IA, One Zone-IA, Glacier tiers, Intelligent-Tiering) and **lifecycle policies** to transition or expire objects automatically — the cost/access trade-off is explicit per class.\n\n---\n\n[2] — corpus:aws-ops/09-storage / Choosing between them\nkey: 2973a826-cb46-432e-8164-4c0b6fed90c6\n## Choosing between them - **Object data, web-scale, durable, API-accessed** → **S3** (not a mountable filesystem). - **Single-instance, low-latency block disk in one AZ** → **EBS** (multi-AZ only via snapshots). - **Shared POSIX filesystem mounted by many clients across AZs** → **EFS** (NFS, multi-AZ).\n\n---\n\n[3] — corpus:ai-engineering/05-llm-evaluation / Faithfulness is grounding, not factual correctness\nkey: f4041894-b591-447a-8062-81b0daed31d9\n## Faithfulness is grounding, not factual correctness In RAG evaluation, **faithfulness** measures whether an answer is supported by the retrieved context — whether every claim in the answer can be traced to the provided passages. It does **not** measure whether the answer is true in the real world. These come apart in both directions. An answer can be perfectly faithful to *wrong* context: the retrieved passage is mistaken, the model repeats it accurately, and the answer is faithful yet factually false. Conversely, an answer can state a real-world truth the context never mentioned, which is factually correct but **unfaithful**. Faithfulness and factual correctness are distinct metrics, and conflating them produces misleading evaluations.\n\n---\n\n[4] — corpus:aws-ops/09-storage\nkey: 1a1ad545-72af-4f86-b97a-1f556412845c\n--- id: corpus/aws-ops/storage/s3-ebs-efs domain: aws-ops subdomain: storage topic: s3-ebs-efs sources: - \"AWS S3 User Guide — What is S3 + data consistency model (read 2026-06-16, © Amazon, paraphrased)\" - \"AWS EBS User Guide — What is Amazon EBS (read 2026-06-16, © Amazon, paraphrased)\" - \"AWS EFS User Guide — What is Amazon EFS (read 2026-06-16, © Amazon, paraphrased)\" - \"AWS S3 storage classes docs — durability figure (© Amazon, paraphrased)\" license_posture: own-words-paraphrase status: drafted last_reviewed: 2026-06-16 ---\n\n---\n\n[5] — corpus:aws-ops/09-storage / S3 consistency model\nkey: f1c81c5d-35e4-4913-a4bb-beebacf501f7\n### S3 consistency model S3 provides **strong read-after-write consistency** for PUT and DELETE of objects, in **all Regions**, automatically and at no extra cost. This applies to **new objects and overwrites of existing objects**: any GET or LIST issued after a successful write returns the latest data (a just-written object appears in a listing immediately; a just-deleted object is gone immediately). Reads on object metadata/HEAD, ACLs, tags, and S3 Select are also strongly consistent. Two nuances worth holding precisely: (1) **updates are atomic per key** — a concurrent reader gets either the old or new object, never a partial/corrupt one — but there is **no cross-key atomicity and no object locking for concurrent writers** (with two simultaneous PUTs to one key, **last writer wins** by timestamp). (2) **Bucket configurations** (not object data) have an **eventual consistency** model — e.g. just-enabled versioning may take a short time to propagate. Historically (before December 2020\n[...truncated]\n\nWrite a concise 2-4 sentence answer that:\n- Directly addresses the question using only chunk content\n- Quotes specific values verbatim when present\n- Has a bracketed citation at the end of every claim\n- Combines facts across chunks when the question spans multiple\n- Says exactly \"Not in context.\" if the chunks don't cover the question\n\nANSWER:\n",
+            "synth_ms": 1329,
+            "judge_ms": 17953,
+            "scores": {
+              "faithfulness": 0.8333333333333334,
+              "answer_relevancy": 0.6298911395279342,
+              "context_precision": 0.99999999995,
+              "context_recall": 1,
+              "groundedness_self_eval": 1
+            },
+            "reasons": {
+              "groundedness_self_eval": "Every claim in the answer is directly supported by the provided contexts: [1] confirms S3 is an object store, not a filesystem or block device, and is accessed via HTTP API; [2] confirms it is not a mountable filesystem."
+            },
+            "fail_reasons": [
+              "faithfulness<0.9",
+              "answer_relevancy<0.85"
+            ]
+          }
+        },
+        {
+          "id": "AWS-STO-0001-s4",
+          "group": "aws-ops/storage",
+          "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"An EBS volume is multi-AZ by default, automatically replicating across Availability Zones.\"",
+          "top_k_keys": [
+            "ea7f3e60-12d8-448d-ada4-17216671da04",
+            "4c6f8de8-a041-4d09-abc9-1a878a51986d",
+            "80584b78-b4d6-4c61-b1e5-dc1e02a9e656",
+            "f4041894-b591-447a-8062-81b0daed31d9",
+            "12244759-8015-4302-9fd2-bb4b8ffcd72b",
+            "2973a826-cb46-432e-8164-4c0b6fed90c6",
+            "f0d58098-27e0-4686-98b3-6e13d0dbf2c4",
+            "2baba915-f63b-46a9-8e7b-cb81209a2503",
+            "fecae52c-7bdb-40ec-8765-cc9a15764315",
+            "f8e842a5-5874-414e-80e4-fd59c564d6d7"
+          ],
+          "top_k_titles": [
+            "corpus:aws-ops/09-storage / Amazon EBS — block storage",
+            "corpus:aws-ops/08-resilience-ha / Multi-AZ ≠ Multi-Region",
+            "corpus:aws-ops/09-storage / Amazon EFS — shared file storage",
+            "corpus:ai-engineering/05-llm-evaluation / Faithfulness is grounding, not factual correctness",
+            "corpus:ai-engineering/01-llm-fundamentals / Why models hallucinate",
+            "corpus:aws-ops/09-storage / Choosing between them",
+            "corpus:aws-ops/03-databases / Choosing between them",
+            "corpus:aws-ops/08-resilience-ha",
+            "corpus:aws-ops/09-storage / Amazon S3 — object storage",
+            "corpus:ai-engineering/01-llm-fundamentals / Embeddings encode meaning, not facts"
+          ],
+          "top_k_snippets": [
+            "## Amazon EBS — block storage EBS provides **block storage volumes** that attach to EC2 instances and behave like a raw disk. A volume lives in a **single Availability Zone** and is normally **attached to one instance at a time** (within that AZ); it is not multi-AZ by default. (The exception is **E",
+            "## Multi-AZ ≠ Multi-Region These solve different problems: - **Multi-AZ** = **high availability within a single Region** by spreading resources across Availability Zones (isolated data centers). It survives an AZ failure, with low-latency synchronous replication between AZs. - **Multi-Region** = **d",
+            "## Amazon EFS — shared file storage EFS is a **serverless, elastic, shared file system** speaking the **NFS (v4.1/v4.0)** protocol. It is **multi-AZ** (highly available and durable across AZs within a Region by design) and can be **mounted concurrently by many compute clients** — EC2, ECS, EKS, Lamb",
+            "## Faithfulness is grounding, not factual correctness In RAG evaluation, **faithfulness** measures whether an answer is supported by the retrieved context — whether every claim in the answer can be traced to the provided passages. It does **not** measure whether the answer is true in the real world.",
+            "## Why models hallucinate At its core an LLM is a **next-token predictor**: it generates the statistically likely continuation of the text so far. It has no built-in model of truth. Fluency and confidence are properties of the language distribution it learned, not evidence of correctness — which is ",
+            "## Choosing between them - **Object data, web-scale, durable, API-accessed** → **S3** (not a mountable filesystem). - **Single-instance, low-latency block disk in one AZ** → **EBS** (multi-AZ only via snapshots). - **Shared POSIX filesystem mounted by many clients across AZs** → **EFS** (NFS, multi-",
+            "## Choosing between them - **Relational model, joins, transactions, SQL** → **RDS/Aurora** (Multi-AZ for HA, read replicas for read scaling). - **Massive-scale key-value/document, predictable latency, no joins** → **DynamoDB** (mind default eventual consistency, partition-key design, and `Scan` cost",
+            "--- id: corpus/aws-ops/resilience-ha/multi-az-region-dr domain: aws-ops subdomain: resilience-ha topic: multi-az-region-dr sources: - \"AWS Disaster Recovery whitepaper — DR options in the cloud (read 2026-06-16, © Amazon, paraphrased)\" - \"AWS EC2 Auto Scaling User Guide — what is Auto Scaling (read ",
+            "## Amazon S3 — object storage S3 is an **object store** (not a filesystem and not a block device): data is stored as objects in flat buckets, addressed by key, and accessed over an HTTP API. It is designed for **11 nines (99.999999999%) of durability** for S3 Standard by redundantly storing objects ",
+            "## Embeddings encode meaning, not facts An **embedding** is a vector that places a piece of text at a point in a high-dimensional space so that semantically similar texts land near each other. It is easy to misread embeddings as a database of true statements. They are not. Embeddings encode the *geo"
+          ],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            146
+          ],
+          "latency_ms_median": 146,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "FALSE. An EBS volume lives in a \"single Availability Zone\" and is \"not multi-AZ by default\" [1]. While EBS Multi-Attach allows attaching to up to 16 instances, this is restricted to the \"same AZ\" and is \"still not cross-AZ\" [1].",
+            "contexts_used": [
+              {
+                "key": "ea7f3e60-12d8-448d-ada4-17216671da04",
+                "title": "corpus:aws-ops/09-storage / Amazon EBS — block storage",
+                "snippet_preview": "## Amazon EBS — block storage EBS provides **block storage volumes** that attach to EC2 instances and behave like a raw disk. A volume lives in a **single Availability Zone** and is normally **attache",
+                "char_count": 744
+              },
+              {
+                "key": "4c6f8de8-a041-4d09-abc9-1a878a51986d",
+                "title": "corpus:aws-ops/08-resilience-ha / Multi-AZ ≠ Multi-Region",
+                "snippet_preview": "## Multi-AZ ≠ Multi-Region These solve different problems: - **Multi-AZ** = **high availability within a single Region** by spreading resources across Availability Zones (isolated data centers). It su",
+                "char_count": 658
+              },
+              {
+                "key": "80584b78-b4d6-4c61-b1e5-dc1e02a9e656",
+                "title": "corpus:aws-ops/09-storage / Amazon EFS — shared file storage",
+                "snippet_preview": "## Amazon EFS — shared file storage EFS is a **serverless, elastic, shared file system** speaking the **NFS (v4.1/v4.0)** protocol. It is **multi-AZ** (highly available and durable across AZs within a",
+                "char_count": 700
+              },
+              {
+                "key": "f4041894-b591-447a-8062-81b0daed31d9",
+                "title": "corpus:ai-engineering/05-llm-evaluation / Faithfulness is grounding, not factual correctness",
+                "snippet_preview": "## Faithfulness is grounding, not factual correctness In RAG evaluation, **faithfulness** measures whether an answer is supported by the retrieved context — whether every claim in the answer can be tr",
+                "char_count": 748
+              },
+              {
+                "key": "12244759-8015-4302-9fd2-bb4b8ffcd72b",
+                "title": "corpus:ai-engineering/01-llm-fundamentals / Why models hallucinate",
+                "snippet_preview": "## Why models hallucinate At its core an LLM is a **next-token predictor**: it generates the statistically likely continuation of the text so far. It has no built-in model of truth. Fluency and confid",
+                "char_count": 604
+              }
+            ],
+            "prompt_used": "You are answering a user question using ONLY the documentation chunks provided below.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information not present in the chunks.\n   Do NOT add common-knowledge background, defaults from other projects, or\n   industry conventions. Stay strictly inside the chunks.\n2. CITE EVERY CLAIM: Every substantive claim MUST end with a bracketed\n   citation like [1] referring to the chunk number(s) that support it.\n3. ABSTAIN WHEN UNSUPPORTED: If the chunks do NOT contain the answer, your\n   ENTIRE answer must be exactly:\n       Not in context.\n4. EXACT VALUES: When chunks state a specific value (e.g. \"max_retries = 3\"),\n   quote that exact value in your answer. Do not paraphrase numbers.\n\nQUESTION:\nState whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"An EBS volume is multi-AZ by default, automatically replicating across Availability Zones.\"\n\nDOCUMENTATION CHUNKS:\n[1] — corpus:aws-ops/09-storage / Amazon EBS — block storage\nkey: ea7f3e60-12d8-448d-ada4-17216671da04\n## Amazon EBS — block storage EBS provides **block storage volumes** that attach to EC2 instances and behave like a raw disk. A volume lives in a **single Availability Zone** and is normally **attached to one instance at a time** (within that AZ); it is not multi-AZ by default. (The exception is **EBS Multi-Attach** for io1/io2 Provisioned IOPS volumes, which can attach to up to 16 instances **in the same AZ** — still not cross-AZ.) Durability/availability across AZs is achieved indirectly via **snapshots**, which are point-in-time backups stored in S3 and can restore a new volume in any AZ of the Region. EBS suits databases and boot volumes — workloads needing low-latency, persistent, single-attach block storage tied to one instance.\n\n---\n\n[2] — corpus:aws-ops/08-resilience-ha / Multi-AZ ≠ Multi-Region\nkey: 4c6f8de8-a041-4d09-abc9-1a878a51986d\n## Multi-AZ ≠ Multi-Region These solve different problems: - **Multi-AZ** = **high availability within a single Region** by spreading resources across Availability Zones (isolated data centers). It survives an AZ failure, with low-latency synchronous replication between AZs. - **Multi-Region** = **disaster recovery and/or global low latency** by running in geographically separate Regions. It survives a whole-Region event and serves users closer to them, but spans long distances (so cross-Region replication is typically asynchronous). Multi-AZ does **not** give Region-level DR; a Region-wide event still takes down a single-Region, multi-AZ deployment.\n\n---\n\n[3] — corpus:aws-ops/09-storage / Amazon EFS — shared file storage\nkey: 80584b78-b4d6-4c61-b1e5-dc1e02a9e656\n## Amazon EFS — shared file storage EFS is a **serverless, elastic, shared file system** speaking the **NFS (v4.1/v4.0)** protocol. It is **multi-AZ** (highly available and durable across AZs within a Region by design) and can be **mounted concurrently by many compute clients** — EC2, ECS, EKS, Lambda, Fargate. It scales automatically to petabytes without provisioning capacity. (The default **Regional** file-system type is multi-AZ; EFS also offers a cheaper **One Zone** type that stores data in a single AZ.) EFS suits **shared-file workloads** where multiple instances need the same filesystem (content management, shared home directories, lift-and- shift apps expecting POSIX file semantics).\n\n---\n\n[4] — corpus:ai-engineering/05-llm-evaluation / Faithfulness is grounding, not factual correctness\nkey: f4041894-b591-447a-8062-81b0daed31d9\n## Faithfulness is grounding, not factual correctness In RAG evaluation, **faithfulness** measures whether an answer is supported by the retrieved context — whether every claim in the answer can be traced to the provided passages. It does **not** measure whether the answer is true in the real world. These come apart in both directions. An answer can be perfectly faithful to *wrong* context: the retrieved passage is mistaken, the model repeats it accurately, and the answer is faithful yet factually false. Conversely, an answer can state a real-world truth the context never mentioned, which is factually correct but **unfaithful**. Faithfulness and factual correctness are distinct metrics, and conflating them produces misleading evaluations.\n\n---\n\n[5] — corpus:ai-engineering/01-llm-fundamentals / Why models hallucinate\nkey: 12244759-8015-4302-9fd2-bb4b8ffcd72b\n## Why models hallucinate At its core an LLM is a **next-token predictor**: it generates the statistically likely continuation of the text so far. It has no built-in model of truth. Fluency and confidence are properties of the language distribution it learned, not evidence of correctness — which is exactly why a model can produce well-formed, confident, and false output. Truthfulness is an **external** addition: grounding the model in retrieved sources, verifying claims, and constraining outputs. Nothing inside the next-token objective makes the model prefer true continuations over plausible ones.\n\nWrite a concise 2-4 sentence answer that:\n- Directly addresses the question using only chunk content\n- Quotes specific values verbatim when present\n- Has a bracketed citation at the end of every claim\n- Combines facts across chunks when the question spans multiple\n- Says exactly \"Not in context.\" if the chunks don't cover the question\n\nANSWER:\n",
+            "synth_ms": 1501,
+            "judge_ms": 16897,
+            "scores": {
+              "faithfulness": 1,
+              "answer_relevancy": 0.730995235585615,
+              "context_precision": 0.9999999999,
+              "context_recall": 1,
+              "groundedness_self_eval": 1
+            },
+            "reasons": {
+              "groundedness_self_eval": "The answer is perfectly grounded in context [1], which explicitly states that an EBS volume lives in a single Availability Zone, is not multi-AZ by default, and that Multi-Attach is restricted to the same AZ."
+            },
+            "fail_reasons": [
+              "answer_relevancy<0.85"
+            ]
+          }
+        },
+        {
+          "id": "AWS-STO-0001-s5",
+          "group": "aws-ops/storage",
+          "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"EFS is a shared file system (NFS) that many instances across AZs can mount concurrently.\"",
+          "top_k_keys": [
+            "80584b78-b4d6-4c61-b1e5-dc1e02a9e656",
+            "2973a826-cb46-432e-8164-4c0b6fed90c6",
+            "f4041894-b591-447a-8062-81b0daed31d9",
+            "ea7f3e60-12d8-448d-ada4-17216671da04",
+            "6629a0f9-9208-493a-b407-6f8f14da7f50",
+            "1a1ad545-72af-4f86-b97a-1f556412845c",
+            "1ae8031d-d9b1-4a74-99b0-65ba57fa48ce",
+            "f8e842a5-5874-414e-80e4-fd59c564d6d7",
+            "779808a8-86f5-4ab2-a134-e9e2e8d15de4",
+            "723a5b50-1a81-4ac2-a183-bed3761d3132"
+          ],
+          "top_k_titles": [
+            "corpus:aws-ops/09-storage / Amazon EFS — shared file storage",
+            "corpus:aws-ops/09-storage / Choosing between them",
+            "corpus:ai-engineering/05-llm-evaluation / Faithfulness is grounding, not factual correctness",
+            "corpus:aws-ops/09-storage / Amazon EBS — block storage",
+            "corpus:aws-ops/02-cost / Data-transfer / egress costs (commonly overlooked)",
+            "corpus:aws-ops/09-storage",
+            "corpus:aws-ops/09-storage / AWS storage — S3 vs EBS vs EFS",
+            "corpus:ai-engineering/01-llm-fundamentals / Embeddings encode meaning, not facts",
+            "corpus:aws-ops/04-iac-deployment / Choosing",
+            "corpus:aws-ops/01-compute / Choosing"
+          ],
+          "top_k_snippets": [
+            "## Amazon EFS — shared file storage EFS is a **serverless, elastic, shared file system** speaking the **NFS (v4.1/v4.0)** protocol. It is **multi-AZ** (highly available and durable across AZs within a Region by design) and can be **mounted concurrently by many compute clients** — EC2, ECS, EKS, Lamb",
+            "## Choosing between them - **Object data, web-scale, durable, API-accessed** → **S3** (not a mountable filesystem). - **Single-instance, low-latency block disk in one AZ** → **EBS** (multi-AZ only via snapshots). - **Shared POSIX filesystem mounted by many clients across AZs** → **EFS** (NFS, multi-",
+            "## Faithfulness is grounding, not factual correctness In RAG evaluation, **faithfulness** measures whether an answer is supported by the retrieved context — whether every claim in the answer can be traced to the provided passages. It does **not** measure whether the answer is true in the real world.",
+            "## Amazon EBS — block storage EBS provides **block storage volumes** that attach to EC2 instances and behave like a raw disk. A volume lives in a **single Availability Zone** and is normally **attached to one instance at a time** (within that AZ); it is not multi-AZ by default. (The exception is **E",
+            "## Data-transfer / egress costs (commonly overlooked) Network charges surprise teams: **data transfer within AWS is NOT uniformly free.** Inbound from the internet is generally free, but **outbound (egress) to the internet is billed**, and **cross-AZ and cross-Region traffic incur charges** (traffic",
+            "--- id: corpus/aws-ops/storage/s3-ebs-efs domain: aws-ops subdomain: storage topic: s3-ebs-efs sources: - \"AWS S3 User Guide — What is S3 + data consistency model (read 2026-06-16, © Amazon, paraphrased)\" - \"AWS EBS User Guide — What is Amazon EBS (read 2026-06-16, © Amazon, paraphrased)\" - \"AWS EFS",
+            "# AWS storage — S3 vs EBS vs EFS",
+            "## Embeddings encode meaning, not facts An **embedding** is a vector that places a piece of text at a point in a high-dimensional space so that semantically similar texts land near each other. It is easy to misread embeddings as a database of true statements. They are not. Embeddings encode the *geo",
+            "## Choosing - **AWS-only, want native integration/rollback** → **CloudFormation** (or **CDK** if you prefer real code that compiles to CFN). - **Multi-cloud / single tool across providers** → **Terraform** (mind state-file management).",
+            "## Choosing - **Full OS control / legacy / specialized workloads** → **EC2**. - **Containerized services, want orchestration** → **ECS** (simpler, AWS-native) or **EKS** (Kubernetes, portable, more complex); pair with **Fargate** to avoid node management. - **Event-driven, short, spiky, pay-per-use*"
+          ],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            143
+          ],
+          "latency_ms_median": 143,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "TRUE. Amazon EFS is a shared file system that speaks the \"NFS (v4.1/v4.0)\" protocol [1]. It is \"multi-AZ\" and can be \"mounted concurrently by many compute clients\" [1], which includes being a \"Shared POSIX filesystem mounted by many clients across AZs\" [2].",
+            "contexts_used": [
+              {
+                "key": "80584b78-b4d6-4c61-b1e5-dc1e02a9e656",
+                "title": "corpus:aws-ops/09-storage / Amazon EFS — shared file storage",
+                "snippet_preview": "## Amazon EFS — shared file storage EFS is a **serverless, elastic, shared file system** speaking the **NFS (v4.1/v4.0)** protocol. It is **multi-AZ** (highly available and durable across AZs within a",
+                "char_count": 700
+              },
+              {
+                "key": "2973a826-cb46-432e-8164-4c0b6fed90c6",
+                "title": "corpus:aws-ops/09-storage / Choosing between them",
+                "snippet_preview": "## Choosing between them - **Object data, web-scale, durable, API-accessed** → **S3** (not a mountable filesystem). - **Single-instance, low-latency block disk in one AZ** → **EBS** (multi-AZ only via",
+                "char_count": 304
+              },
+              {
+                "key": "f4041894-b591-447a-8062-81b0daed31d9",
+                "title": "corpus:ai-engineering/05-llm-evaluation / Faithfulness is grounding, not factual correctness",
+                "snippet_preview": "## Faithfulness is grounding, not factual correctness In RAG evaluation, **faithfulness** measures whether an answer is supported by the retrieved context — whether every claim in the answer can be tr",
+                "char_count": 748
+              },
+              {
+                "key": "ea7f3e60-12d8-448d-ada4-17216671da04",
+                "title": "corpus:aws-ops/09-storage / Amazon EBS — block storage",
+                "snippet_preview": "## Amazon EBS — block storage EBS provides **block storage volumes** that attach to EC2 instances and behave like a raw disk. A volume lives in a **single Availability Zone** and is normally **attache",
+                "char_count": 744
+              },
+              {
+                "key": "6629a0f9-9208-493a-b407-6f8f14da7f50",
+                "title": "corpus:aws-ops/02-cost / Data-transfer / egress costs (commonly overlooked)",
+                "snippet_preview": "## Data-transfer / egress costs (commonly overlooked) Network charges surprise teams: **data transfer within AWS is NOT uniformly free.** Inbound from the internet is generally free, but **outbound (e",
+                "char_count": 466
+              }
+            ],
+            "prompt_used": "You are answering a user question using ONLY the documentation chunks provided below.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information not present in the chunks.\n   Do NOT add common-knowledge background, defaults from other projects, or\n   industry conventions. Stay strictly inside the chunks.\n2. CITE EVERY CLAIM: Every substantive claim MUST end with a bracketed\n   citation like [1] referring to the chunk number(s) that support it.\n3. ABSTAIN WHEN UNSUPPORTED: If the chunks do NOT contain the answer, your\n   ENTIRE answer must be exactly:\n       Not in context.\n4. EXACT VALUES: When chunks state a specific value (e.g. \"max_retries = 3\"),\n   quote that exact value in your answer. Do not paraphrase numbers.\n\nQUESTION:\nState whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"EFS is a shared file system (NFS) that many instances across AZs can mount concurrently.\"\n\nDOCUMENTATION CHUNKS:\n[1] — corpus:aws-ops/09-storage / Amazon EFS — shared file storage\nkey: 80584b78-b4d6-4c61-b1e5-dc1e02a9e656\n## Amazon EFS — shared file storage EFS is a **serverless, elastic, shared file system** speaking the **NFS (v4.1/v4.0)** protocol. It is **multi-AZ** (highly available and durable across AZs within a Region by design) and can be **mounted concurrently by many compute clients** — EC2, ECS, EKS, Lambda, Fargate. It scales automatically to petabytes without provisioning capacity. (The default **Regional** file-system type is multi-AZ; EFS also offers a cheaper **One Zone** type that stores data in a single AZ.) EFS suits **shared-file workloads** where multiple instances need the same filesystem (content management, shared home directories, lift-and- shift apps expecting POSIX file semantics).\n\n---\n\n[2] — corpus:aws-ops/09-storage / Choosing between them\nkey: 2973a826-cb46-432e-8164-4c0b6fed90c6\n## Choosing between them - **Object data, web-scale, durable, API-accessed** → **S3** (not a mountable filesystem). - **Single-instance, low-latency block disk in one AZ** → **EBS** (multi-AZ only via snapshots). - **Shared POSIX filesystem mounted by many clients across AZs** → **EFS** (NFS, multi-AZ).\n\n---\n\n[3] — corpus:ai-engineering/05-llm-evaluation / Faithfulness is grounding, not factual correctness\nkey: f4041894-b591-447a-8062-81b0daed31d9\n## Faithfulness is grounding, not factual correctness In RAG evaluation, **faithfulness** measures whether an answer is supported by the retrieved context — whether every claim in the answer can be traced to the provided passages. It does **not** measure whether the answer is true in the real world. These come apart in both directions. An answer can be perfectly faithful to *wrong* context: the retrieved passage is mistaken, the model repeats it accurately, and the answer is faithful yet factually false. Conversely, an answer can state a real-world truth the context never mentioned, which is factually correct but **unfaithful**. Faithfulness and factual correctness are distinct metrics, and conflating them produces misleading evaluations.\n\n---\n\n[4] — corpus:aws-ops/09-storage / Amazon EBS — block storage\nkey: ea7f3e60-12d8-448d-ada4-17216671da04\n## Amazon EBS — block storage EBS provides **block storage volumes** that attach to EC2 instances and behave like a raw disk. A volume lives in a **single Availability Zone** and is normally **attached to one instance at a time** (within that AZ); it is not multi-AZ by default. (The exception is **EBS Multi-Attach** for io1/io2 Provisioned IOPS volumes, which can attach to up to 16 instances **in the same AZ** — still not cross-AZ.) Durability/availability across AZs is achieved indirectly via **snapshots**, which are point-in-time backups stored in S3 and can restore a new volume in any AZ of the Region. EBS suits databases and boot volumes — workloads needing low-latency, persistent, single-attach block storage tied to one instance.\n\n---\n\n[5] — corpus:aws-ops/02-cost / Data-transfer / egress costs (commonly overlooked)\nkey: 6629a0f9-9208-493a-b407-6f8f14da7f50\n## Data-transfer / egress costs (commonly overlooked) Network charges surprise teams: **data transfer within AWS is NOT uniformly free.** Inbound from the internet is generally free, but **outbound (egress) to the internet is billed**, and **cross-AZ and cross-Region traffic incur charges** (traffic within a single AZ using private IPs is typically free). Architectures that chat across AZs/Regions or push large egress can run up significant, easily-missed bills.\n\nWrite a concise 2-4 sentence answer that:\n- Directly addresses the question using only chunk content\n- Quotes specific values verbatim when present\n- Has a bracketed citation at the end of every claim\n- Combines facts across chunks when the question spans multiple\n- Says exactly \"Not in context.\" if the chunks don't cover the question\n\nANSWER:\n",
+            "synth_ms": 1446,
+            "judge_ms": 17662,
+            "scores": {
+              "faithfulness": 0.8,
+              "answer_relevancy": 0.5324862054959917,
+              "context_precision": 0.99999999995,
+              "context_recall": 1,
+              "groundedness_self_eval": 1
+            },
+            "reasons": {
+              "groundedness_self_eval": "Every claim in the answer is directly supported by the provided contexts: [1] confirms it is a shared file system using NFS, multi-AZ, and mountable by many clients, and [2] confirms it is a shared POSIX filesystem mounted by many clients across AZs."
+            },
+            "fail_reasons": [
+              "faithfulness<0.9",
+              "answer_relevancy<0.85"
+            ]
+          }
+        },
+        {
+          "id": "AWS-STO-0001-s6",
+          "group": "aws-ops/storage",
+          "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"With two simultaneous PUTs to the same S3 key, S3 merges the two writes into one combined object.\"",
+          "top_k_keys": [
+            "f1c81c5d-35e4-4913-a4bb-beebacf501f7",
+            "f4041894-b591-447a-8062-81b0daed31d9",
+            "12244759-8015-4302-9fd2-bb4b8ffcd72b",
+            "2973a826-cb46-432e-8164-4c0b6fed90c6",
+            "fecae52c-7bdb-40ec-8765-cc9a15764315",
+            "f8e842a5-5874-414e-80e4-fd59c564d6d7",
+            "eca83071-d726-4a3d-8c94-69f0fcaa2d2e",
+            "726b0c36-5b6d-48cb-a3b7-0f54c5f6a828",
+            "6224ec50-87de-4251-b513-44440775ca80",
+            "d44b5b9f-a977-48b0-ace6-6fa6d2322d7d"
+          ],
+          "top_k_titles": [
+            "corpus:aws-ops/09-storage / S3 consistency model",
+            "corpus:ai-engineering/05-llm-evaluation / Faithfulness is grounding, not factual correctness",
+            "corpus:ai-engineering/01-llm-fundamentals / Why models hallucinate",
+            "corpus:aws-ops/09-storage / Choosing between them",
+            "corpus:aws-ops/09-storage / Amazon S3 — object storage",
+            "corpus:ai-engineering/01-llm-fundamentals / Embeddings encode meaning, not facts",
+            "corpus:solution-architecture/03-data-architecture / Event Sourcing (ES)",
+            "corpus:ai-engineering/04-agentic-ai / Tool output is untrusted input",
+            "corpus:solution-architecture/08-security-architecture / JWTs: signed ≠ encrypted",
+            "corpus:developer/05-relational-databases-indexing-and-transactions / Transactions and ACID"
+          ],
+          "top_k_snippets": [
+            "### S3 consistency model S3 provides **strong read-after-write consistency** for PUT and DELETE of objects, in **all Regions**, automatically and at no extra cost. This applies to **new objects and overwrites of existing objects**: any GET or LIST issued after a successful write returns the latest d",
+            "## Faithfulness is grounding, not factual correctness In RAG evaluation, **faithfulness** measures whether an answer is supported by the retrieved context — whether every claim in the answer can be traced to the provided passages. It does **not** measure whether the answer is true in the real world.",
+            "## Why models hallucinate At its core an LLM is a **next-token predictor**: it generates the statistically likely continuation of the text so far. It has no built-in model of truth. Fluency and confidence are properties of the language distribution it learned, not evidence of correctness — which is ",
+            "## Choosing between them - **Object data, web-scale, durable, API-accessed** → **S3** (not a mountable filesystem). - **Single-instance, low-latency block disk in one AZ** → **EBS** (multi-AZ only via snapshots). - **Shared POSIX filesystem mounted by many clients across AZs** → **EFS** (NFS, multi-",
+            "## Amazon S3 — object storage S3 is an **object store** (not a filesystem and not a block device): data is stored as objects in flat buckets, addressed by key, and accessed over an HTTP API. It is designed for **11 nines (99.999999999%) of durability** for S3 Standard by redundantly storing objects ",
+            "## Embeddings encode meaning, not facts An **embedding** is a vector that places a piece of text at a point in a high-dimensional space so that semantically similar texts land near each other. It is easy to misread embeddings as a database of true statements. They are not. Embeddings encode the *geo",
+            "## Event Sourcing (ES) Event Sourcing stores **the full sequence of state-changing events as the source of truth**, instead of only the current state. Current state is **derived by replaying** events. Key properties: - Events are an **append-only, immutable log** — **you do not edit past events**; y",
+            "## Tool output is untrusted input Whatever a tool returns — a web page, a file, a database row, another system's response — must be treated as **untrusted data, not trusted instructions**. Returned content can contain **prompt injection**: text like \"ignore your previous instructions and do X.\" If t",
+            "## JWTs: signed ≠ encrypted A standard **JWT (JWS) is signed, not encrypted** — signing gives **integrity and authenticity** (you can trust it wasn't tampered with) but the payload is only **base64url-encoded and fully readable**. **A JWT is NOT confidential by default**; never put secrets in one un",
+            "## Transactions and ACID A transaction groups operations into an all-or-nothing unit with **ACID** guarantees: - **Atomicity** — all operations commit or none do (rollback on failure). - **Consistency** — a transaction moves the DB from one valid state to another (constraints hold). - **Isolation** "
+          ],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            144
+          ],
+          "latency_ms_median": 144,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "FALSE. With two simultaneous PUTs to one key, \"last writer wins\" by timestamp [1]. There is \"no object locking for concurrent writers\" [1].",
+            "contexts_used": [
+              {
+                "key": "f1c81c5d-35e4-4913-a4bb-beebacf501f7",
+                "title": "corpus:aws-ops/09-storage / S3 consistency model",
+                "snippet_preview": "### S3 consistency model S3 provides **strong read-after-write consistency** for PUT and DELETE of objects, in **all Regions**, automatically and at no extra cost. This applies to **new objects and ov",
+                "char_count": 1096
+              },
+              {
+                "key": "f4041894-b591-447a-8062-81b0daed31d9",
+                "title": "corpus:ai-engineering/05-llm-evaluation / Faithfulness is grounding, not factual correctness",
+                "snippet_preview": "## Faithfulness is grounding, not factual correctness In RAG evaluation, **faithfulness** measures whether an answer is supported by the retrieved context — whether every claim in the answer can be tr",
+                "char_count": 748
+              },
+              {
+                "key": "12244759-8015-4302-9fd2-bb4b8ffcd72b",
+                "title": "corpus:ai-engineering/01-llm-fundamentals / Why models hallucinate",
+                "snippet_preview": "## Why models hallucinate At its core an LLM is a **next-token predictor**: it generates the statistically likely continuation of the text so far. It has no built-in model of truth. Fluency and confid",
+                "char_count": 604
+              },
+              {
+                "key": "2973a826-cb46-432e-8164-4c0b6fed90c6",
+                "title": "corpus:aws-ops/09-storage / Choosing between them",
+                "snippet_preview": "## Choosing between them - **Object data, web-scale, durable, API-accessed** → **S3** (not a mountable filesystem). - **Single-instance, low-latency block disk in one AZ** → **EBS** (multi-AZ only via",
+                "char_count": 304
+              },
+              {
+                "key": "fecae52c-7bdb-40ec-8765-cc9a15764315",
+                "title": "corpus:aws-ops/09-storage / Amazon S3 — object storage",
+                "snippet_preview": "## Amazon S3 — object storage S3 is an **object store** (not a filesystem and not a block device): data is stored as objects in flat buckets, addressed by key, and accessed over an HTTP API. It is des",
+                "char_count": 599
+              }
+            ],
+            "prompt_used": "You are answering a user question using ONLY the documentation chunks provided below.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information not present in the chunks.\n   Do NOT add common-knowledge background, defaults from other projects, or\n   industry conventions. Stay strictly inside the chunks.\n2. CITE EVERY CLAIM: Every substantive claim MUST end with a bracketed\n   citation like [1] referring to the chunk number(s) that support it.\n3. ABSTAIN WHEN UNSUPPORTED: If the chunks do NOT contain the answer, your\n   ENTIRE answer must be exactly:\n       Not in context.\n4. EXACT VALUES: When chunks state a specific value (e.g. \"max_retries = 3\"),\n   quote that exact value in your answer. Do not paraphrase numbers.\n\nQUESTION:\nState whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"With two simultaneous PUTs to the same S3 key, S3 merges the two writes into one combined object.\"\n\nDOCUMENTATION CHUNKS:\n[1] — corpus:aws-ops/09-storage / S3 consistency model\nkey: f1c81c5d-35e4-4913-a4bb-beebacf501f7\n### S3 consistency model S3 provides **strong read-after-write consistency** for PUT and DELETE of objects, in **all Regions**, automatically and at no extra cost. This applies to **new objects and overwrites of existing objects**: any GET or LIST issued after a successful write returns the latest data (a just-written object appears in a listing immediately; a just-deleted object is gone immediately). Reads on object metadata/HEAD, ACLs, tags, and S3 Select are also strongly consistent. Two nuances worth holding precisely: (1) **updates are atomic per key** — a concurrent reader gets either the old or new object, never a partial/corrupt one — but there is **no cross-key atomicity and no object locking for concurrent writers** (with two simultaneous PUTs to one key, **last writer wins** by timestamp). (2) **Bucket configurations** (not object data) have an **eventual consistency** model — e.g. just-enabled versioning may take a short time to propagate. Historically (before December 2020\n[...truncated]\n\n---\n\n[2] — corpus:ai-engineering/05-llm-evaluation / Faithfulness is grounding, not factual correctness\nkey: f4041894-b591-447a-8062-81b0daed31d9\n## Faithfulness is grounding, not factual correctness In RAG evaluation, **faithfulness** measures whether an answer is supported by the retrieved context — whether every claim in the answer can be traced to the provided passages. It does **not** measure whether the answer is true in the real world. These come apart in both directions. An answer can be perfectly faithful to *wrong* context: the retrieved passage is mistaken, the model repeats it accurately, and the answer is faithful yet factually false. Conversely, an answer can state a real-world truth the context never mentioned, which is factually correct but **unfaithful**. Faithfulness and factual correctness are distinct metrics, and conflating them produces misleading evaluations.\n\n---\n\n[3] — corpus:ai-engineering/01-llm-fundamentals / Why models hallucinate\nkey: 12244759-8015-4302-9fd2-bb4b8ffcd72b\n## Why models hallucinate At its core an LLM is a **next-token predictor**: it generates the statistically likely continuation of the text so far. It has no built-in model of truth. Fluency and confidence are properties of the language distribution it learned, not evidence of correctness — which is exactly why a model can produce well-formed, confident, and false output. Truthfulness is an **external** addition: grounding the model in retrieved sources, verifying claims, and constraining outputs. Nothing inside the next-token objective makes the model prefer true continuations over plausible ones.\n\n---\n\n[4] — corpus:aws-ops/09-storage / Choosing between them\nkey: 2973a826-cb46-432e-8164-4c0b6fed90c6\n## Choosing between them - **Object data, web-scale, durable, API-accessed** → **S3** (not a mountable filesystem). - **Single-instance, low-latency block disk in one AZ** → **EBS** (multi-AZ only via snapshots). - **Shared POSIX filesystem mounted by many clients across AZs** → **EFS** (NFS, multi-AZ).\n\n---\n\n[5] — corpus:aws-ops/09-storage / Amazon S3 — object storage\nkey: fecae52c-7bdb-40ec-8765-cc9a15764315\n## Amazon S3 — object storage S3 is an **object store** (not a filesystem and not a block device): data is stored as objects in flat buckets, addressed by key, and accessed over an HTTP API. It is designed for **11 nines (99.999999999%) of durability** for S3 Standard by redundantly storing objects across multiple devices and Availability Zones within a Region. It offers multiple **storage classes** (Standard, Standard-IA, One Zone-IA, Glacier tiers, Intelligent-Tiering) and **lifecycle policies** to transition or expire objects automatically — the cost/access trade-off is explicit per class.\n\nWrite a concise 2-4 sentence answer that:\n- Directly addresses the question using only chunk content\n- Quotes specific values verbatim when present\n- Has a bracketed citation at the end of every claim\n- Combines facts across chunks when the question spans multiple\n- Says exactly \"Not in context.\" if the chunks don't cover the question\n\nANSWER:\n",
+            "synth_ms": 1247,
+            "judge_ms": 15158,
+            "scores": {
+              "faithfulness": 1,
+              "answer_relevancy": 0.6005162793367708,
+              "context_precision": 0.9999999999,
+              "context_recall": 1,
+              "groundedness_self_eval": 1
+            },
+            "reasons": {
+              "groundedness_self_eval": "The answer correctly identifies the claim as false and provides the specific reasoning ('last writer wins' and 'no object locking') found in context [1]."
+            },
+            "fail_reasons": [
+              "answer_relevancy<0.85"
+            ]
+          }
+        },
+        {
+          "id": "AWS-STO-0001-s7",
+          "group": "aws-ops/storage",
+          "query": "State whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"A standard EBS volume can be attached to one instance at a time (with io1/io2 Multi-Attach as a same-AZ exception).\"",
+          "top_k_keys": [
+            "ea7f3e60-12d8-448d-ada4-17216671da04",
+            "f4041894-b591-447a-8062-81b0daed31d9",
+            "f8e842a5-5874-414e-80e4-fd59c564d6d7",
+            "2973a826-cb46-432e-8164-4c0b6fed90c6",
+            "1a1ad545-72af-4f86-b97a-1f556412845c",
+            "80584b78-b4d6-4c61-b1e5-dc1e02a9e656",
+            "fecae52c-7bdb-40ec-8765-cc9a15764315",
+            "1ae8031d-d9b1-4a74-99b0-65ba57fa48ce",
+            "eca83071-d726-4a3d-8c94-69f0fcaa2d2e",
+            "ca4a6223-33ad-4edf-850e-d8ccf6b0c580"
+          ],
+          "top_k_titles": [
+            "corpus:aws-ops/09-storage / Amazon EBS — block storage",
+            "corpus:ai-engineering/05-llm-evaluation / Faithfulness is grounding, not factual correctness",
+            "corpus:ai-engineering/01-llm-fundamentals / Embeddings encode meaning, not facts",
+            "corpus:aws-ops/09-storage / Choosing between them",
+            "corpus:aws-ops/09-storage",
+            "corpus:aws-ops/09-storage / Amazon EFS — shared file storage",
+            "corpus:aws-ops/09-storage / Amazon S3 — object storage",
+            "corpus:aws-ops/09-storage / AWS storage — S3 vs EBS vs EFS",
+            "corpus:solution-architecture/03-data-architecture / Event Sourcing (ES)",
+            "corpus:aws-ops/02-cost / The compute purchasing models"
+          ],
+          "top_k_snippets": [
+            "## Amazon EBS — block storage EBS provides **block storage volumes** that attach to EC2 instances and behave like a raw disk. A volume lives in a **single Availability Zone** and is normally **attached to one instance at a time** (within that AZ); it is not multi-AZ by default. (The exception is **E",
+            "## Faithfulness is grounding, not factual correctness In RAG evaluation, **faithfulness** measures whether an answer is supported by the retrieved context — whether every claim in the answer can be traced to the provided passages. It does **not** measure whether the answer is true in the real world.",
+            "## Embeddings encode meaning, not facts An **embedding** is a vector that places a piece of text at a point in a high-dimensional space so that semantically similar texts land near each other. It is easy to misread embeddings as a database of true statements. They are not. Embeddings encode the *geo",
+            "## Choosing between them - **Object data, web-scale, durable, API-accessed** → **S3** (not a mountable filesystem). - **Single-instance, low-latency block disk in one AZ** → **EBS** (multi-AZ only via snapshots). - **Shared POSIX filesystem mounted by many clients across AZs** → **EFS** (NFS, multi-",
+            "--- id: corpus/aws-ops/storage/s3-ebs-efs domain: aws-ops subdomain: storage topic: s3-ebs-efs sources: - \"AWS S3 User Guide — What is S3 + data consistency model (read 2026-06-16, © Amazon, paraphrased)\" - \"AWS EBS User Guide — What is Amazon EBS (read 2026-06-16, © Amazon, paraphrased)\" - \"AWS EFS",
+            "## Amazon EFS — shared file storage EFS is a **serverless, elastic, shared file system** speaking the **NFS (v4.1/v4.0)** protocol. It is **multi-AZ** (highly available and durable across AZs within a Region by design) and can be **mounted concurrently by many compute clients** — EC2, ECS, EKS, Lamb",
+            "## Amazon S3 — object storage S3 is an **object store** (not a filesystem and not a block device): data is stored as objects in flat buckets, addressed by key, and accessed over an HTTP API. It is designed for **11 nines (99.999999999%) of durability** for S3 Standard by redundantly storing objects ",
+            "# AWS storage — S3 vs EBS vs EFS",
+            "## Event Sourcing (ES) Event Sourcing stores **the full sequence of state-changing events as the source of truth**, instead of only the current state. Current state is **derived by replaying** events. Key properties: - Events are an **append-only, immutable log** — **you do not edit past events**; y",
+            "## The compute purchasing models - **On-Demand** — pay per second/hour, no commitment. Most flexible, highest unit price. Best for spiky/unpredictable or short-lived workloads. - **Spot Instances** — use **spare EC2 capacity at a steep discount (up to ~90% off On-Demand)**. The catch: AWS can **recl"
+          ],
+          "found_ranks": [],
+          "graded_hits_in_rank_order": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "latency_ms_samples": [
+            154
+          ],
+          "latency_ms_median": 154,
+          "has_relevant_hit_in_top_k": false,
+          "friction_classes": [],
+          "generation": {
+            "generated_answer": "TRUE. An EBS volume is normally \"attached to one instance at a time\" (within that AZ) [1]. The exception is \"EBS Multi-Attach\" for \"io1/io2 Provisioned IOPS volumes,\" which can be attached to up to \"16 instances\" in the \"same AZ\" [1].",
+            "contexts_used": [
+              {
+                "key": "ea7f3e60-12d8-448d-ada4-17216671da04",
+                "title": "corpus:aws-ops/09-storage / Amazon EBS — block storage",
+                "snippet_preview": "## Amazon EBS — block storage EBS provides **block storage volumes** that attach to EC2 instances and behave like a raw disk. A volume lives in a **single Availability Zone** and is normally **attache",
+                "char_count": 744
+              },
+              {
+                "key": "f4041894-b591-447a-8062-81b0daed31d9",
+                "title": "corpus:ai-engineering/05-llm-evaluation / Faithfulness is grounding, not factual correctness",
+                "snippet_preview": "## Faithfulness is grounding, not factual correctness In RAG evaluation, **faithfulness** measures whether an answer is supported by the retrieved context — whether every claim in the answer can be tr",
+                "char_count": 748
+              },
+              {
+                "key": "f8e842a5-5874-414e-80e4-fd59c564d6d7",
+                "title": "corpus:ai-engineering/01-llm-fundamentals / Embeddings encode meaning, not facts",
+                "snippet_preview": "## Embeddings encode meaning, not facts An **embedding** is a vector that places a piece of text at a point in a high-dimensional space so that semantically similar texts land near each other. It is e",
+                "char_count": 648
+              },
+              {
+                "key": "2973a826-cb46-432e-8164-4c0b6fed90c6",
+                "title": "corpus:aws-ops/09-storage / Choosing between them",
+                "snippet_preview": "## Choosing between them - **Object data, web-scale, durable, API-accessed** → **S3** (not a mountable filesystem). - **Single-instance, low-latency block disk in one AZ** → **EBS** (multi-AZ only via",
+                "char_count": 304
+              },
+              {
+                "key": "1a1ad545-72af-4f86-b97a-1f556412845c",
+                "title": "corpus:aws-ops/09-storage",
+                "snippet_preview": "--- id: corpus/aws-ops/storage/s3-ebs-efs domain: aws-ops subdomain: storage topic: s3-ebs-efs sources: - \"AWS S3 User Guide — What is S3 + data consistency model (read 2026-06-16, © Amazon, paraphras",
+                "char_count": 534
+              }
+            ],
+            "prompt_used": "You are answering a user question using ONLY the documentation chunks provided below.\n\nCRITICAL RULES — read before answering:\n1. CLOSED-BOOK: You MUST NOT use any information not present in the chunks.\n   Do NOT add common-knowledge background, defaults from other projects, or\n   industry conventions. Stay strictly inside the chunks.\n2. CITE EVERY CLAIM: Every substantive claim MUST end with a bracketed\n   citation like [1] referring to the chunk number(s) that support it.\n3. ABSTAIN WHEN UNSUPPORTED: If the chunks do NOT contain the answer, your\n   ENTIRE answer must be exactly:\n       Not in context.\n4. EXACT VALUES: When chunks state a specific value (e.g. \"max_retries = 3\"),\n   quote that exact value in your answer. Do not paraphrase numbers.\n\nQUESTION:\nState whether the following claim is TRUE or FALSE and explain why, based only on authoritative sources in the provided context. If the context does not address it, say so. Claim: \"A standard EBS volume can be attached to one instance at a time (with io1/io2 Multi-Attach as a same-AZ exception).\"\n\nDOCUMENTATION CHUNKS:\n[1] — corpus:aws-ops/09-storage / Amazon EBS — block storage\nkey: ea7f3e60-12d8-448d-ada4-17216671da04\n## Amazon EBS — block storage EBS provides **block storage volumes** that attach to EC2 instances and behave like a raw disk. A volume lives in a **single Availability Zone** and is normally **attached to one instance at a time** (within that AZ); it is not multi-AZ by default. (The exception is **EBS Multi-Attach** for io1/io2 Provisioned IOPS volumes, which can attach to up to 16 instances **in the same AZ** — still not cross-AZ.) Durability/availability across AZs is achieved indirectly via **snapshots**, which are point-in-time backups stored in S3 and can restore a new volume in any AZ of the Region. EBS suits databases and boot volumes — workloads needing low-latency, persistent, single-attach block storage tied to one instance.\n\n---\n\n[2] — corpus:ai-engineering/05-llm-evaluation / Faithfulness is grounding, not factual correctness\nkey: f4041894-b591-447a-8062-81b0daed31d9\n## Faithfulness is grounding, not factual correctness In RAG evaluation, **faithfulness** measures whether an answer is supported by the retrieved context — whether every claim in the answer can be traced to the provided passages. It does **not** measure whether the answer is true in the real world. These come apart in both directions. An answer can be perfectly faithful to *wrong* context: the retrieved passage is mistaken, the model repeats it accurately, and the answer is faithful yet factually false. Conversely, an answer can state a real-world truth the context never mentioned, which is factually correct but **unfaithful**. Faithfulness and factual correctness are distinct metrics, and conflating them produces misleading evaluations.\n\n---\n\n[3] — corpus:ai-engineering/01-llm-fundamentals / Embeddings encode meaning, not facts\nkey: f8e842a5-5874-414e-80e4-fd59c564d6d7\n## Embeddings encode meaning, not facts An **embedding** is a vector that places a piece of text at a point in a high-dimensional space so that semantically similar texts land near each other. It is easy to misread embeddings as a database of true statements. They are not. Embeddings encode the *geometry of meaning* — relative similarity — not retrievable facts. A retrieval system uses vector proximity to find the **source text** most similar to a query; a model then reads that text. The knowledge lives in the retrieved documents, and the embedding is only the index that locates them. Asking an embedding \"is this true?\" is a category error.\n\n---\n\n[4] — corpus:aws-ops/09-storage / Choosing between them\nkey: 2973a826-cb46-432e-8164-4c0b6fed90c6\n## Choosing between them - **Object data, web-scale, durable, API-accessed** → **S3** (not a mountable filesystem). - **Single-instance, low-latency block disk in one AZ** → **EBS** (multi-AZ only via snapshots). - **Shared POSIX filesystem mounted by many clients across AZs** → **EFS** (NFS, multi-AZ).\n\n---\n\n[5] — corpus:aws-ops/09-storage\nkey: 1a1ad545-72af-4f86-b97a-1f556412845c\n--- id: corpus/aws-ops/storage/s3-ebs-efs domain: aws-ops subdomain: storage topic: s3-ebs-efs sources: - \"AWS S3 User Guide — What is S3 + data consistency model (read 2026-06-16, © Amazon, paraphrased)\" - \"AWS EBS User Guide — What is Amazon EBS (read 2026-06-16, © Amazon, paraphrased)\" - \"AWS EFS User Guide — What is Amazon EFS (read 2026-06-16, © Amazon, paraphrased)\" - \"AWS S3 storage classes docs — durability figure (© Amazon, paraphrased)\" license_posture: own-words-paraphrase status: drafted last_reviewed: 2026-06-16 ---\n\nWrite a concise 2-4 sentence answer that:\n- Directly addresses the question using only chunk content\n- Quotes specific values verbatim when present\n- Has a bracketed citation at the end of every claim\n- Combines facts across chunks when the question spans multiple\n- Says exactly \"Not in context.\" if the chunks don't cover the question\n\nANSWER:\n",
+            "synth_ms": 1059,
+            "judge_ms": 17830,
+            "scores": {
+              "faithfulness": 0.75,
+              "answer_relevancy": 0.7345140389153088,
+              "context_precision": 0.9999999999,
+              "context_recall": 1,
+              "groundedness_self_eval": 1
+            },
+            "reasons": {
+              "groundedness_self_eval": "The answer is perfectly grounded; every claim regarding the single-attach nature of EBS, the io1/io2 Multi-Attach exception, the 16-instance limit, and the same-AZ requirement is directly supported by Context [1]."
+            },
+            "fail_reasons": [
+              "faithfulness<0.9",
+              "answer_relevancy<0.85"
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

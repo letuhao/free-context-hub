@@ -19,8 +19,11 @@ import path from 'node:path';
 const API = (process.env.API_BASE_URL?.trim() || 'http://127.0.0.1:3001').replace(/\/$/, '');
 const PROJECT = process.env.PROJECT_ID?.trim() || 'free-context-hub';
 const CORPUS_DIR = process.env.CORPUS_DIR?.trim() || 'corpus/ai-engineering';
+/** Namespace = the corpus dir's domain segment (e.g. 'aws-ops'), so the tool is
+ *  domain-agnostic: point CORPUS_DIR at any corpus/<domain> to ingest it. */
+const NS = path.basename(CORPUS_DIR.replace(/[\\/]+$/, ''));
 /** Stable name prefix so re-ingest can find + delete the prior copies. */
-const NAME_PREFIX = 'corpus:ai-engineering/';
+const NAME_PREFIX = `corpus:${NS}/`;
 
 async function api(method: string, route: string, body?: unknown): Promise<any> {
   const res = await fetch(`${API}${route}`, {
@@ -67,8 +70,8 @@ async function main() {
       name,
       doc_type: 'markdown',
       content,
-      description: 'DEFERRED-032 ai-engineering corpus',
-      tags: ['corpus', 'ai-engineering', 'deferred-032'],
+      description: `competency corpus: ${NS}`,
+      tags: ['corpus', NS],
     });
     const docId = created.doc_id ?? created.id ?? created.document?.doc_id;
     if (!docId) throw new Error(`create returned no doc_id for ${name}: ${JSON.stringify(created).slice(0, 200)}`);
