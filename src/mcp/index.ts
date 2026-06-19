@@ -1545,9 +1545,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, lesson_payload, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, lesson_payload.captured_by);
       const projectId = resolveProjectIdOrThrow(lesson_payload.project_id);
-      const result = await addLesson({ ...lesson_payload, project_id: projectId, callerScope } as any);
+      const result = await addLesson({ ...lesson_payload, project_id: projectId, callerScope, captured_by: actingPrincipalId ?? lesson_payload.captured_by } as any);
       const summary = `add_lesson: lesson_id=${result.lesson_id ?? '(unknown)'}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -3327,8 +3327,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, actor_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await closeTopic({ topic_id, callerScope, actor_id });
+      const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, actor_id);
+      const r = await closeTopic({ topic_id, callerScope, actor_id: actingPrincipalId ?? actor_id });
       const result = {
         status: 'ok',
         topic_id: r.topic_id,
@@ -3925,8 +3925,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, body_id, principal, proxy, granted_by, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await grantProxy({ body_id, callerScope, principal, proxy, granted_by });
+      // granted_by is the delegating caller (must equal principal); principal/proxy are targets.
+      const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, granted_by);
+      const r = await grantProxy({ body_id, callerScope, principal, proxy, granted_by: actingPrincipalId ?? granted_by });
       const summary = `grant_proxy: body=${body_id} principal=${principal} proxy=${proxy} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3946,7 +3947,8 @@ function createMcpToolsServer() {
       outputSchema: z.object({ status: z.string() }),
     },
     async ({ workspace_token, body_id, principal, proxy, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      // principal/proxy are targets; no caller-identity field — authenticate the caller only.
+      const { scope: callerScope } = await resolveActingActorOrThrow(workspace_token);
       const r = await revokeProxy({ body_id, callerScope, principal, proxy });
       const summary = `revoke_proxy: body=${body_id} principal=${principal} proxy=${proxy} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
