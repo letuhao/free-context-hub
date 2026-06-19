@@ -3655,7 +3655,7 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, subject_id, kind, weight, procedure, submitted_by, execution_task, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, submitted_by);
       const r = await submitRequest({
         callerScope,
         topic_id,
@@ -3664,7 +3664,7 @@ function createMcpToolsServer() {
         kind,
         weight,
         procedure: procedure ?? 'unilateral',
-        submitted_by,
+        submitted_by: actingPrincipalId ?? submitted_by,
         execution_task,
       });
       const summary = `submit_request: topic=${topic_id} status=${r.status}`;
@@ -3796,8 +3796,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, request_id, step_index, actor_id, decision, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await decideStep({ request_id, callerScope, step_index, actor_id, decision });
+      const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, actor_id);
+      const r = await decideStep({ request_id, callerScope, step_index, actor_id: actingPrincipalId ?? actor_id, decision });
       const summary = `decide_request_step: request=${request_id} step=${step_index} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3869,8 +3869,8 @@ function createMcpToolsServer() {
       outputSchema: bodyRecordShape,
     },
     async ({ workspace_token, project_id, name, quorum, threshold, veto_holders, created_by, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await createBody({ project_id, callerScope, name, quorum, threshold, veto_holders, created_by });
+      const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, created_by);
+      const r = await createBody({ project_id, callerScope, name, quorum, threshold, veto_holders, created_by: actingPrincipalId ?? created_by });
       const summary = `create_decision_body: body_id=${r.body_id} name=${r.name}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3895,7 +3895,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, body_id, actor_id, vote_weight, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      // actor_id is the TARGET member being added (data), not the caller's identity — authenticate
+      // the caller (scope + reject unbound under auth-ON) but do NOT rewrite actor_id.
+      const { scope: callerScope } = await resolveActingActorOrThrow(workspace_token);
       const r = await addBodyMember({ body_id, callerScope, actor_id, vote_weight });
       const summary = `add_body_member: body=${body_id} actor=${actor_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
@@ -4049,8 +4051,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, body_id, subject_ref, proposed_by, deadline_minutes, execution_task, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await proposeMotion({ topic_id, callerScope, body_id, subject_ref, proposed_by, deadline_minutes, execution_task });
+      const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, proposed_by);
+      const r = await proposeMotion({ topic_id, callerScope, body_id, subject_ref, proposed_by: actingPrincipalId ?? proposed_by, deadline_minutes, execution_task });
       const summary = `propose_motion: topic=${topic_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -4121,8 +4123,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, motion_id, actor_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await secondMotion({ motion_id, callerScope, actor_id });
+      const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, actor_id);
+      const r = await secondMotion({ motion_id, callerScope, actor_id: actingPrincipalId ?? actor_id });
       const summary = `second_motion: motion=${motion_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -4145,13 +4147,17 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, motion_id, actor_id, choice, proxy_for, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      // The acting CALLER is whoever casts: the proxy holder if proxied, else the voter. actor_id is
+      // the vote OWNER (data the service validates as a body member); resolve only the caster.
+      const caster = proxy_for ?? actor_id;
+      const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, caster);
+      const resolvedCaster = actingPrincipalId ?? caster;
       const r = await castVote({
         callerScope,
         motion_id,
-        actor_id,
+        actor_id: proxy_for ? actor_id : resolvedCaster,
         choice: choice as 'for' | 'against' | 'abstain',
-        proxy_for,
+        proxy_for: proxy_for ? resolvedCaster : undefined,
       });
       const summary = `cast_vote: motion=${motion_id} actor=${actor_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
@@ -4173,8 +4179,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, motion_id, actor_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await vetoMotion({ motion_id, callerScope, actor_id });
+      const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, actor_id);
+      const r = await vetoMotion({ motion_id, callerScope, actor_id: actingPrincipalId ?? actor_id });
       const summary = `veto_motion: motion=${motion_id} actor=${actor_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -4237,8 +4243,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, topic_id, kind, body, submitted_by, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const result = await submitIntake({ project_id, callerScope, topic_id, kind, body, submitted_by });
+      const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, submitted_by);
+      const result = await submitIntake({ project_id, callerScope, topic_id, kind, body, submitted_by: actingPrincipalId ?? submitted_by });
       const summary = `submit_intake: project=${project_id} kind=${kind} id=${result.intake_id}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -4272,24 +4278,26 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, intake_id, route_kind, actor_id, topic_id, routed_to, subject_ref, parties, procedure, submitted_by, kind, weight, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      // actor_id is the triaging CALLER. Resolve it from the credential; submitted_by defaults to it.
+      const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, actor_id);
+      const actingActor = actingPrincipalId ?? actor_id;
       let route: Parameters<typeof triageIntake>[1];
       if (route_kind === 'dispute') {
         route = {
           route_kind: 'dispute',
-          actor_id,
+          actor_id: actingActor,
           topic_id,
           subject_ref: subject_ref ?? '',
           parties: parties ?? [],
           procedure: (procedure ?? 'unilateral') as 'unilateral' | 'collective',
-          submitted_by: submitted_by ?? actor_id,
+          submitted_by: submitted_by ?? actingActor,
           kind,
           weight,
         };
       } else {
         route = {
           route_kind: route_kind as 'task' | 'request' | 'motion',
-          actor_id,
+          actor_id: actingActor,
           topic_id,
           routed_to: routed_to ?? '',
         };
@@ -4415,8 +4423,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, subject_ref, parties, procedure, submitted_by, kind, weight, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const result = await openDispute({ topic_id, callerScope, subject_ref, parties, procedure, submitted_by, kind, weight });
+      const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, submitted_by);
+      const result = await openDispute({ topic_id, callerScope, subject_ref, parties, procedure, submitted_by: actingPrincipalId ?? submitted_by, kind, weight });
       const summary = `open_dispute: topic=${topic_id} id=${result.dispute.dispute_id}`;
       return formatToolResponse(result, summary, output_format);
     },
