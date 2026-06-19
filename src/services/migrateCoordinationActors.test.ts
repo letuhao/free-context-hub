@@ -102,6 +102,54 @@ test('migrate: leaves a value that is already a principal_id untouched (no doubl
   }
 });
 
+test('migrate: the SAME legacy string in two tables maps to ONE principal [F1f-adv #4 dedup]', async () => {
+  const client = await getDbPool().connect();
+  try {
+    await client.query('BEGIN');
+    const tid = `${PREFIX}dedupT`;
+    const shared = `${PREFIX}sharedActor`;
+    // same string as a topic creator AND a dispute party
+    await client.query(
+      `INSERT INTO topics (topic_id, project_id, name, charter, created_by) VALUES ($1,$2,'n','c',$3)`,
+      [tid, `${PREFIX}proj`, shared],
+    );
+    await client.query(`INSERT INTO disputes (topic_id, subject_ref, parties) VALUES ($1,'x',$2)`, [tid, [shared]]);
+    await migrateCoordinationActorIds(client, { restrictTo: [shared] });
+    const t = await client.query<{ created_by: string }>(`SELECT created_by FROM topics WHERE topic_id=$1`, [tid]);
+    const d = await client.query<{ parties: string[] }>(`SELECT parties FROM disputes WHERE topic_id=$1`, [tid]);
+    assert.equal(t.rows[0].created_by, d.rows[0].parties[0], 'one principal for the shared string across tables');
+  } finally {
+    await client.query('ROLLBACK').catch(() => {});
+    client.release();
+  }
+});
+
+test('migrate: blank actor excluded (no empty-display_name principal); over-long display_name truncated [F1f-adv #3]', async () => {
+  const client = await getDbPool().connect();
+  try {
+    await client.query('BEGIN');
+    const longActor = `${PREFIX}${'x'.repeat(400)}`;
+    const tidLong = `${PREFIX}longT`;
+    const tidBlank = `${PREFIX}blankT`;
+    await client.query(`INSERT INTO topics (topic_id, project_id, name, charter, created_by) VALUES ($1,$2,'n','c',$3)`, [tidLong, `${PREFIX}proj`, longActor]);
+    await client.query(`INSERT INTO topics (topic_id, project_id, name, charter, created_by) VALUES ($1,$2,'n','c',$3)`, [tidBlank, `${PREFIX}proj`, '']);
+    await migrateCoordinationActorIds(client, { restrictTo: [longActor, ''] });
+
+    // long: rewritten; the imported principal's display_name is truncated to 256
+    const tl = await client.query<{ created_by: string }>(`SELECT created_by FROM topics WHERE topic_id=$1`, [tidLong]);
+    assert.ok(isUuid(tl.rows[0].created_by));
+    const pl = await client.query<{ display_name: string }>(`SELECT display_name FROM principals WHERE principal_id=$1`, [tl.rows[0].created_by]);
+    assert.equal(pl.rows[0].display_name.length, 256);
+
+    // blank: NOT migrated (stays ''), so no empty-display_name principal is created
+    const tb = await client.query<{ created_by: string }>(`SELECT created_by FROM topics WHERE topic_id=$1`, [tidBlank]);
+    assert.equal(tb.rows[0].created_by, '', 'blank actor left as-is, not turned into a principal');
+  } finally {
+    await client.query('ROLLBACK').catch(() => {});
+    client.release();
+  }
+});
+
 test('countUnmigratedCoordinationActors: counts a legacy actor, drops it once resolved (enforce-ready gate)', async () => {
   // REPEATABLE READ = stable snapshot, so concurrent commits can't change the count between the two
   // reads. We resolve ONLY this test's own freshly-inserted row (no global migrate), so there is no

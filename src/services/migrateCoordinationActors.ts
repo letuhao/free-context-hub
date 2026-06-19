@@ -12,6 +12,12 @@
  * (assertEnforceReady gates on it — F1f.4). Operators bind credentials to the imported principals to
  * act as them under auth-ON.
  *
+ * SCOPE [F1f-adv #2]: this rewrites the AUTHORITATIVE identity columns (the scalar + text[] columns
+ * below) that ownership/membership/ballot comparisons key off. It deliberately does NOT rewrite
+ * actor strings embedded inside `coordination_events.payload` JSONB — that log is APPEND-ONLY audit
+ * history (replay/display only), never compared to a live principal-keyed column for an authz
+ * decision. Payload actor fields therefore remain the historical free-text record by design.
+ *
  * Table/column names below are hardcoded constants (never user input) — safe to interpolate.
  */
 
@@ -20,6 +26,9 @@ import { getDbPool } from '../db/client.js';
 
 /** Scalar text columns that hold an actor identity. */
 const SCALAR_COLUMNS: ReadonlyArray<readonly [table: string, column: string]> = [
+  // The project-scoped actor registry (joined for type/display_name) — MUST migrate in lockstep with
+  // the columns that reference it, else the roster join breaks. [F1f-adv CRITICAL #1]
+  ['actors', 'actor_id'],
   ['claims', 'actor_id'],
   ['body_members', 'actor_id'],
   ['votes', 'actor_id'],
@@ -61,21 +70,32 @@ function collectUnionSql(): string {
 }
 
 /**
+ * The SINGLE source of "distinct legacy actor values not yet a principal" — migrate and the
+ * enforce-ready count both use it, so their column coverage + filters are provably identical
+ * [F1f-adv #5]. Excludes blanks (so a degenerate '' actor can't mint an empty-display_name principal
+ * NOR wedge the gate open forever — both sides agree to ignore it) [F1f-adv #3]. The
+ * `principal_id::text = v` comparison (not `v::uuid`) avoids 22P02 on non-UUID legacy strings.
+ */
+function distinctUnmigratedSql(hasRestrict: boolean): string {
+  return `
+    SELECT DISTINCT v FROM (
+      ${collectUnionSql()}
+    ) s
+    WHERE s.v IS NOT NULL
+      AND btrim(s.v) <> ''
+      AND NOT EXISTS (SELECT 1 FROM principals p WHERE p.principal_id::text = s.v)
+      ${hasRestrict ? 'AND s.v = ANY($1::text[])' : ''}
+  `;
+}
+
+/**
  * Count distinct coordination actor values that are NOT yet a principal_id. assertEnforceReady gates
  * on this being 0 — auth must not be enabled while the board still holds un-migrated string actors
  * (they would strand under principal-keyed comparisons). [F1-adv finding #5 / F1f.4]
  */
 export async function countUnmigratedCoordinationActors(executor?: PoolClient): Promise<number> {
   const runner = executor ?? getDbPool();
-  const r = await runner.query<{ n: number }>(`
-    SELECT count(*)::int AS n FROM (
-      SELECT DISTINCT v FROM (
-        ${collectUnionSql()}
-      ) s
-      WHERE s.v IS NOT NULL
-        AND NOT EXISTS (SELECT 1 FROM principals p WHERE p.principal_id::text = s.v)
-    ) u
-  `);
+  const r = await runner.query<{ n: number }>(`SELECT count(*)::int AS n FROM (${distinctUnmigratedSql(false)}) u`);
   return r.rows[0].n;
 }
 
@@ -92,30 +112,21 @@ export async function migrateCoordinationActorIds(
   try {
     if (ownTxn) await client.query('BEGIN');
 
-    // Collect every distinct legacy actor value that is NOT already a principal_id. Comparing
-    // principal_id::text (not the string cast to uuid) avoids 22P02 on non-UUID legacy strings.
-    const collectUnion = collectUnionSql();
-
     await client.query('DROP TABLE IF EXISTS _coord_actor_map');
     await client.query('CREATE TEMP TABLE _coord_actor_map (legacy text PRIMARY KEY, pid uuid) ON COMMIT DROP');
     await client.query(
-      `
-      INSERT INTO _coord_actor_map (legacy)
-      SELECT DISTINCT v FROM (
-        ${collectUnion}
-      ) s
-      WHERE s.v IS NOT NULL
-        AND NOT EXISTS (SELECT 1 FROM principals p WHERE p.principal_id::text = s.v)
-        ${restrict ? 'AND s.v = ANY($1::text[])' : ''}
-    `,
+      `INSERT INTO _coord_actor_map (legacy) ${distinctUnmigratedSql(!!restrict)}`,
       restrict ? [restrict] : [],
     );
 
     // Mint one imported principal per legacy string (uuid chosen in the map, then inserted).
+    // display_name is truncated to 256 to mirror validateDisplayName (the INSERT bypasses it);
+    // matching/rewrite below keys off the FULL legacy value, so truncation is cosmetic only.
+    // [F1f-adv #3]
     await client.query('UPDATE _coord_actor_map SET pid = gen_random_uuid() WHERE pid IS NULL');
     const ins = await client.query(`
       INSERT INTO principals (principal_id, kind, status, display_name, is_root)
-      SELECT pid, 'agent', 'active', legacy, false FROM _coord_actor_map
+      SELECT pid, 'agent', 'active', left(legacy, 256), false FROM _coord_actor_map
     `);
     const imported = ins.rowCount ?? 0;
 

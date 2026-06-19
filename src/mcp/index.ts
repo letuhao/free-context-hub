@@ -3953,6 +3953,10 @@ function createMcpToolsServer() {
       const self = actingPrincipalId ?? granted_by;
       const proxyId = await resolveTargetActorOrThrow(proxy);
       const resolvedPrincipal = getEnv().MCP_AUTH_ENABLED ? self : principal;
+      // A principal cannot proxy to itself (DB CHECK principal<>proxy) — fail clean, not a raw 23514.
+      if (resolvedPrincipal === proxyId) {
+        throw new McpError(ErrorCode.InvalidParams, 'proxy must differ from the principal (cannot delegate your vote to yourself).');
+      }
       const r = await grantProxy({ body_id, callerScope, principal: resolvedPrincipal, proxy: proxyId, granted_by: self });
       const summary = `grant_proxy: body=${body_id} principal=${principal} proxy=${proxy} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
