@@ -1,0 +1,157 @@
+/**
+ * Actor Data Boundary F2b — authorize() async wrapper: resolver (task→topic→project), the deny
+ * ladder, the auth-OFF fast path, and best-effort decision logging. Real DB + env toggling.
+ */
+
+import assert from 'node:assert/strict';
+import test, { before, after, beforeEach } from 'node:test';
+import { authorize, resolveResourceScope } from './authorize.js';
+import { createPrincipal, getRootPrincipal } from './principals.js';
+import { createGrant } from './grants.js';
+import { getDbPool } from '../db/client.js';
+
+const PREFIX = '__test_authz__';
+const P = `${PREFIX}projP`;
+const Q = `${PREFIX}projQ`;
+
+async function cleanup() {
+  const pool = getDbPool();
+  await pool.query(`DELETE FROM authz_decisions WHERE principal_id IN (SELECT principal_id::text FROM principals WHERE display_name LIKE $1)`, [`${PREFIX}%`]);
+  await pool.query(`DELETE FROM tasks WHERE topic_id LIKE $1`, [`${PREFIX}%`]);
+  await pool.query(`DELETE FROM topics WHERE topic_id LIKE $1 OR project_id LIKE $1`, [`${PREFIX}%`]);
+  await pool.query(
+    `DELETE FROM grants WHERE grantee_principal IN (SELECT principal_id FROM principals WHERE display_name LIKE $1)
+        OR granted_by IN (SELECT principal_id FROM principals WHERE display_name LIKE $1)`,
+    [`${PREFIX}%`],
+  );
+  await pool.query(`DELETE FROM principals WHERE display_name LIKE $1`, [`${PREFIX}%`]);
+}
+
+let resetEnv: () => void;
+const saved = { auth: process.env.MCP_AUTH_ENABLED };
+async function setAuth(on: boolean) {
+  process.env.MCP_AUTH_ENABLED = on ? 'true' : 'false';
+  ({ _resetEnvCacheForTest: resetEnv } = await import('../env.js'));
+  resetEnv();
+}
+
+// shared fixtures
+let actor: string;      // active non-root principal
+let grantor: string;
+let topicP: string;     // topic in project P
+let topicQ: string;     // topic in project Q
+let taskP: string;      // task under topicP
+
+before(async () => {
+  await cleanup();
+  actor = (await createPrincipal({ kind: 'agent', display_name: `${PREFIX}actor` })).principal_id;
+  grantor = (await createPrincipal({ kind: 'agent', display_name: `${PREFIX}grantor` })).principal_id;
+  const pool = getDbPool();
+  topicP = `${PREFIX}topP`;
+  topicQ = `${PREFIX}topQ`;
+  await pool.query(`INSERT INTO topics (topic_id, project_id, name, charter, created_by) VALUES ($1,$2,'n','c',$3)`, [topicP, P, grantor]);
+  await pool.query(`INSERT INTO topics (topic_id, project_id, name, charter, created_by) VALUES ($1,$2,'n','c',$3)`, [topicQ, Q, grantor]);
+  const tr = await pool.query<{ task_id: string }>(
+    `INSERT INTO tasks (topic_id, title, topology, status, created_by) VALUES ($1,'t','parallel','posted',$2) RETURNING task_id`,
+    [topicP, grantor],
+  );
+  taskP = tr.rows[0].task_id;
+});
+after(async () => {
+  await cleanup();
+  if (saved.auth === undefined) delete process.env.MCP_AUTH_ENABLED; else process.env.MCP_AUTH_ENABLED = saved.auth;
+  const { _resetEnvCacheForTest } = await import('../env.js');
+  _resetEnvCacheForTest();
+});
+
+test('auth-OFF: authorize is a pass-through ALLOW/AUTH_DISABLED with no DB write', async () => {
+  await setAuth(false);
+  const before = (await getDbPool().query(`SELECT count(*)::int n FROM authz_decisions`)).rows[0].n;
+  const d = await authorize(null, 'admin', { kind: 'global' });
+  assert.deepEqual(d, { allow: true, reason: 'AUTH_DISABLED' });
+  const after = (await getDbPool().query(`SELECT count(*)::int n FROM authz_decisions`)).rows[0].n;
+  assert.equal(after, before, 'auth-off does not log');
+});
+
+test('resolveResourceScope: walks task -> topic -> project', async () => {
+  const r = await resolveResourceScope({ kind: 'task', id: taskP });
+  assert.deepEqual(r, { ok: { kind: 'task', project_id: P, topic_id: topicP, task_id: taskP } });
+  const rt = await resolveResourceScope({ kind: 'topic', id: topicP });
+  assert.deepEqual(rt, { ok: { kind: 'topic', project_id: P, topic_id: topicP } });
+});
+
+test('resolveResourceScope: unknown / malformed ids are unresolvable (no oracle, no 22P02)', async () => {
+  assert.deepEqual(await resolveResourceScope({ kind: 'topic', id: `${PREFIX}nope` }), { unresolvable: 'NOT_FOUND' });
+  assert.deepEqual(await resolveResourceScope({ kind: 'task', id: 'not-a-uuid' }), { unresolvable: 'NOT_FOUND' });
+  assert.deepEqual(await resolveResourceScope({ kind: 'task', id: '00000000-0000-0000-0000-000000000000' }), { unresolvable: 'NOT_FOUND' });
+});
+
+test('auth-ON: null principal -> NO_PRINCIPAL (and logged)', async () => {
+  await setAuth(true);
+  const d = await authorize(null, 'read', { kind: 'project', id: P });
+  assert.deepEqual(d, { allow: false, reason: 'NO_PRINCIPAL' });
+  const row = (await getDbPool().query(`SELECT allow, reason FROM authz_decisions WHERE principal_id IS NULL AND action='read' ORDER BY ts DESC LIMIT 1`)).rows[0];
+  assert.equal(row.allow, false);
+  assert.equal(row.reason, 'NO_PRINCIPAL');
+});
+
+test('auth-ON: a covering project grant ALLOWs read on a topic AND a task in that project', async () => {
+  await setAuth(true);
+  await createGrant({ grantee_principal: actor, scope_type: 'project', scope_id: P, capability: 'read', granted_by: grantor });
+  const onTopic = await authorize(actor, 'read', { kind: 'topic', id: topicP });
+  assert.equal(onTopic.allow, true);
+  assert.equal(onTopic.reason, 'GRANT');
+  const onTask = await authorize(actor, 'read', { kind: 'task', id: taskP });
+  assert.equal(onTask.allow, true, 'project grant covers the task via the resolved chain');
+});
+
+test('auth-ON: read grant does NOT cover a write, nor a sibling project', async () => {
+  await setAuth(true);
+  // actor holds read@project:P (from the prior test ran in same file? isolate by re-granting idempotently)
+  await createGrant({ grantee_principal: actor, scope_type: 'project', scope_id: P, capability: 'read', granted_by: grantor });
+  const wr = await authorize(actor, 'write', { kind: 'topic', id: topicP });
+  assert.deepEqual(wr, { allow: false, reason: 'NO_COVERING_GRANT' }, 'read does not cover write');
+  const sibling = await authorize(actor, 'read', { kind: 'topic', id: topicQ });
+  assert.deepEqual(sibling, { allow: false, reason: 'NO_COVERING_GRANT' }, 'project P grant does not reach project Q');
+});
+
+test('auth-ON: inactive principal -> PRINCIPAL_INACTIVE without leaking resource existence', async () => {
+  await setAuth(true);
+  const sus = (await createPrincipal({ kind: 'agent', display_name: `${PREFIX}sus` })).principal_id;
+  const { setPrincipalStatus } = await import('./principals.js');
+  await setPrincipalStatus(sus, 'suspended');
+  // even pointing at a NON-existent resource, the answer is PRINCIPAL_INACTIVE (resource not resolved)
+  const d = await authorize(sus, 'read', { kind: 'topic', id: `${PREFIX}doesNotExist` });
+  assert.deepEqual(d, { allow: false, reason: 'PRINCIPAL_INACTIVE' });
+});
+
+test('auth-ON: active principal + unresolvable resource -> OUT_OF_SCOPE', async () => {
+  await setAuth(true);
+  const d = await authorize(actor, 'read', { kind: 'task', id: '00000000-0000-0000-0000-000000000000' });
+  assert.deepEqual(d, { allow: false, reason: 'OUT_OF_SCOPE' });
+});
+
+test('auth-ON: root principal short-circuits ALLOW (if a root exists)', async () => {
+  await setAuth(true);
+  const root = await getRootPrincipal();
+  if (!root) return; // no root seeded in this DB — pure test covers the logic
+  const d = await authorize(root.principal_id, 'admin', { kind: 'global' });
+  assert.deepEqual(d, { allow: true, reason: 'ROOT' });
+});
+
+test('auth-ON: a decision is logged with action + resource + matched grant', async () => {
+  await setAuth(true);
+  await createGrant({ grantee_principal: actor, scope_type: 'project', scope_id: P, capability: 'admin', granted_by: grantor });
+  const d = await authorize(actor, 'admin', { kind: 'project', id: P });
+  assert.equal(d.allow, true);
+  const row = (await getDbPool().query(
+    `SELECT action, resource_kind, resource_id, allow, reason, matched_grant_id
+       FROM authz_decisions WHERE principal_id=$1 AND action='admin' ORDER BY ts DESC LIMIT 1`,
+    [actor],
+  )).rows[0];
+  assert.equal(row.resource_kind, 'project');
+  assert.equal(row.resource_id, P);
+  assert.equal(row.allow, true);
+  assert.equal(row.reason, 'GRANT');
+  assert.ok(row.matched_grant_id, 'matched grant id recorded on allow');
+});
