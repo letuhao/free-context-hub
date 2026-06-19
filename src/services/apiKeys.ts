@@ -2,6 +2,7 @@ import { randomBytes, createHash } from 'node:crypto';
 import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
 import { getEnv } from '../env.js';
+import { getPrincipal } from './principals.js';
 
 export interface ApiKeyEntry {
   key_id: string;
@@ -13,6 +14,9 @@ export interface ApiKeyEntry {
   last_used_at: string | null;
   revoked: boolean;
   created_at: string;
+  // Actor Data Boundary F1b — the principal this credential authenticates to.
+  // NULL = legacy/env-token key (pre-F1, back-compat).
+  principal_id: string | null;
 }
 
 function hashKey(key: string): string {
@@ -28,7 +32,7 @@ function generateKey(): string {
 export async function listApiKeys(): Promise<ApiKeyEntry[]> {
   const pool = getDbPool();
   const res = await pool.query(
-    `SELECT key_id, name, key_prefix, role, project_scope, expires_at, last_used_at, revoked, created_at
+    `SELECT key_id, name, key_prefix, role, project_scope, expires_at, last_used_at, revoked, created_at, principal_id
      FROM api_keys ORDER BY created_at DESC`,
   );
   return res.rows ?? [];
@@ -41,6 +45,7 @@ export async function createApiKey(params: {
   project_scope?: string;
   expires_at?: string;
   created_by?: string; // Sprint 15.11 — minting operator (apiKeyName), for the per-creator limit.
+  principal_id?: string; // Actor Data Boundary F1b — bind the credential to this principal.
 }): Promise<{ key: string; entry: ApiKeyEntry }> {
   const pool = getDbPool();
 
@@ -54,6 +59,24 @@ export async function createApiKey(params: {
   const role = params.role ?? 'writer';
   if (!['admin', 'writer', 'reader'].includes(role)) {
     throw new ContextHubError('BAD_REQUEST', `Invalid role "${role}". Allowed: admin, writer, reader.`);
+  }
+
+  // Actor Data Boundary F1b — bind-time principal validation. A credential may only be bound to
+  // an EXISTING, ACTIVE, non-root principal. Root binding is refused here on purpose: a root-bound
+  // credential is the highest privilege in the system and is minted ONLY by the out-of-band
+  // bootstrap path (F1c), never through this general key-provisioning surface (escalation guard).
+  const principalId = params.principal_id ?? null;
+  if (principalId !== null) {
+    const principal = await getPrincipal(principalId);
+    if (!principal) {
+      throw new ContextHubError('NOT_FOUND', `Principal ${principalId} not found.`);
+    }
+    if (principal.is_root) {
+      throw new ContextHubError('BAD_REQUEST', 'Cannot bind a key to the root principal; root credentials are minted out-of-band (bootstrap).');
+    }
+    if (principal.status !== 'active') {
+      throw new ContextHubError('BAD_REQUEST', `Cannot bind a key to a ${principal.status} principal; only active principals may hold credentials.`);
+    }
   }
 
   const name = params.name.trim();
@@ -81,11 +104,24 @@ export async function createApiKey(params: {
   const keyPrefix = key.slice(0, 12) + '...' + key.slice(-4);
 
   try {
+    // Actor Data Boundary F1b — the bind is ATOMIC. The pre-check above gives a specific error in
+    // the common case; this guarded INSERT...SELECT closes the TOCTOU window (a principal
+    // suspended/retired between the check and the write inserts nothing — no zombie row holding the
+    // active-name slot bound to a now-ineligible principal). [F1b adversary HIGH]
     const res = await pool.query(
-      `INSERT INTO api_keys (name, key_prefix, key_hash, role, project_scope, expires_at, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [name, keyPrefix, keyHash, role, params.project_scope ?? null, params.expires_at ?? null, createdBy],
+      `INSERT INTO api_keys (name, key_prefix, key_hash, role, project_scope, expires_at, created_by, principal_id)
+       SELECT $1, $2, $3, $4, $5, $6, $7, $8::uuid
+       WHERE $8::uuid IS NULL
+          OR EXISTS (SELECT 1 FROM principals
+                     WHERE principal_id = $8::uuid AND status = 'active' AND is_root = false)
+       RETURNING *`,
+      [name, keyPrefix, keyHash, role, params.project_scope ?? null, params.expires_at ?? null, createdBy, principalId],
     );
+    if (res.rowCount === 0) {
+      // principalId was non-null but no eligible principal matched at write time — it changed
+      // (suspended/retired) after the pre-check. Fail the mint rather than bind to a dead subject.
+      throw new ContextHubError('CONFLICT', 'Principal became ineligible during key minting (suspended/retired); no key was created.');
+    }
     return { key, entry: res.rows[0] };
   } catch (err) {
     // Sprint 15.11 (DEFERRED-016) — actor-identity uniqueness: at most one ACTIVE key
@@ -113,16 +149,37 @@ export async function revokeApiKey(keyId: string): Promise<void> {
   }
 }
 
-/** Validate a bearer token against api_keys table. Returns the key entry if valid. */
+/**
+ * Validate a bearer token against api_keys. Returns the key entry if valid, else null.
+ *
+ * Actor Data Boundary F1b — a credential bound to a principal authenticates an ACTIVE subject:
+ * the LEFT JOIN gates on principal status so suspending/retiring the bound principal instantly
+ * denies every credential it holds. Legacy keys (principal_id NULL) skip the gate (back-compat).
+ *
+ * FAIL-CLOSED ON ROOT: the validator is the universal chokepoint, so it refuses to authenticate
+ * ANY root-bound key — `p.is_root = false` is required. createApiKey already blocks root binding,
+ * but an errant row (future migration, restored backup, manual SQL) must never silently mint a
+ * working root credential through the general path. [F1b adversary MED]
+ * F1c TODO: when the out-of-band bootstrap mints the legitimate root credential, it adds a
+ * provenance marker (e.g. api_keys.is_bootstrap) and this predicate relaxes to
+ * `(p.is_root = false OR k.is_bootstrap)` — deliberate, not silent.
+ *
+ * Note on the LEFT JOIN NULL fail-safe: a non-NULL principal_id with no resolvable row yields
+ * p.status = NULL, and `NULL = 'active'` is false ⇒ deny. The FK (ON DELETE RESTRICT) makes a
+ * dangling principal_id unreachable in practice; the predicate is still written to fail closed.
+ */
 export async function validateApiKey(token: string): Promise<ApiKeyEntry | null> {
   const pool = getDbPool();
   const tokenHash = hashKey(token);
 
   const res = await pool.query(
-    `SELECT key_id, name, key_prefix, role, project_scope, expires_at, last_used_at, revoked, created_at
-     FROM api_keys
-     WHERE key_hash = $1 AND revoked = false
-       AND (expires_at IS NULL OR expires_at > now())`,
+    `SELECT k.key_id, k.name, k.key_prefix, k.role, k.project_scope, k.expires_at,
+            k.last_used_at, k.revoked, k.created_at, k.principal_id
+     FROM api_keys k
+     LEFT JOIN principals p ON p.principal_id = k.principal_id
+     WHERE k.key_hash = $1 AND k.revoked = false
+       AND (k.expires_at IS NULL OR k.expires_at > now())
+       AND (k.principal_id IS NULL OR (p.status = 'active' AND p.is_root = false))`,
     [tokenHash],
   );
 

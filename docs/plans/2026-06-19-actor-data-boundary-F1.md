@@ -39,6 +39,12 @@ adversary review against the CODE (safety policy: auth primitive + new service b
   bound principal (joined), expiry/revocation surfaces `CREDENTIAL_EXPIRED` semantics. Tests.
 - **F1c — root bootstrap.** `ROOT_BOOTSTRAP_TOKEN` in `env.ts`; `src/scripts/bootstrapRoot.ts` +
   `bootstrap:root` npm script; enforce-ready preflight (`assertEnforceReady`). Tests.
+  - **DECISION (carried from review #4):** root `kind` — `human` (operator owner) vs `system`.
+  - **TODO (from F1b adversary MED):** validateApiKey currently FAILS CLOSED on any root-bound key
+    (`p.is_root = false` required). F1c mints the legitimate root credential, so it must add a
+    provenance marker (`api_keys.is_bootstrap` or equivalent) and relax the validator predicate to
+    `(p.is_root = false OR k.is_bootstrap)` — deliberate, not silent. Plus the bootstrap path is the
+    ONLY place a root-bound key is created (createApiKey refuses root).
 - **F1d — authenticated principal resolution.** Thread principal (not just scope) out of `mcp/auth.ts`
   + REST `auth.ts`; add `resolveActingPrincipal` helper + `whoami` MCP tool. Tests.
 - **F1e — stop trusting asserted actor_id.** Apply `resolveActingPrincipal` at the MCP boundary for the
