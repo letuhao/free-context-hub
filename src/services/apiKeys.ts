@@ -215,6 +215,38 @@ export async function revokeApiKey(keyId: string): Promise<void> {
 }
 
 /**
+ * Actor Data Boundary F1d — classify WHY a token failed validation, so the auth layer can return
+ * the structured CREDENTIAL_EXPIRED signal (distinct from a plain invalid token) per the G3
+ * contract. Only call this when validateApiKey already returned null. Looks the key up by hash
+ * WITHOUT the validity filters and reports the most relevant reason.
+ */
+export type CredentialFailure = 'expired' | 'revoked' | 'principal_inactive' | 'invalid';
+
+export async function classifyCredentialFailure(token: string): Promise<CredentialFailure> {
+  const res = await getDbPool().query<{
+    revoked: boolean;
+    expired: boolean;
+    principal_id: string | null;
+    principal_status: string | null;
+  }>(
+    `SELECT k.revoked,
+            (k.expires_at IS NOT NULL AND k.expires_at <= now()) AS expired,
+            k.principal_id,
+            p.status AS principal_status
+       FROM api_keys k
+       LEFT JOIN principals p ON p.principal_id = k.principal_id
+      WHERE k.key_hash = $1`,
+    [hashKey(token)],
+  );
+  const row = res.rows[0];
+  if (!row) return 'invalid';
+  if (row.revoked) return 'revoked';
+  if (row.expired) return 'expired';
+  if (row.principal_id && row.principal_status !== 'active') return 'principal_inactive';
+  return 'invalid';
+}
+
+/**
  * Validate a bearer token against api_keys. Returns the key entry if valid, else null.
  *
  * Actor Data Boundary F1b — a credential bound to a principal authenticates an ACTIVE subject:

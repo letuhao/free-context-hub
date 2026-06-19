@@ -50,6 +50,15 @@ adversary review against the CODE (safety policy: auth primitive + new service b
 - **F1e — stop trusting asserted actor_id.** Apply `resolveActingPrincipal` at the MCP boundary for the
   ~19 asserted-identity tools (charter_topic, post_task, submit_request, propose_motion, cast_vote,
   submit_intake, … and `appendEvent`'s actor_id). Auth-ON reject mismatch; auth-OFF unchanged. Tests.
+  - **F1d adversary #2/#3 → F1e MUSTs:** (a) pass `allowUnboundAssertion = !MCP_LEGACY_TOKEN_DISABLED`
+    to `resolveActingPrincipal` so hardened deployments refuse unbound-credential assertions; (b) when
+    the resolver returns a non-null value that did NOT come from the authenticated principal (honored
+    asserted), VALIDATE it resolves to an existing ACTIVE principal in the caller's tenant scope before
+    persisting — else forged provenance / suspended-principal bypass returns. The resolver's JSDoc
+    states this as a hard contract.
+  - **F1d adversary #4 → optional refactor:** fold `classifyCredentialFailure` into `validateApiKey`
+    as a single discriminated query (removes the validate→classify TOCTOU; benign today — only flaps
+    the error code, never an allow).
 - **F1-adv — cold-start hostile-actor adversary** read-only pass over all F1 code; ≥3 passes to
   saturate per safety policy; fix every BLOCK; re-verify.
 

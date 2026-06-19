@@ -127,7 +127,8 @@ import { isFeatureEnabled } from '../services/featureToggles.js';
 import { searchChunks } from '../services/documentChunks.js';
 import { logLessonAccess, isSalienceDisabled, type AccessLogEntry } from '../services/salience.js';
 import { getDbPool } from '../db/client.js';
-import { resolveMcpCallerScope } from './auth.js';
+import { resolveMcpCallerScope, resolveMcpCaller, type McpCaller } from './auth.js';
+import { getPrincipal } from '../services/principals.js';
 import type { CallerScope } from '../core/index.js';
 
 // ── MCP error boundary: convert ContextHubError → McpError at protocol edge ──
@@ -135,6 +136,11 @@ const CONTEXT_HUB_TO_MCP_CODE: Record<string, number> = {
   UNAUTHORIZED: ErrorCode.InvalidParams,
   BAD_REQUEST: ErrorCode.InvalidParams,
   NOT_FOUND: ErrorCode.InvalidParams,
+  CONFLICT: ErrorCode.InvalidParams,
+  // F1d: surfaced to the agent as InvalidParams (MCP has no dedicated auth codes); the message
+  // carries the distinction so an agent can stop + re-auth rather than retry-loop.
+  ASSERTED_IDENTITY_REJECTED: ErrorCode.InvalidParams,
+  CREDENTIAL_EXPIRED: ErrorCode.InvalidParams,
   INTERNAL: ErrorCode.InternalError,
   SERVICE_UNAVAILABLE: ErrorCode.InternalError,
 };
@@ -146,6 +152,15 @@ const CONTEXT_HUB_TO_MCP_CODE: Record<string, number> = {
  *  (→ keyEntry.project_scope). */
 async function resolveMcpCallerScopeOrThrow(token?: string): Promise<CallerScope> {
   try { return await resolveMcpCallerScope(token); }
+  catch (e) {
+    if (e instanceof ContextHubError) throw new McpError(CONTEXT_HUB_TO_MCP_CODE[e.code] ?? ErrorCode.InternalError, e.message);
+    throw e;
+  }
+}
+
+/** F1d: full authenticated caller (scope + bound principal + expiry), McpError-mapped. */
+async function resolveMcpCallerOrThrow(token?: string): Promise<McpCaller> {
+  try { return await resolveMcpCaller(token); }
   catch (e) {
     if (e instanceof ContextHubError) throw new McpError(CONTEXT_HUB_TO_MCP_CODE[e.code] ?? ErrorCode.InternalError, e.message);
     throw e;
@@ -769,6 +784,66 @@ function createMcpToolsServer() {
       };
 
       const summary = `help: tools=${tools.length}, workflows=${workflows.length}`;
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'whoami',
+    {
+      description:
+        "Actor Data Boundary F1 — the caller's AUTHENTICATED principal (derived from the credential, " +
+        'not asserted). Lets an agent discover its own identity instead of claiming one. Returns ' +
+        'authenticated=false when the credential is unbound (legacy token / pre-F1 key) or auth is off.',
+      inputSchema: z.object({
+        workspace_token: z
+          .string()
+          .optional()
+          .describe('Workspace token (required only if MCP_AUTH_ENABLED=true).'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        authenticated: z.boolean(),
+        principal_id: z.string().nullable(),
+        kind: z.enum(['human', 'agent', 'system']).nullable(),
+        status: z.enum(['active', 'suspended', 'retired']).nullable(),
+        is_root: z.boolean(),
+        display_name: z.string().nullable(),
+        expires_at: z.string().nullable(),
+        note: z.string(),
+      }),
+    },
+    async ({ workspace_token, output_format }) => {
+      const caller = await resolveMcpCallerOrThrow(workspace_token);
+      const principal = caller.principalId ? await getPrincipal(caller.principalId) : null;
+
+      const result = principal
+        ? {
+            authenticated: true,
+            principal_id: principal.principal_id,
+            kind: principal.kind,
+            status: principal.status,
+            is_root: principal.is_root,
+            display_name: principal.display_name,
+            expires_at: caller.expiresAt,
+            note: 'Identity is derived from your credential. Tools reject an actor_id that disagrees.',
+          }
+        : {
+            authenticated: false,
+            principal_id: null,
+            kind: null,
+            status: null,
+            is_root: false,
+            display_name: null,
+            expires_at: caller.expiresAt,
+            note: getEnv().MCP_AUTH_ENABLED
+              ? 'Unbound credential (legacy single-shared token or pre-F1 key) — no principal identity; asserted actor_id is workspace-trusted during migration.'
+              : 'Auth is disabled (MCP_AUTH_ENABLED=false) — dev/root posture; no enforced principal identity.',
+          };
+
+      const summary = result.authenticated
+        ? `whoami: ${result.display_name} (${result.kind}${result.is_root ? ', root' : ''})`
+        : 'whoami: unauthenticated (no bound principal)';
       return formatToolResponse(result, summary, output_format);
     },
   );

@@ -8,6 +8,9 @@ const CODE_TO_STATUS: Record<string, number> = {
   BAD_REQUEST: 400,
   NOT_FOUND: 404,
   CONFLICT: 409,
+  // F1d: identity mismatch is a forbidden action; expired/revoked credential needs re-auth.
+  ASSERTED_IDENTITY_REJECTED: 403,
+  CREDENTIAL_EXPIRED: 401,
   INTERNAL: 500,
   SERVICE_UNAVAILABLE: 503,
 };
