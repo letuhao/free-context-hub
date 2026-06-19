@@ -1,3 +1,30 @@
+# CHECKPOINT — Actor data-boundary F1b: api_keys↔principal binding SHIPPED (2026-06-19, session 10)
+
+**Branch:** `feature/actor-data-boundary`. **F1b landed (commit `22f4694`).** `/loop` self-paced through
+F1 sub-phases.
+
+**F1b — credential authenticates TO a principal (DONE, verified, adversary-cleared):**
+- `api_keys.principal_id` on `ApiKeyEntry`; `createApiKey({principal_id})` binds only to an existing,
+  ACTIVE, non-root principal (root binding refused — root creds are F1c bootstrap-only).
+- `validateApiKey` LEFT JOINs principals, requires bound principal `active` ⇒ suspend/retire instantly
+  denies all its credentials (closes prior adversary MED #3 + review #6). Legacy NULL-principal keys
+  unchanged.
+- **Adversary found 1 HIGH + 2 MED, all fixed:** HIGH TOCTOU (bind now ATOMIC via guarded
+  INSERT...SELECT); MED validateApiKey FAILS CLOSED on root-bound keys (`p.is_root=false`); MED coverage
+  (root-denial + legacy-with-bystander tests).
+- **15/15 unit tests (9 F1b + 6 regression), tsc clean.**
+
+**F1c carries two decisions (in plan):** root `kind` (human vs system); add a bootstrap-provenance
+marker (`api_keys.is_bootstrap`) and relax the validator's root fail-closed predicate to
+`(p.is_root=false OR k.is_bootstrap)` when minting the legitimate root credential.
+
+**What's next:** **F1c** — `ROOT_BOOTSTRAP_TOKEN` env + `bootstrap:root` CLI (seed root principal +
+mint marked root credential, idempotent) + enforce-ready preflight (lockout guard). Then F1d
+(authenticated-principal resolution + resolveActingPrincipal + whoami), F1e (stop trusting asserted
+actor_id), F1-adv (saturating multi-pass).
+
+---
+
 # CHECKPOINT — Actor data-boundary F1a: identity substrate SHIPPED (2026-06-19, session 10)
 
 **Branch:** `feature/actor-data-boundary`. **First F1 code landed (commit `37c03be`).** Running via `/loop`
