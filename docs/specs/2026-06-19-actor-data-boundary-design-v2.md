@@ -1,6 +1,10 @@
 # DESIGN v2 — Actor / Project / Task Data Boundaries (DLF-grounded)
 
-**Status:** DESIGN v2 (awaiting human approval before BUILD)
+**Status:** ⚠️ SUPERSEDED by `-design-v3.md` (2026-06-19) — v3 converts v2's prose properties into
+concrete mechanisms (DB triggers, columns, engine steps, migration sequences) after the v2 eval found
+the DLF machinery was "asserted, not mechanized." Kept for history.
+
+**Status (original):** DESIGN v2 (awaiting human approval before BUILD)
 **Supersedes:** `2026-06-19-actor-data-boundary-design.md` (v1)
 **Branch:** `feature/actor-data-boundary` · **Date:** 2026-06-19 · **Scope:** XL
 **Inputs:** CLARIFY spec, v1 design, scenario eval (`-eval.md`), and the **Dead Light
