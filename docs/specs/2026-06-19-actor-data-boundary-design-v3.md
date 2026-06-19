@@ -1,6 +1,10 @@
 # DESIGN v3 — Actor / Project / Task Data Boundaries (mechanism-complete)
 
-**Status:** DESIGN v3 (awaiting human approval + 3rd eval before BUILD)
+**Status:** ⚠️ SUPERSEDED by `-design-v4.md` (2026-06-19) — v4 tightens every mechanism's *binding
+rule* and anchors each to the as-built code, after the v3 eval found the gates existed but their
+bindings were a notch loose (and several claims didn't match real code). Kept for history.
+
+**Status (original):** DESIGN v3 (awaiting human approval + 3rd eval before BUILD)
 **Supersedes:** v2 (`-design-v2.md`), which superseded v1. **Inputs:** v2 + v2-eval (8 CRITICAL
 clusters C1–C8 + H1–H4 + MED) + DLF (Codex, Tier Card, cross-unit/refer-back).
 **Principle of v3:** *every DLF property is a concrete gate — a column, constraint, trigger, or
