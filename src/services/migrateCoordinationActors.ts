@@ -55,6 +55,15 @@ const ARRAY_COLUMNS: ReadonlyArray<readonly [table: string, column: string]> = [
   ['disputes', 'parties'],
 ];
 
+// Reserved RESERVED-PREFIX synthetic actors (`system:sweep`, `system:tally`, `system:resolve`,
+// `system:closing-recovery`, `system:request-step-proposer`, `motion:<uuid>`, …) are written by
+// background services (sweep/tally/chaining) and the collective-routing path — they are legitimate
+// NON-principal system/synthetic identities, not actors to import. Excluded from BOTH the migration
+// and the enforce-ready count (sharing this constant), so they are never minted as bogus principals
+// and never wedge the gate open. They never equal a principal_id, so authz comparisons skip them
+// correctly. [F1f-adv pass 2 #1]
+const SENTINEL_EXCLUSION = `AND s.v NOT LIKE 'system:%' AND s.v NOT LIKE 'motion:%'`;
+
 export interface MigrateActorsResult {
   imported: number; // principals created for legacy strings
   scalarColumns: number;
@@ -83,6 +92,7 @@ function distinctUnmigratedSql(hasRestrict: boolean): string {
     ) s
     WHERE s.v IS NOT NULL
       AND btrim(s.v) <> ''
+      ${SENTINEL_EXCLUSION}
       AND NOT EXISTS (SELECT 1 FROM principals p WHERE p.principal_id::text = s.v)
       ${hasRestrict ? 'AND s.v = ANY($1::text[])' : ''}
   `;

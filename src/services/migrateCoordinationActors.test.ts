@@ -150,6 +150,32 @@ test('migrate: blank actor excluded (no empty-display_name principal); over-long
   }
 });
 
+test('migrate: reserved system:/motion: sentinels are NOT imported as principals and do not block the gate [F1f-adv pass2 #1]', async () => {
+  const client = await getDbPool().connect();
+  try {
+    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ');
+    const tid = `${PREFIX}sentinelT`;
+    // a synthetic system actor written by background services lands in an actor column
+    await client.query(
+      `INSERT INTO topics (topic_id, project_id, name, charter, created_by) VALUES ($1,$2,'n','c',$3)`,
+      [tid, `${PREFIX}proj`, 'system:sweep'],
+    );
+    const beforeCount = await countUnmigratedCoordinationActors(client);
+    await migrateCoordinationActorIds(client, { restrictTo: ['system:sweep'] });
+    const t = await client.query<{ created_by: string }>(`SELECT created_by FROM topics WHERE topic_id=$1`, [tid]);
+    assert.equal(t.rows[0].created_by, 'system:sweep', 'sentinel left as-is, not turned into a principal');
+    const pr = await client.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM principals WHERE display_name = 'system:sweep'`,
+    );
+    assert.equal(pr.rows[0].n, 0, 'no bogus principal minted for the sentinel');
+    const afterCount = await countUnmigratedCoordinationActors(client);
+    assert.equal(afterCount, beforeCount, 'sentinel never counted as un-migrated (gate not wedged)');
+  } finally {
+    await client.query('ROLLBACK').catch(() => {});
+    client.release();
+  }
+});
+
 test('countUnmigratedCoordinationActors: counts a legacy actor, drops it once resolved (enforce-ready gate)', async () => {
   // REPEATABLE READ = stable snapshot, so concurrent commits can't change the count between the two
   // reads. We resolve ONLY this test's own freshly-inserted row (no global migrate), so there is no

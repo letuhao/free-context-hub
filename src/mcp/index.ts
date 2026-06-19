@@ -3977,10 +3977,13 @@ function createMcpToolsServer() {
       outputSchema: z.object({ status: z.string() }),
     },
     async ({ workspace_token, body_id, principal, proxy, output_format }) => {
-      // principal/proxy are targets; no caller-identity field — authenticate the caller only.
-      const { scope: callerScope } = await resolveActingActorOrThrow(workspace_token);
-      const r = await revokeProxy({ body_id, callerScope, principal, proxy });
-      const summary = `revoke_proxy: body=${body_id} principal=${principal} proxy=${proxy} status=${r.status}`;
+      // Mirror grant_proxy's self-authorization: only the principal may revoke THEIR OWN delegation.
+      // Under auth-ON `principal` IS the acting caller; auth-OFF keeps it caller-supplied. Without
+      // this, any project-scoped caller could strip another member's proxy grant. [F1f-adv pass 2 #2]
+      const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, principal);
+      const resolvedPrincipal = getEnv().MCP_AUTH_ENABLED ? (actingPrincipalId ?? principal) : principal;
+      const r = await revokeProxy({ body_id, callerScope, principal: resolvedPrincipal, proxy });
+      const summary = `revoke_proxy: body=${body_id} principal=${resolvedPrincipal} proxy=${proxy} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
   );
