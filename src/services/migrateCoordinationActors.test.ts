@@ -176,6 +176,46 @@ test('migrate: reserved system:/motion: sentinels are NOT imported as principals
   }
 });
 
+test('migrate: array with MIXED elements — only the legacy element is rewritten; already-principal + sentinel preserved IN ORDER [review-impl F1 #4]', async () => {
+  const client = await getDbPool().connect();
+  try {
+    await client.query('BEGIN');
+    // An already-migrated principal to sit in the array alongside a legacy string and a sentinel.
+    const pr = await client.query<{ principal_id: string }>(
+      `INSERT INTO principals (kind, status, display_name, is_root) VALUES ('agent','active',$1,false) RETURNING principal_id`,
+      [`${PREFIX}existing`],
+    );
+    const existingPid = pr.rows[0].principal_id;
+    const legacy = `${PREFIX}mixedLegacy`;
+    const tid = `${PREFIX}mixedT`;
+    // parties = [legacy, existingPrincipal, system:resolve] — only `legacy` is in restrictTo.
+    await client.query(
+      `INSERT INTO disputes (topic_id, subject_ref, parties) VALUES ($1,'x',$2)`,
+      [tid, [legacy, existingPid, 'system:resolve']],
+    );
+    await client.query(
+      `INSERT INTO topics (topic_id, project_id, name, charter, created_by) VALUES ($1,$2,'n','c',$3)`,
+      [tid, `${PREFIX}proj`, legacy],
+    );
+
+    await migrateCoordinationActorIds(client, { restrictTo: [legacy] });
+
+    const d = await client.query<{ parties: string[] }>(`SELECT parties FROM disputes WHERE topic_id=$1`, [tid]);
+    const parties = d.rows[0].parties;
+    assert.equal(parties.length, 3, 'cardinality preserved');
+    // [0] legacy -> a fresh principal uuid (and equals the topic.created_by mint for the same string)
+    assert.ok(isUuid(parties[0]), 'legacy element rewritten to a uuid');
+    const tc = await client.query<{ created_by: string }>(`SELECT created_by FROM topics WHERE topic_id=$1`, [tid]);
+    assert.equal(parties[0], tc.rows[0].created_by, 'same legacy string -> one principal, even across scalar+array');
+    // [1] already-principal -> untouched; [2] sentinel -> untouched. Order intact.
+    assert.equal(parties[1], existingPid, 'already-principal element left as-is, position 1');
+    assert.equal(parties[2], 'system:resolve', 'sentinel element left as-is, position 2');
+  } finally {
+    await client.query('ROLLBACK').catch(() => {});
+    client.release();
+  }
+});
+
 test('countUnmigratedCoordinationActors: counts a legacy actor, drops it once resolved (enforce-ready gate)', async () => {
   // REPEATABLE READ = stable snapshot, so concurrent commits can't change the count between the two
   // reads. We resolve ONLY this test's own freshly-inserted row (no global migrate), so there is no

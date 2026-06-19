@@ -67,3 +67,22 @@ export function resolveActingPrincipal(params: {
   // auth OFF — dev/root posture, behavior unchanged.
   return asserted ?? params.rootDevPrincipalId ?? null;
 }
+
+/**
+ * review-impl F1 #2 — does a caller-NAMED "self" identity disagree with the credential-derived self?
+ *
+ * Some tools carry an identity arg that MUST be the caller themselves (e.g. grant_proxy's `principal`
+ * — only the delegator may grant their own vote). Under auth-ON such an arg must be REJECTED when it
+ * disagrees with the authenticated principal (the same spoof defense resolveActingPrincipal applies
+ * to an asserted actor) rather than silently coerced to self. Returns true ⇒ the caller should throw.
+ * UUIDs compared case-insensitively. Auth-OFF: never a mismatch (free-text dev posture). Pure — no I/O.
+ */
+export function claimedSelfMismatch(params: {
+  authEnabled: boolean;
+  claimed: string | null | undefined;
+  self: string;
+}): boolean {
+  if (!params.authEnabled) return false;
+  const claimed = normalize(params.claimed);
+  return claimed !== null && claimed.toLowerCase() !== params.self.toLowerCase();
+}

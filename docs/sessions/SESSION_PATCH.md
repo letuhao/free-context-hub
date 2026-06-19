@@ -1,3 +1,34 @@
+# CHECKPOINT — F1 post-merge `/review-impl` pass (2026-06-19, session 11)
+
+**Branch:** `feature/actor-data-boundary`. A fresh `/review-impl` (coverage/drift mode, distinct from
+the 4 saturated adversary passes) over the F1 surface found **0 HIGH** but surfaced one **real
+data-integrity miss** plus audit/consistency/coverage gaps. All five fixed. Full unit suite
+**1079/1079** (+8), tsc clean.
+
+**Findings & fixes:**
+1. **(LOW, audit)** `grant_proxy` summary logged the raw, possibly-overridden `principal`/`proxy` args
+   instead of what was persisted → now logs `resolvedPrincipal`/`proxyId` (mirrors `revoke_proxy`).
+2. **(LOW, consistency)** `grant_proxy` silently coerced a mismatched `principal` to self under
+   auth-ON while `granted_by` hard-rejected → now both reject via a new pure, unit-tested predicate
+   `claimedSelfMismatch` (actingPrincipal.ts; 5 tests).
+3. **(MED, real miss)** `proxies.granted_by` was **absent from the coordination migration** though
+   `proxies.principal` (its write-time equal, `grantProxy` enforces `granted_by===principal`) IS
+   migrated — a legacy row would end up `principal=<uuid>`/`granted_by=<string>`. Added the column;
+   added a **schema-coverage guard test** (exists-with-type + un-listed-actor-column tripwire) and a
+   documented `DELIBERATELY_EXCLUDED_ACTOR_COLUMNS` list (api_keys.created_by, review_requests.* — all
+   audit/filter-only, no authz comparison; verified via reviewRequests.ts).
+4. **(LOW, coverage)** Added a mixed-array migration test (legacy + already-principal + sentinel in one
+   `parties[]` → only the legacy element rewritten, order/others preserved).
+5. **(LOW, verify)** Confirmed `replayEvents` is a cursor READ (not state reconstruction) so the
+   `coordination_events.actor_id`-rewritten / `payload`-preserved split cannot diverge any authz
+   decision — documented in the migration header.
+
+**Net:** identity audit logs now reflect persisted values; the migration column list is now
+schema-guarded against future drift; one genuine stranding gap (`proxies.granted_by`) closed before
+auth-ON is ever enabled.
+
+---
+
 # CHECKPOINT — Actor data-boundary F1 COMPLETE (2026-06-19, session 10)
 
 **Branch:** `feature/actor-data-boundary`. **F1 (identity substrate) is DONE** — all sub-phases built

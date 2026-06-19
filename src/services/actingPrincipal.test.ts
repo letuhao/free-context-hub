@@ -16,7 +16,7 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { resolveActingPrincipal } from './actingPrincipal.js';
+import { resolveActingPrincipal, claimedSelfMismatch } from './actingPrincipal.js';
 import { ContextHubError } from '../core/errors.js';
 
 const AUTHED = '11111111-1111-1111-1111-111111111111';
@@ -116,4 +116,27 @@ test('auth ON + bound + asserted mismatch even when rootDev present -> still rej
       }),
     (e: unknown) => e instanceof ContextHubError && e.code === 'ASSERTED_IDENTITY_REJECTED',
   );
+});
+
+// ── claimedSelfMismatch (review-impl F1 #2 — grant_proxy's `principal` must be the caller) ────────
+
+test('claimedSelfMismatch: auth ON + claimed != self -> true (reject, do not silently coerce)', () => {
+  assert.equal(claimedSelfMismatch({ authEnabled: true, claimed: OTHER, self: AUTHED }), true);
+});
+
+test('claimedSelfMismatch: auth ON + claimed == self -> false', () => {
+  assert.equal(claimedSelfMismatch({ authEnabled: true, claimed: AUTHED, self: AUTHED }), false);
+});
+
+test('claimedSelfMismatch: auth ON + claimed is UPPERCASE self -> false (canonical UUID compare)', () => {
+  assert.equal(claimedSelfMismatch({ authEnabled: true, claimed: AUTHED.toUpperCase(), self: AUTHED }), false);
+});
+
+test('claimedSelfMismatch: auth ON + claimed absent/blank -> false (nothing to disagree with)', () => {
+  assert.equal(claimedSelfMismatch({ authEnabled: true, claimed: null, self: AUTHED }), false);
+  assert.equal(claimedSelfMismatch({ authEnabled: true, claimed: '   ', self: AUTHED }), false);
+});
+
+test('claimedSelfMismatch: auth OFF -> always false (free-text dev posture, even on mismatch)', () => {
+  assert.equal(claimedSelfMismatch({ authEnabled: false, claimed: OTHER, self: AUTHED }), false);
 });

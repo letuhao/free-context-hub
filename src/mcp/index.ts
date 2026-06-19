@@ -128,6 +128,7 @@ import { searchChunks } from '../services/documentChunks.js';
 import { logLessonAccess, isSalienceDisabled, type AccessLogEntry } from '../services/salience.js';
 import { getDbPool } from '../db/client.js';
 import { resolveMcpCallerScope, resolveMcpCaller, resolveActingActor, resolveTargetActor, resolveTargetActors, type McpCaller } from './auth.js';
+import { claimedSelfMismatch } from '../services/actingPrincipal.js';
 import { getPrincipal } from '../services/principals.js';
 import type { CallerScope } from '../core/index.js';
 
@@ -3952,13 +3953,26 @@ function createMcpToolsServer() {
       const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, granted_by);
       const self = actingPrincipalId ?? granted_by;
       const proxyId = await resolveTargetActorOrThrow(proxy);
+      // Proxy delegation is self-only — the `principal` (delegator) IS the caller. Under auth-ON,
+      // REJECT a `principal` arg that disagrees with the credential rather than silently coercing it
+      // to self; this matches the contract resolveActingActor already enforces on granted_by, so both
+      // identity args on this call fail the same way instead of one rejecting and one swallowing.
+      // [review-impl F1 #2]
+      if (claimedSelfMismatch({ authEnabled: Boolean(getEnv().MCP_AUTH_ENABLED), claimed: principal, self })) {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          'principal does not match the authenticated caller; a proxy may only be granted from your own identity (identity is derived from the credential, not the request body).',
+        );
+      }
       const resolvedPrincipal = getEnv().MCP_AUTH_ENABLED ? self : principal;
       // A principal cannot proxy to itself (DB CHECK principal<>proxy) — fail clean, not a raw 23514.
       if (resolvedPrincipal === proxyId) {
         throw new McpError(ErrorCode.InvalidParams, 'proxy must differ from the principal (cannot delegate your vote to yourself).');
       }
       const r = await grantProxy({ body_id, callerScope, principal: resolvedPrincipal, proxy: proxyId, granted_by: self });
-      const summary = `grant_proxy: body=${body_id} principal=${principal} proxy=${proxy} status=${r.status}`;
+      // Log the PERSISTED identities (resolvedPrincipal/proxyId), not the raw args — under auth-ON the
+      // args may differ from what was stored. Mirrors revoke_proxy's summary. [review-impl F1 #1]
+      const summary = `grant_proxy: body=${body_id} principal=${resolvedPrincipal} proxy=${proxyId} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
   );

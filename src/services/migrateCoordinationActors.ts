@@ -17,6 +17,10 @@
  * actor strings embedded inside `coordination_events.payload` JSONB — that log is APPEND-ONLY audit
  * history (replay/display only), never compared to a live principal-keyed column for an authz
  * decision. Payload actor fields therefore remain the historical free-text record by design.
+ * VERIFIED [review-impl F1 #5]: replayEvents (src/services/coordinationEvents.ts) is a cursor READ
+ * that returns events for display/audit — it does NOT reconstruct board state from payload. Live
+ * authz state is materialized in the tables this migration rewrites (claims/votes/members/…), so a
+ * post-migration replay cannot diverge from the principal-keyed board on any authz decision.
  *
  * Table/column names below are hardcoded constants (never user input) — safe to interpolate.
  */
@@ -24,7 +28,16 @@
 import type { PoolClient } from 'pg';
 import { getDbPool } from '../db/client.js';
 
-/** Scalar text columns that hold an actor identity. */
+/**
+ * Scalar text columns that hold an actor identity.
+ *
+ * COVERAGE INVARIANT [review-impl F1 #3]: this list (plus ARRAY_COLUMNS) MUST cover every column
+ * the principal-keyed substrate compares for an ownership/membership/ballot/grant authz decision.
+ * A guard test (migrateCoordinationActors.coverage.test.ts) asserts (a) every column here exists in
+ * the live schema and (b) no UN-listed actor-named column on a covered table sneaks in — so a future
+ * migration that adds one fails loudly instead of silently stranding it under auth-ON. If you add a
+ * coordination actor column, add it here too (or to DELIBERATELY_EXCLUDED_ACTOR_COLUMNS with a why).
+ */
 const SCALAR_COLUMNS: ReadonlyArray<readonly [table: string, column: string]> = [
   // The project-scoped actor registry (joined for type/display_name) — MUST migrate in lockstep with
   // the columns that reference it, else the roster join breaks. [F1f-adv CRITICAL #1]
@@ -34,6 +47,11 @@ const SCALAR_COLUMNS: ReadonlyArray<readonly [table: string, column: string]> = 
   ['votes', 'actor_id'],
   ['proxies', 'principal'],
   ['proxies', 'proxy'],
+  // proxies.granted_by is the delegator — grantProxy enforces granted_by === principal at write time
+  // (proxies.ts:67), so it carries the SAME identity as proxies.principal (which IS migrated). Migrate
+  // it in lockstep or a legacy row ends up principal=<uuid> / granted_by=<old string>, silently
+  // breaking that invariant. Mirrors topic_participants.granted_by, already covered. [review-impl F1 #3]
+  ['proxies', 'granted_by'],
   ['topic_participants', 'actor_id'],
   ['topic_participants', 'granted_by'],
   ['tasks', 'created_by'],
@@ -54,6 +72,28 @@ const ARRAY_COLUMNS: ReadonlyArray<readonly [table: string, column: string]> = [
   ['decision_bodies', 'veto_holders'],
   ['disputes', 'parties'],
 ];
+
+/**
+ * Actor-NAMED columns on covered tables that are DELIBERATELY not migrated — they are audit / display
+ * / list-filter fields, never compared to a principal for an authz decision, so leaving them as the
+ * historical free-text record is correct (same rationale as coordination_events.payload). The
+ * coverage guard test allowlists exactly these; anything else un-listed is a real miss.
+ *   - api_keys.created_by  — the minting OPERATOR (an apiKeyName), a key-provisioning audit field +
+ *                            the per-operator key-limit key; its own namespace, not a board actor.
+ *   - review_requests.{submitter_agent_id,intended_reviewer,resolved_by} — Phase-13 review queue.
+ *                            resolved_by is write-only audit; submitter_agent_id is a list filter;
+ *                            intended_reviewer is a routing hint. None gate an authz comparison.
+ */
+export const DELIBERATELY_EXCLUDED_ACTOR_COLUMNS: ReadonlyArray<readonly [table: string, column: string]> = [
+  ['api_keys', 'created_by'],
+  ['review_requests', 'submitter_agent_id'],
+  ['review_requests', 'intended_reviewer'],
+  ['review_requests', 'resolved_by'],
+];
+
+/** Exposed for the coverage guard test. */
+export const MIGRATED_SCALAR_COLUMNS = SCALAR_COLUMNS;
+export const MIGRATED_ARRAY_COLUMNS = ARRAY_COLUMNS;
 
 // Reserved RESERVED-PREFIX synthetic actors (`system:sweep`, `system:tally`, `system:resolve`,
 // `system:closing-recovery`, `system:request-step-proposer`, `motion:<uuid>`, …) are written by
