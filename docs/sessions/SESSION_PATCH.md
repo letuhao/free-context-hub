@@ -1,3 +1,31 @@
+# CHECKPOINT — Actor data-boundary F1a: identity substrate SHIPPED (2026-06-19, session 10)
+
+**Branch:** `feature/actor-data-boundary`. **First F1 code landed (commit `37c03be`).** Running via `/loop`
+(self-paced) through the F1 sub-phases. Plan: `docs/plans/2026-06-19-actor-data-boundary-F1.md`.
+
+**F1a — principals identity substrate (DONE, verified, adversary-cleared):**
+- **migration 0064** — `principals` (UUID `principal_id`, `kind` human|agent|system, `status`
+  active|suspended|retired, `is_root` + single-root partial unique index) + `api_keys.principal_id`
+  nullable FK (ON DELETE RESTRICT; legacy/env-token keys stay NULL).
+- **`src/services/principals.ts`** — createPrincipal (is_root always false), get/getRoot/list,
+  setPrincipalStatus, seedRootPrincipal (only is_root path, race-safe via 23505).
+- **`ContextHubError 'CONFLICT'`** + errorHandler 409.
+- **Cold-start adversary found 2 HIGH, both fixed + tested:** #1 root could be suspended/retired
+  (brick trust anchor, no recovery); #2 `retired` wasn't terminal (silent resurrection). Guards now in
+  the `setPrincipalStatus` WHERE clause. MED #3 → F1b contract (validateApiKey denies non-active principal).
+- **12/12 unit tests, tsc clean.**
+
+**Implementation decisions (recorded in plan):** principal_id = UUID not ULID (codebase convention, no
+new dep, same opaqueness); is_root = guarded column (partial unique index), not a grantable flag.
+
+**What's next (loop continues):** **F1b** — bind api_keys↔principal: `createApiKey({principal_id})`,
+`validateApiKey` joins+returns the bound principal and denies when its status≠active (closes adversary
+MED #3). Then F1c (root bootstrap CLI + enforce-ready preflight), F1d (authenticated-principal
+resolution + `resolveActingPrincipal` + whoami), F1e (stop trusting asserted actor_id across ~19 tools),
+F1-adv (saturating multi-pass adversary).
+
+---
+
 # CHECKPOINT — Actor data-boundary: DESIGN PHASE CLOSED (2026-06-19, session 9)
 
 **Branch:** `feature/actor-data-boundary`. **Design phase complete — no code yet; F1 starts next, clean.**
