@@ -110,10 +110,32 @@ export async function resolveMcpCallerScope(token: string | undefined): Promise<
  * the hardened posture. Under auth-OFF / legacy-allowed the actor is workspace-trusted free text by
  * design (dev/CI lane unchanged); validating it against principals would break existing flows.
  */
+/**
+ * The `system:` and `motion:` prefixes are RESERVED for synthetic/system identities written by
+ * background services (sweep/tally/chaining) and collective routing. The actor migration + the
+ * enforce-ready gate exclude them (they're not principals); to make that exclusion sound, a
+ * user-supplied actor identity may NEVER bear these prefixes — otherwise a real actor named
+ * `system:*` would be excluded-and-stranded while the gate still reported safe. [F1-adv pass 3]
+ * Enforced at the MCP user-input boundary (these resolvers); system services bypass them.
+ */
+const RESERVED_ACTOR_PREFIXES = ['system:', 'motion:'] as const;
+export function isReservedActorId(v: string | null | undefined): boolean {
+  return typeof v === 'string' && RESERVED_ACTOR_PREFIXES.some((p) => v.startsWith(p));
+}
+function rejectReservedActorId(v: string | null | undefined): void {
+  if (isReservedActorId(v)) {
+    throw new ContextHubError(
+      'BAD_REQUEST',
+      'actor_id may not use the reserved "system:"/"motion:" prefix (reserved for system identities).',
+    );
+  }
+}
+
 export async function resolveActingActor(
   token: string | undefined,
   assertedActorId?: string | null,
 ): Promise<{ scope: CallerScope; actingPrincipalId: string | null }> {
+  rejectReservedActorId(assertedActorId);
   const caller = await resolveMcpCaller(token);
   const env = getEnv();
   const acting = resolveActingPrincipal({
@@ -139,6 +161,7 @@ export async function resolveActingActor(
  * free string, unchanged. Returns the value to persist.
  */
 export async function resolveTargetActor(actorId: string): Promise<string> {
+  rejectReservedActorId(actorId); // reserved prefixes are never valid user-named targets (all postures)
   if (!getEnv().MCP_AUTH_ENABLED) return actorId;
   if (!(await isActivePrincipal(actorId))) {
     throw new ContextHubError(

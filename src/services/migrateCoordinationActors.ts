@@ -145,7 +145,10 @@ export async function migrateCoordinationActorIds(
       await client.query(`UPDATE ${t} tt SET ${c} = m.pid::text FROM _coord_actor_map m WHERE tt.${c} = m.legacy`);
     }
 
-    // Rewrite array columns, preserving element order; unknown elements (already principals) pass through.
+    // Rewrite array columns, preserving element order; unknown elements (already principals) pass
+    // through. The EXISTS guard scopes the UPDATE to ONLY rows that actually contain a mapped element
+    // — so an empty/restricted map touches no rows (no needless global row-locking / no rewrite of a
+    // value to itself), which also keeps restrictTo correct and avoids serialization conflicts.
     for (const [t, c] of ARRAY_COLUMNS) {
       await client.query(`
         UPDATE ${t} tt SET ${c} = (
@@ -154,6 +157,7 @@ export async function migrateCoordinationActorIds(
           LEFT JOIN _coord_actor_map m ON m.legacy = u.elem
         )
         WHERE tt.${c} IS NOT NULL AND cardinality(tt.${c}) > 0
+          AND EXISTS (SELECT 1 FROM unnest(tt.${c}) e JOIN _coord_actor_map m ON m.legacy = e)
       `);
     }
 

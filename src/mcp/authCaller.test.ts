@@ -157,6 +157,25 @@ test('resolveTargetActor: auth-OFF -> passthrough (free string unchanged)', asyn
   assert.equal(await resolveTargetActor('legacy-member-name'), 'legacy-member-name');
 });
 
+test('reserved system:/motion: prefixes rejected at the user-input boundary (all postures) [adversary pass 3]', async () => {
+  // auth-OFF: a user must not be able to register a reserved-prefix actor (would strand under migrate).
+  await authOff();
+  await assert.rejects(
+    () => resolveActingActor(undefined, 'system:ci-bot'),
+    (e: unknown) => e instanceof ContextHubError && e.code === 'BAD_REQUEST',
+  );
+  await assert.rejects(
+    () => resolveTargetActor('motion:foo'),
+    (e: unknown) => e instanceof ContextHubError && e.code === 'BAD_REQUEST',
+  );
+  // auth-ON: same rejection (before the active-principal check).
+  await authOn();
+  await assert.rejects(
+    () => resolveActingActor(undefined, 'system:sweep'),
+    (e: unknown) => e instanceof ContextHubError && e.code === 'BAD_REQUEST',
+  );
+});
+
 test('resolveTargetActor: auth-ON + active principal -> returns it', async () => {
   await authOn();
   const p = await createPrincipal({ kind: 'agent', display_name: `${PREFIX}target` });
