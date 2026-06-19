@@ -1,6 +1,8 @@
 # DESIGN v5 — Actor / Project / Task Data Boundaries (code-accurate, contradiction-resolved)
 
-**Status:** DESIGN v5 (awaiting 5th eval + approval before BUILD)
+**Status:** 📚 GOVERNANCE-OS RESEARCH TRACK (not the near-term build). The near-term plan is
+`-FOUNDATION.md` — the small real data boundary, built Codex-ready so this governance design grows on
+top of it additively. v1–v5 + the 5 evals are kept as the DLF design reference for later phases.
 **Supersedes:** v4. **Inputs:** v4 + v4-eval (4 false anchors + ~5 design contradictions + ~24 binding
 edges) + the as-built code the v4 eval verified (file:line cited inline).
 **What v5 fixes vs v4:** (1) corrects the **4 false code anchors** by designing *around the real

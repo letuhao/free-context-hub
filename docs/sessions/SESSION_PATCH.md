@@ -1,3 +1,42 @@
+# CHECKPOINT — Actor data-boundary: 5 design rounds → cleared foundation (2026-06-19, session 9)
+
+**Branch:** `feature/actor-data-boundary` (design only; no code yet).
+
+**Asked:** after the single-port gateway shipped, "explicit data boundary between actors (human,
+agent) and projects/tasks" — the project reframing from team-memory toward a multi-actor AI
+governance system.
+
+**What happened — a 5-round design→eval loop that did NOT converge.** CLARIFY+DESIGN (v1) →
+scenario eval (3 cold-start red-team agents, ~46 scenarios) → v2 (DLF-grounded: Role=Codex, Topic=job,
+Appointment, Instance; refer-back; tier-crossing) → eval → v3 (mechanism-complete) → eval → v4
+(code-grounded) → eval → v5 (contradiction-resolved) → eval. Each round ~46 scenarios. The headline
+security mechanisms (sealing, trust-root identity, self-kind) **relocated one indirection per round and
+never closed**; v4/v5 even drifted from the real code (false anchors: `NOT NULL NOT VALID` isn't valid
+PG; a cited CLI doesn't exist). All five evals + the convergence analysis are committed
+(`docs/specs/2026-06-19-actor-data-boundary-{design-v1..v5, *-eval}.md`).
+
+**The unlock (brainstorm, not paperwork):** the non-convergence was one root error — **trying to gate
+the root of trust in-system.** A root of trust is **axiomatic + out-of-band** (single 1-of-1 or peer
+k-of-n; same machinery). Deleting that error deletes ~4 of the recurring whack-a-moles AND gives the
+threat boundary the evals lacked: **a compromised root is OUT OF SCOPE.**
+
+**Decision:** build the **small real data boundary now** as a **foundation**, Codex-ready so the
+governance-OS grows additively (new Codices / Phase-15 bodies), not a rewrite. v5 reframed as the
+**governance-OS research track**; near-term plan = `docs/specs/2026-06-19-actor-data-boundary-FOUNDATION.md`.
+
+**Model (5 lines):** root axiomatic+out-of-band (single for this deployment); compromised-root OOS;
+below root = a delegation tree (grants + project/task scope, reusing callerScope/assertXScope + the
+fence); human/agent = attribute; a Codex = additive capability/policy unit on the same grant tables.
+
+**Build plan (TDD-first, per-phase cold-start adversary against CODE — no more paper eval loop):**
+F1 identity + out-of-band root + stop-trusting-asserted-id · F2 delegation + scope (the boundary) ·
+F3 human/agent attribute + fence on authenticated principal · F4 enforcement posture (auth-on enforced,
+auth-off = root/dev) + auth-on CI lane.
+
+**What's next:** start **F1** (migrations + principal/identity + root config) TDD-first.
+
+---
+
 # CHECKPOINT — Single-port gateway consolidation + security hardening (2026-06-19, session 9)
 
 **Branch:** none — committed directly to `main` (trunk-based).
