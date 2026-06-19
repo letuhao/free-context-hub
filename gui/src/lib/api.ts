@@ -15,17 +15,29 @@
  * same-origin so no hostname is baked into the client bundle at build time.
  */
 
+let warnedMissingServerBase = false;
+
 function resolveApiBase(): string {
   // Browser → same-origin (relative). The gateway proxies /api to the backend.
   if (typeof window !== "undefined") {
     return process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "";
   }
-  // Server → reach the backend directly over the internal network.
-  return (
-    process.env.CONTEXTHUB_INTERNAL_API_URL ??
-    process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ??
-    "http://localhost:3001"
-  );
+  // Server → reach the backend directly over the internal network. The
+  // localhost:3001 fallback is correct for `next dev` run on the same host as
+  // the backend, but is a DEAD address inside the gui container (the backend
+  // isn't there). Warn once so a misconfigured deployment surfaces loudly
+  // instead of failing with an opaque fetch error on the first SSR call.
+  const serverBase =
+    process.env.CONTEXTHUB_INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL;
+  if (!serverBase && !warnedMissingServerBase) {
+    warnedMissingServerBase = true;
+    console.warn(
+      "[api] server-side API base unset (CONTEXTHUB_INTERNAL_API_URL / " +
+        "NEXT_PUBLIC_CONTEXTHUB_API_URL) — falling back to http://localhost:3001, " +
+        "which is unreachable inside the gui container. Set CONTEXTHUB_INTERNAL_API_URL.",
+    );
+  }
+  return serverBase ?? "http://localhost:3001";
 }
 
 const API_URL = resolveApiBase();

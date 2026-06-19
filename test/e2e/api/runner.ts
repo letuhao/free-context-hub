@@ -27,6 +27,7 @@ import { allPhase13McpTests } from './phase13-mcp.test.js';
 import { allPhase13CrossFeatureTests } from './phase13-cross-feature.test.js';
 import { allPhase13AuthScopeTests } from './phase13-auth-scope.test.js';
 import { allDeferred029CrossTenantTests } from './deferred-029-cross-tenant.test.js';
+import { allGatewayGuardTests } from './gateway-guard.test.js';
 
 async function main() {
   const startMs = Date.now();
@@ -57,6 +58,7 @@ async function main() {
     ...allPhase13CrossFeatureTests,
     ...allPhase13AuthScopeTests, // skipped automatically when auth is disabled
     ...allDeferred029CrossTenantTests, // DEFERRED-029 PR F — skipped when auth is disabled
+    ...allGatewayGuardTests, // single-port gateway cross-site guard — skipped when not behind the gateway
   ];
 
   console.log(`  ${allTests.length} tests registered.\n`);
