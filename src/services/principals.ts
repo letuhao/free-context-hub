@@ -37,10 +37,13 @@ function validateDisplayName(name: string): string {
   if (typeof name !== 'string' || name.trim().length === 0) {
     throw new ContextHubError('BAD_REQUEST', 'display_name is required.');
   }
-  if (name.length > 256) {
+  // Length is checked on the TRIMMED value — that is what gets stored, so trailing
+  // whitespace must not push a valid name over the limit. [review-impl F1a #2]
+  const trimmed = name.trim();
+  if (trimmed.length > 256) {
     throw new ContextHubError('BAD_REQUEST', 'display_name must be 256 characters or fewer.');
   }
-  return name.trim();
+  return trimmed;
 }
 
 /**

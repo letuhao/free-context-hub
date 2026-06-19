@@ -42,6 +42,21 @@ before(cleanup);
 after(cleanup);
 beforeEach(cleanup);
 
+/**
+ * is_root is a GLOBAL singleton (principals_single_root_uniq). Root-creating tests can only run
+ * on a root-free DB. Once F1c's bootstrap:root seeds a real (non-PREFIX) root into a shared dev
+ * DB, these tests would false-RED — so skip gracefully instead, rather than destroying a real
+ * root row. [review-impl F1a #1]
+ */
+async function skipIfForeignRoot(t: { skip: (m?: string) => void }): Promise<boolean> {
+  const pre = await getRootPrincipal();
+  if (pre && !pre.display_name.startsWith(PREFIX)) {
+    t.skip('requires a root-free DB; a non-test root principal already exists');
+    return true;
+  }
+  return false;
+}
+
 test('createPrincipal: active agent, is_root false, round-trips via getPrincipal', async () => {
   const p = await createPrincipal({ kind: 'agent', display_name: `${PREFIX}codex` });
   assert.equal(p.kind, 'agent');
@@ -110,7 +125,8 @@ test('setPrincipalStatus: suspended <-> active stays reversible', async () => {
   assert.equal(back.status, 'active');
 });
 
-test('setPrincipalStatus: root status is axiomatic — cannot suspend/retire root [adversary #1]', async () => {
+test('setPrincipalStatus: root status is axiomatic — cannot suspend/retire root [adversary #1]', async (t) => {
+  if (await skipIfForeignRoot(t)) return;
   const root = await seedRootPrincipal({ display_name: `${PREFIX}root` });
   await assert.rejects(
     () => setPrincipalStatus(root.principal_id, 'suspended'),
@@ -132,7 +148,8 @@ test('setPrincipalStatus: unknown principal -> NOT_FOUND', async () => {
   );
 });
 
-test('seedRootPrincipal: sets is_root, discoverable via getRootPrincipal; second seed -> ROOT_EXISTS', async () => {
+test('seedRootPrincipal: sets is_root, discoverable via getRootPrincipal; second seed -> ROOT_EXISTS', async (t) => {
+  if (await skipIfForeignRoot(t)) return;
   const root = await seedRootPrincipal({ display_name: `${PREFIX}root` });
   assert.equal(root.is_root, true);
   assert.equal(root.kind, 'human');
@@ -154,6 +171,27 @@ test('seedRootPrincipal: sets is_root, discoverable via getRootPrincipal; second
     [`${PREFIX}%`],
   );
   assert.equal(res.rows[0].n, 1);
+});
+
+test('seedRootPrincipal: concurrent seeders -> exactly one root (singleton invariant) [review-impl #3]', async (t) => {
+  if (await skipIfForeignRoot(t)) return;
+  const results = await Promise.allSettled([
+    seedRootPrincipal({ display_name: `${PREFIX}race1` }),
+    seedRootPrincipal({ display_name: `${PREFIX}race2` }),
+  ]);
+  const fulfilled = results.filter((r) => r.status === 'fulfilled');
+  const conflicts = results.filter(
+    (r) => r.status === 'rejected' && (r.reason as ContextHubError)?.code === 'CONFLICT',
+  );
+  assert.equal(fulfilled.length, 1, 'exactly one seeder succeeds');
+  assert.equal(conflicts.length, 1, 'the loser gets CONFLICT (read-check or 23505 catch)');
+
+  const pool = getDbPool();
+  const res = await pool.query(
+    `SELECT count(*)::int AS n FROM principals WHERE is_root = true AND display_name LIKE $1`,
+    [`${PREFIX}%`],
+  );
+  assert.equal(res.rows[0].n, 1, 'exactly one root row committed');
 });
 
 test('listPrincipals: returns created rows', async () => {

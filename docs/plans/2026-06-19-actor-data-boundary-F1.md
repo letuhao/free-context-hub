@@ -47,6 +47,20 @@ adversary review against the CODE (safety policy: auth primitive + new service b
 - **F1-adv — cold-start hostile-actor adversary** read-only pass over all F1 code; ≥3 passes to
   saturate per safety policy; fix every BLOCK; re-verify.
 
+## /review-impl outcomes (F1a, post-commit 37c03be)
+Fixed now: #1 root tests now `t.skip()` on a foreign root (global singleton would false-RED once F1c
+seeds a dev root); #2 `validateDisplayName` checks the TRIMMED length; #3 added a concurrent-seeder
+test proving "2 seeders → exactly 1 root". Carried forward:
+- **#4 (F1c DECISION REQUIRED):** `seedRootPrincipal` hardcodes `kind='human'`. `bootstrap:root` is a
+  headless path — decide in F1c whether the trust anchor is `human` (operator owner) or `system`
+  (and whether to make it configurable). Pre-committed to `human` for now.
+- **#5 (accept, codebase-wide):** `created_at`/`expires_at` typed `string` but node-pg returns `Date`
+  (no `setTypeParser`). Works via JSON boundary serialization; F1b+ must not do string ops on them.
+- **#6 (accept):** F1b auth-time check must validate non-root principal `status` (getRootPrincipal
+  ignores status — fine for root since its status is guard-immutable). `listPrincipals` unbounded —
+  scope-filter + pagination is F1d's MCP layer.
+- **#7 (accept):** `createPrincipal` can mint a born-suspended/retired principal (useful for import).
+
 ## Out of F1 scope (later phases)
 Grants/`authorize()` (F2), human-agent attribute + Board fence (F3), enforcement-flip FE + live
 auth-ON CI denial (F4), human password/MFA/session (F-AUTH), grant/revoke MCP tools, ephemeral keys.
