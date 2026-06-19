@@ -23,6 +23,7 @@
 import { ContextHubError, getEnv } from '../core/index.js';
 import type { CallerScope } from '../core/index.js';
 import { validateApiKey, classifyCredentialFailure } from '../services/apiKeys.js';
+import { resolveActingPrincipal } from '../services/actingPrincipal.js';
 import { createModuleLogger } from '../utils/logger.js';
 
 const logger = createModuleLogger('mcp-auth');
@@ -90,4 +91,41 @@ export async function resolveMcpCaller(token: string | undefined): Promise<McpCa
 /** Back-compat scope-only resolver — delegates to resolveMcpCaller (single auth path). */
 export async function resolveMcpCallerScope(token: string | undefined): Promise<CallerScope> {
   return (await resolveMcpCaller(token)).scope;
+}
+
+/**
+ * Actor Data Boundary F1e — the single chokepoint every previously-asserting tool uses to learn WHO
+ * is acting. Composes resolveMcpCaller (credential → principal) with resolveActingPrincipal (the
+ * spoofing defense), applying the two F1d contracts:
+ *   (a) allowUnboundAssertion = !MCP_LEGACY_TOKEN_DISABLED — a hardened deployment refuses to honor
+ *       an asserted actor_id from an UNBOUND credential (no impersonation).
+ *   (b) under auth-ON, a null acting principal (unbound + refused) is rejected — the caller must use
+ *       a principal-bound credential rather than assert an identity.
+ * Returns the caller's tenant scope alongside, so a handler resolves auth once.
+ *
+ * Note on F1d contract #3 (validate asserted == active principal): under auth-ON the only non-null
+ * results are (i) the authenticated bound principal — already gated active by validateApiKey — or
+ * (ii) nothing (unbound refused by (a)/(b)). So no forged/suspended principal can be persisted in
+ * the hardened posture. Under auth-OFF / legacy-allowed the actor is workspace-trusted free text by
+ * design (dev/CI lane unchanged); validating it against principals would break existing flows.
+ */
+export async function resolveActingActor(
+  token: string | undefined,
+  assertedActorId?: string | null,
+): Promise<{ scope: CallerScope; actingPrincipalId: string | null }> {
+  const caller = await resolveMcpCaller(token);
+  const env = getEnv();
+  const acting = resolveActingPrincipal({
+    authEnabled: Boolean(env.MCP_AUTH_ENABLED),
+    authenticatedPrincipalId: caller.principalId,
+    assertedActorId,
+    allowUnboundAssertion: !env.MCP_LEGACY_TOKEN_DISABLED,
+  });
+  if (env.MCP_AUTH_ENABLED && acting === null) {
+    throw new ContextHubError(
+      'ASSERTED_IDENTITY_REJECTED',
+      'no derivable acting identity: use a principal-bound credential (an asserted actor_id is not honored for unbound credentials when MCP_LEGACY_TOKEN_DISABLED=true).',
+    );
+  }
+  return { scope: caller.scope, actingPrincipalId: acting };
 }

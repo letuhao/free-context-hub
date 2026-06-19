@@ -127,7 +127,7 @@ import { isFeatureEnabled } from '../services/featureToggles.js';
 import { searchChunks } from '../services/documentChunks.js';
 import { logLessonAccess, isSalienceDisabled, type AccessLogEntry } from '../services/salience.js';
 import { getDbPool } from '../db/client.js';
-import { resolveMcpCallerScope, resolveMcpCaller, type McpCaller } from './auth.js';
+import { resolveMcpCallerScope, resolveMcpCaller, resolveActingActor, type McpCaller } from './auth.js';
 import { getPrincipal } from '../services/principals.js';
 import type { CallerScope } from '../core/index.js';
 
@@ -161,6 +161,24 @@ async function resolveMcpCallerScopeOrThrow(token?: string): Promise<CallerScope
 /** F1d: full authenticated caller (scope + bound principal + expiry), McpError-mapped. */
 async function resolveMcpCallerOrThrow(token?: string): Promise<McpCaller> {
   try { return await resolveMcpCaller(token); }
+  catch (e) {
+    if (e instanceof ContextHubError) throw new McpError(CONTEXT_HUB_TO_MCP_CODE[e.code] ?? ErrorCode.InternalError, e.message);
+    throw e;
+  }
+}
+
+/**
+ * F1e: resolve the tenant scope AND the ACTING principal for a previously-asserting tool. Replaces
+ * the bare resolveMcpCallerScopeOrThrow + trusting an args actor field. Pass the tool's asserted
+ * actor/created_by/submitted_by; the returned actingPrincipalId is what the service must persist
+ * (auth-OFF: equals the asserted value → unchanged; auth-ON bound: the credential's principal;
+ * auth-ON mismatch/unbound: rejected). McpError-mapped at this protocol edge.
+ */
+async function resolveActingActorOrThrow(
+  token: string | undefined,
+  assertedActorId?: string | null,
+): Promise<{ scope: CallerScope; actingPrincipalId: string | null }> {
+  try { return await resolveActingActor(token, assertedActorId); }
   catch (e) {
     if (e instanceof ContextHubError) throw new McpError(CONTEXT_HUB_TO_MCP_CODE[e.code] ?? ErrorCode.InternalError, e.message);
     throw e;
@@ -3210,9 +3228,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, name, charter, created_by, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, created_by);
       const projectId = resolveProjectIdOrThrow(project_id);
-      const t = await charterTopic({ project_id: projectId, callerScope, name, charter, created_by });
+      const t = await charterTopic({ project_id: projectId, callerScope, name, charter, created_by: actingPrincipalId ?? created_by });
       const result = {
         status: 'ok',
         topic_id: t.topic_id,
@@ -3252,8 +3270,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, actor_id, actor_type, display_name, level, since, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const pack = await joinTopic({ topic_id, callerScope, actor_id, actor_type, display_name, level, since_seq: since });
+      const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, actor_id);
+      const pack = await joinTopic({ topic_id, callerScope, actor_id: actingPrincipalId ?? actor_id, actor_type, display_name, level, since_seq: since });
       const result = {
         status: 'ok',
         topic: pack.topic,
@@ -3343,8 +3361,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, actor_id, level, granted_by, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await grantLevel({ topic_id, callerScope, actor_id, level, granted_by });
+      // The ACTING identity here is the GRANTOR (granted_by); actor_id is the target participant.
+      const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, granted_by);
+      const r = await grantLevel({ topic_id, callerScope, actor_id, level, granted_by: actingPrincipalId ?? granted_by });
       const summary = `grant_level: topic=${topic_id} target=${actor_id} level=${level} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3439,8 +3458,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, title, topology, depends_on, raci, slot, kind, created_by, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const task = await postTask({ topic_id, callerScope, title, topology, depends_on, raci, slot, kind, created_by });
+      const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, created_by);
+      const task = await postTask({ topic_id, callerScope, title, topology, depends_on, raci, slot, kind, created_by: actingPrincipalId ?? created_by });
       const result = { status: 'ok' as const, task };
       const summary = `post_task: task_id=${task.task_id} artifact_id=${task.artifact_id} status=${task.status}`;
       return formatToolResponse(result, summary, output_format);
@@ -3493,8 +3512,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, task_id, actor_id, ttl_minutes, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await claimTask({ task_id, callerScope, actor_id, ttl_minutes });
+      const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, actor_id);
+      const r = await claimTask({ task_id, callerScope, actor_id: actingPrincipalId ?? actor_id, ttl_minutes });
       const summary = `claim_task: task=${task_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3515,8 +3534,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, task_id, actor_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await releaseTask({ task_id, callerScope, actor_id });
+      const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, actor_id);
+      const r = await releaseTask({ task_id, callerScope, actor_id: actingPrincipalId ?? actor_id });
       const summary = `release_task: task=${task_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3537,8 +3556,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, task_id, actor_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await completeTask({ task_id, callerScope, actor_id });
+      const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, actor_id);
+      const r = await completeTask({ task_id, callerScope, actor_id: actingPrincipalId ?? actor_id });
       const summary = `complete_task: task=${task_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3565,8 +3584,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, artifact_id, claim_id, fencing_token, content_ref, actor_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await writeArtifact({ artifact_id, callerScope, claim_id, fencing_token, content_ref, actor_id });
+      const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, actor_id);
+      const r = await writeArtifact({ artifact_id, callerScope, claim_id, fencing_token, content_ref, actor_id: actingPrincipalId ?? actor_id });
       const summary = `write_artifact: artifact=${artifact_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3592,8 +3611,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, artifact_id, claim_id, fencing_token, actor_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await baselineArtifact({ artifact_id, callerScope, claim_id, fencing_token, actor_id });
+      const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, actor_id);
+      const r = await baselineArtifact({ artifact_id, callerScope, claim_id, fencing_token, actor_id: actingPrincipalId ?? actor_id });
       const summary = `baseline_artifact: artifact=${artifact_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },

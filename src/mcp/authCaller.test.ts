@@ -7,7 +7,7 @@
 
 import assert from 'node:assert/strict';
 import test, { before, after, beforeEach } from 'node:test';
-import { resolveMcpCaller } from './auth.js';
+import { resolveMcpCaller, resolveActingActor } from './auth.js';
 import { createPrincipal, setPrincipalStatus } from '../services/principals.js';
 import { createApiKey, revokeApiKey } from '../services/apiKeys.js';
 import { ContextHubError } from '../core/errors.js';
@@ -112,4 +112,40 @@ test('never-seen token -> UNAUTHORIZED (not CREDENTIAL_EXPIRED)', async () => {
     () => resolveMcpCaller('chub_sk_never_existed_at_all'),
     (e: unknown) => e instanceof ContextHubError && e.code === 'UNAUTHORIZED',
   );
+});
+
+// ── resolveActingActor (the F1e chokepoint) ──────────────────────────────────
+
+test('resolveActingActor: auth-ON bound + no asserted -> acts as the bound principal', async () => {
+  await authOn();
+  const p = await createPrincipal({ kind: 'agent', display_name: `${PREFIX}act` });
+  const { key } = await createApiKey({ name: `${PREFIX}kact`, principal_id: p.principal_id });
+  const { actingPrincipalId } = await resolveActingActor(key);
+  assert.equal(actingPrincipalId, p.principal_id);
+});
+
+test('resolveActingActor: auth-ON bound + asserted MISMATCH -> ASSERTED_IDENTITY_REJECTED', async () => {
+  await authOn();
+  const p = await createPrincipal({ kind: 'agent', display_name: `${PREFIX}act2` });
+  const { key } = await createApiKey({ name: `${PREFIX}kact2`, principal_id: p.principal_id });
+  await assert.rejects(
+    () => resolveActingActor(key, 'some-other-name'),
+    (e: unknown) => e instanceof ContextHubError && e.code === 'ASSERTED_IDENTITY_REJECTED',
+  );
+});
+
+test('resolveActingActor: auth-ON unbound key + asserted (hardened) -> ASSERTED_IDENTITY_REJECTED (no impersonation)', async () => {
+  // authOn() sets MCP_LEGACY_TOKEN_DISABLED=true -> allowUnboundAssertion=false.
+  await authOn();
+  const { key } = await createApiKey({ name: `${PREFIX}kunbound` }); // no principal_id => unbound
+  await assert.rejects(
+    () => resolveActingActor(key, 'victim-principal'),
+    (e: unknown) => e instanceof ContextHubError && e.code === 'ASSERTED_IDENTITY_REJECTED',
+  );
+});
+
+test('resolveActingActor: auth-OFF -> honors asserted (dev behavior unchanged)', async () => {
+  await authOff();
+  const { actingPrincipalId } = await resolveActingActor(undefined, 'dev-agent');
+  assert.equal(actingPrincipalId, 'dev-agent');
 });
