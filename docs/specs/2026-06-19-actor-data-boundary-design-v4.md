@@ -1,6 +1,9 @@
 # DESIGN v4 — Actor / Project / Task Data Boundaries (code-grounded, binding-complete)
 
-**Status:** DESIGN v4 (awaiting 4th eval + approval before BUILD)
+**Status:** ⚠️ SUPERSEDED by `-design-v5.md` (2026-06-19) — v5 corrects v4's 4 inaccurate code anchors
+and resolves the 5 design contradictions the v4 eval surfaced. Kept for history.
+
+**Status (original):** DESIGN v4 (awaiting 4th eval + approval before BUILD)
 **Supersedes:** v3 (`-design-v3.md`). **Inputs:** v3 + v3-eval (7 Group-A decisions + ~24 Group-B
 binding fixes) + the as-built code the v3 eval cited.
 **What changed from v3 → v4 (the method change):** v3 was mechanism-complete but its *bindings* were
