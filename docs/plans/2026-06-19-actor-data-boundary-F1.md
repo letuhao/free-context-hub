@@ -67,6 +67,22 @@ test proving "2 seeders → exactly 1 root". Carried forward:
   scope-filter + pagination is F1d's MCP layer.
 - **#7 (accept):** `createPrincipal` can mint a born-suspended/retired principal (useful for import).
 
+## F1c adversary outcomes (BLOCKED → cleared)
+Fixed in F1c: #2/#3 HIGH (bootstrapRoot non-atomic / reissue accumulated live root secrets) →
+`createBootstrapRootKey` now atomically rotates (revoke prior live bootstrap key + insert in one
+txn) + partial unique index `api_keys_one_live_bootstrap_per_principal` (≤1 live root credential);
+#4 MED (name-collision 23505) → unique name + typed CONFLICT; #1 HIGH (contained) → `assertEnforceReady`
+refuses while the legacy `CONTEXT_HUB_WORKSPACE_TOKEN` global-admin bypass is live; #6 → coverage
+(rotation, empty-token, legacy-block, public-path-can't-set-is_bootstrap).
+
+**Deferred to F4 (enforcement posture — cross-cutting, blast radius on the auth-ON E2E lane):**
+- **#5 — hard boot-gate:** call `assertEnforceReady()` at startup when `MCP_AUTH_ENABLED=true` (refuse
+  to boot into enforcement without a usable root credential). Currently advisory-only (CLI prints
+  ready/not-ready). Wiring to `src/index.ts` startup risks the existing auth-ON E2E lane (which may
+  rely on the legacy token) — design the interaction in F4.
+- **#1 — legacy default:** consider flipping `MCP_LEGACY_TOKEN_DISABLED` default to true (or requiring
+  it for enforce-ready at boot). Back-compat decision (DEFERRED-029 kept it false for migration).
+
 ## Out of F1 scope (later phases)
 Grants/`authorize()` (F2), human-agent attribute + Board fence (F3), enforcement-flip FE + live
 auth-ON CI denial (F4), human password/MFA/session (F-AUTH), grant/revoke MCP tools, ephemeral keys.

@@ -85,6 +85,13 @@ const EnvSchema = z.object({
     .preprocess(v => parseBooleanEnv(v), z.boolean().optional())
     .default(false),
 
+  // Actor Data Boundary F1c — the out-of-band root bootstrap secret. Whoever holds this (the
+  // deployment owner, alongside DATABASE_URL) can establish the single root principal via
+  // `npm run bootstrap:root` (or, later, the first-run HTTP bootstrap). It is NOT a password and
+  // proves out-of-band possession. Must be set before root can be established; unset disables
+  // bootstrap entirely (refuse). Keep it secret and rotate it after first use.
+  ROOT_BOOTSTRAP_TOKEN: z.string().min(1).optional(),
+
   // Single-port gateway: the human GUI is same-origin, so the REST API does NOT
   // need permissive CORS. This is a comma-separated allowlist of origins that
   // may make cross-origin browser requests with credentials. Default empty =

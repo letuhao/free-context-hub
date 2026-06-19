@@ -142,6 +142,11 @@ export async function setPrincipalStatus(
  * that sets is_root=true. Idempotency is the caller's job (bootstrap checks getRootPrincipal
  * first); this enforces single-root at the DB and translates the partial-unique-index
  * violation into a typed CONFLICT so a race can't create two roots.
+ *
+ * Root is kind=`system`: it is the headless trust anchor, NOT a person. The bootstrap draft is
+ * explicit — "Root is the anchor, not a daily login"; the human operator is a SEPARATE `human`
+ * principal (created later, F-AUTH). `kind` is an attribute, not the authz axis (FOUNDATION line 4),
+ * so this is a label choice, not a privilege one — root's power comes from is_root.
  */
 export async function seedRootPrincipal(params: { display_name: string }): Promise<Principal> {
   const displayName = validateDisplayName(params.display_name);
@@ -155,7 +160,7 @@ export async function seedRootPrincipal(params: { display_name: string }): Promi
   try {
     const res = await pool.query<Principal>(
       `INSERT INTO principals (kind, status, display_name, is_root)
-       VALUES ('human', 'active', $1, true) RETURNING ${COLS}`,
+       VALUES ('system', 'active', $1, true) RETURNING ${COLS}`,
       [displayName],
     );
     return res.rows[0];

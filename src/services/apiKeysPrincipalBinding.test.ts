@@ -13,6 +13,7 @@
 
 import assert from 'node:assert/strict';
 import test, { before, after, beforeEach } from 'node:test';
+import type { PoolClient } from 'pg';
 import { createApiKey, validateApiKey, listApiKeys } from './apiKeys.js';
 import { createPrincipal, seedRootPrincipal, setPrincipalStatus, getRootPrincipal } from './principals.js';
 import { ContextHubError } from '../core/errors.js';
@@ -26,8 +27,23 @@ async function cleanup() {
   await pool.query(`DELETE FROM principals WHERE display_name LIKE $1`, [`${PREFIX}%`]);
 }
 
-before(cleanup);
-after(cleanup);
+// This file seeds a root in its root-binding tests — share the advisory lock with the other
+// root-creating files so the global single-root slot is never contended under concurrency. [F1c]
+const ROOT_TEST_LOCK = 0x1c0b0064;
+let rootLockClient: PoolClient | undefined;
+before(async () => {
+  rootLockClient = await getDbPool().connect();
+  await rootLockClient.query('SELECT pg_advisory_lock($1)', [ROOT_TEST_LOCK]);
+  await cleanup();
+});
+after(async () => {
+  await cleanup();
+  if (rootLockClient) {
+    await rootLockClient.query('SELECT pg_advisory_unlock($1)', [ROOT_TEST_LOCK]).catch(() => {});
+    rootLockClient.release();
+    rootLockClient = undefined;
+  }
+});
 beforeEach(cleanup);
 
 test('createApiKey: binds to an active principal; validateApiKey resolves principal_id', async () => {
@@ -38,6 +54,17 @@ test('createApiKey: binds to an active principal; validateApiKey resolves princi
   const validated = await validateApiKey(key);
   assert.ok(validated);
   assert.equal(validated.principal_id, p.principal_id);
+});
+
+test('createApiKey: the public path never sets is_bootstrap (escalation guard) [adversary #6]', async () => {
+  const p = await createPrincipal({ kind: 'agent', display_name: `${PREFIX}nb` });
+  const { entry } = await createApiKey({ name: `${PREFIX}knb`, principal_id: p.principal_id });
+  const pool = getDbPool();
+  const r = await pool.query<{ is_bootstrap: boolean }>(
+    `SELECT is_bootstrap FROM api_keys WHERE key_id = $1`,
+    [entry.key_id],
+  );
+  assert.equal(r.rows[0].is_bootstrap, false);
 });
 
 test('createApiKey: unknown principal_id -> NOT_FOUND', async () => {

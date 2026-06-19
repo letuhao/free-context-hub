@@ -15,6 +15,7 @@
 
 import assert from 'node:assert/strict';
 import test, { before, after, beforeEach } from 'node:test';
+import type { PoolClient } from 'pg';
 import {
   createPrincipal,
   getPrincipal,
@@ -38,8 +39,25 @@ async function cleanup() {
   await pool.query(`DELETE FROM principals WHERE display_name LIKE $1`, [`${PREFIX}%`]);
 }
 
-before(cleanup);
-after(cleanup);
+// The single-root index is a GLOBAL singleton, so any two test FILES that create a root collide
+// when node:test runs them concurrently. Serialize all root-creating files behind a Postgres
+// advisory lock held for this file's duration (auto-released if the process dies). [F1c test-contention]
+const ROOT_TEST_LOCK = 0x1c0b0064;
+let rootLockClient: PoolClient | undefined;
+
+before(async () => {
+  rootLockClient = await getDbPool().connect();
+  await rootLockClient.query('SELECT pg_advisory_lock($1)', [ROOT_TEST_LOCK]);
+  await cleanup();
+});
+after(async () => {
+  await cleanup();
+  if (rootLockClient) {
+    await rootLockClient.query('SELECT pg_advisory_unlock($1)', [ROOT_TEST_LOCK]).catch(() => {});
+    rootLockClient.release();
+    rootLockClient = undefined;
+  }
+});
 beforeEach(cleanup);
 
 /**
@@ -152,7 +170,7 @@ test('seedRootPrincipal: sets is_root, discoverable via getRootPrincipal; second
   if (await skipIfForeignRoot(t)) return;
   const root = await seedRootPrincipal({ display_name: `${PREFIX}root` });
   assert.equal(root.is_root, true);
-  assert.equal(root.kind, 'human');
+  assert.equal(root.kind, 'system'); // root = headless trust anchor, not a person (F1c)
 
   const found = await getRootPrincipal();
   assert.ok(found);

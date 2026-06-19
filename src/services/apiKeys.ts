@@ -143,6 +143,65 @@ export async function createApiKey(params: {
   }
 }
 
+/**
+ * Actor Data Boundary F1c — mint THE root credential. This is the ONLY path that sets
+ * is_bootstrap=true and binds a key to the root principal; it is invoked exclusively by the
+ * out-of-band bootstrap (src/services/bootstrap.ts), never exposed on any HTTP/MCP surface.
+ *
+ * The key is long-lived (no expiry — it is the recovery anchor), role 'admin', attributed to the
+ * sentinel 'bootstrap:root' (so it is never counted against any operator's per-key limit). Caller
+ * MUST pass the actual root principal id; this re-verifies is_root + active defensively.
+ */
+export async function createBootstrapRootKey(rootPrincipalId: string): Promise<{ key: string; entry: ApiKeyEntry }> {
+  if (!isUuid(rootPrincipalId)) {
+    throw new ContextHubError('BAD_REQUEST', 'createBootstrapRootKey requires a valid root principal id.');
+  }
+  const principal = await getPrincipal(rootPrincipalId);
+  if (!principal || !principal.is_root) {
+    throw new ContextHubError('BAD_REQUEST', 'createBootstrapRootKey target is not the root principal.');
+  }
+  if (principal.status !== 'active') {
+    throw new ContextHubError('CONFLICT', 'root principal is not active; cannot mint a root credential.');
+  }
+
+  const key = generateKey();
+  const keyHash = hashKey(key);
+  const keyPrefix = key.slice(0, 12) + '...' + key.slice(-4);
+  // Fully-random, collision-free name (the prior `keyPrefix.slice` had ~4 chars of entropy). [F1c adversary #4]
+  const name = `root-bootstrap-${key.slice(8, 28)}`;
+
+  // ATOMIC ROTATION [F1c adversary #2/#3]: revoke any prior live bootstrap credential for root and
+  // mint exactly one new one in a single transaction. Reissue is a true rotation, never an
+  // accumulation of orphaned live root secrets. The partial unique index
+  // api_keys_one_live_bootstrap_per_principal is the DB backstop under concurrency.
+  const client = await getDbPool().connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `UPDATE api_keys SET revoked = true
+        WHERE principal_id = $1::uuid AND is_bootstrap = true AND revoked = false`,
+      [rootPrincipalId],
+    );
+    const res = await client.query(
+      `INSERT INTO api_keys (name, key_prefix, key_hash, role, project_scope, expires_at, created_by, principal_id, is_bootstrap)
+       VALUES ($1, $2, $3, 'admin', NULL, NULL, 'bootstrap:root', $4::uuid, true)
+       RETURNING *`,
+      [name, keyPrefix, keyHash, rootPrincipalId],
+    );
+    await client.query('COMMIT');
+    return { key, entry: res.rows[0] };
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (err && typeof err === 'object' && (err as { code?: string }).code === '23505') {
+      // Lost a concurrent race to mint the single live bootstrap credential — safe to fail.
+      throw new ContextHubError('CONFLICT', 'a root credential mint is already in progress; retry.');
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 /** Revoke an API key. */
 export async function revokeApiKey(keyId: string): Promise<void> {
   const pool = getDbPool();
@@ -162,13 +221,11 @@ export async function revokeApiKey(keyId: string): Promise<void> {
  * the LEFT JOIN gates on principal status so suspending/retiring the bound principal instantly
  * denies every credential it holds. Legacy keys (principal_id NULL) skip the gate (back-compat).
  *
- * FAIL-CLOSED ON ROOT: the validator is the universal chokepoint, so it refuses to authenticate
- * ANY root-bound key — `p.is_root = false` is required. createApiKey already blocks root binding,
- * but an errant row (future migration, restored backup, manual SQL) must never silently mint a
- * working root credential through the general path. [F1b adversary MED]
- * F1c TODO: when the out-of-band bootstrap mints the legitimate root credential, it adds a
- * provenance marker (e.g. api_keys.is_bootstrap) and this predicate relaxes to
- * `(p.is_root = false OR k.is_bootstrap)` — deliberate, not silent.
+ * ROOT REQUIRES THE BOOTSTRAP MARKER: the validator is the universal chokepoint, so a root-bound
+ * key authenticates ONLY when it carries `is_bootstrap = true` (set exclusively by the out-of-band
+ * createBootstrapRootKey path). An errant root-bound row from any other path (restored backup,
+ * manual SQL, a buggy migration) has is_bootstrap=false and is denied — no silent root escalation.
+ * createApiKey (the public path) cannot set is_bootstrap and refuses root binding outright. [F1b/F1c]
  *
  * Note on the LEFT JOIN NULL fail-safe: a non-NULL principal_id with no resolvable row yields
  * p.status = NULL, and `NULL = 'active'` is false ⇒ deny. The FK (ON DELETE RESTRICT) makes a
@@ -185,7 +242,8 @@ export async function validateApiKey(token: string): Promise<ApiKeyEntry | null>
      LEFT JOIN principals p ON p.principal_id = k.principal_id
      WHERE k.key_hash = $1 AND k.revoked = false
        AND (k.expires_at IS NULL OR k.expires_at > now())
-       AND (k.principal_id IS NULL OR (p.status = 'active' AND p.is_root = false))`,
+       AND (k.principal_id IS NULL
+            OR (p.status = 'active' AND (p.is_root = false OR k.is_bootstrap = true)))`,
     [tokenHash],
   );
 
