@@ -1,3 +1,33 @@
+# CHECKPOINT — Actor data-boundary F1c: out-of-band root bootstrap SHIPPED (2026-06-19, session 10)
+
+**Branch:** `feature/actor-data-boundary`. **F1c landed (commit `67761ac`).** `/loop` self-paced.
+
+**F1c — the trust anchor, established out-of-band (DONE, verified, adversary-cleared):**
+- migration 0065: `api_keys.is_bootstrap` + partial unique index (≤1 live root credential).
+- `ROOT_BOOTSTRAP_TOKEN` env (deployment secret). Root principal = `kind='system'` (headless anchor;
+  human operator is separate, F-AUTH).
+- `createBootstrapRootKey` — ONLY path that sets is_bootstrap + binds root; atomic rotation (revoke
+  old + insert in one txn). `validateApiKey` root predicate relaxed to `(is_root=false OR is_bootstrap)`.
+- `services/bootstrap.ts`: `bootstrapRoot` (create | reissue-on-lockout | no-op, constant-time token
+  compare) + `assertEnforceReady` lockout guard. `scripts/bootstrapRoot.ts` + `npm run bootstrap:root`.
+- **Adversary (crux phase) found 2 HIGH + 3 MED/LOW, all fixed:** HIGH non-atomic bootstrap → atomic
+  rotation + DB index (proven exactly-one-live-root-credential); HIGH legacy `CONTEXT_HUB_WORKSPACE_TOKEN`
+  bypass → `assertEnforceReady` refuses while it's live; MED name-collision → unique name+CONFLICT; +coverage.
+- **Deferred to F4** (cross-cutting): hard boot-gate of `MCP_AUTH_ENABLED` on `assertEnforceReady`;
+  `MCP_LEGACY_TOKEN_DISABLED` default flip.
+- **34/34 unit tests, 0 skipped** (advisory lock serializes the 3 root-creating test files); auth
+  regression 25/25; tsc clean.
+
+**Note:** unrelated `corpus/**` + `docs/qc/**competency**` + `src/qc/ingestCorpus.ts` appeared in the
+working tree during this session (not from F1 work); left uncommitted/untouched.
+
+**What's next:** **F1d** — authenticated-principal resolution: thread the principal (not just scope)
+out of `mcp/auth.ts` + REST `auth.ts`; `resolveActingPrincipal` helper (ASSERTED_IDENTITY_REJECTED /
+CREDENTIAL_EXPIRED codes); `whoami` MCP tool. Then F1e (stop trusting asserted actor_id across ~19
+tools), F1-adv (saturating multi-pass).
+
+---
+
 # CHECKPOINT — Actor data-boundary F1b: api_keys↔principal binding SHIPPED (2026-06-19, session 10)
 
 **Branch:** `feature/actor-data-boundary`. **F1b landed (commit `22f4694`).** `/loop` self-paced through
