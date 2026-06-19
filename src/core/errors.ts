@@ -12,6 +12,8 @@ export class ContextHubError extends Error {
       | 'BAD_REQUEST'
       | 'NOT_FOUND'
       | 'INTERNAL'
+      // Actor Data Boundary F1: single-root / unique-resource conflict (409-shaped)
+      | 'CONFLICT'
       // DEFERRED-025: upstream dependency (e.g. embeddings model) unavailable → 503
       | 'SERVICE_UNAVAILABLE'
       // Phase 15 Sprint 15.5: intake + dispute extended codes
