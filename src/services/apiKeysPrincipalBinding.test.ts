@@ -13,7 +13,7 @@
 
 import assert from 'node:assert/strict';
 import test, { before, after, beforeEach } from 'node:test';
-import { createApiKey, validateApiKey } from './apiKeys.js';
+import { createApiKey, validateApiKey, listApiKeys } from './apiKeys.js';
 import { createPrincipal, seedRootPrincipal, setPrincipalStatus, getRootPrincipal } from './principals.js';
 import { ContextHubError } from '../core/errors.js';
 import { getDbPool } from '../db/client.js';
@@ -45,6 +45,22 @@ test('createApiKey: unknown principal_id -> NOT_FOUND', async () => {
     () => createApiKey({ name: `${PREFIX}k2`, principal_id: '00000000-0000-0000-0000-000000000000' }),
     (e: unknown) => e instanceof ContextHubError && e.code === 'NOT_FOUND',
   );
+});
+
+test('createApiKey: malformed principal_id -> BAD_REQUEST (not a raw pg 500) [review #1]', async () => {
+  await assert.rejects(
+    () => createApiKey({ name: `${PREFIX}kbad`, principal_id: 'not-a-uuid' }),
+    (e: unknown) => e instanceof ContextHubError && e.code === 'BAD_REQUEST',
+  );
+});
+
+test('listApiKeys: surfaces principal_id for bound keys (FE access-control depends on it) [review #2]', async () => {
+  const p = await createPrincipal({ kind: 'agent', display_name: `${PREFIX}listed` });
+  await createApiKey({ name: `${PREFIX}klisted`, principal_id: p.principal_id });
+  const all = await listApiKeys();
+  const mine = all.find((k) => k.name === `${PREFIX}klisted`);
+  assert.ok(mine);
+  assert.equal(mine.principal_id, p.principal_id);
 });
 
 test('createApiKey: cannot bind to a suspended or retired principal -> BAD_REQUEST', async () => {

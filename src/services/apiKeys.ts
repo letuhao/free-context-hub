@@ -2,6 +2,7 @@ import { randomBytes, createHash } from 'node:crypto';
 import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
 import { getEnv } from '../env.js';
+import { validate as isUuid } from 'uuid';
 import { getPrincipal } from './principals.js';
 
 export interface ApiKeyEntry {
@@ -67,6 +68,11 @@ export async function createApiKey(params: {
   // bootstrap path (F1c), never through this general key-provisioning surface (escalation guard).
   const principalId = params.principal_id ?? null;
   if (principalId !== null) {
+    // Fail clean on malformed input — principal_id is a UUID column; a non-UUID would otherwise
+    // raise a raw pg 22P02 (500) once F1d wires this to caller input. [review-impl F1b #1]
+    if (!isUuid(principalId)) {
+      throw new ContextHubError('BAD_REQUEST', `Invalid principal_id "${principalId}" (must be a UUID).`);
+    }
     const principal = await getPrincipal(principalId);
     if (!principal) {
       throw new ContextHubError('NOT_FOUND', `Principal ${principalId} not found.`);
