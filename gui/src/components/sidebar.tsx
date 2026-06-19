@@ -109,7 +109,7 @@ export function Sidebar() {
   const [notifCount, setNotifCount] = useState(0);
 
   useEffect(() => {
-    const apiUrl = process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "http://localhost:3001";
+    const apiUrl = process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "";
     let active = true;
     const check = () => {
       fetch(`${apiUrl}/api/system/health`)
@@ -123,7 +123,7 @@ export function Sidebar() {
 
   useEffect(() => {
     if (!projectId) return;
-    const apiUrl = process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "http://localhost:3001";
+    const apiUrl = process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "";
     let active = true;
     const fetchCount = () => {
       Promise.all([
@@ -140,7 +140,7 @@ export function Sidebar() {
 
   useEffect(() => {
     if (!projectId) return;
-    const apiUrl = process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "http://localhost:3001";
+    const apiUrl = process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "";
     let active = true;
     const fetchNotifs = () => {
       fetch(`${apiUrl}/api/notifications?project_id=${encodeURIComponent(projectId)}&unread=true&limit=1`)

@@ -1,9 +1,34 @@
 /**
  * ContextHub REST API client for the GUI.
- * Talks to the backend REST API on API_URL (default http://localhost:3001).
+ *
+ * Single-port gateway model: in the browser the client uses SAME-ORIGIN
+ * relative URLs (base = ""), so every `/api/*` call hits the Next.js server
+ * (the single external entrypoint), which rewrites it to the internal REST
+ * backend. The browser never talks to the backend port directly.
+ *
+ * On the server (SSR / route handlers) there is no origin to be relative to,
+ * so the client reaches the backend directly over the internal network via
+ * CONTEXTHUB_INTERNAL_API_URL (e.g. http://mcp:3001 inside Docker).
+ *
+ * NEXT_PUBLIC_CONTEXTHUB_API_URL is honored as an explicit override if set
+ * (e.g. pointing at a remote backend), but the default is intentionally
+ * same-origin so no hostname is baked into the client bundle at build time.
  */
 
-const API_URL = process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "http://localhost:3001";
+function resolveApiBase(): string {
+  // Browser → same-origin (relative). The gateway proxies /api to the backend.
+  if (typeof window !== "undefined") {
+    return process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "";
+  }
+  // Server → reach the backend directly over the internal network.
+  return (
+    process.env.CONTEXTHUB_INTERNAL_API_URL ??
+    process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ??
+    "http://localhost:3001"
+  );
+}
+
+const API_URL = resolveApiBase();
 const API_TOKEN = process.env.NEXT_PUBLIC_CONTEXTHUB_TOKEN;
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -266,7 +291,7 @@ export const api = {
     // Use the same duplicate-surface shape as uploadDocument so callers
     // can branch on { status: 'duplicate', existing_doc_id, ... } without
     // having to catch an error.
-    const API_URL = process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "http://localhost:3001";
+    const API_URL = resolveApiBase();
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (API_TOKEN) headers["Authorization"] = `Bearer ${API_TOKEN}`;
     const res = await fetch(`${API_URL}/api/documents/ingest-url`, {
@@ -386,7 +411,7 @@ export const api = {
     request<{ points?: { date: string; count: number }[] }>("GET", `/api/analytics/timeseries?${qs(params)}`),
 
   uploadDocument: async (body: FormData): Promise<any> => {
-    const API_URL = process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "http://localhost:3001";
+    const API_URL = resolveApiBase();
     const res = await fetch(`${API_URL}/api/documents/upload`, { method: "POST", body });
     const json: any = await res.json().catch(() => ({}));
 
@@ -411,7 +436,7 @@ export const api = {
     includeDocuments?: boolean;
     includeChunks?: boolean;
   }): string => {
-    const API_URL = process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "http://localhost:3001";
+    const API_URL = resolveApiBase();
     const params = new URLSearchParams();
     if (opts.includeDocuments === false) params.set("include_documents", "false");
     if (opts.includeChunks === false) params.set("include_chunks", "false");
@@ -431,7 +456,7 @@ export const api = {
       conflictsCap?: number;
     },
   ): Promise<any> => {
-    const API_URL = process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "http://localhost:3001";
+    const API_URL = resolveApiBase();
     const params = new URLSearchParams();
     if (opts.policy) params.set("policy", opts.policy);
     if (opts.dryRun) params.set("dry_run", "true");

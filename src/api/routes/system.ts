@@ -1,14 +1,21 @@
 import { Router } from 'express';
 import { getEnv } from '../../core/index.js';
 
-const router = Router();
+// Public router: liveness only. Mounted BEFORE bearerAuth so health checks /
+// load balancers can probe without a token. Must not leak any configuration.
+const publicRouter = Router();
 
-/** GET /api/system/health — basic health check */
-router.get('/health', (_req, res) => {
+/** GET /api/system/health — basic health check (public) */
+publicRouter.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-/** GET /api/system/info — server info + feature flags */
+// Authed router: server info + feature flags. Mounted AFTER bearerAuth — this
+// payload (model names, enabled features, ports) is useful recon for an
+// attacker, so it must not be reachable unauthenticated through the gateway.
+const router = Router();
+
+/** GET /api/system/info — server info + feature flags (requires auth) */
 router.get('/info', (_req, res) => {
   const env = getEnv();
   res.json({
@@ -31,4 +38,4 @@ router.get('/info', (_req, res) => {
   });
 });
 
-export { router as systemRouter };
+export { router as systemRouter, publicRouter as publicSystemRouter };

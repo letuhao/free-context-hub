@@ -1,3 +1,59 @@
+# CHECKPOINT — Single-port gateway consolidation + security hardening (2026-06-19, session 9)
+
+**Branch:** none — committed directly to `main` (trunk-based).
+
+**Asked:** "dự án đang bị deploy phân mảnh… đưa về 1 external port để user đi trực tiếp
+từ FE vào hệ thống; FE đang gọi thẳng internal BE — sai về thiết kế và bảo mật." Then:
+"FE và MCP là 2 FE cho agents và user → 1 cổng ra duy nhất." Then: "rebuild docker + e2e",
+"approve commit and push" → guardrail blocked → user chose **"harden auth/CORS now, then push."**
+
+**Root cause of the design flaw:** `NEXT_PUBLIC_CONTEXTHUB_API_URL` (default
+`http://localhost:3001`) is inlined into the **client bundle**, so the browser fetched
+the BE port directly cross-origin → undeployable without exposing :3001 + an ALB, and no
+single trust boundary.
+
+**Shipped — single-port gateway:** the Next.js GUI (`:3002`) is the ONE external port for
+both users and agents. `gui/next.config.ts` rewrites `/api/*` → `mcp:3001` and `/mcp` →
+`mcp:3000` (SSE-safe). FE switched to **same-origin** (`resolveApiBase()` in
+`gui/src/lib/api.ts`: browser="" , server=`CONTEXTHUB_INTERNAL_API_URL`) across api.ts,
+chat, documents, sidebar. Backend ports moved to **loopback-only** host publish. New
+`MCP_ALLOWED_HOSTS` (default includes `mcp`) so the SDK's DNS-rebinding Host check accepts
+the proxied `Host: mcp`.
+
+**Security hardening (after cold-start hostile-actor review found 2 CRITICAL + 1 HIGH +
+2 MED):**
+- **Cross-site guard** (`gui/src/proxy.ts`, Next.js Proxy/middleware) — blocks
+  cross-site browser requests to `/mcp` and state-changing `/api` via `Sec-Fetch-Site`;
+  agents (no header) + same-origin pass. Closes the proxy-neutralized DNS-rebinding/CSRF
+  vector (CRITICAL-2). Live-verified: cross-site POST → 403, agent/curl → 200.
+- **CORS lockdown** (`CORS_ALLOWED_ORIGINS`, default same-origin only) — `src/api/index.ts`.
+- **`/api/system/info` moved behind `bearerAuth`** (was public recon) — split
+  `publicSystemRouter` (health) vs `systemRouter` (info).
+- **Loopback-publish all infra** (db/neo4j/redis/minio/tei/ragas/nli → `127.0.0.1:`;
+  rabbitmq → internal-only `expose`, since a host-native RabbitMQ owns 5672).
+- **Honest comments** (the old "outside world cannot reach backend" was misleading —
+  with auth off the gateway is an unauthenticated proxy) + **startup warning** when
+  `MCP_AUTH_ENABLED=false`.
+- **Deferred** the one genuine feature: browser session-login auth → **DEFERRED-041**
+  (the backend's only auth is bearer/api-key, built for agents; a browser can't safely
+  hold a shared token). Two review findings (client-bundle leak, rewrite-SSRF) were
+  investigated and **dismissed**.
+
+**Verified (live, all through the gateway `:3002`):** e2e smoke **111/111**, api
+**128/128**, agent **9/9**, gui Playwright **52/52** — both before and after hardening.
+Backend `tsc` clean; gui `next build` clean; 25/25 targeted unit tests (env resolvers +
+auth middleware). mcp confirmed bound `127.0.0.1:3000-3001` only.
+
+**Files:** `gui/next.config.ts`, `gui/src/proxy.ts` (new), `gui/src/lib/api.ts`,
+`gui/src/app/chat/page.tsx`, `gui/src/app/documents/page.tsx`, `gui/src/components/sidebar.tsx`,
+`src/index.ts`, `src/env.ts`, `src/api/index.ts`, `src/api/routes/system.ts`,
+`docker-compose.yml`, `CLAUDE.md`, `docs/deferred/DEFERRED.md`.
+
+**What's next:** DEFERRED-041 (human session auth) before any untrusted-network exposure;
+DEFERRED-032 still open from prior session.
+
+---
+
 # CHECKPOINT — DEFERRED-034 chunks cp/cr was a broken golden set (2026-06-19, session 8)
 
 **Branch:** none — committed directly to `main` (trunk-based).

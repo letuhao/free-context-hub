@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 
+import { getEnv } from '../core/index.js';
 import { bearerAuth } from './middleware/auth.js';
 import { requireRole } from './middleware/requireRole.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -20,7 +21,7 @@ import { activityRouter, notificationsRouter } from './routes/activity.js';
 import { analyticsRouter } from './routes/analytics.js';
 import { learningPathsRouter } from './routes/learningPaths.js';
 import { agentsRouter } from './routes/agents.js';
-import { systemRouter } from './routes/system.js';
+import { systemRouter, publicSystemRouter } from './routes/system.js';
 import { projectGroupsRouter } from './routes/projectGroups.js';
 import { lessonTypesRouter } from './routes/lessonTypes.js';
 import { auditRouter } from './routes/audit.js';
@@ -42,13 +43,35 @@ import { disputesRouter } from './routes/disputes.js';              // Phase 15 
  */
 export function createApiApp() {
   const app = express();
+  const env = getEnv();
 
   // ── Global middleware ──
-  app.use(cors());
+  // CORS lockdown: the GUI is same-origin (single-port gateway), so cross-origin
+  // browser access is denied by default. Only origins explicitly listed in
+  // CORS_ALLOWED_ORIGINS may make credentialed cross-origin requests. Requests
+  // with no Origin header (server-to-server agents, curl, the same-origin GUI)
+  // are unaffected — CORS only governs cross-origin browser reads.
+  const allowedOrigins = env.CORS_ALLOWED_ORIGINS.split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+  app.use(
+    cors({
+      origin(origin, callback) {
+        // No Origin header → non-browser or same-origin → allow.
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.includes(origin)) return callback(null, true);
+        // Cross-origin browser request to a non-allowlisted origin → no CORS
+        // headers emitted, so the browser blocks the response read.
+        return callback(null, false);
+      },
+      credentials: true,
+    }),
+  );
   app.use(express.json({ limit: '2mb' }));
 
-  // Health endpoint is public (no auth)
-  app.use('/api/system', systemRouter);
+  // Liveness probe is public (no auth). /api/system/info — which leaks model
+  // names + feature flags — is NOT public; it's mounted behind bearerAuth below.
+  app.use('/api/system', publicSystemRouter);
 
   // Phase 10.7 test-only static fixtures. Enabled ONLY when
   // ALLOW_PRIVATE_FETCH_FOR_TESTS=true (matches the SSRF bypass flag) so
@@ -77,6 +100,9 @@ export function createApiApp() {
 
   // All other routes require Bearer token
   app.use('/api', bearerAuth);
+
+  // System info (model names, feature flags) — behind auth (MED-1: recon).
+  app.use('/api/system', systemRouter);
 
   // ── Routes: read (reader+) ──
   // Phase 13 Sprint 13.2: identity-context endpoint for GUI role/scope checks

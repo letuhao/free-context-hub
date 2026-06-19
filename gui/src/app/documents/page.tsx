@@ -32,7 +32,7 @@ const TYPE_BADGES: Record<string, string> = {
  */
 function imageThumbUrl(doc: { doc_id: string; doc_type: string }, projectId: string): string | null {
   if (doc.doc_type !== "image") return null;
-  const API_URL = process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "http://localhost:3001";
+  const API_URL = process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "";
   return `${API_URL}/api/documents/${encodeURIComponent(doc.doc_id)}/thumbnail?project_id=${encodeURIComponent(projectId)}`;
 }
 

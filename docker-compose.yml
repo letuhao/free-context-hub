@@ -7,8 +7,11 @@ services:
       POSTGRES_USER: contexthub
       POSTGRES_PASSWORD: contexthub
       POSTGRES_DB: contexthub
+    # Loopback-only publish: reachable by host-side dev/QC tooling at
+    # localhost:5432 but NOT exposed on the public interface. Containers reach it
+    # over the Docker network (service name `db`), independent of this mapping.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - contexthub_pgdata:/var/lib/postgresql/data
 
@@ -18,9 +21,10 @@ services:
       NEO4J_AUTH: ${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD:-neo4jpassword}
       NEO4J_server_memory_heap_initial__size: 512m
       NEO4J_server_memory_heap_max__size: 512m
+    # Loopback-only publish (see `db`). Not exposed on the public interface.
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
     volumes:
       - contexthub_neo4j_data:/data
 
@@ -29,14 +33,19 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
-    ports:
-      - "5672:5672"
-      - "15672:15672"
+    # Internal-only: app containers reach this over the Docker network
+    # (rabbitmq:5672). NOT published to the host — default guest/guest creds must
+    # never be on the public interface, and a host-published port is unnecessary.
+    # (Also avoids colliding with a host-native RabbitMQ on 5672/15672.)
+    expose:
+      - "5672"
+      - "15672"
 
   redis:
     image: redis:7-alpine
+    # Loopback-only publish (see `db`). Not exposed on the public interface.
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - contexthub_redis_data:/data
 
@@ -68,6 +77,12 @@ services:
       EMBEDDINGS_BASE_URL: ${EMBEDDINGS_BASE_URL:-http://host.docker.internal:1234}
       MCP_PORT: ${MCP_PORT:-3000}
       API_PORT: ${API_PORT:-3001}
+      # CORS allowlist for cross-origin browser access to the REST API. Default
+      # empty = same-origin only (the GUI is same-origin via the gateway).
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      # MCP Host-header allowlist (DNS-rebinding). Includes the gateway's
+      # internal service name so proxied /mcp requests (Host: mcp) are accepted.
+      MCP_ALLOWED_HOSTS: ${MCP_ALLOWED_HOSTS:-localhost,127.0.0.1,[::1],mcp}
       # Future phase: store index artifacts / caches here.
       INDEX_STORAGE_ROOT: /data/index
       # Future phase (optional): S3-compatible object storage for snapshots/artifacts.
@@ -136,9 +151,21 @@ services:
       RERANK_API_PROTOCOL: ${RERANK_API_PROTOCOL-cohere}
       RERANK_BASE_URL: ${RERANK_BASE_URL-}
       RERANK_API_KEY: ${RERANK_API_KEY-}
+    # Single-port gateway model. The host PUBLISH mapping below is loopback-only
+    # (127.0.0.1), so the backend is not reachable from the public interface —
+    # host-side QC/baseline/smoke tooling can still hit localhost:3000 / :3001.
+    # NOTE: the Node process itself listens on 0.0.0.0 INSIDE the container, so
+    # it IS reachable by other containers over the Docker network (by design —
+    # the `gui` gateway proxies to it). The boundary is therefore: (1) this
+    # loopback publish mapping, (2) the gateway's cross-site guard
+    # (gui/src/middleware.ts), and (3) backend auth when MCP_AUTH_ENABLED=true.
+    # The gateway is NOT an authentication boundary unless auth is enabled —
+    # with auth off (default) anyone who can reach the published :3002 can call
+    # the full MCP/REST surface. Enable auth + scoped api_keys for any
+    # deployment whose gateway port is exposed beyond localhost.
     ports:
-      - "3000:3000"
-      - "3001:3001"
+      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:3001:3001"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -205,20 +232,34 @@ services:
       - ./:/workspace
       - D:/Works:/workspaces
 
-  # Next.js GUI — talks to the REST API on mcp:3001 inside the Docker network.
+  # Next.js GUI — THE single external entrypoint (the gateway).
+  # Browser uses same-origin /api and /mcp; this server proxies them to the
+  # internal backend (see gui/next.config.ts rewrites). The browser never hits
+  # the backend ports directly.
   gui:
     build:
       context: ./gui
       dockerfile: Dockerfile
       args:
         NPM_STRICT_SSL: ${NPM_STRICT_SSL:-false}
-        NEXT_PUBLIC_CONTEXTHUB_API_URL: ${NEXT_PUBLIC_CONTEXTHUB_API_URL:-http://localhost:3001}
+        # Same-origin by default — no backend hostname baked into the client
+        # bundle. Override only to point the browser at a remote backend.
+        NEXT_PUBLIC_CONTEXTHUB_API_URL: ${NEXT_PUBLIC_CONTEXTHUB_API_URL:-}
         NEXT_PUBLIC_CONTEXTHUB_TOKEN: ${NEXT_PUBLIC_CONTEXTHUB_TOKEN:-}
         NEXT_PUBLIC_CONTEXTHUB_DEFAULT_PROJECT: ${NEXT_PUBLIC_CONTEXTHUB_DEFAULT_PROJECT:-free-context-hub}
+    environment:
+      # Runtime proxy targets for the gateway rewrites (server-side only).
+      CONTEXTHUB_INTERNAL_API_URL: ${CONTEXTHUB_INTERNAL_API_URL:-http://mcp:3001}
+      CONTEXTHUB_INTERNAL_MCP_URL: ${CONTEXTHUB_INTERNAL_MCP_URL:-http://mcp:3000}
+      # Cross-site guard (gui/src/middleware.ts): extra origins allowed to call
+      # /api and /mcp cross-site. Default empty = same-origin only. Keep in sync
+      # with the backend's CORS_ALLOWED_ORIGINS.
+      GATEWAY_ALLOWED_ORIGINS: ${GATEWAY_ALLOWED_ORIGINS:-}
     depends_on:
       - mcp
+    # The ONE public port. Users and agents both enter here.
     ports:
-      - "${GUI_PORT:-3002}:3000"
+      - "${GATEWAY_PORT:-${GUI_PORT:-3002}}:3000"
 
   # MCP server with corporate CA installed into container trust store.
   # Start with: docker compose --profile corp-ca up -d --build db mcp-ca
@@ -297,7 +338,7 @@ services:
     volumes:
       - tei_model_cache:/data
     ports:
-      - "8080:80"  # dev/debug expose; mcp reaches via docker network at http://tei-rerank:80
+      - "127.0.0.1:8080:80"  # loopback dev/debug expose; mcp reaches via docker network at http://tei-rerank:80
     healthcheck:
       # TEI image has `curl` but NOT `wget` (12.1h /review-impl finding).
       test: ["CMD-SHELL", "curl --fail --silent --max-time 3 http://localhost:80/health || exit 1"]
@@ -346,7 +387,7 @@ services:
       # See: https://github.com/explodinggradients/ragas (telemetry section)
       RAGAS_DO_NOT_TRACK: "true"
     ports:
-      - "3005:8000"
+      - "127.0.0.1:3005:8000"  # loopback-only; measurement sidecar
     # host.docker.internal already resolved on Docker Desktop (Win/Mac);
     # on Linux it requires this extra_hosts entry.
     extra_hosts:
@@ -370,7 +411,7 @@ services:
       NLI_MAX_LENGTH: ${NLI_MAX_LENGTH-512}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
-      - "3006:8000"
+      - "127.0.0.1:3006:8000"  # loopback-only; measurement sidecar
     restart: unless-stopped
 
   # Optional S3-compatible storage (MinIO) for future indexing phases.
@@ -382,9 +423,11 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    # Loopback-only publish (see `db`). Default minioadmin creds must never be
+    # reachable from the public interface.
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     volumes:
       - contexthub_minio_data:/data
 

@@ -17,7 +17,11 @@ import { CreateLessonPopover } from "./create-lesson-popover";
 
 type HistoricalMessage = { id: string; role: "user" | "assistant"; content: string };
 
-const API_URL = process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "http://localhost:3001";
+// Single-port gateway: same-origin relative base in the browser. The chat
+// stream POSTs to `${API_URL}/api/chat` → "/api/chat", which the Next.js
+// gateway rewrites to the internal REST backend. NEXT_PUBLIC_CONTEXTHUB_API_URL
+// remains an explicit override for pointing at a remote backend.
+const API_URL = process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "";
 const API_TOKEN = process.env.NEXT_PUBLIC_CONTEXTHUB_TOKEN;
 
 const SUGGESTED_PROMPTS = [

@@ -2,7 +2,13 @@
 
 ## Project
 free-context-hub — self-hosted persistent memory + guardrails for AI agents, with human-in-the-loop GUI.
-MCP: `http://localhost:3000/mcp` | API: `http://localhost:3001` | GUI: `http://localhost:3002`
+
+**Single-port gateway (external):** the Next.js GUI (`http://localhost:3002`) is the ONE
+externally-published entrypoint for both humans and agents. It proxies (via
+`gui/next.config.ts` rewrites) `/api/*` → REST backend and `/mcp` → MCP. So agents connect
+to `http://localhost:3002/mcp`; the browser uses same-origin `/api`. In Docker the backend
+ports (`mcp:3000` / `mcp:3001`) bind to `127.0.0.1` only — reachable for host-side QC/dev
+tooling (`localhost:3000/mcp`, `localhost:3001`) but NOT exposed to the public interface.
 project_id: `free-context-hub`
 
 ## Session Start (do these 2 things)

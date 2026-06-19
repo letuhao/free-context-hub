@@ -1,7 +1,36 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 041 -->
+<!-- Next ID: 042 -->
+
+## DEFERRED-041
+
+- **Title:** Browser session-login auth for the GUI (true human auth boundary)
+- **Status:** OPEN (2026-06-19). Surfaced by the cold-start security review of the
+  single-port gateway consolidation.
+- **Context:** The single-port gateway made the GUI the one external entrypoint, and
+  the hardening pass added a cross-site guard (`gui/src/proxy.ts`), CORS lockdown,
+  loopback-only infra publish, and an auth-off startup warning. But it did NOT create
+  a *human* authentication boundary. The backend's only auth is bearer/API-key
+  (`MCP_AUTH_ENABLED` + `api_keys`), designed for **agents**. A browser cannot safely
+  carry a shared bearer token (`NEXT_PUBLIC_CONTEXTHUB_TOKEN` would ship it to every
+  client). So with `MCP_AUTH_ENABLED=true`, agents authenticate but the **human GUI's
+  same-origin `/api` calls have no credential path** — there is no login/session.
+- **Why deferred:** real session auth (login page + session cookies, ideally
+  httpOnly+SameSite, CSRF-token for state changes, or an auth proxy / OIDC in front of
+  the gateway) is a feature, not a config flip — out of scope for the gateway
+  consolidation. The cross-site guard + CORS lockdown already close the
+  browser-driven attack vector for the common auth-off self-host case.
+- **Trigger condition:** before exposing the gateway port to an untrusted network
+  (public internet / shared LAN) for **human** use. Until then: keep the gateway on
+  localhost/trusted network, or front it with an external authenticating reverse proxy.
+- **Scope when picked up:** session-cookie login for the GUI; make `/api` accept the
+  session for browser callers while keeping bearer/api_keys for agents; CSRF token for
+  same-origin state-changing requests; revisit defaulting `MCP_AUTH_ENABLED=true` for
+  non-loopback gateway bindings. See the security-review findings in the
+  single-port-gateway session patch.
+
+---
 
 ## DEFERRED-040
 

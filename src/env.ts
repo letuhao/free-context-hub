@@ -85,6 +85,13 @@ const EnvSchema = z.object({
     .preprocess(v => parseBooleanEnv(v), z.boolean().optional())
     .default(false),
 
+  // Single-port gateway: the human GUI is same-origin, so the REST API does NOT
+  // need permissive CORS. This is a comma-separated allowlist of origins that
+  // may make cross-origin browser requests with credentials. Default empty =
+  // same-origin only (no cross-origin browser access). Set explicitly only if a
+  // separate-origin frontend must call the API directly.
+  CORS_ALLOWED_ORIGINS: z.string().optional().default(''),
+
   // When provided, MCP tools may omit project_id and fallback to this default.
   // If a tool allows missing project_id and this env is missing, the tool returns Bad Request.
   DEFAULT_PROJECT_ID: z.string().min(1).optional(),
@@ -135,6 +142,18 @@ const EnvSchema = z.object({
 
   MCP_PORT: z.coerce.number().int().positive().optional().default(3000),
   API_PORT: z.coerce.number().int().positive().optional().default(3001),
+
+  // Single-port gateway: the MCP endpoint is reached through the GUI gateway
+  // (Next.js rewrites /mcp → http://mcp:3000), so the proxied request arrives
+  // with `Host: mcp`. The MCP SDK applies DNS-rebinding protection that only
+  // allows localhost by default, which would reject the proxied host. This is
+  // the comma-separated allowlist of hostnames (port-agnostic) accepted by the
+  // MCP server. Keep localhost entries for host-side QC/dev tooling; add the
+  // internal service name(s) any gateway proxies from.
+  MCP_ALLOWED_HOSTS: z
+    .string()
+    .optional()
+    .default('localhost,127.0.0.1,[::1],mcp'),
 
   // Vector dimension must match the embedding model configured above.
   EMBEDDINGS_DIM: z.coerce.number().int().positive().optional().default(1024),

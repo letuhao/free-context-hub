@@ -40,7 +40,14 @@ async function main() {
   });
 
   // ── MCP Server (:3000) ──
-  const mcpApp = createMcpExpressApp();
+  // Keep the SDK's DNS-rebinding protection, but allow the hostnames the MCP
+  // endpoint is reached under — localhost (host-side tooling) plus the internal
+  // service name the single-port gateway proxies from (Host: mcp). Configurable
+  // via MCP_ALLOWED_HOSTS for other deployments/proxy hostnames.
+  const allowedHosts = env.MCP_ALLOWED_HOSTS.split(',')
+    .map((h) => h.trim())
+    .filter(Boolean);
+  const mcpApp = createMcpExpressApp({ allowedHosts });
 
   // Stateless MCP server: each request gets a fresh transport.
   // No session IDs, no stale session errors.
@@ -94,6 +101,19 @@ async function main() {
   apiApp.listen(env.API_PORT, () => {
     logger.info({ port: env.API_PORT, prefix: '/api' }, 'REST API listening');
   });
+
+  // Security posture warning: with auth off, the single-port gateway is an
+  // unauthenticated proxy to the full MCP/REST surface. Safe for a loopback /
+  // trusted-network self-host; dangerous if the gateway port is publicly
+  // exposed. The gateway's cross-site guard still blocks browser-driven attacks,
+  // but does not authenticate direct (curl/SDK) callers.
+  if (!env.MCP_AUTH_ENABLED) {
+    logger.warn(
+      'MCP_AUTH_ENABLED=false — backend is UNAUTHENTICATED. Anyone who can reach '
+        + 'the gateway port can call all MCP tools and REST endpoints. Set '
+        + 'MCP_AUTH_ENABLED=true and use scoped api_keys for any non-localhost deployment.',
+    );
+  }
 
   process.on('SIGINT', () => process.exit(0));
 }
