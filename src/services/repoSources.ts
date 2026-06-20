@@ -5,8 +5,7 @@ import { promisify } from 'node:util';
 
 import { getDbPool } from '../db/client.js';
 import { materializeRepoFromS3, syncSourceArtifactToS3 } from './sourceArtifacts.js';
-import { assertCallerScope } from '../core/security/callerScope.js';
-import type { CallerScope } from '../core/security/callerScope.js';
+import { assertAuthorized } from './authorize.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -19,15 +18,15 @@ async function runGit(cwd: string, args: string[]): Promise<string> {
 
 export async function configureProjectSource(params: {
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() gate (project scope). */
+  actingPrincipalId?: string | null;
   sourceType: SourceType;
   gitUrl?: string;
   defaultRef?: string;
   repoRoot?: string;
   enabled?: boolean;
 }): Promise<{ status: 'ok'; project_id: string; source_type: SourceType }> {
-  assertCallerScope(params.callerScope, params.projectId);
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.projectId });
   const pool = getDbPool();
   await pool.query(
     `INSERT INTO projects(project_id, name)
@@ -59,8 +58,8 @@ export async function configureProjectSource(params: {
 
 export async function prepareRepo(params: {
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() gate (project scope). */
+  actingPrincipalId?: string | null;
   gitUrl: string;
   cacheRoot: string;
   ref?: string;
@@ -81,7 +80,7 @@ export async function prepareRepo(params: {
   };
   error?: string;
 }> {
-  assertCallerScope(params.callerScope, params.projectId);
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.projectId });
   const ref = (params.ref ?? 'main').trim() || 'main';
   const sourceStorageMode = params.sourceStorageMode ?? 'local';
   const safeProject = params.projectId.replace(/[^\w.-]+/g, '_');
@@ -160,8 +159,8 @@ export async function prepareRepo(params: {
 export async function getProjectSource(
   projectId: string,
   sourceType: SourceType,
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  opts?: { callerScope?: CallerScope },
+  /** F2f — acting principal; authorize() gate (project scope). */
+  opts?: { actingPrincipalId?: string | null },
 ): Promise<{
   project_id: string;
   source_type: SourceType;
@@ -170,7 +169,7 @@ export async function getProjectSource(
   repo_root: string | null;
   enabled: boolean;
 } | null> {
-  assertCallerScope(opts?.callerScope, projectId);
+  await assertAuthorized(opts?.actingPrincipalId, 'read', { kind: 'project', id: projectId });
   const pool = getDbPool();
   const res = await pool.query(
     `SELECT project_id, source_type, git_url, default_ref, repo_root, enabled

@@ -10,12 +10,7 @@ import {
   resolveProjectIdOrThrow,
   resolveProjectRoot,
 } from '../../core/index.js';
-import type { CallerScope } from '../../core/index.js';
-
-/** DEFERRED-029: read the caller's project scope attached by bearerAuth. */
-function callerScopeOf(req: Request): CallerScope {
-  return (req as { apiKeyScope?: CallerScope }).apiKeyScope;
-}
+import { callerPrincipalOf } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -26,7 +21,7 @@ router.post('/ingest', requireProjectScope('body'), async (req, res, next) => {
     const root = await resolveProjectRoot(projectId, req.body.root);
     const result = await ingestGitHistory({
       projectId,
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       root,
       maxCommits: req.body.max_commits,
       since: req.body.since,
@@ -41,7 +36,7 @@ router.get('/commits', requireProjectScope('query'), async (req, res, next) => {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
     const result = await listCommits({
       projectId,
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       limit: req.query.limit ? Number(req.query.limit) : undefined,
       offset: req.query.offset ? Number(req.query.offset) : undefined,
     });
@@ -53,7 +48,7 @@ router.get('/commits', requireProjectScope('query'), async (req, res, next) => {
 router.get('/commits/:sha', requireProjectScope('query'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
-    const result = await getCommit({ projectId, callerScope: callerScopeOf(req), sha: String(req.params.sha) });
+    const result = await getCommit({ projectId, actingPrincipalId: callerPrincipalOf(req), sha: String(req.params.sha) });
     res.json(result);
   } catch (e) { next(e); }
 });
@@ -64,7 +59,7 @@ router.post('/suggest-lessons', requireProjectScope('body'), async (req, res, ne
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await suggestLessonsFromCommits({
       projectId,
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       commitShas: req.body.commit_shas,
       limit: req.body.limit,
     });
@@ -78,7 +73,7 @@ router.post('/analyze-impact', requireProjectScope('body'), async (req, res, nex
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await analyzeCommitImpact({
       projectId,
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       commitSha: req.body.sha,
     });
     res.json(result);

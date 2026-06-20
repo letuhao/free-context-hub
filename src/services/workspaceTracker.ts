@@ -4,8 +4,7 @@ import { promisify } from 'node:util';
 
 import { getDbPool } from '../db/client.js';
 import { indexProject } from './indexer.js';
-import { assertCallerScope } from '../core/security/callerScope.js';
-import type { CallerScope } from '../core/security/callerScope.js';
+import { assertAuthorized } from './authorize.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -16,12 +15,12 @@ async function runGit(root: string, args: string[]): Promise<string> {
 
 export async function registerWorkspaceRoot(params: {
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() gate (project scope). */
+  actingPrincipalId?: string | null;
   rootPath: string;
   active?: boolean;
 }): Promise<{ status: 'ok'; workspace_id: string; project_id: string; root_path: string }> {
-  assertCallerScope(params.callerScope, params.projectId);
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.projectId });
   const pool = getDbPool();
   const root = path.resolve(params.rootPath);
   await pool.query(
@@ -48,12 +47,12 @@ export async function registerWorkspaceRoot(params: {
 
 export async function listWorkspaceRoots(
   projectId: string,
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  opts?: { callerScope?: CallerScope },
+  /** F2f — acting principal; authorize() gate (project scope). */
+  opts?: { actingPrincipalId?: string | null },
 ): Promise<{
   items: Array<{ workspace_id: string; root_path: string; is_active: boolean; updated_at: any }>;
 }> {
-  assertCallerScope(opts?.callerScope, projectId);
+  await assertAuthorized(opts?.actingPrincipalId, 'read', { kind: 'project', id: projectId });
   const pool = getDbPool();
   const q = await pool.query(
     `SELECT workspace_id, root_path, is_active, updated_at
@@ -67,8 +66,8 @@ export async function listWorkspaceRoots(
 
 export async function scanWorkspaceChanges(params: {
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() gate (project scope). */
+  actingPrincipalId?: string | null;
   rootPath: string;
   runDeltaIndex?: boolean;
 }): Promise<{
@@ -81,7 +80,7 @@ export async function scanWorkspaceChanges(params: {
   index_result?: { status: 'ok' | 'error'; files_indexed: number; duration_ms: number; errors: Array<{ path: string; message: string }> };
   error?: string;
 }> {
-  assertCallerScope(params.callerScope, params.projectId);
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.projectId });
   const pool = getDbPool();
   const root = path.resolve(params.rootPath);
   try {
@@ -101,7 +100,7 @@ export async function scanWorkspaceChanges(params: {
       if (x === '?' && y === '?') untracked.add(file);
     }
 
-    const reg = await registerWorkspaceRoot({ projectId: params.projectId, callerScope: params.callerScope, rootPath: root, active: true });
+    const reg = await registerWorkspaceRoot({ projectId: params.projectId, actingPrincipalId: params.actingPrincipalId, rootPath: root, active: true });
     const ins = await pool.query(
       `INSERT INTO workspace_deltas(project_id, workspace_id, root_path, modified_files, untracked_files, staged_files, scanned_at)
        VALUES ($1,$2,$3,$4::text[],$5::text[],$6::text[], now())

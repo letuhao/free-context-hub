@@ -15,7 +15,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { listGuardrailRules, simulateGuardrails, checkGuardrails } from './guardrails.js';
-import { getProjectSnapshotBody, rebuildProjectSnapshot } from './snapshot.js';
 import { indexProject } from './indexer.js';
 import { searchCode } from './retriever.js';
 import { tieredSearch } from './tieredRetriever.js';
@@ -55,21 +54,9 @@ test('DEFERRED-029: checkGuardrails cross-tenant → NOT_FOUND', async () => {
   );
 });
 
-// ── snapshot (2) ──────────────────────────────────────────────────────────────
-
-test('DEFERRED-029: getProjectSnapshotBody cross-tenant → NOT_FOUND', async () => {
-  await assert.rejects(
-    getProjectSnapshotBody('proj-A', { callerScope: 'proj-B' }),
-    isNotFound,
-  );
-});
-
-test('DEFERRED-029: rebuildProjectSnapshot cross-tenant → NOT_FOUND', async () => {
-  await assert.rejects(
-    rebuildProjectSnapshot('proj-A', { callerScope: 'proj-B' }),
-    isNotFound,
-  );
-});
+// ── snapshot (getProjectSnapshotBody/rebuildProjectSnapshot) MIGRATED to F2f domain 5 (authorize()
+//    + grants); auth-ON coverage moved to git-workspace-scope.test.ts. The indexer/retriever/KG
+//    cases below stay on the DEFERRED-029 callerScope guard until domains 6–7 migrate them.
 
 // ── indexer (1) ───────────────────────────────────────────────────────────────
 

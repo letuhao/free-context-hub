@@ -13,6 +13,7 @@ import {
   addProjectToGroup,
 } from '../../core/index.js';
 import type { CallerScope } from '../../core/index.js';
+import { callerPrincipalOf } from '../middleware/auth.js';
 import multer from 'multer';
 import { promises as fsPromises } from 'node:fs';
 import { invalidateFeatureCache } from '../../services/featureToggles.js';
@@ -105,7 +106,7 @@ router.put('/:id', requireRole('writer'), async (req, res, next) => {
 router.get('/:id/summary', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String(req.params.id));
-    const body = await getProjectSnapshotBody(projectId, { callerScope: callerScopeOf(req) });
+    const body = await getProjectSnapshotBody(projectId, { actingPrincipalId: callerPrincipalOf(req) });
     if (body === null) {
       res.status(404).json({ error: 'No summary found for project', project_id: projectId });
       return;
@@ -331,7 +332,7 @@ router.post('/:id/pull-from', requireRole('writer'), async (req, res, next) => {
 router.delete('/:id', requireRole('admin'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String(req.params.id));
-    const result = await deleteWorkspace(projectId);
+    const result = await deleteWorkspace(projectId, { actingPrincipalId: callerPrincipalOf(req) });
     res.json(result);
   } catch (e) { next(e); }
 });

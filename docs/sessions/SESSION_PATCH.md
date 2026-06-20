@@ -1,3 +1,25 @@
+# CHECKPOINT — F2f domain 5 (git/workspace/snapshot) enforcement wired (2026-06-20, session 12)
+
+**Branch:** `feature/actor-data-boundary`. Serial /loom rollout continuing. Auth stays **OFF** (inert).
+Full unit suite **1148 pass / 2 skip**, tsc clean.
+
+**Domain 5 — git/workspace (PURE REPLACE)**, all project-scoped: `gitIntelligence.ts` (ingest/suggest/
+link=write, listCommits/getCommit/analyzeImpact=read), `repoSources.ts` (configure/prepare=write,
+get=read), `workspaceTracker.ts` (register/scan=write, list=read), `snapshot.ts` (rebuild=write,
+get=read). All `assertCallerScope` → `assertAuthorized({kind:'project'})`; `callerScope` removed.
+Threaded through REST git/workspace routes + the projects route's snapshot & `deleteWorkspace` calls
+(+ `callerPrincipalOf`) and ~14 MCP handlers (`resolveMcpCallerScopeOrThrow` →
+`resolveActingActorOrThrow`). No resolver change needed (all project-level).
+
+**Tests:** rewrote `git-workspace-scope.test.ts` as auth-ON (18 grant-based tests across all 14 fns:
+read cross-tenant → NOT_FOUND, write cross-tenant + over-capability → FORBIDDEN, allow, unknown
+principal). Removed the 2 snapshot cases from `d4-scope.test.ts` (indexer/retriever/KG stay — domains
+6–7). git/workspace FUNCTIONAL tests never passed callerScope, none broke.
+
+**What's next:** domains 6–8 (search/retrieval next). F2g prerequisites already logged.
+
+---
+
 # CHECKPOINT — F2f domain 4 (documents) enforcement wired (2026-06-20, session 12)
 
 **Branch:** `feature/actor-data-boundary`. Serial /loom rollout continuing. Auth stays **OFF** (inert).
