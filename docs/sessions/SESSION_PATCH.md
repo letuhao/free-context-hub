@@ -1,3 +1,45 @@
+# CHECKPOINT — F2f deferred items cleared: read-sweep + groups + jobQueue + adversary-pass-2 (2026-06-20, session 12)
+
+**Branch:** `feature/actor-data-boundary`. Auth stays **OFF** (inert). Full unit suite **1194 pass / 2 skip**,
+tsc clean. Drove the three open F2f deferred items to RESOLVED, each with its own cold-start adversary
+verification (the follow-up pass found real misses → fixed in a second round).
+
+**DEFERRED-047 read-sweep (RESOLVED):** authorized every NEVER-guarded project-read surface (the
+migrate-the-callerScope-sites rollout was structurally blind to them; globalSearch was the adversary-caught
+instance). Wave 1 `e3af366` (analytics ×6, auditLog, activity.listActivity, agentTrust — via a per-file
+`assertReadAll` loop, strict-reject for the multi-project "All Projects" mode). Wave 2 `be2b9a4`
+(collaboration lesson-keyed engagement, chatHistory project-keyed, lessonImportExport; reads→read, engagement
+writes→write, preserving the capability model; deleteComment/toggleMessagePin resolve their parent in-service).
+
+**DEFERRED-046 groups (RESOLVED `d1cabfa`):** a group IS a projects-table row, so it authorizes via the
+`project` kind (no new resolver kind). Membership add/remove require write on BOTH the member project AND the
+group (strict-reject; closes the cross-project-flow widening + the "Group X not found" existence oracle);
+createGroup=write@group, deleteGroup=admin@group.
+
+**DEFERRED-045 jobQueue (RESOLVED `28ec95f`):** the security-critical one (cross-tenant filesystem path).
+Chose the **global-grant gate** (user decision). New `hasGlobalGrant(principalId, action)` helper. enqueue/
+cancel=write@project + project_id REQUIRED unless global; list=read@project per filter + no-filter⇒global
+(closes SEC-1 WHERE 1=1); `payload.root`⇒global only (SEC-6). Deleted the obsolete legacy-callerScope SEC
+suites; new jobqueue-authz.test.ts.
+
+**Follow-up cold-start adversary pass (3 agents) + fixes `8aa736f`:** the pass earned its keep — found the
+two read surfaces the first sweep MISSED (`learningPaths`, `notification_settings`), the group-COMPOSITION
+reads left open (`listGroupMembers`/`getGroup`), and that **`runNextJob` executed jobs UNGATED** (a null-scope
+drain ran every project's jobs — walks payload.root). All fixed: learningPaths + notification_settings +
+listGroupMembers/getGroup gated; runNextJob now gated like listJobs (write@project, or hasGlobalGrant for the
+unscoped drain); assertReadAll empty-filter fails closed by construction.
+
+**Residual design-level items logged (NOT live-exploitable; F2g-flip prerequisites):** DEFERRED-048 (worker
+EXECUTION-time payload.root re-validation — same enqueue-time posture as PR F), DEFERRED-049 (resolveProjectIds
+resolver-level authz + project/group id-namespace conflation), DEFERRED-050 (user-scoped notification list/mark
+needs the user-identity model). All in DEFERRED.md.
+
+**Commits this batch:** e3af366, be2b9a4, d1cabfa, 28ec95f, 8aa736f. **What's next:** the F2g posture-flip
+prerequisites (system/root principal for the worker + internal callers; DEFERRED-048/049/050; the flip itself
+is human-gated — NOT done). Domain 8 (retire REST scope/role middleware) remains gated behind the flip.
+
+---
+
 # CHECKPOINT — F2f cold-start adversary pass (domains 6–7) + 2 HIGH fixes (2026-06-20, session 12)
 
 **Branch:** `feature/actor-data-boundary`. Auth stays **OFF** (inert). Full unit suite **1162 pass / 2 skip**,

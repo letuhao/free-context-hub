@@ -1,12 +1,77 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 048 -->
+<!-- Next ID: 051 -->
+
+## DEFERRED-050
+
+- **Title:** F2f — user-scoped notification list/mark needs user-identity isolation (not project authz)
+- **Status:** OPEN (2026-06-20). MED. Split from DEFERRED-047 (read-sweep). F2g-flip item.
+- **Context:** `activity.listNotifications` / `markNotificationsRead` (src/services/activity.ts) and their
+  `/api/notifications` routes are keyed by a caller-supplied `user_id` with no check. `listNotifications`
+  JOINs `activity_log` and returns `a.project_id / title / detail / actor` — so passing `user_id=<victim>`
+  leaks activity metadata for projects the caller has no grant on, and `markNotificationsRead` mutates
+  another user's unread state. This is USER isolation (the authenticated principal must equal the
+  requested user), a different axis than the project/tenant authz the read-sweep covered — so it was not
+  fixed there. The project-keyed `notification_settings` handlers WERE fixed (commit 8aa736f).
+- **Scope when picked up:** derive `user_id` from the authenticated principal (never the request), and/or
+  filter the `activity_log` join to projects the principal can read. Needs the user↔principal identity
+  mapping (the "who is the human behind this key" model), which F2 did not build.
+- **Trigger:** before the F2g flip, or when the notifications surface is next touched.
+
+## DEFERRED-049
+
+- **Title:** F2f-groups (residual) — resolveProjectIds resolver-level authz + project/group id-namespace conflation
+- **Status:** OPEN (2026-06-20). MED (design). Split from DEFERRED-046. NOT live-exploitable today.
+- **Context (two related modeling gaps the cold-start adversary raised):**
+  1. **`resolveProjectIds` is unauthorized** (src/services/projectGroups.ts) — it folds a project's group
+     ids into a scope array with no check. Every CURRENT consumer (search include_groups → `searchLessonsMulti`,
+     check_guardrails include_groups) re-authorizes each returned id, so there is no live transitive leak;
+     but the defense lives in the N callers, not the resolver. A future consumer that passes the expanded
+     array straight into a `= ANY($1)` query without per-id authz reopens a transitive cross-scope read.
+  2. **project/group id-namespace conflation** — groups ARE rows in the `projects` table and authorize via
+     `scope_type='project'` grants (pure string equality `scope_id === id`). So a grant on a *project* named
+     `acme` also covers a *group* named `acme` (and vice-versa), and `createGroup`'s `ON CONFLICT (project_id)
+     DO UPDATE` can silently take over an existing project row whose id collides. Low practical risk (ids are
+     admin-assigned) but a soundness gap the `kind:'project'`-for-group choice surfaces.
+- **Scope when picked up:** (1) give `resolveProjectIds` an `actingPrincipalId` + first-line `read` authz on
+  the entry project (or a doc-contract + a test asserting every caller re-authorizes each id); (2) add a
+  namespace discriminator — a `group` scope_type in the grant lattice, or a `group:` id prefix at the
+  projects-row level — so a project grant and a group grant can't be string-equal; reject `createGroup` on
+  collision with a non-group project instead of `DO UPDATE`.
+- **Trigger:** before the F2g flip, or when groups/search-scope expansion is next touched.
+
+## DEFERRED-048
+
+- **Title:** F2f-jobs (residual) — re-validate `payload.root` at job EXECUTION time, not only at enqueue
+- **Status:** OPEN (2026-06-20). MED. Split from DEFERRED-045. Tied to the F2g worker/system-principal.
+- **Context:** the global-grant gate (28ec95f) blocks a non-global principal from SETTING `payload.root` at
+  enqueue. But `payload.root` is honored UNCONDITIONALLY at execution — `jobExecutor.resolveRoot` →
+  `resolveProjectRoot` returns the explicit root with no principal/scope check (the worker indexes that
+  filesystem path under the row's `project_id`). This is the same enqueue-time-only posture PR F shipped,
+  but the cold-start adversary correctly notes that across the durable async-queue boundary a write-time
+  gate is weaker than gating where the capability is USED: (a) rows enqueued before the flip (or while
+  auth was OFF, where `hasGlobalGrant` returns true) already carry arbitrary `payload.root`; (b) nothing
+  re-validates at exec time. Also recommended: an explicit unit test asserting a project/topic/task-scope
+  grant ⇒ `hasGlobalGrant === false` (today proven only indirectly by jobqueue-authz's non-global cases),
+  and consider requiring global-`admin` (not just global-`write`) for the root capability.
+- **Scope when picked up:** stamp `payload.root_authorized_by` (a global principal id) at enqueue and verify
+  `hasGlobalGrant` for it in `resolveProjectRoot` before honoring root; OR reject an explicit root that
+  escapes the resolved project root unless an explicit global flag is set. Fold into the F2g worker/system-
+  principal work (the background worker drains with no principal → needs root at the flip anyway).
+- **Trigger:** before the F2g `MCP_AUTH_ENABLED` flip (must close before arbitrary-filesystem jobs can run
+  under enforcement).
 
 ## DEFERRED-047
 
 - **Title:** F2f-readsweep — systematically authorize the NEVER-guarded project-read surfaces (globalSearch's siblings)
-- **Status:** OPEN (2026-06-20). MED. Surfaced by `/review-impl` on the F2f domains 6–7 work. Auth is OFF
+- **Status:** **RESOLVED (2026-06-20)** — commits e3af366 (wave 1: analytics/auditLog/activity/agentTrust),
+  be2b9a4 (wave 2: collaboration/chatHistory/lessonImportExport), 8aa736f (adversary-pass-2: learningPaths
+  + notification_settings + empty-filter fail-closed). A follow-up cold-start adversary pass caught the
+  two surfaces the first sweep missed (learningPaths, notification_settings) — now closed. The USER-scoped
+  notification list/mark (listNotifications/markNotificationsRead) is split out to DEFERRED-050 (it needs
+  the user-identity model, a different isolation axis). Original write-up:
+- ~~OPEN~~ MED. Surfaced by `/review-impl` on the F2f domains 6–7 work. Auth is OFF
   → inert today; a F2g-flip prerequisite (and a hard blocker for domain 8, which retires the REST-layer
   scope middleware that is currently these surfaces' ONLY guard).
 - **Context:** F2f (and DEFERRED-029 before it) migrated the call sites that HAD an `assertCallerScope`
@@ -38,7 +103,11 @@
 ## DEFERRED-046
 
 - **Title:** F2f-groups — authorize project-group membership on the GROUP, not just the member project (+ guard `createGroup`)
-- **Status:** OPEN (2026-06-20). MED. Surfaced by the F2f domain-7 cold-start adversary pass (2 of 3
+- **Status:** **RESOLVED (2026-06-20)** — commit d1cabfa (membership write@group + createGroup write@group +
+  deleteGroup admin@group) + 8aa736f (adversary-pass-2: listGroupMembers/getGroup read@group). Residual
+  design items split to DEFERRED-049 (resolveProjectIds resolver-level authz + project/group id-namespace
+  conflation). Original write-up:
+- ~~OPEN~~ MED. Surfaced by the F2f domain-7 cold-start adversary pass (2 of 3
   agents converged on it). Pre-existing semantics, NOT an F2f regression — the legacy
   `assertCallerScope(callerScope, projectId)` guard ALSO keyed on the member project only. Auth is OFF,
   so inert today; a F2g-flip hardening item.
@@ -68,7 +137,11 @@
 ## DEFERRED-045
 
 - **Title:** F2f-jobs — migrate jobQueue (`enqueueJob`/`listJobs`/`cancelJob`) to `authorize()` (actor-native SEC-1/3/5/6 redesign)
-- **Status:** OPEN (2026-06-20). MED. Raised during the F2f domain-7 rollout — the ONE domain-7 service
+- **Status:** **RESOLVED (2026-06-20)** — commit 28ec95f (global-grant gate: enqueue/cancel=write@project +
+  required-project-id, list=read@project + no-filter⇒global, payload.root⇒global) + 8aa736f (adversary-pass-2:
+  runNextJob execute-path gate). User chose the global-grant-gate design. Residual: EXECUTION-time
+  payload.root re-validation at the worker (same enqueue-time posture as PR F) → DEFERRED-048. Original write-up:
+- ~~OPEN~~ MED. Raised during the F2f domain-7 rollout — the ONE domain-7 service
   that is NOT a clean pure-replace. jobQueue stays on the DEFERRED-029 `callerScope` guard (its
   `d3-scope.test.ts` cases remain) until this is done. Auth is OFF, so jobQueue is correct today; this
   is a F2g-flip prerequisite, not a live bug.
