@@ -1,4 +1,5 @@
 import { getDbPool } from '../db/client.js';
+import { assertAuthorized } from './authorize.js';
 import { createModuleLogger } from '../utils/logger.js';
 
 const logger = createModuleLogger('global-search');
@@ -27,9 +28,15 @@ export interface GlobalSearchResults {
  */
 export async function globalSearch(params: {
   projectId: string;
+  /** F2f: acting principal; authorize() enforces read on the project. */
+  actingPrincipalId?: string | null;
   query: string;
   limitPerGroup?: number;
 }): Promise<GlobalSearchResults> {
+  // First line, before any data access: the Cmd+K palette reads lessons/documents/guardrails/commits
+  // for a caller-supplied project_id. Without this, a bound key passing ?project_id=<other> leaks
+  // cross-tenant data at the auth-ON flip (this surface predates the DEFERRED-029 callerScope guards).
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id: params.projectId });
   const pool = getDbPool();
   const q = params.query.trim();
   if (!q) {

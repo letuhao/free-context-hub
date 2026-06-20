@@ -1,3 +1,48 @@
+# CHECKPOINT — F2f cold-start adversary pass (domains 6–7) + 2 HIGH fixes (2026-06-20, session 12)
+
+**Branch:** `feature/actor-data-boundary`. Auth stays **OFF** (inert). Full unit suite **1162 pass / 2 skip**,
+tsc clean. Ran the CLAUDE.md-mandated cold-start hostile-actor adversary pass over this session's wired
+enforcement (3 parallel fresh read-only agents — action-mapping, coverage/bypass, oracle/resolver lenses).
+
+**2 HIGH findings fixed now:**
+1. **`joinTopic` → `replayEvents` dropped the principal** (`src/services/topics.ts`). I migrated
+   `replayEvents` to re-assert `read@topic` but missed its internal caller `joinTopic`, which forwards the
+   txn-2 client without `actingPrincipalId`. At the flip the induction read would deny NO_PRINCIPAL →
+   NOT_FOUND, breaking EVERY authorized join after txn-1 already committed. Fix: forward
+   `params.actingPrincipalId`. **Surfaced a deeper flaw:** txn-2 was `REPEATABLE READ READ ONLY`, but
+   `authorize()`'s best-effort `logDecision` INSERTs into `authz_decisions` on that client → a READ ONLY
+   txn rejects the INSERT (25P02) and poisons the read. Fix: drop `READ ONLY` (REPEATABLE READ alone keeps
+   the coherent snapshot; the audit write is now permitted). (Decoupling logDecision to the pool was
+   rejected — `authorize.test.ts`'s fail-closed test relies on it writing through the passed executor, and
+   a pool write would deadlock on that test's ACCESS EXCLUSIVE lock.)
+2. **`globalSearch` (Cmd+K palette) was an unguarded cross-tenant read surface** (`src/services/globalSearch.ts`).
+   `GET /api/search/global` reads lessons/documents/guardrails/commits by caller-supplied `project_id` with
+   only bearerAuth + zero authz (a pre-existing DEFERRED-029 gap — it never had `callerScope`). At the flip a
+   bound key passing `?project_id=<other>` leaks cross-tenant data. Fix: `assertAuthorized(read, project)` as
+   the first line + thread `callerPrincipalOf(req)` from the route.
+
+**Tests:** new `join-induction-authz.test.ts` (3 auth-ON: granted charter+join returns the induction pack
+not NOT_FOUND; ungranted → FORBIDDEN; unknown principal). Added 2 globalSearch cases to `search-authz.test.ts`.
+
+**Findings correctly DEFERRED / accepted (not regressions):**
+- **DEFERRED-046 (MED) — project-group membership authorizes the member project, not the GROUP** (+ group-
+  existence oracle + `createGroup` has no authz). Pre-existing semantics (legacy guard did the same); fixing
+  needs a new `group` ResourceRef kind = design change. Logged for a dedicated pass before the flip.
+- **KG internal sub-calls** (retriever/tieredRetriever → searchSymbols/getSymbolNeighbors pass no principal):
+  fail CLOSED (wrapped in best-effort try/catch → graceful KG-assist degrade at the flip), covered by the
+  F2g system-principal prerequisite. Noted, not fixed (consistent with the cross-fn internal-caller pattern).
+- **`checkGuardrails` = `read` but writes an audit row**: `read` is the correct ACCESS tier (read-only agents
+  must be able to check guardrails — preserves behavior); audit-log spam by a read-only principal is a minor
+  accepted risk on an append-only telemetry table.
+
+The curve is not yet zero (2 HIGH this pass) — a follow-up cold-start pass is warranted once DEFERRED-045
+(jobQueue) + DEFERRED-046 (groups) land, per the multi-pass-to-saturation policy.
+
+**What's next:** unchanged — DEFERRED-045 jobQueue (F2g prereq), DEFERRED-046 groups, domain 8 (retire REST
+scope/role middleware — blocked on jobQueue + the flip), F2g posture-flip prerequisites doc + system principal.
+
+---
+
 # CHECKPOINT — F2f domain 7 (guardrails/taxonomy/groups/review/exchange/replay) enforcement wired (2026-06-20, session 12)
 
 **Branch:** `feature/actor-data-boundary`. Serial /loom rollout continuing. Auth stays **OFF** (inert).

@@ -29,6 +29,7 @@ router.get('/global', async (req, res, next) => {
     const { globalSearch } = await import('../../services/globalSearch.js');
     const result = await globalSearch({
       projectId,
+      actingPrincipalId: callerPrincipalOf(req),
       query: q,
       limitPerGroup: req.query.limit ? Number(req.query.limit) : undefined,
     });

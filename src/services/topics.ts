@@ -308,11 +308,17 @@ export async function joinTopic(params: {
     // pack carries the most-recent events (incl. the joiner's own topic.actor_joined)
     // rather than the oldest 1000 on a large topic. A re-prime (since_seq>0) keeps the
     // forward cursor-continuation contract.
-    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    // REPEATABLE READ gives the coherent induction snapshot. NOT declared READ ONLY: replayEvents now
+    // re-asserts read@topic via authorize(), whose best-effort decision log INSERTs into authz_decisions
+    // on this same client — a READ ONLY txn would reject that INSERT (25P02) and poison the read.
+    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ');
     const tr = await fetchTopicWithRoster(client, topicId);
+    // F2f: forward the caller's principal — joinTopic already authorized write@topic above, and
+    // replayEvents re-asserts read@topic. Without this, at the auth-ON flip the induction read denies
+    // with NO_PRINCIPAL → NOT_FOUND, breaking every authorized join after txn-1 already committed.
     const ev = sinceSeq === 0
-      ? await replayEvents({ topic_id: topicId, tail: true }, client)
-      : await replayEvents({ topic_id: topicId, since_seq: sinceSeq }, client);
+      ? await replayEvents({ topic_id: topicId, actingPrincipalId: params.actingPrincipalId, tail: true }, client)
+      : await replayEvents({ topic_id: topicId, actingPrincipalId: params.actingPrincipalId, since_seq: sinceSeq }, client);
     await client.query('COMMIT');
     if (!tr) {
       // Unreachable: the topic existed under FOR UPDATE in txn 1 and is never deleted.

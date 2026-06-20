@@ -1,7 +1,37 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 046 -->
+<!-- Next ID: 047 -->
+
+## DEFERRED-046
+
+- **Title:** F2f-groups — authorize project-group membership on the GROUP, not just the member project (+ guard `createGroup`)
+- **Status:** OPEN (2026-06-20). MED. Surfaced by the F2f domain-7 cold-start adversary pass (2 of 3
+  agents converged on it). Pre-existing semantics, NOT an F2f regression — the legacy
+  `assertCallerScope(callerScope, projectId)` guard ALSO keyed on the member project only. Auth is OFF,
+  so inert today; a F2g-flip hardening item.
+- **Context:** `addProjectToGroup`/`removeProjectFromGroup` (src/services/projectGroups.ts) authorize
+  `write` on the **member project** but the row they INSERT/DELETE changes the **group's** composition.
+  Groups are themselves `projects`-table rows (see `createGroup`) and membership is the mechanism by
+  which knowledge crosses project boundaries (`resolveProjectIds` folds group ids into search scope).
+  So at the flip a principal with write on project P but NO authority over group G can splice P into G
+  (widening cross-project knowledge flow), and the post-authz group-existence check throws a SHAPED
+  `NOT_FOUND` ("Group 'G' not found") → an existence oracle for arbitrary group ids to any project-writer.
+  Separately, `createGroup` has NO `assertAuthorized` at all (and its REST route has no role guard) — any
+  bearerAuth caller can create a group (which upserts a `projects` row).
+- **Why deferred (design decision needed):** fixing it properly means introducing a `group` ResourceRef
+  kind in `resolveResourceScope` (a group is a top-level scope, not a project/topic/task lattice node —
+  needs a deliberate placement: treat group-id as a `project`-kind scope so a grant on the group covers
+  it, or add a first-class `group` scope_type to the grants model). That is a behavior/contract change,
+  not the mechanical pure-replace the rest of F2f was — so it belongs in its own design+review pass
+  (user's design-first preference for cross-boundary changes).
+- **Scope when picked up:** (1) authorize `write` on the GROUP (strict-reject alongside the member
+  project) in add/remove; (2) make the group-not-found path return the no-leak shape (uniform
+  NOT_FOUND, not a distinct message) or gate the existence check behind group authz; (3) add
+  `assertAuthorized` to `createGroup` + a role guard on its route; (4) auth-ON tests: a write@P-only
+  principal cannot splice P into a group it has no grant on.
+- **Trigger condition:** before the F2g `MCP_AUTH_ENABLED` flip (cross-boundary membership must enforce
+  by then), or whenever projectGroups is next touched.
 
 ## DEFERRED-045
 

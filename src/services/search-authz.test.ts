@@ -16,6 +16,7 @@ import { searchCode } from './retriever.js';
 import { tieredSearch } from './tieredRetriever.js';
 import { indexProject } from './indexer.js';
 import { searchSymbols, getSymbolNeighbors, traceDependencyPath, getLessonImpact } from '../kg/query.js';
+import { globalSearch } from './globalSearch.js';
 import { createPrincipal } from './principals.js';
 import { createGrant } from './grants.js';
 import { ContextHubError } from '../core/errors.js';
@@ -113,4 +114,13 @@ test('unknown principal: searchCode on P → NOT_FOUND', async () => {
     searchCode({ projectId: P, actingPrincipalId: '00000000-0000-0000-0000-000000000000', query: 'x' }),
     isNotFound,
   );
+});
+
+// ── globalSearch (Cmd+K palette) — adversary-pass fix: was an unguarded cross-tenant read surface ──
+test('reader@P: globalSearch cross-tenant → NOT_FOUND', async () => {
+  await assert.rejects(globalSearch({ projectId: Q, actingPrincipalId: reader, query: 'x' }), isNotFound);
+});
+test('reader@P: globalSearch on P → ALLOW (resolves through the gate → result shape)', async () => {
+  const res = await globalSearch({ projectId: P, actingPrincipalId: reader, query: 'x' });
+  assert.ok(Array.isArray(res.lessons) && Array.isArray(res.documents) && Array.isArray(res.guardrails));
 });
