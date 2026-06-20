@@ -14,6 +14,7 @@ import type { PoolClient } from 'pg';
 import { validate as isUuid } from 'uuid';
 import { getDbPool } from '../db/client.js';
 import { getEnv } from '../env.js';
+import { ContextHubError } from '../core/errors.js';
 import { createModuleLogger } from '../utils/logger.js';
 import type { Capability, ScopeType } from './grants.js';
 
@@ -255,6 +256,30 @@ export async function authorize(
   const { decision } = await evaluate(principalId, action, resource, executor);
   await logDecision(principalId, action, resource, decision, context, executor);
   return decision;
+}
+
+/**
+ * Actor Data Boundary F2f — the enforcement workhorse. Authorize, and THROW on deny with the no-leak
+ * mapping that replaces assertCallerScope at every call site:
+ *   - a `read` deny, or any unresolvable resource (OUT_OF_SCOPE) → NOT_FOUND (no existence oracle,
+ *     exactly the shape assertCallerScope produced for a cross-tenant resource).
+ *   - a write/admin/delegate deny on a resolvable resource → FORBIDDEN (403; existence isn't secret —
+ *     you reached a real resource you may not mutate).
+ * Returns void on ALLOW (incl. root short-circuit and the auth-off AUTH_DISABLED pass-through, so it
+ * is a no-op while enforcement is off — every migrated site stays dev-safe until the F2g flip).
+ */
+export async function assertAuthorized(
+  principalId: string | null,
+  action: Action,
+  resource: ResourceRef,
+  executor?: PoolClient,
+): Promise<void> {
+  const d = await authorize(principalId, action, resource, executor);
+  if (d.allow) return;
+  if (d.reason === 'OUT_OF_SCOPE' || action === 'read') {
+    throw new ContextHubError('NOT_FOUND', 'not found');
+  }
+  throw new ContextHubError('FORBIDDEN', `not authorized to ${action} this resource`);
 }
 
 export interface ExplainResult {

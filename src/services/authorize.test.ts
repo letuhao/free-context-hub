@@ -5,7 +5,8 @@
 
 import assert from 'node:assert/strict';
 import test, { before, after, beforeEach } from 'node:test';
-import { authorize, resolveResourceScope, explainAuthorization } from './authorize.js';
+import { authorize, resolveResourceScope, explainAuthorization, assertAuthorized } from './authorize.js';
+import { ContextHubError } from '../core/errors.js';
 import { createPrincipal, getRootPrincipal } from './principals.js';
 import { createGrant } from './grants.js';
 import { getDbPool } from '../db/client.js';
@@ -222,6 +223,44 @@ test('authorize: a grant-LOAD error PROPAGATES (fail closed, never a silent allo
     await client.query('ROLLBACK').catch(() => {});
     client.release();
   }
+});
+
+// ── assertAuthorized — the F2f enforcement workhorse + no-leak deny mapping ────
+test('assertAuthorized: auth-off is a no-op (every migrated site stays dev-safe until the flip)', async () => {
+  await setAuth(false);
+  await assertAuthorized(null, 'admin', { kind: 'project', id: P }); // must not throw
+});
+
+test('assertAuthorized: ALLOW (covering grant) does not throw', async () => {
+  await setAuth(true);
+  await createGrant({ grantee_principal: actor, scope_type: 'project', scope_id: P, capability: 'write', granted_by: grantor });
+  await assertAuthorized(actor, 'write', { kind: 'topic', id: topicP }); // covered -> no throw
+});
+
+test('assertAuthorized: a READ deny maps to NOT_FOUND (no existence oracle)', async () => {
+  await setAuth(true);
+  const stranger = (await createPrincipal({ kind: 'agent', display_name: `${PREFIX}rdstranger` })).principal_id;
+  await assert.rejects(
+    () => assertAuthorized(stranger, 'read', { kind: 'topic', id: topicQ }),
+    (e: unknown) => e instanceof ContextHubError && e.code === 'NOT_FOUND',
+  );
+});
+
+test('assertAuthorized: a WRITE deny on a resolvable resource maps to FORBIDDEN', async () => {
+  await setAuth(true);
+  const stranger = (await createPrincipal({ kind: 'agent', display_name: `${PREFIX}wrstranger` })).principal_id;
+  await assert.rejects(
+    () => assertAuthorized(stranger, 'write', { kind: 'topic', id: topicP }),
+    (e: unknown) => e instanceof ContextHubError && e.code === 'FORBIDDEN',
+  );
+});
+
+test('assertAuthorized: an unresolvable resource maps to NOT_FOUND regardless of action', async () => {
+  await setAuth(true);
+  await assert.rejects(
+    () => assertAuthorized(actor, 'write', { kind: 'task', id: '00000000-0000-0000-0000-000000000000' }),
+    (e: unknown) => e instanceof ContextHubError && e.code === 'NOT_FOUND',
+  );
 });
 
 test('explainAuthorization: a DENY does NOT leak the resolved scope chain (no ancestry oracle) [F2-adv #3]', async () => {
