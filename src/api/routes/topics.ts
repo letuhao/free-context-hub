@@ -23,14 +23,10 @@ import {
   resolveProjectIdOrThrow,
   ContextHubError,
 } from '../../core/index.js';
-import type { CoordinationEvent, CallerScope } from '../../core/index.js';
+import type { CoordinationEvent } from '../../core/index.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { requireResourceScope, requireBodyProjectScope } from '../middleware/requireResourceScope.js';
-
-/** DEFERRED-029: read the caller's project scope attached by bearerAuth. */
-function callerScopeOf(req: Request): CallerScope {
-  return (req as { apiKeyScope?: CallerScope }).apiKeyScope;
-}
+import { callerPrincipalOf } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -61,7 +57,7 @@ router.post('/', requireRole('writer'), requireBodyProjectScope(), async (req, r
     );
     const result = await charterTopic({
       project_id: projectId,
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       name: String(body.name ?? ''),
       charter: String(body.charter ?? ''),
       created_by: String(body.created_by ?? ''),
@@ -76,7 +72,7 @@ router.post('/:id/join', requireRole('writer'), requireResourceScope('topic'), a
     const body = req.body ?? {};
     const result = await joinTopic({
       topic_id: String(req.params.id),
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       actor_id: String(body.actor_id ?? ''),
       actor_type: String(body.actor_type ?? ''),
       display_name: String(body.display_name ?? ''),
@@ -95,7 +91,7 @@ router.post('/:id/grant-level', requireRole('writer'), requireResourceScope('top
     const body = req.body ?? {};
     const result = await grantLevel({
       topic_id: String(req.params.id),
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       actor_id: String(body.actor_id ?? ''),
       level: String(body.level ?? ''),
       granted_by: String(body.granted_by ?? ''),
@@ -107,7 +103,7 @@ router.post('/:id/grant-level', requireRole('writer'), requireResourceScope('top
 // GET /api/topics/:id — topic record + participant roster
 router.get('/:id', requireResourceScope('topic'), async (req, res, next) => {
   try {
-    const result = await getTopic({ topic_id: String(req.params.id), callerScope: callerScopeOf(req) });
+    const result = await getTopic({ topic_id: String(req.params.id), actingPrincipalId: callerPrincipalOf(req) });
     res.json({ status: 'ok', data: result });
   } catch (e) { next(e); }
 });
@@ -117,7 +113,7 @@ router.post('/:id/close', requireRole('writer'), requireResourceScope('topic'), 
   try {
     const result = await closeTopic({
       topic_id: String(req.params.id),
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       actor_id: String((req.body ?? {}).actor_id ?? ''),
     });
     res.json({ status: 'ok', data: result });

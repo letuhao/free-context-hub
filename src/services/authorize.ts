@@ -118,9 +118,14 @@ export function decide(
 
 // ── Async wrapper + resolver + logging ────────────────────────────────────────
 
-/** A handler's reference to the resource it acts on: a kind + (for non-global) its id. */
+/**
+ * A handler's reference to the resource it acts on: a kind + (for non-global) its id. The input
+ * kind is the lattice levels PLUS two entity shorthands the resolver maps UP to a lattice scope —
+ * `artifact` → its task (artifact hangs off a task), `doc` → its project (documents live directly
+ * under a project). The RESOLVED ResourceScope is always a lattice level; these are input-only.
+ */
 export interface ResourceRef {
-  kind: ResourceScope['kind'];
+  kind: ResourceScope['kind'] | 'artifact' | 'doc';
   id?: string | null;
 }
 
@@ -147,6 +152,30 @@ export async function resolveResourceScope(
     );
     if (!r.rows[0]) return { unresolvable: 'NOT_FOUND' };
     return { ok: { kind: 'topic', project_id: r.rows[0].project_id, topic_id: id } };
+  }
+
+  if (ref.kind === 'artifact') {
+    // [F2f domain 2] artifact_id is TEXT (no 22P02 risk). An artifact hangs off a task → enforce at
+    // that task's scope, so a task/topic/project/global grant all cover it.
+    const r = await runner.query<{ task_id: string; topic_id: string; project_id: string }>(
+      `SELECT tk.task_id, tk.topic_id, t.project_id
+         FROM artifacts a JOIN tasks tk ON tk.task_id = a.task_id JOIN topics t ON t.topic_id = tk.topic_id
+        WHERE a.artifact_id = $1`,
+      [id],
+    );
+    if (!r.rows[0]) return { unresolvable: 'NOT_FOUND' };
+    return { ok: { kind: 'task', project_id: r.rows[0].project_id, topic_id: r.rows[0].topic_id, task_id: r.rows[0].task_id } };
+  }
+
+  if (ref.kind === 'doc') {
+    // [F2f domain 4] doc_id is UUID — guard against 22P02. A document lives directly under a project.
+    if (!isUuid(id)) return { unresolvable: 'NOT_FOUND' };
+    const r = await runner.query<{ project_id: string }>(
+      `SELECT project_id FROM documents WHERE doc_id = $1`,
+      [id],
+    );
+    if (!r.rows[0]) return { unresolvable: 'NOT_FOUND' };
+    return { ok: { kind: 'project', project_id: r.rows[0].project_id } };
   }
 
   // task — task_id is UUID; guard against 22P02 on a malformed id (treat as not found).

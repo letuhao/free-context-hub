@@ -1,3 +1,33 @@
+# CHECKPOINT — F2f domain 2 (coordination board) enforcement wired (2026-06-20, session 12)
+
+**Branch:** `feature/actor-data-boundary`. Serial /loom rollout continuing. Auth stays **OFF** (inert).
+Full unit suite **1144 pass / 1 skip**, tsc clean.
+
+**Domain 2 — board (PURE REPLACE)** across `board.ts` (postTask=write, listBoard=read, claim/release/
+completeTask=write·task), `topics.ts` (charterTopic=write·project, joinTopic=write, grantLevel=admin,
+getTopic=read, closeTopic=admin·topic), `artifacts.ts` (writeArtifact/baselineArtifact=write·artifact),
+`artifactLeases.ts` (claim/release/renew=write, listActiveClaims/checkAvailability=read,
+forceRelease=admin·project). All `assertTopicScope`/`assertTaskScope`/`assertArtifactScope`/
+`assertCallerScope` → `assertAuthorized`; `callerScope` param removed. Callers threaded: REST board/
+topics/artifactLeases routes (+ `callerPrincipalOf`) and ~18 MCP coordination handlers
+(`resolveMcpCallerScopeOrThrow` → `resolveActingActorOrThrow`).
+
+**Resolver extension (additive to the F2b chokepoint):** `ResourceRef.kind` gained input-only
+shorthands `artifact` (→ its task scope; `artifact_id` is TEXT) and `doc` (→ its project scope;
+`doc_id` is UUID-guarded). The resolved `ResourceScope` lattice is unchanged. So an artifact authorizes
+at its task scope — a task/topic/project/global grant all correctly cover it. (`doc` is pre-wired for
+domain 4.)
+
+**Tests:** the 6 DEFERRED-029 artifactLeases callerScope cases in `d3-scope.test.ts` (which also covers
+un-migrated jobs/taxonomy/projectGroups/projects — those stay) → replaced by
+**`board-authz.test.ts`** (7 auth-ON tests incl. artifact→task resolver exercise: topic read
+cross-tenant NOT_FOUND, task/artifact/lease write over-capability FORBIDDEN, granted read resolves,
+unknown principal NOT_FOUND). The board FUNCTIONAL tests never passed callerScope, so none broke.
+
+**What's next:** domains 3–8 (decisions next). Same pattern + the F2g prerequisites already logged.
+
+---
+
 # CHECKPOINT — F2f.0 foundation + domain 1 (lessons) enforcement wired (2026-06-20, session 12)
 
 **Branch:** `feature/actor-data-boundary`. Continuing the F2f enforcement rollout serially under

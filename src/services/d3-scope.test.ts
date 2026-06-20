@@ -15,14 +15,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { enqueueJob, listJobs, cancelJob } from './jobQueue.js';
-import {
-  claimArtifact,
-  releaseArtifact,
-  renewArtifact,
-  listActiveClaims,
-  checkArtifactAvailability,
-  forceReleaseArtifact,
-} from './artifactLeases.js';
 import { getActiveProfile, activateProfile, deactivateProfile } from './taxonomyService.js';
 import {
   addProjectToGroup,
@@ -71,76 +63,8 @@ test('DEFERRED-029: cancelJob cross-tenant → NOT_FOUND', async () => {
   );
 });
 
-// ── artifactLeases (6) ────────────────────────────────────────────────────────
-
-test('DEFERRED-029: claimArtifact cross-tenant → NOT_FOUND', async () => {
-  await assert.rejects(
-    claimArtifact({
-      project_id: 'proj-A',
-      callerScope: 'proj-B',
-      agent_id: 'agent:x',
-      artifact_type: 'lesson',
-      artifact_id: 'x-y',
-      task_description: 'test',
-    }),
-    isNotFound,
-  );
-});
-
-test('DEFERRED-029: releaseArtifact cross-tenant → NOT_FOUND', async () => {
-  await assert.rejects(
-    releaseArtifact({
-      project_id: 'proj-A',
-      callerScope: 'proj-B',
-      agent_id: 'agent:x',
-      lease_id: '11111111-1111-1111-1111-111111111111',
-    }),
-    isNotFound,
-  );
-});
-
-test('DEFERRED-029: renewArtifact cross-tenant → NOT_FOUND', async () => {
-  await assert.rejects(
-    renewArtifact({
-      project_id: 'proj-A',
-      callerScope: 'proj-B',
-      agent_id: 'agent:x',
-      lease_id: '11111111-1111-1111-1111-111111111111',
-      extend_by_minutes: 10,
-    }),
-    isNotFound,
-  );
-});
-
-test('DEFERRED-029: listActiveClaims cross-tenant → NOT_FOUND', async () => {
-  await assert.rejects(
-    listActiveClaims({ project_id: 'proj-A', callerScope: 'proj-B' }),
-    isNotFound,
-  );
-});
-
-test('DEFERRED-029: checkArtifactAvailability cross-tenant → NOT_FOUND', async () => {
-  await assert.rejects(
-    checkArtifactAvailability({
-      project_id: 'proj-A',
-      callerScope: 'proj-B',
-      artifact_type: 'lesson',
-      artifact_id: 'x-y',
-    }),
-    isNotFound,
-  );
-});
-
-test('DEFERRED-029: forceReleaseArtifact cross-tenant → NOT_FOUND', async () => {
-  await assert.rejects(
-    forceReleaseArtifact({
-      project_id: 'proj-A',
-      callerScope: 'proj-B',
-      lease_id: '11111111-1111-1111-1111-111111111111',
-    }),
-    isNotFound,
-  );
-});
+// ── artifactLeases MIGRATED to F2f domain 2 (authorize() + grants); the 6 callerScope cross-tenant
+//    cases moved to board-authz.test.ts (auth-ON grant-based). ─────────────────────────────────
 
 // ── taxonomyService (3 project-scoped) ────────────────────────────────────────
 

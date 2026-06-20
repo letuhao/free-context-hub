@@ -13,8 +13,7 @@ import { randomUUID } from 'node:crypto';
 import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
 import { createModuleLogger } from '../utils/logger.js';
-import { assertCallerScope } from '../core/security/callerScope.js';
-import type { CallerScope } from '../core/security/callerScope.js';
+import { assertAuthorized } from './authorize.js';
 
 const logger = createModuleLogger('artifact-leases');
 
@@ -78,8 +77,8 @@ const VALID_ARTIFACT_TYPES = new Set(['lesson', 'document', 'report-section', 'c
 
 export type ClaimParams = {
   project_id: string;
-  /** DEFERRED-029: caller's scope; enforced against project_id. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() is the tenant/authz gate (project scope). */
+  actingPrincipalId?: string | null;
   agent_id: string;
   artifact_type: string;
   artifact_id: string;
@@ -116,7 +115,7 @@ export type AvailabilityResult =
   | { available: false; lease: Omit<LeaseSummary, 'lease_id'> };
 
 export async function claimArtifact(p: ClaimParams): Promise<ClaimResult> {
-  assertCallerScope(p.callerScope, p.project_id);
+  await assertAuthorized(p.actingPrincipalId, 'write', { kind: 'project', id: p.project_id });
   validateClaimInput(p);
   // post-audit R1: attempt-rate limit (20/min per agent per project)
   // Per phase-13-design.md L228. In-process; multi-replica is a known
@@ -260,8 +259,8 @@ async function fetchConflictResultOrRetry(p: ClaimParams): Promise<ClaimResult |
   };
 }
 
-export async function releaseArtifact(params: { project_id: string; callerScope?: CallerScope; agent_id: string; lease_id: string }): Promise<ReleaseResult> {
-  assertCallerScope(params.callerScope, params.project_id);
+export async function releaseArtifact(params: { project_id: string; actingPrincipalId?: string | null; agent_id: string; lease_id: string }): Promise<ReleaseResult> {
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.project_id });
   const pool = getDbPool();
   const r = await pool.query<{ agent_id: string }>(
     `SELECT agent_id FROM artifact_leases WHERE lease_id = $1 AND project_id = $2`,
@@ -274,9 +273,9 @@ export async function releaseArtifact(params: { project_id: string; callerScope?
 }
 
 export async function renewArtifact(params: {
-  project_id: string; callerScope?: CallerScope; agent_id: string; lease_id: string; extend_by_minutes: number;
+  project_id: string; actingPrincipalId?: string | null; agent_id: string; lease_id: string; extend_by_minutes: number;
 }): Promise<RenewResult> {
-  assertCallerScope(params.callerScope, params.project_id);
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.project_id });
   if (params.extend_by_minutes < MIN_EXTEND_MINUTES || params.extend_by_minutes > MAX_EXTEND_MINUTES) {
     throw new ContextHubError('BAD_REQUEST', `extend_by_minutes must be ${MIN_EXTEND_MINUTES}-${MAX_EXTEND_MINUTES}`);
   }
@@ -322,8 +321,8 @@ export async function renewArtifact(params: {
   }
 }
 
-export async function listActiveClaims(params: { project_id: string; callerScope?: CallerScope; artifact_type?: string }): Promise<ListResult> {
-  assertCallerScope(params.callerScope, params.project_id);
+export async function listActiveClaims(params: { project_id: string; actingPrincipalId?: string | null; artifact_type?: string }): Promise<ListResult> {
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id: params.project_id });
   // v2-r2 WARN 1: validate filter type if provided (symmetric with claimArtifact)
   if (params.artifact_type !== undefined && !VALID_ARTIFACT_TYPES.has(params.artifact_type)) {
     throw new ContextHubError('BAD_REQUEST', `artifact_type must be one of: ${Array.from(VALID_ARTIFACT_TYPES).join(', ')}; got: ${params.artifact_type}`);
@@ -360,9 +359,9 @@ export async function listActiveClaims(params: { project_id: string; callerScope
 }
 
 export async function checkArtifactAvailability(params: {
-  project_id: string; callerScope?: CallerScope; artifact_type: string; artifact_id: string;
+  project_id: string; actingPrincipalId?: string | null; artifact_type: string; artifact_id: string;
 }): Promise<AvailabilityResult> {
-  assertCallerScope(params.callerScope, params.project_id);
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id: params.project_id });
   // v2-r2 WARN 1 + post-audit R7: validate type AND id-format symmetrically
   // with claimArtifact. Without R7 fix, a snapshot read with malformed id
   // returns {available:true} (false negative) — caller may think artifact
@@ -405,8 +404,8 @@ export async function checkArtifactAvailability(params: {
  * Admin force-release. Requires project_id for tenant isolation (v2 fix BLOCK 1).
  * Caller must be authenticated as admin role for the same project.
  */
-export async function forceReleaseArtifact(params: { project_id: string; callerScope?: CallerScope; lease_id: string }): Promise<{ status: 'force_released' | 'not_found' }> {
-  assertCallerScope(params.callerScope, params.project_id);
+export async function forceReleaseArtifact(params: { project_id: string; actingPrincipalId?: string | null; lease_id: string }): Promise<{ status: 'force_released' | 'not_found' }> {
+  await assertAuthorized(params.actingPrincipalId, 'admin', { kind: 'project', id: params.project_id });
   const pool = getDbPool();
   const r = await pool.query(
     `DELETE FROM artifact_leases WHERE lease_id = $1 AND project_id = $2`,
