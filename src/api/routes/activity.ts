@@ -5,6 +5,7 @@ import {
 } from '../../services/activity.js';
 import { resolveProjectIdOrThrow } from '../../core/index.js';
 import { resolveProjectParams } from '../middleware/resolveProjectParams.js';
+import { callerPrincipalOf } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -14,6 +15,7 @@ router.get('/', async (req, res, next) => {
     const p = resolveProjectParams(req.query);
     const result = await listActivity({
       ...p,
+      actingPrincipalId: callerPrincipalOf(req),
       eventType: req.query.event_type as string | undefined,
       since: req.query.since as string | undefined,
       limit: req.query.limit ? Number(req.query.limit) : undefined,

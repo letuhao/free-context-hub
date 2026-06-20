@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getAgentTrust, updateAgentTrust, listAgents } from '../../services/agentTrust.js';
 import { resolveProjectIdOrThrow } from '../../core/index.js';
+import { callerPrincipalOf } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -8,7 +9,7 @@ const router = Router();
 router.get('/', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
-    const result = await listAgents({ projectId });
+    const result = await listAgents({ projectId, actingPrincipalId: callerPrincipalOf(req) });
     res.json(result);
   } catch (e) { next(e); }
 });
@@ -17,7 +18,7 @@ router.get('/', async (req, res, next) => {
 router.get('/:id', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
-    const result = await getAgentTrust({ agentId: req.params.id, projectId });
+    const result = await getAgentTrust({ agentId: req.params.id, projectId, actingPrincipalId: callerPrincipalOf(req) });
     res.json(result);
   } catch (e) { next(e); }
 });
@@ -29,6 +30,7 @@ router.patch('/:id', async (req, res, next) => {
     const result = await updateAgentTrust({
       agentId: req.params.id,
       projectId,
+      actingPrincipalId: callerPrincipalOf(req),
       trustLevel: req.body.trust_level,
       autoApprove: req.body.auto_approve,
     });

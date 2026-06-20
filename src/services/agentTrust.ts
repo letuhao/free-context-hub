@@ -1,4 +1,5 @@
 import { getDbPool } from '../db/client.js';
+import { assertAuthorized } from './authorize.js';
 
 export type TrustLevel = 'new' | 'standard' | 'trusted';
 
@@ -18,7 +19,9 @@ export interface AgentTrustEntry {
 export async function getAgentTrust(params: {
   agentId: string;
   projectId: string;
+  actingPrincipalId?: string | null;
 }): Promise<AgentTrustEntry> {
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id: params.projectId });
   const pool = getDbPool();
   const result = await pool.query(
     `INSERT INTO agent_trust_levels (agent_id, project_id)
@@ -40,9 +43,11 @@ export async function getAgentTrust(params: {
 export async function updateAgentTrust(params: {
   agentId: string;
   projectId: string;
+  actingPrincipalId?: string | null;
   trustLevel?: TrustLevel;
   autoApprove?: boolean;
 }): Promise<AgentTrustEntry | null> {
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.projectId });
   const pool = getDbPool();
 
   // Ensure entry exists.
@@ -74,7 +79,9 @@ export async function updateAgentTrust(params: {
 /** List all agents for a project with their trust levels + lesson stats. */
 export async function listAgents(params: {
   projectId: string;
+  actingPrincipalId?: string | null;
 }): Promise<{ agents: AgentTrustEntry[] }> {
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id: params.projectId });
   const pool = getDbPool();
 
   // Get all known agents from both trust table and lessons.

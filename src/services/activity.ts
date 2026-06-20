@@ -1,4 +1,16 @@
 import { getDbPool } from '../db/client.js';
+import { assertAuthorized } from './authorize.js';
+
+/** F2f: authorize `read` on every project in the (single-or-multi) filter, strict-reject. */
+async function assertReadAll(
+  actingPrincipalId: string | null | undefined,
+  projectIdOrIds: string | string[] | undefined,
+): Promise<void> {
+  const ids = Array.isArray(projectIdOrIds) ? projectIdOrIds : projectIdOrIds ? [projectIdOrIds] : [];
+  for (const pid of ids) {
+    await assertAuthorized(actingPrincipalId, 'read', { kind: 'project', id: pid });
+  }
+}
 
 function safeStringify(obj: unknown): string | null {
   try { return JSON.stringify(obj); } catch { return null; }
@@ -49,11 +61,14 @@ export async function logActivity(params: {
 export async function listActivity(params: {
   projectId?: string;
   projectIds?: string[];
+  /** F2f: acting principal; authorize() enforces read on each project. */
+  actingPrincipalId?: string | null;
   eventType?: string;
   since?: string;
   limit?: number;
   offset?: number;
 }): Promise<{ items: ActivityEntry[]; total_count: number }> {
+  await assertReadAll(params.actingPrincipalId, params.projectIds ?? params.projectId);
   const pool = getDbPool();
   const limit = Math.min(params.limit ?? 50, 200);
   const offset = Math.max(params.offset ?? 0, 0);

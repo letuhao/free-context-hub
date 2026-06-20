@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { listAuditLog, getAuditStats } from '../../services/auditLog.js';
 import { resolveProjectParams, resolveProjectIdOrIds } from '../middleware/resolveProjectParams.js';
+import { callerPrincipalOf } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -10,6 +11,7 @@ router.get('/', async (req, res, next) => {
     const p = resolveProjectParams(req.query);
     const result = await listAuditLog({
       ...p,
+      actingPrincipalId: callerPrincipalOf(req),
       limit: req.query.limit ? Number(req.query.limit) : undefined,
       offset: req.query.offset ? Number(req.query.offset) : undefined,
       agent_id: req.query.agent_id as string | undefined,
@@ -24,7 +26,7 @@ router.get('/', async (req, res, next) => {
 router.get('/stats', async (req, res, next) => {
   try {
     const pid = resolveProjectIdOrIds(req.query);
-    const stats = await getAuditStats(pid);
+    const stats = await getAuditStats(pid, { actingPrincipalId: callerPrincipalOf(req) });
     res.json(stats);
   } catch (e) { next(e); }
 });

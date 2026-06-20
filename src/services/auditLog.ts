@@ -1,4 +1,16 @@
 import { getDbPool } from '../db/client.js';
+import { assertAuthorized } from './authorize.js';
+
+/** F2f: authorize `read` on every project in the (single-or-multi) filter, strict-reject. */
+async function assertReadAll(
+  actingPrincipalId: string | null | undefined,
+  projectIdOrIds: string | string[] | undefined,
+): Promise<void> {
+  const ids = Array.isArray(projectIdOrIds) ? projectIdOrIds : projectIdOrIds ? [projectIdOrIds] : [];
+  for (const pid of ids) {
+    await assertAuthorized(actingPrincipalId, 'read', { kind: 'project', id: pid });
+  }
+}
 
 export interface AuditEntry {
   id: string;
@@ -28,12 +40,15 @@ export interface AuditStats {
 export async function listAuditLog(params: {
   projectId?: string;
   projectIds?: string[];
+  /** F2f: acting principal; authorize() enforces read on each project. */
+  actingPrincipalId?: string | null;
   limit?: number;
   offset?: number;
   agent_id?: string;
   action_type?: string;     // filter: "guardrail" | "lesson" | all
   days?: number;            // limit to last N days
 }): Promise<{ items: AuditEntry[]; total_count: number }> {
+  await assertReadAll(params.actingPrincipalId, params.projectIds ?? params.projectId);
   const pool = getDbPool();
   const limit = Math.min(params.limit ?? 20, 100);
   const offset = params.offset ?? 0;
@@ -133,7 +148,11 @@ export async function listAuditLog(params: {
 }
 
 /** Get audit stats for a project or multiple projects. */
-export async function getAuditStats(projectIdOrIds: string | string[]): Promise<AuditStats> {
+export async function getAuditStats(
+  projectIdOrIds: string | string[],
+  opts?: { actingPrincipalId?: string | null },
+): Promise<AuditStats> {
+  await assertReadAll(opts?.actingPrincipalId, projectIdOrIds);
   const pool = getDbPool();
   const isArray = Array.isArray(projectIdOrIds);
   const clause = isArray ? `project_id = ANY($1::text[])` : `project_id = $1`;
