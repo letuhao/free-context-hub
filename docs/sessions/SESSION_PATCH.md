@@ -1,3 +1,40 @@
+# CHECKPOINT — F2 authorization machinery (F2a–F2e) COMPLETE (2026-06-20, session 12)
+
+**Branch:** `feature/actor-data-boundary`. Driven as one continuous **/loom** XL effort. The entire F2
+**authorization mechanism + lockout guard is built**, twice cold-start-adversary-reviewed, and
+`/review-impl`'d. Auth stays **OFF** (everything inert until the F2g posture flip — human-gated, NOT
+done). Full unit suite **1141 pass / 2 skip**, tsc clean. Commits `ecdf6b4`→`eacbe2e`.
+
+**Decisions (checkpointed):** authority model = **REPLACE NOW** (authorize() sole gate, role/scope
+deprecated) + **FULL ENFORCEMENT NOW** (F4 collapsed into F2). Captured in
+`docs/specs/2026-06-19-actor-data-boundary-F2-{clarify,design}.md`.
+
+**Sub-phases shipped:**
+- **F2a** `grants` substrate — migration 0066 (delegation edges, active-edge unique index NULLS NOT
+  DISTINCT), service (createGrant idempotent/bounded-loop, revoke, list).
+- **F2b** `authorize()` chokepoint — migration 0067 `authz_decisions`; pure core (capability lattice
+  read⊂write⊂admin + delegate orthogonal, scope coverage global⊃project⊃topic⊃task), total async
+  wrapper (auth-off fast path, oracle-safe ordering, task→topic→project resolver), best-effort log.
+- **F2c** delegation invariant — grantCapability (hold `delegate` AND the capability, covering scope;
+  refuses under auth-off) + revokeGrantAuthorized; added `FORBIDDEN` (403) code.
+- **F2d** 5 MCP tools — grant_capability, revoke_grant, list_grants, explain_authorization (read-only,
+  scope_chain nulled on deny), list_principals.
+- **F2e** backfill (`backfill:grants`) + `assertEnforceReady` grant-**coverage** gate — maps each live
+  credential's (role, scope)→grant; refuses enforce-ready until every principal-bound non-root
+  credential is covered; won't resurrect a revoked grant.
+
+**Reviews:** cold-start adversary **pass 1** (CRITICAL auth-off grant fabrication + 3) and **pass 2**
+(CRITICAL enforce-ready existence-vs-coverage + HIGH resurrection) — all fixed; `/review-impl` (7
+coverage/drift findings) — all fixed. Migrations 0066–0068. New CLI: `backfill:grants`.
+
+**What's next — F2f (the blast radius):** wire `authorize()` into the handlers, **replacing**
+`assertCallerScope`/role checks, domain by domain. Then F2g posture prerequisites. The
+`MCP_AUTH_ENABLED` default flip stays parked behind an explicit human go. **Open fork for F2f:**
+tenant containment — thread `callerScope` as defence-in-depth, or commit fully to "grants supersede
+callerScope" (see F2-design §7b). A 3rd cold-start adversary pass should run after F2f.
+
+---
+
 # CHECKPOINT — F1 post-merge `/review-impl` pass (2026-06-19, session 11)
 
 **Branch:** `feature/actor-data-boundary`. A fresh `/review-impl` (coverage/drift mode, distinct from
