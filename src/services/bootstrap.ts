@@ -138,14 +138,16 @@ export async function assertEnforceReady(): Promise<Principal> {
     );
   }
   // [F2e] REPLACE NOW + FULL ENFORCEMENT: once authorize() is the sole gate, an active principal-bound
-  // credential with NO covering grant is locked out the instant auth flips on. Refuse until every such
-  // credential has a grant (run `npm run backfill:grants`). Root needs none (short-circuit); unbound
-  // keys are out of scope (denied by the F1 hardened posture — rebind them).
+  // credential whose principal lacks a grant COVERING that credential's (role, scope) is denied the
+  // instant auth flips on. Refuse until every such credential is covered. `backfill:grants` seeds the
+  // mapped grants; a credential whose mapped grant was deliberately REVOKED (or otherwise needs a
+  // bespoke grant) must be re-granted or its credential revoked by hand — the backfill won't resurrect
+  // a revocation. Root needs none (short-circuit); unbound keys are out of scope (F1 hardened posture).
   const ungranted = await countCredentialsWithoutGrants();
   if (ungranted > 0) {
     throw new ContextHubError(
       'CONFLICT',
-      `not enforce-ready: ${ungranted} active credential(s) bind a principal with no covering grant — enabling enforcement would lock them out. Run \`npm run backfill:grants\` first.`,
+      `not enforce-ready: ${ungranted} active credential(s) bind a principal lacking a covering grant — enabling enforcement would lock them out. Run \`npm run backfill:grants\` (then re-grant or revoke any credential it reports as deliberately-revoked / unmappable).`,
     );
   }
   return root;

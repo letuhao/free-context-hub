@@ -11,7 +11,7 @@ import type { PoolClient } from 'pg';
 import { backfillGrantsFromApiKeys, countCredentialsWithoutGrants } from './backfillGrants.js';
 import { createPrincipal, seedRootPrincipal, getRootPrincipal } from './principals.js';
 import { createApiKey } from './apiKeys.js';
-import { listGrants } from './grants.js';
+import { listGrants, createGrant, revokeGrant } from './grants.js';
 import { getDbPool } from '../db/client.js';
 
 const PREFIX = '__test_backfill__';
@@ -105,6 +105,46 @@ test('backfill: a revoked or expired credential is NOT counted/backfilled (only 
   const res = await backfillGrantsFromApiKeys(undefined, { restrictToPrincipals: [p] });
   assert.equal(res.created, 0);
   assert.equal((await listGrants({ grantee_principal: p })).length, 0);
+});
+
+test('coverage gap: a writer@P key with only an unrelated read@Q grant is UNCOVERED (existence != coverage) [F2-adv2 #1]', async () => {
+  const root = await getRootPrincipal();
+  const p = (await createPrincipal({ kind: 'agent', display_name: `${PREFIX}cov1` })).principal_id;
+  await createApiKey({ name: `${PREFIX}kcov1`, role: 'writer', project_scope: 'projP', principal_id: p });
+  // an unrelated grant that the OLD existence check would have accepted as "covered"
+  await createGrant({ grantee_principal: p, scope_type: 'project', scope_id: 'projQ', capability: 'read', granted_by: root!.principal_id });
+
+  assert.equal(await countCredentialsWithoutGrants(undefined, { restrictToPrincipals: [p] }), 1, 'read@Q does not cover write@P');
+  await backfillGrantsFromApiKeys(undefined, { restrictToPrincipals: [p] });
+  assert.equal(await countCredentialsWithoutGrants(undefined, { restrictToPrincipals: [p] }), 0, 'covered after backfill');
+  const g = await listGrants({ grantee_principal: p, scope_type: 'project', scope_id: 'projP' });
+  assert.equal(g[0].capability, 'write');
+});
+
+test('coverage: a reader@P key already covered by a broader admin@global grant is NOT re-minted [F2-adv2 #1]', async () => {
+  const root = await getRootPrincipal();
+  const p = (await createPrincipal({ kind: 'agent', display_name: `${PREFIX}cov2` })).principal_id;
+  await createApiKey({ name: `${PREFIX}kcov2`, role: 'reader', project_scope: 'projP', principal_id: p });
+  await createGrant({ grantee_principal: p, scope_type: 'global', capability: 'admin', granted_by: root!.principal_id });
+
+  assert.equal(await countCredentialsWithoutGrants(undefined, { restrictToPrincipals: [p] }), 0, 'admin@global covers reader@project:P');
+  const res = await backfillGrantsFromApiKeys(undefined, { restrictToPrincipals: [p] });
+  assert.equal(res.created, 0, 'no redundant grant minted when already covered by a broader grant');
+});
+
+test('backfill does NOT resurrect a deliberately-revoked grant on re-run [F2-adv2 #5]', async () => {
+  const p = (await createPrincipal({ kind: 'agent', display_name: `${PREFIX}resurrect` })).principal_id;
+  await createApiKey({ name: `${PREFIX}kres`, role: 'writer', project_scope: 'projR', principal_id: p });
+  const first = await backfillGrantsFromApiKeys(undefined, { restrictToPrincipals: [p] });
+  assert.equal(first.created, 1);
+
+  const g = (await listGrants({ grantee_principal: p }))[0];
+  await revokeGrant(g.grant_id); // operator deliberately removes it
+
+  const second = await backfillGrantsFromApiKeys(undefined, { restrictToPrincipals: [p] });
+  assert.equal(second.created, 0, 'did not re-mint');
+  assert.equal(second.skippedRevoked, 1, 'reported as deliberately-revoked');
+  assert.equal((await listGrants({ grantee_principal: p })).length, 0, 'no active grant resurrected');
 });
 
 test('backfill: an unbound (principal_id NULL) key is excluded structurally (no principal to grant)', async () => {

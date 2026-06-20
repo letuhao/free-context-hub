@@ -19,9 +19,12 @@ async function main() {
   const res = await backfillGrantsFromApiKeys();
   const remaining = await countCredentialsWithoutGrants();
   console.log(
-    `[backfill:grants] scanned ${res.scanned} eligible credential(s); ensured ${res.created} grant(s), ` +
-      `skipped ${res.skipped} (unknown role). ${remaining} credential(s) still without a covering grant.` +
-      (remaining === 0 ? ' Grant coverage complete — enforce-ready on this gate.' : ' Fix the skipped roles before enabling enforcement.'),
+    `[backfill:grants] scanned ${res.scanned} uncovered credential(s); minted ${res.created} grant(s), ` +
+      `skipped ${res.skippedRevoked} deliberately-revoked + ${res.skipped} unmappable. ` +
+      `${remaining} credential(s) still without a covering grant.` +
+      (remaining === 0
+        ? ' Grant coverage complete — enforce-ready on this gate.'
+        : ' Re-grant or revoke the skipped credentials before enabling enforcement (backfill will not resurrect a revoked grant).'),
   );
 }
 
