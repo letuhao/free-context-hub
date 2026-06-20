@@ -109,6 +109,20 @@ domain. Action mapping: reads (`search_*`, `get_*`, `list_*`) → `read`; writes
 no-op pass-through when `MCP_AUTH_ENABLED=false` — dev/root lane intact). The `MCP_AUTH_ENABLED`
 default flip is **out of scope for this build** (explicit human go required).
 
+## 7b. Carried to F2f (from the F2a–d cold-start adversary)
+- **Tenant containment at grant + list time (#2/#4).** The F2 tools do NOT yet thread `callerScope`.
+  Under the REPLACE model that's deliberate (grants supersede callerScope), but until F2f wires
+  enforcement, `grant_capability`/`list_grants` rely solely on the admin-grant check for tenant
+  reach. F2f MUST decide tenant containment: either thread `callerScope` as defence-in-depth, or
+  prove the grant graph alone is sufficient. A `global` admin is intentionally omnipotent; a
+  project-scoped delegate is correctly downward-bounded.
+- **Project/global scope existence is NOT validated at grant time** (resolver no-ops them). This
+  permits pre-granting over a not-yet-created project — acceptable by design, revisit if a `projects`
+  authority table appears.
+- Fixed in F2d adversary pass: #1 (grant_capability refuses under auth-off — AUTH_DISABLED ≠ authz),
+  #3 (explain nulls scope_chain on deny — no ancestry oracle), #5 (bounded createGrant retry),
+  #6 (capped audit resource_id length).
+
 ## 8. Adversary targets (REVIEW-design + per-phase)
 1. `delegate` leaking resource access (orthogonality break) or `admin` silently conferring delegate.
 2. Scope-coverage confusion: a `topic` grant covering a sibling topic's task; a stale topic_id.

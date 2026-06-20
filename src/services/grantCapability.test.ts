@@ -139,3 +139,19 @@ test('revoke_grant: unknown grant id -> idempotent noop (no leak, no throw)', as
   const r = await revokeGrantAuthorized({ callerPrincipalId: delegator, grant_id: '00000000-0000-0000-0000-000000000000' });
   assert.equal(r.status, 'noop');
 });
+
+test('grant_capability: REFUSED under auth-off — AUTH_DISABLED is not authorization [F2-adv #1]', async () => {
+  // Under auth-off, authorize() pass-throughs to ALLOW, so the delegation gates would be no-ops.
+  // grantCapability must hard-refuse rather than let anyone fabricate grants that go live on flip.
+  process.env.MCP_AUTH_ENABLED = 'false';
+  const { _resetEnvCacheForTest } = await import('../env.js');
+  _resetEnvCacheForTest();
+  try {
+    await assert.rejects(
+      () => grantCapability({ callerPrincipalId: delegator, grantee_principal: actor, scope_type: 'global', capability: 'admin' }),
+      (e: unknown) => e instanceof ContextHubError && e.code === 'FORBIDDEN',
+    );
+  } finally {
+    await authOn(); // restore for any later tests
+  }
+});

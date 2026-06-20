@@ -176,6 +176,15 @@ test('explainAuthorization: returns the resolved scope_chain + matching decision
   assert.deepEqual(r.scope_chain, { kind: 'task', project_id: P, topic_id: topicP, task_id: taskP });
 });
 
+test('explainAuthorization: a DENY does NOT leak the resolved scope chain (no ancestry oracle) [F2-adv #3]', async () => {
+  await setAuth(true);
+  // actor has no grant covering topicQ (sibling project Q) -> deny. scope_chain must be null so the
+  // caller can't learn topicQ exists / its project from an explain it isn't allowed.
+  const r = await explainAuthorization(actor, 'admin', { kind: 'topic', id: topicQ });
+  assert.equal(r.decision.allow, false);
+  assert.equal(r.scope_chain, null, 'deny must not expose the resolved ancestry');
+});
+
 test('explainAuthorization: auth-off -> AUTH_DISABLED, null chain, no log', async () => {
   await setAuth(false);
   const marker = `${PREFIX}marker_explain_off`;

@@ -191,7 +191,9 @@ async function logDecision(
         principalId,
         action,
         ref.kind,
-        ref.id ?? null,
+        // [F2-adv #6] resource_id is raw caller input; cap its length so the append-only audit log
+        // can't be bloated with arbitrary attacker text.
+        typeof ref.id === 'string' ? ref.id.slice(0, 256) : null,
         d.allow,
         d.reason,
         d.allow ? (d.matched_grant_id ?? null) : null,
@@ -264,5 +266,8 @@ export async function explainAuthorization(
 ): Promise<ExplainResult> {
   if (!getEnv().MCP_AUTH_ENABLED) return { decision: { allow: true, reason: 'AUTH_DISABLED' }, scope_chain: null };
   const { decision, resolved } = await evaluate(principalId, action, resource, executor);
-  return { decision, scope_chain: resolved };
+  // [F2-adv #3] Only reveal the resolved scope chain (project→topic→task ancestry) on an ALLOW. On a
+  // deny, null it — otherwise explain becomes an existence/ancestry oracle for resources the caller
+  // cannot access (the resolver walks the resource regardless of the caller's grants).
+  return { decision, scope_chain: decision.allow ? resolved : null };
 }

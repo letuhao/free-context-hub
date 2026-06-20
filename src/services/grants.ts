@@ -65,7 +65,7 @@ export async function createGrant(params: {
   scope_id?: string | null;
   capability: Capability;
   granted_by: string;
-}): Promise<Grant> {
+}, _attempt = 0): Promise<Grant> {
   if (!CAPABILITIES.includes(params.capability)) {
     throw new ContextHubError('BAD_REQUEST', `Invalid capability "${params.capability}". Allowed: ${CAPABILITIES.join(', ')}.`);
   }
@@ -109,8 +109,13 @@ export async function createGrant(params: {
     [params.grantee_principal, params.scope_type, scopeId, params.capability],
   );
   if (existing.rows[0]) return existing.rows[0];
-  // Extremely unlikely race (the active row was revoked between INSERT and SELECT) — retry once.
-  return createGrant(params);
+  // Unlikely race (the active row was revoked between INSERT and SELECT). Retry, but BOUNDED — an
+  // attacker driving concurrent revoke/re-grant on one edge must not be able to spin this
+  // unboundedly. [F2-adv #5]
+  if (_attempt >= 2) {
+    throw new ContextHubError('CONFLICT', 'grant edge under concurrent contention; retry.');
+  }
+  return createGrant(params, _attempt + 1);
 }
 
 export async function getGrant(grantId: string): Promise<Grant | null> {

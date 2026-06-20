@@ -14,6 +14,7 @@
  */
 
 import { ContextHubError } from '../core/errors.js';
+import { getEnv } from '../env.js';
 import { authorize, type Action } from './authorize.js';
 import { createGrant, getGrant, revokeGrant, type Capability, type ScopeType, type Grant } from './grants.js';
 
@@ -24,6 +25,17 @@ export async function grantCapability(params: {
   scope_id?: string | null;
   capability: Capability;
 }): Promise<Grant> {
+  // [F2-adv #1] AUTH_DISABLED is NOT authorization. Under auth-off, authorize() pass-throughs to
+  // ALLOW, which would make the two delegation gates below no-ops — letting any caller fabricate
+  // grants (e.g. admin@global) that go LIVE the instant the posture flips. Delegated granting is an
+  // auth-ON operation; initial grants are seeded out-of-band via the backfill/CLI (createGrant), not
+  // this policy path. So refuse here while auth is off.
+  if (!getEnv().MCP_AUTH_ENABLED) {
+    throw new ContextHubError(
+      'FORBIDDEN',
+      'grant_capability requires MCP_AUTH_ENABLED=true (delegated granting needs an enforced identity); seed initial grants via the backfill/CLI.',
+    );
+  }
   const scopeRef = { kind: params.scope_type, id: params.scope_id ?? null };
   // Two gates: (1) the re-grant flag (`delegate`) covering the target scope, and (2) the capability
   // itself covering the target scope (can't grant beyond your own authority). Both via authorize(),
