@@ -18,7 +18,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { submitForReview, listReviewRequests, getReviewRequest, approveReviewRequest, returnReviewRequest } from './reviewRequests.js';
-import { submitIntake, listIntake } from './intake.js';
 import { ContextHubError } from '../core/errors.js';
 
 const isNotFound = (err: unknown): boolean =>
@@ -81,63 +80,6 @@ test('DEFERRED-029: returnReviewRequest cross-tenant → NOT_FOUND', async () =>
   );
 });
 
-// ── intake (2 — direct-project_id fns) ───────────────────────────────────────
-// triageIntake / dismissIntake / getIntake derive from intake_id and are
-// covered by the PR F auth-ON E2E slice (DESIGN §8 + §9).
-
-test('DEFERRED-029: submitIntake cross-tenant → NOT_FOUND', async () => {
-  await assert.rejects(
-    submitIntake({
-      project_id: 'proj-A',
-      callerScope: 'proj-B',
-      kind: 'suggestion',
-      body: 'hello',
-      submitted_by: 'agent:x',
-    }),
-    isNotFound,
-  );
-});
-
-test('DEFERRED-029: listIntake cross-tenant → NOT_FOUND', async () => {
-  await assert.rejects(
-    listIntake('proj-A', { callerScope: 'proj-B' }),
-    isNotFound,
-  );
-});
-
-// ── back-compat sanity: undefined / null are unrestricted ────────────────────
-// We can't fully exercise the happy path without a DB, but we can prove the
-// guard does NOT throw on undefined/null and instead progresses to the next
-// validation step. (For undefined we'd reach DB; the assertion below uses
-// missing required fields to force a synchronous BAD_REQUEST before any DB
-// call.)
-
-test('DEFERRED-029: undefined callerScope → unrestricted (no NOT_FOUND from scope)', async () => {
-  await assert.rejects(
-    submitIntake({
-      project_id: 'proj-A',
-      callerScope: undefined,
-      kind: '', // forces BAD_REQUEST before DB
-      body: 'hello',
-      submitted_by: 'agent:x',
-    }),
-    (err: unknown) =>
-      err instanceof ContextHubError && err.code === 'BAD_REQUEST',
-    'undefined callerScope should NOT trigger NOT_FOUND — must fall through to next check',
-  );
-});
-
-test('DEFERRED-029: null callerScope (global key) → unrestricted', async () => {
-  await assert.rejects(
-    submitIntake({
-      project_id: 'proj-A',
-      callerScope: null,
-      kind: '', // forces BAD_REQUEST before DB
-      body: 'hello',
-      submitted_by: 'agent:x',
-    }),
-    (err: unknown) =>
-      err instanceof ContextHubError && err.code === 'BAD_REQUEST',
-    'null callerScope (global) should NOT trigger NOT_FOUND',
-  );
-});
+// ── intake (submitIntake/listIntake) MIGRATED to F2f domain 3 (authorize() + grants); their
+//    auth-ON enforcement coverage moved to decisions-authz.test.ts. The reviewRequests cases above
+//    remain on the DEFERRED-029 callerScope guard until that domain (7) migrates.

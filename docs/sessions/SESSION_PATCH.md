@@ -1,3 +1,39 @@
+# CHECKPOINT — F2f domain 3 (decisions) enforcement wired (2026-06-20, session 12)
+
+**Branch:** `feature/actor-data-boundary`. Serial /loom rollout continuing. Auth stays **OFF** (inert).
+Full unit suite **1151 pass / 2 skip**, tsc clean.
+
+**Domain 3 — decisions (PURE REPLACE)** across `decisionBodies.ts` (createBody=admin·project,
+addBodyMember=admin·body, getBody=read, listBodies=read), `motions.ts` (proposeMotion=write·topic,
+second/cast/veto/tally=write·motion, getMotion=read, listMotions=read·topic), `proxies.ts`
+(grant/revoke=write·body, list=read), `requests.ts` (submit=write·topic, decideStep=write·request,
+get=read, list=read·topic), `intake.ts` (submit=write·project, triage=write [intake+topic],
+dismiss=write·intake, get=read, list=read·project), `disputes.ts` (open=write·topic,
+resolve=write·dispute, get=read, list=read·topic). All `assertBodyScope`/`assertMotionScope`/
+`assertDisputeScope`/`assertRequestScope`/`assertIntakeScope`/`assertCallerScope` → `assertAuthorized`;
+`callerScope` removed. Threaded through 4 REST routes (motions/requests/intake/disputes, +
+`callerPrincipalOf`) and ~27 MCP decision handlers (`resolveMcpCallerScopeOrThrow` →
+`resolveActingActorOrThrow`).
+
+**Resolver extension:** `ResourceRef.kind` gained 5 more input shorthands — `body`/`intake` → project,
+`motion`/`dispute`/`request` → topic (all UUID-guarded, queries mirror the retired scopeResolvers).
+Topic-level resolution for motion/dispute/request is MORE precise than the old project-level guard
+(a project grant still covers via the lattice; a topic grant now also works).
+
+**Tests:** removed the 2 intake DEFERRED-029 cases from `coordination-scope.test.ts` (reviewRequests
+cases stay — domain 7) → new **`decisions-authz.test.ts`** (12 auth-ON tests exercising the body→
+project and motion→topic resolvers). Fixed `proxies.test.ts` 15.11 (its auth-ON proxy-verification
+test now mints a write-granted principal to pass the new outer gate). Migrated the **SEC-2** cross-
+tenant intake-injection regression in `pr-f-adversary-fixes-db.test.ts` to auth-ON (now FORBIDDEN
+instead of NOT_FOUND on the resolvable cross-tenant topic; the no-event-injection guarantee is
+identical). Decision FUNCTIONAL tests never passed callerScope, so none broke.
+
+**What's next:** domains 4–8 (documents next; the `doc` resolver kind is already wired). Plus the
+coordination-events tool (`replayEvents` in `coordinationEvents.ts`) still on callerScope — fold into
+a later domain. F2g prerequisites already logged.
+
+---
+
 # CHECKPOINT — F2f domain 2 (coordination board) enforcement wired (2026-06-20, session 12)
 
 **Branch:** `feature/actor-data-boundary`. Serial /loom rollout continuing. Auth stays **OFF** (inert).

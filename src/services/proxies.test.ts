@@ -11,6 +11,8 @@ import { grantProxy, revokeProxy, listProxies } from './proxies.js';
 import { createBody, addBodyMember } from './decisionBodies.js';
 import { charterTopic, joinTopic } from './topics.js';
 import { proposeMotion, secondMotion, castVote } from './motions.js';
+import { createPrincipal } from './principals.js';
+import { createGrant } from './grants.js';
 import { getDbPool } from '../db/client.js';
 import { getEnv } from '../env.js';
 
@@ -97,6 +99,13 @@ test('15.11 castVote proxy verification: gated behind MCP_AUTH_ENABLED', async (
   const env = getEnv() as { MCP_AUTH_ENABLED: boolean };
   const original = env.MCP_AUTH_ENABLED;
 
+  // F2f: under auth-ON, castVote/grantProxy now require the CALLER to hold write over the
+  // motion/body (assertAuthorized) BEFORE the proxy-verification logic under test runs. Mint a
+  // write-granted principal to satisfy that outer gate; the proxy check (proxy_not_granted vs
+  // vote_recorded) is independent of it.
+  const caller = (await createPrincipal({ kind: 'agent', display_name: `${TEST_PROJECT}caller` })).principal_id;
+  await createGrant({ grantee_principal: caller, scope_type: 'project', scope_id: TEST_PROJECT, capability: 'write', granted_by: caller });
+
   // Setup a balloting motion with a member principal.
   const t = await charterTopic({ project_id: TEST_PROJECT, name: 'PV', charter: 'c', created_by: 'owner' });
   await joinTopic({ topic_id: t.topic_id, actor_id: 'owner', actor_type: 'human', display_name: 'O', level: 'authority' });
@@ -112,15 +121,18 @@ test('15.11 castVote proxy verification: gated behind MCP_AUTH_ENABLED', async (
   try {
     // Auth-ON: a vote with proxy_for but no grant → proxy_not_granted.
     env.MCP_AUTH_ENABLED = true;
-    const denied = await castVote({ motion_id: m.motion_id, actor_id: 'principal-a', choice: 'for', proxy_for: 'agent-z' });
+    const denied = await castVote({ motion_id: m.motion_id, actingPrincipalId: caller, actor_id: 'principal-a', choice: 'for', proxy_for: 'agent-z' });
     assert.equal(denied.status, 'proxy_not_granted', 'auth-on rejects ungranted proxy');
 
     // Grant the proxy, then the vote succeeds.
-    await grantProxy({ body_id: body.body_id, principal: 'principal-a', proxy: 'agent-z', granted_by: 'principal-a' });
-    const ok = await castVote({ motion_id: m.motion_id, actor_id: 'principal-a', choice: 'for', proxy_for: 'agent-z' });
+    await grantProxy({ body_id: body.body_id, actingPrincipalId: caller, principal: 'principal-a', proxy: 'agent-z', granted_by: 'principal-a' });
+    const ok = await castVote({ motion_id: m.motion_id, actingPrincipalId: caller, actor_id: 'principal-a', choice: 'for', proxy_for: 'agent-z' });
     assert.equal(ok.status, 'vote_recorded', 'auth-on accepts granted proxy');
   } finally {
     env.MCP_AUTH_ENABLED = original;
+    const pool = getDbPool();
+    await pool.query(`DELETE FROM grants WHERE grantee_principal=$1 OR granted_by=$1`, [caller]);
+    await pool.query(`DELETE FROM principals WHERE principal_id=$1`, [caller]);
   }
 });
 

@@ -41,9 +41,26 @@ process.env.QUEUE_BACKEND = 'postgres';
 import { enqueueJob, listJobs } from './jobQueue.js';
 import { submitIntake, triageIntake } from './intake.js';
 import { charterTopic, joinTopic } from './topics.js';
+import { createPrincipal } from './principals.js';
+import { createGrant } from './grants.js';
 import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
 import { _resetEnvCacheForTest } from '../env.js';
+
+const isForbidden = (err: unknown): boolean =>
+  err instanceof ContextHubError && err.code === 'FORBIDDEN';
+
+/** F2f: mint a principal granted `capability` over `project`, returning its id. */
+async function grantedPrincipal(name: string, project: string, capability: 'read' | 'write' | 'admin'): Promise<string> {
+  const p = (await createPrincipal({ kind: 'agent', display_name: name })).principal_id;
+  await createGrant({ grantee_principal: p, scope_type: 'project', scope_id: project, capability, granted_by: p });
+  return p;
+}
+async function dropPrincipal(id: string): Promise<void> {
+  const pool = getDbPool();
+  await pool.query(`DELETE FROM grants WHERE grantee_principal=$1 OR granted_by=$1`, [id]);
+  await pool.query(`DELETE FROM principals WHERE principal_id=$1`, [id]);
+}
 
 const PROJ_A = '__sec_db_A__';
 const PROJ_B = '__sec_db_B__';
@@ -266,10 +283,9 @@ test('SEC-2 DB: scoped intake triaged to cross-tenant topic → NOT_FOUND + no c
   const topicA = await makeActiveTopic(PROJ_A, ACTOR_A);
   const topicB = await makeActiveTopic(PROJ_B, ACTOR_B);
 
-  // Submit an intake owned by proj-A.
+  // Submit an intake owned by proj-A (setup runs auth-OFF; the gate is inert here).
   const intake = await submitIntake({
     project_id: PROJ_A,
-    callerScope: PROJ_A,
     kind: 'suggestion',
     body: 'SEC-2 DB regression intake',
     submitted_by: ACTOR_A,
@@ -284,23 +300,34 @@ test('SEC-2 DB: scoped intake triaged to cross-tenant topic → NOT_FOUND + no c
   );
   const beforeCount = parseInt(beforeRes.rows[0]?.n ?? '0', 10);
 
-  // The exploit attempt: scopedA triages own intake but with route.topic_id
-  // pointing at proj-B's topic. Pre-fix: appendEvent writes 'intake.triaged'
-  // into proj-B's coordination_events. Post-fix: assertTopicScope throws
-  // NOT_FOUND on the cross-tenant topic.
-  await assert.rejects(
-    triageIntake(
-      intake.intake_id,
-      {
-        route_kind: 'task' as const,
-        actor_id: ACTOR_A,
-        topic_id: topicB,
-        routed_to: 'arbitrary-task-id',
-      },
-      { callerScope: PROJ_A },
-    ),
-    isNotFound,
-  );
+  // F2f: scopedA is a principal granted write@PROJ_A only. Under auth-ON the cross-tenant triage
+  // (route.topic_id in PROJ_B) is rejected by authorize() on the topic — a write-deny on a resolvable
+  // cross-tenant topic → FORBIDDEN — BEFORE any UPDATE/appendEvent. (Pre-F2f the assertTopicScope
+  // guard gave NOT_FOUND; the no-injection guarantee is identical.)
+  const originalAuth = process.env.MCP_AUTH_ENABLED;
+  const scopedA = await grantedPrincipal('__sec_db_scopedA__', PROJ_A, 'write');
+  process.env.MCP_AUTH_ENABLED = 'true';
+  _resetEnvCacheForTest();
+  try {
+    await assert.rejects(
+      triageIntake(
+        intake.intake_id,
+        {
+          route_kind: 'task' as const,
+          actor_id: ACTOR_A,
+          topic_id: topicB,
+          routed_to: 'arbitrary-task-id',
+        },
+        { actingPrincipalId: scopedA },
+      ),
+      isForbidden,
+    );
+  } finally {
+    if (originalAuth === undefined) delete process.env.MCP_AUTH_ENABLED;
+    else process.env.MCP_AUTH_ENABLED = originalAuth;
+    _resetEnvCacheForTest();
+    await dropPrincipal(scopedA);
+  }
 
   // Critical negative proof: proj-B's coordination_events count must be
   // unchanged. The attacker forged nothing into proj-B's append-only log.

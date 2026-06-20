@@ -35,14 +35,9 @@ import {
   getRequest,
   decideStep,
 } from '../../core/index.js';
-import type { CallerScope } from '../../core/index.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { requireResourceScope } from '../middleware/requireResourceScope.js';
-
-/** DEFERRED-029: read the caller's project scope attached by bearerAuth. */
-function callerScopeOf(req: Request): CallerScope {
-  return (req as { apiKeyScope?: CallerScope }).apiKeyScope;
-}
+import { callerPrincipalOf } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -131,7 +126,7 @@ router.post('/topics/:id/requests', requireRole('writer'), requireResourceScope(
     }
     const result = await submitRequest({
       topic_id: String(req.params.id),
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       subject_type: 'artifact',       // fixed in 15.3 (D7)
       subject_id: asString(body.subject_id),
       kind: asString(body.kind),
@@ -151,7 +146,7 @@ router.get('/topics/:id/requests', requireRole('reader'), requireResourceScope('
     const statusFilter = typeof statusQ === 'string' && statusQ ? statusQ : undefined;
     const result = await listRequests({
       topic_id: String(req.params.id),
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       status: statusFilter,
     });
     res.json({ status: 'ok', data: result });
@@ -161,7 +156,7 @@ router.get('/topics/:id/requests', requireRole('reader'), requireResourceScope('
 // GET /api/requests/:id — get a single request + its steps
 router.get('/requests/:id', requireRole('reader'), requireResourceScope('request'), async (req, res, next) => {
   try {
-    const req2 = await getRequest({ request_id: String(req.params.id), callerScope: callerScopeOf(req) });
+    const req2 = await getRequest({ request_id: String(req.params.id), actingPrincipalId: callerPrincipalOf(req) });
     if (req2 === null) {
       res.status(404).json({ status: 'error', error: 'request not found', code: 'NOT_FOUND' });
       return;
@@ -193,7 +188,7 @@ router.post('/requests/:id/steps/:n/decide', requireRole('writer'), requireResou
     }
     const result = await decideStep({
       request_id: String(req.params.id),
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       step_index: stepIndex,
       actor_id: id.actor,
       decision: asString(body.decision),

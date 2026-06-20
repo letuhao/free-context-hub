@@ -120,12 +120,13 @@ export function decide(
 
 /**
  * A handler's reference to the resource it acts on: a kind + (for non-global) its id. The input
- * kind is the lattice levels PLUS two entity shorthands the resolver maps UP to a lattice scope —
- * `artifact` → its task (artifact hangs off a task), `doc` → its project (documents live directly
- * under a project). The RESOLVED ResourceScope is always a lattice level; these are input-only.
+ * kind is the lattice levels PLUS entity shorthands the resolver maps UP to a lattice scope:
+ *   - `artifact` → its task; `motion`/`dispute`/`request` → their topic;
+ *   - `doc`/`body`/`intake` → their project.
+ * The RESOLVED ResourceScope is always a lattice level; these shorthands are input-only.
  */
 export interface ResourceRef {
-  kind: ResourceScope['kind'] | 'artifact' | 'doc';
+  kind: ResourceScope['kind'] | 'artifact' | 'doc' | 'body' | 'intake' | 'motion' | 'dispute' | 'request';
   id?: string | null;
 }
 
@@ -176,6 +177,31 @@ export async function resolveResourceScope(
     );
     if (!r.rows[0]) return { unresolvable: 'NOT_FOUND' };
     return { ok: { kind: 'project', project_id: r.rows[0].project_id } };
+  }
+
+  // [F2f domain 3] decision entities — all UUID-typed (guard 22P02). body/intake live directly under
+  // a project; motion/dispute/request hang off a topic → enforce at that topic's scope (a topic/
+  // project/global grant all cover it). Queries mirror the retired scopeResolvers.ts SSOT.
+  if (ref.kind === 'body' || ref.kind === 'intake') {
+    if (!isUuid(id)) return { unresolvable: 'NOT_FOUND' };
+    const sql = ref.kind === 'body'
+      ? `SELECT project_id FROM decision_bodies WHERE body_id = $1`
+      : `SELECT project_id FROM intake_items WHERE intake_id = $1`;
+    const r = await runner.query<{ project_id: string }>(sql, [id]);
+    if (!r.rows[0]) return { unresolvable: 'NOT_FOUND' };
+    return { ok: { kind: 'project', project_id: r.rows[0].project_id } };
+  }
+
+  if (ref.kind === 'motion' || ref.kind === 'dispute' || ref.kind === 'request') {
+    if (!isUuid(id)) return { unresolvable: 'NOT_FOUND' };
+    const sql = ref.kind === 'motion'
+      ? `SELECT m.topic_id, t.project_id FROM motions m JOIN topics t ON t.topic_id = m.topic_id WHERE m.motion_id = $1`
+      : ref.kind === 'dispute'
+      ? `SELECT d.topic_id, t.project_id FROM disputes d JOIN topics t ON t.topic_id = d.topic_id WHERE d.dispute_id = $1`
+      : `SELECT r.topic_id, t.project_id FROM requests r JOIN topics t ON t.topic_id = r.topic_id WHERE r.request_id = $1`;
+    const r = await runner.query<{ topic_id: string; project_id: string }>(sql, [id]);
+    if (!r.rows[0]) return { unresolvable: 'NOT_FOUND' };
+    return { ok: { kind: 'topic', project_id: r.rows[0].project_id, topic_id: r.rows[0].topic_id } };
   }
 
   // task — task_id is UUID; guard against 22P02 on a malformed id (treat as not found).
