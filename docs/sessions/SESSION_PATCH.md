@@ -1,3 +1,53 @@
+# CHECKPOINT — F2f domain 7 (guardrails/taxonomy/groups/review/exchange/replay) enforcement wired (2026-06-20, session 12)
+
+**Branch:** `feature/actor-data-boundary`. Serial /loom rollout continuing. Auth stays **OFF** (inert).
+Full unit suite **1157 pass / 2 skip**, tsc clean.
+
+**Domain 7 — leftover project/topic-scoped services (PURE REPLACE, EXCEPT jobQueue):**
+`guardrails.ts` (list/simulate/check = read; multi-project = authorize-each strict-reject),
+`taxonomyService.ts` (getActiveProfile = read, activate/deactivate = write), `projectGroups.ts`
+(add/remove = write, listGroupsForProject = read, createProject/updateProject = write),
+`reviewRequests.ts` (submit/approve/return = write, list/get = read), `exchange/` (exportProject = read,
+importProject/pullFromRemote = write), `coordinationEvents.replayEvents` (topic read). All
+`assertCallerScope`/`assertTopicScope` → `assertAuthorized`; `callerScope` removed. `createProject`
+authorizes cleanly against a not-yet-existent project because `resolveResourceScope` trusts `project`
+kind without an existence check (a global-write/root principal can create; a project-scoped one can't
+create elsewhere).
+
+**authorize.ts widening:** `executor` param `PoolClient` → `Pool | PoolClient` across the 8 internal
+fns (additive; the bodies already fell back to `getDbPool()`, a Pool) so `replayEvents` can pass its
+`Pool | PoolClient` executor for transaction-join (joinTopic's coherent snapshot).
+
+**Wiring:** ~11 MCP handlers (`resolveMcpCallerScopeOrThrow` → `resolveActingActorOrThrow`: check_guardrails,
+add/remove_project_from_group, list_project_groups, submit_for_review, list_review_requests, replay_events,
+get/activate/deactivate_taxonomy_profile). REST fully migrated to `callerPrincipalOf`: guardrails.ts,
+taxonomy.ts, reviewRequests.ts, projectGroups.ts, projects.ts (now FULLY migrated — `callerScopeOf` +
+`CallerScope`/`Request` imports deleted), chat.ts checkGuardrails, topics.ts replayEvents ×3. The
+include_groups graceful-skip (check_guardrails MCP + REST) now keys off `NOT_FOUND` directly instead of
+`typeof callerScope === 'string'`.
+
+**⚠️ DEFERRED — jobQueue NOT migrated (DEFERRED-045 / F2f-jobs, MED):** `enqueueJob`/`listJobs`/`cancelJob`
+use `callerScope` as a DATA value in PR F's adversary-hardened SEC-1/3/5/6 logic (auto-bind project_id
+to the single caller scope; block `payload.root` for scoped callers — the only defense against the
+cross-tenant filesystem-write bug since the worker runs jobs with no principal). The actor model has no
+single "caller scope", so this needs an actor-native redesign (global-grant detection + required
+project_id) + its own cold-start adversary pass — NOT a mechanical replace. jobQueue stays on the
+DEFERRED-029 guard; its `d3-scope.test.ts` cases remain. **This is a F2g-flip prerequisite.**
+
+**Tests:** new consolidated **`domain7-authz.test.ts`** (25 auth-ON grant-based tests across all migrated
+fns: 10 reads cross-tenant → NOT_FOUND incl. multi-project strict-reject + replay unresolvable-topic, 11
+writes cross-tenant → FORBIDDEN, over-capability, allows, unknown principal). Deleted the now-empty
+`d4-scope.test.ts` (guardrails), `coordination-scope.test.ts` (reviewRequests), `documents-scope.test.ts`
+(exchange); trimmed `d3-scope.test.ts` to jobQueue-only. Functional tests never passed callerScope, none broke.
+
+**What's next:** **DEFERRED-045 jobQueue (F2f-jobs)** before any flip; domain 8 (retire REST
+`requireScope`/`requireResourceScope`/role middleware once every route's service enforces — blocked
+until jobQueue lands); the mandated **3rd cold-start adversary pass** over the wired enforcement; F2g
+posture-flip prerequisites doc (flip itself human-gated, NOT done). F2g system/root principal needed for
+internal/worker callers (they pass no principal — inert now, would NO_PRINCIPAL-deny at flip).
+
+---
+
 # CHECKPOINT — F2f domain 6 (search/retrieval/indexer/KG) enforcement wired (2026-06-20, session 12)
 
 **Branch:** `feature/actor-data-boundary`. Serial /loom rollout continuing. Auth stays **OFF** (inert).

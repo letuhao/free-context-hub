@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import type { Request } from 'express';
 import {
   getProjectSnapshotBody,
   indexProject,
@@ -12,7 +11,6 @@ import {
   updateProject,
   addProjectToGroup,
 } from '../../core/index.js';
-import type { CallerScope } from '../../core/index.js';
 import { callerPrincipalOf } from '../middleware/auth.js';
 import multer from 'multer';
 import { promises as fsPromises } from 'node:fs';
@@ -25,11 +23,6 @@ import {
   type ConflictPolicy,
 } from '../../services/exchange/importProject.js';
 import { pullFromRemote, PullError } from '../../services/exchange/pullFromRemote.js';
-
-/** DEFERRED-029: read the caller's project scope attached by bearerAuth. */
-function callerScopeOf(req: Request): CallerScope {
-  return (req as { apiKeyScope?: CallerScope }).apiKeyScope;
-}
 
 // Bundles routinely exceed the 10MB default used for document uploads —
 // 500 MB matches what we've observed in production-scale projects with
@@ -62,7 +55,7 @@ router.post('/', requireRole('writer'), async (req, res, next) => {
     const trimmedDesc = typeof description === 'string' ? description.trim() : undefined;
     const result = await createProject({
       project_id: project_id.trim(),
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       name: trimmedName || undefined,
       description: trimmedDesc || undefined,
       color,
@@ -73,7 +66,7 @@ router.post('/', requireRole('writer'), async (req, res, next) => {
     let group_warning: string | undefined;
     if (group_id && typeof group_id === 'string') {
       try {
-        await addProjectToGroup(group_id, project_id, { callerScope: callerScopeOf(req) });
+        await addProjectToGroup(group_id, project_id, { actingPrincipalId: callerPrincipalOf(req) });
       } catch (err: any) {
         group_warning = `Project created but failed to add to group "${group_id}": ${err?.message ?? 'unknown error'}`;
       }
@@ -91,7 +84,7 @@ router.put('/:id', requireRole('writer'), async (req, res, next) => {
     const trimmedName = typeof name === 'string' ? name.trim() : undefined;
     const trimmedDesc = typeof description === 'string' ? description.trim() : undefined;
     const result = await updateProject(projectId, {
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       name: trimmedName,
       description: trimmedDesc,
       color,
@@ -163,7 +156,7 @@ router.get('/:id/export', async (req, res, next) => {
     );
     // Disable any default JSON-ifying middleware buffering by streaming
     // straight into the response. encodeBundle pipes archiver → res.
-    await exportProject({ projectId, callerScope: callerScopeOf(req), includeDocuments, includeChunks }, res);
+    await exportProject({ projectId, actingPrincipalId: callerPrincipalOf(req), includeDocuments, includeChunks }, res);
     // archiver.finalize() ended the response; nothing more to send.
   } catch (e) {
     if (e instanceof ExportNotFoundError) {
@@ -219,7 +212,7 @@ router.post(
 
       const result = await importProject({
         targetProjectId: projectId,
-        callerScope: callerScopeOf(req),
+        actingPrincipalId: callerPrincipalOf(req),
         bundlePath: tmpPath,
         policy,
         dryRun,
@@ -299,7 +292,7 @@ router.post('/:id/pull-from', requireRole('writer'), async (req, res, next) => {
 
     const result = await pullFromRemote({
       targetProjectId: projectId,
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       remoteUrl: body.remote_url,
       remoteProjectId: body.remote_project_id,
       apiKey,

@@ -1,34 +1,27 @@
 /**
- * DEFERRED-029 PR D3 — DB-free cross-tenant scope guards for jobQueue +
- * artifactLeases + taxonomyService + replayEvents + projectGroups.
+ * DEFERRED-029 PR D3 — DB-free cross-tenant scope guards for jobQueue.
  *
- * All these fns use direct project_id paths (assertCallerScope) or topic-id
- * derive (assertTopicScope for replayEvents). Cross-tenant attempts therefore
- * yield ContextHubError('NOT_FOUND', 'not found') with no oracle leak.
+ * jobQueue (enqueueJob/listJobs/cancelJob) uses direct project_id paths
+ * (assertCallerScope). Cross-tenant attempts yield ContextHubError('NOT_FOUND').
  *
- * Entity-id-derive cross-tenant DB tests (replayEvents.assertTopicScope)
- * deferred to PR F per established pattern — covered here only for direct
- * project_id matches.
+ * NOTE: the taxonomyService / projectGroups / replayEvents cases that once lived
+ * here were MIGRATED to authorize() + grants (F2f domain 7); their auth-ON
+ * coverage now lives in domain7-authz.test.ts. artifactLeases moved to
+ * board-authz.test.ts (F2f domain 2). jobQueue stays on the DEFERRED-029 guard:
+ * its SEC-1/3/5/6 hardening keys off callerScope as a data value and needs an
+ * actor-native redesign before migration (see DEFERRED.md F2f-jobs).
  */
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { enqueueJob, listJobs, cancelJob } from './jobQueue.js';
-import { getActiveProfile, activateProfile, deactivateProfile } from './taxonomyService.js';
-import {
-  addProjectToGroup,
-  removeProjectFromGroup,
-  listGroupsForProject,
-  createProject,
-  updateProject,
-} from './projectGroups.js';
 import { ContextHubError } from '../core/errors.js';
 
 const isNotFound = (err: unknown): boolean =>
   err instanceof ContextHubError && err.code === 'NOT_FOUND';
 
-// ── jobQueue (3 — direct project_id when project_id is set) ───────────────────
+// ── jobQueue (4 — direct project_id when project_id is set) ───────────────────
 
 test('DEFERRED-029: enqueueJob cross-tenant → NOT_FOUND', async () => {
   await assert.rejects(
@@ -59,69 +52,6 @@ test('DEFERRED-029: listJobs cross-tenant (multi projectIds) → NOT_FOUND (stri
 test('DEFERRED-029: cancelJob cross-tenant → NOT_FOUND', async () => {
   await assert.rejects(
     cancelJob('11111111-1111-1111-1111-111111111111', 'proj-A', { callerScope: 'proj-B' }),
-    isNotFound,
-  );
-});
-
-// ── artifactLeases MIGRATED to F2f domain 2 (authorize() + grants); the 6 callerScope cross-tenant
-//    cases moved to board-authz.test.ts (auth-ON grant-based). ─────────────────────────────────
-
-// ── taxonomyService (3 project-scoped) ────────────────────────────────────────
-
-test('DEFERRED-029: getActiveProfile cross-tenant → NOT_FOUND', async () => {
-  await assert.rejects(
-    getActiveProfile('proj-A', { callerScope: 'proj-B' }),
-    isNotFound,
-  );
-});
-
-test('DEFERRED-029: activateProfile cross-tenant → NOT_FOUND', async () => {
-  await assert.rejects(
-    activateProfile({ project_id: 'proj-A', callerScope: 'proj-B', slug: 'default' }),
-    isNotFound,
-  );
-});
-
-test('DEFERRED-029: deactivateProfile cross-tenant → NOT_FOUND', async () => {
-  await assert.rejects(
-    deactivateProfile('proj-A', { callerScope: 'proj-B' }),
-    isNotFound,
-  );
-});
-
-// ── projectGroups (5 project-scoped) ──────────────────────────────────────────
-
-test('DEFERRED-029: addProjectToGroup cross-tenant → NOT_FOUND', async () => {
-  await assert.rejects(
-    addProjectToGroup('group-x', 'proj-A', { callerScope: 'proj-B' }),
-    isNotFound,
-  );
-});
-
-test('DEFERRED-029: removeProjectFromGroup cross-tenant → NOT_FOUND', async () => {
-  await assert.rejects(
-    removeProjectFromGroup('group-x', 'proj-A', { callerScope: 'proj-B' }),
-    isNotFound,
-  );
-});
-
-test('DEFERRED-029: listGroupsForProject cross-tenant → NOT_FOUND', async () => {
-  await assert.rejects(
-    listGroupsForProject('proj-A', { callerScope: 'proj-B' }),
-    isNotFound,
-  );
-});
-
-test('DEFERRED-029: createProject cross-tenant → NOT_FOUND', async () => {
-  await assert.rejects(
-    createProject({ project_id: 'proj-A', callerScope: 'proj-B', name: 'A' }),
-    isNotFound,
-  );
-});
-
-test('DEFERRED-029: updateProject cross-tenant → NOT_FOUND', async () => {
-  await assert.rejects(
-    updateProject('proj-A', { callerScope: 'proj-B', name: 'A' }),
     isNotFound,
   );
 });

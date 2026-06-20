@@ -125,6 +125,7 @@ router.get('/:id/events', requireResourceScope('topic'), async (req, res, next) 
   try {
     const result = await replayEvents({
       topic_id: String(req.params.id),
+      actingPrincipalId: callerPrincipalOf(req),
       since_seq: parseCursor(req.query.since),
     });
     res.json({ status: 'ok', data: result });
@@ -161,7 +162,7 @@ router.get('/:id/stream', requireResourceScope('topic'), async (req, res, next) 
 
   try {
     // pre-flight existence check — before headers. NOT_FOUND → catch → next(e) → real 404.
-    const first = await replayEvents({ topic_id: topicId, since_seq: sinceSeq });
+    const first = await replayEvents({ topic_id: topicId, actingPrincipalId: callerPrincipalOf(req), since_seq: sinceSeq });
     if (closed || req.destroyed) { cleanup(); return; }
 
     res.setHeader('Content-Type', 'text/event-stream');
@@ -201,7 +202,7 @@ router.get('/:id/stream', requireResourceScope('topic'), async (req, res, next) 
     const tick = async () => {
       if (closed || res.writableEnded) return;
       if (Date.now() > streamDeadline) { endStream(); return; }
-      const r = await replayEvents({ topic_id: topicId, since_seq: cursor });
+      const r = await replayEvents({ topic_id: topicId, actingPrincipalId: callerPrincipalOf(req), since_seq: cursor });
       if (closed || res.writableEnded) return;
       writeEvents(r.events);
       cursor = r.next_cursor;

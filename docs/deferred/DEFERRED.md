@@ -1,7 +1,49 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 045 -->
+<!-- Next ID: 046 -->
+
+## DEFERRED-045
+
+- **Title:** F2f-jobs — migrate jobQueue (`enqueueJob`/`listJobs`/`cancelJob`) to `authorize()` (actor-native SEC-1/3/5/6 redesign)
+- **Status:** OPEN (2026-06-20). MED. Raised during the F2f domain-7 rollout — the ONE domain-7 service
+  that is NOT a clean pure-replace. jobQueue stays on the DEFERRED-029 `callerScope` guard (its
+  `d3-scope.test.ts` cases remain) until this is done. Auth is OFF, so jobQueue is correct today; this
+  is a F2g-flip prerequisite, not a live bug.
+- **Context:** `src/services/jobQueue.ts` uses `callerScope` not merely as an authz check but as a DATA
+  value, in PR F's adversary-hardened logic:
+  - **SEC-1** (`listJobs`): a scoped caller that omits both `projectId` and `projectIds` is pinned to
+    `params = { ...params, projectId: callerScope }` (else `WHERE 1=1` → cross-tenant read of every
+    project's jobs).
+  - **SEC-3** (`enqueueJob`): a scoped caller that omits `project_id` gets it auto-bound to
+    `callerScope`; a mismatching `project_id` is rejected.
+  - **SEC-6** (`enqueueJob`): a scoped caller may NOT pass `payload.root` — the worker walks that
+    filesystem path verbatim and would index another tenant's source under this tenant's `project_id`.
+    Only an unscoped (admin/global) caller may specify `root`.
+  - **SEC-5** (`cancelJob`): same auto-bind footgun as SEC-3.
+  The actor model has no single "the caller's scope" — a principal can hold many grants — so none of
+  these auto-bind/restrict rules translate mechanically. The worker also calls `indexProject` etc.
+  with NO principal (internal/system caller), so it will NOT re-check authz at run time; SEC-6's
+  enqueue-time `payload.root` block therefore remains the ONLY defense against the cross-tenant
+  filesystem write PR F fixed. Getting the translation subtly wrong reintroduces that exact bug.
+- **Scope when picked up (the redesign):**
+  1. **Authz check:** `assertAuthorized(actingPrincipalId, 'write', { kind:'project', id: project_id })`
+     for `enqueueJob`/`cancelJob`; `read` for `listJobs`. `project_id`/`projectId` becomes effectively
+     REQUIRED for a non-global principal (no single scope to auto-bind to).
+  2. **`payload.root` restriction (SEC-6):** replace "scoped caller can't pass root" with "only a
+     principal holding a GLOBAL grant (or root) may pass `payload.root`." Needs a new helper, e.g.
+     `hasGlobalGrant(principalId)` / a `global`-scope capability probe, since `authorize()` returns
+     allow/deny but does not expose "is this principal globally privileged."
+  3. **`listJobs` no-scope read (SEC-1):** a non-global principal with neither `projectId` nor
+     `projectIds` must NOT get `WHERE 1=1`. Either require a project filter, or derive the readable
+     project set from the principal's grants and constrain to it.
+  4. **Worker/system caller:** depends on the F2g system/root principal (the worker passes no principal
+     today) — fold into that work so run-time `indexProject`/`git.ingest` calls authorize as root.
+  5. Re-run a cold-start hostile-actor adversary pass over the result (CLAUDE.md safety-sensitive policy
+     — this is the cross-tenant-filesystem path) + auth-ON tests mirroring the PR F SEC-1/3/5/6 cases.
+- **Trigger condition:** before the F2g `MCP_AUTH_ENABLED` default flip (jobQueue must enforce via
+  grants by then), OR whenever jobQueue is next touched. Tracked alongside the other F2g prerequisites
+  in `docs/sessions/SESSION_PATCH.md`.
 
 ## DEFERRED-044
 

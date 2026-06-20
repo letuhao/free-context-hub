@@ -11,13 +11,6 @@
  */
 
 import { Router } from 'express';
-import type { Request } from 'express';
-import type { CallerScope } from '../../core/index.js';
-
-/** DEFERRED-029: read the caller's project scope attached by bearerAuth. */
-function callerScopeOf(req: Request): CallerScope {
-  return (req as { apiKeyScope?: CallerScope }).apiKeyScope;
-}
 import {
   listTaxonomyProfiles,
   getTaxonomyProfileBySlug,
@@ -27,6 +20,7 @@ import {
   deactivateProfile,
   resolveProjectIdOrThrow,
 } from '../../core/index.js';
+import { callerPrincipalOf } from '../middleware/auth.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { requireScope } from '../middleware/requireScope.js';
 import { ContextHubError } from '../../core/errors.js';
@@ -88,7 +82,7 @@ export const projectTaxonomyProfileRouter = Router({ mergeParams: true });
 projectTaxonomyProfileRouter.get('/', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String((req.params as Record<string, string>).id ?? ''));
-    const profile = await getActiveProfile(projectId, { callerScope: callerScopeOf(req) });
+    const profile = await getActiveProfile(projectId, { actingPrincipalId: callerPrincipalOf(req) });
     res.json({ profile });
   } catch (e) { next(e); }
 });
@@ -101,7 +95,7 @@ projectTaxonomyProfileRouter.post('/activate', requireRole('writer'), requireSco
       res.status(400).json({ error: 'slug (string) is required' });
       return;
     }
-    const result = await activateProfile({ project_id: projectId, callerScope: callerScopeOf(req), slug, activated_by });
+    const result = await activateProfile({ project_id: projectId, actingPrincipalId: callerPrincipalOf(req), slug, activated_by });
     if (result.status === 'profile_not_found') { res.status(404).json(result); return; }
     res.json(result);
   } catch (e) { next(e); }
@@ -110,6 +104,6 @@ projectTaxonomyProfileRouter.post('/activate', requireRole('writer'), requireSco
 projectTaxonomyProfileRouter.delete('/', requireRole('writer'), requireScope('id'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String((req.params as Record<string, string>).id ?? ''));
-    res.json(await deactivateProfile(projectId, { callerScope: callerScopeOf(req) }));
+    res.json(await deactivateProfile(projectId, { actingPrincipalId: callerPrincipalOf(req) }));
   } catch (e) { next(e); }
 });

@@ -1,7 +1,6 @@
 import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
-import { assertCallerScope } from '../core/security/callerScope.js';
-import type { CallerScope } from '../core/security/callerScope.js';
+import { assertAuthorized } from './authorize.js';
 
 const MAX_GROUP_MEMBERS = 50;
 
@@ -95,10 +94,10 @@ export async function listGroupMembers(groupId: string): Promise<string[]> {
 export async function addProjectToGroup(
   groupId: string,
   projectId: string,
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  opts?: { callerScope?: CallerScope },
+  /** F2f: acting principal; authorize() enforces write on the project. */
+  opts?: { actingPrincipalId?: string | null },
 ): Promise<{ added: boolean }> {
-  assertCallerScope(opts?.callerScope, projectId);
+  await assertAuthorized(opts?.actingPrincipalId, 'write', { kind: 'project', id: projectId });
   const pool = getDbPool();
 
   // Guard: group must exist.
@@ -133,10 +132,10 @@ export async function addProjectToGroup(
 export async function removeProjectFromGroup(
   groupId: string,
   projectId: string,
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  opts?: { callerScope?: CallerScope },
+  /** F2f: acting principal; authorize() enforces write on the project. */
+  opts?: { actingPrincipalId?: string | null },
 ): Promise<{ removed: boolean }> {
-  assertCallerScope(opts?.callerScope, projectId);
+  await assertAuthorized(opts?.actingPrincipalId, 'write', { kind: 'project', id: projectId });
   const pool = getDbPool();
   const res = await pool.query(
     `DELETE FROM project_group_members WHERE group_id = $1 AND project_id = $2 RETURNING project_id`,
@@ -147,10 +146,10 @@ export async function removeProjectFromGroup(
 
 export async function listGroupsForProject(
   projectId: string,
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  opts?: { callerScope?: CallerScope },
+  /** F2f: acting principal; authorize() enforces read on the project. */
+  opts?: { actingPrincipalId?: string | null },
 ): Promise<ProjectGroup[]> {
-  assertCallerScope(opts?.callerScope, projectId);
+  await assertAuthorized(opts?.actingPrincipalId, 'read', { kind: 'project', id: projectId });
   const pool = getDbPool();
   const res = await pool.query(
     `SELECT g.*
@@ -230,15 +229,16 @@ function validateColor(color: string | undefined): void {
 
 export async function createProject(params: {
   project_id: string;
-  /** DEFERRED-029: caller's scope; enforced against project_id. A scoped key may
-   *  only create its OWN project; an admin/global key may create any. */
-  callerScope?: CallerScope;
+  /** F2f: acting principal; authorize() enforces write on the project id. A principal with a covering
+   *  grant (its own project, or a global grant) may create; resolveResourceScope trusts `project` kind
+   *  without an existence check, so authorizing a not-yet-existent project works. */
+  actingPrincipalId?: string | null;
   name?: string;
   description?: string;
   color?: string;
   settings?: Record<string, unknown>;
 }): Promise<{ project_id: string }> {
-  assertCallerScope(params.callerScope, params.project_id);
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.project_id });
   const pool = getDbPool();
 
   // Validate project_id format: lowercase alphanumeric + hyphens, no leading/trailing hyphens
@@ -281,15 +281,15 @@ export async function createProject(params: {
 export async function updateProject(
   projectId: string,
   params: {
-    /** DEFERRED-029: caller's scope; enforced against projectId. */
-    callerScope?: CallerScope;
+    /** F2f: acting principal; authorize() enforces write on the project. */
+    actingPrincipalId?: string | null;
     name?: string;
     description?: string;
     color?: string;
     settings?: Record<string, unknown>;
   },
 ): Promise<{ project_id: string }> {
-  assertCallerScope(params.callerScope, projectId);
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: projectId });
   const pool = getDbPool();
 
   if (params.name !== undefined && params.name.length > MAX_NAME_LENGTH) {

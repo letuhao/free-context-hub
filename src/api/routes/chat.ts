@@ -72,7 +72,7 @@ Be concise and direct. Use markdown formatting.`,
           }),
           execute: async ({ action }) => {
             logger.info({ projectId, action }, 'chat tool: check_guardrails');
-            return checkGuardrails(projectId, { action });
+            return checkGuardrails(projectId, { action }, { actingPrincipalId: callerPrincipalOf(req) });
           },
         }),
         search_documents: tool({

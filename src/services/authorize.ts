@@ -10,7 +10,7 @@
  * See docs/specs/2026-06-19-actor-data-boundary-F2-design.md.
  */
 
-import type { PoolClient } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { validate as isUuid } from 'uuid';
 import { getDbPool } from '../db/client.js';
 import { getEnv } from '../env.js';
@@ -137,7 +137,7 @@ export interface ResourceRef {
  */
 export async function resolveResourceScope(
   ref: ResourceRef,
-  executor?: PoolClient,
+  executor?: Pool | PoolClient,
 ): Promise<{ ok: ResourceScope } | { unresolvable: 'NOT_FOUND' }> {
   if (ref.kind === 'global') return { ok: { kind: 'global' } };
   const runner = executor ?? getDbPool();
@@ -216,7 +216,7 @@ export async function resolveResourceScope(
   return { ok: { kind: 'task', project_id: r.rows[0].project_id, topic_id: r.rows[0].topic_id, task_id: id } };
 }
 
-async function loadPrincipalLite(principalId: string | null | undefined, executor?: PoolClient): Promise<PrincipalLike | null> {
+async function loadPrincipalLite(principalId: string | null | undefined, executor?: Pool | PoolClient): Promise<PrincipalLike | null> {
   if (typeof principalId !== 'string' || !isUuid(principalId)) return null;
   const runner = executor ?? getDbPool();
   const r = await runner.query<PrincipalLike>(
@@ -226,7 +226,7 @@ async function loadPrincipalLite(principalId: string | null | undefined, executo
   return r.rows[0] ?? null;
 }
 
-async function loadActiveGrants(principalId: string, executor?: PoolClient): Promise<GrantLike[]> {
+async function loadActiveGrants(principalId: string, executor?: Pool | PoolClient): Promise<GrantLike[]> {
   const runner = executor ?? getDbPool();
   const r = await runner.query<GrantLike>(
     `SELECT grant_id, scope_type, scope_id, capability
@@ -243,7 +243,7 @@ async function logDecision(
   ref: ResourceRef,
   d: Decision,
   context: AuthzContext,
-  executor?: PoolClient,
+  executor?: Pool | PoolClient,
 ): Promise<void> {
   try {
     const runner = executor ?? getDbPool();
@@ -278,7 +278,7 @@ async function evaluate(
   principalId: string | null | undefined,
   action: Action,
   resource: ResourceRef,
-  executor?: PoolClient,
+  executor?: Pool | PoolClient,
 ): Promise<{ decision: Decision; resolved: ResourceScope | null }> {
   const principal = await loadPrincipalLite(principalId, executor);
   if (!principal) return { decision: { allow: false, reason: 'NO_PRINCIPAL' }, resolved: null };
@@ -304,7 +304,7 @@ export async function authorize(
   principalId: string | null | undefined,
   action: Action,
   resource: ResourceRef,
-  executor?: PoolClient,
+  executor?: Pool | PoolClient,
   context: AuthzContext = 'access',
 ): Promise<Decision> {
   if (!getEnv().MCP_AUTH_ENABLED) return { allow: true, reason: 'AUTH_DISABLED' };
@@ -327,7 +327,7 @@ export async function assertAuthorized(
   principalId: string | null | undefined,
   action: Action,
   resource: ResourceRef,
-  executor?: PoolClient,
+  executor?: Pool | PoolClient,
 ): Promise<void> {
   const d = await authorize(principalId, action, resource, executor);
   if (d.allow) return;
@@ -352,7 +352,7 @@ export async function explainAuthorization(
   principalId: string | null | undefined,
   action: Action,
   resource: ResourceRef,
-  executor?: PoolClient,
+  executor?: Pool | PoolClient,
 ): Promise<ExplainResult> {
   if (!getEnv().MCP_AUTH_ENABLED) return { decision: { allow: true, reason: 'AUTH_DISABLED' }, scope_chain: null };
   const { decision, resolved } = await evaluate(principalId, action, resource, executor);
