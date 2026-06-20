@@ -50,21 +50,18 @@ async function executeByType(
         sourceStorageMode: (payload.source_storage_mode ? String(payload.source_storage_mode) : env.SOURCE_STORAGE_MODE) as any,
       });
       if (res.status !== 'ok') throw new Error(res.error ?? 'repo.sync failed');
-      // PR F Adversary #4 MEDIUM-3: explicit callerScope:null on worker-internal
-      // chains. The worker is a trusted "global" actor — it's not a scoped caller.
-      // Setting callerScope=null self-documents the intent and is future-proof
-      // against an accidental "default to current scope" refactor that could
-      // re-introduce a SEC-3-shaped trap.
+      // [F2f/DEFERRED-045] worker-internal chain. The worker is a trusted "global" actor; it enqueues
+      // follow-up jobs with no acting principal. While auth is OFF this is inert; at the F2g flip the
+      // worker must run under a system/root principal (the F2g prerequisite) so enqueueJob's write@project
+      // authorize() passes for these chained jobs.
       await enqueueJob({
         project_id: projectId,
-        callerScope: null,
         job_type: 'git.ingest',
         payload: { root: res.repo_root, since: payload.since ?? null, max_commits: payload.max_commits ?? null },
         correlation_id: chainCorrelation,
       });
       await enqueueJob({
         project_id: projectId,
-        callerScope: null,
         job_type: 'index.run',
         payload: { root: res.repo_root },
         correlation_id: chainCorrelation,
@@ -90,17 +87,14 @@ async function executeByType(
       if (!projectId) throw new Error('project_id is required for workspace.scan');
       const root = await resolveRoot(projectId, payload);
       const scan = await scanWorkspaceChanges({ projectId, rootPath: root, runDeltaIndex: false });
-      // MEDIUM-3: explicit callerScope:null on worker-internal chains.
       await enqueueJob({
         project_id: projectId,
-        callerScope: null,
         job_type: 'workspace.delta_index',
         payload: { root },
         correlation_id: chainCorrelation,
       });
       await enqueueJob({
         project_id: projectId,
-        callerScope: null,
         job_type: 'knowledge.refresh',
         payload: { root },
         correlation_id: chainCorrelation,
@@ -429,10 +423,8 @@ async function executeByType(
         sourceJobId,
         correlationId: chainCorrelation,
       });
-      // MEDIUM-3: explicit callerScope:null on worker-internal chain.
       await enqueueJob({
         project_id: projectId,
-        callerScope: null,
         job_type: 'index.run',
         payload: { root },
         correlation_id: chainCorrelation,
@@ -450,10 +442,8 @@ async function executeByType(
         sourceJobId,
         correlationId: chainCorrelation,
       });
-      // MEDIUM-3: explicit callerScope:null on worker-internal chain.
       await enqueueJob({
         project_id: projectId,
-        callerScope: null,
         job_type: 'index.run',
         payload: { root },
         correlation_id: chainCorrelation,
@@ -475,10 +465,8 @@ async function executeByType(
           payload.resume_from_shard_index !== undefined ? Number(payload.resume_from_shard_index) : undefined,
       });
       if (res.status === 'ok') {
-        // MEDIUM-3: explicit callerScope:null on worker-internal chain.
         await enqueueJob({
           project_id: projectId,
-          callerScope: null,
           job_type: 'index.run',
           payload: { root },
           correlation_id: chainCorrelation,

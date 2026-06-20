@@ -2881,11 +2881,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, job_type, payload, correlation_id, queue_name, max_attempts, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = project_id ? resolveProjectIdOrThrow(project_id) : undefined;
       const result = await enqueueJob({
         project_id: pid,
-        callerScope,
+        actingPrincipalId,
         job_type,
         payload: payload ?? {},
         correlation_id,
@@ -2929,9 +2929,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, correlation_id, status, limit, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = project_id ? resolveProjectIdOrThrow(project_id) : undefined;
-      const result = await listJobs({ projectId: pid, callerScope, correlationId: correlation_id, status, limit });
+      const result = await listJobs({ projectId: pid, actingPrincipalId, correlationId: correlation_id, status, limit });
       const summary = `list_jobs: items=${result.items.length}`;
       return formatToolResponse(result, summary, output_format);
     },

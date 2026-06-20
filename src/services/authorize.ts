@@ -337,6 +337,28 @@ export async function assertAuthorized(
   throw new ContextHubError('FORBIDDEN', `not authorized to ${action} this resource`);
 }
 
+/**
+ * Is this principal GLOBALLY privileged for `action` — i.e. root, or holding an active global-scope
+ * grant whose capability covers the action? Used by surfaces where a global capability (not a single
+ * project grant) is the gate — e.g. jobQueue's `payload.root` (arbitrary filesystem access) and
+ * unscoped job enqueue/list. Honors the auth-off posture symmetrically: when MCP_AUTH_ENABLED=false
+ * this returns true (the dev/admin posture is fully privileged), so the gated capability stays usable
+ * in dev exactly as the legacy `callerScope=null/undefined` admin path did. [DEFERRED-045]
+ */
+export async function hasGlobalGrant(
+  principalId: string | null | undefined,
+  action: Action = 'write',
+  executor?: Pool | PoolClient,
+): Promise<boolean> {
+  if (!getEnv().MCP_AUTH_ENABLED) return true;
+  const principal = await loadPrincipalLite(principalId, executor);
+  if (!principal) return false;
+  if (principal.is_root) return true;
+  if (principal.status !== 'active') return false;
+  const grants = await loadActiveGrants(principalId as string, executor);
+  return grants.some((g) => g.scope_type === 'global' && capabilityCovers(g.capability, action));
+}
+
 export interface ExplainResult {
   decision: Decision;
   /** the resolved resource scope chain, or null when the principal failed before resolution or the

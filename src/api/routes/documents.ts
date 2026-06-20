@@ -435,6 +435,7 @@ router.post('/:id/extract', requireResourceScope('document', 'id'), async (req, 
 
       const job = await enqueueJob({
         project_id: projectId,
+        actingPrincipalId: callerPrincipalOf(req),
         job_type: 'document.extract.vision' as any,
         payload: {
           doc_id: String(req.params.id),
@@ -689,7 +690,7 @@ router.delete('/:id/chunks/:chunkId', requireResourceScope('document', 'id'), as
 router.post('/:id/jobs/:jobId/cancel', requireResourceScope('document', 'id'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
-    const cancelled = await cancelJob(String(req.params.jobId), projectId);
+    const cancelled = await cancelJob(String(req.params.jobId), projectId, { actingPrincipalId: callerPrincipalOf(req) });
     if (!cancelled) {
       res.status(409).json({
         status: 'error',
@@ -744,6 +745,7 @@ router.post('/bulk-extract', requireProjectScope('body'), async (req, res, next)
         );
         const job = await enqueueJob({
           project_id: projectId,
+          actingPrincipalId: callerPrincipalOf(req),
           job_type: 'document.extract.vision' as any,
           payload: {
             doc_id: row.doc_id,
