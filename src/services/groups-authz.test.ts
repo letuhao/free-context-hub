@@ -10,7 +10,7 @@
 
 import assert from 'node:assert/strict';
 import test, { before, after } from 'node:test';
-import { createGroup, deleteGroup, addProjectToGroup, removeProjectFromGroup } from './projectGroups.js';
+import { createGroup, deleteGroup, addProjectToGroup, removeProjectFromGroup, listGroupMembers } from './projectGroups.js';
 import { createPrincipal } from './principals.js';
 import { createGrant } from './grants.js';
 import { ContextHubError } from '../core/errors.js';
@@ -90,4 +90,10 @@ test('gadmin (write@P + admin@G): create → add → remove → delete the group
 // ── the old "Group X not found" existence oracle is now gated by group authz ──
 test('pwriter (write@P): addProjectToGroup to a non-existent group → FORBIDDEN, not a NOT_FOUND oracle', async () => {
   await assert.rejects(addProjectToGroup(NG, P, { actingPrincipalId: pwriter }), isForbidden);
+});
+
+// ── adversary-pass-2 fix: group composition reads are gated on read@group ──
+test('pwriter (write@P, no read on group G): listGroupMembers(G) → NOT_FOUND', async () => {
+  const isNotFound = (e: unknown) => e instanceof ContextHubError && e.code === 'NOT_FOUND';
+  await assert.rejects(listGroupMembers(G, { actingPrincipalId: pwriter }), isNotFound);
 });

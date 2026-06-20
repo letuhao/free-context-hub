@@ -14,6 +14,7 @@
 import assert from 'node:assert/strict';
 import test, { before, after } from 'node:test';
 import { enqueueJob, listJobs, cancelJob } from './jobQueue.js';
+import { runNextJob } from './jobExecutor.js';
 import { createPrincipal } from './principals.js';
 import { createGrant } from './grants.js';
 import { ContextHubError } from '../core/errors.js';
@@ -128,4 +129,12 @@ test('unknown principal: enqueueJob on P → FORBIDDEN (write deny on resolvable
     enqueueJob({ project_id: P, actingPrincipalId: '00000000-0000-0000-0000-000000000000', job_type: 'index.run', payload: {} }),
     isForbidden,
   );
+});
+
+// ── adversary-pass-2 fix: runNextJob (the execute path) is gated ──────────────
+test('reader@P (non-global): runNextJob unscoped drain → BAD_REQUEST (no ungated all-projects execute)', async () => {
+  await assert.rejects(runNextJob('default', undefined, { actingPrincipalId: reader }), isBadRequest);
+});
+test('writer@P: runNextJob scoped to cross-tenant project → FORBIDDEN', async () => {
+  await assert.rejects(runNextJob('default', Q, { actingPrincipalId: writer }), isForbidden);
 });

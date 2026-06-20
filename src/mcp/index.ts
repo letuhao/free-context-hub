@@ -2956,10 +2956,11 @@ function createMcpToolsServer() {
     },
     async ({ workspace_token, queue_name, output_format }) => {
       const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      // DEFERRED-024 + 029: a scoped caller drains ONLY its own project's queue;
-      // global/auth-off (null/undefined) → all projects.
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      // DEFERRED-024: a scoped caller drains ONLY its own project's queue; global/auth-off → all
+      // projects. runNextJob gates execution (write@project, or hasGlobalGrant for the unscoped drain).
       const projectScope = callerScope ?? undefined;
-      const result = await runNextJob(queue_name, projectScope);
+      const result = await runNextJob(queue_name, projectScope, { actingPrincipalId });
       const summary = `run_next_job: status=${result.status}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -3092,11 +3093,10 @@ function createMcpToolsServer() {
       outputSchema: z.object({ group_id: z.string(), members: z.array(z.string()) }),
     },
     async ({ workspace_token, group_id, output_format }) => {
-      // list_group_members: admin op (returns project IDs that belong to a group;
-      // no per-member tenant filter applied here — caller is expected to filter on
-      // the returned list if scoped).
-      await resolveMcpCallerScopeOrThrow(workspace_token);
-      const members = await listGroupMembers(group_id);
+      // list_group_members: authorize() enforces read on the group (member project_ids are sensitive
+      // cross-project topology). [DEFERRED-046/adv]
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const members = await listGroupMembers(group_id, { actingPrincipalId });
       const summary = `list_group_members: group=${group_id} count=${members.length}`;
       return formatToolResponse({ group_id, members }, summary, output_format);
     },

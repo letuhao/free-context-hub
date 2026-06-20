@@ -6,6 +6,7 @@ import {
 import { resolveProjectIdOrThrow } from '../../core/index.js';
 import { resolveProjectParams } from '../middleware/resolveProjectParams.js';
 import { callerPrincipalOf } from '../middleware/auth.js';
+import { assertAuthorized } from '../../services/authorize.js';
 
 const router = Router();
 
@@ -74,6 +75,7 @@ notifRouter.patch('/mark-read', async (req, res, next) => {
 notifRouter.get('/settings', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
+    await assertAuthorized(callerPrincipalOf(req), 'read', { kind: 'project', id: projectId });
     const userId = (req.query.user_id as string) ?? 'gui-user';
     const { getDbPool } = await import('../../db/client.js');
     const pool = getDbPool();
@@ -91,6 +93,7 @@ notifRouter.get('/settings', async (req, res, next) => {
 notifRouter.put('/settings', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
+    await assertAuthorized(callerPrincipalOf(req), 'write', { kind: 'project', id: projectId });
     const userId = req.body.user_id ?? 'gui-user';
     const rawSettings = req.body.settings ?? {};
     // Validate: only boolean values, sanitize keys

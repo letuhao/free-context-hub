@@ -38,7 +38,7 @@ router.post('/run-next', async (req, res, next) => {
     // DEFERRED-024 — a scoped api key drains only its own project's queue; auth-off /
     // global scope (apiKeyScope undefined/null) → all projects (no behavior change).
     const scope = (req as { apiKeyScope?: string | null }).apiKeyScope;
-    const result = await runNextJob(req.body.queue_name, scope);
+    const result = await runNextJob(req.body.queue_name, scope, { actingPrincipalId: callerPrincipalOf(req) });
     res.json(result);
   } catch (e) { next(e); }
 });

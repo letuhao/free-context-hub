@@ -7,7 +7,8 @@ async function assertReadAll(
   projectIdOrIds: string | string[] | undefined,
 ): Promise<void> {
   const ids = Array.isArray(projectIdOrIds) ? projectIdOrIds : projectIdOrIds ? [projectIdOrIds] : [];
-  for (const pid of ids) {
+  // Empty filter → fail closed (authorize a null project → NOT_FOUND under auth-ON).
+  for (const pid of (ids.length ? ids : [null])) {
     await assertAuthorized(actingPrincipalId, 'read', { kind: 'project', id: pid });
   }
 }
@@ -156,7 +157,7 @@ export async function getAuditStats(
   const pool = getDbPool();
   const isArray = Array.isArray(projectIdOrIds);
   const clause = isArray ? `project_id = ANY($1::text[])` : `project_id = $1`;
-  const param = isArray ? projectIdOrIds : projectIdOrIds;
+  const param = projectIdOrIds;
 
   const [guardrailRes, blockedRes, lessonRes, agentRes] = await Promise.all([
     pool.query(`SELECT count(*)::int AS cnt FROM guardrail_audit_logs WHERE ${clause}`, [param]),

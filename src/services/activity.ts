@@ -7,7 +7,8 @@ async function assertReadAll(
   projectIdOrIds: string | string[] | undefined,
 ): Promise<void> {
   const ids = Array.isArray(projectIdOrIds) ? projectIdOrIds : projectIdOrIds ? [projectIdOrIds] : [];
-  for (const pid of ids) {
+  // Empty filter → fail closed (authorize a null project → NOT_FOUND under auth-ON).
+  for (const pid of (ids.length ? ids : [null])) {
     await assertAuthorized(actingPrincipalId, 'read', { kind: 'project', id: pid });
   }
 }

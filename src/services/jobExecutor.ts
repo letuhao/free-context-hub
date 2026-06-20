@@ -2,6 +2,8 @@ import path from 'node:path';
 
 import { analyzeCommitImpact, ingestGitHistory } from './gitIntelligence.js';
 import { claimNextQueuedJob, claimQueuedJobById, completeJob, enqueueJob, failJob, type JobType } from './jobQueue.js';
+import { assertAuthorized, hasGlobalGrant } from './authorize.js';
+import { ContextHubError } from '../core/errors.js';
 import { indexProject } from './indexer.js';
 import { buildFaq } from './faqBuilder.js';
 import { buildRaptorSummaries } from './raptorBuilder.js';
@@ -511,6 +513,7 @@ async function executeByType(
 export async function runNextJob(
   queueName = 'default',
   projectScope?: string | null,
+  opts?: { actingPrincipalId?: string | null },
 ): Promise<{
   status: 'idle' | 'ok' | 'error';
   job_id?: string;
@@ -518,8 +521,20 @@ export async function runNextJob(
   result?: Record<string, unknown>;
   error?: string;
 }> {
-  // DEFERRED-024 — a project-scoped caller (/run-next with a scoped api key) drains
-  // only its own project's queue; undefined/null → all projects (worker unchanged).
+  // [F2f/adv DEFERRED-045] /run-next POPS AND EXECUTES a job (the worker walks payload.root). Gate it
+  // like the rest of jobQueue: a project scope drains that project (write@project); an UNSCOPED drain
+  // executes jobs across ALL projects → globally-privileged only (mirrors listJobs' no-filter rule),
+  // closing the previously-ungated execute path. DEFERRED-024 — a scoped api key still drains only its
+  // own project's queue; undefined/null → all projects (the background worker passes a system/root
+  // principal at the F2g flip; inert while auth is OFF since hasGlobalGrant returns true).
+  if (typeof projectScope === 'string' && projectScope.length > 0) {
+    await assertAuthorized(opts?.actingPrincipalId, 'write', { kind: 'project', id: projectScope });
+  } else if (!(await hasGlobalGrant(opts?.actingPrincipalId, 'write'))) {
+    throw new ContextHubError(
+      'BAD_REQUEST',
+      'a project scope is required to run jobs — only a globally-privileged principal may drain all queues',
+    );
+  }
   const job = await claimNextQueuedJob(queueName, projectScope);
   if (!job) return { status: 'idle' };
   try {

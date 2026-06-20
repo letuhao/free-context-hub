@@ -17,6 +17,7 @@ import { getAgentTrust, listAgents, updateAgentTrust } from './agentTrust.js';
 import { listComments, getFeedback, addComment, listBookmarks } from './collaboration.js';
 import { listConversations, createConversation, addMessage, deleteConversation } from './chatHistory.js';
 import { exportLessons, importLessons } from './lessonImportExport.js';
+import { getLearningPath, addToLearningPath } from './learningPaths.js';
 import { createPrincipal } from './principals.js';
 import { createGrant } from './grants.js';
 import { ContextHubError } from '../core/errors.js';
@@ -170,4 +171,15 @@ test('reader@P: listConversations on P → ALLOW', async () => {
 test('reader@P: exportLessons on P → ALLOW', async () => {
   const res = await exportLessons({ projectId: P, actingPrincipalId: reader });
   assert.ok(Array.isArray(res.items));
+});
+
+// ── adversary-pass-2 fixes: learningPaths + empty-filter fail-closed ──────────
+test('reader@P: getLearningPath cross-tenant → NOT_FOUND', async () => {
+  await assert.rejects(getLearningPath({ projectId: Q, actingPrincipalId: reader, userId: 'u' }), isNotFound);
+});
+test('writer@P: addToLearningPath cross-tenant → FORBIDDEN', async () => {
+  await assert.rejects(addToLearningPath({ projectId: Q, actingPrincipalId: writer, section: 's', lessonId: 'l' }), isForbidden);
+});
+test('reader@P: listActivity with EMPTY filter → NOT_FOUND (fail-closed, no all-projects read)', async () => {
+  await assert.rejects(listActivity({ actingPrincipalId: reader }), isNotFound);
 });

@@ -76,7 +76,13 @@ export async function listGroups(): Promise<ProjectGroupWithMembers[]> {
   return (res.rows ?? []).map(mapGroupWithMembersRow);
 }
 
-export async function getGroup(groupId: string): Promise<ProjectGroupWithMembers | null> {
+export async function getGroup(
+  groupId: string,
+  opts?: { actingPrincipalId?: string | null },
+): Promise<ProjectGroupWithMembers | null> {
+  // [DEFERRED-046/adv] group composition (member_count, membership) is the cross-project knowledge-flow
+  // topology — read it only with read on the group (a projects-table row).
+  await assertAuthorized(opts?.actingPrincipalId, 'read', { kind: 'project', id: groupId });
   const pool = getDbPool();
   const res = await pool.query(
     `SELECT g.*, COUNT(m.project_id)::int AS member_count
@@ -92,7 +98,12 @@ export async function getGroup(groupId: string): Promise<ProjectGroupWithMembers
 
 // ── Members ──
 
-export async function listGroupMembers(groupId: string): Promise<string[]> {
+export async function listGroupMembers(
+  groupId: string,
+  opts?: { actingPrincipalId?: string | null },
+): Promise<string[]> {
+  // [DEFERRED-046/adv] member project_ids are sensitive group topology — gate on read@group.
+  await assertAuthorized(opts?.actingPrincipalId, 'read', { kind: 'project', id: groupId });
   const pool = getDbPool();
   const res = await pool.query(
     `SELECT project_id FROM project_group_members WHERE group_id = $1 ORDER BY added_at`,

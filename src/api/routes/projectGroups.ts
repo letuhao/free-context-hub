@@ -46,7 +46,7 @@ router.delete('/:id', async (req, res, next) => {
 /** GET /api/groups/:id/members — list project members of a group */
 router.get('/:id/members', async (req, res, next) => {
   try {
-    const members = await listGroupMembers(String(req.params.id));
+    const members = await listGroupMembers(String(req.params.id), { actingPrincipalId: callerPrincipalOf(req) });
     res.json({ group_id: String(req.params.id), members });
   } catch (e) { next(e); }
 });
