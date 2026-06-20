@@ -14,6 +14,9 @@ import { listActivity } from './activity.js';
 import { listAuditLog, getAuditStats } from './auditLog.js';
 import { getRetrievalStats, getLessonsByType, getAgentActivity } from './analytics.js';
 import { getAgentTrust, listAgents, updateAgentTrust } from './agentTrust.js';
+import { listComments, getFeedback, addComment, listBookmarks } from './collaboration.js';
+import { listConversations, createConversation, addMessage, deleteConversation } from './chatHistory.js';
+import { exportLessons, importLessons } from './lessonImportExport.js';
 import { createPrincipal } from './principals.js';
 import { createGrant } from './grants.js';
 import { ContextHubError } from '../core/errors.js';
@@ -116,4 +119,55 @@ test('reader@P: getAuditStats on P → ALLOW', async () => {
 });
 test('unknown principal: listAuditLog on P → NOT_FOUND', async () => {
   await assert.rejects(listAuditLog({ projectId: P, actingPrincipalId: '00000000-0000-0000-0000-000000000000' }), isNotFound);
+});
+
+// ── Wave 2: collaboration / chatHistory / lessonImportExport ─────────────────
+const UUID = '11111111-1111-1111-1111-111111111111';
+
+// collaboration is lesson-keyed (lesson→project resolver, proven in documents-authz). Here: an
+// unresolvable lesson → OUT_OF_SCOPE → NOT_FOUND, gating before any DB read/write.
+test('reader@P: listComments unresolvable lesson → NOT_FOUND', async () => {
+  await assert.rejects(listComments({ lessonId: UUID, actingPrincipalId: reader }), isNotFound);
+});
+test('reader@P: getFeedback unresolvable lesson → NOT_FOUND', async () => {
+  await assert.rejects(getFeedback({ lessonId: UUID, actingPrincipalId: reader }), isNotFound);
+});
+test('writer@P: addComment unresolvable lesson → NOT_FOUND (write on OUT_OF_SCOPE → no oracle)', async () => {
+  await assert.rejects(addComment({ lessonId: UUID, actingPrincipalId: writer, author: 'a', content: 'c' }), isNotFound);
+});
+
+// project-keyed surfaces: cross-tenant Q → NOT_FOUND (read) / FORBIDDEN (write); allow on P
+test('reader@P: listBookmarks cross-tenant → NOT_FOUND', async () => {
+  await assert.rejects(listBookmarks({ userId: 'u', projectId: Q, actingPrincipalId: reader }), isNotFound);
+});
+test('reader@P: listConversations cross-tenant → NOT_FOUND', async () => {
+  await assert.rejects(listConversations({ projectId: Q, actingPrincipalId: reader }), isNotFound);
+});
+test('reader@P: exportLessons cross-tenant → NOT_FOUND', async () => {
+  await assert.rejects(exportLessons({ projectId: Q, actingPrincipalId: reader }), isNotFound);
+});
+test('writer@P: createConversation cross-tenant → FORBIDDEN', async () => {
+  await assert.rejects(createConversation({ projectId: Q, actingPrincipalId: writer }), isForbidden);
+});
+test('writer@P: addMessage cross-tenant → FORBIDDEN', async () => {
+  await assert.rejects(addMessage({ conversationId: UUID, projectId: Q, actingPrincipalId: writer, role: 'user', content: 'x' }), isForbidden);
+});
+test('writer@P: deleteConversation cross-tenant → FORBIDDEN', async () => {
+  await assert.rejects(deleteConversation({ conversationId: UUID, projectId: Q, actingPrincipalId: writer }), isForbidden);
+});
+test('writer@P: importLessons cross-tenant → FORBIDDEN', async () => {
+  await assert.rejects(importLessons({ projectId: Q, actingPrincipalId: writer, lessons: [] }), isForbidden);
+});
+
+// over-capability + allow
+test('reader@P: createConversation on own project (read ⊅ write) → FORBIDDEN', async () => {
+  await assert.rejects(createConversation({ projectId: P, actingPrincipalId: reader }), isForbidden);
+});
+test('reader@P: listConversations on P → ALLOW', async () => {
+  const res = await listConversations({ projectId: P, actingPrincipalId: reader });
+  assert.ok(Array.isArray(res.items));
+});
+test('reader@P: exportLessons on P → ALLOW', async () => {
+  const res = await exportLessons({ projectId: P, actingPrincipalId: reader });
+  assert.ok(Array.isArray(res.items));
 });

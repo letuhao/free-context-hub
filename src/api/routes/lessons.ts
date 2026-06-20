@@ -277,6 +277,7 @@ router.get('/export', async (req, res, next) => {
     const { exportLessons } = await import('../../services/lessonImportExport.js');
     const result = await exportLessons({
       projectId,
+      actingPrincipalId: callerPrincipalOf(req),
       format: (req.query.format as 'json' | 'csv') ?? 'json',
       status: req.query.status as string | undefined,
     });
@@ -296,6 +297,7 @@ router.post('/import', requireRole('writer'), async (req, res, next) => {
     const { importLessons } = await import('../../services/lessonImportExport.js');
     const result = await importLessons({
       projectId,
+      actingPrincipalId: callerPrincipalOf(req),
       lessons: req.body.lessons ?? [],
       skipDuplicates: req.body.skip_duplicates,
     });

@@ -6,6 +6,7 @@ import {
 } from '../../services/collaboration.js';
 import { resolveProjectIdOrThrow } from '../../core/index.js';
 import { requireRole } from '../middleware/requireRole.js';
+import { callerPrincipalOf } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -13,7 +14,7 @@ const router = Router();
 
 router.get('/:id/comments', async (req, res, next) => {
   try {
-    const result = await listComments({ lessonId: req.params.id });
+    const result = await listComments({ lessonId: req.params.id, actingPrincipalId: callerPrincipalOf(req) });
     res.json(result);
   } catch (e) { next(e); }
 });
@@ -22,6 +23,7 @@ router.post('/:id/comments', requireRole('writer'), async (req, res, next) => {
   try {
     const result = await addComment({
       lessonId: String(req.params.id),
+      actingPrincipalId: callerPrincipalOf(req),
       parentId: req.body.parent_id,
       author: req.body.author,
       content: req.body.content,
@@ -32,7 +34,7 @@ router.post('/:id/comments', requireRole('writer'), async (req, res, next) => {
 
 router.delete('/:id/comments/:commentId', requireRole('writer'), async (req, res, next) => {
   try {
-    const deleted = await deleteComment({ commentId: String(req.params.commentId) });
+    const deleted = await deleteComment({ commentId: String(req.params.commentId), actingPrincipalId: callerPrincipalOf(req) });
     if (!deleted) { res.status(404).json({ status: 'error', error: 'comment not found' }); return; }
     res.json({ status: 'ok' });
   } catch (e) { next(e); }
@@ -44,6 +46,7 @@ router.get('/:id/feedback', async (req, res, next) => {
   try {
     const result = await getFeedback({
       lessonId: req.params.id,
+      actingPrincipalId: callerPrincipalOf(req),
       userId: req.query.user_id as string | undefined,
     });
     res.json(result);
@@ -56,6 +59,7 @@ router.post('/:id/feedback', requireRole('writer'), async (req, res, next) => {
     if (vote !== 1 && vote !== -1) { res.status(400).json({ status: 'error', error: 'vote must be 1 or -1' }); return; }
     const result = await voteFeedback({
       lessonId: String(req.params.id),
+      actingPrincipalId: callerPrincipalOf(req),
       userId: req.body.user_id,
       vote: vote as 1 | -1,
     });
@@ -67,6 +71,7 @@ router.delete('/:id/feedback', requireRole('writer'), async (req, res, next) => 
   try {
     const deleted = await removeFeedback({
       lessonId: String(req.params.id),
+      actingPrincipalId: callerPrincipalOf(req),
       userId: String(req.query.user_id ?? req.body?.user_id ?? ''),
     });
     if (!deleted) { res.status(404).json({ status: 'error', error: 'feedback not found' }); return; }
@@ -84,6 +89,7 @@ bookmarkRouter.get('/', async (req, res, next) => {
     const result = await listBookmarks({
       userId: req.query.user_id as string,
       projectId,
+      actingPrincipalId: callerPrincipalOf(req),
     });
     res.json(result);
   } catch (e) { next(e); }
@@ -94,6 +100,7 @@ bookmarkRouter.post('/', async (req, res, next) => {
     const result = await addBookmark({
       userId: req.body.user_id,
       lessonId: req.body.lesson_id,
+      actingPrincipalId: callerPrincipalOf(req),
     });
     res.status(201).json(result);
   } catch (e) { next(e); }
@@ -104,6 +111,7 @@ bookmarkRouter.delete('/', async (req, res, next) => {
     const deleted = await removeBookmark({
       userId: (req.query.user_id as string) ?? req.body?.user_id,
       lessonId: (req.query.lesson_id as string) ?? req.body?.lesson_id,
+      actingPrincipalId: callerPrincipalOf(req),
     });
     if (!deleted) { res.status(404).json({ status: 'error', error: 'bookmark not found' }); return; }
     res.json({ status: 'ok' });

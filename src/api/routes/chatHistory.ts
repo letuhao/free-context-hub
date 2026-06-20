@@ -9,6 +9,7 @@ import {
   deleteConversation,
 } from '../../services/chatHistory.js';
 import { resolveProjectIdOrThrow } from '../../core/index.js';
+import { callerPrincipalOf } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -18,6 +19,7 @@ router.post('/', requireProjectScope('body'), async (req, res, next) => {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await createConversation({
       projectId,
+      actingPrincipalId: callerPrincipalOf(req),
       title: req.body.title,
     });
     res.status(201).json(result);
@@ -30,6 +32,7 @@ router.get('/', requireProjectScope('query'), async (req, res, next) => {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
     const result = await listConversations({
       projectId,
+      actingPrincipalId: callerPrincipalOf(req),
       limit: req.query.limit ? Number(req.query.limit) : undefined,
     });
     res.json(result);
@@ -43,6 +46,7 @@ router.get('/:id', requireResourceScope('conversation', 'id'), async (req, res, 
     const result = await getConversation({
       conversationId: String(req.params.id),
       projectId,
+      actingPrincipalId: callerPrincipalOf(req),
     });
     if (!result) {
       res.status(404).json({ status: 'error', error: 'conversation not found' });
@@ -59,6 +63,7 @@ router.post('/:id/messages', requireResourceScope('conversation', 'id'), async (
     const result = await addMessage({
       conversationId: String(req.params.id),
       projectId,
+      actingPrincipalId: callerPrincipalOf(req),
       role: req.body.role,
       content: req.body.content,
       metadata: req.body.metadata,
@@ -77,6 +82,7 @@ router.patch('/:id/messages/:msgId/pin', requireResourceScope('conversation', 'i
     const result = await toggleMessagePin({
       conversationId: String(req.params.id),
       messageId: String(req.params.msgId),
+      actingPrincipalId: callerPrincipalOf(req),
     });
     if (!result) {
       res.status(404).json({ status: 'error', error: 'message not found' });
@@ -93,6 +99,7 @@ router.delete('/:id', requireResourceScope('conversation', 'id'), async (req, re
     const deleted = await deleteConversation({
       conversationId: String(req.params.id),
       projectId,
+      actingPrincipalId: callerPrincipalOf(req),
     });
     if (!deleted) {
       res.status(404).json({ status: 'error', error: 'conversation not found' });

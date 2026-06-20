@@ -1,5 +1,6 @@
 import { getDbPool } from '../db/client.js';
 import { addLesson } from './lessons.js';
+import { assertAuthorized } from './authorize.js';
 import { createModuleLogger } from '../utils/logger.js';
 
 const logger = createModuleLogger('lesson-import-export');
@@ -19,9 +20,11 @@ export interface ExportedLesson {
 /** Export lessons as JSON array. */
 export async function exportLessons(params: {
   projectId: string;
+  actingPrincipalId?: string | null;
   format?: 'json' | 'csv';
   status?: string;
 }): Promise<{ items: ExportedLesson[]; total_count: number; format: string }> {
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id: params.projectId });
   const pool = getDbPool();
   let where = 'WHERE project_id = $1';
   const args: any[] = [params.projectId];
@@ -57,6 +60,7 @@ export interface ImportResult {
 /** Import lessons from JSON array. Skips duplicates (same title + project). */
 export async function importLessons(params: {
   projectId: string;
+  actingPrincipalId?: string | null;
   lessons: Array<{
     lesson_type: string;
     title: string;
@@ -67,6 +71,7 @@ export async function importLessons(params: {
   }>;
   skipDuplicates?: boolean;
 }): Promise<ImportResult> {
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.projectId });
   const pool = getDbPool();
   const skipDuplicates = params.skipDuplicates ?? true;
   const result: ImportResult = { status: 'ok', imported: 0, skipped: 0, errors: [], details: [] };
@@ -109,6 +114,7 @@ export async function importLessons(params: {
     try {
       await addLesson({
         project_id: params.projectId,
+        actingPrincipalId: params.actingPrincipalId,
         lesson_type: lessonType as any,
         title,
         content,

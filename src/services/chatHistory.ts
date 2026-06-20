@@ -1,4 +1,5 @@
 import { getDbPool } from '../db/client.js';
+import { assertAuthorized } from './authorize.js';
 
 export type ChatRole = 'user' | 'assistant' | 'tool';
 
@@ -23,8 +24,10 @@ export interface ChatConversation {
 /** Create a new conversation. Title defaults to truncated first message or 'New conversation'. */
 export async function createConversation(params: {
   projectId: string;
+  actingPrincipalId?: string | null;
   title?: string;
 }): Promise<ChatConversation> {
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.projectId });
   const pool = getDbPool();
   const title = params.title?.trim().slice(0, 120) || 'New conversation';
   const result = await pool.query(
@@ -37,8 +40,10 @@ export async function createConversation(params: {
 /** List conversations for a project, newest first. */
 export async function listConversations(params: {
   projectId: string;
+  actingPrincipalId?: string | null;
   limit?: number;
 }): Promise<{ items: ChatConversation[]; total_count: number }> {
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id: params.projectId });
   const pool = getDbPool();
   const limit = Math.min(params.limit ?? 50, 100);
 
@@ -62,7 +67,9 @@ export async function listConversations(params: {
 export async function getConversation(params: {
   conversationId: string;
   projectId: string;
+  actingPrincipalId?: string | null;
 }): Promise<{ conversation: ChatConversation; messages: ChatMessage[] } | null> {
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id: params.projectId });
   const pool = getDbPool();
 
   const convRes = await pool.query(
@@ -86,10 +93,12 @@ export async function getConversation(params: {
 export async function addMessage(params: {
   conversationId: string;
   projectId: string;
+  actingPrincipalId?: string | null;
   role: ChatRole;
   content: string;
   metadata?: Record<string, unknown>;
 }): Promise<ChatMessage | null> {
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.projectId });
   const pool = getDbPool();
 
   // Verify conversation exists and belongs to project.
@@ -126,8 +135,12 @@ export async function addMessage(params: {
 export async function toggleMessagePin(params: {
   conversationId: string;
   messageId: string;
+  actingPrincipalId?: string | null;
 }): Promise<{ pinned: boolean } | null> {
   const pool = getDbPool();
+  // conversation-keyed (no projectId): resolve the conversation's project so authorize() gates it.
+  const cr = await pool.query(`SELECT project_id FROM chat_conversations WHERE conversation_id = $1`, [params.conversationId]);
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: cr.rows[0]?.project_id ?? null });
   const result = await pool.query(
     `UPDATE chat_messages SET pinned = NOT pinned
      WHERE message_id = $1 AND conversation_id = $2
@@ -142,7 +155,9 @@ export async function toggleMessagePin(params: {
 export async function deleteConversation(params: {
   conversationId: string;
   projectId: string;
+  actingPrincipalId?: string | null;
 }): Promise<boolean> {
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.projectId });
   const pool = getDbPool();
   const result = await pool.query(
     `DELETE FROM chat_conversations WHERE conversation_id = $1 AND project_id = $2`,
