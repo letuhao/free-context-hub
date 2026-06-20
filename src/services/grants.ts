@@ -65,7 +65,7 @@ export async function createGrant(params: {
   scope_id?: string | null;
   capability: Capability;
   granted_by: string;
-}, _attempt = 0): Promise<Grant> {
+}): Promise<Grant> {
   if (!CAPABILITIES.includes(params.capability)) {
     throw new ContextHubError('BAD_REQUEST', `Invalid capability "${params.capability}". Allowed: ${CAPABILITIES.join(', ')}.`);
   }
@@ -90,32 +90,30 @@ export async function createGrant(params: {
   const pool = getDbPool();
   // Idempotent on the active-edge unique index (grantee, scope_type, scope_id, capability) WHERE
   // revoked_at IS NULL, NULLS NOT DISTINCT (so global edges collide too). On conflict, return the
-  // existing ACTIVE row rather than minting a duplicate.
-  const ins = await pool.query<Grant>(
-    `INSERT INTO grants (grantee_principal, scope_type, scope_id, capability, granted_by)
-     VALUES ($1, $2, $3, $4, $5)
-     ON CONFLICT (grantee_principal, scope_type, scope_id, capability) WHERE revoked_at IS NULL
-     DO NOTHING
-     RETURNING ${COLS}`,
-    [params.grantee_principal, params.scope_type, scopeId, params.capability, params.granted_by],
-  );
-  if (ins.rows[0]) return ins.rows[0];
+  // existing ACTIVE row rather than minting a duplicate. BOUNDED loop (not recursion) — an attacker
+  // driving concurrent revoke/re-grant on one edge must not spin this unboundedly. [F2-adv #5]
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const ins = await pool.query<Grant>(
+      `INSERT INTO grants (grantee_principal, scope_type, scope_id, capability, granted_by)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (grantee_principal, scope_type, scope_id, capability) WHERE revoked_at IS NULL
+       DO NOTHING
+       RETURNING ${COLS}`,
+      [params.grantee_principal, params.scope_type, scopeId, params.capability, params.granted_by],
+    );
+    if (ins.rows[0]) return ins.rows[0];
 
-  // Conflict: an active edge already exists — return it (idempotent grant).
-  const existing = await pool.query<Grant>(
-    `SELECT ${COLS} FROM grants
-      WHERE grantee_principal = $1 AND scope_type = $2 AND scope_id IS NOT DISTINCT FROM $3
-        AND capability = $4 AND revoked_at IS NULL`,
-    [params.grantee_principal, params.scope_type, scopeId, params.capability],
-  );
-  if (existing.rows[0]) return existing.rows[0];
-  // Unlikely race (the active row was revoked between INSERT and SELECT). Retry, but BOUNDED — an
-  // attacker driving concurrent revoke/re-grant on one edge must not be able to spin this
-  // unboundedly. [F2-adv #5]
-  if (_attempt >= 2) {
-    throw new ContextHubError('CONFLICT', 'grant edge under concurrent contention; retry.');
+    // Conflict: an active edge already exists — return it (idempotent grant).
+    const existing = await pool.query<Grant>(
+      `SELECT ${COLS} FROM grants
+        WHERE grantee_principal = $1 AND scope_type = $2 AND scope_id IS NOT DISTINCT FROM $3
+          AND capability = $4 AND revoked_at IS NULL`,
+      [params.grantee_principal, params.scope_type, scopeId, params.capability],
+    );
+    if (existing.rows[0]) return existing.rows[0];
+    // Neither inserted nor found: the active row was revoked between INSERT and SELECT — loop.
   }
-  return createGrant(params, _attempt + 1);
+  throw new ContextHubError('CONFLICT', 'grant edge under concurrent contention; retry.');
 }
 
 export async function getGrant(grantId: string): Promise<Grant | null> {

@@ -1,7 +1,23 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 044 -->
+<!-- Next ID: 045 -->
+
+## DEFERRED-044
+
+- **Title:** F2 authz — `revoke_grant` grant-existence oracle (FORBIDDEN vs noop)
+- **Status:** OPEN (2026-06-19, ACCEPTED-as-documented). LOW; raised by `/review-impl` on F2.
+- **Context:** `revokeGrantAuthorized` (src/services/grantCapability.ts) returns `noop` for an unknown
+  `grant_id` but throws `FORBIDDEN` for an existing grant the caller may not revoke. An
+  authenticated-but-unauthorized caller can therefore distinguish "grant exists" from "grant doesn't
+  exist" by the response shape. Mitigated by `grant_id` being an unguessable UUIDv4 (no enumeration).
+- **Why not fixed now:** the alternatives are worse — returning `noop` for the unauthorized case
+  hides a real authorization failure (silent no-op the caller believes succeeded); requiring a
+  baseline authority to even attempt a revoke can't be scoped without first loading the grant. The
+  UUID-unguessability mitigation is the standard resolution for this oracle class.
+- **Trigger condition:** revisit if grant ids ever become guessable/sequential, or if the FE needs to
+  distinguish "already revoked" from "not yours" for UX (then return a uniform `not_found` with a
+  separate authorized-listing path).
 
 ## DEFERRED-043
 

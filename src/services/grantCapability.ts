@@ -40,8 +40,8 @@ export async function grantCapability(params: {
   // Two gates: (1) the re-grant flag (`delegate`) covering the target scope, and (2) the capability
   // itself covering the target scope (can't grant beyond your own authority). Both via authorize(),
   // so root + auth-off + scope-coverage (downward-only) are handled uniformly.
-  const canDelegate = await authorize(params.callerPrincipalId, 'delegate', scopeRef);
-  const canGrantCap = await authorize(params.callerPrincipalId, params.capability as Action, scopeRef);
+  const canDelegate = await authorize(params.callerPrincipalId, 'delegate', scopeRef, undefined, 'delegation_check');
+  const canGrantCap = await authorize(params.callerPrincipalId, params.capability as Action, scopeRef, undefined, 'delegation_check');
   if (!canDelegate.allow || !canGrantCap.allow) {
     throw new ContextHubError(
       'FORBIDDEN',
@@ -70,8 +70,8 @@ export async function revokeGrantAuthorized(params: {
   const scopeRef = { kind: grant.scope_type, id: grant.scope_id };
   const isGranter = !!params.callerPrincipalId && grant.granted_by === params.callerPrincipalId;
   if (!isGranter) {
-    const canAdmin = (await authorize(params.callerPrincipalId, 'admin', scopeRef)).allow;
-    const canDelegate = (await authorize(params.callerPrincipalId, 'delegate', scopeRef)).allow;
+    const canAdmin = (await authorize(params.callerPrincipalId, 'admin', scopeRef, undefined, 'delegation_check')).allow;
+    const canDelegate = (await authorize(params.callerPrincipalId, 'delegate', scopeRef, undefined, 'delegation_check')).allow;
     if (!canAdmin && !canDelegate) {
       throw new ContextHubError(
         'FORBIDDEN',

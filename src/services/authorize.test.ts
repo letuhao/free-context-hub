@@ -134,10 +134,10 @@ test('auth-ON: active principal + unresolvable resource -> OUT_OF_SCOPE', async 
   assert.deepEqual(d, { allow: false, reason: 'OUT_OF_SCOPE' });
 });
 
-test('auth-ON: root principal short-circuits ALLOW (if a root exists)', async () => {
+test('auth-ON: root principal short-circuits ALLOW (if a root exists)', async (t) => {
   await setAuth(true);
   const root = await getRootPrincipal();
-  if (!root) return; // no root seeded in this DB — pure test covers the logic
+  if (!root) { t.skip('no root principal in this DB (run bootstrap:root) — pure decide test covers the logic'); return; }
   const d = await authorize(root.principal_id, 'admin', { kind: 'global' });
   assert.deepEqual(d, { allow: true, reason: 'ROOT' });
 });
@@ -174,6 +174,54 @@ test('explainAuthorization: returns the resolved scope_chain + matching decision
   const r = await explainAuthorization(actor, 'read', { kind: 'task', id: taskP });
   assert.equal(r.decision.allow, true);
   assert.deepEqual(r.scope_chain, { kind: 'task', project_id: P, topic_id: topicP, task_id: taskP });
+});
+
+test('auth-ON: a global grant authorizes a global resource; delegate flows end-to-end [review-impl #5]', async () => {
+  await setAuth(true);
+  const gp = (await createPrincipal({ kind: 'agent', display_name: `${PREFIX}globalholder` })).principal_id;
+  await createGrant({ grantee_principal: gp, scope_type: 'global', capability: 'admin', granted_by: grantor });
+  const d = await authorize(gp, 'admin', { kind: 'global' });
+  assert.equal(d.allow, true);
+  assert.equal(d.reason, 'GRANT');
+  const dp = (await createPrincipal({ kind: 'agent', display_name: `${PREFIX}delegholder` })).principal_id;
+  await createGrant({ grantee_principal: dp, scope_type: 'project', scope_id: P, capability: 'delegate', granted_by: grantor });
+  const del = await authorize(dp, 'delegate', { kind: 'project', id: P });
+  assert.equal(del.allow, true, 'delegate capability authorizes the delegate action end-to-end');
+});
+
+test('authorize: logs the origin discriminator (access by default) [review-impl #3]', async () => {
+  await setAuth(true);
+  const marker = `${PREFIX}originmark`;
+  await authorize(actor, 'read', { kind: 'project', id: marker });
+  const row = (await getDbPool().query(`SELECT origin FROM authz_decisions WHERE resource_id=$1 ORDER BY ts DESC LIMIT 1`, [marker])).rows[0];
+  assert.equal(row.origin, 'access');
+});
+
+test('authorize: a decision-log WRITE FAILURE does not alter the decision (never fail-open) [review-impl #1]', async () => {
+  await setAuth(true);
+  const client = await getDbPool().connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('ALTER TABLE authz_decisions RENAME TO authz_decisions_tmp'); // make the log INSERT fail
+    const d = await authorize(null, 'read', { kind: 'project', id: P }, client);
+    assert.deepEqual(d, { allow: false, reason: 'NO_PRINCIPAL' }, 'decision returned despite the log INSERT failing');
+  } finally {
+    await client.query('ROLLBACK').catch(() => {});
+    client.release();
+  }
+});
+
+test('authorize: a grant-LOAD error PROPAGATES (fail closed, never a silent allow) [review-impl #1]', async () => {
+  await setAuth(true);
+  const client = await getDbPool().connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('ALTER TABLE grants RENAME TO grants_tmp'); // break the grant lookup
+    await assert.rejects(() => authorize(actor, 'read', { kind: 'project', id: P }, client), 'a grant-load failure must reject, not allow');
+  } finally {
+    await client.query('ROLLBACK').catch(() => {});
+    client.release();
+  }
 });
 
 test('explainAuthorization: a DENY does NOT leak the resolved scope chain (no ancestry oracle) [F2-adv #3]', async () => {

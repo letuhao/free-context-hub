@@ -102,9 +102,9 @@ test('grant_capability: cannot grant SIDEWAYS/UPWARD out of subtree (delegate@pr
   );
 });
 
-test('grant_capability: root may grant anything (short-circuit) — if a root exists', async () => {
+test('grant_capability: root may grant anything (short-circuit) — if a root exists', async (t) => {
   const root = await getRootPrincipal();
-  if (!root) return;
+  if (!root) { t.skip('no root principal in this DB (run bootstrap:root)'); return; }
   const g = await grantCapability({ callerPrincipalId: root.principal_id, grantee_principal: actor, scope_type: 'global', capability: 'admin' });
   assert.equal(g.capability, 'admin');
   assert.equal(g.scope_type, 'global');

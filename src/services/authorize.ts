@@ -56,6 +56,13 @@ export type Decision =
   | { allow: true; reason: AllowReason; matched_grant_id?: string }
   | { allow: false; reason: DenyReason };
 
+/**
+ * Why authorize() was called — recorded in the decision log so the FE can separate real
+ * resource-access decisions ('access', the default) from internal permission-checks made by the
+ * management paths. [review-impl #3]
+ */
+export type AuthzContext = 'access' | 'delegation_check' | 'tool_auth';
+
 // ── Pure core ───────────────────────────────────────────────────────────────────
 
 const RESOURCE_RANK: Record<'read' | 'write' | 'admin', number> = { read: 1, write: 2, admin: 3 };
@@ -179,14 +186,15 @@ async function logDecision(
   action: Action,
   ref: ResourceRef,
   d: Decision,
+  context: AuthzContext,
   executor?: PoolClient,
 ): Promise<void> {
   try {
     const runner = executor ?? getDbPool();
     await runner.query(
       `INSERT INTO authz_decisions
-         (principal_id, action, resource_kind, resource_id, allow, reason, matched_grant_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+         (principal_id, action, resource_kind, resource_id, allow, reason, matched_grant_id, origin)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
         principalId,
         action,
@@ -197,6 +205,7 @@ async function logDecision(
         d.allow,
         d.reason,
         d.allow ? (d.matched_grant_id ?? null) : null,
+        context,
       ],
     );
   } catch (err) {
@@ -240,10 +249,11 @@ export async function authorize(
   action: Action,
   resource: ResourceRef,
   executor?: PoolClient,
+  context: AuthzContext = 'access',
 ): Promise<Decision> {
   if (!getEnv().MCP_AUTH_ENABLED) return { allow: true, reason: 'AUTH_DISABLED' };
   const { decision } = await evaluate(principalId, action, resource, executor);
-  await logDecision(principalId, action, resource, decision, executor);
+  await logDecision(principalId, action, resource, decision, context, executor);
   return decision;
 }
 

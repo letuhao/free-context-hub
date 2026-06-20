@@ -996,7 +996,7 @@ function createMcpToolsServer() {
       // scope filter) — authorize() handles root + auth-off.
       const isOwn = !!target && target === actingPrincipalId;
       if (!isOwn) {
-        const d = await authorize(actingPrincipalId, 'admin', { kind: scope_type ?? 'global', id: scope_id ?? null });
+        const d = await authorize(actingPrincipalId, 'admin', { kind: scope_type ?? 'global', id: scope_id ?? null }, undefined, 'tool_auth');
         if (!d.allow) {
           throw new McpError(ErrorCode.InvalidParams, 'not authorized to list these grants (need admin over the scope, or list your own).');
         }
@@ -1031,7 +1031,7 @@ function createMcpToolsServer() {
       const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const subject = principal_id ?? actingPrincipalId ?? null;
       if (subject !== actingPrincipalId) {
-        const d = await authorize(actingPrincipalId, 'admin', { kind: 'global' });
+        const d = await authorize(actingPrincipalId, 'admin', { kind: 'global' }, undefined, 'tool_auth');
         if (!d.allow) {
           throw new McpError(ErrorCode.InvalidParams, 'not authorized to explain another principal\'s authority (admin required).');
         }
@@ -1065,7 +1065,7 @@ function createMcpToolsServer() {
     },
     async ({ workspace_token, output_format }) => {
       const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
-      const d = await authorize(actingPrincipalId, 'admin', { kind: 'global' });
+      const d = await authorize(actingPrincipalId, 'admin', { kind: 'global' }, undefined, 'tool_auth');
       if (!d.allow) {
         throw new McpError(ErrorCode.InvalidParams, 'not authorized to list principals (admin at global scope required).');
       }

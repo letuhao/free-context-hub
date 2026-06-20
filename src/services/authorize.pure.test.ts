@@ -7,6 +7,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { capabilityCovers, scopeCovers, decide, type ResourceScope, type GrantLike } from './authorize.js';
+import { CAPABILITIES, SCOPE_TYPES } from './grants.js';
 
 // ── capability lattice: read ⊂ write ⊂ admin; delegate orthogonal ──────────────
 test('capabilityCovers: read⊂write⊂admin for resource actions', () => {
@@ -116,4 +117,32 @@ test('decide: first covering grant wins (deterministic match)', () => {
   const r = decide(active, 'read', task, [g1, g2]);
   assert.equal(r.allow, true);
   assert.equal((r as { matched_grant_id: string }).matched_grant_id, 'g1');
+});
+
+// ── SSOT drift guards [review-impl #2] — the capability/scope enums are defined in grants.ts but
+//    consumed by capabilityCovers/scopeCovers/resolveResourceScope. A new value added to the enum
+//    (and the migration CHECK) without updating these would silently fail-closed. These guards fail
+//    LOUDLY so the omission is caught at test time, not in prod.
+test('SSOT: every non-delegate capability self-covers (catches a RESOURCE_RANK omission)', () => {
+  for (const c of CAPABILITIES) {
+    if (c === 'delegate') {
+      assert.equal(capabilityCovers('delegate', 'delegate'), true);
+      continue;
+    }
+    assert.equal(capabilityCovers(c, c), true, `capability "${c}" must self-cover — add it to RESOURCE_RANK in authorize.ts`);
+  }
+});
+
+test('SSOT: every scope_type has a real covering case in scopeCovers (not the default-false)', () => {
+  const selfCover: Record<string, () => boolean> = {
+    global: () => scopeCovers(G('global', null), glob),
+    project: () => scopeCovers(G('project', 'P'), proj),
+    topic: () => scopeCovers(G('topic', 'T'), topic),
+    task: () => scopeCovers(G('task', 'K'), task),
+  };
+  for (const st of SCOPE_TYPES) {
+    assert.equal(typeof selfCover[st], 'function', `scope_type "${st}" has no scopeCovers guard — add a case + update this test`);
+    assert.equal(selfCover[st](), true, `scope_type "${st}" must cover its own resource`);
+  }
+  assert.equal(SCOPE_TYPES.length, 4, 'a new scope_type needs a scopeCovers case, a resolveResourceScope branch, and this guard updated');
 });
