@@ -22,6 +22,8 @@ const logger = createModuleLogger('raptorBuilder');
 
 export async function buildRaptorSummaries(input: {
   projectId: string;
+  /** F2g — the worker's system-worker identity, threaded into every guarded leaf. */
+  actingPrincipalId?: string | null;
   root: string;
   pathGlob?: string;
   maxLevels?: number;
@@ -64,6 +66,7 @@ export async function buildRaptorSummaries(input: {
     const md = `# RAPTOR L1 summary — ${toPosix(rel)}\n\nProject: \`${input.projectId}\`\n\n${summary}\n`;
     const upserted = await upsertGeneratedDocument({
       projectId: input.projectId,
+      actingPrincipalId: input.actingPrincipalId,
       docType: 'raptor',
       docKey: `level1/${safeSlug(rel)}`,
       title: `RAPTOR L1 ${toPosix(rel)}`,
@@ -104,6 +107,7 @@ export async function buildRaptorSummaries(input: {
       const md = `# RAPTOR L2 directory summary — ${dir}\n\nProject: \`${input.projectId}\`\n\n${compressed.compressed.trim()}\n`;
       const upserted = await upsertGeneratedDocument({
         projectId: input.projectId,
+        actingPrincipalId: input.actingPrincipalId,
         docType: 'raptor',
         docKey: `level2/${safeSlug(`${dir}.md`)}`,
         title: `RAPTOR L2 ${dir}`,

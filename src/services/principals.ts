@@ -25,6 +25,8 @@ export interface Principal {
   status: PrincipalStatus;
   display_name: string;
   is_root: boolean;
+  /** F2g — the one non-root machine identity internal callers (the worker) authenticate as. */
+  is_system: boolean;
   created_at: string;
 }
 
@@ -32,7 +34,7 @@ const KINDS: readonly PrincipalKind[] = ['human', 'agent', 'system'];
 const STATUSES: readonly PrincipalStatus[] = ['active', 'suspended', 'retired'];
 
 const COLS =
-  'principal_id, kind, status, display_name, is_root, created_at';
+  'principal_id, kind, status, display_name, is_root, is_system, created_at';
 
 function validateDisplayName(name: string): string {
   if (typeof name !== 'string' || name.trim().length === 0) {
@@ -98,6 +100,18 @@ export async function getRootPrincipal(): Promise<Principal | null> {
   const pool = getDbPool();
   const res = await pool.query<Principal>(
     `SELECT ${COLS} FROM principals WHERE is_root = true LIMIT 1`,
+  );
+  return res.rows[0] ?? null;
+}
+
+/**
+ * Actor Data Boundary F2g — fetch THE system-worker principal (the one non-root machine identity the
+ * background worker / internal callers authenticate as). At most one exists (partial unique index).
+ */
+export async function getSystemPrincipal(): Promise<Principal | null> {
+  const pool = getDbPool();
+  const res = await pool.query<Principal>(
+    `SELECT ${COLS} FROM principals WHERE is_system = true LIMIT 1`,
   );
   return res.rows[0] ?? null;
 }
@@ -180,6 +194,38 @@ export async function seedRootPrincipal(params: { display_name: string }): Promi
     // 23505 = unique_violation on principals_single_root_uniq (lost a race to another seeder).
     if (err && typeof err === 'object' && (err as { code?: string }).code === '23505') {
       throw new ContextHubError('CONFLICT', 'A root principal already exists; bootstrap is a no-op.');
+    }
+    throw err;
+  }
+}
+
+/**
+ * Actor Data Boundary F2g — seed THE system-worker principal: a NON-root `kind=system` identity the
+ * background worker authenticates as. Mirrors seedRootPrincipal exactly (single-row via the partial
+ * unique index; 23505 → typed CONFLICT so a race can't create two). It is is_root=false on purpose —
+ * its authority comes from ONE `global write` grant (bootstrap:system), never root's short-circuit.
+ * Idempotency is the caller's job (bootstrapSystem checks getSystemPrincipal first).
+ */
+export async function seedSystemPrincipal(params: { display_name: string }): Promise<Principal> {
+  const displayName = validateDisplayName(params.display_name);
+  const pool = getDbPool();
+
+  const existing = await getSystemPrincipal();
+  if (existing) {
+    throw new ContextHubError('CONFLICT', 'A system-worker principal already exists; bootstrap is a no-op.');
+  }
+
+  try {
+    const res = await pool.query<Principal>(
+      `INSERT INTO principals (kind, status, display_name, is_root, is_system)
+       VALUES ('system', 'active', $1, false, true) RETURNING ${COLS}`,
+      [displayName],
+    );
+    return res.rows[0];
+  } catch (err) {
+    // 23505 = unique_violation on principals_single_system_uniq (lost a race to another seeder).
+    if (err && typeof err === 'object' && (err as { code?: string }).code === '23505') {
+      throw new ContextHubError('CONFLICT', 'A system-worker principal already exists; bootstrap is a no-op.');
     }
     throw err;
   }

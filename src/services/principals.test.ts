@@ -20,8 +20,10 @@ import {
   createPrincipal,
   getPrincipal,
   getRootPrincipal,
+  getSystemPrincipal,
   listPrincipals,
   seedRootPrincipal,
+  seedSystemPrincipal,
   setPrincipalStatus,
 } from './principals.js';
 import { ContextHubError } from '../core/errors.js';
@@ -107,10 +109,51 @@ test('createPrincipal: rejects empty display_name', async () => {
   );
 });
 
-test('createPrincipal: cannot set is_root via the normal path', async () => {
-  // createPrincipal has no is_root param; the only root path is seedRootPrincipal.
+test('createPrincipal: cannot set is_root or is_system via the normal path', async () => {
+  // createPrincipal has no is_root/is_system param; the only marker paths are seedRoot/seedSystem.
   const p = await createPrincipal({ kind: 'system', display_name: `${PREFIX}sys` });
   assert.equal(p.is_root, false);
+  assert.equal(p.is_system, false);
+});
+
+/** Mirror skipIfForeignRoot for the is_system singleton (a real bootstrap:system on a shared dev DB). */
+async function skipIfForeignSystem(t: { skip: (m?: string) => void }): Promise<boolean> {
+  const pre = await getSystemPrincipal();
+  if (pre && !pre.display_name.startsWith(PREFIX)) {
+    t.skip('requires a system-free DB; a non-test system principal already exists');
+    return true;
+  }
+  return false;
+}
+
+test('seedSystemPrincipal: sets is_system=true (NOT root); getSystemPrincipal finds it; second seed -> CONFLICT [F2g]', async (t) => {
+  if (await skipIfForeignSystem(t)) return;
+  const sys = await seedSystemPrincipal({ display_name: `${PREFIX}system-worker` });
+  assert.equal(sys.is_system, true);
+  assert.equal(sys.is_root, false);
+  assert.equal(sys.kind, 'system');
+
+  const found = await getSystemPrincipal();
+  assert.equal(found?.principal_id, sys.principal_id);
+
+  await assert.rejects(
+    () => seedSystemPrincipal({ display_name: `${PREFIX}dupe` }),
+    (e: unknown) => e instanceof ContextHubError && e.code === 'CONFLICT',
+  );
+});
+
+test('principals_root_xor_system_chk: a row cannot be BOTH root and system [F2g adv #2]', async (t) => {
+  // Run only on a root- AND system-free window so the CHECK (23514) fires, not a singleton index (23505).
+  if (await skipIfForeignRoot(t)) return;
+  if (await skipIfForeignSystem(t)) return;
+  const p = await createPrincipal({ kind: 'system', display_name: `${PREFIX}both` });
+  await assert.rejects(
+    () =>
+      getDbPool().query(`UPDATE principals SET is_root = true, is_system = true WHERE principal_id = $1`, [
+        p.principal_id,
+      ]),
+    (e: unknown) => (e as { code?: string }).code === '23514', // check_violation
+  );
 });
 
 test('setPrincipalStatus: active -> suspended -> retired; bad status rejected', async () => {

@@ -314,6 +314,8 @@ async function mergeTextsBatched(
 
 export type BuildLargeRepoMemoryInput = {
   projectId: string;
+  /** F2g — the worker's system-worker identity, threaded into every guarded upsert. */
+  actingPrincipalId?: string | null;
   root: string;
   correlationId?: string;
   sourceJobId?: string;
@@ -375,6 +377,7 @@ export async function buildLargeRepoProjectMemory(
 
   await upsertGeneratedDocument({
     projectId: input.projectId,
+    actingPrincipalId: input.actingPrincipalId,
     docType: 'benchmark_artifact',
     docKey: `phase6/builder_memory/manifest/${runId}`,
     title: `Builder memory manifest ${runId}`,
@@ -447,6 +450,7 @@ export async function buildLargeRepoProjectMemory(
 
     await upsertGeneratedDocument({
       projectId: input.projectId,
+      actingPrincipalId: input.actingPrincipalId,
       docType: 'benchmark_artifact',
       docKey,
       title: `Builder memory leaf ${runId} ${sh.shardId}`,
@@ -517,6 +521,7 @@ export async function buildLargeRepoProjectMemory(
     moduleTexts.push(merged);
     await upsertGeneratedDocument({
       projectId: input.projectId,
+      actingPrincipalId: input.actingPrincipalId,
       docType: 'benchmark_artifact',
       docKey: mk,
       title: `Builder memory module ${runId} ${mkey}`,
@@ -569,6 +574,7 @@ export async function buildLargeRepoProjectMemory(
     globalKey = `phase6/builder_memory/global/${runId}`;
     await upsertGeneratedDocument({
       projectId: input.projectId,
+      actingPrincipalId: input.actingPrincipalId,
       docType: 'benchmark_artifact',
       docKey: globalKey,
       title: `Builder memory global ${runId}`,

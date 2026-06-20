@@ -1,3 +1,67 @@
+# CHECKPOINT — F2g sub-step 1: system-worker identity (the auth-flip prerequisite) (2026-06-20, session 13)
+
+**Branch:** `feature/actor-data-boundary`. Auth stays **OFF** (`MCP_AUTH_ENABLED=false`, inert). The
+`MCP_AUTH_ENABLED` flip and Domain 8 remain **separately human-gated** — NOT touched. Full unit suite
+**1214 tests / 1195 pass / 0 fail / 19 skip** (skips = the existing root-free/system-free graceful guards,
+which run on a clean CI DB), tsc clean. Drove the first F2g flip-prerequisite — a dedicated identity for
+the background worker — through the full 12-phase `/loom` workflow (AMAW: 2 cold-start adversaries + a
+`/review-impl` coverage-gap pass), with the CLARIFY design checkpoint (user chose Option B) and the
+POST-REVIEW human gate both honored.
+
+**The problem:** after F2f every guarded service starts with `assertAuthorized(actingPrincipalId, …)`.
+The worker and other internal callers pass NO principal — fine under auth-off (short-circuit ALLOW), but
+would `NO_PRINCIPAL`-deny the instant the flag flips, killing the whole index/embed/knowledge pipeline.
+
+**Option B (user-chosen):** a dedicated NON-root `kind=system` principal with exactly ONE `global write`
+grant (bounded least-privilege — cannot admin-delete/delegate), threaded explicitly through the worker.
+
+**Substrate:** migration `0067_system_principal.sql` (`is_system` marker — singleton partial index +
+`principals_root_xor_system_chk` CHECK keeping it disjoint from root) · `getSystemPrincipal` /
+`seedSystemPrincipal` (principals.ts) · `bootstrapSystem()` + `npm run bootstrap:system` CLI · enforce-ready
+gate `hasUsableSystemIdentity()` (system principal active + active `global write` grant + granted_by an
+active root — flag-independent, exact-write).
+
+**Wiring (explicit threading, no ambient authority):** worker resolves the system principal at startup,
+**fast-fails under auth-on if it's missing** (clean "run bootstrap:system" vs every job dying in failJob),
+threads `actingPrincipalId` through `executeByType` (an `enqueueChained` closure forwards internal
+re-enqueues) into every guarded leaf — including the gaps F2f had not plumbed: `indexProject`,
+`ingestGitHistory`, `analyzeCommitImpact`, `prepareRepo`, `scanWorkspaceChanges` (+ its internal
+`indexProject`), `upsertGeneratedDocument`, and the 6 the reviews caught — `buildFaq`,
+`buildRaptorSummaries`, `runQualityEvalAndPersist`, `buildProjectMemoryArtifact`,
+`buildLargeRepoProjectMemory`, `runExtraction`. `runJobById` gained a symmetric claimed-job gate.
+
+**Reviews (all findings fixed):**
+- REVIEW-DESIGN adversary (3): missed 2 builder-memory leaves (`knowledge.loop.deep` /
+  `knowledge.memory.build`) + a tail-trace `runExtraction`; CHECK was prose-only (added to DDL);
+  enforce-ready needed a granted_by-active-root join.
+- REVIEW-CODE adversary (3): gate accepted `admin` → tightened to exact `write`; a false-green
+  `runNextJob` idle test → replaced with a real `index.run` threading proof via `runJobById`;
+  `runJobById`/rabbit path ungated → added the symmetric gate.
+- `/review-impl` (1 MED + LOWs): the 6 pipeline forwards were untested → added
+  `pipeline-threading-authz.test.ts` (covering-principal forward proof; distillation-off + closed-port
+  embedder for speed/determinism; `builderMemory` single-pass skips honestly without an LLM).
+  **Mutation-verified** — dropping a forward fails the test.
+
+**New files:** `migrations/0067_system_principal.sql`, `src/scripts/bootstrapSystem.ts`,
+`src/services/system-identity-authz.test.ts` (10), `src/services/pipeline-threading-authz.test.ts` (6),
+F2g CLARIFY/DESIGN/PLAN docs. **Modified:** worker.ts, jobExecutor.ts, bootstrap.ts(+test),
+principals.ts(+test), faqBuilder/raptorBuilder/qcEval/builderMemory/builderMemoryLarge/workspaceTracker.ts,
+package.json. **Tests:** `npm run bootstrap:system` CLI; `npx tsx src/db/migrate.ts` applied 0067.
+
+**Deferred (logged):** DEFERRED-051 (`runJobById` claims-then-strands on denial — worker-only/latent),
+DEFERRED-052 (`loadLeafBodiesFromDb` unguarded raw read — worker-only/latent), DEFERRED-053
+(`hasUsableSystemIdentity` ensures write present but doesn't forbid a hand-granted admin). All three are
+F2g-flip least-privilege-pass items, not blockers.
+
+**What's next (all human-gated):** the remaining F2g flip prerequisites — DEFERRED-048/049/050 (worker
+exec-time `payload.root` re-validation; `resolveProjectIds` authz + project/group id-namespace;
+user-scoped notification identity) — then Domain 8 (retire legacy REST `requireScope`/role middleware),
+then the `MCP_AUTH_ENABLED` default flip itself (its own checkpoint + cold-start security adversary + live
+auth-ON verification). Operator runbook for the flip: `bootstrap:root` → `bootstrap:system` →
+`backfill:grants` → `migrate:coordination-actors` → `assertEnforceReady` green → flip.
+
+---
+
 # CHECKPOINT — F2f deferred items cleared: read-sweep + groups + jobQueue + adversary-pass-2 (2026-06-20, session 12)
 
 **Branch:** `feature/actor-data-boundary`. Auth stays **OFF** (inert). Full unit suite **1194 pass / 2 skip**,

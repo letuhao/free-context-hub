@@ -1,7 +1,46 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 051 -->
+<!-- Next ID: 054 -->
+
+## DEFERRED-053
+
+- **Title:** F2g — `hasUsableSystemIdentity` ensures write EXISTS but does not forbid a hand-granted admin
+- **Status:** OPEN (2026-06-20). LOW. From F2g `/review-impl` #2. F2g-flip least-privilege item.
+- **Context:** `hasUsableSystemIdentity` (src/services/bootstrap.ts) was tightened to require the system
+  principal hold a `global write` grant EXACTLY (not `admin`), so an admin-only system principal is not
+  accepted as ready. But it does not also assert the system principal LACKS a broader (admin/delegate/
+  global) grant. Bounded-ness is guaranteed at CREATION (bootstrapSystem only ever grants `write`), so the
+  supported flow stays bounded (proven by the admin/delegate-DENY test); an operator who manually grants
+  the system principal admin takes an explicit privileged action outside the gate's scope.
+- **Scope when picked up:** the flip's least-privilege pass should audit the system principal's grants and
+  refuse enforce-ready (or warn) if it holds anything beyond the single `global write`.
+- **Trigger:** the `MCP_AUTH_ENABLED` flip's least-privilege review.
+
+## DEFERRED-052
+
+- **Title:** F2g — `loadLeafBodiesFromDb` is an unguarded raw read of `generated_documents`
+- **Status:** OPEN (2026-06-20). LOW. From F2g `/review-impl` #5. Latent (worker-only today).
+- **Context:** `loadLeafBodiesFromDb` (src/services/builderMemoryLarge.ts:~205) issues a raw
+  `SELECT … FROM generated_documents` with NO `assertAuthorized`. It is called only by
+  `buildLargeRepoProjectMemory` (the background worker, system principal, reading its OWN run's leaves),
+  so it is not caller-exposed — but it would bypass authorization if ever invoked from a request path.
+- **Scope when picked up:** add a project read guard (thread `actingPrincipalId`) if this helper is ever
+  reused outside the worker, or document it as worker-internal-only.
+- **Trigger:** if `loadLeafBodiesFromDb` is reused from a request/MCP path, or the flip's authz audit.
+
+## DEFERRED-051
+
+- **Title:** F2g — `runJobById` gate runs AFTER claim (claims-then-strands a job on denial)
+- **Status:** OPEN (2026-06-20). LOW. From F2g `/review-impl` #4. Latent (worker-only today).
+- **Context:** `runJobById` (src/services/jobExecutor.ts) claims the job (`claimQueuedJobById` → marks it
+  `running`) BEFORE its authorization gate throws, so a denied caller leaves the job stranded in `running`
+  rather than requeued. `runJobById` is invoked ONLY by the worker (system principal, never denied), so
+  this is latent. (`runNextJob` gates before claiming; `runJobById` can't trivially, since it needs the
+  claimed job's `project_id` to gate on.)
+- **Scope when picked up:** peek the job's `project_id` (or claim under a savepoint and roll back the claim
+  on denial) so a denied by-id execute does not strand the job.
+- **Trigger:** if `runJobById` gains a non-worker (non-global) caller, or the flip's authz audit.
 
 ## DEFERRED-050
 

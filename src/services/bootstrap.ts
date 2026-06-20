@@ -12,8 +12,15 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
 import { getEnv } from '../env.js';
-import { getRootPrincipal, seedRootPrincipal, type Principal } from './principals.js';
+import {
+  getRootPrincipal,
+  seedRootPrincipal,
+  getSystemPrincipal,
+  seedSystemPrincipal,
+  type Principal,
+} from './principals.js';
 import { createBootstrapRootKey } from './apiKeys.js';
+import { createGrant } from './grants.js';
 import { countUnmigratedCoordinationActors } from './migrateCoordinationActors.js';
 import { countCredentialsWithoutGrants } from './backfillGrants.js';
 
@@ -38,6 +45,83 @@ export async function hasUsableRootCredential(): Promise<boolean> {
         AND (k.expires_at IS NULL OR k.expires_at > now())`,
   );
   return res.rows[0].n > 0;
+}
+
+/**
+ * Actor Data Boundary F2g — true iff a USABLE system-worker identity exists: the single is_system
+ * principal is active, AND it holds an active (revoked_at IS NULL) `global` grant with capability
+ * EXACTLY `write`, AND that grant's `granted_by` resolves to an ACTIVE ROOT.
+ *
+ * Why EXACTLY write (not "covers write", i.e. not admin) [REVIEW-CODE adv #1]: the user's design
+ * choice (CLARIFY Option B) is a BOUNDED least-privilege worker — "cannot admin-delete / delegate".
+ * Matching `= 'write'` (not `IN ('write','admin')`) keeps the readiness probe aligned with that bound:
+ * an `admin`-only system principal is NOT accepted as ready, so a deployment can't drift into an
+ * admin worker just because admin happens to cover write.
+ *   NOTE [review-impl #2]: this checks that a write grant EXISTS; it does not by itself FORBID a
+ *   separately-granted admin/delegate on the same principal. Bounded-ness is guaranteed at CREATION —
+ *   bootstrapSystem only ever grants `write` — so the supported flow stays bounded (proven by the
+ *   admin/delegate-DENY test). An operator who manually grants the system principal admin takes an
+ *   explicit privileged action outside this gate's scope.
+ * The granted_by-root join [REVIEW-DESIGN adv #3a] stops a dangling/orphaned grant from rubber-stamping
+ * enforce-ready. REAL DB check — independent of MCP_AUTH_ENABLED — unlike hasGlobalGrant (which
+ * short-circuits true under auth-off).
+ */
+export async function hasUsableSystemIdentity(): Promise<boolean> {
+  const res = await getDbPool().query<{ n: number }>(
+    `SELECT count(*)::int AS n
+       FROM principals sp
+       JOIN grants g     ON g.grantee_principal = sp.principal_id
+       JOIN principals gr ON gr.principal_id = g.granted_by
+      WHERE sp.is_system = true AND sp.status = 'active'
+        AND g.revoked_at IS NULL
+        AND g.scope_type = 'global'
+        AND g.capability = 'write'
+        AND gr.is_root = true AND gr.status = 'active'`,
+  );
+  return res.rows[0].n > 0;
+}
+
+export type SystemBootstrapResult =
+  | { status: 'created'; principal: Principal }   // principal seeded + grant created
+  | { status: 'granted'; principal: Principal }   // principal existed, covering grant added
+  | { status: 'noop'; principal: Principal };     // already usable
+
+/**
+ * Actor Data Boundary F2g — establish the system-worker identity the background worker authenticates
+ * as. Idempotent. Requires root to exist first (root is the delegation origin for the grant):
+ *   - no system principal yet → seed it (NON-root, kind=system)
+ *   - no usable covering grant → mint ONE `global write` grant granted_by root
+ *   - already usable          → no-op
+ * Least-privilege by construction: exactly `global write` (covers read/write across all projects;
+ * NOT admin/delegate, NOT root's short-circuit).
+ */
+export async function bootstrapSystem(params?: { display_name?: string }): Promise<SystemBootstrapResult> {
+  const root = await getRootPrincipal();
+  if (!root) {
+    throw new ContextHubError(
+      'CONFLICT',
+      'cannot bootstrap the system-worker identity before root exists. Run `npm run bootstrap:root` first.',
+    );
+  }
+
+  let sys = await getSystemPrincipal();
+  let created = false;
+  if (!sys) {
+    sys = await seedSystemPrincipal({ display_name: params?.display_name?.trim() || 'system-worker' });
+    created = true;
+  }
+
+  if (!(await hasUsableSystemIdentity())) {
+    await createGrant({
+      grantee_principal: sys.principal_id,
+      scope_type: 'global',
+      scope_id: null,
+      capability: 'write',
+      granted_by: root.principal_id,
+    });
+    return { status: created ? 'created' : 'granted', principal: sys };
+  }
+  return { status: created ? 'created' : 'noop', principal: sys };
 }
 
 export type BootstrapResult =
@@ -148,6 +232,15 @@ export async function assertEnforceReady(): Promise<Principal> {
     throw new ContextHubError(
       'CONFLICT',
       `not enforce-ready: ${ungranted} active credential(s) bind a principal lacking a covering grant — enabling enforcement would lock them out. Run \`npm run backfill:grants\` (then re-grant or revoke any credential it reports as deliberately-revoked / unmappable).`,
+    );
+  }
+  // [F2g] The background worker authenticates as the system-worker principal (its global-write grant);
+  // if that identity is missing, enabling enforcement locks the worker out — every job NO_PRINCIPAL-
+  // denies and the whole index/embed/knowledge pipeline stops. Refuse until bootstrap:system has run.
+  if (!(await hasUsableSystemIdentity())) {
+    throw new ContextHubError(
+      'CONFLICT',
+      'not enforce-ready: no usable system-worker identity (missing the is_system principal or its global-write grant) — the background worker would be locked out at the flip. Run `npm run bootstrap:system` first.',
     );
   }
   return root;

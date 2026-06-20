@@ -18,6 +18,8 @@ function mdEscape(s: string) {
 
 export async function buildFaq(input: {
   projectId: string;
+  /** F2g — the worker's system-worker identity, threaded into every guarded leaf. */
+  actingPrincipalId?: string | null;
   root: string;
   modules?: string[];
   maxItems?: number;
@@ -73,6 +75,7 @@ export async function buildFaq(input: {
       logger.info({ group, item_index: idx + 1, total_items: items.length }, 'faq item started');
       const r = await searchCode({
         projectId: input.projectId,
+        actingPrincipalId: input.actingPrincipalId,
         query: it.q,
         pathGlob: it.pathGlob,
         kgAssist: group === 'kg' || group === 'queue' || group === 'mcp-server',
@@ -107,6 +110,7 @@ export async function buildFaq(input: {
         .join('\n');
       await upsertGeneratedDocument({
         projectId: input.projectId,
+        actingPrincipalId: input.actingPrincipalId,
         docType: 'faq',
         docKey,
         title: `FAQ: ${it.q}`.slice(0, 160),
@@ -133,6 +137,7 @@ export async function buildFaq(input: {
           `Evidence:\n${top.map(m => `- ${m.path} (${m.start_line}-${m.end_line}): ${m.snippet}`).join('\n')}\n`;
         await addLesson({
           project_id: input.projectId,
+          actingPrincipalId: input.actingPrincipalId,
           lesson_type: 'general_note',
           title: `FAQ: ${it.q}`.slice(0, 120),
           content,
@@ -151,6 +156,7 @@ export async function buildFaq(input: {
       written.push(outPath);
       await upsertGeneratedDocument({
         projectId: input.projectId,
+        actingPrincipalId: input.actingPrincipalId,
         docType: 'faq',
         docKey: `group/${group}`,
         title: `FAQ group ${group}`,

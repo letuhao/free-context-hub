@@ -14,7 +14,7 @@
 import assert from 'node:assert/strict';
 import test, { before, after, beforeEach } from 'node:test';
 import type { PoolClient } from 'pg';
-import { bootstrapRoot, assertEnforceReady, hasUsableRootCredential } from './bootstrap.js';
+import { bootstrapRoot, bootstrapSystem, assertEnforceReady, hasUsableRootCredential } from './bootstrap.js';
 import { getRootPrincipal } from './principals.js';
 import { validateApiKey, revokeApiKey } from './apiKeys.js';
 import { ContextHubError } from '../core/errors.js';
@@ -199,9 +199,22 @@ test('hasUsableRootCredential agrees with validateApiKey for the bootstrap key (
 // ONLY that specific CONFLICT here so the root/legacy assertions stay deterministic.
 async function enforceReadyTolerant(): Promise<{ is_root: boolean } | null> {
   try {
+    // [F2g] enforce-ready now also requires a usable system-worker identity. These ROOT-focused
+    // assertions just bootstrapped root, so seed the system identity (best-effort) to reach the ready
+    // state. If root isn't established yet, bootstrapSystem throws and assertEnforceReady reports the
+    // root gate first — which is what the "no root" branch expects.
+    try {
+      await bootstrapSystem();
+    } catch {
+      /* no root yet → assertEnforceReady will throw on the root gate below */
+    }
     return await assertEnforceReady();
   } catch (e) {
-    if (e instanceof ContextHubError && e.code === 'CONFLICT' && /coordination actor_id/.test(e.message)) {
+    if (
+      e instanceof ContextHubError &&
+      e.code === 'CONFLICT' &&
+      (/coordination actor_id/.test(e.message) || /system-worker identity/.test(e.message))
+    ) {
       return null;
     }
     throw e;

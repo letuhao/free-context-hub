@@ -34,8 +34,15 @@ async function executeByType(
   payload: Record<string, unknown>,
   correlationId: string | null,
   sourceJobId?: string,
+  // [F2g] The worker authenticates as the system-worker principal; threaded into every guarded leaf
+  // so jobs don't NO_PRINCIPAL-deny once auth is flipped on. null/undefined under auth-off (inert).
+  actingPrincipalId?: string | null,
 ): Promise<Record<string, unknown>> {
   const chainCorrelation = correlationId ?? undefined;
+  // [F2g] worker-internal re-enqueues inherit the worker's system-worker identity, so the chained
+  // jobs pass enqueueJob's write@project gate once auth is on.
+  const enqueueChained = (args: Parameters<typeof enqueueJob>[0]) =>
+    enqueueJob({ ...args, actingPrincipalId });
   switch (jobType) {
     case 'repo.sync': {
       if (!projectId) throw new Error('project_id is required for repo.sync');
@@ -45,6 +52,7 @@ async function executeByType(
       if (!gitUrl) throw new Error('payload.git_url is required');
       const res = await prepareRepo({
         projectId,
+        actingPrincipalId,
         gitUrl,
         cacheRoot,
         ref: payload.ref ? String(payload.ref) : undefined,
@@ -52,17 +60,16 @@ async function executeByType(
         sourceStorageMode: (payload.source_storage_mode ? String(payload.source_storage_mode) : env.SOURCE_STORAGE_MODE) as any,
       });
       if (res.status !== 'ok') throw new Error(res.error ?? 'repo.sync failed');
-      // [F2f/DEFERRED-045] worker-internal chain. The worker is a trusted "global" actor; it enqueues
-      // follow-up jobs with no acting principal. While auth is OFF this is inert; at the F2g flip the
-      // worker must run under a system/root principal (the F2g prerequisite) so enqueueJob's write@project
-      // authorize() passes for these chained jobs.
-      await enqueueJob({
+      // [F2f/DEFERRED-045 · F2g] worker-internal chain. enqueueChained forwards the worker's
+      // system-worker identity (F2g) so these follow-up jobs pass enqueueJob's write@project authorize()
+      // once auth is on. Inert while auth is OFF (actingPrincipalId is null → short-circuit ALLOW).
+      await enqueueChained({
         project_id: projectId,
         job_type: 'git.ingest',
         payload: { root: res.repo_root, since: payload.since ?? null, max_commits: payload.max_commits ?? null },
         correlation_id: chainCorrelation,
       });
-      await enqueueJob({
+      await enqueueChained({
         project_id: projectId,
         job_type: 'index.run',
         payload: { root: res.repo_root },
@@ -75,6 +82,7 @@ async function executeByType(
       const root = await resolveRoot(projectId, payload);
       return (await ingestGitHistory({
         projectId,
+        actingPrincipalId,
         root,
         since: payload.since ? String(payload.since) : undefined,
         maxCommits: payload.max_commits ? Number(payload.max_commits) : undefined,
@@ -83,19 +91,19 @@ async function executeByType(
     case 'index.run': {
       if (!projectId) throw new Error('project_id is required for index.run');
       const root = await resolveRoot(projectId, payload);
-      return (await indexProject({ projectId, root })) as unknown as Record<string, unknown>;
+      return (await indexProject({ projectId, root, actingPrincipalId })) as unknown as Record<string, unknown>;
     }
     case 'workspace.scan': {
       if (!projectId) throw new Error('project_id is required for workspace.scan');
       const root = await resolveRoot(projectId, payload);
-      const scan = await scanWorkspaceChanges({ projectId, rootPath: root, runDeltaIndex: false });
-      await enqueueJob({
+      const scan = await scanWorkspaceChanges({ projectId, actingPrincipalId, rootPath: root, runDeltaIndex: false });
+      await enqueueChained({
         project_id: projectId,
         job_type: 'workspace.delta_index',
         payload: { root },
         correlation_id: chainCorrelation,
       });
-      await enqueueJob({
+      await enqueueChained({
         project_id: projectId,
         job_type: 'knowledge.refresh',
         payload: { root },
@@ -106,13 +114,13 @@ async function executeByType(
     case 'workspace.delta_index': {
       if (!projectId) throw new Error('project_id is required for workspace.delta_index');
       const root = await resolveRoot(projectId, payload);
-      return (await indexProject({ projectId, root })) as unknown as Record<string, unknown>;
+      return (await indexProject({ projectId, root, actingPrincipalId })) as unknown as Record<string, unknown>;
     }
     case 'knowledge.refresh': {
       if (!projectId) throw new Error('project_id is required for knowledge.refresh');
       const commitSha = payload.commit_sha ? String(payload.commit_sha) : '';
       if (!commitSha) return { status: 'ok', skipped: true, reason: 'commit_sha not provided' };
-      return (await analyzeCommitImpact({ projectId, commitSha, limit: payload.limit ? Number(payload.limit) : undefined })) as unknown as Record<string, unknown>;
+      return (await analyzeCommitImpact({ projectId, actingPrincipalId, commitSha, limit: payload.limit ? Number(payload.limit) : undefined })) as unknown as Record<string, unknown>;
     }
     case 'quality.eval': {
       if (!projectId) throw new Error('project_id is required for quality.eval');
@@ -139,6 +147,7 @@ async function executeByType(
       const baselineDocKey = payload.baseline_doc_key ? String(payload.baseline_doc_key) : undefined;
       const { artifact, gate, baseline, doc_key } = await runQualityEvalAndPersist({
         projectId,
+        actingPrincipalId,
         env,
         queriesPath: path.resolve(queriesPath),
         hybridMode,
@@ -196,6 +205,7 @@ async function executeByType(
       if (runFaq) {
         parts.faq = await buildFaq({
           projectId,
+          actingPrincipalId,
           root,
           sourceJobId,
           correlationId: chainCorrelation,
@@ -204,6 +214,7 @@ async function executeByType(
       if (runRaptor) {
         parts.raptor = await buildRaptorSummaries({
           projectId,
+          actingPrincipalId,
           root,
           pathGlob: payload.path_glob ? String(payload.path_glob) : undefined,
           maxLevels: payload.max_levels ? Number(payload.max_levels) : undefined,
@@ -211,11 +222,12 @@ async function executeByType(
           correlationId: chainCorrelation,
         });
       }
-      const idx = await indexProject({ projectId, root });
+      const idx = await indexProject({ projectId, root, actingPrincipalId });
       const stamp = new Date().toISOString().replace(/[:.]/g, '-');
       const shallowKey = `phase6/shallow/${stamp}`;
       await upsertGeneratedDocument({
         projectId,
+        actingPrincipalId,
         docType: 'benchmark_artifact',
         docKey: shallowKey,
         title: `Phase6 shallow ${stamp}`,
@@ -272,11 +284,12 @@ async function executeByType(
       for (let round = 1; round <= maxRounds; round++) {
         if (payload.run_shallow !== false && round === 1) {
           if (payload.run_faq !== false) {
-            await buildFaq({ projectId, root, sourceJobId, correlationId: chainCorrelation });
+            await buildFaq({ projectId, actingPrincipalId, root, sourceJobId, correlationId: chainCorrelation });
           }
           if (payload.run_raptor !== false) {
             await buildRaptorSummaries({
               projectId,
+              actingPrincipalId,
               root,
               pathGlob: payload.path_glob ? String(payload.path_glob) : undefined,
               maxLevels: payload.max_levels ? Number(payload.max_levels) : undefined,
@@ -310,6 +323,7 @@ async function executeByType(
           const bm = useLarge
             ? await buildLargeRepoProjectMemory({
                 projectId,
+                actingPrincipalId,
                 root,
                 correlationId: chainCorrelation,
                 sourceJobId,
@@ -324,6 +338,7 @@ async function executeByType(
               })
             : await buildProjectMemoryArtifact({
                 projectId,
+                actingPrincipalId,
                 root,
                 correlationId: chainCorrelation,
                 sourceJobId,
@@ -346,9 +361,10 @@ async function executeByType(
             'phase6 deep builder memory step',
           );
         }
-        await indexProject({ projectId, root });
+        await indexProject({ projectId, root, actingPrincipalId });
         const evalResult = await runQualityEvalAndPersist({
           projectId,
+          actingPrincipalId,
           env,
           queriesPath: path.resolve(queriesPath),
           hybridMode,
@@ -380,6 +396,7 @@ async function executeByType(
       const summaryKey = `phase6/deep/summary/${summaryStamp}`;
       await upsertGeneratedDocument({
         projectId,
+        actingPrincipalId,
         docType: 'benchmark_artifact',
         docKey: summaryKey,
         title: `Phase6 deep summary ${summaryStamp}`,
@@ -418,6 +435,7 @@ async function executeByType(
       const root = await resolveRoot(projectId, payload);
       const res = await buildFaq({
         projectId,
+        actingPrincipalId,
         root,
         modules: Array.isArray(payload.modules) ? (payload.modules as any[]).map(s => String(s)) : undefined,
         maxItems: payload.max_items ? Number(payload.max_items) : undefined,
@@ -425,7 +443,7 @@ async function executeByType(
         sourceJobId,
         correlationId: chainCorrelation,
       });
-      await enqueueJob({
+      await enqueueChained({
         project_id: projectId,
         job_type: 'index.run',
         payload: { root },
@@ -438,13 +456,14 @@ async function executeByType(
       const root = await resolveRoot(projectId, payload);
       const res = await buildRaptorSummaries({
         projectId,
+        actingPrincipalId,
         root,
         pathGlob: payload.path_glob ? String(payload.path_glob) : undefined,
         maxLevels: payload.max_levels ? Number(payload.max_levels) : undefined,
         sourceJobId,
         correlationId: chainCorrelation,
       });
-      await enqueueJob({
+      await enqueueChained({
         project_id: projectId,
         job_type: 'index.run',
         payload: { root },
@@ -457,6 +476,7 @@ async function executeByType(
       const root = await resolveRoot(projectId, payload);
       const res = await buildLargeRepoProjectMemory({
         projectId,
+        actingPrincipalId,
         root,
         correlationId: chainCorrelation,
         sourceJobId,
@@ -467,7 +487,7 @@ async function executeByType(
           payload.resume_from_shard_index !== undefined ? Number(payload.resume_from_shard_index) : undefined,
       });
       if (res.status === 'ok') {
-        await enqueueJob({
+        await enqueueChained({
           project_id: projectId,
           job_type: 'index.run',
           payload: { root },
@@ -487,6 +507,7 @@ async function executeByType(
       const result = await runExtraction({
         docId,
         projectId,
+        actingPrincipalId,
         mode: 'vision',
         template,
         jobId: sourceJobId, // pass through for progress + cancel checks
@@ -556,7 +577,7 @@ export async function runNextJob(
       },
       'job started',
     );
-    const result = await executeByType(job.job_type, job.project_id, job.payload, job.correlation_id, job.job_id);
+    const result = await executeByType(job.job_type, job.project_id, job.payload, job.correlation_id, job.job_id, opts?.actingPrincipalId);
     await completeJob(job.job_id);
     logger.info(
       {
@@ -578,7 +599,10 @@ export async function runNextJob(
   }
 }
 
-export async function runJobById(jobId: string): Promise<{
+export async function runJobById(
+  jobId: string,
+  opts?: { actingPrincipalId?: string | null },
+): Promise<{
   status: 'idle' | 'ok' | 'error';
   job_id?: string;
   job_type?: JobType;
@@ -587,6 +611,19 @@ export async function runJobById(jobId: string): Promise<{
 }> {
   const job = await claimQueuedJobById(jobId);
   if (!job) return { status: 'idle' };
+  // [F2g/REVIEW-CODE adv #3] Gate the rabbit/by-id execute path symmetrically with runNextJob, on the
+  // CLAIMED job's own project (jobs carry their own project_id, independent of the caller's scope): a
+  // project job → write@project; a global job (project_id null, e.g. leases.sweep) → globally
+  // privileged only. The worker passes the system principal (global write), so both branches pass;
+  // this rejects any non-covering principal UP FRONT instead of failing at the first guarded leaf.
+  if (job.project_id) {
+    await assertAuthorized(opts?.actingPrincipalId, 'write', { kind: 'project', id: job.project_id });
+  } else if (!(await hasGlobalGrant(opts?.actingPrincipalId, 'write'))) {
+    throw new ContextHubError(
+      'BAD_REQUEST',
+      'a global job may be executed only by a globally-privileged principal',
+    );
+  }
   try {
     const started = Date.now();
     const phase6Types = new Set<JobType>([
@@ -606,7 +643,7 @@ export async function runJobById(jobId: string): Promise<{
       },
       'job started by id',
     );
-    const result = await executeByType(job.job_type, job.project_id, job.payload, job.correlation_id, job.job_id);
+    const result = await executeByType(job.job_type, job.project_id, job.payload, job.correlation_id, job.job_id, opts?.actingPrincipalId);
     await completeJob(job.job_id);
     logger.info(
       {

@@ -112,7 +112,7 @@ export async function scanWorkspaceChanges(params: {
       | { status: 'ok' | 'error'; files_indexed: number; duration_ms: number; errors: Array<{ path: string; message: string }> }
       | undefined;
     if (params.runDeltaIndex) {
-      indexResult = await indexProject({ projectId: params.projectId, root });
+      indexResult = await indexProject({ projectId: params.projectId, actingPrincipalId: params.actingPrincipalId, root });
     }
 
     return {
