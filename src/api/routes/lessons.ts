@@ -1,7 +1,6 @@
-import { Router, type Request } from 'express';
+import { Router } from 'express';
 import {
   addLesson,
-  assertCallerScope,
   batchUpdateLessonStatus,
   listLessons,
   listLessonVersions,
@@ -11,13 +10,9 @@ import {
   updateLessonStatus,
   resolveProjectIdOrThrow,
   resolveProjectIds,
-  type CallerScope,
 } from '../../core/index.js';
-
-/** DEFERRED-029: read the caller's project scope attached by bearerAuth (REST). */
-function callerScopeOf(req: Request): CallerScope {
-  return (req as { apiKeyScope?: CallerScope }).apiKeyScope;
-}
+import { assertAuthorized } from '../../services/authorize.js';
+import { callerPrincipalOf } from '../middleware/auth.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { resolveProjectParams } from '../middleware/resolveProjectParams.js';
 import { logLessonAccess, isSalienceDisabled } from '../../services/salience.js';
@@ -33,7 +28,7 @@ router.get('/', async (req, res, next) => {
 
     const result = await listLessons({
       ...p,
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       limit,
       // Offset-based pagination (page numbers)
       offset: req.query.offset !== undefined ? Number(req.query.offset) : undefined,
@@ -60,7 +55,7 @@ router.get('/', async (req, res, next) => {
 router.post('/', requireRole('writer'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
-    const result = await addLesson({ ...req.body, project_id: projectId, callerScope: callerScopeOf(req) });
+    const result = await addLesson({ ...req.body, project_id: projectId, actingPrincipalId: callerPrincipalOf(req) });
     res.status(201).json(result);
   } catch (e) { next(e); }
 });
@@ -85,13 +80,13 @@ router.post('/search', async (req, res, next) => {
       if (include_groups) {
         resolvedIds = await resolveProjectIds(projectId, true);
       } else {
-        const result = await searchLessons({ projectId, callerScope: callerScopeOf(req), query, filters, limit, rerank: rerankFlag });
+        const result = await searchLessons({ projectId, actingPrincipalId: callerPrincipalOf(req), query, filters, limit, rerank: rerankFlag });
         res.json(result);
         return;
       }
     }
 
-    const result = await searchLessonsMulti({ projectIds: resolvedIds, callerScope: callerScopeOf(req), query, filters, limit, rerank: rerankFlag });
+    const result = await searchLessonsMulti({ projectIds: resolvedIds, actingPrincipalId: callerPrincipalOf(req), query, filters, limit, rerank: rerankFlag });
     res.json(result);
   } catch (e) { next(e); }
 });
@@ -100,7 +95,8 @@ router.post('/search', async (req, res, next) => {
 router.post('/:id/improve', requireRole('writer'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
-    assertCallerScope(callerScopeOf(req), projectId);
+    // F2f: AI improve is a writer-gated authoring aid ⇒ write over the project.
+    await assertAuthorized(callerPrincipalOf(req), 'write', { kind: 'project', id: projectId });
     const { getDbPool } = await import('../../db/client.js');
     const pool = getDbPool();
     const existing = await pool.query(
@@ -140,7 +136,8 @@ router.post('/:id/improve', requireRole('writer'), async (req, res, next) => {
 router.post('/:id/suggest-tags', requireRole('writer'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
-    assertCallerScope(callerScopeOf(req), projectId);
+    // F2f: AI suggest-tags is a writer-gated authoring aid ⇒ write over the project.
+    await assertAuthorized(callerPrincipalOf(req), 'write', { kind: 'project', id: projectId });
     const { getDbPool } = await import('../../db/client.js');
     const pool = getDbPool();
     const existing = await pool.query(
@@ -193,7 +190,7 @@ router.get('/:id/versions', async (req, res, next) => {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
     const result = await listLessonVersions({
       projectId,
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       lessonId: req.params.id,
     });
     if (result.status === 'error') {
@@ -223,7 +220,7 @@ router.put('/:id', requireRole('writer'), async (req, res, next) => {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await updateLesson({
       projectId,
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       lessonId: String(req.params.id),
       title: req.body.title,
       content: req.body.content,
@@ -246,7 +243,7 @@ router.post('/batch-status', requireRole('writer'), async (req, res, next) => {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await batchUpdateLessonStatus({
       projectId,
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       lessonIds: req.body.lesson_ids ?? [],
       status: req.body.status,
     });
@@ -264,7 +261,7 @@ router.patch('/:id/status', requireRole('writer'), async (req, res, next) => {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await updateLessonStatus({
       projectId,
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       lessonId: String(req.params.id),
       status: req.body.status,
       supersededBy: req.body.superseded_by,

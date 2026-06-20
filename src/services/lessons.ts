@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { getEnv } from '../env.js';
-import { ContextHubError, assertCallerScope, assertCallerScopeMulti, type CallerScope } from '../core/index.js';
+import { ContextHubError } from '../core/index.js';
+import { assertAuthorized } from './authorize.js';
 import { getDbPool } from '../db/client.js';
 import { linkLessonToSymbols, upsertLessonNode } from '../kg/linker.js';
 import { deleteProjectGraph } from '../kg/projectGraph.js';
@@ -39,8 +40,8 @@ export type GuardrailRulePayload = {
 
 export type LessonPayload = {
   project_id: string;
-  /** DEFERRED-029: caller's scope; enforced against project_id. */
-  callerScope?: CallerScope;
+  /** Actor Data Boundary F2f — acting principal; authorize() is the tenant/authz gate. */
+  actingPrincipalId?: string | null;
   lesson_type: LessonType;
   title: string;
   content: string;
@@ -195,8 +196,8 @@ async function generateSearchAliases(title: string, content: string): Promise<st
 }
 
 export async function addLesson(payload: LessonPayload): Promise<AddLessonResult> {
-  // DEFERRED-029: service-layer tenant-scope guard (REST + MCP both inherit).
-  assertCallerScope(payload.callerScope, payload.project_id);
+  // F2f: authorize() is the tenant/authz gate (REST + MCP inherit). write ⊃ read.
+  await assertAuthorized(payload.actingPrincipalId, 'write', { kind: 'project', id: payload.project_id });
   // Phase 13 Sprint 13.5 — single source of truth for lesson_type validation.
   // Runs at the SERVICE layer so REST POST /api/lessons, REST /import, MCP
   // add_lesson, and any future caller all hit the same gate. Built-ins always
@@ -342,8 +343,8 @@ export type SortOrder = 'asc' | 'desc';
 export type ListLessonsParams = {
   projectId?: string;
   projectIds?: string[];
-  /** DEFERRED-029: caller's scope; enforced against projectId (single) or projectIds (multi). */
-  callerScope?: CallerScope;
+  /** Actor Data Boundary F2f — acting principal; authorize() is the tenant/authz gate. */
+  actingPrincipalId?: string | null;
   limit?: number;
   /** Cursor-based pagination (legacy, still supported). */
   after?: string;
@@ -381,15 +382,18 @@ function escapeIlike(s: string): string {
 }
 
 export async function listLessons(params: ListLessonsParams): Promise<ListLessonsResult> {
-  // DEFERRED-029: enforce scope against whichever project axis was supplied.
-  // Single-project path: assertCallerScope. Multi-project path: assertCallerScopeMulti.
+  // F2f: read authorization per project axis. Multi-project ⇒ authorize EACH (a caller granted on
+  // several projects legitimately spans them; one scoped outside its grants gets NOT_FOUND). The
+  // "all projects" axis (no projectId/Ids) requires global read — a project-scoped caller can't list
+  // across every tenant.
   if (params.projectIds && params.projectIds.length > 0) {
-    assertCallerScopeMulti(params.callerScope, params.projectIds);
+    for (const id of params.projectIds) {
+      await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id });
+    }
   } else if (params.projectId) {
-    assertCallerScope(params.callerScope, params.projectId);
-  } else if (params.callerScope) {
-    // A scoped caller asking for "all projects" (no projectId/Ids) is meaningless.
-    throw new ContextHubError('NOT_FOUND', 'not found');
+    await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id: params.projectId });
+  } else {
+    await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'global' });
   }
   const pool = getDbPool();
   const limit = Math.min(Math.max(params.limit ?? 20, 1), 100);
@@ -504,8 +508,8 @@ export async function listLessons(params: ListLessonsParams): Promise<ListLesson
 
 export type SearchLessonsParams = {
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** Actor Data Boundary F2f — acting principal; authorize() is the tenant/authz gate. */
+  actingPrincipalId?: string | null;
   query: string;
   limit?: number;
   /** DEFERRED-030: when explicitly `false`, skip the server-side rerank
@@ -1003,8 +1007,8 @@ function isDedupDisabled(): boolean {
 }
 
 export async function searchLessons(params: SearchLessonsParams): Promise<SearchLessonsResult> {
-  // DEFERRED-029: service-layer tenant-scope guard (REST + MCP both inherit).
-  assertCallerScope(params.callerScope, params.projectId);
+  // F2f: read authorization (REST + MCP inherit).
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id: params.projectId });
   const pool = getDbPool();
   const limit = Math.min(Math.max(params.limit ?? 10, 1), 50);
   const lessonType = params.filters?.lesson_type;
@@ -1315,8 +1319,8 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
 
 export type SearchLessonsMultiParams = {
   projectIds: string[];
-  /** DEFERRED-029: caller's scope; enforced against projectIds via strict-reject. */
-  callerScope?: CallerScope;
+  /** Actor Data Boundary F2f — acting principal; authorize() is the tenant/authz gate. */
+  actingPrincipalId?: string | null;
   query: string;
   limit?: number;
   /** DEFERRED-030: see {@link SearchLessonsParams.rerank}. */
@@ -1336,14 +1340,17 @@ export type SearchLessonsMultiParams = {
  * Single embedding computation, single SQL query, single rerank pass.
  */
 export async function searchLessonsMulti(params: SearchLessonsMultiParams): Promise<SearchLessonsResult> {
-  // DEFERRED-029: strict-reject if the requested projects fall outside the caller's scope.
-  assertCallerScopeMulti(params.callerScope, params.projectIds);
+  // F2f: authorize read on EACH requested project (replaces strict-reject; a multi-project-granted
+  // caller may legitimately span them, one scoped outside its grants gets NOT_FOUND per project).
+  for (const id of [...new Set(params.projectIds.filter(Boolean))]) {
+    await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id });
+  }
   const pool = getDbPool();
   const projectIds = [...new Set(params.projectIds.filter(Boolean))];
 
   // If only one project, delegate to single-project search (same perf path).
   if (projectIds.length === 1) {
-    return searchLessons({ projectId: projectIds[0], callerScope: params.callerScope, query: params.query, limit: params.limit, rerank: params.rerank, filters: params.filters, snippetMaxChars: params.snippetMaxChars });
+    return searchLessons({ projectId: projectIds[0], actingPrincipalId: params.actingPrincipalId, query: params.query, limit: params.limit, rerank: params.rerank, filters: params.filters, snippetMaxChars: params.snippetMaxChars });
   }
   if (projectIds.length === 0) {
     return { matches: [], explanations: ['no project_ids provided'] };
@@ -1607,8 +1614,8 @@ function assertUuid(value: string | null | undefined, field: string): void {
 
 export async function updateLesson(params: {
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** Actor Data Boundary F2f — acting principal; authorize() is the tenant/authz gate. */
+  actingPrincipalId?: string | null;
   lessonId: string;
   title?: string;
   content?: string;
@@ -1619,7 +1626,8 @@ export async function updateLesson(params: {
 }): Promise<{ status: 'ok' | 'error'; error?: string; re_embedded?: boolean; version_number?: number }> {
   const pool = getDbPool();
 
-  assertCallerScope(params.callerScope, params.projectId);
+  // F2f: mutating a lesson ⇒ write over its project.
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.projectId });
   // DEFERRED-027: reject malformed ids before they reach the uuid-typed query.
   assertUuid(params.lessonId, 'lessonId');
 
@@ -1714,12 +1722,13 @@ export async function updateLesson(params: {
 
 export async function listLessonVersions(params: {
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** Actor Data Boundary F2f — acting principal; authorize() is the tenant/authz gate. */
+  actingPrincipalId?: string | null;
   lessonId: string;
 }): Promise<{ status: 'ok' | 'error'; error?: string; versions?: any[]; total_count?: number }> {
   const pool = getDbPool();
-  assertCallerScope(params.callerScope, params.projectId);
+  // F2f: reading version history ⇒ read over its project.
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id: params.projectId });
 
   const existing = await pool.query(
     `SELECT lesson_id FROM lessons WHERE project_id=$1 AND lesson_id=$2`,
@@ -1746,12 +1755,13 @@ export async function listLessonVersions(params: {
 
 export async function batchUpdateLessonStatus(params: {
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** Actor Data Boundary F2f — acting principal; authorize() is the tenant/authz gate. */
+  actingPrincipalId?: string | null;
   lessonIds: string[];
   status: LessonStatus;
 }): Promise<{ status: 'ok' | 'error'; error?: string; updated_count?: number; failed_ids?: string[] }> {
-  assertCallerScope(params.callerScope, params.projectId);
+  // F2f: batch status mutation ⇒ write over its project.
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.projectId });
   if (!params.lessonIds.length) {
     return { status: 'error', error: 'lesson_ids is empty' };
   }
@@ -1798,12 +1808,13 @@ export async function updateLessonStatus(params: {
   lessonId: string;
   status: LessonStatus;
   supersededBy?: string | null;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** Actor Data Boundary F2f — acting principal; authorize() is the tenant/authz gate. */
+  actingPrincipalId?: string | null;
 }): Promise<{ status: 'ok' | 'error'; error?: string }> {
   const pool = getDbPool();
 
-  assertCallerScope(params.callerScope, params.projectId);
+  // F2f: status transition ⇒ write over its project.
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.projectId });
   // DEFERRED-027: reject malformed ids before they reach the uuid-typed query.
   assertUuid(params.lessonId, 'lessonId');
   assertUuid(params.supersededBy, 'superseded_by');
@@ -1871,10 +1882,10 @@ export async function updateLessonStatus(params: {
 
 export async function deleteWorkspace(
   projectId: string,
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  opts?: { callerScope?: CallerScope },
+  /** Actor Data Boundary F2f — acting principal; destructive ⇒ requires admin over the project. */
+  opts?: { actingPrincipalId?: string | null },
 ) {
-  assertCallerScope(opts?.callerScope, projectId);
+  await assertAuthorized(opts?.actingPrincipalId, 'admin', { kind: 'project', id: projectId });
   const pool = getDbPool();
 
   await pool.query('BEGIN');

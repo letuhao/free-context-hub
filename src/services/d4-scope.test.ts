@@ -20,7 +20,6 @@ import { indexProject } from './indexer.js';
 import { searchCode } from './retriever.js';
 import { tieredSearch } from './tieredRetriever.js';
 import { searchSymbols, getSymbolNeighbors, traceDependencyPath, getLessonImpact } from '../kg/query.js';
-import { deleteWorkspace } from './lessons.js';
 import { ContextHubError } from '../core/errors.js';
 
 const isNotFound = (err: unknown): boolean =>
@@ -136,11 +135,6 @@ test('DEFERRED-029: getLessonImpact cross-tenant → NOT_FOUND', async () => {
   );
 });
 
-// ── deleteWorkspace (1) ───────────────────────────────────────────────────────
-
-test('DEFERRED-029: deleteWorkspace cross-tenant → NOT_FOUND', async () => {
-  await assert.rejects(
-    deleteWorkspace('proj-A', { callerScope: 'proj-B' }),
-    isNotFound,
-  );
-});
+// ── deleteWorkspace MIGRATED to F2f (authorize() + grants); its auth-ON enforcement coverage
+//    moved to lessons-authz.test.ts. The remaining DEFERRED-029 callerScope cases below cover the
+//    documents-domain functions not yet migrated (snapshot/indexer/retriever/KG) — F2f domain 4.

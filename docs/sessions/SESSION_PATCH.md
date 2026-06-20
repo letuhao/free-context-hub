@@ -1,3 +1,53 @@
+# CHECKPOINT — F2f.0 foundation + domain 1 (lessons) enforcement wired (2026-06-20, session 12)
+
+**Branch:** `feature/actor-data-boundary`. Continuing the F2f enforcement rollout serially under
+**/loom** (the `/warp` disjointness gate was run and **failed** — `src/mcp/index.ts` is a shared-write
+magnet every domain touches; per warp.md that mandates serial /loom). Auth stays **OFF** — every
+migrated site no-ops via `assertAuthorized`'s AUTH_DISABLED pass-through until the F2g flip. Full unit
+suite **1142 pass / 2 skip**, tsc clean.
+
+**F2f.0 foundation (REST principal threading):** the rollout doc's claim "REST bearerAuth provides the
+principal" was **inaccurate** — `bearerAuth` attached only `apiKeyScope`. Fixed: it now also attaches
+`req.apiKeyPrincipalId = keyEntry.principal_id` (data already loaded by `validateApiKey`), and a new
+exported `callerPrincipalOf(req)` helper (`src/api/middleware/auth.ts`) is the REST analog of MCP's
+`resolveActingActorOrThrow → actingPrincipalId`.
+
+**Domain 1 — lessons (PURE REPLACE):** every `assertCallerScope`/`assertCallerScopeMulti` in
+`src/services/lessons.ts` (10 sites across addLesson/listLessons/searchLessons/searchLessonsMulti/
+updateLesson/listLessonVersions/batchUpdateLessonStatus/updateLessonStatus/deleteWorkspace) replaced
+with `assertAuthorized(actingPrincipalId, ACTION, resource)`. The `callerScope` param is GONE
+(renamed → `actingPrincipalId`). Action mapping: read for search/list/versions; write for add/update/
+status/batch and the writer-gated AI improve/suggest-tags routes (consolidates the role check into
+authorize); admin for the destructive `deleteWorkspace`. Multi-project reads authorize EACH project
+(stricter + more correct than the old strict-reject); list-all-projects requires global read.
+Callers threaded: REST `lessons.ts` route + `chat.ts` (searchLessons) + 9 MCP handlers
+(`resolveMcpCallerScopeOrThrow` → `resolveActingActorOrThrow`).
+
+**Frozen-interface change:** `authorize`/`assertAuthorized`/`explainAuthorization` first param widened
+`string | null` → `string | null | undefined` (additive; the pure `decide` core is untouched) so an
+optional `actingPrincipalId` threads without `?? null` at every site.
+
+**Tests:** the 9 DEFERRED-029 callerScope cross-tenant unit tests in `lessons.test.ts` + the
+`deleteWorkspace` case in `d4-scope.test.ts` tested the now-removed synchronous guard — replaced by
+**`src/services/lessons-authz.test.ts`** (6 auth-ON grant-based tests: cross-tenant read → NOT_FOUND,
+over-capability write/admin → FORBIDDEN, granted read resolves, unknown principal → NOT_FOUND).
+Registered in `package.json`.
+
+**F2g posture-flip prerequisites discovered (NOT blockers now — auth is off):**
+1. **Internal/system callers** of lesson fns (import, faqBuilder, salience, seeds, jobs) pass no
+   principal → under auth-ON they would `NO_PRINCIPAL`-deny. Before the flip they need a system/root
+   principal threaded (or an explicit exemption). This applies to EVERY domain.
+2. The deprecated **env-token fast path** (`CONTEXT_HUB_WORKSPACE_TOKEN`) carries no principal → loses
+   access at flip. Consistent with DEFERRED-029 PR E retiring it; must be gone before flip.
+3. **`projects.ts` REST `deleteWorkspace(projectId)`** (no opts) still passes no principal — inert now;
+   thread `callerPrincipalOf(req)` in domain 7.
+
+**What's next:** F2f domains 2–8 (board → decisions → documents → git/workspace → search → jobs/misc →
+REST middleware retire), same pattern. Then the 3rd cold-start adversary pass over the wired
+enforcement, then F2g prerequisites. `MCP_AUTH_ENABLED` flip stays human-gated.
+
+---
+
 # CHECKPOINT — F2 authorization machinery (F2a–F2e) COMPLETE (2026-06-20, session 12)
 
 **Branch:** `feature/actor-data-boundary`. Driven as one continuous **/loom** XL effort. The entire F2

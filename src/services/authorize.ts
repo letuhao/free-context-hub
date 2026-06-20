@@ -161,7 +161,7 @@ export async function resolveResourceScope(
   return { ok: { kind: 'task', project_id: r.rows[0].project_id, topic_id: r.rows[0].topic_id, task_id: id } };
 }
 
-async function loadPrincipalLite(principalId: string | null, executor?: PoolClient): Promise<PrincipalLike | null> {
+async function loadPrincipalLite(principalId: string | null | undefined, executor?: PoolClient): Promise<PrincipalLike | null> {
   if (typeof principalId !== 'string' || !isUuid(principalId)) return null;
   const runner = executor ?? getDbPool();
   const r = await runner.query<PrincipalLike>(
@@ -183,7 +183,7 @@ async function loadActiveGrants(principalId: string, executor?: PoolClient): Pro
 
 /** Append the decision to authz_decisions. BEST-EFFORT: a logging failure never alters the decision. */
 async function logDecision(
-  principalId: string | null,
+  principalId: string | null | undefined,
   action: Action,
   ref: ResourceRef,
   d: Decision,
@@ -197,7 +197,7 @@ async function logDecision(
          (principal_id, action, resource_kind, resource_id, allow, reason, matched_grant_id, origin)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
-        principalId,
+        principalId ?? null,
         action,
         ref.kind,
         // [F2-adv #6] resource_id is raw caller input; cap its length so the append-only audit log
@@ -220,7 +220,7 @@ async function logDecision(
  * learns whether a resource exists. Returns the resolved scope chain too (for explain). Total.
  */
 async function evaluate(
-  principalId: string | null,
+  principalId: string | null | undefined,
   action: Action,
   resource: ResourceRef,
   executor?: PoolClient,
@@ -246,7 +246,7 @@ async function evaluate(
  * the posture flip (F2g, human-gated).
  */
 export async function authorize(
-  principalId: string | null,
+  principalId: string | null | undefined,
   action: Action,
   resource: ResourceRef,
   executor?: PoolClient,
@@ -269,7 +269,7 @@ export async function authorize(
  * is a no-op while enforcement is off — every migrated site stays dev-safe until the F2g flip).
  */
 export async function assertAuthorized(
-  principalId: string | null,
+  principalId: string | null | undefined,
   action: Action,
   resource: ResourceRef,
   executor?: PoolClient,
@@ -294,7 +294,7 @@ export interface ExplainResult {
  * explain_authorization tool + the FE "why" inspector. Honors the auth-off posture symmetrically.
  */
 export async function explainAuthorization(
-  principalId: string | null,
+  principalId: string | null | undefined,
   action: Action,
   resource: ResourceRef,
   executor?: PoolClient,

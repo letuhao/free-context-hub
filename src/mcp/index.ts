@@ -1367,11 +1367,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, filters, page, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       const result = await listLessons({
         projectId,
-        callerScope,
+        actingPrincipalId,
         limit: page?.limit,
         after: page?.after,
         filters: filters as { lesson_type?: any; tags_any?: string[]; status?: any },
@@ -1453,7 +1453,7 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, project_ids, group_id, include_groups, query, filters, limit, rerank, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const filtersTyped = filters as { lesson_type?: any; tags_any?: string[]; include_all_statuses?: boolean } | undefined;
 
       // Priority: project_ids > group_id > project_id + include_groups > project_id alone
@@ -1472,13 +1472,13 @@ function createMcpToolsServer() {
           resolvedIds = await resolveProjectIds(projectId, true);
         } else {
           // Single project search (backwards compat — identical to previous behavior).
-          const result = await searchLessons({ projectId, callerScope, query, limit, rerank, filters: filtersTyped });
+          const result = await searchLessons({ projectId, actingPrincipalId, query, limit, rerank, filters: filtersTyped });
           const summary = `search_lessons: matches=${result.matches.length}`;
           return formatToolResponse(result, summary, output_format);
         }
       }
 
-      const result = await searchLessonsMulti({ projectIds: resolvedIds, callerScope, query, limit, rerank, filters: filtersTyped });
+      const result = await searchLessonsMulti({ projectIds: resolvedIds, actingPrincipalId, query, limit, rerank, filters: filtersTyped });
       const summary = `search_lessons: matches=${result.matches.length} (multi-project: ${resolvedIds.length})`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -1753,9 +1753,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, lesson_payload, output_format }) => {
-      const { scope: callerScope, actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, lesson_payload.captured_by);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, lesson_payload.captured_by);
       const projectId = resolveProjectIdOrThrow(lesson_payload.project_id);
-      const result = await addLesson({ ...lesson_payload, project_id: projectId, callerScope, captured_by: actingPrincipalId ?? lesson_payload.captured_by } as any);
+      const result = await addLesson({ ...lesson_payload, project_id: projectId, actingPrincipalId, captured_by: actingPrincipalId ?? lesson_payload.captured_by } as any);
       const summary = `add_lesson: lesson_id=${result.lesson_id ?? '(unknown)'}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -1967,9 +1967,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, lesson_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const result = await listLessonVersions({ projectId: pid, callerScope, lessonId: lesson_id });
+      const result = await listLessonVersions({ projectId: pid, actingPrincipalId, lessonId: lesson_id });
       const summary = `list_lesson_versions: ${result.total_count ?? 0} version(s)`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2003,11 +2003,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, lesson_id, title, content, tags, source_refs, changed_by, change_summary, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       const result = await updateLesson({
         projectId: pid,
-        callerScope,
+        actingPrincipalId,
         lessonId: lesson_id,
         title,
         content,
@@ -2045,7 +2045,7 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, lesson_id, status, superseded_by, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       // Phase 13 Sprint 13.3 runtime guard: belt-and-suspenders for raw callers bypassing zod.
       if ((status as string) === 'pending-review') {
@@ -2056,7 +2056,7 @@ function createMcpToolsServer() {
       }
       const result = await updateLessonStatus({
         projectId: pid,
-        callerScope,
+        actingPrincipalId,
         lessonId: lesson_id,
         status: status as any,
         supersededBy: superseded_by,
@@ -2118,14 +2118,14 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, topic, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       if (!(await isFeatureEnabled(pid, 'distillation'))) {
         return formatToolResponse({ answer: '', warning: 'Distillation is disabled for this project.' }, 'reflect: disabled', output_format);
       }
       const retrieved = await searchLessons({
         projectId: pid,
-        callerScope,
+        actingPrincipalId,
         query: topic,
         limit: 12,
         filters: { include_all_statuses: false },
@@ -2212,9 +2212,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
-      const result = await deleteWorkspace(projectId, { callerScope });
+      const result = await deleteWorkspace(projectId, { actingPrincipalId });
       const summary = `delete_workspace: deleted=${result.deleted}, project_id=${result.deleted_project_id}`;
       return formatToolResponse(result, summary, output_format);
     },

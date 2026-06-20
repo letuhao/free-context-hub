@@ -6,6 +6,16 @@ import { createModuleLogger } from '../../utils/logger.js';
 const logger = createModuleLogger('rest-auth');
 
 /**
+ * Actor Data Boundary F2f — the acting principal id attached by bearerAuth (the bound principal of
+ * the api key, F1b). This is what authorize()/assertAuthorized take, replacing the project-scope
+ * `callerScopeOf`. Returns null when no principal is bound (legacy unbound key, env-token fast path,
+ * or auth-off) — under auth-off assertAuthorized no-ops regardless, so this is dev-safe.
+ */
+export function callerPrincipalOf(req: Request): string | null {
+  return (req as { apiKeyPrincipalId?: string | null }).apiKeyPrincipalId ?? null;
+}
+
+/**
  * Bearer token middleware for the REST API.
  * Checks in order:
  *   1. Env var CONTEXT_HUB_WORKSPACE_TOKEN (fast path, backwards compat → admin role)
@@ -59,6 +69,10 @@ export function bearerAuth(req: Request, res: Response, next: NextFunction) {
       (req as any).apiKeyRole = keyEntry.role;
       (req as any).apiKeyScope = keyEntry.project_scope;
       (req as any).apiKeyName = keyEntry.name;
+      // Actor Data Boundary F2f — the bound acting principal (F1b). authorize()/assertAuthorized
+      // need the principal id, not the project scope. Null for a legacy unbound key; that path
+      // loses access only once MCP_AUTH_ENABLED flips (F2g posture-flip prerequisite).
+      (req as any).apiKeyPrincipalId = keyEntry.principal_id;
       next();
     })
     .catch(() => {

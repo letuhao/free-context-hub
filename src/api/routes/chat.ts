@@ -14,6 +14,7 @@ import {
 } from '../../core/index.js';
 import type { CallerScope } from '../../core/index.js';
 import { searchChunks } from '../../services/documentChunks.js';
+import { callerPrincipalOf } from '../middleware/auth.js';
 
 /** DEFERRED-029: read the caller's project scope attached by bearerAuth. */
 function callerScopeOf(req: Request): CallerScope {
@@ -68,7 +69,7 @@ Be concise and direct. Use markdown formatting.`,
             // 280-char display preview (mirrors the search_documents fix). A
             // lesson whose decision/content sits past char 280 otherwise can't
             // be grounded on by the assistant.
-            return searchLessons({ projectId, callerScope: callerScopeOf(req), query, limit: 5, snippetMaxChars: 2000 });
+            return searchLessons({ projectId, actingPrincipalId: callerPrincipalOf(req), query, limit: 5, snippetMaxChars: 2000 });
           },
         }),
         check_guardrails: tool({
