@@ -94,6 +94,16 @@ test('system principal: delegate@global → DENY (no delegate grant; bounded, no
 });
 
 // ── 3. runNextJob's unscoped global gate: system passes; a project-scoped principal does not ──
+// This is the worker's PRIMARY poll-loop path (worker.ts: runNextJob(queue, undefined, {system})).
+// It exercises the global `hasGlobalGrant(system)` branch — which the project_id-bearing job tests
+// below never reach (they take the write@project branch).
+test('runNextJob unscoped drain with the system principal → passes the global gate (NOT BAD_REQUEST)', async () => {
+  // Unique empty queue: the gate (hasGlobalGrant) runs BEFORE the claim, so this exercises the global
+  // branch yet deterministically returns idle — without popping a foreign job off the shared 'default'
+  // queue. A dropped/insufficient system grant would BAD_REQUEST here, breaking the worker's poll loop.
+  const res = await runNextJob(`${PREFIX}unq`, undefined, { actingPrincipalId: sys });
+  assert.equal(res.status, 'idle', 'global gate passed (hasGlobalGrant(system)=true) and the unique queue is empty');
+});
 test('runNextJob unscoped drain with a project-scoped principal → BAD_REQUEST (not globally privileged)', async () => {
   await assert.rejects(runNextJob('default', undefined, { actingPrincipalId: projWriter }), isBadRequest);
 });
