@@ -1547,11 +1547,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, query, chunk_types, doc_ids, limit, min_score, rerank, snippet_max_chars, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       const result = await searchChunks({
         projectId,
-        callerScope,
+        actingPrincipalId,
         query,
         limit,
         chunkTypes: chunk_types as any,
@@ -1594,11 +1594,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, doc_type, doc_status, include_content, limit, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       const res = await listGeneratedDocuments({
         projectId,
-        callerScope,
+        actingPrincipalId,
         docType: doc_type,
         docStatus: doc_status,
         includeContent: include_content,
@@ -1642,14 +1642,14 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, doc_id, doc_type, doc_key, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       if (!doc_id && (!doc_type || !doc_key)) {
         throw new McpError(ErrorCode.InvalidParams, 'Provide doc_id or both doc_type + doc_key');
       }
       const item = await getGeneratedDocument({
         projectId,
-        callerScope,
+        actingPrincipalId,
         docId: doc_id,
         docType: doc_type,
         docKey: doc_key,
@@ -1678,14 +1678,14 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, doc_id, doc_type, doc_key, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       if (!doc_id && (!doc_type || !doc_key)) {
         throw new McpError(ErrorCode.InvalidParams, 'Provide doc_id or both doc_type + doc_key');
       }
       const result = await promoteGeneratedDocument({
         projectId,
-        callerScope,
+        actingPrincipalId,
         docId: doc_id,
         docType: doc_type,
         docKey: doc_key,

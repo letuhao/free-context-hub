@@ -126,7 +126,7 @@ export function decide(
  * The RESOLVED ResourceScope is always a lattice level; these shorthands are input-only.
  */
 export interface ResourceRef {
-  kind: ResourceScope['kind'] | 'artifact' | 'doc' | 'body' | 'intake' | 'motion' | 'dispute' | 'request';
+  kind: ResourceScope['kind'] | 'artifact' | 'doc' | 'lesson' | 'body' | 'intake' | 'motion' | 'dispute' | 'request';
   id?: string | null;
 }
 
@@ -168,13 +168,13 @@ export async function resolveResourceScope(
     return { ok: { kind: 'task', project_id: r.rows[0].project_id, topic_id: r.rows[0].topic_id, task_id: r.rows[0].task_id } };
   }
 
-  if (ref.kind === 'doc') {
-    // [F2f domain 4] doc_id is UUID — guard against 22P02. A document lives directly under a project.
+  if (ref.kind === 'doc' || ref.kind === 'lesson') {
+    // [F2f domain 4] doc_id / lesson_id are UUID — guard against 22P02. Both live directly under a project.
     if (!isUuid(id)) return { unresolvable: 'NOT_FOUND' };
-    const r = await runner.query<{ project_id: string }>(
-      `SELECT project_id FROM documents WHERE doc_id = $1`,
-      [id],
-    );
+    const sql = ref.kind === 'doc'
+      ? `SELECT project_id FROM documents WHERE doc_id = $1`
+      : `SELECT project_id FROM lessons WHERE lesson_id = $1`;
+    const r = await runner.query<{ project_id: string }>(sql, [id]);
     if (!r.rows[0]) return { unresolvable: 'NOT_FOUND' };
     return { ok: { kind: 'project', project_id: r.rows[0].project_id } };
   }

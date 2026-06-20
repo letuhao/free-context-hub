@@ -1,3 +1,30 @@
+# CHECKPOINT — F2f domain 4 (documents) enforcement wired (2026-06-20, session 12)
+
+**Branch:** `feature/actor-data-boundary`. Serial /loom rollout continuing. Auth stays **OFF** (inert).
+Full unit suite **1145 pass / 2 skip**, tsc clean.
+
+**Domain 4 — documents (PURE REPLACE)** across `documents.ts` (create=write, list/get=read,
+delete=admin, link/unlink=write·[doc+lesson], listDocumentLessons=read·doc), `documentChunks.ts`
+(searchChunks/searchChunksMulti=read·project, per-project), `generatedDocs.ts` (upsert/promote=write,
+list/get=read), `extraction/pipeline.ts` (runExtraction/updateChunk/deleteChunk=write,
+listDocumentChunks=read). All `assertCallerScope`/`assertDocumentScope`/`assertLessonScope` →
+`assertAuthorized`; `callerScope` removed. Threaded through REST documents/generated-docs/chat routes
+(+ `callerPrincipalOf`) and the doc MCP handlers (`resolveMcpCallerScopeOrThrow` →
+`resolveActingActorOrThrow`).
+
+**Resolver extension:** `ResourceRef.kind` gained `lesson` (→ project, UUID-guarded; shares the `doc`
+branch). The link/unlink fns authorize BOTH endpoints (doc AND lesson) — preserves the PR F SEC-4
+no-cross-tenant-edge guarantee for the project_id-less `document_lessons` join.
+
+**Tests:** rewrote `documents-scope.test.ts` to keep only the exchange (export/import) cases (domain 7)
+→ new **`documents-authz.test.ts`** (13 auth-ON tests incl. the doc→project resolver + the SEC-4
+no-edge/no-oracle property). Removed the 2 SEC-4 link/unlink cases from `pr-f-adversary-fixes.test.ts`
+(migrated to documents-authz). Document FUNCTIONAL tests never passed callerScope, none broke.
+
+**What's next:** domains 5–8 (git/workspace next). F2g prerequisites already logged.
+
+---
+
 # CHECKPOINT — F2f domain 3 (decisions) enforcement wired (2026-06-20, session 12)
 
 **Branch:** `feature/actor-data-boundary`. Serial /loom rollout continuing. Auth stays **OFF** (inert).

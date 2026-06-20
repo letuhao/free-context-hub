@@ -26,7 +26,6 @@ import test from 'node:test';
 
 import { enqueueJob, listJobs, cancelJob } from './jobQueue.js';
 import { triageIntake } from './intake.js';
-import { linkDocumentToLesson, unlinkDocumentFromLesson } from './documents.js';
 import { ContextHubError } from '../core/errors.js';
 
 const isNotFound = (err: unknown): boolean =>
@@ -130,37 +129,10 @@ test('PR F SEC-3: enqueueJob scoped + cross-tenant project_id → NOT_FOUND (reg
   );
 });
 
-// ── SEC-4 (Adversary #2 HIGH): linkDocumentToLesson cross-tenant edge ────────
-// PRE-FIX: assertDocumentScope on docId, lesson_id un-validated. A scoped-A
-// caller who owns docA could link to lesson-from-projB → cross-tenant edge
-// write + read oracle via listDocumentLessons.
-// POST-FIX: assertLessonScope on lesson_id too. Both endpoints must scope.
-
-test('PR F SEC-4: linkDocumentToLesson cross-tenant lesson → NOT_FOUND', async () => {
-  // No DB: assertDocumentScope fires first on an unknown docId and returns
-  // NOT_FOUND for any non-null/undefined scope. That proves the fn reaches
-  // the scope helpers. The end-to-end "doc-owned-by-A links to lesson-in-B"
-  // case is covered by the E2E auth-ON slice.
-  await assert.rejects(
-    linkDocumentToLesson({
-      docId: '11111111-1111-1111-1111-111111111111',
-      lessonId: '22222222-2222-2222-2222-222222222222',
-      callerScope: 'proj-B',
-    }),
-    isNotFound,
-  );
-});
-
-test('PR F SEC-4: unlinkDocumentFromLesson cross-tenant lesson → NOT_FOUND', async () => {
-  await assert.rejects(
-    unlinkDocumentFromLesson({
-      docId: '11111111-1111-1111-1111-111111111111',
-      lessonId: '22222222-2222-2222-2222-222222222222',
-      callerScope: 'proj-B',
-    }),
-    isNotFound,
-  );
-});
+// ── SEC-4 (Adversary #2 HIGH): linkDocumentToLesson cross-tenant edge — MIGRATED to F2f domain 4.
+// The assertDocumentScope+assertLessonScope guard is gone; authorize() gates BOTH endpoints. The
+// no-cross-tenant-edge / no-oracle property is now covered by documents-authz.test.ts (auth-ON:
+// an unresolvable/cross-tenant doc or lesson → NOT_FOUND/FORBIDDEN before any edge write).
 
 // ── SEC-6 (Adversary #3 HIGH): worker payload.root cross-tenant ingestion ───
 // SEC-3 pinned DB project_id; SEC-6 closes the separate filesystem-read path.

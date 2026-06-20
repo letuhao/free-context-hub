@@ -12,8 +12,7 @@ import { extractFast } from './fastText.js';
 import { extractQuality } from './qualityText.js';
 import { extractVision } from './visionExtract.js';
 import { chunkDocument, chunkDocumentSemantic } from './chunker.js';
-import { assertCallerScope } from '../../core/security/callerScope.js';
-import type { CallerScope } from '../../core/security/callerScope.js';
+import { assertAuthorized } from '../authorize.js';
 import type {
   ExtractionMode,
   ChunkTemplate,
@@ -37,8 +36,8 @@ const EMBED_BATCH_SIZE = 32;
 export async function runExtraction(params: {
   docId: string;
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() gate (project scope). */
+  actingPrincipalId?: string | null;
   mode: ExtractionMode;
   template?: ChunkTemplate;
   /** Optional job ID for progress reporting + cancellation (vision mode only). */
@@ -46,7 +45,7 @@ export async function runExtraction(params: {
   /** Optional prompt template (vision mode only). 'mermaid' uses the diagram-extraction prompt. */
   promptTemplate?: 'default' | 'mermaid';
 }): Promise<{ chunks: DocumentChunk[]; pages: number }> {
-  assertCallerScope(params.callerScope, params.projectId);
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.projectId });
   const { docId, projectId, mode, template, jobId, promptTemplate } = params;
   const pool = getDbPool();
 
@@ -303,10 +302,10 @@ function sanitizeExtractedContent(content: string): string {
 export async function listDocumentChunks(params: {
   docId: string;
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() gate (project scope). */
+  actingPrincipalId?: string | null;
 }): Promise<{ chunks: DocumentChunk[]; total: number }> {
-  assertCallerScope(params.callerScope, params.projectId);
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id: params.projectId });
   const pool = getDbPool();
   const result = await pool.query(
     `SELECT chunk_id, doc_id, project_id, chunk_index, content, page_number,
@@ -330,12 +329,12 @@ export async function updateChunk(params: {
   docId: string;
   chunkId: string;
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() gate (project scope). */
+  actingPrincipalId?: string | null;
   content: string;
   expectedUpdatedAt?: string;
 }): Promise<{ status: 'ok'; chunk: DocumentChunk } | { status: 'conflict'; current: DocumentChunk } | { status: 'not_found' }> {
-  assertCallerScope(params.callerScope, params.projectId);
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.projectId });
   const pool = getDbPool();
 
   // Fetch current row
@@ -393,10 +392,10 @@ export async function deleteChunk(params: {
   docId: string;
   chunkId: string;
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() gate (project scope). */
+  actingPrincipalId?: string | null;
 }): Promise<boolean> {
-  assertCallerScope(params.callerScope, params.projectId);
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.projectId });
   const pool = getDbPool();
   const res = await pool.query(
     `DELETE FROM document_chunks

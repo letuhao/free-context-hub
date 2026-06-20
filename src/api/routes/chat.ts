@@ -98,7 +98,7 @@ Be concise and direct. Use markdown formatting.`,
             logger.info({ projectId, query, chunk_types }, 'chat tool: search_documents');
             const res = await searchChunks({
               projectId,
-              callerScope: callerScopeOf(req),
+              actingPrincipalId: callerPrincipalOf(req),
               query,
               limit: 5,
               chunkTypes: chunk_types as any,

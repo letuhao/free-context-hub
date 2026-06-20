@@ -1,16 +1,15 @@
 import { createHash } from 'node:crypto';
 
 import { getDbPool } from '../db/client.js';
-import { assertCallerScope } from '../core/security/callerScope.js';
-import type { CallerScope } from '../core/security/callerScope.js';
+import { assertAuthorized } from './authorize.js';
 
 export type GeneratedDocType = 'faq' | 'raptor' | 'qc_report' | 'qc_artifact' | 'benchmark_artifact';
 
 export async function upsertGeneratedDocument(input: {
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId.
-   *  Worker/job-internal callers leave this unset (undefined = unrestricted). */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() gate (project scope). Worker/job-internal callers leave
+   *  this unset (no principal → inert under auth-OFF; needs a system principal before the F2g flip). */
+  actingPrincipalId?: string | null;
   docType: GeneratedDocType;
   docKey: string;
   content: string;
@@ -20,7 +19,7 @@ export async function upsertGeneratedDocument(input: {
   sourceJobId?: string;
   correlationId?: string;
 }): Promise<{ doc_id: string }> {
-  assertCallerScope(input.callerScope, input.projectId);
+  await assertAuthorized(input.actingPrincipalId, 'write', { kind: 'project', id: input.projectId });
   const pool = getDbPool();
   const res = await pool.query(
     `INSERT INTO generated_documents(
@@ -53,8 +52,8 @@ export async function upsertGeneratedDocument(input: {
 
 export async function listGeneratedDocuments(params: {
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() gate (project scope). */
+  actingPrincipalId?: string | null;
   docType?: GeneratedDocType;
   limit?: number;
   offset?: number;
@@ -74,7 +73,7 @@ export async function listGeneratedDocuments(params: {
   }>;
   total_count: number;
 }> {
-  assertCallerScope(params.callerScope, params.projectId);
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id: params.projectId });
   const pool = getDbPool();
   const values: unknown[] = [params.projectId];
   const clauses = ['project_id=$1'];
@@ -119,8 +118,8 @@ export async function listGeneratedDocuments(params: {
 
 export async function getGeneratedDocument(params: {
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() gate (project scope). */
+  actingPrincipalId?: string | null;
   docId?: string;
   docType?: GeneratedDocType;
   docKey?: string;
@@ -138,7 +137,7 @@ export async function getGeneratedDocument(params: {
   created_at: any;
   updated_at: any;
 } | null> {
-  assertCallerScope(params.callerScope, params.projectId);
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id: params.projectId });
   const pool = getDbPool();
   if (params.docId) {
     const byId = await pool.query(
@@ -198,16 +197,16 @@ export async function getGeneratedDocument(params: {
 /** Promote a generated document from draft to active (metadata.status). No-op if already active. */
 export async function promoteGeneratedDocument(input: {
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() gate (project scope). */
+  actingPrincipalId?: string | null;
   docId?: string;
   docType?: GeneratedDocType;
   docKey?: string;
 }): Promise<{ doc_id: string; promoted: boolean }> {
-  assertCallerScope(input.callerScope, input.projectId);
+  await assertAuthorized(input.actingPrincipalId, 'write', { kind: 'project', id: input.projectId });
   const row = await getGeneratedDocument({
     projectId: input.projectId,
-    callerScope: input.callerScope,
+    actingPrincipalId: input.actingPrincipalId,
     docId: input.docId,
     docType: input.docType,
     docKey: input.docKey,
