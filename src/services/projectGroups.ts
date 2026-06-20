@@ -64,6 +64,13 @@ export async function deleteGroup(
   return { deleted: (res.rowCount ?? 0) > 0 };
 }
 
+/**
+ * [DEFERRED-049] NOT authz-gated: returns the cross-tenant group CATALOG (names + member_count) for the
+ * GUI group dropdown / `list_project_groups`. Gating it to `hasGlobalGrant` would blank the dropdown for
+ * every project-scoped user, so it is left open as shared-pool metadata. Whether `member_count` is
+ * sensitive enough to filter per-caller is the open group-read-model question tracked in DEFERRED-049
+ * (the per-group reads `listGroupMembers`/`getGroup` ARE gated on read@group).
+ */
 export async function listGroups(): Promise<ProjectGroupWithMembers[]> {
   const pool = getDbPool();
   const res = await pool.query(

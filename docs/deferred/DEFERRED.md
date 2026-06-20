@@ -23,7 +23,11 @@
 
 - **Title:** F2f-groups (residual) — resolveProjectIds resolver-level authz + project/group id-namespace conflation
 - **Status:** OPEN (2026-06-20). MED (design). Split from DEFERRED-046. NOT live-exploitable today.
-- **Context (two related modeling gaps the cold-start adversary raised):**
+- **Context (related group read-model + modeling gaps from the adversary + `/review-impl` passes):**
+  0. **`listGroups` is unguarded** (live `GET /api/groups` + MCP `list_project_groups`) and returns
+     `member_count` for ALL groups cross-tenant — documented in-code as accepted shared-pool catalog
+     metadata, but the per-caller-filtering decision belongs to this group-read-model item. (The per-group
+     `listGroupMembers`/`getGroup` reads ARE gated on read@group as of commit 8aa736f.)
   1. **`resolveProjectIds` is unauthorized** (src/services/projectGroups.ts) — it folds a project's group
      ids into a scope array with no check. Every CURRENT consumer (search include_groups → `searchLessonsMulti`,
      check_guardrails include_groups) re-authorizes each returned id, so there is no live transitive leak;
