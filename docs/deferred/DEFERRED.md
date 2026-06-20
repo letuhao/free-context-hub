@@ -1,7 +1,23 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 054 -->
+<!-- Next ID: 055 -->
+
+## DEFERRED-054
+
+- **Title:** F2g/DEFERRED-048 — suspending the system principal nulls authorization for every root it stamped
+- **Status:** OPEN (2026-06-20). LOW. From DEFERRED-048 `/review-impl` #3. F2g-flip availability item.
+- **Context:** under enforcement a stored `repo_root` / `root_path` is honored only if its
+  `*_authorized_by` stamp still `hasGlobalGrant`. If the dedicated system principal (which stamps the
+  worker's own prepared roots) is suspended/retired, `hasGlobalGrant` returns false for it, so EVERY root
+  it authorized stops resolving at once → the index/embed/knowledge pipeline breaks worker-wide. This is
+  fail-CLOSED (secure, not a leak) but an availability fragility: `setPrincipalStatus` protects `is_root`
+  from suspension but not `is_system`. Mirrors DEFERRED-053's least-privilege theme (the system principal
+  is a singleton load-bearing identity that needs the same guardrails as root).
+- **Scope when picked up:** protect `is_system` status the way `is_root` is protected (refuse to suspend
+  the last active system principal, or require an explicit `--force`), and/or have the flip's runbook
+  re-stamp via a fresh global principal before retiring the old one.
+- **Trigger:** the `MCP_AUTH_ENABLED` flip's least-privilege / runbook pass, or any system-principal rotation.
 
 ## DEFERRED-053
 
@@ -87,7 +103,22 @@
 ## DEFERRED-048
 
 - **Title:** F2f-jobs (residual) — re-validate `payload.root` at job EXECUTION time, not only at enqueue
-- **Status:** OPEN (2026-06-20). MED. Split from DEFERRED-045. Tied to the F2g worker/system-principal.
+- **Status:** **RESOLVED (2026-06-20)** — closed via FULL CLOSURE (scope grew M→XL under adversarial review,
+  user-approved). The model: specifying ANY filesystem path the worker will index is a GLOBAL capability
+  under enforcement. Enforced at the single resolve chokepoint + every write vector — (a) explicit-root gate
+  in `resolveProjectRoot(projectId, explicitRoot, authorizerPrincipalId)`; (b) authorizer-stamp columns
+  `repo_root_authorized_by` / `root_path_authorized_by` (mig **0069**) set by the gated setters
+  (`configureProjectSource`, `prepareRepo` — now gated UP FRONT before any FS clone/mkdir — and
+  `registerWorkspaceRoot`) and re-verified via `hasGlobalGrant` at `resolveProjectRoot` branches 2/3;
+  (c) `chunks.root` fallback (branch 4) NOT honored under enforcement (no provenance); (d) `payload.root`
+  stamped `root_authorized_by` at `enqueueJob` + re-verified at `resolveRoot`, plus a `payload.cache_root`
+  enqueue gate. Null stamp (auth-off / legacy row) → not honored post-flip → operator re-authorizes as a
+  global principal (transition closure). Reviews: 4 cold-start adversary passes (curve 3→3→3→0, SATURATED)
+  + a `/review-impl` coverage-gap pass (caught the prepareRepo clone-before-gate arbitrary-FS-WRITE). Tests:
+  `payload-root-exec-authz.test.ts` (+e2e stored-root via worker) + `indexed-root-authorizer.test.ts`
+  (setter gates, resolve re-verify, ON-CONFLICT clobber-preservation, disabled-suppression, chunks denial).
+  Residual fragility split to **DEFERRED-054**. Original write-up:
+- ~~OPEN~~ MED. Split from DEFERRED-045. Tied to the F2g worker/system-principal.
 - **Context:** the global-grant gate (28ec95f) blocks a non-global principal from SETTING `payload.root` at
   enqueue. But `payload.root` is honored UNCONDITIONALLY at execution — `jobExecutor.resolveRoot` →
   `resolveProjectRoot` returns the explicit root with no principal/scope check (the worker indexes that

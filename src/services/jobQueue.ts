@@ -88,11 +88,35 @@ export async function enqueueJob(input: QueuePayload): Promise<{ status: 'queued
     );
   }
   const payloadRoot = (input.payload as Record<string, unknown> | undefined)?.root;
-  if (typeof payloadRoot === 'string' && payloadRoot.trim().length > 0 && !isGlobal) {
+  const hasExplicitRoot = typeof payloadRoot === 'string' && payloadRoot.trim().length > 0;
+  if (hasExplicitRoot && !isGlobal) {
     throw new ContextHubError(
       'BAD_REQUEST',
       'only a globally-privileged principal may specify payload.root — the worker resolves the root from project_sources for the bound project_id',
     );
+  }
+  // [DEFERRED-048 REVIEW-CODE #2] `payload.cache_root` is the SAME arbitrary-filesystem capability by a
+  // different name: repo.sync computes `repo_root = resolve(cache_root, project)` and re-enqueues
+  // index.run with that root stamped by the SYSTEM principal — so a non-global caller could launder an
+  // attacker-chosen parent dir (`/`, `../..`) into a global stamp (confused deputy). Gate it identically:
+  // only a globally-privileged principal may override the repo cache location.
+  const payloadCacheRoot = (input.payload as Record<string, unknown> | undefined)?.cache_root;
+  if (typeof payloadCacheRoot === 'string' && payloadCacheRoot.trim().length > 0 && !isGlobal) {
+    throw new ContextHubError(
+      'BAD_REQUEST',
+      'only a globally-privileged principal may specify payload.cache_root — the worker uses the configured repo cache base for the bound project_id',
+    );
+  }
+  // [DEFERRED-048] Stamp WHO authorized the arbitrary root (a global principal — guaranteed by the gate
+  // above) so execution (resolveRoot) can re-verify across the durable-queue boundary. OVERWRITE any
+  // caller-supplied value — never trust the payload's own authorizer claim — and strip it when no root
+  // is set, so a forged stamp can never ride along. Under auth-off actingPrincipalId is null → the stamp
+  // is null and the exec check is inert (honored as today).
+  const stampedPayload: Record<string, unknown> = { ...((input.payload as Record<string, unknown>) ?? {}) };
+  if (hasExplicitRoot) {
+    stampedPayload.root_authorized_by = input.actingPrincipalId ?? null;
+  } else {
+    delete stampedPayload.root_authorized_by;
   }
   const pool = getDbPool();
   const jobId = randomUUID();
@@ -103,7 +127,7 @@ export async function enqueueJob(input: QueuePayload): Promise<{ status: 'queued
   await pool.query(
     `INSERT INTO async_jobs(job_id, project_id, job_type, queue_name, payload, correlation_id, status, max_attempts, available_at, queued_at)
      VALUES ($1,$2,$3,$4,$5::jsonb,$6,'queued',$7, now(), now())`,
-    [jobId, input.project_id ?? null, input.job_type, queueName, JSON.stringify(input.payload ?? {}), correlationId, maxAttempts],
+    [jobId, input.project_id ?? null, input.job_type, queueName, JSON.stringify(stampedPayload), correlationId, maxAttempts],
   );
 
   const env = getEnv();

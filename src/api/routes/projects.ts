@@ -112,7 +112,7 @@ router.get('/:id/summary', async (req, res, next) => {
 router.post('/:id/index', requireRole('writer'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String(req.params.id));
-    const root = await resolveProjectRoot(projectId, req.body.root);
+    const root = await resolveProjectRoot(projectId, req.body.root, callerPrincipalOf(req));
     const result = await indexProject({
       projectId,
       actingPrincipalId: callerPrincipalOf(req),

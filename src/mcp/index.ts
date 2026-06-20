@@ -1124,7 +1124,7 @@ function createMcpToolsServer() {
     async ({ workspace_token, project_id, root, output_format, options }) => {
       const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
-      const resolvedRoot = await resolveProjectRoot(projectId, root);
+      const resolvedRoot = await resolveProjectRoot(projectId, root, actingPrincipalId);
       const result = await indexProject({
         projectId,
         actingPrincipalId,
@@ -2401,7 +2401,7 @@ function createMcpToolsServer() {
     async ({ workspace_token, project_id, root, since, max_commits, output_format }) => {
       const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const resolvedRoot = await resolveProjectRoot(pid, root);
+      const resolvedRoot = await resolveProjectRoot(pid, root, actingPrincipalId);
       const result = await ingestGitHistory({
         projectId: pid,
         actingPrincipalId,
@@ -2752,7 +2752,7 @@ function createMcpToolsServer() {
     async ({ workspace_token, project_id, root_path, active, output_format }) => {
       const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const resolvedRoot = await resolveProjectRoot(pid, root_path);
+      const resolvedRoot = await resolveProjectRoot(pid, root_path, actingPrincipalId);
       const result = await registerWorkspaceRoot({ projectId: pid, actingPrincipalId, rootPath: resolvedRoot, active });
       const summary = `register_workspace_root: workspace_id=${result.workspace_id}`;
       return formatToolResponse(result, summary, output_format);
@@ -2822,7 +2822,7 @@ function createMcpToolsServer() {
     async ({ workspace_token, project_id, root_path, run_delta_index, output_format }) => {
       const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const resolvedRoot = await resolveProjectRoot(pid, root_path);
+      const resolvedRoot = await resolveProjectRoot(pid, root_path, actingPrincipalId);
       const result = await scanWorkspaceChanges({
         projectId: pid,
         actingPrincipalId,

@@ -25,7 +25,13 @@ const logger = createModuleLogger('jobExecutor');
 
 /** Resolve root from payload or auto-resolve from project config. */
 async function resolveRoot(projectId: string | null, payload: Record<string, unknown>): Promise<string> {
-  return resolveProjectRoot(projectId, payload.root ? String(payload.root) : undefined);
+  const explicitRoot = payload.root ? String(payload.root) : undefined;
+  // [DEFERRED-048] The job-time authorizer for an explicit root is the enqueue-time stamp
+  // (`root_authorized_by`), re-verified across the durable-queue boundary. resolveProjectRoot is the
+  // single chokepoint that enforces the global-write gate (same for every caller); a pre-flip / auth-off
+  // row has a null stamp → hasGlobalGrant(null) is false under enforcement → FORBIDDEN (fail closed).
+  const authBy = payload.root_authorized_by ? String(payload.root_authorized_by) : null;
+  return resolveProjectRoot(projectId, explicitRoot, authBy);
 }
 
 async function executeByType(

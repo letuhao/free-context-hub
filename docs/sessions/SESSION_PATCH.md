@@ -1,3 +1,74 @@
+# CHECKPOINT — DEFERRED-048: close the arbitrary-filesystem-path capability across ALL vectors (2026-06-20, session 13)
+
+**Branch:** `feature/actor-data-boundary`. Auth stays **OFF** (`MCP_AUTH_ENABLED=false`, inert) — the flip
+and Domain 8 remain **separately human-gated**, NOT touched. Full unit suite **1236 tests / 1217 pass /
+0 fail / 19 skip** (skips = existing root-free/system-free graceful guards), tsc clean. POST-REVIEW human
+gate honored (user approved). DEFERRED-048 closed; residual fragility → DEFERRED-054.
+
+**The problem (as scoped):** DEFERRED-048 began as "re-validate `payload.root` at job EXECUTION time, not
+only at enqueue" (MED). Cold-start adversary review showed `payload.root` is just ONE of several vectors
+that bind the worker to an arbitrary filesystem path it will index — a cross-tenant **global** capability:
+also the explicit `root` arg, the stored `project_sources.repo_root`, the stored
+`project_workspaces.root_path`, the derived `chunks.root` fallback, and `payload.cache_root`. The user
+approved the **FULL CLOSURE** scope (M→XL).
+
+**The model:** specifying ANY indexed path is a GLOBAL capability under enforcement. Enforced at the single
+resolve chokepoint + every write vector:
+- `resolveProjectRoot(projectId, explicitRoot, authorizerPrincipalId)` — explicit-root branch (1) gates on
+  `hasGlobalGrant(authorizer, 'write')`; stored branches (2 `project_sources`, 3 `project_workspaces`)
+  re-verify the row's `*_authorized_by` stamp; branch 4 (`chunks.root`, no provenance) is NOT honored under
+  enforcement. (Incidentally fixed a latent branch-3 bug: queried `active`, real column is `is_active`.)
+- **Stamp columns** (mig `0069_indexed_root_authorizer.sql`): `project_sources.repo_root_authorized_by`,
+  `project_workspaces.root_path_authorized_by` (UUID → principals, ON DELETE SET NULL), set by the gated
+  setters and re-verified at resolve.
+- **Gated setters:** `configureProjectSource` (gate + stamp; ON CONFLICT uses COALESCE/CASE so a project
+  writer calling configure WITHOUT a root can't clobber/downgrade another principal's stamped root — adv
+  p3 #1), `prepareRepo` (gated **UP FRONT before any FS mkdir/clone** — `/review-impl` #1, the arbitrary-FS
+  **write** the read-focused passes missed), `registerWorkspaceRoot` (gate + stamp).
+- **Jobs:** `enqueueJob` stamps `payload.root_authorized_by` + gates `payload.cache_root`; `resolveRoot`
+  threads the stamp to `resolveProjectRoot`; `runJobById` re-verifies at exec.
+- **Auth-off→on transition:** a null stamp (auth-off / legacy row) is NOT honored post-flip → the operator
+  re-runs the setter as a global principal, which re-stamps. Fail-closed + LOUD (no silent fallback to a
+  different tree).
+
+**Reviews (all findings fixed):**
+- REVIEW-CODE adversary, 4 cold-start passes, curve **3→3→3→0 (SATURATED)**: p1 — HIGH 6 sync callers
+  bypass the exec check → moved the gate INTO the `resolveProjectRoot` chokepoint; MED `cache_root`
+  laundering → enqueue gate. p2 — HIGH stored `repo_root` (configure) + HIGH stored `root_path` (workspace)
+  write-vectors → triggered the full-closure scope; auth-off transition → null-stamp model. p3 — HIGH
+  ON-CONFLICT clobber/downgrade DoS → COALESCE/CASE; MED branch-2 ignored `enabled` → `enabled=true`; LOW
+  test gaps. p4 — clean (verified clobber-safe, gates-before-write, end-to-end `scanWorkspaceChanges`,
+  transition closed; direct-DB-write out of threat model).
+- `/review-impl` coverage-gap pass (post-saturation): **1 MED** — `prepareRepo` mkdir+clone (arbitrary FS
+  WRITE) ran BEFORE its inherited gate → added an up-front global gate before any FS side effect (+test
+  asserting NO directory created on deny); **1 LOW** — stored-root branch not tested e2e → added a
+  `runJobById` stored-`repo_root` test (no `payload.root`, resolves via branch 2); **1 LOW** →
+  DEFERRED-054; 1 COSMETIC accepted.
+
+**New files:** `migrations/0069_indexed_root_authorizer.sql`,
+`src/services/payload-root-exec-authz.test.ts`, `src/services/indexed-root-authorizer.test.ts`, the
+DEFERRED-048 CLARIFY doc. **Modified:** `src/utils/resolveProjectRoot.ts`, `src/services/jobExecutor.ts`,
+`src/services/jobQueue.ts`, `src/services/repoSources.ts`, `src/services/workspaceTracker.ts`,
+`src/api/routes/git.ts`, `src/api/routes/projects.ts`, `src/mcp/index.ts` (6 `resolveProjectRoot` callers
+now pass the authorizer), `package.json` (2 tests added). **Migration applied:** `npx tsx src/db/migrate.ts`
+ran 0069.
+
+**Housekeeping noted:** migration **0067 number collision** — `0067_system_principal.sql` (F2g) and a
+pre-existing `0067_authz_decisions.sql` share the number. Filenames are unique so both apply and the
+migrate runner is fine; flagged here so a future renumber/squash doesn't silently drop one.
+
+**Deferred (logged):** **DEFERRED-054** — suspending the system principal nulls authorization for every
+root it stamped (fail-closed availability fragility; protect `is_system` status like `is_root`). DEFERRED-048
+itself is now **RESOLVED**.
+
+**What's next (all human-gated):** remaining F2g flip prerequisites — DEFERRED-049 (`resolveProjectIds`
+resolver-level authz + project/group id-namespace), DEFERRED-050 (user-scoped notification identity), plus
+the least-privilege pass items DEFERRED-051/052/053/054 — then Domain 8 (retire legacy REST
+`requireScope`/role middleware), then the `MCP_AUTH_ENABLED` default flip itself (own checkpoint +
+cold-start security adversary + live auth-ON verification).
+
+---
+
 # CHECKPOINT — F2g sub-step 1: system-worker identity (the auth-flip prerequisite) (2026-06-20, session 13)
 
 **Branch:** `feature/actor-data-boundary`. Auth stays **OFF** (`MCP_AUTH_ENABLED=false`, inert). The

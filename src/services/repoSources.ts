@@ -4,8 +4,10 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 import { getDbPool } from '../db/client.js';
+import { getEnv } from '../env.js';
+import { ContextHubError } from '../core/errors.js';
 import { materializeRepoFromS3, syncSourceArtifactToS3 } from './sourceArtifacts.js';
-import { assertAuthorized } from './authorize.js';
+import { assertAuthorized, hasGlobalGrant } from './authorize.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -27,6 +29,18 @@ export async function configureProjectSource(params: {
   enabled?: boolean;
 }): Promise<{ status: 'ok'; project_id: string; source_type: SourceType }> {
   await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.projectId });
+  // [DEFERRED-048 full closure] Storing an explicit repo_root binds the worker to an ARBITRARY filesystem
+  // path it will index — a cross-tenant, GLOBAL capability. Under enforcement, require global write and
+  // STAMP the authorizer so resolveProjectRoot can re-verify it. (prepareRepo reaches this same write
+  // with its own actingPrincipalId; the worker's repo.sync chain runs as the global system principal.)
+  const hasRepoRoot = !!(params.repoRoot && params.repoRoot.trim());
+  if (hasRepoRoot && getEnv().MCP_AUTH_ENABLED && !(await hasGlobalGrant(params.actingPrincipalId, 'write'))) {
+    throw new ContextHubError(
+      'FORBIDDEN',
+      'configuring an explicit repo_root is a global capability — not authorized for this principal',
+    );
+  }
+  const repoRootAuthBy = hasRepoRoot ? (params.actingPrincipalId ?? null) : null;
   const pool = getDbPool();
   await pool.query(
     `INSERT INTO projects(project_id, name)
@@ -35,13 +49,21 @@ export async function configureProjectSource(params: {
     [params.projectId, params.projectId],
   );
   await pool.query(
-    `INSERT INTO project_sources(project_id, source_type, git_url, default_ref, repo_root, enabled, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6, now())
+    `INSERT INTO project_sources(project_id, source_type, git_url, default_ref, repo_root, repo_root_authorized_by, enabled, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7, now())
      ON CONFLICT (project_id, source_type)
      DO UPDATE SET
        git_url=EXCLUDED.git_url,
        default_ref=EXCLUDED.default_ref,
-       repo_root=EXCLUDED.repo_root,
+       -- [DEFERRED-048 REVIEW-CODE p3 #1] Do NOT clobber an existing stamped repo_root when this call
+       -- supplies none: a project-scoped writer calling configure WITHOUT repo_root (the gate only fires
+       -- when a repo_root IS supplied) would otherwise NULL another principal's authorized root + stamp
+       -- (a downgrade/DoS). Preserve both when no new root is given; when a new root IS given (gated
+       -- global), set the stamp to the NEW authorizer atomically (never inherit a stale stamp).
+       repo_root=COALESCE(EXCLUDED.repo_root, project_sources.repo_root),
+       repo_root_authorized_by=CASE WHEN EXCLUDED.repo_root IS NOT NULL
+                                    THEN EXCLUDED.repo_root_authorized_by
+                                    ELSE project_sources.repo_root_authorized_by END,
        enabled=EXCLUDED.enabled,
        updated_at=now()`,
     [
@@ -50,6 +72,7 @@ export async function configureProjectSource(params: {
       params.gitUrl ?? null,
       params.defaultRef ?? 'main',
       params.repoRoot ? path.resolve(params.repoRoot) : null,
+      repoRootAuthBy,
       params.enabled ?? true,
     ],
   );
@@ -81,6 +104,18 @@ export async function prepareRepo(params: {
   error?: string;
 }> {
   await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.projectId });
+  // [DEFERRED-048 /review-impl #1] prepareRepo mkdir's + git-clones into cacheRoot — an arbitrary
+  // filesystem WRITE — and only gates the resulting repo_root LATER, via configureProjectSource (after
+  // the clone). Gate up front, BEFORE any FS side effect: cloning into a cache root and binding it as
+  // the project's index root is a global capability (the worker's repo.sync runs as the global system
+  // principal; a project-scoped REST /sources/prepare caller is rejected before the clone). Inert while
+  // auth is OFF (hasGlobalGrant short-circuits true).
+  if (getEnv().MCP_AUTH_ENABLED && !(await hasGlobalGrant(params.actingPrincipalId, 'write'))) {
+    throw new ContextHubError(
+      'FORBIDDEN',
+      'preparing a repo (cloning into a cache root + binding it as the index root) is a global capability — not authorized for this principal',
+    );
+  }
   const ref = (params.ref ?? 'main').trim() || 'main';
   const sourceStorageMode = params.sourceStorageMode ?? 'local';
   const safeProject = params.projectId.replace(/[^\w.-]+/g, '_');
@@ -129,6 +164,9 @@ export async function prepareRepo(params: {
 
     await configureProjectSource({
       projectId: params.projectId,
+      // [DEFERRED-048] forward the principal so the repo_root stamp is the prepareRepo caller (the global
+      // system principal for the worker's repo.sync chain) — without it, the global gate would reject.
+      actingPrincipalId: params.actingPrincipalId,
       sourceType: 'remote_git',
       gitUrl: params.gitUrl,
       defaultRef: ref,

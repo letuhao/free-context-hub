@@ -3,8 +3,10 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 import { getDbPool } from '../db/client.js';
+import { getEnv } from '../env.js';
+import { ContextHubError } from '../core/errors.js';
 import { indexProject } from './indexer.js';
-import { assertAuthorized } from './authorize.js';
+import { assertAuthorized, hasGlobalGrant } from './authorize.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -21,6 +23,16 @@ export async function registerWorkspaceRoot(params: {
   active?: boolean;
 }): Promise<{ status: 'ok'; workspace_id: string; project_id: string; root_path: string }> {
   await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.projectId });
+  // [DEFERRED-048 full closure] A workspace root_path is an ARBITRARY filesystem path the worker indexes —
+  // a cross-tenant, GLOBAL capability (there is no server-confined base for dev workspace paths). Under
+  // enforcement, require global write and STAMP the authorizer for resolveProjectRoot's re-verify.
+  if (getEnv().MCP_AUTH_ENABLED && !(await hasGlobalGrant(params.actingPrincipalId, 'write'))) {
+    throw new ContextHubError(
+      'FORBIDDEN',
+      'registering a workspace root_path is a global capability — not authorized for this principal',
+    );
+  }
+  const rootAuthBy = params.actingPrincipalId ?? null;
   const pool = getDbPool();
   const root = path.resolve(params.rootPath);
   await pool.query(
@@ -30,12 +42,12 @@ export async function registerWorkspaceRoot(params: {
     [params.projectId, params.projectId],
   );
   const q = await pool.query(
-    `INSERT INTO project_workspaces(project_id, root_path, is_active, updated_at)
-     VALUES ($1,$2,$3, now())
+    `INSERT INTO project_workspaces(project_id, root_path, root_path_authorized_by, is_active, updated_at)
+     VALUES ($1,$2,$3,$4, now())
      ON CONFLICT (project_id, root_path)
-     DO UPDATE SET is_active=EXCLUDED.is_active, updated_at=now()
+     DO UPDATE SET root_path_authorized_by=EXCLUDED.root_path_authorized_by, is_active=EXCLUDED.is_active, updated_at=now()
      RETURNING workspace_id, project_id, root_path`,
-    [params.projectId, root, params.active ?? true],
+    [params.projectId, root, rootAuthBy, params.active ?? true],
   );
   return {
     status: 'ok',

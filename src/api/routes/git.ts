@@ -18,7 +18,7 @@ const router = Router();
 router.post('/ingest', requireProjectScope('body'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
-    const root = await resolveProjectRoot(projectId, req.body.root);
+    const root = await resolveProjectRoot(projectId, req.body.root, callerPrincipalOf(req));
     const result = await ingestGitHistory({
       projectId,
       actingPrincipalId: callerPrincipalOf(req),
