@@ -15,6 +15,7 @@ import { getEnv } from '../env.js';
 import { getRootPrincipal, seedRootPrincipal, type Principal } from './principals.js';
 import { createBootstrapRootKey } from './apiKeys.js';
 import { countUnmigratedCoordinationActors } from './migrateCoordinationActors.js';
+import { countCredentialsWithoutGrants } from './backfillGrants.js';
 
 /** Constant-time, length-independent secret comparison (hash both to a fixed 32 bytes first). */
 function secretsMatch(a: string, b: string): boolean {
@@ -134,6 +135,17 @@ export async function assertEnforceReady(): Promise<Principal> {
     throw new ContextHubError(
       'CONFLICT',
       `not enforce-ready: ${unmigrated} coordination actor_id(s) are not principals. Run \`npm run migrate:coordination-actors\` before enabling enforcement.`,
+    );
+  }
+  // [F2e] REPLACE NOW + FULL ENFORCEMENT: once authorize() is the sole gate, an active principal-bound
+  // credential with NO covering grant is locked out the instant auth flips on. Refuse until every such
+  // credential has a grant (run `npm run backfill:grants`). Root needs none (short-circuit); unbound
+  // keys are out of scope (denied by the F1 hardened posture — rebind them).
+  const ungranted = await countCredentialsWithoutGrants();
+  if (ungranted > 0) {
+    throw new ContextHubError(
+      'CONFLICT',
+      `not enforce-ready: ${ungranted} active credential(s) bind a principal with no covering grant — enabling enforcement would lock them out. Run \`npm run backfill:grants\` first.`,
     );
   }
   return root;
