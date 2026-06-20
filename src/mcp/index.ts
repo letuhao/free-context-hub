@@ -129,7 +129,10 @@ import { logLessonAccess, isSalienceDisabled, type AccessLogEntry } from '../ser
 import { getDbPool } from '../db/client.js';
 import { resolveMcpCallerScope, resolveMcpCaller, resolveActingActor, resolveTargetActor, resolveTargetActors, type McpCaller } from './auth.js';
 import { claimedSelfMismatch } from '../services/actingPrincipal.js';
-import { getPrincipal } from '../services/principals.js';
+import { getPrincipal, listPrincipals } from '../services/principals.js';
+import { grantCapability, revokeGrantAuthorized } from '../services/grantCapability.js';
+import { listGrants } from '../services/grants.js';
+import { authorize, explainAuthorization, type Action } from '../services/authorize.js';
 import type { CallerScope } from '../core/index.js';
 
 // ── MCP error boundary: convert ContextHubError → McpError at protocol edge ──
@@ -198,6 +201,14 @@ async function resolveTargetActorOrThrow(actorId: string): Promise<string> {
 }
 async function resolveTargetActorsOrThrow(actorIds: readonly string[]): Promise<string[]> {
   try { return await resolveTargetActors(actorIds); }
+  catch (e) {
+    if (e instanceof ContextHubError) throw new McpError(CONTEXT_HUB_TO_MCP_CODE[e.code] ?? ErrorCode.InternalError, e.message);
+    throw e;
+  }
+}
+/** F2: run a service call, mapping any ContextHubError → McpError at the protocol edge. */
+async function mcpCall<T>(fn: () => Promise<T>): Promise<T> {
+  try { return await fn(); }
   catch (e) {
     if (e instanceof ContextHubError) throw new McpError(CONTEXT_HUB_TO_MCP_CODE[e.code] ?? ErrorCode.InternalError, e.message);
     throw e;
@@ -882,6 +893,184 @@ function createMcpToolsServer() {
         ? `whoami: ${result.display_name} (${result.kind}${result.is_root ? ', root' : ''})`
         : 'whoami: unauthenticated (no bound principal)';
       return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  // ── Actor Data Boundary F2 — delegation + authorization tools ────────────────
+  server.registerTool(
+    'grant_capability',
+    {
+      description:
+        'Actor Data Boundary F2 — grant a capability to a principal at a scope. You may grant only a ' +
+        'capability you yourself hold AND only if you hold `delegate`, at a scope that COVERS the target ' +
+        '(no upward/sideways grants, no granting more than you hold). Root may grant anything. Idempotent.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        grantee_principal: z.string().min(1).describe('The principal UUID receiving the grant.'),
+        scope_type: z.enum(['global', 'project', 'topic', 'task']),
+        scope_id: z.string().optional().describe('Required for project/topic/task; omit for global.'),
+        capability: z.enum(['read', 'write', 'admin', 'delegate']),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        grant_id: z.string(),
+        grantee_principal: z.string(),
+        scope_type: z.string(),
+        scope_id: z.string().nullable(),
+        capability: z.string(),
+        granted_by: z.string(),
+        granted_at: z.string(),
+        revoked_at: z.string().nullable(),
+      }),
+    },
+    async ({ workspace_token, grantee_principal, scope_type, scope_id, capability, output_format }) => {
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const g = await mcpCall(() =>
+        grantCapability({ callerPrincipalId: actingPrincipalId, grantee_principal, scope_type, scope_id, capability }),
+      );
+      const summary = `grant_capability: ${capability}@${scope_type}${scope_id ? ':' + scope_id : ''} -> ${grantee_principal}`;
+      return formatToolResponse({
+        grant_id: g.grant_id,
+        grantee_principal: g.grantee_principal,
+        scope_type: g.scope_type,
+        scope_id: g.scope_id,
+        capability: g.capability,
+        granted_by: g.granted_by,
+        granted_at: g.granted_at,
+        revoked_at: g.revoked_at,
+      }, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'revoke_grant',
+    {
+      description:
+        'Actor Data Boundary F2 — revoke a grant by id. Allowed for the grant\'s granter, a principal ' +
+        'holding admin/delegate over the grant\'s scope, or root. Idempotent (unknown/already-revoked = noop).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        grant_id: z.string().min(1),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({ status: z.string() }),
+    },
+    async ({ workspace_token, grant_id, output_format }) => {
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const r = await mcpCall(() => revokeGrantAuthorized({ callerPrincipalId: actingPrincipalId, grant_id }));
+      return formatToolResponse({ status: r.status }, `revoke_grant: ${grant_id} -> ${r.status}`, output_format);
+    },
+  );
+
+  server.registerTool(
+    'list_grants',
+    {
+      description:
+        'Actor Data Boundary F2 — list grants. A principal may always list its OWN grants; listing ' +
+        'another principal\'s (or a scope\'s) requires admin over that scope (or root).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        principal_id: z.string().optional().describe('Filter by grantee; defaults to the caller.'),
+        scope_type: z.enum(['global', 'project', 'topic', 'task']).optional(),
+        scope_id: z.string().optional(),
+        include_revoked: z.boolean().default(false),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        grants: z.array(z.object({
+          grant_id: z.string(),
+          grantee_principal: z.string(),
+          scope_type: z.string(),
+          scope_id: z.string().nullable(),
+          capability: z.string(),
+          granted_by: z.string(),
+          granted_at: z.string(),
+          revoked_at: z.string().nullable(),
+        })),
+      }),
+    },
+    async ({ workspace_token, principal_id, scope_type, scope_id, include_revoked, output_format }) => {
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const target = principal_id ?? actingPrincipalId ?? undefined;
+      // Own grants are always listable. Otherwise require admin over the queried scope (global if no
+      // scope filter) — authorize() handles root + auth-off.
+      const isOwn = !!target && target === actingPrincipalId;
+      if (!isOwn) {
+        const d = await authorize(actingPrincipalId, 'admin', { kind: scope_type ?? 'global', id: scope_id ?? null });
+        if (!d.allow) {
+          throw new McpError(ErrorCode.InvalidParams, 'not authorized to list these grants (need admin over the scope, or list your own).');
+        }
+      }
+      const grants = await listGrants({ grantee_principal: target, scope_type, scope_id, include_revoked });
+      return formatToolResponse({ grants }, `list_grants: ${grants.length} grant(s)`, output_format);
+    },
+  );
+
+  server.registerTool(
+    'explain_authorization',
+    {
+      description:
+        'Actor Data Boundary F2 — the read-only "why": evaluate whether a principal may perform an ' +
+        'action on a resource and return the decision + reason + matched grant + resolved scope chain. ' +
+        'Never mutates, never logs. About yourself by default; about another principal requires admin.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        action: z.enum(['read', 'write', 'admin', 'delegate']),
+        resource_kind: z.enum(['global', 'project', 'topic', 'task']),
+        resource_id: z.string().optional(),
+        principal_id: z.string().optional().describe('Whose authority to explain; defaults to the caller.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        decision: z.object({ allow: z.boolean(), reason: z.string(), matched_grant_id: z.string().optional() }),
+        scope_chain: z.any().nullable(),
+        subject_principal_id: z.string().nullable(),
+      }),
+    },
+    async ({ workspace_token, action, resource_kind, resource_id, principal_id, output_format }) => {
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const subject = principal_id ?? actingPrincipalId ?? null;
+      if (subject !== actingPrincipalId) {
+        const d = await authorize(actingPrincipalId, 'admin', { kind: 'global' });
+        if (!d.allow) {
+          throw new McpError(ErrorCode.InvalidParams, 'not authorized to explain another principal\'s authority (admin required).');
+        }
+      }
+      const result = await explainAuthorization(subject, action as Action, { kind: resource_kind, id: resource_id ?? null });
+      const summary = `explain_authorization: ${action}@${resource_kind}${resource_id ? ':' + resource_id : ''} -> ${result.decision.allow ? 'ALLOW' : 'DENY'} (${result.decision.reason})`;
+      return formatToolResponse({ ...result, subject_principal_id: subject }, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'list_principals',
+    {
+      description:
+        'Actor Data Boundary F2 — the principal directory (id, kind, status, is_root, display_name). ' +
+        'Requires admin at global scope (or root).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        principals: z.array(z.object({
+          principal_id: z.string(),
+          kind: z.string(),
+          status: z.string(),
+          is_root: z.boolean(),
+          display_name: z.string(),
+          created_at: z.string(),
+        })),
+      }),
+    },
+    async ({ workspace_token, output_format }) => {
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const d = await authorize(actingPrincipalId, 'admin', { kind: 'global' });
+      if (!d.allow) {
+        throw new McpError(ErrorCode.InvalidParams, 'not authorized to list principals (admin at global scope required).');
+      }
+      const principals = await listPrincipals();
+      return formatToolResponse({ principals }, `list_principals: ${principals.length}`, output_format);
     },
   );
 

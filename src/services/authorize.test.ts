@@ -5,7 +5,7 @@
 
 import assert from 'node:assert/strict';
 import test, { before, after, beforeEach } from 'node:test';
-import { authorize, resolveResourceScope } from './authorize.js';
+import { authorize, resolveResourceScope, explainAuthorization } from './authorize.js';
 import { createPrincipal, getRootPrincipal } from './principals.js';
 import { createGrant } from './grants.js';
 import { getDbPool } from '../db/client.js';
@@ -64,13 +64,16 @@ after(async () => {
   _resetEnvCacheForTest();
 });
 
+// "does not log" assertions scope to a UNIQUE resource_id marker (never a global count) — node:test
+// runs files concurrently and other suites write authz_decisions, so a global before/after delta is
+// non-deterministic. A per-marker count is exact.
 test('auth-OFF: authorize is a pass-through ALLOW/AUTH_DISABLED with no DB write', async () => {
   await setAuth(false);
-  const before = (await getDbPool().query(`SELECT count(*)::int n FROM authz_decisions`)).rows[0].n;
-  const d = await authorize(null, 'admin', { kind: 'global' });
+  const marker = `${PREFIX}marker_off`;
+  const d = await authorize(null, 'admin', { kind: 'project', id: marker });
   assert.deepEqual(d, { allow: true, reason: 'AUTH_DISABLED' });
-  const after = (await getDbPool().query(`SELECT count(*)::int n FROM authz_decisions`)).rows[0].n;
-  assert.equal(after, before, 'auth-off does not log');
+  const n = (await getDbPool().query(`SELECT count(*)::int n FROM authz_decisions WHERE resource_id=$1`, [marker])).rows[0].n;
+  assert.equal(n, 0, 'auth-off does not log');
 });
 
 test('resolveResourceScope: walks task -> topic -> project', async () => {
@@ -154,4 +157,30 @@ test('auth-ON: a decision is logged with action + resource + matched grant', asy
   assert.equal(row.allow, true);
   assert.equal(row.reason, 'GRANT');
   assert.ok(row.matched_grant_id, 'matched grant id recorded on allow');
+});
+
+test('explainAuthorization: read-only — never writes a decision log row', async () => {
+  await setAuth(true);
+  const marker = `${PREFIX}marker_explain`;
+  const r = await explainAuthorization(actor, 'read', { kind: 'project', id: marker });
+  assert.ok('allow' in r.decision);
+  const n = (await getDbPool().query(`SELECT count(*)::int n FROM authz_decisions WHERE resource_id=$1`, [marker])).rows[0].n;
+  assert.equal(n, 0, 'explain must not log');
+});
+
+test('explainAuthorization: returns the resolved scope_chain + matching decision', async () => {
+  await setAuth(true);
+  await createGrant({ grantee_principal: actor, scope_type: 'project', scope_id: P, capability: 'read', granted_by: grantor });
+  const r = await explainAuthorization(actor, 'read', { kind: 'task', id: taskP });
+  assert.equal(r.decision.allow, true);
+  assert.deepEqual(r.scope_chain, { kind: 'task', project_id: P, topic_id: topicP, task_id: taskP });
+});
+
+test('explainAuthorization: auth-off -> AUTH_DISABLED, null chain, no log', async () => {
+  await setAuth(false);
+  const marker = `${PREFIX}marker_explain_off`;
+  const r = await explainAuthorization(actor, 'admin', { kind: 'project', id: marker });
+  assert.deepEqual(r, { decision: { allow: true, reason: 'AUTH_DISABLED' }, scope_chain: null });
+  const n = (await getDbPool().query(`SELECT count(*)::int n FROM authz_decisions WHERE resource_id=$1`, [marker])).rows[0].n;
+  assert.equal(n, 0);
 });

@@ -203,10 +203,31 @@ async function logDecision(
 }
 
 /**
- * The single authorization chokepoint. Loads the principal + its active grants, resolves the
- * resource's scope chain, applies the pure `decide`, logs, and returns. Total — never throws for an
- * authz reason. Ordering is oracle-safe: a null/inactive principal is denied BEFORE the resource is
- * resolved, so an unauthorized caller never learns whether a resource exists.
+ * The shared decision computation (NO logging, NO auth-off check). Oracle-safe ordering: a
+ * null/inactive principal is denied BEFORE the resource is resolved, so an unauthorized caller never
+ * learns whether a resource exists. Returns the resolved scope chain too (for explain). Total.
+ */
+async function evaluate(
+  principalId: string | null,
+  action: Action,
+  resource: ResourceRef,
+  executor?: PoolClient,
+): Promise<{ decision: Decision; resolved: ResourceScope | null }> {
+  const principal = await loadPrincipalLite(principalId, executor);
+  if (!principal) return { decision: { allow: false, reason: 'NO_PRINCIPAL' }, resolved: null };
+  if (principal.is_root) return { decision: { allow: true, reason: 'ROOT' }, resolved: null };
+  if (principal.status !== 'active') return { decision: { allow: false, reason: 'PRINCIPAL_INACTIVE' }, resolved: null };
+
+  const r = await resolveResourceScope(resource, executor);
+  if ('unresolvable' in r) return { decision: { allow: false, reason: 'OUT_OF_SCOPE' }, resolved: null };
+
+  const grants = await loadActiveGrants(principalId as string, executor);
+  return { decision: decide(principal, action, r.ok, grants), resolved: r.ok };
+}
+
+/**
+ * The single authorization chokepoint. Computes the decision, LOGS it, returns it. Total — never
+ * throws for an authz reason.
  *
  * AUTH-OFF fast path: when MCP_AUTH_ENABLED=false this returns ALLOW/AUTH_DISABLED immediately (no
  * DB, no log) — the dev/root posture is unchanged and the whole F2 enforcement layer is inert until
@@ -219,33 +240,29 @@ export async function authorize(
   executor?: PoolClient,
 ): Promise<Decision> {
   if (!getEnv().MCP_AUTH_ENABLED) return { allow: true, reason: 'AUTH_DISABLED' };
+  const { decision } = await evaluate(principalId, action, resource, executor);
+  await logDecision(principalId, action, resource, decision, executor);
+  return decision;
+}
 
-  const principal = await loadPrincipalLite(principalId, executor);
-  if (!principal) {
-    const d: Decision = { allow: false, reason: 'NO_PRINCIPAL' };
-    await logDecision(principalId, action, resource, d, executor);
-    return d;
-  }
-  if (principal.is_root) {
-    const d: Decision = { allow: true, reason: 'ROOT' };
-    await logDecision(principalId, action, resource, d, executor);
-    return d;
-  }
-  if (principal.status !== 'active') {
-    const d: Decision = { allow: false, reason: 'PRINCIPAL_INACTIVE' };
-    await logDecision(principalId, action, resource, d, executor);
-    return d;
-  }
+export interface ExplainResult {
+  decision: Decision;
+  /** the resolved resource scope chain, or null when the principal failed before resolution or the
+   *  resource was unresolvable. */
+  scope_chain: ResourceScope | null;
+}
 
-  const resolved = await resolveResourceScope(resource, executor);
-  if ('unresolvable' in resolved) {
-    const d: Decision = { allow: false, reason: 'OUT_OF_SCOPE' };
-    await logDecision(principalId, action, resource, d, executor);
-    return d;
-  }
-
-  const grants = await loadActiveGrants(principalId as string, executor);
-  const d = decide(principal, action, resolved.ok, grants);
-  await logDecision(principalId, action, resource, d, executor);
-  return d;
+/**
+ * Read-only "why": the same decision as authorize(), but NEVER logs and NEVER mutates — for the
+ * explain_authorization tool + the FE "why" inspector. Honors the auth-off posture symmetrically.
+ */
+export async function explainAuthorization(
+  principalId: string | null,
+  action: Action,
+  resource: ResourceRef,
+  executor?: PoolClient,
+): Promise<ExplainResult> {
+  if (!getEnv().MCP_AUTH_ENABLED) return { decision: { allow: true, reason: 'AUTH_DISABLED' }, scope_chain: null };
+  const { decision, resolved } = await evaluate(principalId, action, resource, executor);
+  return { decision, scope_chain: resolved };
 }
