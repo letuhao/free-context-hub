@@ -122,7 +122,7 @@ router.post('/:id/index', requireRole('writer'), async (req, res, next) => {
     const root = await resolveProjectRoot(projectId, req.body.root);
     const result = await indexProject({
       projectId,
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       root,
       linesPerChunk: req.body.lines_per_chunk,
       embeddingBatchSize: req.body.embedding_batch_size,

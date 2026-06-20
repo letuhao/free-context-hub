@@ -12,15 +12,14 @@ import { buildFtsQuery } from '../utils/ftsTokenizer.js';
 import { cohereRerank } from './rerankClient.js';
 import { chatComplete, extractJsonObject } from './llm/index.js';
 import { createModuleLogger } from '../utils/logger.js';
-import { assertCallerScope } from '../core/security/callerScope.js';
-import type { CallerScope } from '../core/security/callerScope.js';
+import { assertAuthorized } from './authorize.js';
 
 const logger = createModuleLogger('retriever');
 
 export type SearchCodeParams = {
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** F2f: acting principal; authorize() enforces read on the project. */
+  actingPrincipalId?: string | null;
   query: string;
   pathGlob?: string;
   includeTests?: boolean;
@@ -561,7 +560,7 @@ export function defaultInteractiveRerankMode(): 'off' | 'llm' | 'api' {
 
 export async function searchCode({
   projectId,
-  callerScope,
+  actingPrincipalId,
   query,
   pathGlob,
   includeTests,
@@ -576,7 +575,7 @@ export async function searchCode({
   debug,
   hybridMode,
 }: SearchCodeParams): Promise<SearchCodeResult> {
-  assertCallerScope(callerScope, projectId);
+  await assertAuthorized(actingPrincipalId, 'read', { kind: 'project', id: projectId });
   const searchStartMs = Date.now();
   const env = getEnv();
   const pool = getDbPool();
@@ -639,7 +638,7 @@ export async function searchCode({
     const subResults = await Promise.all(
       subQueries.map(sq =>
         searchCode({
-          projectId, query: sq, pathGlob, includeTests, includeSmoke, preferPaths,
+          projectId, actingPrincipalId, query: sq, pathGlob, includeTests, includeSmoke, preferPaths,
           qcNoCap, rerankMode, lexicalBoost, kgAssist, lessonToCode,
           limit: topK, debug, hybridMode,
         }),

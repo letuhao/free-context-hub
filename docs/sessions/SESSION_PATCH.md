@@ -1,3 +1,35 @@
+# CHECKPOINT — F2f domain 6 (search/retrieval/indexer/KG) enforcement wired (2026-06-20, session 12)
+
+**Branch:** `feature/actor-data-boundary`. Serial /loom rollout continuing. Auth stays **OFF** (inert).
+Full unit suite **1151 pass / 2 skip**, tsc clean.
+
+**Domain 6 — search/retrieval (PURE REPLACE)**, all project-scoped: `retriever.ts` (`searchCode`=read),
+`tieredRetriever.ts` (`tieredSearch`=read), `indexer.ts` (`indexProject`=write — writes chunks/embeddings),
+`kg/query.ts` (`searchSymbols`/`getSymbolNeighbors`/`traceDependencyPath`/`getLessonImpact`=read). All
+`assertCallerScope` → `assertAuthorized({kind:'project'})`; `callerScope` removed. `assertAuthorized` runs
+as the FIRST line of each fn, so a deny throws before any embedding / Neo4j / fs work AND before the KG
+feature-toggle short-circuit can mask a cross-tenant attempt. No resolver change (all project-level).
+
+**Wiring:** 7 MCP handlers (`resolveMcpCallerScopeOrThrow` → `resolveActingActorOrThrow`: index_project,
+search_code, search_code_tiered, search_symbols, get_symbol_neighbors, trace_dependency_path,
+get_lesson_impact). REST: `search.ts` + `chat.ts` fully migrated to `callerPrincipalOf` (their local
+`callerScopeOf` helpers + `CallerScope`/`Request` imports deleted); `projects.ts` index route threaded
+`actingPrincipalId` (stays MIXED — keeps `callerScopeOf` for un-migrated domain-7 create/update/group/
+exchange calls). `searchCode`'s sub-query recursion now forwards `actingPrincipalId` (was a latent
+unprincipled self-call). Internal cross-fn callers (faqBuilder/qcEval/jobExecutor/workspaceTracker/smoke)
+pass no principal — covered by the F2g system-principal prerequisite, same as prior domains.
+
+**Tests:** new **`search-authz.test.ts`** (10 auth-ON grant-based tests: 6 reads cross-tenant → NOT_FOUND,
+indexProject cross-tenant + over-capability → FORBIDDEN, allow-past-gate, unknown principal → NOT_FOUND).
+Removed the indexer/retriever/tieredRetriever/KG DEFERRED-029 cases from `d4-scope.test.ts` (now guardrails-
+only, domain 7). Search/index FUNCTIONAL + internal callers never passed callerScope, none broke.
+
+**What's next:** domains 7–8 (jobs/exchange/taxonomy/guardrails/projectGroups/reviewRequests/coordEvents
+next, then retire REST scope/role middleware) + the mandated 3rd cold-start adversary pass. F2g
+prerequisites already logged.
+
+---
+
 # CHECKPOINT — F2f domain 5 (git/workspace/snapshot) enforcement wired (2026-06-20, session 12)
 
 **Branch:** `feature/actor-data-boundary`. Serial /loom rollout continuing. Auth stays **OFF** (inert).

@@ -1122,12 +1122,12 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, root, output_format, options }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       const resolvedRoot = await resolveProjectRoot(projectId, root);
       const result = await indexProject({
         projectId,
-        callerScope,
+        actingPrincipalId,
         root: resolvedRoot,
         linesPerChunk: options?.lines_per_chunk,
         embeddingBatchSize: options?.embedding_batch_size,
@@ -1197,11 +1197,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, query, filters, limit, debug, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       const result = await searchCode({
         projectId,
-        callerScope,
+        actingPrincipalId,
         query,
         pathGlob: filters?.path_glob,
         includeTests: filters?.include_tests,
@@ -1287,11 +1287,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, query, kind, filters, max_files, semantic_threshold, debug, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       const result = await tieredSearch({
         projectId,
-        callerScope,
+        actingPrincipalId,
         query,
         kind: kind as any,
         includeTests: filters?.include_tests,
@@ -2245,9 +2245,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, query, limit, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const result = await searchSymbols({ projectId: pid, callerScope, query, limit });
+      const result = await searchSymbols({ projectId: pid, actingPrincipalId, query, limit });
       const summary = `search_symbols: matches=${result.matches.length}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2290,9 +2290,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, symbol_id, depth, limit, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const result = await getSymbolNeighbors({ projectId: pid, callerScope, symbolId: symbol_id, depth, limit });
+      const result = await getSymbolNeighbors({ projectId: pid, actingPrincipalId, symbolId: symbol_id, depth, limit });
       const summary = `get_symbol_neighbors: neighbors=${result.neighbors.length}, edges=${result.edges.length}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2319,11 +2319,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, from_symbol_id, to_symbol_id, max_hops, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       const result = await traceDependencyPath({
         projectId: pid,
-        callerScope,
+        actingPrincipalId,
         fromSymbolId: from_symbol_id,
         toSymbolId: to_symbol_id,
         maxHops: max_hops,
@@ -2367,9 +2367,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, lesson_id, limit, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const result = await getLessonImpact({ projectId: pid, callerScope, lessonId: lesson_id, limit });
+      const result = await getLessonImpact({ projectId: pid, actingPrincipalId, lessonId: lesson_id, limit });
       const summary = `get_lesson_impact: linked_symbols=${result.linked_symbols.length}`;
       return formatToolResponse(result, summary, output_format);
     },

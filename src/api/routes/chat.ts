@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import type { Request } from 'express';
 import { requireProjectScope } from '../middleware/requireResourceScope.js';
 import { streamText, tool, stepCountIs, convertToModelMessages } from 'ai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
@@ -12,14 +11,8 @@ import {
   tieredSearch,
   createModuleLogger,
 } from '../../core/index.js';
-import type { CallerScope } from '../../core/index.js';
 import { searchChunks } from '../../services/documentChunks.js';
 import { callerPrincipalOf } from '../middleware/auth.js';
-
-/** DEFERRED-029: read the caller's project scope attached by bearerAuth. */
-function callerScopeOf(req: Request): CallerScope {
-  return (req as { apiKeyScope?: CallerScope }).apiKeyScope;
-}
 
 const logger = createModuleLogger('chat');
 const router = Router();
@@ -132,7 +125,7 @@ Be concise and direct. Use markdown formatting.`,
           }),
           execute: async ({ query, kind }) => {
             logger.info({ projectId, query, kind }, 'chat tool: search_code');
-            return tieredSearch({ projectId, callerScope: callerScopeOf(req), query, kind: kind as any, maxFiles: 5 });
+            return tieredSearch({ projectId, actingPrincipalId: callerPrincipalOf(req), query, kind: kind as any, maxFiles: 5 });
           },
         }),
       },

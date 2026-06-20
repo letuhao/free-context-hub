@@ -15,8 +15,7 @@ import { bumpProjectCacheVersion } from './cacheVersions.js';
 import { createModuleLogger } from '../utils/logger.js';
 import { getEnv } from '../env.js';
 import { indexGeneratedDocuments } from './generatedIndexer.js';
-import { assertCallerScope } from '../core/security/callerScope.js';
-import type { CallerScope } from '../core/security/callerScope.js';
+import { assertAuthorized } from './authorize.js';
 
 const logger = createModuleLogger('indexer');
 
@@ -31,8 +30,8 @@ export type IndexProjectResult = {
 
 export type IndexProjectParams = {
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** F2f: acting principal; authorize() enforces write on the project. */
+  actingPrincipalId?: string | null;
   root: string;
   linesPerChunk?: number;
   embeddingBatchSize?: number;
@@ -47,8 +46,8 @@ function vectorLiteral(embedding: number[]) {
   return `[${embedding.join(',')}]`;
 }
 
-export async function indexProject({ projectId, callerScope, root, linesPerChunk, embeddingBatchSize }: IndexProjectParams) {
-  assertCallerScope(callerScope, projectId);
+export async function indexProject({ projectId, actingPrincipalId, root, linesPerChunk, embeddingBatchSize }: IndexProjectParams) {
+  await assertAuthorized(actingPrincipalId, 'write', { kind: 'project', id: projectId });
   const pool = getDbPool();
   const startedAt = Date.now();
 
