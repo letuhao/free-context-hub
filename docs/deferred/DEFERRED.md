@@ -1,7 +1,39 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 047 -->
+<!-- Next ID: 048 -->
+
+## DEFERRED-047
+
+- **Title:** F2f-readsweep — systematically authorize the NEVER-guarded project-read surfaces (globalSearch's siblings)
+- **Status:** OPEN (2026-06-20). MED. Surfaced by `/review-impl` on the F2f domains 6–7 work. Auth is OFF
+  → inert today; a F2g-flip prerequisite (and a hard blocker for domain 8, which retires the REST-layer
+  scope middleware that is currently these surfaces' ONLY guard).
+- **Context:** F2f (and DEFERRED-029 before it) migrated the call sites that HAD an `assertCallerScope`
+  guard. But several read surfaces NEVER had one, so the "migrate the callerScope sites" approach is
+  structurally blind to them. The cold-start adversary caught ONE by luck — `globalSearch` (Cmd+K) — now
+  fixed (commit 6063784). `/review-impl` confirmed siblings still open:
+  - `src/services/activity.ts` — reads `activity_log` by project filter; **0** authz calls. Reachable via
+    `GET /api/.../activity` (and the agent slide-over).
+  - `src/services/analytics.ts` — reads `lessons` + `activity_log` by project filter; **0** authz calls.
+    Reachable via the analytics route.
+  - **Likely more** — ~18 GET-route files read project-scoped data (learningPaths, collaboration,
+    chatHistory, agents/audit, dashboard stats, …). They were NOT individually audited here; do not assume
+    only these two.
+  These leak cross-tenant project data at the flip once the REST `requireScope`/`requireResourceScope`
+  middleware (their current guard) is retired in domain 8.
+- **Why deferred (not a partial fix now):** the honest fix is a SYSTEMATIC sweep — enumerate every service
+  function that reads a project-scoped table, confirm each either authorizes `read` on its project or is a
+  deliberate cross-project/admin surface. Fixing only the two greps-happened-to-find would give false
+  confidence ("reads are guarded") while siblings stay open — exactly the silent-cap anti-pattern. Needs a
+  bounded discovery pass (grep every `FROM <project-table> WHERE project_id` against the authz set), then a
+  uniform `assertAuthorized(read, {kind:'project'})` + `callerPrincipalOf` threading.
+- **Scope when picked up:** (1) enumerate the unguarded project-read services (start: activity, analytics,
+  then sweep all REST GET routes); (2) add `actingPrincipalId` + `assertAuthorized(read, project)` first-line;
+  (3) thread `callerPrincipalOf(req)` from each route; (4) auth-ON cross-tenant tests per surface; (5) a
+  cold-start adversary pass focused specifically on "what reads project data without authz."
+- **Trigger condition:** before the F2g flip AND before domain 8 (retiring the REST scope middleware must
+  not precede service-layer read enforcement). Tracked with the other F2g prerequisites.
 
 ## DEFERRED-046
 

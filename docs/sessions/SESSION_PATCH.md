@@ -38,6 +38,23 @@ not NOT_FOUND; ungranted → FORBIDDEN; unknown principal). Added 2 globalSearch
 The curve is not yet zero (2 HIGH this pass) — a follow-up cold-start pass is warranted once DEFERRED-045
 (jobQueue) + DEFERRED-046 (groups) land, per the multi-pass-to-saturation policy.
 
+**`/review-impl` (coverage-gap lens, separate from the hostile-actor pass) — findings:**
+- **MED → DEFERRED-047 (F2f-readsweep):** the rollout migrated the call sites that HAD `assertCallerScope`,
+  so it is structurally blind to NEVER-guarded read surfaces. The adversary caught `globalSearch` by luck;
+  `/review-impl` confirmed siblings still open — `activity.ts` and `analytics.ts` read project-scoped tables
+  with **0** authz calls, and ~18 other GET-route files were not individually audited. A systematic sweep
+  (not a partial fix) is needed before the flip / domain 8. Logged.
+- **Verified clean:** `globalSearch`'s single `assertAuthorized(read, project)` covers all 5 of its queries
+  (every one `WHERE project_id = $1`). The migrated services assert FIRST, before side-effects. The
+  Pool|PoolClient widening is exercised under auth-ON both via a Pool (domain7-authz replayEvents) and a
+  PoolClient (join-induction-authz).
+- **LOW (accepted/documented, not fixed):** (a) `listGuardrailRules([])` with an empty id array runs the
+  authorize loop zero times — no leak (empty `ANY()` → empty result), but authz is technically skipped;
+  (b) `searchCode`'s decomposed-sub-query recursion forwards `actingPrincipalId` but no auth-ON test
+  exercises a multi-intent query, so a future regression there wouldn't be caught; (c) `joinTopic` txn-2 is
+  no longer `READ ONLY`, so a future stray write in that block would silently succeed (guarded only by the
+  code comment). No new HIGH — the F2f code itself is sound; the MED is a pre-existing unguarded-surface class.
+
 **What's next:** unchanged — DEFERRED-045 jobQueue (F2g prereq), DEFERRED-046 groups, domain 8 (retire REST
 scope/role middleware — blocked on jobQueue + the flip), F2g posture-flip prerequisites doc + system principal.
 
