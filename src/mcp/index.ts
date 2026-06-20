@@ -3012,9 +3012,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, group_id, name, description, output_format }) => {
-      // create_group: admin op — group itself is global, not project-scoped.
-      await resolveMcpCallerScopeOrThrow(workspace_token);
-      const result = await createGroup({ group_id, name, description });
+      // create_group: authorize() enforces write on the group (a projects-table row). [DEFERRED-046]
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const result = await createGroup({ group_id, name, description, actingPrincipalId });
       const summary = `create_group: group_id=${result.group_id}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -3032,9 +3032,9 @@ function createMcpToolsServer() {
       outputSchema: z.object({ deleted: z.boolean() }),
     },
     async ({ workspace_token, group_id, output_format }) => {
-      // delete_group: admin op — group itself is global.
-      await resolveMcpCallerScopeOrThrow(workspace_token);
-      const result = await deleteGroup(group_id);
+      // delete_group: authorize() enforces admin on the group. [DEFERRED-046]
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const result = await deleteGroup(group_id, { actingPrincipalId });
       const summary = `delete_group: deleted=${result.deleted}`;
       return formatToolResponse(result, summary, output_format);
     },

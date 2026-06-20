@@ -30,7 +30,7 @@ router.post('/', async (req, res, next) => {
       res.status(400).json({ error: 'group_id and name are required' });
       return;
     }
-    const group = await createGroup({ group_id: String(group_id), name: String(name), description });
+    const group = await createGroup({ group_id: String(group_id), name: String(name), description, actingPrincipalId: callerPrincipalOf(req) });
     res.status(201).json(group);
   } catch (e) { next(e); }
 });
@@ -38,7 +38,7 @@ router.post('/', async (req, res, next) => {
 /** DELETE /api/groups/:id — delete a group (members cascade) */
 router.delete('/:id', async (req, res, next) => {
   try {
-    const result = await deleteGroup(String(req.params.id));
+    const result = await deleteGroup(String(req.params.id), { actingPrincipalId: callerPrincipalOf(req) });
     res.json(result);
   } catch (e) { next(e); }
 });

@@ -21,9 +21,14 @@ export type ProjectGroupWithMembers = ProjectGroup & {
 
 export async function createGroup(params: {
   group_id: string;
+  /** F2f: acting principal; authorize() enforces write on the group (a projects-table row). */
+  actingPrincipalId?: string | null;
   name: string;
   description?: string;
 }): Promise<ProjectGroup> {
+  // A group IS a projects-table row, so it authorizes via the `project` kind (resolver trusts the id
+  // without an existence check, so a not-yet-existent group works). [DEFERRED-046]
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.group_id });
   const pool = getDbPool();
 
   // Ensure the projects table has a row for this group_id so lessons can be stored there.
@@ -44,7 +49,12 @@ export async function createGroup(params: {
   return mapGroupRow(res.rows[0]);
 }
 
-export async function deleteGroup(groupId: string): Promise<{ deleted: boolean }> {
+export async function deleteGroup(
+  groupId: string,
+  opts?: { actingPrincipalId?: string | null },
+): Promise<{ deleted: boolean }> {
+  // Destructive whole-resource delete → admin on the group (mirrors deleteWorkspace=admin). [DEFERRED-046]
+  await assertAuthorized(opts?.actingPrincipalId, 'admin', { kind: 'project', id: groupId });
   const pool = getDbPool();
   // Members cascade-deleted via FK.
   const res = await pool.query(
@@ -97,7 +107,12 @@ export async function addProjectToGroup(
   /** F2f: acting principal; authorize() enforces write on the project. */
   opts?: { actingPrincipalId?: string | null },
 ): Promise<{ added: boolean }> {
+  // [DEFERRED-046] Splicing a project into a group widens cross-project knowledge flow (group ids fold
+  // into search scope via resolveProjectIds), so require write on BOTH the member project AND the group
+  // (strict-reject — first deny throws). Authorizing the group BEFORE the existence check below also
+  // closes the old "Group X not found" existence oracle to anyone holding write on some other project.
   await assertAuthorized(opts?.actingPrincipalId, 'write', { kind: 'project', id: projectId });
+  await assertAuthorized(opts?.actingPrincipalId, 'write', { kind: 'project', id: groupId });
   const pool = getDbPool();
 
   // Guard: group must exist.
@@ -135,7 +150,9 @@ export async function removeProjectFromGroup(
   /** F2f: acting principal; authorize() enforces write on the project. */
   opts?: { actingPrincipalId?: string | null },
 ): Promise<{ removed: boolean }> {
+  // [DEFERRED-046] write on BOTH the member project AND the group (strict-reject).
   await assertAuthorized(opts?.actingPrincipalId, 'write', { kind: 'project', id: projectId });
+  await assertAuthorized(opts?.actingPrincipalId, 'write', { kind: 'project', id: groupId });
   const pool = getDbPool();
   const res = await pool.query(
     `DELETE FROM project_group_members WHERE group_id = $1 AND project_id = $2 RETURNING project_id`,
