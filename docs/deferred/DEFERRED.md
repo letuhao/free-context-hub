@@ -1,7 +1,22 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 063 -->
+<!-- Next ID: 064 -->
+
+## DEFERRED-063
+
+- **Title:** `POST /api/bootstrap/operator` is a login dead-end (vestigial as built)
+- **Status:** OPEN (2026-06-21, session 15). Found while building the DEFERRED-059 hardened-login E2E.
+- **Context:** The first-run wizard's `/operator` step creates a bare `human` principal with **no email and no
+  credential** ([bootstrap.ts:124](../../src/api/routes/bootstrap.ts)). But login resolves email→principal through the
+  **invites trail** (`resolvePrincipalByEmail` joins `invites`+`human_credentials`), and `acceptInvite` **mints its own
+  fresh principal** ([invites.ts:131](../../src/services/invites.ts)). So the principal created by `/operator` can never
+  be logged into — it is orphaned from the credential model. The real loginable path is **issue-invite (as root/admin)
+  → register**, which is what the DEFERRED-059 flip used.
+- **Resolution:** either (a) wire `/operator` to ALSO issue an invite for the operator's email (so the wizard yields a
+  registrable account end-to-end), or (b) drop the `/operator` step from the wizard + GUI bootstrap page so it doesn't
+  mislead a future operator into thinking it provisions a login.
+- **Trigger:** next bootstrap-wizard / governance-GUI pass.
 
 ## DEFERRED-062
 
@@ -46,7 +61,18 @@
 ## DEFERRED-059
 
 - **Title:** Full F-AUTH human-login E2E in hardened (auth-ON) posture — bootstrap → operator → login → MFA
-- **Status:** OPEN (2026-06-21, session 14). The /warp build + reconcile is live-smoked in **dev/auth-off** posture
+- **Status:** ✅ **DONE (2026-06-21, session 15).** Built an automated hardened E2E
+  (`src/api/auth-hardened-e2e.test.ts`) driving the REAL `createApiApp` over HTTP under `MCP_AUTH_ENABLED=true`:
+  register → login → cookie → `/api/me` (principal==operator) → MFA enroll/verify → logout → re-login
+  (`mfa_required`) → `/api/auth/mfa/verify` (AAL2) → `/api/me`. Retired the gateway-token shim
+  (`gui/src/proxy.ts` no longer injects `CONTEXTHUB_GATEWAY_TOKEN`; removed from compose + `.env`). **Flipped the live
+  stack to hardened posture** (base compose, auth-ON; secrets generated into `.env`; root/system/backfill/coordination
+  prepped; operator provisioned with a global-admin grant) and **proved live through the gateway**: unauth `/api/me`
+  & `/api/system/info` → 401; operator login → 200 + `chub_session`; `/api/me`+cookie → operator principal;
+  admin-gated `/api/principals`+cookie → 200. The DEFERRED-059 recipe was corrected: `/operator` is a login dead-end
+  (see DEFERRED-063); the real path is invite→register. GUI bind kept loopback (legitimacy gate = auth-ON+login+shim
+  gone, orthogonal to LAN exposure). Evidence: tsc clean · 1311 pass/0 fail · gui build clean · live gateway smoke.
+- ~~OPEN (2026-06-21, session 14). The /warp build + reconcile is live-smoked in **dev/auth-off** posture~~
   (API boots, all routes serve, GUI pages render, `POST /api/auth/login`→401). The full **hardened** path was NOT
   yet exercised end-to-end: set `AUTH_SESSION_SIGNING_SECRET` + `DEPLOYMENT_PROFILE=production` + `MCP_AUTH_ENABLED=true`,
   boot (A6 guard now requires the secret), run the bootstrap wizard (`POST /api/bootstrap/root` → operator → enforce),

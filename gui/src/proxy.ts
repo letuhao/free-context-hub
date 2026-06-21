@@ -43,26 +43,19 @@ const ALLOWED_ORIGINS = (process.env.GATEWAY_ALLOWED_ORIGINS ?? "")
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 /**
- * [F2g] Gateway-side auth injection (backend-for-frontend).
+ * [DEFERRED-059] The gateway-token shim is RETIRED.
  *
- * Under the hardened backend (MCP_AUTH_ENABLED=true) the browser GUI ships NO bearer
- * token — its same-origin `/api` calls would 401. This SERVER-ONLY credential (never a
- * NEXT_PUBLIC_* var, never exposed to the client) is injected as `Authorization: Bearer …`
- * on proxied requests via `NextResponse.next({ request: { headers } })`, which mutates only
- * the upstream request the backend receives. It is the gateway's own api_keys-bound principal
- * (mint one scoped to what the GUI needs — typically global for a single-operator deploy).
- *
- * Inert when unset (dev / auth-OFF backend ignores it). Skipped when the caller already sent
- * an Authorization header, so an agent calling through the gateway keeps its OWN identity.
+ * It was a stopgap: under the hardened backend (MCP_AUTH_ENABLED=true) the browser GUI shipped
+ * no bearer, so the proxy injected a single SERVER-ONLY `CONTEXTHUB_GATEWAY_TOKEN` (one shared
+ * api_keys-bound principal) on every proxied `/api` request. That made every human share ONE
+ * super-credential — the exact single-super-credential anti-pattern the actor-data-boundary
+ * exists to eliminate. F-AUTH (human login → session cookie) is now the real browser credential:
+ * the GUI's same-origin `/api` calls carry the httpOnly `chub_session` cookie (forwarded
+ * unchanged by the same-origin proxy), which `sessionAuth` authenticates. An agent calling
+ * through the gateway still carries its OWN `Authorization: Bearer <api_key>`. So the proxy no
+ * longer injects any credential — it only enforces the cross-site / CSRF guard below.
  */
-const GATEWAY_TOKEN = (process.env.CONTEXTHUB_GATEWAY_TOKEN ?? "").trim();
-
-function allow(req: NextRequest): NextResponse {
-  if (GATEWAY_TOKEN && !req.headers.get("authorization")) {
-    const headers = new Headers(req.headers);
-    headers.set("authorization", `Bearer ${GATEWAY_TOKEN}`);
-    return NextResponse.next({ request: { headers } });
-  }
+function allow(_req: NextRequest): NextResponse {
   return NextResponse.next();
 }
 

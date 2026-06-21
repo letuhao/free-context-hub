@@ -271,12 +271,10 @@ services:
       # /api and /mcp cross-site. Default empty = same-origin only. Keep in sync
       # with the backend's CORS_ALLOWED_ORIGINS.
       GATEWAY_ALLOWED_ORIGINS: ${GATEWAY_ALLOWED_ORIGINS:-}
-      # F2g — gateway-side bearer for the hardened (auth-ON) backend. The browser GUI
-      # ships no token; the proxy (gui/src/proxy.ts) injects THIS server-only credential
-      # (an api_keys-bound principal) on proxied /api requests so same-origin GUI calls
-      # authenticate. Empty in dev (auth-OFF backend ignores it). Mint via the runbook and
-      # set in .env for a hardened deploy. NEVER a NEXT_PUBLIC_* var (must stay server-side).
-      CONTEXTHUB_GATEWAY_TOKEN: ${CONTEXTHUB_GATEWAY_TOKEN:-}
+      # [DEFERRED-059] The CONTEXTHUB_GATEWAY_TOKEN shim is RETIRED. Under the hardened backend
+      # the browser now authenticates with the F-AUTH session cookie (human login), forwarded
+      # unchanged by the same-origin proxy — no shared server-side super-credential. Agents still
+      # carry their own Bearer api_key. See gui/src/proxy.ts.
     depends_on:
       - mcp
     # The ONE public port. Users and agents both enter here.

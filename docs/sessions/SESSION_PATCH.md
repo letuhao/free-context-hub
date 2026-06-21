@@ -1,3 +1,50 @@
+# CHECKPOINT — DEFERRED-059: hardened human-login E2E + shim retirement + LIVE flip to auth-ON (2026-06-21, session 15)
+
+**Branch:** `feature/actor-data-boundary`. Discharges **DEFERRED-059** — the gap the session-14 /warp build left:
+the human login chain was only ever smoked in dev/auth-OFF. This session proves it in the **hardened** posture and
+makes that posture *legitimate* (auth-ON + human login enforced + the shared-admin shim gone) per completion-plan §7.
+
+**Discovery (corrects the DEFERRED-059 recipe):** `POST /api/bootstrap/operator` is a **login dead-end** — it creates a
+bare `human` principal with no email/credential, but login resolves email→principal through the **invites trail** and
+`acceptInvite` mints its OWN principal. The real loginable path is **issue-invite (as root/admin) → register**. Filed
+as **DEFERRED-063**.
+
+**BUILD:**
+- **AC1 — automated hardened E2E** (`src/api/auth-hardened-e2e.test.ts`, +`package.json` test list): drives the REAL
+  `createApiApp` over a loopback socket under `MCP_AUTH_ENABLED=true`, end to end — register → login → cookie →
+  `/api/me` (principal==operator) → MFA enroll/verify → logout → re-login (`mfa_required`) → `/mfa/verify` (AAL2) →
+  `/api/me`. Pins the cooperative bearerAuth-cookie-defer → sessionAuth → meRouter wiring nothing covered end-to-end.
+- **AC2 — shim retired:** `gui/src/proxy.ts` `allow()` no longer injects `CONTEXTHUB_GATEWAY_TOKEN` (the cross-site/CSRF
+  guard is preserved); removed the var from `docker-compose.yml` (gui) + `.env`. The browser now authenticates with the
+  F-AUTH session cookie; agents keep their own Bearer api_key.
+
+**REVIEW (AC4):** removing a credential *injection* can only tighten access (browser→401 without a cookie), never open a
+hole. Grep confirmed no dangling *code* ref to the token (only the explanatory comment) and the three gates intact
+(cookie-defer `auth.ts:37`, A1 `/info` gate `system.ts:25`, `csrfGuard` `sessionAuth.ts:100`). No HIGH/MED.
+
+**VERIFY (AC3):** backend+gui `tsc` clean · `npm test` **1330 tests, 1311 pass / 0 fail / 19 skip** (incl. the new E2E)
+· `gui build` clean.
+
+**LIVE FLIP (AC5):** generated `AUTH_SESSION_SIGNING_SECRET` + `ROOT_BOOTSTRAP_TOKEN` into `.env` (gitignored); host-prep
+made the DB enforce-ready (root/system already present, `backfill:grants` 0 uncovered, `migrate:coordination-actors`
+imported 3 principals); provisioned the operator (`letuhao1994@gmail.com` → principal `c8c51471…`) with a **global-admin**
+grant by root (creds surfaced once to rotate); brought up the **base compose (auth-ON, no dev overlay)** rebuilding
+gui/mcp/worker. mcp boot log: **"production auth-ON boot gate passed"**. Live gateway proof (`:3002`): unauth `/api/me`
+& `/api/system/info` → **401**; operator login → **200** + `chub_session`; `/api/me`+cookie → the **operator principal**;
+admin-gated `/api/principals`+cookie → **200**. The `/api/me` `role`/`key_source` mislabel for cookie sessions is the
+known DEFERRED-060 item (the `principal` field — what the GUI uses — is correct).
+
+**Posture now:** hardened, auth-ON, human-login-enforced, shim-gone, GUI **loopback-bound** (`127.0.0.1:3002`). Removing
+`GATEWAY_PORT` from `.env` binds `0.0.0.0` for LAN exposure — a one-line operator choice, intentionally not done here.
+**Note:** agents/MCP clients now need a real api_key bearer (legacy token disabled); mint one for any agent integration.
+
+**Files:** `src/api/auth-hardened-e2e.test.ts` (new) · `gui/src/proxy.ts` · `docker-compose.yml` · `package.json` ·
+`docs/specs/2026-06-21-deferred-059-hardened-login-e2e.md` (new) · `.env` (gitignored, secrets + shim removal).
+**Tracked residuals:** DEFERRED-060 (auth residuals), 061 (GUI features needing endpoints), 062 (governance polish),
+**063 (bootstrap/operator dead-end)**.
+
+---
+
 # CHECKPOINT — Actor-data-boundary COMPLETION built via /warp: 6 disjoint slices → reconcile → safety-cleared → live (2026-06-21, session 14)
 
 **Branch:** `feature/actor-data-boundary` (not yet PR'd). **Mode:** `/warp` parallel fan-out. Executes the plan from
