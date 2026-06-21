@@ -202,6 +202,282 @@ export async function createBootstrapRootKey(rootPrincipalId: string): Promise<{
   }
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Actor Data Boundary — Stream S5 (NHI hardening). standards-gap.md §3 NHI.
+//
+// Three operations layered on the EXISTING api_keys columns (expires_at,
+// last_used_at, principal_id, revoked) — migration-free (COMPLETION-plan §2.2):
+//   - reviewApiKeys()        : log-based access review (age / unused-≥90d /
+//                              never-expires / ownerless) + aggregate stats.
+//   - rotateApiKey()         : mint a successor + bounded overlap window; the
+//                              old key auto-expires (UPDATE expires_at) inside a
+//                              single transaction so a partial rotation can't
+//                              leave the old key live forever.
+//   - createEphemeralApiKey(): short-TTL, principal-bound credential for CI /
+//                              one-shot agents (auto-expires at validate-time).
+//
+// Defaults are constants (not env) so this slice does NOT touch the src/env.ts
+// magnet (§2.9). If overlap/TTL ever need to be operator-tunable, the recorded
+// optional env keys are NHI_ROTATION_OVERLAP_DAYS / NHI_EPHEMERAL_MAX_TTL_HOURS.
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Default overlap window for a rotation: the old key stays valid this long. */
+export const DEFAULT_ROTATION_OVERLAP_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+/** Hard ceiling on a rotation overlap — a longer-lived "successor" defeats the point. */
+export const MAX_ROTATION_OVERLAP_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+/** Default ephemeral TTL when the caller doesn't specify one. */
+export const DEFAULT_EPHEMERAL_TTL_MS = 60 * 60 * 1000; // 1 hour
+/** Hard ceiling on an ephemeral TTL — "ephemeral" means short-lived by definition. */
+export const MAX_EPHEMERAL_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+/** Access-review staleness threshold: a key unused for this long is flagged. */
+export const UNUSED_REVIEW_THRESHOLD_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
+
+export interface ApiKeyReviewItem extends ApiKeyEntry {
+  /** Whole days since the key was created. */
+  age_days: number;
+  /** Whole days since last use, or null if never used. */
+  days_since_used: number | null;
+  /** Display name of the bound principal, or null for legacy/ownerless keys. */
+  principal_name: string | null;
+  /** never used (or last used) for ≥90d AND not freshly created. */
+  unused_90d: boolean;
+  /** expires_at IS NULL — a non-expiring durable credential. */
+  never_expires: boolean;
+  /** principal_id IS NULL — legacy/env key with no named owner. */
+  ownerless: boolean;
+}
+
+export interface AccessReviewStats {
+  total_active: number;
+  unused_90d: number;
+  never_expires: number;
+  ownerless: number;
+}
+
+export interface AccessReviewResult {
+  stats: AccessReviewStats;
+  keys: ApiKeyReviewItem[];
+}
+
+/**
+ * Log-based access review of all ACTIVE (non-revoked) keys. "Reviewed from the
+ * logs, not by asking" — surfaces stale / never-expiring / ownerless credentials
+ * for revocation. Computes per-key flags and the aggregate stat-card counts.
+ *
+ * The flags are derived in SQL (single round-trip) against `now()` so they are
+ * always evaluated server-side relative to the DB clock, never the API host's.
+ */
+export async function reviewApiKeys(): Promise<AccessReviewResult> {
+  const pool = getDbPool();
+  const thresholdDays = Math.floor(UNUSED_REVIEW_THRESHOLD_MS / (24 * 60 * 60 * 1000));
+  const res = await pool.query<
+    ApiKeyEntry & {
+      age_days: string;
+      days_since_used: string | null;
+      principal_name: string | null;
+      unused_90d: boolean;
+      never_expires: boolean;
+      ownerless: boolean;
+    }
+  >(
+    `SELECT k.key_id, k.name, k.key_prefix, k.role, k.project_scope, k.expires_at,
+            k.last_used_at, k.revoked, k.created_at, k.principal_id,
+            p.display_name AS principal_name,
+            floor(extract(epoch FROM (now() - k.created_at)) / 86400)::int::text AS age_days,
+            CASE WHEN k.last_used_at IS NULL THEN NULL
+                 ELSE floor(extract(epoch FROM (now() - k.last_used_at)) / 86400)::int::text
+            END AS days_since_used,
+            -- unused ≥90d: never used since a 90d-old creation, OR last used ≥90d ago.
+            (CASE
+               WHEN k.last_used_at IS NULL THEN k.created_at <= now() - ($1 || ' days')::interval
+               ELSE k.last_used_at <= now() - ($1 || ' days')::interval
+             END) AS unused_90d,
+            (k.expires_at IS NULL) AS never_expires,
+            (k.principal_id IS NULL) AS ownerless
+       FROM api_keys k
+       LEFT JOIN principals p ON p.principal_id = k.principal_id
+      WHERE k.revoked = false
+      ORDER BY k.created_at DESC`,
+    [String(thresholdDays)],
+  );
+
+  const keys: ApiKeyReviewItem[] = (res.rows ?? []).map((r) => ({
+    key_id: r.key_id,
+    name: r.name,
+    key_prefix: r.key_prefix,
+    role: r.role,
+    project_scope: r.project_scope,
+    expires_at: r.expires_at,
+    last_used_at: r.last_used_at,
+    revoked: r.revoked,
+    created_at: r.created_at,
+    principal_id: r.principal_id,
+    principal_name: r.principal_name,
+    age_days: Number(r.age_days),
+    days_since_used: r.days_since_used === null ? null : Number(r.days_since_used),
+    unused_90d: r.unused_90d,
+    never_expires: r.never_expires,
+    ownerless: r.ownerless,
+  }));
+
+  const stats: AccessReviewStats = {
+    total_active: keys.length,
+    unused_90d: keys.filter((k) => k.unused_90d).length,
+    never_expires: keys.filter((k) => k.never_expires).length,
+    ownerless: keys.filter((k) => k.ownerless).length,
+  };
+
+  return { stats, keys };
+}
+
+/**
+ * Rotate a key: mint a SUCCESSOR bound to the same principal / role / scope, and
+ * set the OLD key to auto-expire after a bounded overlap window. During overlap
+ * BOTH keys validate (zero-downtime rotation); after it the old key fails the
+ * `expires_at > now()` filter in validateApiKey and only the successor remains.
+ *
+ * Atomicity [§4 acceptance / §6 S5 adversary]: the successor INSERT and the old
+ * key's expiry UPDATE happen in ONE transaction. A failure leaves the old key
+ * exactly as it was (still live) — never a half-rotation that silently expired
+ * the only working credential.
+ *
+ * Name collision [api_keys_active_name_uniq]: the old key is NOT revoked during
+ * overlap, so it still occupies its name in the partial-unique index. The
+ * successor therefore gets a distinct, deterministic name (`<old> (rotated …)`).
+ *
+ * @param keyId       the key to rotate (must be active / non-revoked).
+ * @param opts.overlapMs  how long the old key stays valid. 0 = revoke the old key
+ *                        immediately (no overlap). Capped at MAX_ROTATION_OVERLAP_MS.
+ */
+export async function rotateApiKey(
+  keyId: string,
+  opts: { overlapMs?: number } = {},
+): Promise<{ key: string; entry: ApiKeyEntry; previous_key_id: string; old_expires_at: string | null }> {
+  if (!isUuid(keyId)) {
+    throw new ContextHubError('BAD_REQUEST', `Invalid key id "${keyId}" (must be a UUID).`);
+  }
+  const requested = opts.overlapMs ?? DEFAULT_ROTATION_OVERLAP_MS;
+  if (!Number.isFinite(requested) || requested < 0) {
+    throw new ContextHubError('BAD_REQUEST', 'overlapMs must be a non-negative number of milliseconds.');
+  }
+  const overlapMs = Math.min(requested, MAX_ROTATION_OVERLAP_MS);
+
+  const successorKey = generateKey();
+  const keyHash = hashKey(successorKey);
+  const keyPrefix = successorKey.slice(0, 12) + '...' + successorKey.slice(-4);
+
+  const client = await getDbPool().connect();
+  try {
+    await client.query('BEGIN');
+
+    // Lock the row we are rotating so two concurrent rotations of the same key
+    // can't each mint a successor against a stale view.
+    const oldRes = await client.query<{
+      name: string;
+      role: string;
+      project_scope: string | null;
+      principal_id: string | null;
+      created_by: string | null;
+      is_bootstrap: boolean;
+      revoked: boolean;
+    }>(
+      `SELECT name, role, project_scope, principal_id, created_by, is_bootstrap, revoked
+         FROM api_keys WHERE key_id = $1 FOR UPDATE`,
+      [keyId],
+    );
+    const old = oldRes.rows[0];
+    if (!old) {
+      throw new ContextHubError('NOT_FOUND', 'API key not found.');
+    }
+    if (old.revoked) {
+      throw new ContextHubError('CONFLICT', 'Cannot rotate a revoked key; mint a fresh key instead.');
+    }
+    // Never rotate the bootstrap root credential through this general path — root
+    // rotation is the out-of-band createBootstrapRootKey path only (escalation guard).
+    if (old.is_bootstrap) {
+      throw new ContextHubError('FORBIDDEN', 'The bootstrap root credential is rotated out-of-band, not via this path.');
+    }
+
+    // Successor name must be distinct from the old (still-active) name to satisfy
+    // api_keys_active_name_uniq during the overlap. Deterministic + collision-safe.
+    const stamp = new Date().toISOString().replace(/[:.]/g, '').slice(0, 15);
+    let successorName = `${old.name} (rotated ${stamp})`;
+    if (successorName.length > 128) {
+      // Keep within the createApiKey 128-char limit; preserve the rotation suffix.
+      const suffix = ` (rotated ${stamp})`;
+      successorName = old.name.slice(0, 128 - suffix.length) + suffix;
+    }
+
+    const insRes = await client.query<ApiKeyEntry>(
+      `INSERT INTO api_keys (name, key_prefix, key_hash, role, project_scope, expires_at, created_by, principal_id)
+       VALUES ($1, $2, $3, $4, $5, NULL, $6, $7)
+       RETURNING key_id, name, key_prefix, role, project_scope, expires_at, last_used_at, revoked, created_at, principal_id`,
+      [successorName, keyPrefix, keyHash, old.role, old.project_scope, old.created_by, old.principal_id],
+    );
+
+    // Old key: expire after the overlap (or revoke immediately when overlap = 0).
+    let oldExpiresAt: string | null = null;
+    if (overlapMs === 0) {
+      await client.query(`UPDATE api_keys SET revoked = true WHERE key_id = $1`, [keyId]);
+    } else {
+      const expRes = await client.query<{ expires_at: string }>(
+        `UPDATE api_keys SET expires_at = now() + ($2 || ' milliseconds')::interval
+          WHERE key_id = $1
+          RETURNING expires_at`,
+        [keyId, String(overlapMs)],
+      );
+      oldExpiresAt = expRes.rows[0]?.expires_at ?? null;
+    }
+
+    await client.query('COMMIT');
+    return { key: successorKey, entry: insRes.rows[0], previous_key_id: keyId, old_expires_at: oldExpiresAt };
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (err && typeof err === 'object' && (err as { code?: string }).code === '23505') {
+      throw new ContextHubError('CONFLICT', 'A rotation of this key is already in progress; retry.');
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Mint an EPHEMERAL (short-TTL) credential. NHI best-practice: prefer a key that
+ * auto-expires over a durable one. Binds to a principal (or stays ownerless for a
+ * dev/CI key) and rides createApiKey's full bind-time validation — the only
+ * difference is a mandatory, bounded `expires_at`.
+ *
+ * @param params.ttlMs  lifetime in ms. Defaults to DEFAULT_EPHEMERAL_TTL_MS,
+ *                       capped at MAX_EPHEMERAL_TTL_MS, must be > 0.
+ */
+export async function createEphemeralApiKey(params: {
+  name: string;
+  role?: string;
+  project_scope?: string;
+  principal_id?: string;
+  created_by?: string;
+  ttlMs?: number;
+}): Promise<{ key: string; entry: ApiKeyEntry; expires_at: string }> {
+  const requested = params.ttlMs ?? DEFAULT_EPHEMERAL_TTL_MS;
+  if (!Number.isFinite(requested) || requested <= 0) {
+    throw new ContextHubError('BAD_REQUEST', 'ttlMs must be a positive number of milliseconds.');
+  }
+  const ttlMs = Math.min(requested, MAX_EPHEMERAL_TTL_MS);
+  const expiresAt = new Date(Date.now() + ttlMs).toISOString();
+
+  const result = await createApiKey({
+    name: params.name,
+    role: params.role,
+    project_scope: params.project_scope,
+    principal_id: params.principal_id,
+    created_by: params.created_by,
+    expires_at: expiresAt,
+  });
+  // createApiKey stamps expires_at from our input; surface the effective value.
+  return { key: result.key, entry: result.entry, expires_at: result.entry.expires_at ?? expiresAt };
+}
+
 /** Revoke an API key. */
 export async function revokeApiKey(keyId: string): Promise<void> {
   const pool = getDbPool();
