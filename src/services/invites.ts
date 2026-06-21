@@ -95,6 +95,38 @@ export async function issueInvite(params: {
   return { invite_id: res.rows[0].invite_id, token, email: params.email.trim(), expires_at: res.rows[0].expires_at.toISOString() };
 }
 
+export interface InvitePreview {
+  email: string;
+  display_name: string | null;
+  intended_kind: 'human' | 'agent';
+  expires_at: string;
+}
+
+/**
+ * [DEFERRED-061] Non-secret preview of a LIVE invite by its token, for the register page ("you're
+ * registering as X"). Returns null for a token that doesn't match a live (unaccepted, unexpired)
+ * invite — the holder of the token is the invitee, so surfacing the bound email to them is not a
+ * leak. No grant_template / created_by is exposed (those are internal).
+ */
+export async function previewInvite(token: string): Promise<InvitePreview | null> {
+  if (typeof token !== 'string' || token.length === 0) return null;
+  const res = await getDbPool().query<{ email: string; display_name: string | null; intended_kind: string; expires_at: Date }>(
+    `SELECT email, display_name, intended_kind, expires_at
+       FROM invites
+      WHERE token_hash = $1 AND accepted_at IS NULL AND expires_at > now()
+      LIMIT 1`,
+    [hashToken(token)],
+  );
+  const row = res.rows[0];
+  if (!row) return null;
+  return {
+    email: row.email,
+    display_name: row.display_name,
+    intended_kind: row.intended_kind === 'agent' ? 'agent' : 'human',
+    expires_at: row.expires_at.toISOString(),
+  };
+}
+
 export interface AcceptedInvite {
   principal_id: string;
   display_name: string;

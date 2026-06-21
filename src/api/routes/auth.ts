@@ -34,10 +34,10 @@ import {
 import { getLockState, evaluateLock, recordFailure, recordSuccess } from '../../services/lockout.js';
 import { createSession } from '../../services/sessions.js';
 import { hasVerifiedFactor, verifyMfaChallenge, enrollTotp, verifyTotpEnrollment } from '../../services/mfa.js';
-import { acceptInvite } from '../../services/invites.js';
+import { acceptInvite, previewInvite } from '../../services/invites.js';
 import { setSessionCookie, clearSessionCookie, requireSession, csrfGuard } from '../middleware/sessionAuth.js';
 import { callerPrincipalOf } from '../middleware/auth.js';
-import { listSessions, revokeSession } from '../../services/sessions.js';
+import { listSessions, revokeSession, revokeOtherSessions } from '../../services/sessions.js';
 import type { Request } from 'express';
 
 const router = Router();
@@ -194,6 +194,21 @@ router.post('/password/reset', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+/** GET /api/auth/invite?token=… — [DEFERRED-061] non-secret preview of a LIVE invite (email +
+ *  display_name) so /register can show "you're registering as X". 404 when the token doesn't match a
+ *  live invite. Public: the token holder IS the invitee, so the bound email is not a leak to them. */
+router.get('/invite', async (req, res, next) => {
+  try {
+    const token = typeof req.query.token === 'string' ? req.query.token : '';
+    const preview = await previewInvite(token);
+    if (!preview) {
+      res.status(404).json({ error: 'Invite is invalid, already used, or expired.' });
+      return;
+    }
+    res.json(preview);
+  } catch (e) { next(e); }
+});
+
 // ── Session-scoped (requireSession) ──────────────────────────────────────────────────────────────
 
 // [DEFERRED-060 C1] This router mounts BEFORE the global csrfGuard (index.ts), so the session-scoped
@@ -229,6 +244,17 @@ router.delete('/sessions/:id', requireSession, csrfGuard, async (req, res, next)
     const ok = await revokeSession(principalId, sessionId);
     if (!ok) { throw new ContextHubError('NOT_FOUND', 'Session not found.'); }
     res.json({ status: 'revoked', session_id: sessionId });
+  } catch (e) { next(e); }
+});
+
+/** POST /api/auth/sessions/revoke-others — [DEFERRED-061] revoke all of MY sessions except the
+ *  current one ("sign out everywhere else"). Cookie-only + CSRF-guarded. */
+router.post('/sessions/revoke-others', requireSession, csrfGuard, async (req, res, next) => {
+  try {
+    const principalId = callerPrincipalOf(req)!;
+    const currentSessionId = String((req as { session?: { session_id?: string } }).session?.session_id ?? '');
+    const revoked = await revokeOtherSessions(principalId, currentSessionId);
+    res.json({ status: 'ok', revoked });
   } catch (e) { next(e); }
 });
 

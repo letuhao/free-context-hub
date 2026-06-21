@@ -219,6 +219,17 @@ export const authApi = {
   resetPassword: (body: { token: string; password: string }) =>
     request<{ status: "ok"; principal_id: string }>("POST", "/api/auth/password/reset", body),
 
+  /** [DEFERRED-061] Non-secret preview of a live invite by token (email/display_name) for /register.
+   *  Returns null when the token doesn't match a live invite (the API answers 404). */
+  invitePreview: async (token: string): Promise<{ email: string; display_name: string | null; intended_kind: "human" | "agent"; expires_at: string } | null> => {
+    try {
+      return await request("GET", `/api/auth/invite?token=${encodeURIComponent(token)}`);
+    } catch (err) {
+      if (err instanceof AuthApiError && err.status === 404) return null;
+      throw err;
+    }
+  },
+
   // ── Registration (invite-only: accept token → principal + AAL1 session) ──
   register: async (body: { token: string; password: string; display_name?: string }) => {
     const res = await request<{
@@ -247,4 +258,8 @@ export const authApi = {
       "DELETE",
       `/api/auth/sessions/${encodeURIComponent(sessionId)}`,
     ),
+
+  /** [DEFERRED-061] Revoke all of my sessions except the current one ("sign out everywhere else"). */
+  revokeOtherSessions: () =>
+    request<{ status: "ok"; revoked: number }>("POST", "/api/auth/sessions/revoke-others"),
 };

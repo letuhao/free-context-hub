@@ -5,8 +5,8 @@
  * Ported from docs/gui-drafts/pages/sessions.html. NIST 800-63B §7 session mgmt.
  *
  * Authed page (renders inside the sidebar shell). Lists the principal's active
- * browser sessions with revoke, plus the deployment-wide auth policy (read for
- * everyone, editable by admin/root). Cookie-based via the typed `authApi`.
+ * browser sessions with per-session revoke and a "sign out all other sessions"
+ * action (DEFERRED-061). Cookie-based via the typed `authApi`.
  *
  * Records its nav line for reconcile (§2.3): Settings group →
  *   { href: "/settings/sessions", label: "Sessions & Security" }
@@ -69,6 +69,7 @@ export default function SessionsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [revokeTarget, setRevokeTarget] = useState<string | null>(null);
+  const [revokeOthersOpen, setRevokeOthersOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -102,6 +103,21 @@ export default function SessionsPage() {
     [],
   );
 
+  // [DEFERRED-061] Sign out every other device — keep only the current session.
+  const handleRevokeOthers = useCallback(async () => {
+    try {
+      const { revoked } = await authApi.revokeOtherSessions();
+      setSessions((prev) => prev.filter((x) => x.current));
+      toastRef.current("success", revoked > 0 ? `Signed out ${revoked} other session${revoked === 1 ? "" : "s"}` : "No other sessions");
+    } catch {
+      toastRef.current("error", "Couldn't sign out the other sessions");
+    } finally {
+      setRevokeOthersOpen(false);
+    }
+  }, []);
+
+  const otherCount = sessions.filter((s) => !s.current).length;
+
   return (
     <div className="flex-1 overflow-y-auto px-6 py-6 max-w-3xl mx-auto w-full">
       <PageHeader
@@ -115,7 +131,17 @@ export default function SessionsPage() {
       />
 
       {/* Active sessions */}
-      <h2 className="text-sm font-semibold text-zinc-200 mb-3">Active sessions</h2>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold text-zinc-200">Active sessions</h2>
+        {otherCount > 0 && (
+          <button
+            onClick={() => setRevokeOthersOpen(true)}
+            className="text-xs text-zinc-500 hover:text-red-400 transition-colors"
+          >
+            Sign out other sessions ({otherCount})
+          </button>
+        )}
+      </div>
       {loading ? (
         <div className="text-xs text-zinc-600 mb-10">Loading sessions…</div>
       ) : error ? (
@@ -193,6 +219,16 @@ export default function SessionsPage() {
         destructive
         onConfirm={() => revokeTarget && handleRevoke(revokeTarget)}
         onClose={() => setRevokeTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={revokeOthersOpen}
+        title="Sign out all other sessions?"
+        description="Every device except this one will be signed out immediately. This can't be undone."
+        confirmText="Sign out others"
+        destructive
+        onConfirm={handleRevokeOthers}
+        onClose={() => setRevokeOthersOpen(false)}
       />
     </div>
   );

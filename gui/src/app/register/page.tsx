@@ -6,10 +6,13 @@
  *
  * Pre-auth page (shell-less once the integrator adds "/register" to
  * PRE_AUTH_ROUTES). Flow (reconciled against routes/auth.ts):
+ *   0. preview the invite (GET /api/auth/invite?token=…, DEFERRED-061) → show the
+ *      bound email + prefill the suggested display name; an invalid/expired token
+ *      shows an "invite not valid" card.
  *   1. accept invite token + set password (≥12 chars) + display name → the
  *      backend creates the principal AND issues an AAL1 session immediately
- *      (POST /api/auth/register). No separate email-verification round-trip and
- *      no invite-preview GET endpoint exist, so we go straight from accept → MFA.
+ *      (POST /api/auth/register). No email-verification round-trip exists, so we
+ *      go straight from accept → MFA.
  *   2. MFA enrollment — TOTP via the otpauth_uri + base32 secret for manual
  *      authenticator entry (the backend returns NO QR data-URL; dep-free).
  *   3. one-time backup codes (returned at enroll time, not at confirm).
@@ -17,7 +20,7 @@
  * The invite token arrives in the URL: /register?token=….
  */
 
-import { useState, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { AlertTriangle, Download } from "lucide-react";
 import { authApi, AuthApiError, type MfaEnrollment } from "@/lib/authApi";
@@ -48,7 +51,29 @@ function RegisterInner() {
   const [mfaCode, setMfaCode] = useState("");
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
 
+  // [DEFERRED-061] Preview the invite (email + suggested display name) before accepting.
+  const [invite, setInvite] = useState<{ email: string; display_name: string | null } | null>(null);
+  const [inviteChecked, setInviteChecked] = useState(false);
+
+  useEffect(() => {
+    if (!token) { setInviteChecked(true); return; }
+    let active = true;
+    authApi
+      .invitePreview(token)
+      .then((p) => {
+        if (!active) return;
+        if (p) {
+          setInvite({ email: p.email, display_name: p.display_name });
+          if (p.display_name) setDisplayName((d) => d || p.display_name!);
+        }
+        setInviteChecked(true);
+      })
+      .catch(() => { if (active) setInviteChecked(true); });
+    return () => { active = false; };
+  }, [token]);
+
   const checks = passwordChecks(password);
+  const inviteInvalid = !!token && inviteChecked && !invite;
 
   const beginMfaEnroll = useCallback(async () => {
     setError(null);
@@ -143,6 +168,26 @@ function RegisterInner() {
           </p>
           <p className="text-[11px] text-zinc-600 mt-3">
             Registration is invite-only. Ask an admin to issue a fresh invite link.
+          </p>
+        </PreAuthCard>
+      </PreAuthShell>
+    );
+  }
+
+  // ── Invite present but invalid / used / expired (DEFERRED-061 preview) ──
+  if (inviteInvalid) {
+    return (
+      <PreAuthShell>
+        <PreAuthCard tone="warning">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle size={16} className="text-amber-400" />
+            <h1 className="text-sm font-semibold text-amber-300">Invite not valid</h1>
+          </div>
+          <p className="text-xs text-zinc-400">
+            This invite link is invalid, already used, or expired.
+          </p>
+          <p className="text-[11px] text-zinc-600 mt-3">
+            Ask an admin to issue a fresh invite.
           </p>
         </PreAuthCard>
       </PreAuthShell>
@@ -261,7 +306,9 @@ function RegisterInner() {
         </div>
         <h1 className="text-lg font-semibold text-zinc-100">Create your account</h1>
         <p className="text-xs text-zinc-500 mt-0.5 mb-5">
-          Your invite establishes which email this principal is bound to.
+          {invite
+            ? <>You&apos;re registering as <span className="text-zinc-300">{invite.email}</span>.</>
+            : "Your invite establishes which email this principal is bound to."}
         </p>
         <form onSubmit={handleAccept}>
           <label className="block text-xs text-zinc-400 mb-1.5" htmlFor="display-name">

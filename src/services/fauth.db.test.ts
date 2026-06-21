@@ -15,10 +15,10 @@
 import assert from 'node:assert/strict';
 import test, { before, after, beforeEach } from 'node:test';
 import { getDbPool } from '../db/client.js';
-import { issueInvite, acceptInvite } from './invites.js';
+import { issueInvite, acceptInvite, previewInvite } from './invites.js';
 import { getCredential, verifyPassword, resolvePrincipalByEmail, issueAuthToken, resetPassword } from './passwordCredentials.js';
 import { getLockState, evaluateLock, recordFailure, recordSuccess } from './lockout.js';
-import { createSession, resolveSession, revokeSession } from './sessions.js';
+import { createSession, resolveSession, revokeSession, revokeOtherSessions } from './sessions.js';
 import { seedRootPrincipal, getRootPrincipal } from './principals.js';
 
 const PREFIX = '__test_fauth__';
@@ -148,6 +148,33 @@ test('reset token is single-use', async () => {
   const resetToken = await issueAuthToken(principal_id, 'password_reset');
   await resetPassword(resetToken, 'first-Reset-Passphrase-1!');
   await assert.rejects(() => resetPassword(resetToken, 'second-Reset-Passphrase-2!'), /invalid, already used, or expired/);
+});
+
+test('previewInvite [DEFERRED-061]: live invite → email+display_name; bad/consumed → null', async () => {
+  const e = email();
+  const { token } = await issueInvite({ email: e, createdBy: issuerId, display_name: `${PREFIX}preview` });
+  const p = await previewInvite(token);
+  assert.ok(p, 'a live invite previews');
+  assert.equal(p!.email, e);
+  assert.equal(p!.display_name, `${PREFIX}preview`);
+  assert.equal(p!.intended_kind, 'human');
+  assert.equal(await previewInvite('not-a-real-token'), null, 'an unknown token does not preview');
+  await acceptInvite({ token, password: STRONG_PW });
+  assert.equal(await previewInvite(token), null, 'an accepted invite is no longer previewable');
+});
+
+test('revokeOtherSessions [DEFERRED-061]: revokes all but the kept session', async () => {
+  const e = email();
+  const { token } = await issueInvite({ email: e, createdBy: issuerId });
+  const { principal_id } = await acceptInvite({ token, password: STRONG_PW });
+  const a = await createSession({ principalId: principal_id, aal: 1 });
+  const b = await createSession({ principalId: principal_id, aal: 1 });
+  const c = await createSession({ principalId: principal_id, aal: 1 });
+  const revoked = await revokeOtherSessions(principal_id, a.session.session_id);
+  assert.equal(revoked, 2, 'the two non-kept sessions are revoked');
+  assert.ok(await resolveSession(a.signedCookie), 'the kept (current) session still resolves');
+  assert.equal(await resolveSession(b.signedCookie), null, 'another session is revoked');
+  assert.equal(await resolveSession(c.signedCookie), null, 'another session is revoked');
 });
 
 test('recordSuccess clears soft state but a clean login after lock requires reset (hard stays)', async () => {

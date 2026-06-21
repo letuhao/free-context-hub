@@ -37,13 +37,21 @@
 
 ## DEFERRED-061
 
-- **Title:** GUI features removed during contract reconcile for lack of a backend endpoint
-- **Status:** OPEN (2026-06-21, session 14). During the S4↔S3 / S2↔S1 contract reconcile, several GUI affordances had
-  no corresponding backend route and were short-circuited (not fabricated): the **auth-policy panel** + **"revoke all
-  other sessions"** on `/settings/sessions`; the **invite-preview (GET)** + **email-verify** steps on `/register`.
-- **Resolution:** either build the backing endpoints (`GET /api/auth/policy` + `PATCH`, `DELETE /api/auth/sessions?scope=others`,
-  `GET /api/auth/register?token=` preview, an email-verify step) or remove the UI affordances permanently.
-- **Trigger:** when the F-AUTH human-login flow is taken to full production E2E.
+- **Title:** GUI features short-circuited during contract reconcile for lack of a backend endpoint
+- **Status:** ✅ **DONE (session 15)** — built the two valuable ones; the two needing absent infra are permanently
+  removed.
+  - **"Sign out all other sessions" ✅ BUILT:** `POST /api/auth/sessions/revoke-others` (session + CSRF) →
+    `revokeOtherSessions(principalId, currentSessionId)`; `/settings/sessions` shows a "Sign out other sessions (N)"
+    action behind a confirm. Test: `revokeOtherSessions` keeps the current session, revokes the rest.
+  - **Invite-preview ✅ BUILT:** `GET /api/auth/invite?token=…` (public) → `previewInvite` returns the bound email +
+    suggested display_name for a LIVE invite (404 otherwise); `/register` previews it ("you're registering as X",
+    prefills the name, shows an "invite not valid" card for a bad/expired token). Test: live/bad/consumed previews.
+  - **Auth-policy panel (edit) — REMOVED:** the lockout/session/argon2 policy is env-configured
+    (`AUTH_LOCKOUT_*`, `AUTH_ARGON2_*`); a DB-backed editable policy store is out of scope. The stale "auth policy"
+    mention was removed from the `/settings/sessions` docstring.
+  - **Email-verify step — REMOVED:** there is no email delivery infra (the deployment is SSRF-hardened / may be
+    air-gapped); a verify round-trip with no transport is misleading. `/register` goes straight accept → MFA, as built.
+- **Closed:** the F-AUTH human-login flow reached production E2E (DEFERRED-059); these were resolved alongside.
 
 ## DEFERRED-060
 
