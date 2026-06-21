@@ -130,6 +130,10 @@ export async function listPrincipals(): Promise<Principal[]> {
  *   - The ROOT principal's status is axiomatically `active` and cannot be changed. Suspending or
  *     retiring root would brick the trust anchor with no recovery (seedRootPrincipal would still
  *     CONFLICT on the reserved is_root slot). [adversary F1a #1]
+ *   - [DEFERRED-054] The SYSTEM principal's status is likewise protected. It is a hard singleton
+ *     (principals_single_system_uniq — one row EVER), and it stamps the worker's prepared roots; suspending
+ *     or retiring it strips authorization from every root it stamped → the index/embed/knowledge pipeline
+ *     breaks worker-wide. Rotation (delete + reseed) is an explicit destructive op, NOT this normal path.
  *   - `retired` is TERMINAL — no transition out of it. A deliberately decommissioned identity must
  *     not be silently resurrected. (suspended ⇄ active stays reversible — that is suspension's
  *     purpose vs retirement.) [adversary F1a #2]
@@ -144,7 +148,7 @@ export async function setPrincipalStatus(
   const pool = getDbPool();
   const res = await pool.query<Principal>(
     `UPDATE principals SET status = $2
-       WHERE principal_id = $1 AND is_root = false AND status <> 'retired'
+       WHERE principal_id = $1 AND is_root = false AND is_system = false AND status <> 'retired'
        RETURNING ${COLS}`,
     [principalId, status],
   );
@@ -156,6 +160,9 @@ export async function setPrincipalStatus(
     }
     if (cur.is_root) {
       throw new ContextHubError('CONFLICT', 'The root principal status is axiomatic and cannot be changed.');
+    }
+    if (cur.is_system) {
+      throw new ContextHubError('CONFLICT', 'The system principal status is protected (it is the singleton worker identity); rotate it via an explicit delete + reseed, not a status change.');
     }
     // cur.status === 'retired' (terminal) is the only remaining reason.
     throw new ContextHubError('CONFLICT', 'retired is a terminal status; the principal cannot be reactivated.');

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { analyzeCommitImpact, ingestGitHistory } from './gitIntelligence.js';
 import { claimNextQueuedJob, claimQueuedJobById, completeJob, enqueueJob, failJob, type JobType } from './jobQueue.js';
 import { assertAuthorized, hasGlobalGrant } from './authorize.js';
+import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
 import { indexProject } from './indexer.js';
 import { buildFaq } from './faqBuilder.js';
@@ -615,21 +616,32 @@ export async function runJobById(
   result?: Record<string, unknown>;
   error?: string;
 }> {
-  const job = await claimQueuedJobById(jobId);
-  if (!job) return { status: 'idle' };
+  // [DEFERRED-051] Gate BEFORE claiming. Peek the job's project_id with a non-claiming SELECT and
+  // authorize on it FIRST; only then claim. Previously the gate ran AFTER claimQueuedJobById marked the
+  // job `running`, so a denied caller stranded the job in `running` (latent — the worker, system
+  // principal, is never denied). A not-queued/missing job peeks to null → idle (unchanged). TOCTOU on
+  // project_id is benign: a job's project_id never changes.
+  const peek = await getDbPool().query<{ project_id: string | null }>(
+    `SELECT project_id FROM async_jobs WHERE job_id = $1 AND status = 'queued'`,
+    [jobId],
+  );
+  if (peek.rowCount === 0) return { status: 'idle' };
+  const peekedProjectId = peek.rows[0].project_id;
   // [F2g/REVIEW-CODE adv #3] Gate the rabbit/by-id execute path symmetrically with runNextJob, on the
-  // CLAIMED job's own project (jobs carry their own project_id, independent of the caller's scope): a
-  // project job → write@project; a global job (project_id null, e.g. leases.sweep) → globally
-  // privileged only. The worker passes the system principal (global write), so both branches pass;
-  // this rejects any non-covering principal UP FRONT instead of failing at the first guarded leaf.
-  if (job.project_id) {
-    await assertAuthorized(opts?.actingPrincipalId, 'write', { kind: 'project', id: job.project_id });
+  // job's own project (jobs carry their own project_id, independent of the caller's scope): a project job
+  // → write@project; a global job (project_id null, e.g. leases.sweep) → globally privileged only. The
+  // worker passes the system principal (global write), so both branches pass; this rejects any
+  // non-covering principal UP FRONT — before the claim, so a denial never strands the job.
+  if (peekedProjectId) {
+    await assertAuthorized(opts?.actingPrincipalId, 'write', { kind: 'project', id: peekedProjectId });
   } else if (!(await hasGlobalGrant(opts?.actingPrincipalId, 'write'))) {
     throw new ContextHubError(
       'BAD_REQUEST',
       'a global job may be executed only by a globally-privileged principal',
     );
   }
+  const job = await claimQueuedJobById(jobId);
+  if (!job) return { status: 'idle' };
   try {
     const started = Date.now();
     const phase6Types = new Set<JobType>([

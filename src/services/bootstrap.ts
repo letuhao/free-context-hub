@@ -57,11 +57,11 @@ export async function hasUsableRootCredential(): Promise<boolean> {
  * Matching `= 'write'` (not `IN ('write','admin')`) keeps the readiness probe aligned with that bound:
  * an `admin`-only system principal is NOT accepted as ready, so a deployment can't drift into an
  * admin worker just because admin happens to cover write.
- *   NOTE [review-impl #2]: this checks that a write grant EXISTS; it does not by itself FORBID a
- *   separately-granted admin/delegate on the same principal. Bounded-ness is guaranteed at CREATION —
- *   bootstrapSystem only ever grants `write` — so the supported flow stays bounded (proven by the
- *   admin/delegate-DENY test). An operator who manually grants the system principal admin takes an
- *   explicit privileged action outside this gate's scope.
+ *   [DEFERRED-053] LEAST-PRIVILEGE is now ENFORCED, not just assumed: the gate also requires the system
+ *   principal hold NO active grant OTHER than that single `global write`. So a hand-granted `global admin`
+ *   (or any broader/extra grant) makes the system identity NOT enforce-ready — the operator must revoke it
+ *   back to exactly-write. (`global write` already covers read via the capability lattice, so one grant
+ *   suffices.) bootstrapSystem only ever mints `global write`, so the supported flow is unaffected.
  * The granted_by-root join [REVIEW-DESIGN adv #3a] stops a dangling/orphaned grant from rubber-stamping
  * enforce-ready. REAL DB check — independent of MCP_AUTH_ENABLED — unlike hasGlobalGrant (which
  * short-circuits true under auth-off).
@@ -76,7 +76,14 @@ export async function hasUsableSystemIdentity(): Promise<boolean> {
         AND g.revoked_at IS NULL
         AND g.scope_type = 'global'
         AND g.capability = 'write'
-        AND gr.is_root = true AND gr.status = 'active'`,
+        AND gr.is_root = true AND gr.status = 'active'
+        -- [DEFERRED-053] and the system principal holds NOTHING beyond that single global-write grant.
+        AND NOT EXISTS (
+          SELECT 1 FROM grants gx
+           WHERE gx.grantee_principal = sp.principal_id
+             AND gx.revoked_at IS NULL
+             AND NOT (gx.scope_type = 'global' AND gx.capability = 'write')
+        )`,
   );
   return res.rows[0].n > 0;
 }

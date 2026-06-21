@@ -18,7 +18,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { assertAuthorized } from './authorize.js';
 import { runNextJob, runJobById } from './jobExecutor.js';
-import { createPrincipal, getRootPrincipal, seedRootPrincipal, getSystemPrincipal } from './principals.js';
+import { createPrincipal, getRootPrincipal, seedRootPrincipal, getSystemPrincipal, setPrincipalStatus } from './principals.js';
 import { createGrant } from './grants.js';
 import { bootstrapSystem, hasUsableSystemIdentity } from './bootstrap.js';
 import { ContextHubError } from '../core/errors.js';
@@ -146,13 +146,43 @@ test('runJobById(index.run) under the system identity → executes with NO authz
     await fs.rm(tmp, { recursive: true, force: true }).catch(() => {});
   }
 });
-test('runJobById(index.run) with a principal that cannot write the job project → FORBIDDEN up front (gate)', async () => {
+test('runJobById(index.run) with a principal that cannot write the job project → FORBIDDEN up front (gate), and the job is NOT stranded [DEFERRED-051]', async () => {
   const pool = getDbPool();
   const idxProj = `${PREFIX}idxproj2`;
   await pool.query(`INSERT INTO projects (project_id, name) VALUES ($1,$1) ON CONFLICT DO NOTHING`, [idxProj]);
   const jobId = await seedQueuedJob(idxProj, 'index.run', { root: '/tmp/none' });
   // projWriter holds write@P, NOT write@idxProj → the runJobById gate denies before executeByType.
   await assert.rejects(runJobById(jobId, { actingPrincipalId: projWriter }), isForbidden);
+  // [DEFERRED-051] the denial must NOT have claimed the job — it stays 'queued', not stranded 'running'.
+  const after = await pool.query<{ status: string }>(`SELECT status FROM async_jobs WHERE job_id = $1`, [jobId]);
+  assert.equal(after.rows[0]?.status, 'queued', 'a denied by-id execute must leave the job queued, not running');
+});
+
+// ── [DEFERRED-053] least-privilege ENFORCED: a system principal carrying anything beyond global-write
+// is NOT enforce-ready (so a hand-granted admin can't silently widen the worker identity). ──
+test('hasUsableSystemIdentity: false when the system principal holds a grant beyond global-write', async () => {
+  const pool = getDbPool();
+  assert.equal(await hasUsableSystemIdentity(), true);
+  const extra = await createGrant({ grantee_principal: sys, scope_type: 'global', scope_id: null, capability: 'admin', granted_by: grantor });
+  try {
+    assert.equal(await hasUsableSystemIdentity(), false, 'a broader (global admin) grant must fail enforce-ready');
+  } finally {
+    // HARD-delete the artifact (not revoke) so a later test that un-revokes by capability can't resurrect it.
+    await pool.query(`DELETE FROM grants WHERE grant_id = $1`, [extra.grant_id]);
+  }
+  assert.equal(await hasUsableSystemIdentity(), true, 'back to exactly global-write → enforce-ready again');
+});
+
+// ── [DEFERRED-054] the singleton system principal's status is protected (suspending it would brick the
+// worker). A normal principal still toggles. ──
+test('setPrincipalStatus: the system principal cannot be suspended or retired (protected singleton)', async () => {
+  const isConflict = (e: unknown) => e instanceof ContextHubError && e.code === 'CONFLICT';
+  await assert.rejects(setPrincipalStatus(sys, 'suspended'), isConflict);
+  await assert.rejects(setPrincipalStatus(sys, 'retired'), isConflict);
+  // a normal (non-root, non-system) principal still toggles freely.
+  const tmp = (await createPrincipal({ kind: 'agent', display_name: `${PREFIX}toggle` })).principal_id;
+  assert.equal((await setPrincipalStatus(tmp, 'suspended')).status, 'suspended');
+  assert.equal((await setPrincipalStatus(tmp, 'active')).status, 'active');
 });
 
 // ── 4. hasUsableSystemIdentity is the enforce-ready signal: revoke the grant → false → restore ──

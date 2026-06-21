@@ -6,7 +6,10 @@
 ## DEFERRED-054
 
 - **Title:** F2g/DEFERRED-048 — suspending the system principal nulls authorization for every root it stamped
-- **Status:** OPEN (2026-06-20). LOW. From DEFERRED-048 `/review-impl` #3. F2g-flip availability item.
+- **Status:** **RESOLVED (2026-06-21)** — `setPrincipalStatus` (principals.ts) now guards `is_system = false`
+  alongside `is_root = false`, so the singleton worker identity cannot be suspended/retired through the normal
+  path (a typed CONFLICT explains rotation = explicit delete+reseed). Test in `system-identity-authz.test.ts`.
+  Part of the F2g-flip least-privilege batch (051-054). OPEN write-up:
 - **Context:** under enforcement a stored `repo_root` / `root_path` is honored only if its
   `*_authorized_by` stamp still `hasGlobalGrant`. If the dedicated system principal (which stamps the
   worker's own prepared roots) is suspended/retired, `hasGlobalGrant` returns false for it, so EVERY root
@@ -22,7 +25,11 @@
 ## DEFERRED-053
 
 - **Title:** F2g — `hasUsableSystemIdentity` ensures write EXISTS but does not forbid a hand-granted admin
-- **Status:** OPEN (2026-06-20). LOW. From F2g `/review-impl` #2. F2g-flip least-privilege item.
+- **Status:** **RESOLVED (2026-06-21)** — `hasUsableSystemIdentity` (bootstrap.ts) now also requires the
+  system principal hold NO active grant beyond the single `global write` (`NOT EXISTS` clause), so a
+  hand-granted admin/delegate fails enforce-ready. **Flip-runbook note:** a deployment whose system principal
+  carries extra grants will fail enforce-ready (the worker refuses to start) until trimmed to exactly
+  global-write. Test in `system-identity-authz.test.ts`. Part of the 051-054 batch. OPEN write-up:
 - **Context:** `hasUsableSystemIdentity` (src/services/bootstrap.ts) was tightened to require the system
   principal hold a `global write` grant EXACTLY (not `admin`), so an admin-only system principal is not
   accepted as ready. But it does not also assert the system principal LACKS a broader (admin/delegate/
@@ -36,7 +43,11 @@
 ## DEFERRED-052
 
 - **Title:** F2g — `loadLeafBodiesFromDb` is an unguarded raw read of `generated_documents`
-- **Status:** OPEN (2026-06-20). LOW. From F2g `/review-impl` #5. Latent (worker-only today).
+- **Status:** **RESOLVED (2026-06-21)** — `loadLeafBodiesFromDb` (builderMemoryLarge.ts) now threads
+  `actingPrincipalId` and `assertAuthorized(read, {project})` before its raw `generated_documents` read (it was
+  the first, unguarded DB op of a resumed build). Both `buildLargeRepoProjectMemory` call sites in jobExecutor
+  pass the principal (verified), so the worker's resume path is unaffected. Construction-verified (private
+  worker-only). Part of the 051-054 batch. OPEN write-up:
 - **Context:** `loadLeafBodiesFromDb` (src/services/builderMemoryLarge.ts:~205) issues a raw
   `SELECT … FROM generated_documents` with NO `assertAuthorized`. It is called only by
   `buildLargeRepoProjectMemory` (the background worker, system principal, reading its OWN run's leaves),
@@ -48,7 +59,10 @@
 ## DEFERRED-051
 
 - **Title:** F2g — `runJobById` gate runs AFTER claim (claims-then-strands a job on denial)
-- **Status:** OPEN (2026-06-20). LOW. From F2g `/review-impl` #4. Latent (worker-only today).
+- **Status:** **RESOLVED (2026-06-21)** — `runJobById` (jobExecutor.ts) now peeks the job's `project_id` with
+  a non-claiming SELECT and authorizes BEFORE `claimQueuedJobById`, so a denied caller no longer strands the job
+  in `running` (it stays `queued`). Test asserts the not-stranded invariant in `system-identity-authz.test.ts`.
+  Part of the 051-054 batch. OPEN write-up:
 - **Context:** `runJobById` (src/services/jobExecutor.ts) claims the job (`claimQueuedJobById` → marks it
   `running`) BEFORE its authorization gate throws, so a denied caller leaves the job stranded in `running`
   rather than requeued. `runJobById` is invoked ONLY by the worker (system principal, never denied), so

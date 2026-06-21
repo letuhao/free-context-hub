@@ -5,6 +5,7 @@ import fg from 'fast-glob';
 
 import { getDbPool } from '../db/client.js';
 import { getEnv } from '../env.js';
+import { assertAuthorized } from './authorize.js';
 import { upsertGeneratedDocument } from './generatedDocs.js';
 import { builderChatCompletion } from './builderMemory.js';
 import { loadIgnorePatternsFromRoot } from '../utils/ignore.js';
@@ -205,7 +206,12 @@ function moduleKeyForShard(shardId: string): string {
 async function loadLeafBodiesFromDb(
   projectId: string,
   runId: string,
+  actingPrincipalId?: string | null,
 ): Promise<Map<number, { shardId: string; moduleKey: string; text: string; docKey: string }>> {
+  // [DEFERRED-052] This raw read of generated_documents runs as the FIRST DB op of a resumed build (before
+  // the first upsert gate), so gate it explicitly on project read. Worker-internal today (system principal,
+  // global write ⊃ read); the guard makes it fail-closed if ever reached from a non-reader. auth-off → no-op.
+  await assertAuthorized(actingPrincipalId, 'read', { kind: 'project', id: projectId });
   const pool = getDbPool();
   const prefix = `phase6/builder_memory/leaf/${runId}/`;
   const res = await pool.query<{ content: string; doc_key: string; metadata: Record<string, unknown> }>(
@@ -372,7 +378,7 @@ export async function buildLargeRepoProjectMemory(
 
   const existingLeaves =
     resumeFrom > 0
-      ? await loadLeafBodiesFromDb(input.projectId, runId)
+      ? await loadLeafBodiesFromDb(input.projectId, runId, input.actingPrincipalId)
       : new Map<number, { shardId: string; moduleKey: string; text: string; docKey: string }>();
 
   await upsertGeneratedDocument({

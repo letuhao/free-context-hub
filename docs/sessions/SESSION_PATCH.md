@@ -1,3 +1,40 @@
+# CHECKPOINT — DEFERRED-051/052/053/054: F2g-flip least-privilege & robustness batch (2026-06-21, session 13)
+
+**Branch:** `feature/actor-data-boundary`. Auth **OFF** (inert) — flip + Domain 8 remain human-gated, NOT
+touched. Full unit suite **1257 / 1238 pass / 0 fail / 19 skip**, tsc clean. POST-REVIEW honored. Four latent
+F2g-flip hardening items closed in one batch.
+
+- **DEFERRED-051** (`jobExecutor.runJobById`): peek the job's `project_id` with a non-claiming SELECT and gate
+  BEFORE `claimQueuedJobById` — a denied caller no longer strands the job in `running` (stays `queued`).
+- **DEFERRED-052** (`builderMemoryLarge.loadLeafBodiesFromDb`): thread `actingPrincipalId` + `assertAuthorized
+  read@project` before the raw `generated_documents` read (the first, unguarded DB op of a resumed build). Both
+  parent call sites pass the principal (verified), so the worker's resume path is unaffected.
+- **DEFERRED-053** (`bootstrap.hasUsableSystemIdentity`): also require the system principal hold NOTHING beyond
+  the single `global write` (`NOT EXISTS` clause) — a hand-granted admin/delegate now fails enforce-ready.
+- **DEFERRED-054** (`principals.setPrincipalStatus`): guard `is_system = false` alongside `is_root = false` — the
+  singleton worker identity can't be suspended/retired (a typed CONFLICT explains rotation = delete+reseed).
+
+**⚠ FLIP-RUNBOOK note (from 053):** before flipping `MCP_AUTH_ENABLED`, the system principal must hold EXACTLY
+`global write` — if it carries any extra grant, `hasUsableSystemIdentity` returns false and the worker refuses to
+start. Trim it to exactly-write first. (Operator order stays: `bootstrap:root` → `bootstrap:system` → verify
+`hasUsableSystemIdentity` → flip.)
+
+**Reviews:** 2-stage REVIEW-CODE self-review + `/review-impl` (no HIGH/MED; verified the 052 threading won't break
+resume, 051 has a single gate, 054 has no bypass `SET status` path). **VERIFY note:** fixed a test-order
+interaction — the 053 artifact admin grant was resurrected by the original revoke/restore test's
+`capability IN (…)` un-revoke → switched the artifact cleanup to a hard DELETE.
+
+**Modified:** `src/services/jobExecutor.ts`, `builderMemoryLarge.ts`, `bootstrap.ts`, `principals.ts`,
+`system-identity-authz.test.ts` (+051 not-stranded, +053 broader-grant-deny, +054 protected-status). **New:**
+the 051-054 CLARIFY/DESIGN doc.
+
+**What's next (human-gated):** **Domain 8** — retire the legacy REST `requireScope`/`requireRole` middleware so
+`authorize()` is the SOLE gate (the last structural prerequisite) — then the `MCP_AUTH_ENABLED` default flip
+itself (own checkpoint + cold-start security adversary + live auth-ON verification). The flip-readiness deferred
+board is now clear except Domain 8.
+
+---
+
 # CHECKPOINT — DEFERRED-050: notification user-identity isolation (the user IS the principal) (2026-06-21, session 13)
 
 **Branch:** `feature/actor-data-boundary`. Auth stays **OFF** (inert) — flip + Domain 8 remain human-gated, NOT
