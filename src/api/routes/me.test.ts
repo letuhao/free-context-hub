@@ -12,7 +12,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildMeResponse } from './me.js';
+import { buildMeResponse, resolveMePrincipal } from './me.js';
+import type { Principal } from '../../services/principals.js';
 
 function stubEnv(MCP_AUTH_ENABLED: boolean): () => { MCP_AUTH_ENABLED: boolean } {
   return () => ({ MCP_AUTH_ENABLED });
@@ -57,4 +58,42 @@ test('buildMeResponse returns restrictive identity when scope is attached withou
   assert.equal(body.project_scope, 'proj-A');
   assert.equal(body.auth_enabled, true);
   assert.equal(body.key_source, 'db_key');
+});
+
+// Actor Data Boundary S1 — buildMeResponse always sets principal:null (the router overlays it async).
+test('buildMeResponse sets principal to null (router overlays it)', () => {
+  assert.equal(buildMeResponse({}, stubEnv(false)).principal, null);
+  assert.equal(buildMeResponse({ apiKeyRole: 'admin' }, stubEnv(true)).principal, null);
+});
+
+// Actor Data Boundary S1 — resolveMePrincipal returns the footer subset for a bound principal.
+const FAKE_PRINCIPAL: Principal = {
+  principal_id: 'p-1',
+  kind: 'human',
+  status: 'active',
+  display_name: 'Ada',
+  is_root: false,
+  is_system: false,
+  created_at: '2026-06-21T00:00:00Z',
+};
+
+test('resolveMePrincipal returns null when no principal id is bound', async () => {
+  assert.equal(await resolveMePrincipal(null, async () => FAKE_PRINCIPAL), null);
+  assert.equal(await resolveMePrincipal('', async () => FAKE_PRINCIPAL), null);
+});
+
+test('resolveMePrincipal returns null when the lookup misses', async () => {
+  assert.equal(await resolveMePrincipal('p-missing', async () => null), null);
+});
+
+test('resolveMePrincipal returns the footer subset for a bound principal', async () => {
+  const p = await resolveMePrincipal('p-1', async () => FAKE_PRINCIPAL);
+  assert.deepEqual(p, {
+    principal_id: 'p-1',
+    display_name: 'Ada',
+    kind: 'human',
+    status: 'active',
+    is_root: false,
+    is_system: false,
+  });
 });
