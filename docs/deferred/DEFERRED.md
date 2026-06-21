@@ -20,11 +20,12 @@
 
 ## DEFERRED-062
 
-- **Title:** Governance GUI polish — sidebar account footer + scope-gated nav visibility + FeatureToggles import-swap
-- **Status:** OPEN (2026-06-21, session 14). Deferred during the /warp reconcile as non-load-bearing polish.
-- **Items:** (1) the sidebar **account footer** ("signed in as {display_name}" + sign-out via `authApi.logout`,
-  reading `governanceApi.me()`) was specced in §2.3 but not wired — sign-out currently lives on `/settings/sessions`.
-  (2) the **Governance nav group is not scope-gated** (visible to all; every page is admin@global-gated at the API
+- **Title:** Governance GUI polish — scope-gated nav visibility + FeatureToggles import-swap (account footer ✅ done)
+- **Status:** OPEN (2026-06-21, session 14; item 1 closed session 15). Deferred during the /warp reconcile as
+  non-load-bearing polish.
+- **Items:** (1) ✅ **DONE (session 15)** — the sidebar **account footer** (`gui/src/components/account-footer.tsx`,
+  wired into `sidebar.tsx`) now shows the signed-in `display_name` + a sign-out button (`authApi.me` / `authApi.logout`
+  → `/login`); renders nothing under auth-off / no-session. (2) the **Governance nav group is not scope-gated** (visible to all; every page is admin@global-gated at the API
   regardless, so no security gap — cosmetic). (3) S6 built `gui/src/components/feature-toggles.tsx` but the
   **import-swap** into `gui/src/app/projects/settings/page.tsx` (replace the inline Features block) was deferred —
   the component is unused until swapped; behaviourally identical so the page works unchanged.

@@ -6,6 +6,7 @@ import { useState, useEffect, type ReactNode } from "react";
 import { useProject } from "@/contexts/project-context";
 import { ProjectSelector } from "@/components/project-selector";
 import { CreateProjectModal } from "@/components/create-project-modal";
+import { AccountFooter } from "@/components/account-footer";
 import { cn } from "@/lib/cn";
 import {
   LayoutDashboard, MessageSquare, BookOpen, Shield,
@@ -250,6 +251,8 @@ export function Sidebar() {
           return renderItem(entry);
         })}
       </nav>
+
+      <AccountFooter showLabel={showLabel} />
 
       <div className="border-t border-zinc-800 px-3 py-2.5 flex items-center justify-between">
         <div className="flex items-center gap-1.5">
