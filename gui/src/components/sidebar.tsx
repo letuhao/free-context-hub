@@ -12,6 +12,7 @@ import {
   FileText, Search, Network, FolderOpen, Users, Files,
   GitBranch, Link2, Zap, Settings, Bot, BarChart3, CheckCircle2,
   PanelLeftClose, PanelLeftOpen, ClipboardCheck, Activity, Menu, X, Fingerprint,
+  ShieldCheck, GitFork, KeyRound, UserCog,
 } from "lucide-react";
 
 type NavItem = { href: string; label: string; icon: ReactNode; badge?: number };
@@ -56,6 +57,18 @@ const buildNavGroups = (reviewCount: number, notifCount: number): (NavItem | Nav
       { href: "/settings/lesson-types", label: "Lesson Types", icon: <BookOpen size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/agents", label: "Agent Audit", icon: <Fingerprint size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/settings/access", label: "Access Control", icon: <Settings size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
+      { href: "/settings/sessions", label: "Sessions & Security", icon: <ShieldCheck size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
+    ],
+  },
+  {
+    // Actor Data Boundary completion (warp §2.3). NOTE: visibility is NOT scope-gated yet
+    // (remaining reconcile polish); every page here is admin@global-gated at the API regardless.
+    title: "Governance",
+    items: [
+      { href: "/identity", label: "Identity", icon: <UserCog size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
+      { href: "/delegation", label: "Delegation", icon: <GitFork size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
+      { href: "/authorization", label: "Authorization", icon: <ShieldCheck size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
+      { href: "/governance/access-review", label: "NHI Access Review", icon: <KeyRound size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
     ],
   },
 ];

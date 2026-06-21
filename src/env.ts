@@ -101,6 +101,26 @@ const EnvSchema = z.object({
   // bootstrap entirely (refuse). Keep it secret and rotate it after first use.
   ROOT_BOOTSTRAP_TOKEN: z.string().min(1).optional(),
 
+  // ── F-AUTH (warp S3): human authentication / session / lockout config ──
+  // The S3 services read these via process.env with the same defaults; declared here so they are
+  // validated + documented (§2.9 — no hardcoded auth params). AUTH_SESSION_SIGNING_SECRET MUST be
+  // set in production (falls back to ROOT_BOOTSTRAP_TOKEN, then a dev-only constant — see sessions.ts).
+  AUTH_SESSION_SIGNING_SECRET: z.string().min(1).optional(),
+  AUTH_SESSION_COOKIE_NAME: z.string().min(1).default('chub_session'),
+  AUTH_COOKIE_SAMESITE: z.enum(['lax', 'strict', 'none']).default('lax'),
+  AUTH_SESSION_ABSOLUTE_TTL_SECONDS: z.coerce.number().int().positive().default(2592000),
+  AUTH_SESSION_IDLE_TTL_SECONDS: z.coerce.number().int().positive().default(900),
+  AUTH_LOCKOUT_SOFT_THRESHOLD: z.coerce.number().int().positive().default(3),
+  AUTH_LOCKOUT_HARD_THRESHOLD: z.coerce.number().int().positive().default(10),
+  AUTH_LOCKOUT_SOFT_BASE_DELAY_SECONDS: z.coerce.number().int().positive().default(5),
+  AUTH_LOCKOUT_SOFT_MAX_DELAY_SECONDS: z.coerce.number().int().positive().default(300),
+  AUTH_ARGON2_MEMORY_COST: z.coerce.number().int().positive().default(65536),
+  AUTH_ARGON2_TIME_COST: z.coerce.number().int().positive().default(3),
+  AUTH_ARGON2_PARALLELISM: z.coerce.number().int().positive().default(4),
+  AUTH_TOTP_ISSUER: z.string().min(1).default('ContextHub'),
+  AUTH_INVITE_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
+  AUTH_RESET_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
+
   // Single-port gateway: the human GUI is same-origin, so the REST API does NOT
   // need permissive CORS. This is a comma-separated allowlist of origins that
   // may make cross-origin browser requests with credentials. Default empty =

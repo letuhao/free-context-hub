@@ -24,7 +24,7 @@ import { systemRouter, publicSystemRouter } from './routes/system.js';
 import { projectGroupsRouter } from './routes/projectGroups.js';
 import { lessonTypesRouter } from './routes/lessonTypes.js';
 import { auditRouter } from './routes/audit.js';
-import { apiKeysRouter } from './routes/apiKeys.js';
+import { apiKeysRouter, accessReviewRouter } from './routes/apiKeys.js';
 import { artifactLeasesRouter } from './routes/artifactLeases.js';  // Phase 13 Sprint 13.1
 import { meRouter } from './routes/me.js';                          // Phase 13 Sprint 13.2
 import { reviewRequestsRouter } from './routes/reviewRequests.js';  // Phase 13 Sprint 13.3
@@ -35,6 +35,14 @@ import { requestsRouter } from './routes/requests.js';              // Phase 15 
 import { motionsRouter } from './routes/motions.js';                // Phase 15 Sprint 15.4
 import { intakeRouter } from './routes/intake.js';                  // Phase 15 Sprint 15.5
 import { disputesRouter } from './routes/disputes.js';              // Phase 15 Sprint 15.5
+// Actor Data Boundary completion (warp) — governance REST (S1) + F-AUTH (S3)
+import { bootstrapRouter } from './routes/bootstrap.js';            // S1 — pre-auth (ROOT_BOOTSTRAP_TOKEN)
+import { principalsRouter } from './routes/principals.js';          // S1 — admin@global
+import { grantsRouter } from './routes/grants.js';                  // S1 — admin@global
+import { authorizationRouter } from './routes/authorization.js';    // S1 — admin@global
+import { authRouter } from './routes/auth.js';                      // S3 — pre-auth (human login)
+import { invitesRouter } from './routes/invites.js';                // S3 — admin
+import { sessionAuth } from './middleware/sessionAuth.js';          // S3 — cooperative cookie auth
 
 /**
  * Creates the REST API Express app.
@@ -97,8 +105,18 @@ export function createApiApp() {
     );
   }
 
+  // ── PRE-AUTH routes (warp: must be reachable WITHOUT a credential) ──
+  // F4 guard: these mount BEFORE the bearerAuth gate so login/register/bootstrap
+  // are reachable to establish the first credential. They gate internally
+  // (authRouter: public auth flows; bootstrapRouter: ROOT_BOOTSTRAP_TOKEN).
+  app.use('/api/auth', authRouter);          // S3 — human login/register/password/mfa/sessions
+  app.use('/api/bootstrap', bootstrapRouter); // S1 — first-run wizard (token-gated)
+
   // All other routes require Bearer token
   app.use('/api', bearerAuth);
+  // S3 — cooperative session-cookie auth, IMMEDIATELY after bearerAuth. No-ops if a
+  // Bearer principal is already attached; else resolves the cookie. Never rejects on its own.
+  app.use('/api', sessionAuth);
 
   // System info (model names, feature flags) — behind auth (MED-1: recon).
   app.use('/api/system', systemRouter);
@@ -158,6 +176,13 @@ export function createApiApp() {
   // ── Routes: admin ──
   app.use('/api/lesson-types', lessonTypesRouter);
   app.use('/api/api-keys', apiKeysRouter);
+  // Actor Data Boundary completion (warp) — governance + NHI admin surface.
+  // Each router gates internally via assertAuthorized(..., 'admin', {kind:'global'}).
+  app.use('/api/principals', principalsRouter);     // S1
+  app.use('/api/grants', grantsRouter);             // S1
+  app.use('/api/authz', authorizationRouter);       // S1 (decision log + explain)
+  app.use('/api/invites', invitesRouter);           // S3
+  app.use('/api/access-review', accessReviewRouter); // S5 (NHI)
 
   // ── Error handler (must be last) ──
   app.use(errorHandler);

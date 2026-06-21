@@ -4897,6 +4897,47 @@ function createMcpToolsServer() {
     },
   );
 
+  // Actor Data Boundary completion (warp S5/§2.8) — NHI ephemeral credential minting.
+  server.registerTool(
+    'mint_ephemeral_key',
+    {
+      description:
+        'Mint a short-lived, principal-bound API key for CI / one-shot agents. Auto-expires at TTL ' +
+        '(default 1h, max 24h) — no review, rotation, or cleanup. Returns the full key ONCE. Admin@global only.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        name: z.string().min(1).max(128).describe('Human-readable key name (unique among active keys).'),
+        principal_id: z.string().uuid().optional()
+          .describe('Bind to this existing, active, non-root principal. Omit for an ownerless dev/CI key.'),
+        role: z.enum(['admin', 'writer', 'reader']).optional().describe("Defaults to 'writer'."),
+        project_scope: z.string().optional().describe('Restrict to one project_id; omit for all projects.'),
+        ttl_minutes: z.number().int().positive().max(1440).optional()
+          .describe('Lifetime in minutes. Default 60, capped at 1440 (24h).'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+    },
+    async ({ workspace_token, name, principal_id, role, project_scope, ttl_minutes, output_format }) => {
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const { assertAuthorized } = await import('../services/authorize.js');
+      await assertAuthorized(actingPrincipalId, 'admin', { kind: 'global' });
+      const { createEphemeralApiKey } = await import('../services/apiKeys.js');
+      const result = await createEphemeralApiKey({
+        name,
+        role,
+        project_scope,
+        principal_id,
+        ttlMs: ttl_minutes !== undefined ? ttl_minutes * 60_000 : undefined,
+        created_by: actingPrincipalId ?? undefined,
+      });
+      const summary = `mint_ephemeral_key: created name=${name} expires_at=${result.expires_at}`;
+      return formatToolResponse(
+        { status: 'created', key: result.key, expires_at: result.expires_at, entry: result.entry },
+        summary,
+        output_format,
+      );
+    },
+  );
+
   return server;
 }
 
