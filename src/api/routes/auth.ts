@@ -80,14 +80,16 @@ router.post('/login', async (req, res, next) => {
       return;
     }
     // Lockout check BEFORE verifying (a locked account never reveals password validity).
+    // [DEFERRED-060 C2] A locked account must look IDENTICAL to a wrong password / unknown email.
+    // The previous 429 "Account locked" was an account-existence oracle: only a REAL account that had
+    // accumulated failures could ever reach a lock, so a 429 confirmed the email exists (a non-existent
+    // email always 401s). We return the SAME generic 401 instead. The lock is still ENFORCED — we return
+    // BEFORE verifying, so a locked account cannot authenticate even with the correct password; recovery
+    // is via the password-reset flow (which clears the lock, OWASP 2.2.3).
     const lockState = await getLockState(principalId);
-    if (lockState) {
-      const ev = evaluateLock(lockState);
-      if (ev.locked) {
-        if (ev.retryAfterSeconds > 0) res.setHeader('Retry-After', String(ev.retryAfterSeconds));
-        res.status(429).json({ error: ev.reason === 'hard' ? 'Account locked. Contact an administrator or reset your password.' : 'Too many attempts. Try again later.', reason: ev.reason, retry_after_seconds: ev.retryAfterSeconds });
-        return;
-      }
+    if (lockState && evaluateLock(lockState).locked) {
+      res.status(401).json({ error: 'Invalid email or password' });
+      return;
     }
     const cred = await getCredential(principalId);
     const ok = cred ? await verifyPassword(cred.password_hash, password) : false;
@@ -122,10 +124,11 @@ router.post('/mfa/verify', async (req, res, next) => {
     }
     const principalId = await resolvePrincipalByEmail(email);
     if (!principalId) { res.status(401).json({ error: 'Invalid credentials' }); return; }
+    // [DEFERRED-060 C2] generic 401 on lock (no 429 oracle), consistent with the login path above.
     const lockState = await getLockState(principalId);
-    if (lockState) {
-      const ev = evaluateLock(lockState);
-      if (ev.locked) { res.status(429).json({ error: 'Too many attempts.', reason: ev.reason }); return; }
+    if (lockState && evaluateLock(lockState).locked) {
+      res.status(401).json({ error: 'Invalid credentials' });
+      return;
     }
     const cred = await getCredential(principalId);
     const pwOk = cred ? await verifyPassword(cred.password_hash, password) : false;

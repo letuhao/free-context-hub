@@ -43,8 +43,8 @@
 
 ## DEFERRED-060
 
-- **Title:** F-AUTH security-hardening residuals from the cold-start adversary (C1 ✅ + /api/me ✅; C2/A4 open)
-- **Status:** PARTIALLY DONE — C1 + /api/me consistency closed session 15; C2/A4/C3/C4 remain.
+- **Title:** F-AUTH security-hardening residuals from the cold-start adversary (C1 ✅ /api/me ✅ C2 ✅; A4 open)
+- **Status:** MOSTLY DONE — C1 + /api/me consistency + C2 closed session 15; A4/C3/C4 remain (lower priority).
   - **C1 (LOW) ✅ DONE (session 15):** `csrfGuard` is now applied to the session-scoped `/api/auth` mutations
     (`logout`, `sessions/:id DELETE`, `mfa/enroll`, `mfa/enroll/verify`) which mount before the global guard.
     Live: logout without `X-CSRF-Token` → 403, with → 200. Tests: hardened E2E + headerless integration.
@@ -52,10 +52,13 @@
     with no `Authorization` header and no resolved session (junk/expired cookie) → 401 instead of an env-token admin
     identity. A real cookie session is labeled `key_source:'session'` with role DERIVED from the principal's global
     grants (no blanket `admin`). Live: junk cookie → 401; operator session → `key_source:session, role:admin`.
-  - **C2 (MEDIUM, pre-existing — OPEN, needs a decision):** the login lockout `429 "Account locked"` vs `401` is an
-    account-existence oracle (an existing email can be driven to 429; non-existent always 401). Options: (a) generic
-    401 for the locked case (kills the oracle, but a locked user isn't told to reset); (b) apply throttle/lock to
-    non-existent emails too (keeps the 429 UX but needs phantom-account state + a storage/DoS guard). Not this work.
+  - **C2 (MEDIUM, pre-existing) ✅ DONE (session 15):** closed the login lockout enumeration oracle. Both the login
+    and mfa/verify lock paths now return the SAME generic 401 as a wrong password (no `429`, no "Account locked"
+    message, no `retry_after`). The lock is still ENFORCED — the check returns BEFORE password verification, so a
+    locked account can't authenticate even with the right password (recovery = password reset, which clears the lock).
+    The GUI's soft-lock countdown screen (now-dead) was removed. Decision: user chose the generic-401 approach over
+    phantom-account throttling. Test: locked account + correct password → generic 401 (e2e). Live: non-existent email
+    → 401; operator login → 200.
   - **A4 (MEDIUM, accepted tradeoff):** hard-lockout is an account-DoS vector (10 bad passwords locks a known email
     until admin/reset). Inherent to account lockout; mitigate with auto-expiring hard-lock or per-IP throttling.
   - **C3/C4 (LOW):** dummy-verify warmup + forgot-token INSERT timing — negligible; optional.

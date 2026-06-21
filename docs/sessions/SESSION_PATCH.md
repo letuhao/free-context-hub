@@ -21,8 +21,11 @@ by resolveMcpCaller (an explicit arg always wins). `.mcp.json` / `.cursor/.mcp.j
   cookie) → 401 (was leaking an env-token `role:admin` identity). A real session is now labeled `key_source:'session'`
   with role derived from the principal's global grants. Live: junk cookie → 401; operator → `key_source:session,
   role:admin`.
-- **Still open (tracked):** C2 (lockout 429-vs-401 enumeration oracle — needs a UX-vs-security decision), A4 (lockout
-  DoS), C3/C4 (timing, negligible).
+- **C2 (lockout enumeration oracle) ✅:** login + mfa/verify lock paths now return the SAME generic 401 as a wrong
+  password (no 429 / "Account locked" / retry_after) — the lock is still enforced (returns before verify). Removed the
+  GUI's now-dead soft-lock countdown screen. (User chose generic-401 over phantom-account throttling.) Live: non-existent
+  email → 401, operator login → 200. Test: locked account + correct password → generic 401.
+- **Still open (tracked):** A4 (lockout DoS), C3/C4 (timing, negligible).
 
 **Operational note:** running the full test suite against the shared live DB leaves coordination actor strings that trip
 the enforce-ready boot gate — `npm run migrate:coordination-actors` + restart mcp clears it (test-DB-vs-prod-DB artifact;

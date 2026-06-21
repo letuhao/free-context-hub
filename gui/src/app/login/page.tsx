@@ -16,7 +16,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
-import { Lock, AlertTriangle, ShieldAlert } from "lucide-react";
+import { Lock, AlertTriangle } from "lucide-react";
 import { authApi, AuthApiError } from "@/lib/authApi";
 import { PreAuthShell, PreAuthCard } from "@/components/pre-auth-shell";
 
@@ -34,8 +34,9 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Soft lockout (State 3)
-  const [lockedSeconds, setLockedSeconds] = useState<number | null>(null);
+  // [DEFERRED-060 C2] No soft-lock countdown: login no longer returns a 429 "locked" (that response
+  // was an account-existence oracle). A locked account now returns the SAME generic 401 as a wrong
+  // password, so there is nothing lock-specific to surface here.
 
   // MFA challenge (State 2). The verify step re-submits email+password+code, so
   // we carry the credentials forward from the login attempt (kept only in memory).
@@ -65,15 +66,6 @@ export default function LoginPage() {
     };
   }, []);
 
-  // Countdown for the soft-lock timer.
-  useEffect(() => {
-    if (lockedSeconds === null || lockedSeconds <= 0) return;
-    const t = setInterval(() => {
-      setLockedSeconds((s) => (s === null ? null : s <= 1 ? null : s - 1));
-    }, 1000);
-    return () => clearInterval(t);
-  }, [lockedSeconds]);
-
   const handleLogin = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
@@ -89,13 +81,8 @@ export default function LoginPage() {
         }
       } catch (err) {
         if (err instanceof AuthApiError) {
-          if (err.status === 429) {
-            const retry = (err.body as any)?.retry_after_seconds;
-            setLockedSeconds(typeof retry === "number" ? retry : 300);
-          } else {
-            // Neutral message — never reveal whether the email exists.
-            setError("Incorrect email or password.");
-          }
+          // Neutral message — never reveal whether the email exists or is locked (DEFERRED-060 C2).
+          setError("Incorrect email or password.");
         } else {
           setError("Sign-in is unavailable right now. Try again shortly.");
         }
@@ -174,34 +161,6 @@ export default function LoginPage() {
           >
             Continue to console
           </Link>
-        </PreAuthCard>
-      </PreAuthShell>
-    );
-  }
-
-  // ── State 3: soft lockout ──
-  if (lockedSeconds !== null && lockedSeconds > 0) {
-    const mm = Math.floor(lockedSeconds / 60);
-    const ss = String(lockedSeconds % 60).padStart(2, "0");
-    return (
-      <PreAuthShell>
-        <PreAuthCard tone="warning">
-          <div className="flex items-center gap-2 mb-2">
-            <ShieldAlert size={16} className="text-amber-400" />
-            <h1 className="text-sm font-semibold text-amber-300">Too many attempts</h1>
-          </div>
-          <p className="text-xs text-zinc-400 mb-1">
-            Sign-in is temporarily paused for this account. Try again in{" "}
-            <span className="text-amber-300 font-medium">
-              {mm}:{ss}
-            </span>
-            .
-          </p>
-          <p className="text-[11px] text-zinc-600">
-            Soft lock — an ever-increasing delay after repeated failures (OWASP V6, ≤100 fails/hr).
-            It does not reset your hard-lock status and cannot be triggered against you by a
-            password-reset attempt.
-          </p>
         </PreAuthCard>
       </PreAuthShell>
     );

@@ -30,6 +30,7 @@ import { getDbPool } from '../db/client.js';
 import { issueInvite } from '../services/invites.js';
 import { seedRootPrincipal, getRootPrincipal } from '../services/principals.js';
 import { totpCode } from '../services/mfa.js';
+import { recordFailure } from '../services/lockout.js';
 
 process.env.MCP_AUTH_ENABLED = 'true';
 process.env.CONTEXT_HUB_WORKSPACE_TOKEN = 'test-token-for-env-validation';
@@ -185,4 +186,23 @@ test('hardened (auth-ON) human login E2E: register → login → /api/me → MFA
   const me2 = await call(app, 'GET', '/api/me', { cookie: cookie2 });
   assert.equal(me2.status, 200);
   assert.equal(me2.body.principal?.principal_id, operatorId, 'the AAL2 session is still the operator');
+});
+
+test('DEFERRED-060 C2: a locked account returns a generic 401 (no 429 oracle), lock still enforced', async () => {
+  const app = await realApp();
+  const email = `${PREFIX}${Math.random().toString(36).slice(2)}@example.com`;
+  const { token } = await issueInvite({ email, createdBy: issuerId, display_name: `${PREFIX}lockme` });
+  const reg = await call(app, 'POST', '/api/auth/register', { body: { token, password: STRONG_PW } });
+  assert.equal(reg.status, 201);
+  const pid: string = reg.body.principal_id;
+
+  // Drive past the hard-lock threshold (default 10).
+  for (let i = 0; i < 12; i++) await recordFailure(pid);
+
+  // Login with the CORRECT password — the lock must still DENY (return before verify), and the
+  // response must be the SAME generic 401 as a wrong password — never a 429 "locked" oracle.
+  const res = await call(app, 'POST', '/api/auth/login', { body: { email, password: STRONG_PW } });
+  assert.equal(res.status, 401, 'locked account → generic 401 (lock enforced; no 429 oracle)');
+  assert.equal(res.body.error, 'Invalid email or password', 'identical wording to a wrong-password failure');
+  assert.equal(res.body.reason, undefined, 'no lock reason / retry_after leaked');
 });
