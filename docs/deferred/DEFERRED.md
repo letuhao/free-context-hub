@@ -47,8 +47,8 @@
 
 ## DEFERRED-060
 
-- **Title:** F-AUTH security-hardening residuals from the cold-start adversary (C1 ✅ /api/me ✅ C2 ✅; A4 open)
-- **Status:** MOSTLY DONE — C1 + /api/me consistency + C2 closed session 15; A4/C3/C4 remain (lower priority).
+- **Title:** F-AUTH security-hardening residuals (C1 ✅ /api/me ✅ C2 ✅ A4 ✅; C3/C4 negligible)
+- **Status:** ✅ **DONE** — C1 + /api/me + C2 + A4 closed session 15. Only C3/C4 remain (negligible timing, optional).
   - **C1 (LOW) ✅ DONE (session 15):** `csrfGuard` is now applied to the session-scoped `/api/auth` mutations
     (`logout`, `sessions/:id DELETE`, `mfa/enroll`, `mfa/enroll/verify`) which mount before the global guard.
     Live: logout without `X-CSRF-Token` → 403, with → 200. Tests: hardened E2E + headerless integration.
@@ -63,9 +63,13 @@
     The GUI's soft-lock countdown screen (now-dead) was removed. Decision: user chose the generic-401 approach over
     phantom-account throttling. Test: locked account + correct password → generic 401 (e2e). Live: non-existent email
     → 401; operator login → 200.
-  - **A4 (MEDIUM, accepted tradeoff):** hard-lockout is an account-DoS vector (10 bad passwords locks a known email
-    until admin/reset). Inherent to account lockout; mitigate with auto-expiring hard-lock or per-IP throttling.
-  - **C3/C4 (LOW):** dummy-verify warmup + forgot-token INSERT timing — negligible; optional.
+  - **A4 (MEDIUM) ✅ DONE (session 15):** the hard lock now AUTO-EXPIRES. Migration `0072` adds
+    `human_credentials.hard_locked_until`; a hard lock set while `AUTH_LOCKOUT_HARD_DURATION_SECONDS > 0` (default
+    1800 = 30 min) self-clears once the window passes (`evaluateLock` treats a lapsed lock as unlocked; a later
+    successful login fully resets it via `recordSuccess`). The expiry is stamped ONCE at the lock transition (not
+    refreshed by later failures), so an attacker who keeps hammering can't extend it. `NULL`/duration=0 preserves the
+    original PERMANENT (admin/reset-only) semantics for pre-existing rows. Tests: 3 new `evaluateLock` A4 cases.
+  - **C3/C4 (LOW, OPEN):** dummy-verify warmup + forgot-token INSERT timing — negligible; optional, left tracked.
 - **Trigger:** C2/A4 — next auth-hardening pass / before public (LAN) exposure.
 
 ## DEFERRED-059

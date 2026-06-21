@@ -28,6 +28,9 @@ export interface LockoutPolicy {
   softBaseDelaySeconds: number;
   /** Cap on a single soft-lock window (seconds) so the ≤100/hr ceiling is never exceeded by design. */
   softMaxDelaySeconds: number;
+  /** [A4] Hard-lock auto-expiry in seconds. 0 = permanent (admin/reset only). When > 0, a hard lock
+   *  self-clears after this window — bounding the account-DoS vector. Default 30 min. */
+  hardDurationSeconds: number;
 }
 
 function num(key: string, dflt: number): number {
@@ -50,6 +53,8 @@ export function getLockoutPolicy(): LockoutPolicy {
     hardThreshold,
     softBaseDelaySeconds: Math.max(1, num('AUTH_LOCKOUT_SOFT_BASE_DELAY_SECONDS', 5)),
     softMaxDelaySeconds: Math.max(1, num('AUTH_LOCKOUT_SOFT_MAX_DELAY_SECONDS', 300)),
+    // [A4] 0 = permanent (admin/reset-only — the pre-A4 behaviour). Default 30 min auto-expiry.
+    hardDurationSeconds: num('AUTH_LOCKOUT_HARD_DURATION_SECONDS', 1800),
   };
 }
 
@@ -77,14 +82,25 @@ export interface LockState {
   hardLocked: boolean;
   softLockedUntil: Date | null;
   failedCount: number;
+  /** [A4] Hard-lock expiry. null = permanent (admin/reset-only); a past value = lapsed (auto-unlock). */
+  hardLockedUntil: Date | null;
 }
 
 /**
  * PURE — is login currently blocked, and why? `now` is injected for deterministic tests.
- * hard lock dominates; otherwise a soft window in the future blocks.
+ * Hard lock dominates; [A4] a hard lock whose `hardLockedUntil` has passed is LAPSED (treated as
+ * unlocked, falling through to the soft check). A null `hardLockedUntil` is permanent (pre-A4 / the
+ * duration=0 config). Otherwise a soft window in the future blocks.
  */
 export function evaluateLock(state: LockState, now: Date = new Date()): { locked: boolean; reason: 'hard' | 'soft' | null; retryAfterSeconds: number } {
-  if (state.hardLocked) return { locked: true, reason: 'hard', retryAfterSeconds: 0 };
+  if (state.hardLocked) {
+    const lapsed = state.hardLockedUntil !== null && state.hardLockedUntil.getTime() <= now.getTime();
+    if (!lapsed) {
+      const retryAfterSeconds = state.hardLockedUntil ? Math.ceil((state.hardLockedUntil.getTime() - now.getTime()) / 1000) : 0;
+      return { locked: true, reason: 'hard', retryAfterSeconds };
+    }
+    // lapsed hard lock → fall through (a later successful login fully clears it via recordSuccess).
+  }
   if (state.softLockedUntil && state.softLockedUntil.getTime() > now.getTime()) {
     return { locked: true, reason: 'soft', retryAfterSeconds: Math.ceil((state.softLockedUntil.getTime() - now.getTime()) / 1000) };
   }
@@ -95,13 +111,13 @@ export function evaluateLock(state: LockState, now: Date = new Date()): { locked
 
 /** Read the current lock state for a principal (null if no human credential row). */
 export async function getLockState(principalId: string): Promise<LockState | null> {
-  const res = await getDbPool().query<{ hard_locked: boolean; soft_locked_until: Date | null; failed_count: number }>(
-    `SELECT hard_locked, soft_locked_until, failed_count FROM human_credentials WHERE principal_id = $1`,
+  const res = await getDbPool().query<{ hard_locked: boolean; soft_locked_until: Date | null; failed_count: number; hard_locked_until: Date | null }>(
+    `SELECT hard_locked, soft_locked_until, failed_count, hard_locked_until FROM human_credentials WHERE principal_id = $1`,
     [principalId],
   );
   const row = res.rows[0];
   if (!row) return null;
-  return { hardLocked: row.hard_locked, softLockedUntil: row.soft_locked_until, failedCount: row.failed_count };
+  return { hardLocked: row.hard_locked, softLockedUntil: row.soft_locked_until, failedCount: row.failed_count, hardLockedUntil: row.hard_locked_until };
 }
 
 /**
@@ -125,21 +141,31 @@ export async function recordFailure(principalId: string): Promise<{ locked: bool
   const delay = softDelaySeconds(failed, policy);
   const hard = shouldHardLock(failed, policy);
   const softUntil = delay > 0 ? new Date(Date.now() + delay * 1000) : null;
+  // [A4] Stamp the hard-lock expiry ONCE at the lock transition (CASE … AND NOT hard_locked): later
+  // failures must NOT refresh it, or an attacker who keeps hammering could extend the lock forever and
+  // defeat the auto-expiry. duration=0 → NULL (permanent). Already-hard rows keep their existing expiry.
+  const hardUntil = hard && policy.hardDurationSeconds > 0 ? new Date(Date.now() + policy.hardDurationSeconds * 1000) : null;
   await pool.query(
-    `UPDATE human_credentials SET soft_locked_until = $2, hard_locked = (hard_locked OR $3) WHERE principal_id = $1`,
-    [principalId, softUntil, hard],
+    `UPDATE human_credentials
+        SET soft_locked_until = $2,
+            hard_locked = (hard_locked OR $3),
+            hard_locked_until = CASE WHEN $3 AND NOT hard_locked THEN $4 ELSE hard_locked_until END
+      WHERE principal_id = $1`,
+    [principalId, softUntil, hard, hardUntil],
   );
-  if (hard) return { locked: true, reason: 'hard', retryAfterSeconds: 0 };
+  if (hard) return { locked: true, reason: 'hard', retryAfterSeconds: hardUntil ? policy.hardDurationSeconds : 0 };
   if (softUntil) return { locked: true, reason: 'soft', retryAfterSeconds: delay };
   return { locked: false, reason: null, retryAfterSeconds: 0 };
 }
 
-/** Record a successful login: clear failures + soft window + last_login_at. Hard lock is NOT cleared
- *  here on purpose — a hard-locked account never reaches success (login is refused before verify). */
+/** Record a successful login: clear ALL lock state + stamp last_login_at. [A4] This now also clears the
+ *  hard lock: with auto-expiry a LAPSED hard lock can reach a successful verify, and a correct password
+ *  after the window means the legitimate user is back — so the lock is fully reset. (A still-active hard
+ *  lock never reaches here: login is refused before verify, so this never clears a live lock.) */
 export async function recordSuccess(principalId: string): Promise<void> {
   await getDbPool().query(
     `UPDATE human_credentials
-        SET failed_count = 0, soft_locked_until = NULL, last_login_at = now()
+        SET failed_count = 0, soft_locked_until = NULL, hard_locked = false, hard_locked_until = NULL, last_login_at = now()
       WHERE principal_id = $1`,
     [principalId],
   );
@@ -153,7 +179,7 @@ export async function recordSuccess(principalId: string): Promise<void> {
 export async function clearLockout(principalId: string): Promise<void> {
   await getDbPool().query(
     `UPDATE human_credentials
-        SET failed_count = 0, soft_locked_until = NULL, hard_locked = false
+        SET failed_count = 0, soft_locked_until = NULL, hard_locked = false, hard_locked_until = NULL
       WHERE principal_id = $1`,
     [principalId],
   );
