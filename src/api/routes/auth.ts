@@ -35,7 +35,7 @@ import { getLockState, evaluateLock, recordFailure, recordSuccess } from '../../
 import { createSession } from '../../services/sessions.js';
 import { hasVerifiedFactor, verifyMfaChallenge, enrollTotp, verifyTotpEnrollment } from '../../services/mfa.js';
 import { acceptInvite } from '../../services/invites.js';
-import { setSessionCookie, clearSessionCookie, requireSession } from '../middleware/sessionAuth.js';
+import { setSessionCookie, clearSessionCookie, requireSession, csrfGuard } from '../middleware/sessionAuth.js';
 import { callerPrincipalOf } from '../middleware/auth.js';
 import { listSessions, revokeSession } from '../../services/sessions.js';
 import type { Request } from 'express';
@@ -193,8 +193,13 @@ router.post('/password/reset', async (req, res, next) => {
 
 // ── Session-scoped (requireSession) ──────────────────────────────────────────────────────────────
 
+// [DEFERRED-060 C1] This router mounts BEFORE the global csrfGuard (index.ts), so the session-scoped
+// cookie mutations below would otherwise bypass CSRF. Apply csrfGuard explicitly (after requireSession,
+// which attaches req.session + authMethod='session' that csrfGuard reads). Safe GETs are exempt by the
+// guard; the GUI authApi already sends X-CSRF-Token on these mutations.
+
 /** POST /api/auth/logout — revoke the current session + clear cookie. */
-router.post('/logout', requireSession, async (req, res, next) => {
+router.post('/logout', requireSession, csrfGuard, async (req, res, next) => {
   try {
     const session = (req as any).session;
     await revokeSession(session.principal_id, session.session_id);
@@ -214,7 +219,7 @@ router.get('/sessions', requireSession, async (req, res, next) => {
 });
 
 /** DELETE /api/auth/sessions/:id — revoke one of MY sessions (no cross-principal revoke). */
-router.delete('/sessions/:id', requireSession, async (req, res, next) => {
+router.delete('/sessions/:id', requireSession, csrfGuard, async (req, res, next) => {
   try {
     const principalId = callerPrincipalOf(req)!;
     const sessionId = String(req.params.id);
@@ -225,7 +230,7 @@ router.delete('/sessions/:id', requireSession, async (req, res, next) => {
 });
 
 /** POST /api/auth/mfa/enroll — begin TOTP enrollment for the current principal. */
-router.post('/mfa/enroll', requireSession, async (req, res, next) => {
+router.post('/mfa/enroll', requireSession, csrfGuard, async (req, res, next) => {
   try {
     const principalId = callerPrincipalOf(req)!;
     const label = typeof req.body?.label === 'string' ? req.body.label : principalId;
@@ -235,7 +240,7 @@ router.post('/mfa/enroll', requireSession, async (req, res, next) => {
 });
 
 /** POST /api/auth/mfa/enroll/verify — confirm enrollment by verifying a code. */
-router.post('/mfa/enroll/verify', requireSession, async (req, res, next) => {
+router.post('/mfa/enroll/verify', requireSession, csrfGuard, async (req, res, next) => {
   try {
     const principalId = callerPrincipalOf(req)!;
     const { factor_id, code } = req.body ?? {};

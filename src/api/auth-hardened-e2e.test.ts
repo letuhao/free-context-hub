@@ -45,8 +45,9 @@ const PREFIX = '__test_hardened_e2e__';
 
 interface Res { status: number; body: any; cookies: string[] }
 
-/** Tiny cookie-aware HTTP client against a one-shot listener. `cookie` is sent as the Cookie header. */
-function call(app: Express, method: string, path: string, opts: { cookie?: string; body?: unknown } = {}): Promise<Res> {
+/** Tiny cookie-aware HTTP client against a one-shot listener. `cookie` → Cookie header; `csrf` →
+ *  X-CSRF-Token header (the double-submit token cookie-authed mutations require). */
+function call(app: Express, method: string, path: string, opts: { cookie?: string; csrf?: string; body?: unknown } = {}): Promise<Res> {
   return new Promise((resolve, reject) => {
     const server = app.listen(0, () => {
       const addr = server.address();
@@ -54,6 +55,7 @@ function call(app: Express, method: string, path: string, opts: { cookie?: strin
       const data = opts.body !== undefined ? JSON.stringify(opts.body) : undefined;
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (opts.cookie) headers.Cookie = opts.cookie;
+      if (opts.csrf) headers['X-CSRF-Token'] = opts.csrf;
       const req = http.request({ host: '127.0.0.1', port, path, method, headers }, (res) => {
         let buf = '';
         res.on('data', (c) => (buf += c));
@@ -129,7 +131,9 @@ test('hardened (auth-ON) human login E2E: register → login → /api/me → MFA
   assert.equal(login.body.status, 'ok');
   assert.equal(login.body.aal, 1, 'no MFA yet → AAL1');
   const cookie1 = sessionCookie(login.cookies);
+  const csrf1: string = login.body.csrf_token;
   assert.ok(cookie1, 'login sets a chub_session cookie');
+  assert.ok(csrf1, 'login returns a csrf_token in the body');
 
   // ── /api/me resolves the operator from the cookie (proves cookie-defer → sessionAuth → meRouter) ──
   const me1 = await call(app, 'GET', '/api/me', { cookie: cookie1 });
@@ -137,23 +141,33 @@ test('hardened (auth-ON) human login E2E: register → login → /api/me → MFA
   assert.equal(me1.body.auth_enabled, true);
   assert.ok(me1.body.principal, '/api/me returns the bound principal for a cookie session');
   assert.equal(me1.body.principal.principal_id, operatorId, '/api/me principal is the logged-in operator');
+  // [DEFERRED-060] a cookie session is labeled 'session' (not the env-token default).
+  assert.equal(me1.body.key_source, 'session', '/api/me labels a cookie session key_source=session');
+
+  // ── [DEFERRED-060] /api/me must NOT hand an env-token admin identity to a junk/expired cookie ──
+  const junk = await call(app, 'GET', '/api/me', { cookie: 'chub_session=not-a-real-session-value' });
+  assert.equal(junk.status, 401, 'a junk session cookie is unauthenticated → 401 (no env-token admin leak)');
 
   // ── Wrong password is rejected (generic 401) ──
   const bad = await call(app, 'POST', '/api/auth/login', { body: { email, password: 'definitely-not-it-9!' } });
   assert.equal(bad.status, 401, 'wrong password → 401');
 
-  // ── MFA enrollment (session-scoped /api/auth route; cookie only, no CSRF header needed) ──
-  const enroll = await call(app, 'POST', '/api/auth/mfa/enroll', { cookie: cookie1, body: { label: email } });
+  // ── [DEFERRED-060 C1] a cookie-authed mutation on /api/auth WITHOUT the CSRF token is rejected ──
+  const noCsrf = await call(app, 'POST', '/api/auth/mfa/enroll', { cookie: cookie1, body: { label: email } });
+  assert.equal(noCsrf.status, 403, 'mfa/enroll without X-CSRF-Token → 403 (csrfGuard now covers /api/auth mutations)');
+
+  // ── MFA enrollment (session-scoped /api/auth route; cookie + X-CSRF-Token) ──
+  const enroll = await call(app, 'POST', '/api/auth/mfa/enroll', { cookie: cookie1, csrf: csrf1, body: { label: email } });
   assert.equal(enroll.status, 201, `mfa/enroll should 201 (got ${enroll.status}: ${JSON.stringify(enroll.body)})`);
   const secret: string = enroll.body.secret;
   assert.ok(secret && enroll.body.otpauth_uri, 'enroll returns a TOTP secret + otpauth_uri');
 
-  const verifyEnroll = await call(app, 'POST', '/api/auth/mfa/enroll/verify', { cookie: cookie1, body: { factor_id: enroll.body.factor_id, code: totpCode(secret) } });
+  const verifyEnroll = await call(app, 'POST', '/api/auth/mfa/enroll/verify', { cookie: cookie1, csrf: csrf1, body: { factor_id: enroll.body.factor_id, code: totpCode(secret) } });
   assert.equal(verifyEnroll.status, 200, `enroll/verify should 200 (got ${verifyEnroll.status}: ${JSON.stringify(verifyEnroll.body)})`);
   assert.equal(verifyEnroll.body.status, 'verified');
 
-  // ── Logout, then a fresh login now demands the second factor ──
-  const logout = await call(app, 'POST', '/api/auth/logout', { cookie: cookie1 });
+  // ── Logout (cookie + CSRF), then a fresh login now demands the second factor ──
+  const logout = await call(app, 'POST', '/api/auth/logout', { cookie: cookie1, csrf: csrf1 });
   assert.equal(logout.status, 200, 'logout 200');
 
   const login2 = await call(app, 'POST', '/api/auth/login', { body: { email, password: STRONG_PW } });

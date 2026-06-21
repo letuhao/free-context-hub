@@ -118,7 +118,8 @@ interface MeBody {
   role: "reader" | "writer" | "admin";
   project_scope: string | null;
   auth_enabled: boolean;
-  key_source: "no_auth" | "env_token" | "db_key";
+  // 'session' (DEFERRED-060): cookie-authenticated human session.
+  key_source: "no_auth" | "env_token" | "db_key" | "session";
   principal: {
     principal_id: string;
     display_name: string;

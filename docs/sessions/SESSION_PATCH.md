@@ -1,3 +1,38 @@
+# CHECKPOINT — post-flip enablement: GUI account footer · MCP credential + header-auth · DEFERRED-060 (C1 + /api/me) (2026-06-21, session 15)
+
+**Branch:** `feature/actor-data-boundary`. Three follow-ups after the hardened flip, each committed + live-verified.
+
+**1. GUI account footer (DEFERRED-062 §1, commit 68e4a00).** The flip made login live but the GUI showed no profile or
+sign-out. Added `gui/src/components/account-footer.tsx` (reads `/api/me`, signs out via `/api/auth/logout` → `/login`),
+slotted into the sidebar; renders nothing under auth-off / no-session.
+
+**2. MCP credential + Authorization-header bridge (commit ec48a85).** Hardening broke the contexthub MCP (tools read
+the token only from a per-call `workspace_token` arg). Added `src/mcp/headerAuth.ts` — bridges `Authorization: Bearer
+<token>` onto tools/call requests that omit it (called from the `/mcp` POST handler); the token is still fully validated
+by resolveMcpCaller (an explicit arg always wins). `.mcp.json` / `.cursor/.mcp.json` → gateway `:3002/mcp` +
+`Authorization: Bearer ${CONTEXTHUB_MCP_TOKEN}` (env-expanded, no secret committed). Minted a principal-bound agent key
+(`claude-code-mcp`, global-write) into the gitignored `.secrets/`. Live: `whoami` via gateway+header → "claude-code-mcp
+(agent)"; no credential → denied. Tests: `headerAuth.test.ts` 7/7.
+
+**3. DEFERRED-060 — C1 + /api/me consistency (this commit).**
+- **C1:** `csrfGuard` now applied to the session-scoped `/api/auth` mutations (logout, sessions DELETE, mfa enroll +
+  enroll/verify) that mount before the global guard. Live: logout without `X-CSRF-Token` → 403, with → 200.
+- **/api/me:** mirrors the `/info` A1 gate — under auth-ON, no `Authorization` header + no resolved session (junk/expired
+  cookie) → 401 (was leaking an env-token `role:admin` identity). A real session is now labeled `key_source:'session'`
+  with role derived from the principal's global grants. Live: junk cookie → 401; operator → `key_source:session,
+  role:admin`.
+- **Still open (tracked):** C2 (lockout 429-vs-401 enumeration oracle — needs a UX-vs-security decision), A4 (lockout
+  DoS), C3/C4 (timing, negligible).
+
+**Operational note:** running the full test suite against the shared live DB leaves coordination actor strings that trip
+the enforce-ready boot gate — `npm run migrate:coordination-actors` + restart mcp clears it (test-DB-vs-prod-DB artifact;
+worth separating later).
+
+**Evidence (this commit):** backend+gui `tsc` clean · `npm test` **1320 pass / 0 fail / 19 skip** · live gateway checks
+above all green.
+
+---
+
 # CHECKPOINT — DEFERRED-059: hardened human-login E2E + shim retirement + LIVE flip to auth-ON (2026-06-21, session 15)
 
 **Branch:** `feature/actor-data-boundary`. Discharges **DEFERRED-059** — the gap the session-14 /warp build left:

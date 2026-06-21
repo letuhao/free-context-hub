@@ -82,6 +82,16 @@ test('REAL app (gate bites): GET /api/lessons → 401 without a credential', asy
   assert.equal(res.status, 401, 'the blanket bearerAuth gate must still block a normal data route');
 });
 
+test('REAL app (DEFERRED-060): GET /api/me → 401 with a junk session cookie + no auth header', async () => {
+  const res = await request(await realApp(), 'GET', '/api/me', { Cookie: 'chub_session=not-a-real-session' });
+  assert.equal(res.status, 401, 'a junk cookie must not get the env-token admin identity from /api/me');
+});
+
+test('REAL app (DEFERRED-060): GET /api/me → 401 with no credential at all', async () => {
+  const res = await request(await realApp(), 'GET', '/api/me');
+  assert.equal(res.status, 401, '/api/me is authenticated-only under auth-ON');
+});
+
 // ── csrfGuard unit (A2) — DB-free; verifies the guard logic the global mount relies on ──
 
 function runGuard(req: Record<string, unknown>): { status: number | null; nexted: boolean } {

@@ -43,21 +43,23 @@
 
 ## DEFERRED-060
 
-- **Title:** F-AUTH security-hardening residuals from the cold-start adversary (C1/C2 + /api/me consistency, A4)
-- **Status:** OPEN (2026-06-21, session 14). The pass-2 adversary cleared all HIGH/CRITICAL; these LOW/MEDIUM remain:
-  - **C2 (MEDIUM, pre-existing):** the login lockout `429 "Account locked"` vs `401` is an account-existence oracle
-    (an existing email can be driven to 429; non-existent always 401). Fix: return generic 401 for the soft-lock case,
-    or apply the throttle counter to non-existent emails too. NOT introduced by this work.
-  - **C1 (LOW):** pre-auth `/api/auth/*` cookie-authed mutations (logout, session-revoke, mfa-enroll) bypass
-    `csrfGuard` (mounted after the auth router). Mitigated by default `SameSite=Lax`; rises to MEDIUM under
-    `AUTH_COOKIE_SAMESITE=none`. Fix: add `csrfGuard` to those session-scoped routes.
-  - **`/api/me` consistency:** same class as A1 (no in-service authz; returns `role:admin`/`principal:null` to a
-    junk-cookie caller under auth-ON) — grants nothing, but worth the same guard as `/api/system/info` for consistency.
-    Interacts with the GUI auth-state detection, so do it WITH the full-login E2E.
+- **Title:** F-AUTH security-hardening residuals from the cold-start adversary (C1 ✅ + /api/me ✅; C2/A4 open)
+- **Status:** PARTIALLY DONE — C1 + /api/me consistency closed session 15; C2/A4/C3/C4 remain.
+  - **C1 (LOW) ✅ DONE (session 15):** `csrfGuard` is now applied to the session-scoped `/api/auth` mutations
+    (`logout`, `sessions/:id DELETE`, `mfa/enroll`, `mfa/enroll/verify`) which mount before the global guard.
+    Live: logout without `X-CSRF-Token` → 403, with → 200. Tests: hardened E2E + headerless integration.
+  - **`/api/me` consistency ✅ DONE (session 15):** mirrors the `/api/system/info` A1 gate — under auth-ON a request
+    with no `Authorization` header and no resolved session (junk/expired cookie) → 401 instead of an env-token admin
+    identity. A real cookie session is labeled `key_source:'session'` with role DERIVED from the principal's global
+    grants (no blanket `admin`). Live: junk cookie → 401; operator session → `key_source:session, role:admin`.
+  - **C2 (MEDIUM, pre-existing — OPEN, needs a decision):** the login lockout `429 "Account locked"` vs `401` is an
+    account-existence oracle (an existing email can be driven to 429; non-existent always 401). Options: (a) generic
+    401 for the locked case (kills the oracle, but a locked user isn't told to reset); (b) apply throttle/lock to
+    non-existent emails too (keeps the 429 UX but needs phantom-account state + a storage/DoS guard). Not this work.
   - **A4 (MEDIUM, accepted tradeoff):** hard-lockout is an account-DoS vector (10 bad passwords locks a known email
     until admin/reset). Inherent to account lockout; mitigate with auto-expiring hard-lock or per-IP throttling.
   - **C3/C4 (LOW):** dummy-verify warmup + forgot-token INSERT timing — negligible; optional.
-- **Trigger:** next auth-hardening pass / before public exposure.
+- **Trigger:** C2/A4 — next auth-hardening pass / before public (LAN) exposure.
 
 ## DEFERRED-059
 
