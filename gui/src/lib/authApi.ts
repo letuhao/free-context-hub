@@ -111,6 +111,8 @@ export interface AuthMe {
   principal_id?: string;
   display_name?: string;
   role?: "reader" | "writer" | "admin";
+  /** null = global scope; a string = project-scoped. Used to gate global-admin-only UI. */
+  project_scope?: string | null;
 }
 
 /** Raw GET /api/me body (routes/me.ts MeResponse). */
@@ -181,6 +183,7 @@ export const authApi = {
       principal_id: body.principal?.principal_id,
       display_name: body.principal?.display_name,
       role: body.role,
+      project_scope: body.project_scope,
     };
   },
 

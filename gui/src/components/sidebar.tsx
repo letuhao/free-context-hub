@@ -7,6 +7,7 @@ import { useProject } from "@/contexts/project-context";
 import { ProjectSelector } from "@/components/project-selector";
 import { CreateProjectModal } from "@/components/create-project-modal";
 import { AccountFooter } from "@/components/account-footer";
+import { authApi } from "@/lib/authApi";
 import { cn } from "@/lib/cn";
 import {
   LayoutDashboard, MessageSquare, BookOpen, Shield,
@@ -121,6 +122,21 @@ export function Sidebar() {
   const [healthy, setHealthy] = useState(true);
   const [reviewCount, setReviewCount] = useState(0);
   const [notifCount, setNotifCount] = useState(0);
+  // [DEFERRED-062 §2] Gate the Governance nav group to global admins. Fail closed: hidden until
+  // /api/me confirms a global-admin identity (role 'admin' + no project scope). Every Governance
+  // page is admin@global-gated at the API regardless — this is UX, not the security boundary.
+  const [isGlobalAdmin, setIsGlobalAdmin] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    authApi
+      .me()
+      .then((me) => {
+        if (active) setIsGlobalAdmin(me.role === "admin" && (me.project_scope ?? null) === null);
+      })
+      .catch(() => { if (active) setIsGlobalAdmin(false); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     const apiUrl = process.env.NEXT_PUBLIC_CONTEXTHUB_API_URL ?? "";
@@ -233,7 +249,9 @@ export function Sidebar() {
       )}
 
       <nav className="flex-1 px-2 py-1 space-y-0.5 overflow-y-auto">
-        {buildNavGroups(reviewCount, notifCount).map((entry, i) => {
+        {buildNavGroups(reviewCount, notifCount)
+          .filter((entry) => isGlobalAdmin || !(isGroup(entry) && entry.title === "Governance"))
+          .map((entry, i) => {
           if (isGroup(entry)) {
             return (
               <div key={entry.title} className="mt-3 first:mt-0">

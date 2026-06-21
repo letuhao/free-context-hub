@@ -20,15 +20,15 @@
 
 ## DEFERRED-062
 
-- **Title:** Governance GUI polish — scope-gated nav visibility + FeatureToggles import-swap (account footer ✅ done)
-- **Status:** OPEN (2026-06-21, session 14; item 1 closed session 15). Deferred during the /warp reconcile as
-  non-load-bearing polish.
-- **Items:** (1) ✅ **DONE (session 15)** — the sidebar **account footer** (`gui/src/components/account-footer.tsx`,
-  wired into `sidebar.tsx`) now shows the signed-in `display_name` + a sign-out button (`authApi.me` / `authApi.logout`
-  → `/login`); renders nothing under auth-off / no-session. (2) the **Governance nav group is not scope-gated** (visible to all; every page is admin@global-gated at the API
-  regardless, so no security gap — cosmetic). (3) S6 built `gui/src/components/feature-toggles.tsx` but the
-  **import-swap** into `gui/src/app/projects/settings/page.tsx` (replace the inline Features block) was deferred —
-  the component is unused until swapped; behaviourally identical so the page works unchanged.
+- **Title:** Governance GUI polish — account footer ✅ · scope-gated nav ✅ · FeatureToggles swap ✅
+- **Status:** ✅ **DONE** (item 1 session 15; items 2+3 session 15). All three polish items closed.
+- **Items:** (1) ✅ **DONE** — the sidebar **account footer** (`gui/src/components/account-footer.tsx`, wired into
+  `sidebar.tsx`) shows the signed-in `display_name` + a sign-out button; renders nothing under auth-off / no-session.
+  (2) ✅ **DONE** — the **Governance nav group is now scope-gated**: `sidebar.tsx` reads `authApi.me()` and hides the
+  group unless the caller is a global admin (`role:'admin'` + null project scope), fail-closed until confirmed. Every
+  page stays admin@global-gated at the API regardless. (3) ✅ **DONE** — the inline Features block in
+  `gui/src/app/projects/settings/page.tsx` was replaced with the shared `<FeatureToggles>` component (behaviourally
+  identical: PATCH `settings.features`, refetch).
 - **Trigger:** next governance-GUI polish pass.
 
 ## DEFERRED-061
