@@ -248,22 +248,5 @@ test('GET /api/projects/:id/intake → list → 200', async () => {
   assert.ok(typeof res.json.data.total === 'number', 'total is a number');
 });
 
-// ── Role gate ─────────────────────────────────────────────────────────────────
-
-test('GET /api/intake/:id with unknown role → 403', async () => {
-  const submit = await request('POST', '/api/intake', {
-    project_id: TEST_PROJECT, kind: 'suggestion', body: 'role test', submitted_by: TEST_ACTOR,
-  });
-  const id = submit.json.data.intake_id;
-  const res = await request('GET', `/api/intake/${id}`, undefined, { 'x-test-key-role': 'intruder' });
-  assert.equal(res.status, 403, `expected 403, got ${res.status}`);
-});
-
-test('GET /api/intake/:id with role reader → not 403', async () => {
-  const submit = await request('POST', '/api/intake', {
-    project_id: TEST_PROJECT, kind: 'suggestion', body: 'reader test', submitted_by: TEST_ACTOR,
-  });
-  const id = submit.json.data.intake_id;
-  const res = await request('GET', `/api/intake/${id}`, undefined, { 'x-test-key-role': 'reader' });
-  assert.notEqual(res.status, 403, `reader must pass the gate; got ${res.status}`);
-});
+// [Domain 8] REMOVED the role-gate tests — they asserted the deleted requireRole middleware via an
+// x-test-key-role shim. Authorization is now authorize() over principal grants (intake-authz coverage).

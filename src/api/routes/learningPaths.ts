@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { requireProjectScope, requireResourceScope } from '../middleware/requireResourceScope.js';
 import {
   addToLearningPath, removeFromLearningPath,
   getLearningPath, markCompleted, unmarkCompleted,
@@ -10,7 +9,7 @@ import { callerPrincipalOf } from '../middleware/auth.js';
 const router = Router();
 
 /** GET /api/learning-paths — get learning path with progress */
-router.get('/', requireProjectScope('query'), async (req, res, next) => {
+router.get('/', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
     const userId = req.query.user_id as string;
@@ -21,7 +20,7 @@ router.get('/', requireProjectScope('query'), async (req, res, next) => {
 });
 
 /** POST /api/learning-paths — add lesson to path */
-router.post('/', requireProjectScope('body'), async (req, res, next) => {
+router.post('/', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await addToLearningPath({
@@ -36,7 +35,7 @@ router.post('/', requireProjectScope('body'), async (req, res, next) => {
 });
 
 /** DELETE /api/learning-paths/:pathId — remove from path */
-router.delete('/:pathId', requireResourceScope('learning_path', 'pathId'), async (req, res, next) => {
+router.delete('/:pathId', async (req, res, next) => {
   try {
     const deleted = await removeFromLearningPath({ pathId: String(req.params.pathId), actingPrincipalId: callerPrincipalOf(req) });
     if (!deleted) { res.status(404).json({ status: 'error', error: 'not found' }); return; }
@@ -45,7 +44,7 @@ router.delete('/:pathId', requireResourceScope('learning_path', 'pathId'), async
 });
 
 /** POST /api/learning-paths/:pathId/complete — mark as completed */
-router.post('/:pathId/complete', requireResourceScope('learning_path', 'pathId'), async (req, res, next) => {
+router.post('/:pathId/complete', async (req, res, next) => {
   try {
     const result = await markCompleted({ userId: req.body.user_id, pathId: String(req.params.pathId), actingPrincipalId: callerPrincipalOf(req) });
     res.json(result);
@@ -53,7 +52,7 @@ router.post('/:pathId/complete', requireResourceScope('learning_path', 'pathId')
 });
 
 /** DELETE /api/learning-paths/:pathId/complete — unmark */
-router.delete('/:pathId/complete', requireResourceScope('learning_path', 'pathId'), async (req, res, next) => {
+router.delete('/:pathId/complete', async (req, res, next) => {
   try {
     const deleted = await unmarkCompleted({
       userId: (req.query.user_id as string) ?? req.body?.user_id,

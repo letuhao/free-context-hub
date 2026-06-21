@@ -373,7 +373,10 @@ export async function approveReviewRequest(params: {
   /** F2f: acting principal; authorize() enforces the project. */
   actingPrincipalId?: string | null;
 }): Promise<ResolveResult> {
-  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.project_id });
+  // [Domain 8] approving a review request is the admin-reviewer gate (BUG-13.3-1: a writer must not
+  // self-approve). The legacy requireRole('admin') carried this distinction; now it lives in authorize as
+  // admin@project (admin ⊃ write, so admins still pass; plain writers no longer can).
+  await assertAuthorized(params.actingPrincipalId, 'admin', { kind: 'project', id: params.project_id });
   return resolveRequest(
     { project_id: params.project_id, request_id: params.request_id, resolved_by: params.resolved_by, resolution_note: params.resolution_note ?? null },
     'approve',
@@ -388,7 +391,9 @@ export async function returnReviewRequest(params: {
   /** F2f: acting principal; authorize() enforces the project. */
   actingPrincipalId?: string | null;
 }): Promise<ResolveResult> {
-  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.project_id });
+  // [Domain 8] returning (rejecting) a review request is the same admin-reviewer gate as approve →
+  // admin@project (replaces requireRole('admin')).
+  await assertAuthorized(params.actingPrincipalId, 'admin', { kind: 'project', id: params.project_id });
   return resolveRequest(
     { project_id: params.project_id, request_id: params.request_id, resolved_by: params.resolved_by, resolution_note: params.resolution_note },
     'return',

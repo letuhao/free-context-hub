@@ -264,7 +264,7 @@ export type ProjectWithGroups = {
  * List all projects with their group memberships and lesson counts.
  * Used by the GUI for the project dropdown and hierarchy view.
  */
-export async function listAllProjects(): Promise<ProjectWithGroups[]> {
+export async function listAllProjects(actingPrincipalId?: string | null): Promise<ProjectWithGroups[]> {
   const pool = getDbPool();
 
   const res = await pool.query(
@@ -290,7 +290,7 @@ export async function listAllProjects(): Promise<ProjectWithGroups[]> {
      ORDER BY p.project_id`,
   );
 
-  return (res.rows ?? []).map((r: any) => ({
+  const rows = (res.rows ?? []).map((r: any) => ({
     project_id: String(r.project_id),
     name: r.name != null ? String(r.name) : null,
     description: r.description != null ? String(r.description) : null,
@@ -299,6 +299,18 @@ export async function listAllProjects(): Promise<ProjectWithGroups[]> {
     groups: (r.groups ?? []) as Array<{ group_id: string; name: string }>,
     lesson_count: Number(r.lesson_count ?? 0),
   }));
+
+  // [Domain 8 / adversary] This "all projects" list returns per-project data (name/description/settings/
+  // lesson_count), so FILTER to the projects the caller can read — otherwise it enumerates every tenant.
+  // Per-row (not assertReadAll, which throws): an "all projects" view should show only what you may see,
+  // not 403. auth-OFF → authorize short-circuits ALLOW → all kept (GUI "All Projects" unchanged in dev).
+  const visible: ProjectWithGroups[] = [];
+  for (const row of rows) {
+    if ((await authorize(actingPrincipalId, 'read', { kind: 'project', id: row.project_id })).allow) {
+      visible.push(row);
+    }
+  }
+  return visible;
 }
 
 // ── Create / Update project ──

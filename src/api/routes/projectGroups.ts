@@ -1,6 +1,4 @@
 import { Router } from 'express';
-import { requireProjectScope } from '../middleware/requireResourceScope.js';
-import { requireScope } from '../middleware/requireScope.js';
 import {
   createGroup,
   deleteGroup,
@@ -52,7 +50,7 @@ router.get('/:id/members', async (req, res, next) => {
 });
 
 /** POST /api/groups/:id/members — add a project to a group */
-router.post('/:id/members', requireProjectScope('body'), async (req, res, next) => {
+router.post('/:id/members', async (req, res, next) => {
   try {
     const { project_id } = req.body;
     if (!project_id) {
@@ -65,7 +63,7 @@ router.post('/:id/members', requireProjectScope('body'), async (req, res, next) 
 });
 
 /** DELETE /api/groups/:id/members/:projectId — remove a project from a group */
-router.delete('/:id/members/:projectId', requireScope('projectId'), async (req, res, next) => {
+router.delete('/:id/members/:projectId', async (req, res, next) => {
   try {
     const result = await removeProjectFromGroup(String(req.params.id), String(req.params.projectId), { actingPrincipalId: callerPrincipalOf(req) });
     res.json(result);
@@ -73,7 +71,7 @@ router.delete('/:id/members/:projectId', requireScope('projectId'), async (req, 
 });
 
 /** GET /api/projects/:projectId/groups — list groups a project belongs to */
-router.get('/by-project/:projectId', requireScope('projectId'), async (req, res, next) => {
+router.get('/by-project/:projectId', async (req, res, next) => {
   try {
     const groups = await listGroupsForProject(String(req.params.projectId), { actingPrincipalId: callerPrincipalOf(req) });
     res.json({ project_id: String(req.params.projectId), groups });

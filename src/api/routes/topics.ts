@@ -24,8 +24,6 @@ import {
   ContextHubError,
 } from '../../core/index.js';
 import type { CoordinationEvent } from '../../core/index.js';
-import { requireRole } from '../middleware/requireRole.js';
-import { requireResourceScope, requireBodyProjectScope } from '../middleware/requireResourceScope.js';
 import { callerPrincipalOf } from '../middleware/auth.js';
 
 const router = Router();
@@ -49,7 +47,7 @@ function parseCursor(raw: unknown): number {
 }
 
 // POST /api/topics — charter a topic
-router.post('/', requireRole('writer'), requireBodyProjectScope(), async (req, res, next) => {
+router.post('/', async (req, res, next) => {
   try {
     const body = req.body ?? {};
     const projectId = resolveProjectIdOrThrow(
@@ -67,7 +65,7 @@ router.post('/', requireRole('writer'), requireBodyProjectScope(), async (req, r
 });
 
 // POST /api/topics/:id/join — join a topic, returns the induction pack
-router.post('/:id/join', requireRole('writer'), requireResourceScope('topic'), async (req, res, next) => {
+router.post('/:id/join', async (req, res, next) => {
   try {
     const body = req.body ?? {};
     const result = await joinTopic({
@@ -86,7 +84,7 @@ router.post('/:id/join', requireRole('writer'), requireResourceScope('topic'), a
 
 // POST /api/topics/:id/grant-level — Sprint 15.11 (DEFERRED-015) grant a participant
 // a level. The grantor must be the owner or an existing authority (service-enforced).
-router.post('/:id/grant-level', requireRole('writer'), requireResourceScope('topic'), async (req, res, next) => {
+router.post('/:id/grant-level', async (req, res, next) => {
   try {
     const body = req.body ?? {};
     const result = await grantLevel({
@@ -101,7 +99,7 @@ router.post('/:id/grant-level', requireRole('writer'), requireResourceScope('top
 });
 
 // GET /api/topics/:id — topic record + participant roster
-router.get('/:id', requireResourceScope('topic'), async (req, res, next) => {
+router.get('/:id', async (req, res, next) => {
   try {
     const result = await getTopic({ topic_id: String(req.params.id), actingPrincipalId: callerPrincipalOf(req) });
     res.json({ status: 'ok', data: result });
@@ -109,7 +107,7 @@ router.get('/:id', requireResourceScope('topic'), async (req, res, next) => {
 });
 
 // POST /api/topics/:id/close — close a topic (seals the event log)
-router.post('/:id/close', requireRole('writer'), requireResourceScope('topic'), async (req, res, next) => {
+router.post('/:id/close', async (req, res, next) => {
   try {
     const result = await closeTopic({
       topic_id: String(req.params.id),
@@ -121,7 +119,7 @@ router.post('/:id/close', requireRole('writer'), requireResourceScope('topic'), 
 });
 
 // GET /api/topics/:id/events?since=:seq — cursor replay
-router.get('/:id/events', requireResourceScope('topic'), async (req, res, next) => {
+router.get('/:id/events', async (req, res, next) => {
   try {
     const result = await replayEvents({
       topic_id: String(req.params.id),
@@ -144,7 +142,7 @@ export function _activeStreamCountForTest(): number {
   return activeStreamCount;
 }
 
-router.get('/:id/stream', requireResourceScope('topic'), async (req, res, next) => {
+router.get('/:id/stream', async (req, res, next) => {
   const topicId = String(req.params.id);
   const sinceSeq = parseCursor(req.query.since ?? req.headers['last-event-id']);
 

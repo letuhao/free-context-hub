@@ -8,7 +8,6 @@ import {
   getEnv,
 } from '../../core/index.js';
 import { callerPrincipalOf } from '../middleware/auth.js';
-import { requireRole } from '../middleware/requireRole.js';
 
 /**
  * Phase 13 Sprint 13.3 — Review-request REST routes.
@@ -63,7 +62,7 @@ router.get('/:reqId', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-router.post('/:reqId/approve', requireRole('admin'), async (req, res, next) => {
+router.post('/:reqId/approve', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String((req.params as Record<string, string>).id ?? ''));
     const reqId = String(req.params.reqId);
@@ -79,7 +78,7 @@ router.post('/:reqId/approve', requireRole('admin'), async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-router.post('/:reqId/return', requireRole('admin'), async (req, res, next) => {
+router.post('/:reqId/return', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String((req.params as Record<string, string>).id ?? ''));
     const reqId = String(req.params.reqId);

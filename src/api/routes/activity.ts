@@ -47,6 +47,9 @@ router.get('/', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
+    // [Domain 8 / adversary] logActivity takes no principal — gate the WRITE here, else any caller could
+    // forge activity-feed entries (arbitrary actor/title/detail) into ANY project. write@project.
+    await assertAuthorized(callerPrincipalOf(req), 'write', { kind: 'project', id: projectId });
     const activityId = await logActivity({
       projectId,
       eventType: req.body.event_type,

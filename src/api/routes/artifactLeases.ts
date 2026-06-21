@@ -8,8 +8,6 @@ import {
   forceReleaseArtifact,
   resolveProjectIdOrThrow,
 } from '../../core/index.js';
-import { requireRole } from '../middleware/requireRole.js';
-import { requireScope } from '../middleware/requireScope.js';
 import { callerPrincipalOf } from '../middleware/auth.js';
 
 /**
@@ -36,7 +34,7 @@ router.get('/', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-router.post('/', requireRole('writer'), async (req, res, next) => {
+router.post('/', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String((req.params as Record<string, string>).id ?? ''));
     const { agent_id, artifact_type, artifact_id, task_description, ttl_minutes } = req.body ?? {};
@@ -78,7 +76,7 @@ router.post('/check', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-router.patch('/:leaseId', requireRole('writer'), async (req, res, next) => {
+router.patch('/:leaseId', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String((req.params as Record<string, string>).id ?? ''));
     const leaseId = String(req.params.leaseId);
@@ -103,7 +101,7 @@ router.patch('/:leaseId', requireRole('writer'), async (req, res, next) => {
   } catch (e) { next(e); }  // SS4 (BUG-13.1-1): ContextHubError → errorHandler maps BAD_REQUEST→400
 });
 
-router.delete('/:leaseId/force', requireRole('admin'), requireScope('id'), async (req, res, next) => {
+router.delete('/:leaseId/force', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String((req.params as Record<string, string>).id ?? ''));
     const leaseId = String(req.params.leaseId);
@@ -112,7 +110,7 @@ router.delete('/:leaseId/force', requireRole('admin'), requireScope('id'), async
   } catch (e) { next(e); }
 });
 
-router.delete('/:leaseId', requireRole('writer'), async (req, res, next) => {
+router.delete('/:leaseId', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String((req.params as Record<string, string>).id ?? ''));
     const leaseId = String(req.params.leaseId);

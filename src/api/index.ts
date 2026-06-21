@@ -3,7 +3,6 @@ import cors from 'cors';
 
 import { getEnv } from '../core/index.js';
 import { bearerAuth } from './middleware/auth.js';
-import { requireRole } from './middleware/requireRole.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { lessonsRouter } from './routes/lessons.js';
 import { searchRouter } from './routes/search.js';
@@ -146,19 +145,19 @@ export function createApiApp() {
   app.use('/api/bookmarks', bookmarkRouter);
 
   // ── Routes: write (writer+) ──
-  app.use('/api/git', requireRole('writer'), gitRouter);
-  app.use('/api/jobs', requireRole('writer'), jobsRouter);
-  app.use('/api/workspace', requireRole('writer'), workspaceRouter);
-  app.use('/api', requireRole('writer'), workspaceRouter); // mounts /api/sources/* routes
-  app.use('/api/chat', requireRole('writer'), chatRouter);
-  app.use('/api/chat/conversations', requireRole('writer'), chatHistoryRouter);
-  app.use('/api/documents', requireRole('writer'), documentsRouter);
-  app.use('/api/learning-paths', requireRole('writer'), learningPathsRouter);
-  app.use('/api/groups', requireRole('writer'), projectGroupsRouter);
+  app.use('/api/git', gitRouter);
+  app.use('/api/jobs', jobsRouter);
+  app.use('/api/workspace', workspaceRouter);
+  app.use('/api', workspaceRouter); // mounts /api/sources/* routes
+  app.use('/api/chat', chatRouter);
+  app.use('/api/chat/conversations', chatHistoryRouter);
+  app.use('/api/documents', documentsRouter);
+  app.use('/api/learning-paths', learningPathsRouter);
+  app.use('/api/groups', projectGroupsRouter);
 
   // ── Routes: admin ──
-  app.use('/api/lesson-types', requireRole('admin'), lessonTypesRouter);
-  app.use('/api/api-keys', requireRole('admin'), apiKeysRouter);
+  app.use('/api/lesson-types', lessonTypesRouter);
+  app.use('/api/api-keys', apiKeysRouter);
 
   // ── Error handler (must be last) ──
   app.use(errorHandler);

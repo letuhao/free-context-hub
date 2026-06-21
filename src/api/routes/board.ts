@@ -29,8 +29,6 @@ import {
   baselineArtifact,
   ContextHubError,
 } from '../../core/index.js';
-import { requireRole } from '../middleware/requireRole.js';
-import { requireResourceScope, requireBodyProjectScope } from '../middleware/requireResourceScope.js';
 import { callerPrincipalOf } from '../middleware/auth.js';
 
 const router = Router();
@@ -83,7 +81,7 @@ function asRaci(v: unknown): Record<string, unknown> | undefined {
 }
 
 // POST /api/topics/:id/tasks — post a task onto a topic's board
-router.post('/topics/:id/tasks', requireRole('writer'), requireResourceScope('topic'), async (req, res, next) => {
+router.post('/topics/:id/tasks', async (req, res, next) => {
   try {
     const body = req.body ?? {};
     const result = await postTask({
@@ -102,7 +100,7 @@ router.post('/topics/:id/tasks', requireRole('writer'), requireResourceScope('to
 });
 
 // GET /api/topics/:id/board — list a topic's board
-router.get('/topics/:id/board', requireResourceScope('topic'), async (req, res, next) => {
+router.get('/topics/:id/board', async (req, res, next) => {
   try {
     const statusQ = req.query.status;
     const status = typeof statusQ === 'string' && statusQ ? statusQ : undefined;
@@ -112,7 +110,7 @@ router.get('/topics/:id/board', requireResourceScope('topic'), async (req, res, 
 });
 
 // POST /api/tasks/:id/claim — claim a task
-router.post('/tasks/:id/claim', requireRole('writer'), requireResourceScope('task'), async (req, res, next) => {
+router.post('/tasks/:id/claim', async (req, res, next) => {
   try {
     const body = req.body ?? {};
     const result = await claimTask({
@@ -126,7 +124,7 @@ router.post('/tasks/:id/claim', requireRole('writer'), requireResourceScope('tas
 });
 
 // POST /api/tasks/:id/release — voluntarily release a live claim
-router.post('/tasks/:id/release', requireRole('writer'), requireResourceScope('task'), async (req, res, next) => {
+router.post('/tasks/:id/release', async (req, res, next) => {
   try {
     const body = req.body ?? {};
     const result = await releaseTask({
@@ -139,7 +137,7 @@ router.post('/tasks/:id/release', requireRole('writer'), requireResourceScope('t
 });
 
 // POST /api/tasks/:id/complete — complete a task
-router.post('/tasks/:id/complete', requireRole('writer'), requireResourceScope('task'), async (req, res, next) => {
+router.post('/tasks/:id/complete', async (req, res, next) => {
   try {
     const body = req.body ?? {};
     const result = await completeTask({
@@ -152,7 +150,7 @@ router.post('/tasks/:id/complete', requireRole('writer'), requireResourceScope('
 });
 
 // PUT /api/artifacts/:id — write a new artifact version
-router.put('/artifacts/:id', requireRole('writer'), async (req, res, next) => {
+router.put('/artifacts/:id', async (req, res, next) => {
   try {
     const body = req.body ?? {};
     const result = await writeArtifact({
@@ -168,7 +166,7 @@ router.put('/artifacts/:id', requireRole('writer'), async (req, res, next) => {
 });
 
 // POST /api/artifacts/:id/baseline — mark an artifact checkpoint
-router.post('/artifacts/:id/baseline', requireRole('writer'), requireResourceScope('artifact'), async (req, res, next) => {
+router.post('/artifacts/:id/baseline', async (req, res, next) => {
   try {
     const body = req.body ?? {};
     const result = await baselineArtifact({

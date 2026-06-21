@@ -1,3 +1,60 @@
+# CHECKPOINT — F2g Domain 8: retire legacy REST middleware → authorize() is the SOLE gate (2026-06-21, session 13)
+
+**Branch:** `feature/actor-data-boundary`. Auth **OFF** (inert) — the `MCP_AUTH_ENABLED` default flip is the ONLY
+remaining step and stays human-gated, NOT touched. Full unit suite **1216 / 1197 pass / 0 fail / 19 skip**
+(count dropped from 1257 as the obsolete middleware/role-shim tests were removed), tsc clean. POST-REVIEW honored
+(`/review-impl` run, 1 HIGH fixed). This is the **last structural prerequisite** before the flip — the
+flip-readiness deferred board is now fully clear.
+
+**The change:** removed the entire legacy coarse-grained REST middleware family so that the F2-era `authorize()`
+over principal grants is the single authorization gate on every route. `bearerAuth` (authentication → sets the
+principal) is KEPT; only the role/scope *authorization* shims are gone.
+
+- **Deleted:** `requireRole.ts`, `requireScope.ts`, `requireResourceScope.ts` (+ their two `.test.ts`). Stripped
+  every `requireRole/requireScope/requireResourceScope/requireProjectScope/requireBody{Project,Topic}Scope` call
+  and import across **22 route files** + the `requireRole(...)` router mounts in `src/api/index.ts`.
+- **Stage A — closed coverage gaps BEFORE removing the net** (audit: ~85 guarded routes; the large majority
+  already self-authorize at the service layer with the correct capability):
+  - 6 route gaps gated inline: `POST /api/chat` (`read@project`), `POST /…/reflect` (`write@project`),
+    `POST /api/taxonomy-profiles` (`write@owner_project`, replacing the legacy inline `apiKeyScope` check), and the
+    3 inline `documents.ts` handlers `extract/estimate`, `extraction-status`, `thumbnail` (`read@project`).
+  - 2 admin-only preserved: review-request `approve`/`return` bumped `write`→`admin@project` (the admin-vs-writer
+    distinction that lived only in `requireRole('admin')`; BUG-13.3-1).
+  - **2 router-mount gaps the audit missed** (caught by reading `index.ts` directly): `/api/api-keys` and
+    `/api/lesson-types` had **zero** service authz — guarded *solely* by their `requireRole('admin')` mount. Now
+    `admin@global` on every mutating route (api-keys: all three; lesson-types: POST/PUT/DELETE).
+- **Stage C — cold-start hostile-actor adversary** (open-route hunt, safety-sensitive policy): 2 HIGH + 1 MED, all
+  resolved — `GET /api/projects` (`listAllProjects` enumerated every tenant → per-row `read@project` filter +
+  threaded principal); `POST /api/activity` (`logActivity` forged feed entries into any project → `write@project`);
+  taxonomy-profiles GET open-catalog (documented).
+- **`/review-impl` (this gate) — 1 HIGH fixed:** `POST /api/documents/:id/extract` (vision path) ran a raw
+  `UPDATE documents SET extraction_status='processing'` **before** `enqueueJob`'s `write@project` check; the
+  removed `requireResourceScope('document')` was its sole guard. Hoisted a `write@project` assert to the top of
+  the handler (both sync + vision paths; service still re-asserts — defense in depth). Independently verified ~30
+  route services are capability-correct and that every other raw-SQL route mutation is test-only.
+
+**Two intentional LOOSENINGS (flagged + accepted at POST-REVIEW):** the **lesson-types LIST** and
+**taxonomy-profiles GET** are now open catalogs (any authenticated caller; mutations stay gated), matching the
+`listGroups` open-catalog precedent (DEFERRED-049) — non-sensitive config the GUI needs broadly. Both were behind
+the old admin/writer mount. Reversible if a future policy wants them re-tightened.
+
+**Obsolete tests removed:** the role/scope-shim assertions (`x-test-key-role` / `x-test-key-scope` 403/404) in
+`requests/topics/disputes/intake/motions` `.test.ts` — they asserted the deleted middleware; behavior is now
+covered by the service-level `*-authz` suites with real principals/grants. `package.json` test list pruned of the
+2 deleted middleware test paths.
+
+**Modified (highlights):** `src/api/index.ts`, 22 `src/api/routes/*.ts`, `src/services/projectGroups.ts`
+(`listAllProjects` per-row read filter), `src/services/reviewRequests.ts` (write→admin), `groups-namespace-authz.test.ts`
+(+`listAllProjects` filter test). **Deleted:** 3 middleware files + 2 middleware tests. **New:**
+`docs/specs/2026-06-21-actor-data-boundary-F2g-DOMAIN8-DESIGN.md` (audit + plan).
+
+**What's next (human-gated, final step):** the **`MCP_AUTH_ENABLED` default flip** — its own checkpoint + a fresh
+cold-start security adversary + **live auth-ON verification** (grep every authn/authz fast-path the flag affects).
+Pre-flip runbook reminder (from DEFERRED-053): the system principal must hold EXACTLY `global write`, else the
+worker refuses to start.
+
+---
+
 # CHECKPOINT — DEFERRED-051/052/053/054: F2g-flip least-privilege & robustness batch (2026-06-21, session 13)
 
 **Branch:** `feature/actor-data-boundary`. Auth **OFF** (inert) — flip + Domain 8 remain human-gated, NOT

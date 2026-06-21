@@ -12,10 +12,10 @@ import {
   addProjectToGroup,
 } from '../../core/index.js';
 import { callerPrincipalOf } from '../middleware/auth.js';
+import { assertAuthorized } from '../../services/authorize.js';
 import multer from 'multer';
 import { promises as fsPromises } from 'node:fs';
 import { invalidateFeatureCache } from '../../services/featureToggles.js';
-import { requireRole } from '../middleware/requireRole.js';
 import { exportProject, ExportNotFoundError } from '../../services/exchange/exportProject.js';
 import {
   importProject,
@@ -38,13 +38,13 @@ const router = Router();
 /** GET /api/projects — list all projects with group memberships and lesson counts */
 router.get('/', async (req, res, next) => {
   try {
-    const projects = await listAllProjects();
+    const projects = await listAllProjects(callerPrincipalOf(req));
     res.json({ projects });
   } catch (e) { next(e); }
 });
 
 /** POST /api/projects — create a new project */
-router.post('/', requireRole('writer'), async (req, res, next) => {
+router.post('/', async (req, res, next) => {
   try {
     const { project_id, name, description, color, settings, group_id } = req.body;
     if (!project_id || typeof project_id !== 'string') {
@@ -77,7 +77,7 @@ router.post('/', requireRole('writer'), async (req, res, next) => {
 });
 
 /** PUT /api/projects/:id — update project metadata */
-router.put('/:id', requireRole('writer'), async (req, res, next) => {
+router.put('/:id', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String(req.params.id));
     const { name, description, color, settings } = req.body;
@@ -109,7 +109,7 @@ router.get('/:id/summary', async (req, res, next) => {
 });
 
 /** POST /api/projects/:id/index — trigger project indexing */
-router.post('/:id/index', requireRole('writer'), async (req, res, next) => {
+router.post('/:id/index', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String(req.params.id));
     const root = await resolveProjectRoot(projectId, req.body.root, callerPrincipalOf(req));
@@ -125,9 +125,12 @@ router.post('/:id/index', requireRole('writer'), async (req, res, next) => {
 });
 
 /** POST /api/projects/:id/reflect — reflect on a topic */
-router.post('/:id/reflect', requireRole('writer'), async (req, res, next) => {
+router.post('/:id/reflect', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String(req.params.id));
+    // [Domain 8] reflect is a writer-gated LLM aid over the project (mirrors /lessons/:id/improve).
+    // reflectOnTopic itself takes no principal, so authorize at the route — this replaces requireRole('writer').
+    await assertAuthorized(callerPrincipalOf(req), 'write', { kind: 'project', id: projectId });
     const result = await reflectOnTopic({
       topic: req.body.topic,
       bullets: req.body.bullets ?? [],
@@ -186,7 +189,6 @@ router.get('/:id/export', async (req, res, next) => {
  */
 router.post(
   '/:id/import',
-  requireRole('writer'),
   importUpload.single('file'),
   async (req, res, next) => {
     if (!req.file) {
@@ -255,7 +257,7 @@ router.post(
  *    dry_run           boolean (default false)
  *    conflicts_cap     positive int, max 1000 (default 50)
  */
-router.post('/:id/pull-from', requireRole('writer'), async (req, res, next) => {
+router.post('/:id/pull-from', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String(req.params.id));
     const body = (req.body ?? {}) as Record<string, unknown>;
@@ -322,7 +324,7 @@ router.post('/:id/pull-from', requireRole('writer'), async (req, res, next) => {
 });
 
 /** DELETE /api/projects/:id — delete workspace data */
-router.delete('/:id', requireRole('admin'), async (req, res, next) => {
+router.delete('/:id', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String(req.params.id));
     const result = await deleteWorkspace(projectId, { actingPrincipalId: callerPrincipalOf(req) });

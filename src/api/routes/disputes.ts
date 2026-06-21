@@ -23,8 +23,6 @@ import {
   resolveDispute,
   listDisputes,
 } from '../../core/index.js';
-import { requireRole } from '../middleware/requireRole.js';
-import { requireResourceScope, requireBodyTopicScope } from '../middleware/requireResourceScope.js';
 import { callerPrincipalOf } from '../middleware/auth.js';
 
 const router = Router();
@@ -44,7 +42,7 @@ function asString(v: unknown): string {
 }
 
 // ── POST /api/disputes — open a dispute ──────────────────────────────────────
-router.post('/disputes', requireRole('writer'), requireBodyTopicScope(), async (req: Request, res: Response, next: NextFunction) => {
+router.post('/disputes', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = req.body ?? {};
     const result = await openDispute({
@@ -62,7 +60,7 @@ router.post('/disputes', requireRole('writer'), requireBodyTopicScope(), async (
 });
 
 // ── GET /api/disputes/:id — get a single dispute + resolution request ─────────
-router.get('/disputes/:id', requireRole('reader'), requireResourceScope('dispute'), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/disputes/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const result = await getDispute(String(req.params.id), { actingPrincipalId: callerPrincipalOf(req) });
     res.json({ status: 'ok', data: result });
@@ -70,7 +68,7 @@ router.get('/disputes/:id', requireRole('reader'), requireResourceScope('dispute
 });
 
 // ── POST /api/disputes/:id/resolve — resolve a dispute ───────────────────────
-router.post('/disputes/:id/resolve', requireRole('writer'), requireResourceScope('dispute'), async (req: Request, res: Response, next: NextFunction) => {
+router.post('/disputes/:id/resolve', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const result = await resolveDispute(String(req.params.id), { actingPrincipalId: callerPrincipalOf(req) });
     res.status(200).json({ status: 'ok', data: result });
@@ -78,7 +76,7 @@ router.post('/disputes/:id/resolve', requireRole('writer'), requireResourceScope
 });
 
 // ── GET /api/topics/:id/disputes — list disputes for a topic ─────────────────
-router.get('/topics/:id/disputes', requireRole('reader'), requireResourceScope('topic'), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/topics/:id/disputes', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const topicId = String(req.params.id);
     const status = typeof req.query.status === 'string' ? req.query.status : undefined;

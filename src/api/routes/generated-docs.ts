@@ -6,7 +6,6 @@ import {
   promoteGeneratedDocument,
   resolveProjectIdOrThrow,
 } from '../../core/index.js';
-import { requireRole } from '../middleware/requireRole.js';
 import { callerPrincipalOf } from '../middleware/auth.js';
 
 const router = Router();
@@ -41,7 +40,7 @@ router.get('/:id', async (req, res, next) => {
 });
 
 /** POST /api/generated-docs/:id/promote — promote a document */
-router.post('/:id/promote', requireRole('writer'), async (req, res, next) => {
+router.post('/:id/promote', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await promoteGeneratedDocument({ projectId, actingPrincipalId: callerPrincipalOf(req), docId: String(req.params.id) });

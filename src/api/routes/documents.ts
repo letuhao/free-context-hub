@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import type { Request } from 'express';
-import { requireProjectScope, requireResourceScope } from '../middleware/requireResourceScope.js';
 import multer from 'multer';
 import { createHash } from 'node:crypto';
 import {
@@ -23,6 +22,7 @@ import type { ExtractionMode, ChunkTemplate } from '../../services/extraction/ty
 import { resolveProjectIdOrThrow } from '../../core/index.js';
 import { getDbPool } from '../../db/client.js';
 import { callerPrincipalOf } from '../middleware/auth.js';
+import { assertAuthorized } from '../../services/authorize.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB
@@ -42,7 +42,7 @@ function sanitizeFilename(name: string): string {
 }
 
 /** POST /api/documents/upload — multipart file upload */
-router.post('/upload', upload.single('file'), requireProjectScope('body'), async (req, res, next) => {
+router.post('/upload', upload.single('file'), async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const file = req.file;
@@ -154,7 +154,7 @@ router.post('/upload', upload.single('file'), requireProjectScope('body'), async
  *  Returns 201 with the created document, 409 on content_hash duplicate,
  *  or 400/403/413/415/502/504 on fetch-specific errors.
  */
-router.post('/ingest-url', requireProjectScope('body'), async (req, res, next) => {
+router.post('/ingest-url', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const sourceUrl = typeof req.body.source_url === 'string' ? req.body.source_url.trim() : '';
@@ -252,7 +252,7 @@ router.post('/ingest-url', requireProjectScope('body'), async (req, res, next) =
 });
 
 /** POST /api/documents — create a document (JSON body) */
-router.post('/', requireProjectScope('body'), async (req, res, next) => {
+router.post('/', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await createDocument({
@@ -271,7 +271,7 @@ router.post('/', requireProjectScope('body'), async (req, res, next) => {
 });
 
 /** GET /api/documents — list documents for a project */
-router.get('/', requireProjectScope('query'), async (req, res, next) => {
+router.get('/', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
     const result = await listDocuments({
@@ -288,7 +288,7 @@ router.get('/', requireProjectScope('query'), async (req, res, next) => {
 });
 
 /** GET /api/documents/:id — get a document */
-router.get('/:id', requireResourceScope('document', 'id'), async (req, res, next) => {
+router.get('/:id', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
     const result = await getDocument({ docId: String(req.params.id), projectId, actingPrincipalId: callerPrincipalOf(req) });
@@ -301,7 +301,7 @@ router.get('/:id', requireResourceScope('document', 'id'), async (req, res, next
 });
 
 /** POST /api/documents/:id/generate-lessons — AI-extract lesson suggestions from doc content */
-router.post('/:id/generate-lessons', requireResourceScope('document', 'id'), async (req, res, next) => {
+router.post('/:id/generate-lessons', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const doc = await getDocument({ docId: String(req.params.id), projectId, actingPrincipalId: callerPrincipalOf(req) });
@@ -328,7 +328,7 @@ router.post('/:id/generate-lessons', requireResourceScope('document', 'id'), asy
 });
 
 /** DELETE /api/documents/:id — delete a document */
-router.delete('/:id', requireResourceScope('document', 'id'), async (req, res, next) => {
+router.delete('/:id', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow((req.query.project_id as string | undefined) ?? req.body?.project_id);
     const deleted = await deleteDocument({ docId: String(req.params.id), projectId, actingPrincipalId: callerPrincipalOf(req) });
@@ -341,7 +341,7 @@ router.delete('/:id', requireResourceScope('document', 'id'), async (req, res, n
 });
 
 /** POST /api/documents/:id/lessons/:lessonId — link document to lesson */
-router.post('/:id/lessons/:lessonId', requireResourceScope('document', 'id'), async (req, res, next) => {
+router.post('/:id/lessons/:lessonId', async (req, res, next) => {
   try {
     const result = await linkDocumentToLesson({
       docId: String(req.params.id),
@@ -357,7 +357,7 @@ router.post('/:id/lessons/:lessonId', requireResourceScope('document', 'id'), as
 });
 
 /** DELETE /api/documents/:id/lessons/:lessonId — unlink document from lesson */
-router.delete('/:id/lessons/:lessonId', requireResourceScope('document', 'id'), async (req, res, next) => {
+router.delete('/:id/lessons/:lessonId', async (req, res, next) => {
   try {
     const deleted = await unlinkDocumentFromLesson({
       docId: String(req.params.id),
@@ -373,7 +373,7 @@ router.delete('/:id/lessons/:lessonId', requireResourceScope('document', 'id'), 
 });
 
 /** GET /api/documents/:id/lessons — list lessons linked to a document */
-router.get('/:id/lessons', requireResourceScope('document', 'id'), async (req, res, next) => {
+router.get('/:id/lessons', async (req, res, next) => {
   try {
     const result = await listDocumentLessons({ docId: String(req.params.id), actingPrincipalId: callerPrincipalOf(req) });
     res.json(result);
@@ -384,9 +384,14 @@ router.get('/:id/lessons', requireResourceScope('document', 'id'), async (req, r
  *  - fast/quality: synchronous, returns chunks immediately
  *  - vision: enqueues an async job, returns { status: 'queued', job_id }
  */
-router.post('/:id/extract', requireResourceScope('document', 'id'), async (req, res, next) => {
+router.post('/:id/extract', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
+    // [Domain 8 / review-impl] Gate the WHOLE handler write@project up front. The vision path runs a raw
+    // `UPDATE documents SET extraction_status='processing'` BEFORE enqueueJob's own authz — without this,
+    // removing requireResourceScope('document') would let any caller flip a known doc's status pre-check.
+    // (runExtraction / enqueueJob still re-assert write — defense in depth; authorize is a no-op under auth-OFF.)
+    await assertAuthorized(callerPrincipalOf(req), 'write', { kind: 'project', id: projectId });
     const mode = (req.body.mode ?? 'fast') as ExtractionMode;
     const template = req.body.template as ChunkTemplate | undefined;
 
@@ -481,9 +486,11 @@ router.post('/:id/extract', requireResourceScope('document', 'id'), async (req, 
 });
 
 /** POST /api/documents/:id/extract/estimate — Phase 10: cost/time estimate before extraction */
-router.post('/:id/extract/estimate', requireResourceScope('document', 'id'), async (req, res, next) => {
+router.post('/:id/extract/estimate', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
+    // [Domain 8] replaces requireResourceScope('document') — this inline handler has no service hop.
+    await assertAuthorized(callerPrincipalOf(req), 'read', { kind: 'project', id: projectId });
     const mode = (req.body.mode ?? 'vision') as ExtractionMode;
 
     const pool = getDbPool();
@@ -548,9 +555,11 @@ router.post('/:id/extract/estimate', requireResourceScope('document', 'id'), asy
 });
 
 /** GET /api/documents/:id/extraction-status — Phase 10: poll for vision job status */
-router.get('/:id/extraction-status', requireResourceScope('document', 'id'), async (req, res, next) => {
+router.get('/:id/extraction-status', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
+    // [Domain 8] replaces requireResourceScope('document') — this inline handler has no service hop.
+    await assertAuthorized(callerPrincipalOf(req), 'read', { kind: 'project', id: projectId });
     const pool = getDbPool();
 
     // Fetch document status
@@ -613,7 +622,7 @@ router.get('/:id/extraction-status', requireResourceScope('document', 'id'), asy
 });
 
 /** GET /api/documents/:id/chunks — Phase 10: list extracted chunks */
-router.get('/:id/chunks', requireResourceScope('document', 'id'), async (req, res, next) => {
+router.get('/:id/chunks', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
     const result = await listDocumentChunks({
@@ -626,7 +635,7 @@ router.get('/:id/chunks', requireResourceScope('document', 'id'), async (req, re
 });
 
 /** PUT /api/documents/:id/chunks/:chunkId — Phase 10.4: edit a single chunk's content. */
-router.put('/:id/chunks/:chunkId', requireResourceScope('document', 'id'), async (req, res, next) => {
+router.put('/:id/chunks/:chunkId', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const content = String(req.body.content ?? '').trim();
@@ -662,7 +671,7 @@ router.put('/:id/chunks/:chunkId', requireResourceScope('document', 'id'), async
 });
 
 /** DELETE /api/documents/:id/chunks/:chunkId — Phase 10.4: remove a chunk (skip). */
-router.delete('/:id/chunks/:chunkId', requireResourceScope('document', 'id'), async (req, res, next) => {
+router.delete('/:id/chunks/:chunkId', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(
       (req.query.project_id as string | undefined) ?? req.body?.project_id,
@@ -687,7 +696,7 @@ router.delete('/:id/chunks/:chunkId', requireResourceScope('document', 'id'), as
  * cancelled across projects. The document status reset is additionally
  * scoped to (doc_id, project_id) to prevent touching another tenant's row.
  */
-router.post('/:id/jobs/:jobId/cancel', requireResourceScope('document', 'id'), async (req, res, next) => {
+router.post('/:id/jobs/:jobId/cancel', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const cancelled = await cancelJob(String(req.params.jobId), projectId, { actingPrincipalId: callerPrincipalOf(req) });
@@ -716,7 +725,7 @@ router.post('/:id/jobs/:jobId/cancel', requireResourceScope('document', 'id'), a
  * for every PDF/image document in a project. Returns the list of queued
  * job IDs so the GUI can poll progress. Non-supported doc types are skipped.
  */
-router.post('/bulk-extract', requireProjectScope('body'), async (req, res, next) => {
+router.post('/bulk-extract', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     // Currently vision-only — the worker job queue only handles the vision
@@ -780,9 +789,11 @@ router.post('/bulk-extract', requireProjectScope('body'), async (req, res, next)
  * image document so the list view can <img src=…> without embedding the full
  * base64 content in the JSON response. Returns 404 if doc is not an image.
  */
-router.get('/:id/thumbnail', requireResourceScope('document', 'id'), async (req, res, next) => {
+router.get('/:id/thumbnail', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
+    // [Domain 8] replaces requireResourceScope('document') — gate before returning raw image bytes.
+    await assertAuthorized(callerPrincipalOf(req), 'read', { kind: 'project', id: projectId });
     const pool = getDbPool();
     const r = await pool.query(
       `SELECT doc_type, content, name FROM documents WHERE doc_id = $1 AND project_id = $2`,
@@ -819,7 +830,7 @@ router.get('/:id/thumbnail', requireResourceScope('document', 'id'), async (req,
  */
 const VALID_CHUNK_TYPES: readonly ChunkTypeFilter[] = ['text', 'table', 'code', 'diagram_description', 'mermaid'] as const;
 
-router.post('/chunks/search', requireProjectScope('body'), async (req, res, next) => {
+router.post('/chunks/search', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const query = typeof req.body.query === 'string' ? req.body.query.trim() : '';

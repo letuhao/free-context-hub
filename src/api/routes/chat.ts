@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { requireProjectScope } from '../middleware/requireResourceScope.js';
 import { streamText, tool, stepCountIs, convertToModelMessages } from 'ai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import * as z from 'zod/v4';
@@ -13,12 +12,13 @@ import {
 } from '../../core/index.js';
 import { searchChunks } from '../../services/documentChunks.js';
 import { callerPrincipalOf } from '../middleware/auth.js';
+import { assertAuthorized } from '../../services/authorize.js';
 
 const logger = createModuleLogger('chat');
 const router = Router();
 
 /** POST /api/chat — AI chat with streaming + tool calling */
-router.post('/', requireProjectScope('body'), async (req, res, next) => {
+router.post('/', async (req, res, next) => {
   try {
     const env = getEnv();
 
@@ -30,6 +30,10 @@ router.post('/', requireProjectScope('body'), async (req, res, next) => {
     }
 
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
+    // [Domain 8] Authorize the whole chat session on project READ up front. The AI tool executors below
+    // each authorize too, but a tool-less answer would otherwise run no check — this replaces
+    // requireProjectScope('body') and gates the session itself (project context feeds the LLM).
+    await assertAuthorized(callerPrincipalOf(req), 'read', { kind: 'project', id: projectId });
     const messages = req.body.messages ?? [];
 
     const provider = createOpenAICompatible({

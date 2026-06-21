@@ -10,7 +10,7 @@
 import assert from 'node:assert/strict';
 import test, { before, after } from 'node:test';
 import {
-  createGroup, createProject, resolveProjectIds, listGroups, canReadLessonsPartition,
+  createGroup, createProject, resolveProjectIds, listGroups, canReadLessonsPartition, listAllProjects,
 } from './projectGroups.js';
 import { searchLessonsMulti } from './lessons.js';
 import { createPrincipal, getRootPrincipal } from './principals.js';
@@ -168,6 +168,19 @@ test('searchLessonsMulti: a read@group grant passes authz for a group id; an out
 });
 
 // ── sub-issue 0: listGroups redacts member_count for non-grant callers ─────────
+// [Domain 8 / adversary] listAllProjects must NOT enumerate every tenant — it filters to projects the
+// caller can read (per-row, not throw). entryReader has read@project ENTRY only.
+test('listAllProjects: filters to caller-readable projects (no cross-tenant enumeration)', async () => {
+  const visibleToReader = (await listAllProjects(entryReader)).map((p) => p.project_id);
+  assert.ok(visibleToReader.includes(ENTRY), 'reader sees its own project');
+  assert.ok(!visibleToReader.includes(REALPROJ), 'reader does NOT see a project it cannot read');
+  // outsider sees none of THIS suite's projects.
+  const visibleToOutsider = (await listAllProjects(outsider)).map((p) => p.project_id);
+  for (const pid of [ENTRY, REALPROJ, GR]) {
+    assert.ok(!visibleToOutsider.includes(pid), `outsider must not see ${pid}`);
+  }
+});
+
 test('listGroups: member_count is a number for a read@group caller, NULL for a non-grant caller; name always present', async () => {
   const asReader = (await listGroups(groupReader)).find((g) => g.group_id === GR);
   assert.ok(asReader, 'group must be listed for the reader');
