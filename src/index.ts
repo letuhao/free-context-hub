@@ -10,6 +10,7 @@ import {
   prewarmReranker,
 } from './core/index.js';
 import { createMcpToolsServer } from './mcp/index.js';
+import { injectBearerWorkspaceToken } from './mcp/headerAuth.js';
 import { createApiApp } from './api/index.js';
 import { startSweepScheduler } from './services/sweepScheduler.js';  // Phase 13 Sprint 13.2
 import { startClaimsSweepScheduler } from './services/coordinationSweep.js';  // Phase 15 Sprint 15.2
@@ -20,6 +21,56 @@ async function main() {
   const env = getEnv();
   logStartupEnvSummary();
   await applyMigrations();
+
+  // F2g — boot-posture guard. Runs AFTER applyMigrations so assertEnforceReady's
+  // DB checks see a ready schema, and BEFORE we bind any listener so a misconfigured
+  // production deploy never accepts a request. The decision is pure (bootPosture.ts);
+  // the DB call + fatal exit live here.
+  {
+    const { evaluateBootPosture } = await import('./services/bootPosture.js');
+    const posture = evaluateBootPosture(env);
+    if (posture.kind === 'refuse') {
+      logger.fatal(posture.reason);
+      process.exit(1);
+    }
+    if (posture.kind === 'enforce-ready-required') {
+      // F-AUTH hardening (adversary A6): in a hardened production boot, the session-signing secret must
+      // be set EXPLICITLY. Otherwise sessions.ts falls back to ROOT_BOOTSTRAP_TOKEN (conflating the
+      // root-minting secret with the cookie-signing key) or, worse, a public dev constant in this
+      // source tree (forgeable cookies). Fail closed.
+      if (!process.env.AUTH_SESSION_SIGNING_SECRET || process.env.AUTH_SESSION_SIGNING_SECRET.trim() === '') {
+        logger.fatal(
+          'DEPLOYMENT_PROFILE=production + auth-ON but AUTH_SESSION_SIGNING_SECRET is unset — refusing '
+            + 'to boot. Session cookies would be signed with a fallback secret (the bootstrap token or a '
+            + 'public dev constant). Set AUTH_SESSION_SIGNING_SECRET to a unique high-entropy value.',
+        );
+        process.exit(1);
+      }
+      try {
+        const { assertEnforceReady } = await import('./services/bootstrap.js');
+        const root = await assertEnforceReady();
+        logger.info(
+          { root_principal: root.principal_id },
+          'enforce-ready: production auth-ON boot gate passed',
+        );
+      } catch (e) {
+        logger.fatal(
+          { error: e instanceof Error ? e.message : String(e) },
+          'not enforce-ready — refusing to boot production auth-ON (enabling enforcement would lock '
+            + 'callers and/or the background worker out). Resolve the reason above, then restart.',
+        );
+        process.exit(1);
+      }
+    }
+    if (posture.kind === 'warn-unauthenticated') {
+      logger.warn(
+        'MCP_AUTH_ENABLED=false — backend is UNAUTHENTICATED. Anyone who can reach the gateway port '
+          + 'can call all MCP tools and REST endpoints. Set MCP_AUTH_ENABLED=true and use scoped '
+          + 'api_keys for any non-localhost deployment.',
+      );
+    }
+  }
+
   await bootstrapKgIfEnabled().catch(err => {
     logger.error({ error: err instanceof Error ? err.message : String(err) }, 'kg bootstrap failed');
   });
@@ -53,6 +104,7 @@ async function main() {
   // No session IDs, no stale session errors.
   mcpApp.post('/mcp', async (req: any, res: any) => {
     try {
+      injectBearerWorkspaceToken(req);
       const server = createMcpToolsServer();
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
@@ -102,18 +154,8 @@ async function main() {
     logger.info({ port: env.API_PORT, prefix: '/api' }, 'REST API listening');
   });
 
-  // Security posture warning: with auth off, the single-port gateway is an
-  // unauthenticated proxy to the full MCP/REST surface. Safe for a loopback /
-  // trusted-network self-host; dangerous if the gateway port is publicly
-  // exposed. The gateway's cross-site guard still blocks browser-driven attacks,
-  // but does not authenticate direct (curl/SDK) callers.
-  if (!env.MCP_AUTH_ENABLED) {
-    logger.warn(
-      'MCP_AUTH_ENABLED=false — backend is UNAUTHENTICATED. Anyone who can reach '
-        + 'the gateway port can call all MCP tools and REST endpoints. Set '
-        + 'MCP_AUTH_ENABLED=true and use scoped api_keys for any non-localhost deployment.',
-    );
-  }
+  // (Security-posture warning + the production enforce-ready boot gate run earlier,
+  //  right after applyMigrations — see the F2g boot-posture guard above.)
 
   process.on('SIGINT', () => process.exit(0));
 }

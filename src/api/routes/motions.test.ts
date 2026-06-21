@@ -336,34 +336,9 @@ test('POST /api/decision-bodies threshold>1 → 400', async () => {
   assert.equal(res.json.code, 'BAD_REQUEST');
 });
 
-// ── GET role gate (AC11 — GET routes require reader) ─────────────────────────
-
-test('GET /api/motions/:id with an unknown role → 403', async () => {
-  const res = await request('GET', '/api/motions/00000000-0000-0000-0000-000000000000', undefined,
-    { 'x-test-key-role': 'intruder' });
-  assert.equal(res.status, 403, `expected 403, got ${res.status}: ${JSON.stringify(res.json)}`);
-});
-
-test('GET /api/decision-bodies with an unknown role → 403', async () => {
-  const res = await request('GET', `/api/decision-bodies?project_id=${TEST_PROJECT}`, undefined,
-    { 'x-test-key-role': 'intruder' });
-  assert.equal(res.status, 403, `expected 403, got ${res.status}`);
-});
-
-test('GET /api/topics/:id/motions with role reader → not 403 (reader admitted)', async () => {
-  const topicId = await mkTopic();
-  const res = await request('GET', `/api/topics/${topicId}/motions`, undefined,
-    { 'x-test-key-role': 'reader' });
-  assert.notEqual(res.status, 403, `reader must pass the gate; got ${res.status}`);
-});
-
-test('GET /api/decision-bodies/:id with role reader → not 403', async () => {
-  const bodyId = await mkBody();
-  const res = await request('GET', `/api/decision-bodies/${bodyId}`, undefined,
-    { 'x-test-key-role': 'reader' });
-  assert.notEqual(res.status, 403, `reader must pass the gate; got ${res.status}`);
-  assert.equal(res.json.data.body_id, bodyId);
-});
+// [Domain 8] REMOVED the GET role-gate tests — they asserted the deleted requireRole middleware via an
+// x-test-key-role shim. Authorization is now authorize() over principal grants (motions/decision-body
+// scope is covered by the decisions-authz / motions service suites). Functional GET coverage is below.
 
 // ── GET list endpoints return data ───────────────────────────────────────────
 

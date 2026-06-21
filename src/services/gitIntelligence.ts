@@ -12,8 +12,7 @@ import { suggestLessonFromCommit } from './distiller.js';
 import { loadIgnorePatternsFromRoot } from '../utils/ignore.js';
 import { parseCommitFilesFromOutputs } from './gitCommitFileParse.js';
 import { upsertGitLessonProposalDraft } from './gitLessonProposalUpsert.js';
-import { assertCallerScope } from '../core/security/callerScope.js';
-import type { CallerScope } from '../core/security/callerScope.js';
+import { assertAuthorized } from './authorize.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -116,13 +115,13 @@ async function parseCommitFiles(
 
 export async function ingestGitHistory(params: {
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() gate (project scope). */
+  actingPrincipalId?: string | null;
   root: string;
   since?: string;
   maxCommits?: number;
 }): Promise<IngestGitHistoryResult> {
-  assertCallerScope(params.callerScope, params.projectId);
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.projectId });
   const env = getEnv();
   if (!env.GIT_INGEST_ENABLED || !(await isFeatureEnabled(params.projectId, 'git_ingest'))) {
     return {
@@ -232,8 +231,8 @@ export async function ingestGitHistory(params: {
   }
 }
 
-export async function listCommits(params: { projectId: string; callerScope?: CallerScope; limit?: number; offset?: number }): Promise<ListCommitsResult & { total_count?: number }> {
-  assertCallerScope(params.callerScope, params.projectId);
+export async function listCommits(params: { projectId: string; actingPrincipalId?: string | null; limit?: number; offset?: number }): Promise<ListCommitsResult & { total_count?: number }> {
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id: params.projectId });
   const env = getEnv();
   if (!env.GIT_INGEST_ENABLED || !(await isFeatureEnabled(params.projectId, 'git_ingest'))) {
     return { items: [], warning: 'Git intelligence is disabled (env or project toggle).' };
@@ -254,8 +253,8 @@ export async function listCommits(params: { projectId: string; callerScope?: Cal
   return { items: (res.rows ?? []) as ListCommitsResult['items'], total_count };
 }
 
-export async function getCommit(params: { projectId: string; callerScope?: CallerScope; sha: string }): Promise<GetCommitResult> {
-  assertCallerScope(params.callerScope, params.projectId);
+export async function getCommit(params: { projectId: string; actingPrincipalId?: string | null; sha: string }): Promise<GetCommitResult> {
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id: params.projectId });
   const env = getEnv();
   if (!env.GIT_INGEST_ENABLED || !(await isFeatureEnabled(params.projectId, 'git_ingest'))) {
     return { commit: null, files: [], warning: 'Git intelligence is disabled (env or project toggle).' };
@@ -323,12 +322,12 @@ function normalizeSourceRefs(input: unknown[]): string[] {
 
 export async function suggestLessonsFromCommits(params: {
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() gate (project scope). */
+  actingPrincipalId?: string | null;
   commitShas?: string[];
   limit?: number;
 }): Promise<{ proposals: SuggestedLessonProposal[]; warning?: string }> {
-  assertCallerScope(params.callerScope, params.projectId);
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.projectId });
   const env = getEnv();
   if (!env.GIT_INGEST_ENABLED || !(await isFeatureEnabled(params.projectId, 'git_ingest'))) {
     return { proposals: [], warning: 'Git intelligence is disabled (env or project toggle).' };
@@ -420,12 +419,12 @@ export async function suggestLessonsFromCommits(params: {
 
 export async function linkCommitToLesson(params: {
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() gate (project scope). */
+  actingPrincipalId?: string | null;
   commitSha: string;
   lessonId: string;
 }): Promise<{ status: 'ok' | 'error' | 'skipped'; linked_refs: number; warning?: string; error?: string }> {
-  assertCallerScope(params.callerScope, params.projectId);
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.projectId });
   const env = getEnv();
   if (!env.GIT_INGEST_ENABLED || !(await isFeatureEnabled(params.projectId, 'git_ingest'))) {
     return { status: 'skipped', linked_refs: 0, warning: 'Git intelligence is disabled (env or project toggle).' };
@@ -473,8 +472,8 @@ export async function linkCommitToLesson(params: {
 
 export async function analyzeCommitImpact(params: {
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() gate (project scope). */
+  actingPrincipalId?: string | null;
   commitSha: string;
   limit?: number;
 }): Promise<{
@@ -484,7 +483,7 @@ export async function analyzeCommitImpact(params: {
   related_lessons: Array<{ lesson_id: string; title: string; edge: string }>;
   warning?: string;
 }> {
-  assertCallerScope(params.callerScope, params.projectId);
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id: params.projectId });
   const env = getEnv();
   if (!env.GIT_INGEST_ENABLED || !(await isFeatureEnabled(params.projectId, 'git_ingest'))) {
     return {

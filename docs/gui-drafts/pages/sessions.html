@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: Sessions &amp; Auth Policy</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen font-sans">
+  <div class="p-6">
+    <p class="text-xs text-zinc-600 mb-4">Draft: pages/sessions | Source: gui/src/app/settings/sessions/page.tsx | Spec: docs/specs/2026-06-19-actor-data-boundary-standards-gap.md | Standards: NIST 800-63B §7 session mgmt</p>
+
+    <!-- Breadcrumb -->
+    <div class="flex items-center gap-1.5 text-xs text-zinc-500 mb-4">
+      <span>Settings</span>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      <span class="text-zinc-400">Sessions &amp; Security</span>
+    </div>
+
+    <!-- Page Header -->
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-lg font-semibold text-zinc-100">Sessions &amp; Security</h1>
+        <p class="text-xs text-zinc-500 mt-0.5">Active browser sessions for your principal, and the deployment's authentication policy.</p>
+      </div>
+      <button class="px-3 py-1.5 text-xs border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-md transition-colors">Revoke all other sessions</button>
+    </div>
+
+    <!-- Active sessions -->
+    <h2 class="text-sm font-semibold text-zinc-200 mb-3">Active sessions</h2>
+    <div class="space-y-2.5 mb-10">
+
+      <!-- current -->
+      <div class="bg-zinc-900 border border-emerald-500/20 rounded-lg p-4">
+        <div class="flex items-start justify-between">
+          <div class="flex items-start gap-3">
+            <div class="w-9 h-9 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-emerald-400"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            </div>
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-sm font-medium text-zinc-200">Chrome on Windows</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">this device</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">AAL2 &middot; MFA</span>
+              </div>
+              <div class="flex items-center gap-3 text-[10px] text-zinc-600">
+                <span>192.168.1.40 &middot; Hanoi, VN</span>
+                <span>Signed in 2 hours ago</span>
+                <span>Re-auth due in 28 days</span>
+              </div>
+            </div>
+          </div>
+          <span class="text-[10px] text-zinc-600 italic shrink-0">current</span>
+        </div>
+      </div>
+
+      <!-- other device -->
+      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+        <div class="flex items-start justify-between">
+          <div class="flex items-start gap-3">
+            <div class="w-9 h-9 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-zinc-500"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+            </div>
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-sm font-medium text-zinc-200">Safari on iPhone</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">AAL2 &middot; MFA</span>
+              </div>
+              <div class="flex items-center gap-3 text-[10px] text-zinc-600">
+                <span>113.22.x.x &middot; Hanoi, VN</span>
+                <span>Last active 1 day ago</span>
+                <span>Idle timeout in 6 days</span>
+              </div>
+            </div>
+          </div>
+          <button class="text-xs text-zinc-500 hover:text-red-400 transition-colors shrink-0">Revoke</button>
+        </div>
+      </div>
+
+      <!-- stale / flagged -->
+      <div class="bg-zinc-900 border border-amber-500/20 rounded-lg p-4">
+        <div class="flex items-start justify-between">
+          <div class="flex items-start gap-3">
+            <div class="w-9 h-9 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-amber-400"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            </div>
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-sm font-medium text-zinc-200">Firefox on Linux</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">new location</span>
+              </div>
+              <div class="flex items-center gap-3 text-[10px] text-zinc-600">
+                <span>45.83.x.x &middot; Frankfurt, DE</span>
+                <span>Signed in 5 days ago</span>
+              </div>
+            </div>
+          </div>
+          <button class="text-xs text-zinc-500 hover:text-red-400 transition-colors shrink-0">Revoke</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Auth policy (deployment-wide; admin/root) ── -->
+    <h2 class="text-sm font-semibold text-zinc-200 mb-1">Authentication policy</h2>
+    <p class="text-xs text-zinc-500 mb-4">Deployment-wide — applies to all human principals. Editable by admin/root.</p>
+
+    <div class="bg-zinc-900 border border-zinc-800 rounded-lg divide-y divide-zinc-800">
+      <!-- require MFA -->
+      <div class="flex items-center justify-between p-4">
+        <div>
+          <div class="text-sm text-zinc-200">Require MFA (AAL2)</div>
+          <div class="text-[11px] text-zinc-600">NIST 800-63B AAL2 — every human session must complete a second factor.</div>
+        </div>
+        <button class="w-9 h-5 rounded-full relative bg-blue-600 transition-colors shrink-0">
+          <span class="absolute top-[2px] left-[18px] w-[16px] h-[16px] bg-white rounded-full shadow-sm"></span>
+        </button>
+      </div>
+      <!-- absolute timeout -->
+      <div class="flex items-center justify-between p-4">
+        <div>
+          <div class="text-sm text-zinc-200">Re-authentication window</div>
+          <div class="text-[11px] text-zinc-600">Force re-auth during an extended session regardless of activity (≤30d @AAL1, ≤12h @AAL3).</div>
+        </div>
+        <select class="px-2.5 py-1 bg-zinc-950 border border-zinc-800 rounded-md text-xs text-zinc-300 outline-none appearance-none cursor-pointer shrink-0">
+          <option>12 hours</option>
+          <option selected>30 days</option>
+          <option>7 days</option>
+        </select>
+      </div>
+      <!-- idle timeout -->
+      <div class="flex items-center justify-between p-4">
+        <div>
+          <div class="text-sm text-zinc-200">Idle timeout</div>
+          <div class="text-[11px] text-zinc-600">End a session after inactivity (AAL3 requires ≤15 minutes).</div>
+        </div>
+        <select class="px-2.5 py-1 bg-zinc-950 border border-zinc-800 rounded-md text-xs text-zinc-300 outline-none appearance-none cursor-pointer shrink-0">
+          <option>15 minutes</option>
+          <option>1 hour</option>
+          <option selected>7 days</option>
+        </select>
+      </div>
+      <!-- lockout -->
+      <div class="flex items-center justify-between p-4">
+        <div>
+          <div class="text-sm text-zinc-200">Brute-force protection</div>
+          <div class="text-[11px] text-zinc-600">Soft lock with increasing delay; ≤100 failed attempts/hour/account (OWASP V6). Reset never locks an account.</div>
+        </div>
+        <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 shrink-0">enforced</span>
+      </div>
+    </div>
+
+    <p class="text-[11px] text-zinc-600 mt-3">Agents don't have sessions — they authenticate per request with an API key. Manage those under <a class="text-blue-300 underline decoration-dotted">Access Control</a> and <a class="text-blue-300 underline decoration-dotted">NHI Access Review</a>.</p>
+
+  </div>
+</body>
+</html>

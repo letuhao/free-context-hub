@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: NHI Access Review</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen font-sans">
+  <div class="p-6">
+    <p class="text-xs text-zinc-600 mb-4">Draft: pages/nhi-access-review | Source: gui/src/app/governance/access-review/page.tsx | Spec: docs/specs/2026-06-19-actor-data-boundary-standards-gap.md | Best-practice: NHI governance (short-lived creds, rotation, log-based review)</p>
+
+    <!-- Breadcrumb -->
+    <div class="flex items-center gap-1.5 text-xs text-zinc-500 mb-4">
+      <span>Governance</span>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      <span class="text-zinc-400">NHI Access Review</span>
+    </div>
+
+    <!-- Page Header -->
+    <div class="flex items-center justify-between mb-5">
+      <div>
+        <h1 class="text-lg font-semibold text-zinc-100">Non-Human Identity — Access Review</h1>
+        <p class="text-xs text-zinc-500 mt-0.5">Agents and service keys reviewed from the logs, not by asking. Surface stale credentials and unused grants for revocation.</p>
+      </div>
+      <button class="px-4 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white font-medium transition-colors">Start review cycle</button>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
+        <p class="text-2xl font-semibold text-zinc-100">9</p>
+        <p class="text-xs text-zinc-500 mt-0.5">Agent / service keys</p>
+      </div>
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
+        <p class="text-2xl font-semibold text-amber-400">3</p>
+        <p class="text-xs text-zinc-500 mt-0.5">Unused &ge;90 days</p>
+      </div>
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
+        <p class="text-2xl font-semibold text-red-400">2</p>
+        <p class="text-xs text-zinc-500 mt-0.5">Never expire</p>
+      </div>
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
+        <p class="text-2xl font-semibold text-amber-400">1</p>
+        <p class="text-xs text-zinc-500 mt-0.5">Rotation overdue (&gt;90d)</p>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex gap-1 mb-5 border-b border-zinc-800 pb-px">
+      <button class="px-4 py-2 text-xs font-medium text-blue-400 border-b-2 border-blue-400">Credentials</button>
+      <button class="px-4 py-2 text-xs text-zinc-500 hover:text-zinc-300">Unused grants</button>
+    </div>
+
+    <!-- Credentials review table -->
+    <div class="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden mb-10">
+      <table class="w-full text-xs">
+        <thead>
+          <tr class="border-b border-zinc-800">
+            <th class="text-left px-4 py-3 text-zinc-500 font-medium">Key / principal</th>
+            <th class="text-left px-4 py-3 text-zinc-500 font-medium">Age</th>
+            <th class="text-left px-4 py-3 text-zinc-500 font-medium">Last used</th>
+            <th class="text-left px-4 py-3 text-zinc-500 font-medium">Expiry</th>
+            <th class="text-left px-4 py-3 text-zinc-500 font-medium">Rotation</th>
+            <th class="text-left px-4 py-3 text-zinc-500 font-medium">Review</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- healthy -->
+          <tr class="border-b border-zinc-800/50">
+            <td class="px-4 py-3">
+              <div class="text-zinc-300">Production Agent Key</div>
+              <div class="text-[10px] text-violet-400">claude-code</div>
+            </td>
+            <td class="px-4 py-3 text-zinc-400">30d</td>
+            <td class="px-4 py-3 text-emerald-400">5 min ago</td>
+            <td class="px-4 py-3 text-zinc-400">90d</td>
+            <td class="px-4 py-3 text-zinc-400">in 60d</td>
+            <td class="px-4 py-3"><span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">keep</span></td>
+          </tr>
+          <!-- unused 90d -->
+          <tr class="border-b border-zinc-800/50">
+            <td class="px-4 py-3">
+              <div class="text-zinc-300">Legacy ETL Key</div>
+              <div class="text-[10px] text-violet-400">etl-bot</div>
+            </td>
+            <td class="px-4 py-3 text-zinc-400">214d</td>
+            <td class="px-4 py-3 text-amber-400">112 days ago</td>
+            <td class="px-4 py-3 text-zinc-400">never</td>
+            <td class="px-4 py-3 text-zinc-600">—</td>
+            <td class="px-4 py-3"><button class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 hover:bg-amber-500/20">revoke?</button></td>
+          </tr>
+          <!-- never expire -->
+          <tr class="border-b border-zinc-800/50">
+            <td class="px-4 py-3">
+              <div class="text-zinc-300">CI/CD Read-Only</div>
+              <div class="text-[10px] text-violet-400">ci-indexer</div>
+            </td>
+            <td class="px-4 py-3 text-zinc-400">14d</td>
+            <td class="px-4 py-3 text-emerald-400">2 h ago</td>
+            <td class="px-4 py-3 text-red-400">never</td>
+            <td class="px-4 py-3 text-zinc-600">—</td>
+            <td class="px-4 py-3"><button class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 hover:bg-blue-500/20">set expiry</button></td>
+          </tr>
+          <!-- rotation overdue -->
+          <tr>
+            <td class="px-4 py-3">
+              <div class="text-zinc-300">Webhook Signer</div>
+              <div class="text-[10px] text-violet-400">webhook-svc</div>
+            </td>
+            <td class="px-4 py-3 text-amber-400">128d</td>
+            <td class="px-4 py-3 text-emerald-400">1 h ago</td>
+            <td class="px-4 py-3 text-zinc-400">1y</td>
+            <td class="px-4 py-3 text-amber-400">overdue 38d</td>
+            <td class="px-4 py-3"><button class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 hover:bg-amber-500/20">rotate</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <h2 class="text-sm font-medium text-zinc-400 mt-6 mb-3">Rotate key (mint successor, overlap window)</h2>
+    <div class="w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl">
+      <div class="px-6 pt-5 pb-4 border-b border-zinc-800">
+        <h2 class="text-base font-semibold text-zinc-100">Rotate &ldquo;Webhook Signer&rdquo;</h2>
+        <p class="text-xs text-zinc-500 mt-0.5">Mint a successor key bound to the same principal &amp; grants. The old key keeps working during an overlap, then auto-expires.</p>
+      </div>
+      <div class="px-6 py-5 space-y-4">
+        <div>
+          <label class="block text-xs text-zinc-400 mb-1.5">Overlap window (old key valid until)</label>
+          <select class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-300 outline-none appearance-none cursor-pointer focus:border-zinc-600">
+            <option>24 hours</option>
+            <option selected>7 days</option>
+            <option>No overlap (revoke now)</option>
+          </select>
+        </div>
+        <div class="bg-zinc-950 border border-zinc-800 rounded-md p-2.5 text-[11px] text-zinc-500">
+          Successor inherits: <span class="text-zinc-300">webhook-svc</span> · grants unchanged · new expiry 1y. No grant edits happen during rotation.
+        </div>
+      </div>
+      <div class="px-6 py-4 border-t border-zinc-800 flex justify-end gap-2">
+        <button class="px-3 py-1.5 text-xs border border-zinc-700 rounded-md text-zinc-400">Cancel</button>
+        <button class="px-4 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white font-medium">Rotate</button>
+      </div>
+    </div>
+
+    <!-- ── Ephemeral credential option ── -->
+    <h2 class="text-sm font-medium text-zinc-400 mt-12 mb-3">Ephemeral / short-lived credential (CI / one-shot agents)</h2>
+    <div class="w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-lg p-5">
+      <div class="flex items-center gap-2 mb-3">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-blue-400"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <h3 class="text-sm font-semibold text-zinc-200">Mint ephemeral key</h3>
+        <span class="text-[10px] text-zinc-600 ml-auto">prefer over durable keys (NHI best-practice)</span>
+      </div>
+      <div class="grid grid-cols-2 gap-3 mb-3">
+        <div>
+          <label class="block text-[10px] uppercase tracking-wide text-zinc-600 mb-1">Bind to principal</label>
+          <select class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-300 outline-none appearance-none cursor-pointer focus:border-zinc-600">
+            <option>ci-indexer</option>
+            <option>— new one-shot principal —</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[10px] uppercase tracking-wide text-zinc-600 mb-1">TTL</label>
+          <select class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-300 outline-none appearance-none cursor-pointer focus:border-zinc-600">
+            <option>15 minutes</option>
+            <option selected>1 hour</option>
+            <option>8 hours</option>
+          </select>
+        </div>
+      </div>
+      <p class="text-[11px] text-zinc-600 mb-3">Auto-revokes at TTL — no review, no rotation, no cleanup. Scope comes from the bound principal's grants.</p>
+      <button class="px-4 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white font-medium">Mint &amp; reveal once</button>
+    </div>
+
+  </div>
+</body>
+</html>

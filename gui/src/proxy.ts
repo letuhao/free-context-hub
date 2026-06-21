@@ -42,6 +42,23 @@ const ALLOWED_ORIGINS = (process.env.GATEWAY_ALLOWED_ORIGINS ?? "")
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
+/**
+ * [DEFERRED-059] The gateway-token shim is RETIRED.
+ *
+ * It was a stopgap: under the hardened backend (MCP_AUTH_ENABLED=true) the browser GUI shipped
+ * no bearer, so the proxy injected a single SERVER-ONLY `CONTEXTHUB_GATEWAY_TOKEN` (one shared
+ * api_keys-bound principal) on every proxied `/api` request. That made every human share ONE
+ * super-credential — the exact single-super-credential anti-pattern the actor-data-boundary
+ * exists to eliminate. F-AUTH (human login → session cookie) is now the real browser credential:
+ * the GUI's same-origin `/api` calls carry the httpOnly `chub_session` cookie (forwarded
+ * unchanged by the same-origin proxy), which `sessionAuth` authenticates. An agent calling
+ * through the gateway still carries its OWN `Authorization: Bearer <api_key>`. So the proxy no
+ * longer injects any credential — it only enforces the cross-site / CSRF guard below.
+ */
+function allow(_req: NextRequest): NextResponse {
+  return NextResponse.next();
+}
+
 function blocked(reason: string) {
   return NextResponse.json(
     { error: `Forbidden: cross-site request to gateway rejected (${reason})` },
@@ -67,7 +84,7 @@ export function proxy(req: NextRequest) {
     if (disallowed && !originAllowed) {
       return blocked(`sec-fetch-site=${site}`);
     }
-    return NextResponse.next();
+    return allow(req);
   }
 
   // No Sec-Fetch-Site. Either a non-browser client (allow) or an old browser.
@@ -87,7 +104,7 @@ export function proxy(req: NextRequest) {
     }
   }
 
-  return NextResponse.next();
+  return allow(req);
 }
 
 export const config = {

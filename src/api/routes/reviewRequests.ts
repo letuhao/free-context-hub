@@ -7,13 +7,7 @@ import {
   resolveProjectIdOrThrow,
   getEnv,
 } from '../../core/index.js';
-import type { CallerScope } from '../../core/index.js';
-import { requireRole } from '../middleware/requireRole.js';
-
-/** DEFERRED-029: read the caller's project scope attached by bearerAuth. */
-function callerScopeOf(req: Request): CallerScope {
-  return (req as { apiKeyScope?: CallerScope }).apiKeyScope;
-}
+import { callerPrincipalOf } from '../middleware/auth.js';
 
 /**
  * Phase 13 Sprint 13.3 — Review-request REST routes.
@@ -54,7 +48,7 @@ router.get('/', async (req, res, next) => {
     const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 100) : 20;
     const offsetRaw = parseInt(String(req.query.offset ?? ''), 10);
     const offset = Number.isFinite(offsetRaw) ? Math.max(offsetRaw, 0) : 0;
-    res.json(await listReviewRequests({ project_id: projectId, callerScope: callerScopeOf(req), status, submitted_by, limit, offset }));
+    res.json(await listReviewRequests({ project_id: projectId, actingPrincipalId: callerPrincipalOf(req), status, submitted_by, limit, offset }));
   } catch (e) { next(e); }
 });
 
@@ -62,13 +56,13 @@ router.get('/:reqId', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String((req.params as Record<string, string>).id ?? ''));
     const reqId = String(req.params.reqId);
-    const r = await getReviewRequest({ project_id: projectId, request_id: reqId, callerScope: callerScopeOf(req) });
+    const r = await getReviewRequest({ project_id: projectId, request_id: reqId, actingPrincipalId: callerPrincipalOf(req) });
     if (!r) { res.status(404).json({ error: 'not found' }); return; }
     res.json(r);
   } catch (e) { next(e); }
 });
 
-router.post('/:reqId/approve', requireRole('admin'), async (req, res, next) => {
+router.post('/:reqId/approve', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String((req.params as Record<string, string>).id ?? ''));
     const reqId = String(req.params.reqId);
@@ -76,7 +70,7 @@ router.post('/:reqId/approve', requireRole('admin'), async (req, res, next) => {
     const result = await approveReviewRequest({
       project_id: projectId, request_id: reqId, resolved_by: reviewerIdentity(req),
       resolution_note: typeof resolutionNote === 'string' ? resolutionNote : undefined,
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
     });
     if (result.status === 'not_found') { res.status(404).json(result); return; }
     if (result.status === 'already_resolved') { res.status(409).json(result); return; }
@@ -84,7 +78,7 @@ router.post('/:reqId/approve', requireRole('admin'), async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-router.post('/:reqId/return', requireRole('admin'), async (req, res, next) => {
+router.post('/:reqId/return', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String((req.params as Record<string, string>).id ?? ''));
     const reqId = String(req.params.reqId);
@@ -95,7 +89,7 @@ router.post('/:reqId/return', requireRole('admin'), async (req, res, next) => {
     }
     const result = await returnReviewRequest({
       project_id: projectId, request_id: reqId, resolved_by: reviewerIdentity(req), resolution_note: resolutionNote,
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
     });
     if (result.status === 'not_found') { res.status(404).json(result); return; }
     if (result.status === 'already_resolved') { res.status(409).json(result); return; }

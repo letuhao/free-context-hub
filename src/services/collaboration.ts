@@ -1,4 +1,12 @@
 import { getDbPool } from '../db/client.js';
+import { assertAuthorized } from './authorize.js';
+
+// F2f (DEFERRED-047): collaboration is tenant-gated on the resource's PROJECT (via the `lesson` kind,
+// which resolves lesson→project). Reads require read@project; engagement writes (comment/vote/bookmark)
+// require write@project — preserving the capability model (a read-only principal cannot write). If
+// read-only engagement is ever desired, relax the specific write surface to `read`. deleteComment is
+// comment-keyed (resolve its lesson in-service); intra-project author/moderator delete authz is a
+// separate concern.
 
 // ── Comments ──
 
@@ -14,10 +22,12 @@ export interface LessonComment {
 
 export async function addComment(params: {
   lessonId: string;
+  actingPrincipalId?: string | null;
   parentId?: string;
   author: string;
   content: string;
 }): Promise<LessonComment> {
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'lesson', id: params.lessonId });
   const pool = getDbPool();
   const result = await pool.query(
     `INSERT INTO lesson_comments (lesson_id, parent_id, author, content)
@@ -30,7 +40,9 @@ export async function addComment(params: {
 
 export async function listComments(params: {
   lessonId: string;
+  actingPrincipalId?: string | null;
 }): Promise<{ comments: LessonComment[]; total_count: number }> {
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'lesson', id: params.lessonId });
   const pool = getDbPool();
   const result = await pool.query(
     `SELECT * FROM lesson_comments WHERE lesson_id = $1 ORDER BY created_at ASC`,
@@ -52,8 +64,13 @@ export async function listComments(params: {
 
 export async function deleteComment(params: {
   commentId: string;
+  actingPrincipalId?: string | null;
 }): Promise<boolean> {
   const pool = getDbPool();
+  // comment-keyed: resolve its lesson so authorize() can gate on the lesson's project. A missing
+  // comment → null lesson → unresolvable → NOT_FOUND (no oracle), before the DELETE runs.
+  const lr = await pool.query(`SELECT lesson_id FROM lesson_comments WHERE comment_id = $1`, [params.commentId]);
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'lesson', id: lr.rows[0]?.lesson_id ?? null });
   const result = await pool.query(
     `DELETE FROM lesson_comments WHERE comment_id = $1`, [params.commentId],
   );
@@ -71,9 +88,11 @@ export interface FeedbackSummary {
 
 export async function voteFeedback(params: {
   lessonId: string;
+  actingPrincipalId?: string | null;
   userId: string;
   vote: 1 | -1;
 }): Promise<{ status: 'ok'; vote: number }> {
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'lesson', id: params.lessonId });
   const pool = getDbPool();
   await pool.query(
     `INSERT INTO lesson_feedback (lesson_id, user_id, vote)
@@ -86,8 +105,10 @@ export async function voteFeedback(params: {
 
 export async function getFeedback(params: {
   lessonId: string;
+  actingPrincipalId?: string | null;
   userId?: string;
 }): Promise<FeedbackSummary> {
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'lesson', id: params.lessonId });
   const pool = getDbPool();
   const agg = await pool.query(
     `SELECT
@@ -114,8 +135,10 @@ export async function getFeedback(params: {
 
 export async function removeFeedback(params: {
   lessonId: string;
+  actingPrincipalId?: string | null;
   userId: string;
 }): Promise<boolean> {
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'lesson', id: params.lessonId });
   const pool = getDbPool();
   const result = await pool.query(
     `DELETE FROM lesson_feedback WHERE lesson_id = $1 AND user_id = $2`,
@@ -129,7 +152,9 @@ export async function removeFeedback(params: {
 export async function addBookmark(params: {
   userId: string;
   lessonId: string;
+  actingPrincipalId?: string | null;
 }): Promise<{ status: 'ok' }> {
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'lesson', id: params.lessonId });
   const pool = getDbPool();
   await pool.query(
     `INSERT INTO bookmarks (user_id, lesson_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
@@ -141,7 +166,9 @@ export async function addBookmark(params: {
 export async function removeBookmark(params: {
   userId: string;
   lessonId: string;
+  actingPrincipalId?: string | null;
 }): Promise<boolean> {
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'lesson', id: params.lessonId });
   const pool = getDbPool();
   const result = await pool.query(
     `DELETE FROM bookmarks WHERE user_id = $1 AND lesson_id = $2`,
@@ -153,7 +180,9 @@ export async function removeBookmark(params: {
 export async function listBookmarks(params: {
   userId: string;
   projectId: string;
+  actingPrincipalId?: string | null;
 }): Promise<{ bookmarks: any[]; total_count: number }> {
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id: params.projectId });
   const pool = getDbPool();
   const result = await pool.query(
     `SELECT b.lesson_id, b.created_at AS bookmarked_at, l.title, l.lesson_type, l.status, l.tags
@@ -169,7 +198,9 @@ export async function listBookmarks(params: {
 export async function isBookmarked(params: {
   userId: string;
   lessonId: string;
+  actingPrincipalId?: string | null;
 }): Promise<boolean> {
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'lesson', id: params.lessonId });
   const pool = getDbPool();
   const result = await pool.query(
     `SELECT 1 FROM bookmarks WHERE user_id = $1 AND lesson_id = $2`,

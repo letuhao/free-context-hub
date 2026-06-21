@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import type { Request } from 'express';
 import {
   getProjectSnapshotBody,
   indexProject,
@@ -12,11 +11,11 @@ import {
   updateProject,
   addProjectToGroup,
 } from '../../core/index.js';
-import type { CallerScope } from '../../core/index.js';
+import { callerPrincipalOf } from '../middleware/auth.js';
+import { assertAuthorized } from '../../services/authorize.js';
 import multer from 'multer';
 import { promises as fsPromises } from 'node:fs';
 import { invalidateFeatureCache } from '../../services/featureToggles.js';
-import { requireRole } from '../middleware/requireRole.js';
 import { exportProject, ExportNotFoundError } from '../../services/exchange/exportProject.js';
 import {
   importProject,
@@ -24,11 +23,6 @@ import {
   type ConflictPolicy,
 } from '../../services/exchange/importProject.js';
 import { pullFromRemote, PullError } from '../../services/exchange/pullFromRemote.js';
-
-/** DEFERRED-029: read the caller's project scope attached by bearerAuth. */
-function callerScopeOf(req: Request): CallerScope {
-  return (req as { apiKeyScope?: CallerScope }).apiKeyScope;
-}
 
 // Bundles routinely exceed the 10MB default used for document uploads —
 // 500 MB matches what we've observed in production-scale projects with
@@ -44,13 +38,13 @@ const router = Router();
 /** GET /api/projects — list all projects with group memberships and lesson counts */
 router.get('/', async (req, res, next) => {
   try {
-    const projects = await listAllProjects();
+    const projects = await listAllProjects(callerPrincipalOf(req));
     res.json({ projects });
   } catch (e) { next(e); }
 });
 
 /** POST /api/projects — create a new project */
-router.post('/', requireRole('writer'), async (req, res, next) => {
+router.post('/', async (req, res, next) => {
   try {
     const { project_id, name, description, color, settings, group_id } = req.body;
     if (!project_id || typeof project_id !== 'string') {
@@ -61,7 +55,7 @@ router.post('/', requireRole('writer'), async (req, res, next) => {
     const trimmedDesc = typeof description === 'string' ? description.trim() : undefined;
     const result = await createProject({
       project_id: project_id.trim(),
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       name: trimmedName || undefined,
       description: trimmedDesc || undefined,
       color,
@@ -72,7 +66,7 @@ router.post('/', requireRole('writer'), async (req, res, next) => {
     let group_warning: string | undefined;
     if (group_id && typeof group_id === 'string') {
       try {
-        await addProjectToGroup(group_id, project_id, { callerScope: callerScopeOf(req) });
+        await addProjectToGroup(group_id, project_id, { actingPrincipalId: callerPrincipalOf(req) });
       } catch (err: any) {
         group_warning = `Project created but failed to add to group "${group_id}": ${err?.message ?? 'unknown error'}`;
       }
@@ -83,14 +77,14 @@ router.post('/', requireRole('writer'), async (req, res, next) => {
 });
 
 /** PUT /api/projects/:id — update project metadata */
-router.put('/:id', requireRole('writer'), async (req, res, next) => {
+router.put('/:id', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String(req.params.id));
     const { name, description, color, settings } = req.body;
     const trimmedName = typeof name === 'string' ? name.trim() : undefined;
     const trimmedDesc = typeof description === 'string' ? description.trim() : undefined;
     const result = await updateProject(projectId, {
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       name: trimmedName,
       description: trimmedDesc,
       color,
@@ -105,7 +99,7 @@ router.put('/:id', requireRole('writer'), async (req, res, next) => {
 router.get('/:id/summary', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String(req.params.id));
-    const body = await getProjectSnapshotBody(projectId, { callerScope: callerScopeOf(req) });
+    const body = await getProjectSnapshotBody(projectId, { actingPrincipalId: callerPrincipalOf(req) });
     if (body === null) {
       res.status(404).json({ error: 'No summary found for project', project_id: projectId });
       return;
@@ -115,13 +109,13 @@ router.get('/:id/summary', async (req, res, next) => {
 });
 
 /** POST /api/projects/:id/index — trigger project indexing */
-router.post('/:id/index', requireRole('writer'), async (req, res, next) => {
+router.post('/:id/index', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String(req.params.id));
-    const root = await resolveProjectRoot(projectId, req.body.root);
+    const root = await resolveProjectRoot(projectId, req.body.root, callerPrincipalOf(req));
     const result = await indexProject({
       projectId,
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       root,
       linesPerChunk: req.body.lines_per_chunk,
       embeddingBatchSize: req.body.embedding_batch_size,
@@ -131,9 +125,12 @@ router.post('/:id/index', requireRole('writer'), async (req, res, next) => {
 });
 
 /** POST /api/projects/:id/reflect — reflect on a topic */
-router.post('/:id/reflect', requireRole('writer'), async (req, res, next) => {
+router.post('/:id/reflect', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String(req.params.id));
+    // [Domain 8] reflect is a writer-gated LLM aid over the project (mirrors /lessons/:id/improve).
+    // reflectOnTopic itself takes no principal, so authorize at the route — this replaces requireRole('writer').
+    await assertAuthorized(callerPrincipalOf(req), 'write', { kind: 'project', id: projectId });
     const result = await reflectOnTopic({
       topic: req.body.topic,
       bullets: req.body.bullets ?? [],
@@ -162,7 +159,7 @@ router.get('/:id/export', async (req, res, next) => {
     );
     // Disable any default JSON-ifying middleware buffering by streaming
     // straight into the response. encodeBundle pipes archiver → res.
-    await exportProject({ projectId, callerScope: callerScopeOf(req), includeDocuments, includeChunks }, res);
+    await exportProject({ projectId, actingPrincipalId: callerPrincipalOf(req), includeDocuments, includeChunks }, res);
     // archiver.finalize() ended the response; nothing more to send.
   } catch (e) {
     if (e instanceof ExportNotFoundError) {
@@ -192,7 +189,6 @@ router.get('/:id/export', async (req, res, next) => {
  */
 router.post(
   '/:id/import',
-  requireRole('writer'),
   importUpload.single('file'),
   async (req, res, next) => {
     if (!req.file) {
@@ -218,7 +214,7 @@ router.post(
 
       const result = await importProject({
         targetProjectId: projectId,
-        callerScope: callerScopeOf(req),
+        actingPrincipalId: callerPrincipalOf(req),
         bundlePath: tmpPath,
         policy,
         dryRun,
@@ -261,7 +257,7 @@ router.post(
  *    dry_run           boolean (default false)
  *    conflicts_cap     positive int, max 1000 (default 50)
  */
-router.post('/:id/pull-from', requireRole('writer'), async (req, res, next) => {
+router.post('/:id/pull-from', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String(req.params.id));
     const body = (req.body ?? {}) as Record<string, unknown>;
@@ -298,7 +294,7 @@ router.post('/:id/pull-from', requireRole('writer'), async (req, res, next) => {
 
     const result = await pullFromRemote({
       targetProjectId: projectId,
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       remoteUrl: body.remote_url,
       remoteProjectId: body.remote_project_id,
       apiKey,
@@ -328,10 +324,10 @@ router.post('/:id/pull-from', requireRole('writer'), async (req, res, next) => {
 });
 
 /** DELETE /api/projects/:id — delete workspace data */
-router.delete('/:id', requireRole('admin'), async (req, res, next) => {
+router.delete('/:id', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(String(req.params.id));
-    const result = await deleteWorkspace(projectId);
+    const result = await deleteWorkspace(projectId, { actingPrincipalId: callerPrincipalOf(req) });
     res.json(result);
   } catch (e) { next(e); }
 });

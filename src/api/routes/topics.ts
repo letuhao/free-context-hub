@@ -23,14 +23,8 @@ import {
   resolveProjectIdOrThrow,
   ContextHubError,
 } from '../../core/index.js';
-import type { CoordinationEvent, CallerScope } from '../../core/index.js';
-import { requireRole } from '../middleware/requireRole.js';
-import { requireResourceScope, requireBodyProjectScope } from '../middleware/requireResourceScope.js';
-
-/** DEFERRED-029: read the caller's project scope attached by bearerAuth. */
-function callerScopeOf(req: Request): CallerScope {
-  return (req as { apiKeyScope?: CallerScope }).apiKeyScope;
-}
+import type { CoordinationEvent } from '../../core/index.js';
+import { callerPrincipalOf } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -53,7 +47,7 @@ function parseCursor(raw: unknown): number {
 }
 
 // POST /api/topics — charter a topic
-router.post('/', requireRole('writer'), requireBodyProjectScope(), async (req, res, next) => {
+router.post('/', async (req, res, next) => {
   try {
     const body = req.body ?? {};
     const projectId = resolveProjectIdOrThrow(
@@ -61,7 +55,7 @@ router.post('/', requireRole('writer'), requireBodyProjectScope(), async (req, r
     );
     const result = await charterTopic({
       project_id: projectId,
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       name: String(body.name ?? ''),
       charter: String(body.charter ?? ''),
       created_by: String(body.created_by ?? ''),
@@ -71,12 +65,12 @@ router.post('/', requireRole('writer'), requireBodyProjectScope(), async (req, r
 });
 
 // POST /api/topics/:id/join — join a topic, returns the induction pack
-router.post('/:id/join', requireRole('writer'), requireResourceScope('topic'), async (req, res, next) => {
+router.post('/:id/join', async (req, res, next) => {
   try {
     const body = req.body ?? {};
     const result = await joinTopic({
       topic_id: String(req.params.id),
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       actor_id: String(body.actor_id ?? ''),
       actor_type: String(body.actor_type ?? ''),
       display_name: String(body.display_name ?? ''),
@@ -90,12 +84,12 @@ router.post('/:id/join', requireRole('writer'), requireResourceScope('topic'), a
 
 // POST /api/topics/:id/grant-level — Sprint 15.11 (DEFERRED-015) grant a participant
 // a level. The grantor must be the owner or an existing authority (service-enforced).
-router.post('/:id/grant-level', requireRole('writer'), requireResourceScope('topic'), async (req, res, next) => {
+router.post('/:id/grant-level', async (req, res, next) => {
   try {
     const body = req.body ?? {};
     const result = await grantLevel({
       topic_id: String(req.params.id),
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       actor_id: String(body.actor_id ?? ''),
       level: String(body.level ?? ''),
       granted_by: String(body.granted_by ?? ''),
@@ -105,19 +99,19 @@ router.post('/:id/grant-level', requireRole('writer'), requireResourceScope('top
 });
 
 // GET /api/topics/:id — topic record + participant roster
-router.get('/:id', requireResourceScope('topic'), async (req, res, next) => {
+router.get('/:id', async (req, res, next) => {
   try {
-    const result = await getTopic({ topic_id: String(req.params.id), callerScope: callerScopeOf(req) });
+    const result = await getTopic({ topic_id: String(req.params.id), actingPrincipalId: callerPrincipalOf(req) });
     res.json({ status: 'ok', data: result });
   } catch (e) { next(e); }
 });
 
 // POST /api/topics/:id/close — close a topic (seals the event log)
-router.post('/:id/close', requireRole('writer'), requireResourceScope('topic'), async (req, res, next) => {
+router.post('/:id/close', async (req, res, next) => {
   try {
     const result = await closeTopic({
       topic_id: String(req.params.id),
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       actor_id: String((req.body ?? {}).actor_id ?? ''),
     });
     res.json({ status: 'ok', data: result });
@@ -125,10 +119,11 @@ router.post('/:id/close', requireRole('writer'), requireResourceScope('topic'), 
 });
 
 // GET /api/topics/:id/events?since=:seq — cursor replay
-router.get('/:id/events', requireResourceScope('topic'), async (req, res, next) => {
+router.get('/:id/events', async (req, res, next) => {
   try {
     const result = await replayEvents({
       topic_id: String(req.params.id),
+      actingPrincipalId: callerPrincipalOf(req),
       since_seq: parseCursor(req.query.since),
     });
     res.json({ status: 'ok', data: result });
@@ -147,7 +142,7 @@ export function _activeStreamCountForTest(): number {
   return activeStreamCount;
 }
 
-router.get('/:id/stream', requireResourceScope('topic'), async (req, res, next) => {
+router.get('/:id/stream', async (req, res, next) => {
   const topicId = String(req.params.id);
   const sinceSeq = parseCursor(req.query.since ?? req.headers['last-event-id']);
 
@@ -165,7 +160,7 @@ router.get('/:id/stream', requireResourceScope('topic'), async (req, res, next) 
 
   try {
     // pre-flight existence check — before headers. NOT_FOUND → catch → next(e) → real 404.
-    const first = await replayEvents({ topic_id: topicId, since_seq: sinceSeq });
+    const first = await replayEvents({ topic_id: topicId, actingPrincipalId: callerPrincipalOf(req), since_seq: sinceSeq });
     if (closed || req.destroyed) { cleanup(); return; }
 
     res.setHeader('Content-Type', 'text/event-stream');
@@ -205,7 +200,7 @@ router.get('/:id/stream', requireResourceScope('topic'), async (req, res, next) 
     const tick = async () => {
       if (closed || res.writableEnded) return;
       if (Date.now() > streamDeadline) { endStream(); return; }
-      const r = await replayEvents({ topic_id: topicId, since_seq: cursor });
+      const r = await replayEvents({ topic_id: topicId, actingPrincipalId: callerPrincipalOf(req), since_seq: cursor });
       if (closed || res.writableEnded) return;
       writeEvents(r.events);
       cursor = r.next_cursor;

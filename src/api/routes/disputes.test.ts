@@ -257,17 +257,5 @@ test('GET /api/topics/:id/disputes → list → 200', async () => {
   assert.ok(typeof res.json.data.total === 'number', 'total is a number');
 });
 
-// ── Role gate ─────────────────────────────────────────────────────────────────
-
-test('GET /api/disputes/:id with unknown role → 403', async () => {
-  const res = await request('GET', '/api/disputes/00000000-0000-0000-0000-000000000002', undefined,
-    { 'x-test-key-role': 'intruder' });
-  assert.equal(res.status, 403, `expected 403, got ${res.status}`);
-});
-
-test('GET /api/topics/:id/disputes with role reader → not 403', async () => {
-  const topicId = await makeTopic();
-  const res = await request('GET', `/api/topics/${topicId}/disputes`, undefined,
-    { 'x-test-key-role': 'reader' });
-  assert.notEqual(res.status, 403, `reader must pass the gate; got ${res.status}`);
-});
+// [Domain 8] REMOVED the role-gate tests — they asserted the deleted requireRole middleware via an
+// x-test-key-role shim. Authorization is now authorize() over principal grants (disputes-authz suite).

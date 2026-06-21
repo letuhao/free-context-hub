@@ -43,8 +43,23 @@ function resolveApiBase(): string {
 const API_URL = resolveApiBase();
 const API_TOKEN = process.env.NEXT_PUBLIC_CONTEXTHUB_TOKEN;
 
+/**
+ * The double-submit CSRF token for the session-cookie auth path. The backend's global csrfGuard
+ * (mounted on /api) requires `X-CSRF-Token == session.csrf_token` on every cookie-authenticated state
+ * change; authApi stores the token the login/mfa/register response returns under this key. Sent on
+ * non-GET requests; harmless for the Bearer/agent path (csrfGuard skips non-session requests). Without
+ * this, every cookie-authed mutation through this client would 403 once the GUI moves off the Bearer
+ * gateway-token to session cookies (review-impl #1).
+ */
+const CSRF_STORAGE_KEY = "ch_csrf_token";
+function csrfHeaders(method: string): Record<string, string> {
+  if (method === "GET" || method === "HEAD" || typeof sessionStorage === "undefined") return {};
+  const token = sessionStorage.getItem(CSRF_STORAGE_KEY);
+  return token ? { "X-CSRF-Token": token } : {};
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...csrfHeaders(method) };
   if (API_TOKEN) headers["Authorization"] = `Bearer ${API_TOKEN}`;
   if (body !== undefined) headers["Content-Type"] = "application/json";
 
@@ -304,7 +319,7 @@ export const api = {
     // can branch on { status: 'duplicate', existing_doc_id, ... } without
     // having to catch an error.
     const API_URL = resolveApiBase();
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    const headers: Record<string, string> = { "Content-Type": "application/json", ...csrfHeaders("POST") };
     if (API_TOKEN) headers["Authorization"] = `Bearer ${API_TOKEN}`;
     const res = await fetch(`${API_URL}/api/documents/ingest-url`, {
       method: "POST",
@@ -424,7 +439,7 @@ export const api = {
 
   uploadDocument: async (body: FormData): Promise<any> => {
     const API_URL = resolveApiBase();
-    const res = await fetch(`${API_URL}/api/documents/upload`, { method: "POST", body });
+    const res = await fetch(`${API_URL}/api/documents/upload`, { method: "POST", body, headers: csrfHeaders("POST") });
     const json: any = await res.json().catch(() => ({}));
 
     // Phase 10: surface duplicate (409) as a distinguishable result, not a thrown error.
@@ -477,7 +492,7 @@ export const api = {
     form.append("file", file);
     const res = await fetch(
       `${API_URL}/api/projects/${encodeURIComponent(opts.projectId)}/import?${params}`,
-      { method: "POST", body: form },
+      { method: "POST", body: form, headers: csrfHeaders("POST") },
     );
     const json: any = await res.json().catch(() => ({}));
     if (!res.ok) {

@@ -1,6 +1,4 @@
 import { Router } from 'express';
-import type { Request } from 'express';
-import { requireProjectScope } from '../middleware/requireResourceScope.js';
 import { streamText, tool, stepCountIs, convertToModelMessages } from 'ai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import * as z from 'zod/v4';
@@ -12,19 +10,15 @@ import {
   tieredSearch,
   createModuleLogger,
 } from '../../core/index.js';
-import type { CallerScope } from '../../core/index.js';
 import { searchChunks } from '../../services/documentChunks.js';
-
-/** DEFERRED-029: read the caller's project scope attached by bearerAuth. */
-function callerScopeOf(req: Request): CallerScope {
-  return (req as { apiKeyScope?: CallerScope }).apiKeyScope;
-}
+import { callerPrincipalOf } from '../middleware/auth.js';
+import { assertAuthorized } from '../../services/authorize.js';
 
 const logger = createModuleLogger('chat');
 const router = Router();
 
 /** POST /api/chat — AI chat with streaming + tool calling */
-router.post('/', requireProjectScope('body'), async (req, res, next) => {
+router.post('/', async (req, res, next) => {
   try {
     const env = getEnv();
 
@@ -36,6 +30,10 @@ router.post('/', requireProjectScope('body'), async (req, res, next) => {
     }
 
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
+    // [Domain 8] Authorize the whole chat session on project READ up front. The AI tool executors below
+    // each authorize too, but a tool-less answer would otherwise run no check — this replaces
+    // requireProjectScope('body') and gates the session itself (project context feeds the LLM).
+    await assertAuthorized(callerPrincipalOf(req), 'read', { kind: 'project', id: projectId });
     const messages = req.body.messages ?? [];
 
     const provider = createOpenAICompatible({
@@ -68,7 +66,7 @@ Be concise and direct. Use markdown formatting.`,
             // 280-char display preview (mirrors the search_documents fix). A
             // lesson whose decision/content sits past char 280 otherwise can't
             // be grounded on by the assistant.
-            return searchLessons({ projectId, callerScope: callerScopeOf(req), query, limit: 5, snippetMaxChars: 2000 });
+            return searchLessons({ projectId, actingPrincipalId: callerPrincipalOf(req), query, limit: 5, snippetMaxChars: 2000 });
           },
         }),
         check_guardrails: tool({
@@ -78,7 +76,7 @@ Be concise and direct. Use markdown formatting.`,
           }),
           execute: async ({ action }) => {
             logger.info({ projectId, action }, 'chat tool: check_guardrails');
-            return checkGuardrails(projectId, { action });
+            return checkGuardrails(projectId, { action }, { actingPrincipalId: callerPrincipalOf(req) });
           },
         }),
         search_documents: tool({
@@ -97,7 +95,7 @@ Be concise and direct. Use markdown formatting.`,
             logger.info({ projectId, query, chunk_types }, 'chat tool: search_documents');
             const res = await searchChunks({
               projectId,
-              callerScope: callerScopeOf(req),
+              actingPrincipalId: callerPrincipalOf(req),
               query,
               limit: 5,
               chunkTypes: chunk_types as any,
@@ -131,7 +129,7 @@ Be concise and direct. Use markdown formatting.`,
           }),
           execute: async ({ query, kind }) => {
             logger.info({ projectId, query, kind }, 'chat tool: search_code');
-            return tieredSearch({ projectId, callerScope: callerScopeOf(req), query, kind: kind as any, maxFiles: 5 });
+            return tieredSearch({ projectId, actingPrincipalId: callerPrincipalOf(req), query, kind: kind as any, maxFiles: 5 });
           },
         }),
       },

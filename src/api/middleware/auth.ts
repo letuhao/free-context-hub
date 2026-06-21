@@ -1,9 +1,20 @@
 import type { Request, Response, NextFunction } from 'express';
 import { getEnv } from '../../core/index.js';
 import { validateApiKey } from '../../services/apiKeys.js';
+import { SESSION_COOKIE_NAME, parseCookies } from '../../services/sessions.js';
 import { createModuleLogger } from '../../utils/logger.js';
 
 const logger = createModuleLogger('rest-auth');
+
+/**
+ * Actor Data Boundary F2f — the acting principal id attached by bearerAuth (the bound principal of
+ * the api key, F1b). This is what authorize()/assertAuthorized take, replacing the project-scope
+ * `callerScopeOf`. Returns null when no principal is bound (legacy unbound key, env-token fast path,
+ * or auth-off) — under auth-off assertAuthorized no-ops regardless, so this is dev-safe.
+ */
+export function callerPrincipalOf(req: Request): string | null {
+  return (req as { apiKeyPrincipalId?: string | null }).apiKeyPrincipalId ?? null;
+}
 
 /**
  * Bearer token middleware for the REST API.
@@ -19,6 +30,11 @@ export function bearerAuth(req: Request, res: Response, next: NextFunction) {
   if (!env.MCP_AUTH_ENABLED) return next();
 
   const header = req.headers.authorization;
+  // F-AUTH (warp S3): a browser session-cookie request carries no Authorization header —
+  // defer to sessionAuth (mounted immediately after bearerAuth) instead of 401-ing it.
+  // A Bearer header still takes precedence (agent path); only header-less cookie requests defer.
+  // Exact cookie lookup (not a substring match) so a suffix-collision cookie name can't trigger the defer.
+  if (!header && parseCookies(req.headers.cookie)[SESSION_COOKIE_NAME]) return next();
   if (!header || !header.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Unauthorized: missing Bearer token' });
     return;
@@ -59,6 +75,10 @@ export function bearerAuth(req: Request, res: Response, next: NextFunction) {
       (req as any).apiKeyRole = keyEntry.role;
       (req as any).apiKeyScope = keyEntry.project_scope;
       (req as any).apiKeyName = keyEntry.name;
+      // Actor Data Boundary F2f — the bound acting principal (F1b). authorize()/assertAuthorized
+      // need the principal id, not the project scope. Null for a legacy unbound key; that path
+      // loses access only once MCP_AUTH_ENABLED flips (F2g posture-flip prerequisite).
+      (req as any).apiKeyPrincipalId = keyEntry.principal_id;
       next();
     })
     .catch(() => {

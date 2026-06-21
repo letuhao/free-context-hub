@@ -1,3 +1,1299 @@
+# CHECKPOINT — cleared the deferred backlog: 062 · 063 · 060-A4 · 061 (2026-06-21, session 15)
+
+**Branch:** `feature/actor-data-boundary`. Four tracked items closed, each a focused, separately-committed, live-verified unit.
+
+- **DEFERRED-062 §2+§3 (`1d5ecaa`)** — scope-gated the Governance nav (sidebar reads `authApi.me()`, hides the group
+  unless global admin, fail-closed; added `project_scope` to the me view); swapped the inline Features block in
+  `projects/settings` for the shared `<FeatureToggles>` component. 062 fully closed.
+- **DEFERRED-063 (`6ae8e24`)** — `POST /api/bootstrap/operator` now ISSUES AN INVITE (attributed to root) instead of
+  an orphaned bare principal; the wizard is coherent end-to-end (root → operator-invite → /register → login). GUI Step 2
+  collects an email + surfaces the token. Live: returns `{status:'invited', invite_token,…}`.
+- **DEFERRED-060 A4 (`1634398`)** — auto-expiring hard lock. Migration `0072` adds `hard_locked_until`; a hard lock set
+  while `AUTH_LOCKOUT_HARD_DURATION_SECONDS > 0` (default 30 min) self-clears, bounding the account-DoS. Stamped once at
+  the lock transition (an attacker can't extend it); NULL/0 = permanent (pre-A4). DEFERRED-060 fully closed (only the
+  negligible C3/C4 timing items remain).
+- **DEFERRED-061 (`8e09c15`)** — built the two valuable affordances: "sign out all other sessions"
+  (`POST /api/auth/sessions/revoke-others`, session+CSRF) and invite-preview (`GET /api/auth/invite?token=…`, public,
+  shows the bound email on /register); formally REMOVED the two needing absent infra (auth-policy EDIT panel — policy is
+  env-configured; email-verify — no email delivery). Live: invite-preview returns the email (junk → 404); revoke-others
+  is 401 without a session.
+
+**Evidence (whole batch):** backend+gui `tsc` clean · `npm test` **1328 pass / 0 fail / 19 skip** (new tests: A4 ×3,
+063 route ×2, 061 service ×2) · `gui build` clean · live gateway checks above all green · migration 0072 applied.
+
+**Posture unchanged:** hardened, auth-ON, loopback-bound. The contexthub MCP works via the gitignored agent key
+(`.secrets/contexthub-mcp.key` → `CONTEXTHUB_MCP_TOKEN`).
+
+---
+
+# CHECKPOINT — post-flip enablement: GUI account footer · MCP credential + header-auth · DEFERRED-060 (C1 + /api/me) (2026-06-21, session 15)
+
+**Branch:** `feature/actor-data-boundary`. Three follow-ups after the hardened flip, each committed + live-verified.
+
+**1. GUI account footer (DEFERRED-062 §1, commit 68e4a00).** The flip made login live but the GUI showed no profile or
+sign-out. Added `gui/src/components/account-footer.tsx` (reads `/api/me`, signs out via `/api/auth/logout` → `/login`),
+slotted into the sidebar; renders nothing under auth-off / no-session.
+
+**2. MCP credential + Authorization-header bridge (commit ec48a85).** Hardening broke the contexthub MCP (tools read
+the token only from a per-call `workspace_token` arg). Added `src/mcp/headerAuth.ts` — bridges `Authorization: Bearer
+<token>` onto tools/call requests that omit it (called from the `/mcp` POST handler); the token is still fully validated
+by resolveMcpCaller (an explicit arg always wins). `.mcp.json` / `.cursor/.mcp.json` → gateway `:3002/mcp` +
+`Authorization: Bearer ${CONTEXTHUB_MCP_TOKEN}` (env-expanded, no secret committed). Minted a principal-bound agent key
+(`claude-code-mcp`, global-write) into the gitignored `.secrets/`. Live: `whoami` via gateway+header → "claude-code-mcp
+(agent)"; no credential → denied. Tests: `headerAuth.test.ts` 7/7.
+
+**3. DEFERRED-060 — C1 + /api/me consistency (this commit).**
+- **C1:** `csrfGuard` now applied to the session-scoped `/api/auth` mutations (logout, sessions DELETE, mfa enroll +
+  enroll/verify) that mount before the global guard. Live: logout without `X-CSRF-Token` → 403, with → 200.
+- **/api/me:** mirrors the `/info` A1 gate — under auth-ON, no `Authorization` header + no resolved session (junk/expired
+  cookie) → 401 (was leaking an env-token `role:admin` identity). A real session is now labeled `key_source:'session'`
+  with role derived from the principal's global grants. Live: junk cookie → 401; operator → `key_source:session,
+  role:admin`.
+- **C2 (lockout enumeration oracle) ✅:** login + mfa/verify lock paths now return the SAME generic 401 as a wrong
+  password (no 429 / "Account locked" / retry_after) — the lock is still enforced (returns before verify). Removed the
+  GUI's now-dead soft-lock countdown screen. (User chose generic-401 over phantom-account throttling.) Live: non-existent
+  email → 401, operator login → 200. Test: locked account + correct password → generic 401.
+- **Still open (tracked):** A4 (lockout DoS), C3/C4 (timing, negligible).
+
+**Operational note:** running the full test suite against the shared live DB leaves coordination actor strings that trip
+the enforce-ready boot gate — `npm run migrate:coordination-actors` + restart mcp clears it (test-DB-vs-prod-DB artifact;
+worth separating later).
+
+**Evidence (this commit):** backend+gui `tsc` clean · `npm test` **1320 pass / 0 fail / 19 skip** · live gateway checks
+above all green.
+
+---
+
+# CHECKPOINT — DEFERRED-059: hardened human-login E2E + shim retirement + LIVE flip to auth-ON (2026-06-21, session 15)
+
+**Branch:** `feature/actor-data-boundary`. Discharges **DEFERRED-059** — the gap the session-14 /warp build left:
+the human login chain was only ever smoked in dev/auth-OFF. This session proves it in the **hardened** posture and
+makes that posture *legitimate* (auth-ON + human login enforced + the shared-admin shim gone) per completion-plan §7.
+
+**Discovery (corrects the DEFERRED-059 recipe):** `POST /api/bootstrap/operator` is a **login dead-end** — it creates a
+bare `human` principal with no email/credential, but login resolves email→principal through the **invites trail** and
+`acceptInvite` mints its OWN principal. The real loginable path is **issue-invite (as root/admin) → register**. Filed
+as **DEFERRED-063**.
+
+**BUILD:**
+- **AC1 — automated hardened E2E** (`src/api/auth-hardened-e2e.test.ts`, +`package.json` test list): drives the REAL
+  `createApiApp` over a loopback socket under `MCP_AUTH_ENABLED=true`, end to end — register → login → cookie →
+  `/api/me` (principal==operator) → MFA enroll/verify → logout → re-login (`mfa_required`) → `/mfa/verify` (AAL2) →
+  `/api/me`. Pins the cooperative bearerAuth-cookie-defer → sessionAuth → meRouter wiring nothing covered end-to-end.
+- **AC2 — shim retired:** `gui/src/proxy.ts` `allow()` no longer injects `CONTEXTHUB_GATEWAY_TOKEN` (the cross-site/CSRF
+  guard is preserved); removed the var from `docker-compose.yml` (gui) + `.env`. The browser now authenticates with the
+  F-AUTH session cookie; agents keep their own Bearer api_key.
+
+**REVIEW (AC4):** removing a credential *injection* can only tighten access (browser→401 without a cookie), never open a
+hole. Grep confirmed no dangling *code* ref to the token (only the explanatory comment) and the three gates intact
+(cookie-defer `auth.ts:37`, A1 `/info` gate `system.ts:25`, `csrfGuard` `sessionAuth.ts:100`). No HIGH/MED.
+
+**VERIFY (AC3):** backend+gui `tsc` clean · `npm test` **1330 tests, 1311 pass / 0 fail / 19 skip** (incl. the new E2E)
+· `gui build` clean.
+
+**LIVE FLIP (AC5):** generated `AUTH_SESSION_SIGNING_SECRET` + `ROOT_BOOTSTRAP_TOKEN` into `.env` (gitignored); host-prep
+made the DB enforce-ready (root/system already present, `backfill:grants` 0 uncovered, `migrate:coordination-actors`
+imported 3 principals); provisioned the operator (`letuhao1994@gmail.com` → principal `c8c51471…`) with a **global-admin**
+grant by root (creds surfaced once to rotate); brought up the **base compose (auth-ON, no dev overlay)** rebuilding
+gui/mcp/worker. mcp boot log: **"production auth-ON boot gate passed"**. Live gateway proof (`:3002`): unauth `/api/me`
+& `/api/system/info` → **401**; operator login → **200** + `chub_session`; `/api/me`+cookie → the **operator principal**;
+admin-gated `/api/principals`+cookie → **200**. The `/api/me` `role`/`key_source` mislabel for cookie sessions is the
+known DEFERRED-060 item (the `principal` field — what the GUI uses — is correct).
+
+**Posture now:** hardened, auth-ON, human-login-enforced, shim-gone, GUI **loopback-bound** (`127.0.0.1:3002`). Removing
+`GATEWAY_PORT` from `.env` binds `0.0.0.0` for LAN exposure — a one-line operator choice, intentionally not done here.
+**Note:** agents/MCP clients now need a real api_key bearer (legacy token disabled); mint one for any agent integration.
+
+**Files:** `src/api/auth-hardened-e2e.test.ts` (new) · `gui/src/proxy.ts` · `docker-compose.yml` · `package.json` ·
+`docs/specs/2026-06-21-deferred-059-hardened-login-e2e.md` (new) · `.env` (gitignored, secrets + shim removal).
+**Tracked residuals:** DEFERRED-060 (auth residuals), 061 (GUI features needing endpoints), 062 (governance polish),
+**063 (bootstrap/operator dead-end)**.
+
+---
+
+# CHECKPOINT — Actor-data-boundary COMPLETION built via /warp: 6 disjoint slices → reconcile → safety-cleared → live (2026-06-21, session 14)
+
+**Branch:** `feature/actor-data-boundary` (not yet PR'd). **Mode:** `/warp` parallel fan-out. Executes the plan from
+session 13 (`docs/plans/2026-06-21-actor-data-boundary-COMPLETION-plan.md`). Discharges **DEFERRED-058** (and 041/042).
+
+**Planning (3 cold-start adversary passes on the SLICING, saturation 3→1→0 BLOCK):** the first plan draft's
+disjointness proof was WRONG — it claimed three magnets were hoisted that weren't. The REVIEW(des) gate caught:
+`src/mcp/index.ts` (tool registry), the access-page key-create coupling, `src/env.ts`, then `gui/src/app/layout.tsx`
+(single root layout renders `<Sidebar/>` — pre-auth pages can't go shell-less from a Next child). Frozen interface
+ended at **nine** integrator-only magnets; resolved via a conditional-shell `AppShell` gated on `PRE_AUTH_ROUTES`.
+
+**BUILD — 6 file-disjoint worktree sub-agents, concurrent:** S1 Governance REST · S2 Governance GUI · S3 F-AUTH
+backend · S4 F-AUTH GUI · S5 NHI · S6 Polish. **Worktree hazard hit + recovered:** S4 and S6 worktrees were cut from
+`main` (stale, lacked the plan), not BASE — caught by the `git merge-base --is-ancestor` sanity check. Their scoped
+diffs touched only new files on non-diverged paths → salvaged by cherry-pick onto BASE (no re-run). S1/S2/S3/S5 were
+BASE-correct (S3 detected its own stale worktree and branched from BASE itself).
+
+**RECONCILE:** merged all six in integrate order — **zero write-set conflicts** (the disjointness dividend held).
+Wired the nine magnets: `src/api/index.ts` (pre-auth `/api/auth`+`/api/bootstrap` before the gate; sessionAuth+csrfGuard
+after; governance/NHI routes), `bearerAuth` cookie-defer, `src/env.ts` (15 AUTH_* keys), `src/mcp/index.ts`
+(`mint_ephemeral_key`), sidebar Governance group, the `AppShell` shell-gate, `package.json` (argon2 + 13 test files).
+
+**SAFETY REVIEW (mandatory — auth + authz primitives):** cold-start hostile-actor adversaries on the *integrated*
+code. S1 governance = **CLEAR** (B1/B2 LOW, dev-posture). S3 F-AUTH = **BLOCKED** pass 1 → fixed → **CLEAR** pass 2:
+- **A1 (HIGH, my reconcile regression):** the bearerAuth cookie-defer opened `GET /api/system/info` to unauth recon
+  (the lone post-gate route with no in-service authz). Gated it. The defer is verified safe for every other route.
+- **A2** csrfGuard was exported but never mounted (dead CSRF) → mounted globally (skips Bearer/agent). **A3** login
+  timing oracle → dummy argon2 verify. **A5** forgot dev-token leak → explicit opt-in flag. **A6** prod boot now
+  fails closed without `AUTH_SESSION_SIGNING_SECRET`.
+
+**CONTRACT RECONCILE + LIVE SMOKE:** aligned the GUI clients (`governanceApi`/`authApi`) to the actual S1/S3 shapes
+(decisions `allow`+keyset-cursor not `result`+offset; `/api/me` not `/api/auth/me`; MFA email+password re-submit;
+CSRF token in body; otpauth_uri not qr_data_url). Rebuilt the dev stack and smoked it LIVE: API boots clean;
+`GET /api/authz/decisions` **serves real who-tried-what rows (the net-new reader — the single biggest backend gap,
+now closed)**; `/api/principals`, `/api/access-review` return data; `POST /api/auth/login` → 401 (pre-auth mount
+works); all 8 new GUI pages render 200.
+
+**Evidence:** `tsc` clean · `npm test` **1302 pass / 0 fail / 19 skip** (~106 new slice tests) · `gui build` clean ·
+live dev-stack smoke green. **Commits:** plan(14ed9bf,4bc06dc) → merges → reconcile-node(684239c) → sec-fixes(15f81d4)
+→ gui-contracts(85535fa). **Posture:** dev/auth-off on `127.0.0.1:3002` (loopback) until a human operator is
+bootstrapped (hardened auth-ON would lock everyone out with no login yet).
+
+**Remaining (tracked):** full bootstrap→operator→login→MFA E2E in hardened posture; the auth-hardening residuals
+(C1/C2 + `/api/me` consistency); GUI features removed for lack of a backend endpoint (auth-policy panel, revoke-all,
+invite-preview, email-verify); deferred polish (sidebar account footer + scope-gating, FeatureToggles import-swap).
+See DEFERRED-059..062.
+
+---
+
+# CHECKPOINT — Architecture correction: the human-facing half was never built/tracked → COMPLETION plan (2026-06-21, session 13)
+
+**Branch:** `feature/actor-data-boundary` (not yet PR'd). **Triggered by the user:** "why does the GUI not require
+login — no login/register screen? … did we never write the plan to file?" — a correct, load-bearing catch.
+
+**The failure:** the branch built the **agent-facing** half of the actor-data-boundary (principals, grants,
+`authorize()`, decision log, api-keys, MCP tools, the hardened flip) but the **human-facing** half — designed in
+`docs/specs/2026-06-19-actor-data-boundary-standards-gap.md` (F-AUTH human login + sessions + MFA, per NIST 800-63B /
+OWASP ASVS V6) and `…-mcp-fe-design.md` (governance GUI), **with HTML drafts already in `docs/gui-drafts/`** — was
+**never built and never tracked.** Worse, the `MCP_AUTH_ENABLED` flip shipped AHEAD of F-AUTH (which §3 defines as the
+flip's precondition), and the GUI-lockout was papered over with a **shared-admin gateway-token shim** (`gui/src/proxy.ts`
++ `CONTEXTHUB_GATEWAY_TOKEN`) — the exact single-super-credential anti-pattern the whole branch exists to eliminate.
+
+**The audit (6 parallel comparators, draft-vs-GUI, all 39 pages + 21 components):** the knowledge/project GUI is
+**complete and exceeds its drafts** (no work). **Three tracks are missing entirely:**
+- **A — Governance GUI:** identity / authorization / delegation / bootstrap pages + governance sidebar + ~13 REST
+  endpoints over existing services (incl. the **net-new `authz_decisions` read API** — nothing reads that table).
+- **B — F-AUTH (DEFERRED-041):** login / register / sessions; `human_credentials`/`mfa_factors`/`sessions`/`invites`
+  tables; `/api/auth/*`; password(argon2)/MFA/lockout/session-cookie. Retire the gateway-token shim when this lands.
+- **C — NHI:** key rotation / ephemeral / access-review + GUI access page (expiry default + principal picker). (Note:
+  `api_keys.expires_at` IS already enforced — spec row was stale.)
+
+**Deliverable:** `docs/plans/2026-06-21-actor-data-boundary-COMPLETION-plan.md` — the durable tracker: full gap matrix,
+sized work units with file paths, and a **6-stream file-disjoint parallel fan-out** (with the 3 hub-file reconcile
+points called out: `src/api/index.ts`, `gui/src/components/sidebar.tsx`, `package.json`). Recorded as **DEFERRED-058**.
+Safety-sensitive: Tracks A + B each need a cold-start adversary pass. Build is **next session** (user directive).
+
+**Interim posture:** the running stack is hardened but login-less (shim only, GUI on 0.0.0.0:3002). Revert to dev
+(`-f docker-compose.dev.yml`) or localhost-bind until Track B lands; re-flip only once human login is enforced.
+
+---
+
+# CHECKPOINT — F2g: the MCP_AUTH_ENABLED flip — hardened deployment posture + boot guard (2026-06-21, session 13)
+
+**Branch:** `feature/actor-data-boundary`. This is THE flip — the final F2g step. The **code default stays
+`MCP_AUTH_ENABLED=false`** (A3: the flip is a *deployment posture*, not a code default); local dev + the unit suite
+are unchanged. Full suite **1220 / 1201 pass / 0 fail / 19 skip** (+4 bootPosture), tsc clean (backend + GUI).
+POST-REVIEW honored — human chose **A3 + ship + B2 (full hardened)** and **fix GUI auth now**.
+
+**What shipped (the flip is a deployment posture + boot guard):**
+- **Boot guard** — new `DEPLOYMENT_PROFILE` env (`dev`|`production`, default `dev`) + pure `src/services/bootPosture.ts`
+  decision, wired into **`src/index.ts`** and **`src/worker.ts`** (after `applyMigrations`, before any listener):
+  `production` + auth-OFF → **refuse boot**; `production` + auth-ON → run **`assertEnforceReady()`** as a hard boot
+  gate (the "F4" gate its own comment anticipated). Scoped to the production profile so non-production auth-ON test
+  rigs (`docker-compose.auth-test.yml`, which keeps the legacy token) still boot.
+- **Base `docker-compose.yml` flipped to HARDENED** (literal `DEPLOYMENT_PROFILE=production`, `MCP_AUTH_ENABLED=true`,
+  `MCP_LEGACY_TOKEN_DISABLED=true` on `mcp`/`worker`/`mcp-ca` — literals so a stray `.env=false` can't un-harden it).
+  New **`docker-compose.dev.yml`** restores local auth-OFF (`-f docker-compose.yml -f docker-compose.dev.yml`).
+- **GUI auth (adversary HIGH #1 fix)** — under hardened auth the browser ships no token. `gui/src/proxy.ts` (the Next
+  16 gateway proxy) now injects a **server-only** `CONTEXTHUB_GATEWAY_TOKEN` as `Authorization: Bearer …` on proxied
+  `/api` calls via `NextResponse.next({ request: { headers } })` (documented BFF idiom — upstream-only, never exposed
+  to the client). Skipped when the caller already sent a bearer (agents keep their own identity) and when unset
+  (dev). Wired into the `gui` service env + `.env.example`.
+
+**Cold-start security adversary** (HARD pre-prod trigger): verified the **auth core + boot decision are sound** (no
+scopeCovers over-coverage; bootPosture matrix exhaustive; no listener binds after a failed guard; `NO_PRINCIPAL`
+denies under auth-ON). 9 findings — **fixed 4**: HIGH #1 GUI lockout (above), #2 `auth-test.yml` re-gated to
+`DEPLOYMENT_PROFILE=dev` (the production base would otherwise hit the enforce-ready gate and refuse), #3 `mcp-ca`
+ports → loopback (`127.0.0.1:`), #4 worker gate mirrored to the full `evaluateBootPosture`+`assertEnforceReady`.
+Deferred 3 LOWs → DEFERRED.md (non-const-time legacy compare — inert under hardened; per-tool-auth-by-convention;
+a legacy-token predicate-drift test).
+
+**Live verification (backend run directly via `tsx` vs the dev DB — NOT a container rebuild):**
+- AC1 `production`+auth-OFF → **FATAL refuse**, exit 1 (exact message). AC2 not-ready → **FATAL** with the precise
+  `assertEnforceReady` reason. **AC2-pass** (after the runbook) → `enforce-ready: production auth-ON boot gate passed`
+  + MCP listening. AC3 dev default → boots + binds.
+- Enforcement (hardened backend): **no-token 401, bad-token 401, legacy `change-me` token 401 (B2 reject), minted
+  admin api-key 200** (no false lockout). Drill artifacts (principal+grant+key) revoked afterward.
+
+**Dev-DB side effects (idempotent, required pre-flip, inert under the still-running auth-OFF container):**
+`bootstrap:root` reissued the root credential (I wiped my copy — re-run `bootstrap:root` for a fresh root key);
+`migrate:coordination-actors` imported 62 principals + rewrote 20+2 columns; `bootstrap:system` no-op; `backfill:grants`
+created 0. **Incident:** while clearing stray test backends off ports 3000/3001, a port-kill caught `com.docker.backend`
+and briefly took Docker Desktop offline; restarted it, all containers (contexthub DB + the unrelated `infra` stack)
+recovered via restart policies. No data lost.
+
+**New/modified:** `src/env.ts`, `src/services/bootPosture.ts` (+`.test.ts`), `src/index.ts`, `src/worker.ts`,
+`package.json`, `docker-compose.yml`, `docker-compose.dev.yml`, `docker-compose.auth-test.yml`, `.env.example`,
+`gui/src/proxy.ts`, the FLIP-clarify + FLIP-DESIGN specs.
+
+**What's next:** **rebuild the running stack hardened** (`docker compose up -d --build`) with `CONTEXTHUB_GATEWAY_TOKEN`
+set to a freshly-minted api-key, and **live-verify the GUI** works end-to-end against the deployed hardened stack
+(the proxy injection has been built + tsc-checked but not yet proven against a real container build). The code default
+stays `false`; the running container is still auth-OFF until that rebuild.
+
+---
+
+# CHECKPOINT — F2g Domain 8: retire legacy REST middleware → authorize() is the SOLE gate (2026-06-21, session 13)
+
+**Branch:** `feature/actor-data-boundary`. Auth **OFF** (inert) — the `MCP_AUTH_ENABLED` default flip is the ONLY
+remaining step and stays human-gated, NOT touched. Full unit suite **1216 / 1197 pass / 0 fail / 19 skip**
+(count dropped from 1257 as the obsolete middleware/role-shim tests were removed), tsc clean. POST-REVIEW honored
+(`/review-impl` run, 1 HIGH fixed). This is the **last structural prerequisite** before the flip — the
+flip-readiness deferred board is now fully clear.
+
+**The change:** removed the entire legacy coarse-grained REST middleware family so that the F2-era `authorize()`
+over principal grants is the single authorization gate on every route. `bearerAuth` (authentication → sets the
+principal) is KEPT; only the role/scope *authorization* shims are gone.
+
+- **Deleted:** `requireRole.ts`, `requireScope.ts`, `requireResourceScope.ts` (+ their two `.test.ts`). Stripped
+  every `requireRole/requireScope/requireResourceScope/requireProjectScope/requireBody{Project,Topic}Scope` call
+  and import across **22 route files** + the `requireRole(...)` router mounts in `src/api/index.ts`.
+- **Stage A — closed coverage gaps BEFORE removing the net** (audit: ~85 guarded routes; the large majority
+  already self-authorize at the service layer with the correct capability):
+  - 6 route gaps gated inline: `POST /api/chat` (`read@project`), `POST /…/reflect` (`write@project`),
+    `POST /api/taxonomy-profiles` (`write@owner_project`, replacing the legacy inline `apiKeyScope` check), and the
+    3 inline `documents.ts` handlers `extract/estimate`, `extraction-status`, `thumbnail` (`read@project`).
+  - 2 admin-only preserved: review-request `approve`/`return` bumped `write`→`admin@project` (the admin-vs-writer
+    distinction that lived only in `requireRole('admin')`; BUG-13.3-1).
+  - **2 router-mount gaps the audit missed** (caught by reading `index.ts` directly): `/api/api-keys` and
+    `/api/lesson-types` had **zero** service authz — guarded *solely* by their `requireRole('admin')` mount. Now
+    `admin@global` on every mutating route (api-keys: all three; lesson-types: POST/PUT/DELETE).
+- **Stage C — cold-start hostile-actor adversary** (open-route hunt, safety-sensitive policy): 2 HIGH + 1 MED, all
+  resolved — `GET /api/projects` (`listAllProjects` enumerated every tenant → per-row `read@project` filter +
+  threaded principal); `POST /api/activity` (`logActivity` forged feed entries into any project → `write@project`);
+  taxonomy-profiles GET open-catalog (documented).
+- **`/review-impl` (this gate) — 1 HIGH fixed:** `POST /api/documents/:id/extract` (vision path) ran a raw
+  `UPDATE documents SET extraction_status='processing'` **before** `enqueueJob`'s `write@project` check; the
+  removed `requireResourceScope('document')` was its sole guard. Hoisted a `write@project` assert to the top of
+  the handler (both sync + vision paths; service still re-asserts — defense in depth). Independently verified ~30
+  route services are capability-correct and that every other raw-SQL route mutation is test-only.
+
+**Two intentional LOOSENINGS (flagged + accepted at POST-REVIEW):** the **lesson-types LIST** and
+**taxonomy-profiles GET** are now open catalogs (any authenticated caller; mutations stay gated), matching the
+`listGroups` open-catalog precedent (DEFERRED-049) — non-sensitive config the GUI needs broadly. Both were behind
+the old admin/writer mount. Reversible if a future policy wants them re-tightened.
+
+**Obsolete tests removed:** the role/scope-shim assertions (`x-test-key-role` / `x-test-key-scope` 403/404) in
+`requests/topics/disputes/intake/motions` `.test.ts` — they asserted the deleted middleware; behavior is now
+covered by the service-level `*-authz` suites with real principals/grants. `package.json` test list pruned of the
+2 deleted middleware test paths.
+
+**Modified (highlights):** `src/api/index.ts`, 22 `src/api/routes/*.ts`, `src/services/projectGroups.ts`
+(`listAllProjects` per-row read filter), `src/services/reviewRequests.ts` (write→admin), `groups-namespace-authz.test.ts`
+(+`listAllProjects` filter test). **Deleted:** 3 middleware files + 2 middleware tests. **New:**
+`docs/specs/2026-06-21-actor-data-boundary-F2g-DOMAIN8-DESIGN.md` (audit + plan).
+
+**What's next (human-gated, final step):** the **`MCP_AUTH_ENABLED` default flip** — its own checkpoint + a fresh
+cold-start security adversary + **live auth-ON verification** (grep every authn/authz fast-path the flag affects).
+Pre-flip runbook reminder (from DEFERRED-053): the system principal must hold EXACTLY `global write`, else the
+worker refuses to start.
+
+---
+
+# CHECKPOINT — DEFERRED-051/052/053/054: F2g-flip least-privilege & robustness batch (2026-06-21, session 13)
+
+**Branch:** `feature/actor-data-boundary`. Auth **OFF** (inert) — flip + Domain 8 remain human-gated, NOT
+touched. Full unit suite **1257 / 1238 pass / 0 fail / 19 skip**, tsc clean. POST-REVIEW honored. Four latent
+F2g-flip hardening items closed in one batch.
+
+- **DEFERRED-051** (`jobExecutor.runJobById`): peek the job's `project_id` with a non-claiming SELECT and gate
+  BEFORE `claimQueuedJobById` — a denied caller no longer strands the job in `running` (stays `queued`).
+- **DEFERRED-052** (`builderMemoryLarge.loadLeafBodiesFromDb`): thread `actingPrincipalId` + `assertAuthorized
+  read@project` before the raw `generated_documents` read (the first, unguarded DB op of a resumed build). Both
+  parent call sites pass the principal (verified), so the worker's resume path is unaffected.
+- **DEFERRED-053** (`bootstrap.hasUsableSystemIdentity`): also require the system principal hold NOTHING beyond
+  the single `global write` (`NOT EXISTS` clause) — a hand-granted admin/delegate now fails enforce-ready.
+- **DEFERRED-054** (`principals.setPrincipalStatus`): guard `is_system = false` alongside `is_root = false` — the
+  singleton worker identity can't be suspended/retired (a typed CONFLICT explains rotation = delete+reseed).
+
+**⚠ FLIP-RUNBOOK note (from 053):** before flipping `MCP_AUTH_ENABLED`, the system principal must hold EXACTLY
+`global write` — if it carries any extra grant, `hasUsableSystemIdentity` returns false and the worker refuses to
+start. Trim it to exactly-write first. (Operator order stays: `bootstrap:root` → `bootstrap:system` → verify
+`hasUsableSystemIdentity` → flip.)
+
+**Reviews:** 2-stage REVIEW-CODE self-review + `/review-impl` (no HIGH/MED; verified the 052 threading won't break
+resume, 051 has a single gate, 054 has no bypass `SET status` path). **VERIFY note:** fixed a test-order
+interaction — the 053 artifact admin grant was resurrected by the original revoke/restore test's
+`capability IN (…)` un-revoke → switched the artifact cleanup to a hard DELETE.
+
+**Modified:** `src/services/jobExecutor.ts`, `builderMemoryLarge.ts`, `bootstrap.ts`, `principals.ts`,
+`system-identity-authz.test.ts` (+051 not-stranded, +053 broader-grant-deny, +054 protected-status). **New:**
+the 051-054 CLARIFY/DESIGN doc.
+
+**What's next (human-gated):** **Domain 8** — retire the legacy REST `requireScope`/`requireRole` middleware so
+`authorize()` is the SOLE gate (the last structural prerequisite) — then the `MCP_AUTH_ENABLED` default flip
+itself (own checkpoint + cold-start security adversary + live auth-ON verification). The flip-readiness deferred
+board is now clear except Domain 8.
+
+---
+
+# CHECKPOINT — DEFERRED-050: notification user-identity isolation (the user IS the principal) (2026-06-21, session 13)
+
+**Branch:** `feature/actor-data-boundary`. Auth stays **OFF** (inert) — flip + Domain 8 remain human-gated, NOT
+touched. Full unit suite **1255 / 1236 pass / 0 fail / 19 skip** (3× stable), tsc clean. POST-REVIEW honored.
+DEFERRED-050 closed; no new deferrals.
+
+**The problem:** `GET /api/notifications` + `PATCH .../mark-read` were keyed by a caller-supplied `user_id` with
+NO check (passing `user_id=<victim>` would read/mark another user's notifications); settings were project-gated
+but still keyed by request `user_id`. The deferred assumed this needed a new user↔principal substrate.
+
+**The correction (CLARIFY):** no new substrate — F1's principal IS the human identity (every request carries it
+via `callerPrincipalOf`), and the `notifications` table is **dormant** (`createNotification` has zero callers).
+User chose **D2** (derive-from-principal + defense-in-depth JOIN filter).
+
+**The fix (2 files, no migration):**
+- `src/api/routes/activity.ts` — new `notificationUserOf(req) = callerPrincipalOf(req) ?? 'gui-user'`; all 4
+  `/api/notifications*` handlers derive the user from it and **ignore any request-supplied `user_id`**. auth-OFF
+  → `'gui-user'` (GUI + existing settings rows unchanged).
+- `src/services/activity.ts` — `listNotifications` gains `actingPrincipalId` and drops any notification whose
+  `project_id` the principal can't `read` (defense-in-depth), `unread_count` over the visible set, bounded by
+  `NOTIFICATION_MAX_SCAN=500`. auth-OFF → `authorize` short-circuits ALLOW → all kept.
+
+**Reviews:** 2-stage REVIEW-CODE self-review (mark-read fenced by `user_id=principal`; orphan-project fail-closed)
++ `/review-impl` (no HIGH/MED; verified `bearerAuth` gates `/api/notifications` so no unauth `gui-user` collapse,
+no MCP surface; LOWs documented in code: env-token/unbound → shared bucket, `createNotification` principal-id
+contract). **VERIFY note:** an initial full-suite flake (`actual:2 expected:1`) was root-caused to a mid-file
+`MCP_AUTH_ENABLED=false` toggle in the new test racing other auth-ON files in the shared runner — removed that
+sub-test; 3× stable since.
+
+**New files:** `src/services/notifications-authz.test.ts` (4: helper×3 + DB JOIN-filter×1), DEFERRED-050
+CLARIFY/DESIGN docs. **Modified:** `src/api/routes/activity.ts`, `src/services/activity.ts`, package.json.
+
+**What's next (all human-gated):** DEFERRED-051/052/053/054 (worker-only/latent least-privilege items) — then
+Domain 8 (retire legacy REST `requireScope`/role middleware) — then the `MCP_AUTH_ENABLED` default flip itself
+(own checkpoint + cold-start security adversary + live auth-ON verification).
+
+---
+
+# CHECKPOINT — DEFERRED-049: `group` becomes a real scope level (namespace split) + resolveProjectIds self-defense (2026-06-21, session 13)
+
+**Branch:** `feature/actor-data-boundary`. Auth stays **OFF** (`MCP_AUTH_ENABLED=false`, inert) — the flip and
+Domain 8 remain **separately human-gated**, NOT touched. Full unit suite **1251 / 1232 pass / 0 fail / 19 skip**,
+backend + GUI `tsc` clean. POST-REVIEW human gate honored. DEFERRED-049 closed; no new deferrals.
+
+**The problem:** a group is a `projects`-table row, so it authorized via a `project`-scope grant by pure string
+equality — a grant on project `acme` covered a group `acme` (and vice-versa), and `createGroup`'s
+`ON CONFLICT DO UPDATE` could silently take over a colliding project row. Also `resolveProjectIds` folded a
+project's group ids into a `= ANY()` scope array with NO authz (the defense lived only in the N callers).
+
+**Decision (user, at CLARIFY):** **A2** (resolver self-defends) + **B2** (formal `group` scope in the lattice) +
+redact `member_count`. B2 = an authorization-primitive change → size XL, safety-sensitive review policy engaged.
+
+**B2 — `group` is a parallel leaf** (`global ⊃ {project⊃topic⊃task, group}`):
+- `authorize.ts` — `ResourceScope` gains `{kind:'group',group_id}`; `scopeCovers` adds a `group` case + an
+  explicit project-case kind-guard (a group resource carries `group_id`, not `project_id`, so the namespaces
+  never string-match); `resolveResourceScope` resolves a group with NO existence check (so createGroup can
+  pre-authorize). `grants.ts` — `ScopeType`/`SCOPE_TYPES` gain `group`.
+- Migration **0070** — `grants_scope_type_check` accepts `group`; **additive mirror-backfill** (project grant on
+  a group id → parallel group grant; `delegate` EXCLUDED so re-grant authority isn't inherited; `granted_by`
+  re-attributed to the active root so a retired granter doesn't fabricate a fresh edge; `EXISTS project_groups`
+  predicate; `ON CONFLICT DO NOTHING`). Matched **0 rows** here (logged no-op).
+- `projectGroups.ts` — every group TOPOLOGY op authorizes strict `{kind:'group'}`; `createGroup` **collision-rejects**
+  an id that already names a non-group project (no silent `DO UPDATE` takeover); `createProject` on a group id
+  rejects (23505). The 3 grant MCP tools (`grant_capability`/`list_grants`/`explain_authorization`) accept `group`.
+
+**A2 — `resolveProjectIds(projectId, includeGroups, actingPrincipalId)`:** authorizes the entry project
+(throws on deny → an unplumbed principal under auth-ON fails LOUD) + keeps only caller-readable groups, so the
+result is safe to feed a raw `= ANY()`. The 4 call sites (REST lessons/guardrails, MCP search/guardrails) + the
+2 `listGroups` callers thread the acting principal.
+
+**Lessons-read UNION (the A2×B2 seam):** a group_id doubles as a `lessons.project_id` partition, so
+`searchLessonsMulti` reads an id if `read@project OR read@group` (`canReadLessonsPartition`) — but the group arm
+fires ONLY for a real `project_groups` row, so a `read@group:<plain-project>` can't leak that project's lessons.
+Group TOPOLOGY stays strict group. **Redact:** `listGroups` nulls `member_count` for non-grant callers.
+
+**Reviews (safety-sensitive — authz primitive):**
+- Cold-start adversary @ DESIGN (3): exact backfill SQL + root-attribution; the both-namespace union (classify-
+  as-group-only would strip project-readers); fail-loud plumbing contract. Folded before BUILD.
+- Cold-start adversary @ CODE (3): **HIGH** `read@group` on a plain project leaked its lessons (existence-check-free
+  union) → group arm gated on a real group row + regression test; **MED** backfill mirrored `delegate` → excluded;
+  **LOW** `member_count:null` crashed the MCP `z.number()` schema → `.nullable()`.
+- `/review-impl` (4): **MED** the 3 grant MCP tool enums omitted `group` → group was UNPROVISIONABLE via API
+  (added); **LOW** GUI rendered null `member_count` literally (type + 3 null-guards); **LOW** mirror + group
+  grant/revoke untested (+2 tests); **LOW** resolveProjectIds false-path docstring overclaimed (scoped).
+
+**New files:** `migrations/0070_group_scope_type.sql`, `src/services/groups-namespace-authz.test.ts` (12),
+DEFERRED-049 CLARIFY/DESIGN/PLAN docs. **Modified:** authorize.ts, grants.ts, projectGroups.ts, lessons.ts,
+mcp/index.ts, api/routes/{lessons,guardrails,projectGroups}.ts, authorize.pure.test.ts(+5), groups-authz.test.ts
+(grant→group), package.json, gui/src/app/projects/{groups,settings}/page.tsx + projects/page.tsx. Migration
+applied live (`npx tsx src/db/migrate.ts`).
+
+**What's next (all human-gated):** the remaining F2g flip prerequisites — DEFERRED-050 (user-scoped notification
+identity) + the least-privilege items DEFERRED-051/052/053/054 — then Domain 8 (retire legacy REST
+`requireScope`/role middleware), then the `MCP_AUTH_ENABLED` default flip itself (own checkpoint + cold-start
+security adversary + live auth-ON verification).
+
+---
+
+# CHECKPOINT — DEFERRED-048: close the arbitrary-filesystem-path capability across ALL vectors (2026-06-20, session 13)
+
+**Branch:** `feature/actor-data-boundary`. Auth stays **OFF** (`MCP_AUTH_ENABLED=false`, inert) — the flip
+and Domain 8 remain **separately human-gated**, NOT touched. Full unit suite **1236 tests / 1217 pass /
+0 fail / 19 skip** (skips = existing root-free/system-free graceful guards), tsc clean. POST-REVIEW human
+gate honored (user approved). DEFERRED-048 closed; residual fragility → DEFERRED-054.
+
+**The problem (as scoped):** DEFERRED-048 began as "re-validate `payload.root` at job EXECUTION time, not
+only at enqueue" (MED). Cold-start adversary review showed `payload.root` is just ONE of several vectors
+that bind the worker to an arbitrary filesystem path it will index — a cross-tenant **global** capability:
+also the explicit `root` arg, the stored `project_sources.repo_root`, the stored
+`project_workspaces.root_path`, the derived `chunks.root` fallback, and `payload.cache_root`. The user
+approved the **FULL CLOSURE** scope (M→XL).
+
+**The model:** specifying ANY indexed path is a GLOBAL capability under enforcement. Enforced at the single
+resolve chokepoint + every write vector:
+- `resolveProjectRoot(projectId, explicitRoot, authorizerPrincipalId)` — explicit-root branch (1) gates on
+  `hasGlobalGrant(authorizer, 'write')`; stored branches (2 `project_sources`, 3 `project_workspaces`)
+  re-verify the row's `*_authorized_by` stamp; branch 4 (`chunks.root`, no provenance) is NOT honored under
+  enforcement. (Incidentally fixed a latent branch-3 bug: queried `active`, real column is `is_active`.)
+- **Stamp columns** (mig `0069_indexed_root_authorizer.sql`): `project_sources.repo_root_authorized_by`,
+  `project_workspaces.root_path_authorized_by` (UUID → principals, ON DELETE SET NULL), set by the gated
+  setters and re-verified at resolve.
+- **Gated setters:** `configureProjectSource` (gate + stamp; ON CONFLICT uses COALESCE/CASE so a project
+  writer calling configure WITHOUT a root can't clobber/downgrade another principal's stamped root — adv
+  p3 #1), `prepareRepo` (gated **UP FRONT before any FS mkdir/clone** — `/review-impl` #1, the arbitrary-FS
+  **write** the read-focused passes missed), `registerWorkspaceRoot` (gate + stamp).
+- **Jobs:** `enqueueJob` stamps `payload.root_authorized_by` + gates `payload.cache_root`; `resolveRoot`
+  threads the stamp to `resolveProjectRoot`; `runJobById` re-verifies at exec.
+- **Auth-off→on transition:** a null stamp (auth-off / legacy row) is NOT honored post-flip → the operator
+  re-runs the setter as a global principal, which re-stamps. Fail-closed + LOUD (no silent fallback to a
+  different tree).
+
+**Reviews (all findings fixed):**
+- REVIEW-CODE adversary, 4 cold-start passes, curve **3→3→3→0 (SATURATED)**: p1 — HIGH 6 sync callers
+  bypass the exec check → moved the gate INTO the `resolveProjectRoot` chokepoint; MED `cache_root`
+  laundering → enqueue gate. p2 — HIGH stored `repo_root` (configure) + HIGH stored `root_path` (workspace)
+  write-vectors → triggered the full-closure scope; auth-off transition → null-stamp model. p3 — HIGH
+  ON-CONFLICT clobber/downgrade DoS → COALESCE/CASE; MED branch-2 ignored `enabled` → `enabled=true`; LOW
+  test gaps. p4 — clean (verified clobber-safe, gates-before-write, end-to-end `scanWorkspaceChanges`,
+  transition closed; direct-DB-write out of threat model).
+- `/review-impl` coverage-gap pass (post-saturation): **1 MED** — `prepareRepo` mkdir+clone (arbitrary FS
+  WRITE) ran BEFORE its inherited gate → added an up-front global gate before any FS side effect (+test
+  asserting NO directory created on deny); **1 LOW** — stored-root branch not tested e2e → added a
+  `runJobById` stored-`repo_root` test (no `payload.root`, resolves via branch 2); **1 LOW** →
+  DEFERRED-054; 1 COSMETIC accepted.
+
+**New files:** `migrations/0069_indexed_root_authorizer.sql`,
+`src/services/payload-root-exec-authz.test.ts`, `src/services/indexed-root-authorizer.test.ts`, the
+DEFERRED-048 CLARIFY doc. **Modified:** `src/utils/resolveProjectRoot.ts`, `src/services/jobExecutor.ts`,
+`src/services/jobQueue.ts`, `src/services/repoSources.ts`, `src/services/workspaceTracker.ts`,
+`src/api/routes/git.ts`, `src/api/routes/projects.ts`, `src/mcp/index.ts` (6 `resolveProjectRoot` callers
+now pass the authorizer), `package.json` (2 tests added). **Migration applied:** `npx tsx src/db/migrate.ts`
+ran 0069.
+
+**Housekeeping noted:** migration **0067 number collision** — `0067_system_principal.sql` (F2g) and a
+pre-existing `0067_authz_decisions.sql` share the number. Filenames are unique so both apply and the
+migrate runner is fine; flagged here so a future renumber/squash doesn't silently drop one.
+
+**Deferred (logged):** **DEFERRED-054** — suspending the system principal nulls authorization for every
+root it stamped (fail-closed availability fragility; protect `is_system` status like `is_root`). DEFERRED-048
+itself is now **RESOLVED**.
+
+**What's next (all human-gated):** remaining F2g flip prerequisites — DEFERRED-049 (`resolveProjectIds`
+resolver-level authz + project/group id-namespace), DEFERRED-050 (user-scoped notification identity), plus
+the least-privilege pass items DEFERRED-051/052/053/054 — then Domain 8 (retire legacy REST
+`requireScope`/role middleware), then the `MCP_AUTH_ENABLED` default flip itself (own checkpoint +
+cold-start security adversary + live auth-ON verification).
+
+---
+
+# CHECKPOINT — F2g sub-step 1: system-worker identity (the auth-flip prerequisite) (2026-06-20, session 13)
+
+**Branch:** `feature/actor-data-boundary`. Auth stays **OFF** (`MCP_AUTH_ENABLED=false`, inert). The
+`MCP_AUTH_ENABLED` flip and Domain 8 remain **separately human-gated** — NOT touched. Full unit suite
+**1214 tests / 1195 pass / 0 fail / 19 skip** (skips = the existing root-free/system-free graceful guards,
+which run on a clean CI DB), tsc clean. Drove the first F2g flip-prerequisite — a dedicated identity for
+the background worker — through the full 12-phase `/loom` workflow (AMAW: 2 cold-start adversaries + a
+`/review-impl` coverage-gap pass), with the CLARIFY design checkpoint (user chose Option B) and the
+POST-REVIEW human gate both honored.
+
+**The problem:** after F2f every guarded service starts with `assertAuthorized(actingPrincipalId, …)`.
+The worker and other internal callers pass NO principal — fine under auth-off (short-circuit ALLOW), but
+would `NO_PRINCIPAL`-deny the instant the flag flips, killing the whole index/embed/knowledge pipeline.
+
+**Option B (user-chosen):** a dedicated NON-root `kind=system` principal with exactly ONE `global write`
+grant (bounded least-privilege — cannot admin-delete/delegate), threaded explicitly through the worker.
+
+**Substrate:** migration `0067_system_principal.sql` (`is_system` marker — singleton partial index +
+`principals_root_xor_system_chk` CHECK keeping it disjoint from root) · `getSystemPrincipal` /
+`seedSystemPrincipal` (principals.ts) · `bootstrapSystem()` + `npm run bootstrap:system` CLI · enforce-ready
+gate `hasUsableSystemIdentity()` (system principal active + active `global write` grant + granted_by an
+active root — flag-independent, exact-write).
+
+**Wiring (explicit threading, no ambient authority):** worker resolves the system principal at startup,
+**fast-fails under auth-on if it's missing** (clean "run bootstrap:system" vs every job dying in failJob),
+threads `actingPrincipalId` through `executeByType` (an `enqueueChained` closure forwards internal
+re-enqueues) into every guarded leaf — including the gaps F2f had not plumbed: `indexProject`,
+`ingestGitHistory`, `analyzeCommitImpact`, `prepareRepo`, `scanWorkspaceChanges` (+ its internal
+`indexProject`), `upsertGeneratedDocument`, and the 6 the reviews caught — `buildFaq`,
+`buildRaptorSummaries`, `runQualityEvalAndPersist`, `buildProjectMemoryArtifact`,
+`buildLargeRepoProjectMemory`, `runExtraction`. `runJobById` gained a symmetric claimed-job gate.
+
+**Reviews (all findings fixed):**
+- REVIEW-DESIGN adversary (3): missed 2 builder-memory leaves (`knowledge.loop.deep` /
+  `knowledge.memory.build`) + a tail-trace `runExtraction`; CHECK was prose-only (added to DDL);
+  enforce-ready needed a granted_by-active-root join.
+- REVIEW-CODE adversary (3): gate accepted `admin` → tightened to exact `write`; a false-green
+  `runNextJob` idle test → replaced with a real `index.run` threading proof via `runJobById`;
+  `runJobById`/rabbit path ungated → added the symmetric gate.
+- `/review-impl` (1 MED + LOWs): the 6 pipeline forwards were untested → added
+  `pipeline-threading-authz.test.ts` (covering-principal forward proof; distillation-off + closed-port
+  embedder for speed/determinism; `builderMemory` single-pass skips honestly without an LLM).
+  **Mutation-verified** — dropping a forward fails the test.
+
+**New files:** `migrations/0067_system_principal.sql`, `src/scripts/bootstrapSystem.ts`,
+`src/services/system-identity-authz.test.ts` (10), `src/services/pipeline-threading-authz.test.ts` (6),
+F2g CLARIFY/DESIGN/PLAN docs. **Modified:** worker.ts, jobExecutor.ts, bootstrap.ts(+test),
+principals.ts(+test), faqBuilder/raptorBuilder/qcEval/builderMemory/builderMemoryLarge/workspaceTracker.ts,
+package.json. **Tests:** `npm run bootstrap:system` CLI; `npx tsx src/db/migrate.ts` applied 0067.
+
+**Deferred (logged):** DEFERRED-051 (`runJobById` claims-then-strands on denial — worker-only/latent),
+DEFERRED-052 (`loadLeafBodiesFromDb` unguarded raw read — worker-only/latent), DEFERRED-053
+(`hasUsableSystemIdentity` ensures write present but doesn't forbid a hand-granted admin). All three are
+F2g-flip least-privilege-pass items, not blockers.
+
+**What's next (all human-gated):** the remaining F2g flip prerequisites — DEFERRED-048/049/050 (worker
+exec-time `payload.root` re-validation; `resolveProjectIds` authz + project/group id-namespace;
+user-scoped notification identity) — then Domain 8 (retire legacy REST `requireScope`/role middleware),
+then the `MCP_AUTH_ENABLED` default flip itself (its own checkpoint + cold-start security adversary + live
+auth-ON verification). Operator runbook for the flip: `bootstrap:root` → `bootstrap:system` →
+`backfill:grants` → `migrate:coordination-actors` → `assertEnforceReady` green → flip.
+
+---
+
+# CHECKPOINT — F2f deferred items cleared: read-sweep + groups + jobQueue + adversary-pass-2 (2026-06-20, session 12)
+
+**Branch:** `feature/actor-data-boundary`. Auth stays **OFF** (inert). Full unit suite **1194 pass / 2 skip**,
+tsc clean. Drove the three open F2f deferred items to RESOLVED, each with its own cold-start adversary
+verification (the follow-up pass found real misses → fixed in a second round).
+
+**DEFERRED-047 read-sweep (RESOLVED):** authorized every NEVER-guarded project-read surface (the
+migrate-the-callerScope-sites rollout was structurally blind to them; globalSearch was the adversary-caught
+instance). Wave 1 `e3af366` (analytics ×6, auditLog, activity.listActivity, agentTrust — via a per-file
+`assertReadAll` loop, strict-reject for the multi-project "All Projects" mode). Wave 2 `be2b9a4`
+(collaboration lesson-keyed engagement, chatHistory project-keyed, lessonImportExport; reads→read, engagement
+writes→write, preserving the capability model; deleteComment/toggleMessagePin resolve their parent in-service).
+
+**DEFERRED-046 groups (RESOLVED `d1cabfa`):** a group IS a projects-table row, so it authorizes via the
+`project` kind (no new resolver kind). Membership add/remove require write on BOTH the member project AND the
+group (strict-reject; closes the cross-project-flow widening + the "Group X not found" existence oracle);
+createGroup=write@group, deleteGroup=admin@group.
+
+**DEFERRED-045 jobQueue (RESOLVED `28ec95f`):** the security-critical one (cross-tenant filesystem path).
+Chose the **global-grant gate** (user decision). New `hasGlobalGrant(principalId, action)` helper. enqueue/
+cancel=write@project + project_id REQUIRED unless global; list=read@project per filter + no-filter⇒global
+(closes SEC-1 WHERE 1=1); `payload.root`⇒global only (SEC-6). Deleted the obsolete legacy-callerScope SEC
+suites; new jobqueue-authz.test.ts.
+
+**Follow-up cold-start adversary pass (3 agents) + fixes `8aa736f`:** the pass earned its keep — found the
+two read surfaces the first sweep MISSED (`learningPaths`, `notification_settings`), the group-COMPOSITION
+reads left open (`listGroupMembers`/`getGroup`), and that **`runNextJob` executed jobs UNGATED** (a null-scope
+drain ran every project's jobs — walks payload.root). All fixed: learningPaths + notification_settings +
+listGroupMembers/getGroup gated; runNextJob now gated like listJobs (write@project, or hasGlobalGrant for the
+unscoped drain); assertReadAll empty-filter fails closed by construction.
+
+**Residual design-level items logged (NOT live-exploitable; F2g-flip prerequisites):** DEFERRED-048 (worker
+EXECUTION-time payload.root re-validation — same enqueue-time posture as PR F), DEFERRED-049 (resolveProjectIds
+resolver-level authz + project/group id-namespace conflation), DEFERRED-050 (user-scoped notification list/mark
+needs the user-identity model). All in DEFERRED.md.
+
+**Commits this batch:** e3af366, be2b9a4, d1cabfa, 28ec95f, 8aa736f. **What's next:** the F2g posture-flip
+prerequisites (system/root principal for the worker + internal callers; DEFERRED-048/049/050; the flip itself
+is human-gated — NOT done). Domain 8 (retire REST scope/role middleware) remains gated behind the flip.
+
+---
+
+# CHECKPOINT — F2f cold-start adversary pass (domains 6–7) + 2 HIGH fixes (2026-06-20, session 12)
+
+**Branch:** `feature/actor-data-boundary`. Auth stays **OFF** (inert). Full unit suite **1162 pass / 2 skip**,
+tsc clean. Ran the CLAUDE.md-mandated cold-start hostile-actor adversary pass over this session's wired
+enforcement (3 parallel fresh read-only agents — action-mapping, coverage/bypass, oracle/resolver lenses).
+
+**2 HIGH findings fixed now:**
+1. **`joinTopic` → `replayEvents` dropped the principal** (`src/services/topics.ts`). I migrated
+   `replayEvents` to re-assert `read@topic` but missed its internal caller `joinTopic`, which forwards the
+   txn-2 client without `actingPrincipalId`. At the flip the induction read would deny NO_PRINCIPAL →
+   NOT_FOUND, breaking EVERY authorized join after txn-1 already committed. Fix: forward
+   `params.actingPrincipalId`. **Surfaced a deeper flaw:** txn-2 was `REPEATABLE READ READ ONLY`, but
+   `authorize()`'s best-effort `logDecision` INSERTs into `authz_decisions` on that client → a READ ONLY
+   txn rejects the INSERT (25P02) and poisons the read. Fix: drop `READ ONLY` (REPEATABLE READ alone keeps
+   the coherent snapshot; the audit write is now permitted). (Decoupling logDecision to the pool was
+   rejected — `authorize.test.ts`'s fail-closed test relies on it writing through the passed executor, and
+   a pool write would deadlock on that test's ACCESS EXCLUSIVE lock.)
+2. **`globalSearch` (Cmd+K palette) was an unguarded cross-tenant read surface** (`src/services/globalSearch.ts`).
+   `GET /api/search/global` reads lessons/documents/guardrails/commits by caller-supplied `project_id` with
+   only bearerAuth + zero authz (a pre-existing DEFERRED-029 gap — it never had `callerScope`). At the flip a
+   bound key passing `?project_id=<other>` leaks cross-tenant data. Fix: `assertAuthorized(read, project)` as
+   the first line + thread `callerPrincipalOf(req)` from the route.
+
+**Tests:** new `join-induction-authz.test.ts` (3 auth-ON: granted charter+join returns the induction pack
+not NOT_FOUND; ungranted → FORBIDDEN; unknown principal). Added 2 globalSearch cases to `search-authz.test.ts`.
+
+**Findings correctly DEFERRED / accepted (not regressions):**
+- **DEFERRED-046 (MED) — project-group membership authorizes the member project, not the GROUP** (+ group-
+  existence oracle + `createGroup` has no authz). Pre-existing semantics (legacy guard did the same); fixing
+  needs a new `group` ResourceRef kind = design change. Logged for a dedicated pass before the flip.
+- **KG internal sub-calls** (retriever/tieredRetriever → searchSymbols/getSymbolNeighbors pass no principal):
+  fail CLOSED (wrapped in best-effort try/catch → graceful KG-assist degrade at the flip), covered by the
+  F2g system-principal prerequisite. Noted, not fixed (consistent with the cross-fn internal-caller pattern).
+- **`checkGuardrails` = `read` but writes an audit row**: `read` is the correct ACCESS tier (read-only agents
+  must be able to check guardrails — preserves behavior); audit-log spam by a read-only principal is a minor
+  accepted risk on an append-only telemetry table.
+
+The curve is not yet zero (2 HIGH this pass) — a follow-up cold-start pass is warranted once DEFERRED-045
+(jobQueue) + DEFERRED-046 (groups) land, per the multi-pass-to-saturation policy.
+
+**`/review-impl` (coverage-gap lens, separate from the hostile-actor pass) — findings:**
+- **MED → DEFERRED-047 (F2f-readsweep):** the rollout migrated the call sites that HAD `assertCallerScope`,
+  so it is structurally blind to NEVER-guarded read surfaces. The adversary caught `globalSearch` by luck;
+  `/review-impl` confirmed siblings still open — `activity.ts` and `analytics.ts` read project-scoped tables
+  with **0** authz calls, and ~18 other GET-route files were not individually audited. A systematic sweep
+  (not a partial fix) is needed before the flip / domain 8. Logged.
+- **Verified clean:** `globalSearch`'s single `assertAuthorized(read, project)` covers all 5 of its queries
+  (every one `WHERE project_id = $1`). The migrated services assert FIRST, before side-effects. The
+  Pool|PoolClient widening is exercised under auth-ON both via a Pool (domain7-authz replayEvents) and a
+  PoolClient (join-induction-authz).
+- **LOW (accepted/documented, not fixed):** (a) `listGuardrailRules([])` with an empty id array runs the
+  authorize loop zero times — no leak (empty `ANY()` → empty result), but authz is technically skipped;
+  (b) `searchCode`'s decomposed-sub-query recursion forwards `actingPrincipalId` but no auth-ON test
+  exercises a multi-intent query, so a future regression there wouldn't be caught; (c) `joinTopic` txn-2 is
+  no longer `READ ONLY`, so a future stray write in that block would silently succeed (guarded only by the
+  code comment). No new HIGH — the F2f code itself is sound; the MED is a pre-existing unguarded-surface class.
+
+**What's next:** unchanged — DEFERRED-045 jobQueue (F2g prereq), DEFERRED-046 groups, domain 8 (retire REST
+scope/role middleware — blocked on jobQueue + the flip), F2g posture-flip prerequisites doc + system principal.
+
+---
+
+# CHECKPOINT — F2f domain 7 (guardrails/taxonomy/groups/review/exchange/replay) enforcement wired (2026-06-20, session 12)
+
+**Branch:** `feature/actor-data-boundary`. Serial /loom rollout continuing. Auth stays **OFF** (inert).
+Full unit suite **1157 pass / 2 skip**, tsc clean.
+
+**Domain 7 — leftover project/topic-scoped services (PURE REPLACE, EXCEPT jobQueue):**
+`guardrails.ts` (list/simulate/check = read; multi-project = authorize-each strict-reject),
+`taxonomyService.ts` (getActiveProfile = read, activate/deactivate = write), `projectGroups.ts`
+(add/remove = write, listGroupsForProject = read, createProject/updateProject = write),
+`reviewRequests.ts` (submit/approve/return = write, list/get = read), `exchange/` (exportProject = read,
+importProject/pullFromRemote = write), `coordinationEvents.replayEvents` (topic read). All
+`assertCallerScope`/`assertTopicScope` → `assertAuthorized`; `callerScope` removed. `createProject`
+authorizes cleanly against a not-yet-existent project because `resolveResourceScope` trusts `project`
+kind without an existence check (a global-write/root principal can create; a project-scoped one can't
+create elsewhere).
+
+**authorize.ts widening:** `executor` param `PoolClient` → `Pool | PoolClient` across the 8 internal
+fns (additive; the bodies already fell back to `getDbPool()`, a Pool) so `replayEvents` can pass its
+`Pool | PoolClient` executor for transaction-join (joinTopic's coherent snapshot).
+
+**Wiring:** ~11 MCP handlers (`resolveMcpCallerScopeOrThrow` → `resolveActingActorOrThrow`: check_guardrails,
+add/remove_project_from_group, list_project_groups, submit_for_review, list_review_requests, replay_events,
+get/activate/deactivate_taxonomy_profile). REST fully migrated to `callerPrincipalOf`: guardrails.ts,
+taxonomy.ts, reviewRequests.ts, projectGroups.ts, projects.ts (now FULLY migrated — `callerScopeOf` +
+`CallerScope`/`Request` imports deleted), chat.ts checkGuardrails, topics.ts replayEvents ×3. The
+include_groups graceful-skip (check_guardrails MCP + REST) now keys off `NOT_FOUND` directly instead of
+`typeof callerScope === 'string'`.
+
+**⚠️ DEFERRED — jobQueue NOT migrated (DEFERRED-045 / F2f-jobs, MED):** `enqueueJob`/`listJobs`/`cancelJob`
+use `callerScope` as a DATA value in PR F's adversary-hardened SEC-1/3/5/6 logic (auto-bind project_id
+to the single caller scope; block `payload.root` for scoped callers — the only defense against the
+cross-tenant filesystem-write bug since the worker runs jobs with no principal). The actor model has no
+single "caller scope", so this needs an actor-native redesign (global-grant detection + required
+project_id) + its own cold-start adversary pass — NOT a mechanical replace. jobQueue stays on the
+DEFERRED-029 guard; its `d3-scope.test.ts` cases remain. **This is a F2g-flip prerequisite.**
+
+**Tests:** new consolidated **`domain7-authz.test.ts`** (25 auth-ON grant-based tests across all migrated
+fns: 10 reads cross-tenant → NOT_FOUND incl. multi-project strict-reject + replay unresolvable-topic, 11
+writes cross-tenant → FORBIDDEN, over-capability, allows, unknown principal). Deleted the now-empty
+`d4-scope.test.ts` (guardrails), `coordination-scope.test.ts` (reviewRequests), `documents-scope.test.ts`
+(exchange); trimmed `d3-scope.test.ts` to jobQueue-only. Functional tests never passed callerScope, none broke.
+
+**What's next:** **DEFERRED-045 jobQueue (F2f-jobs)** before any flip; domain 8 (retire REST
+`requireScope`/`requireResourceScope`/role middleware once every route's service enforces — blocked
+until jobQueue lands); the mandated **3rd cold-start adversary pass** over the wired enforcement; F2g
+posture-flip prerequisites doc (flip itself human-gated, NOT done). F2g system/root principal needed for
+internal/worker callers (they pass no principal — inert now, would NO_PRINCIPAL-deny at flip).
+
+---
+
+# CHECKPOINT — F2f domain 6 (search/retrieval/indexer/KG) enforcement wired (2026-06-20, session 12)
+
+**Branch:** `feature/actor-data-boundary`. Serial /loom rollout continuing. Auth stays **OFF** (inert).
+Full unit suite **1151 pass / 2 skip**, tsc clean.
+
+**Domain 6 — search/retrieval (PURE REPLACE)**, all project-scoped: `retriever.ts` (`searchCode`=read),
+`tieredRetriever.ts` (`tieredSearch`=read), `indexer.ts` (`indexProject`=write — writes chunks/embeddings),
+`kg/query.ts` (`searchSymbols`/`getSymbolNeighbors`/`traceDependencyPath`/`getLessonImpact`=read). All
+`assertCallerScope` → `assertAuthorized({kind:'project'})`; `callerScope` removed. `assertAuthorized` runs
+as the FIRST line of each fn, so a deny throws before any embedding / Neo4j / fs work AND before the KG
+feature-toggle short-circuit can mask a cross-tenant attempt. No resolver change (all project-level).
+
+**Wiring:** 7 MCP handlers (`resolveMcpCallerScopeOrThrow` → `resolveActingActorOrThrow`: index_project,
+search_code, search_code_tiered, search_symbols, get_symbol_neighbors, trace_dependency_path,
+get_lesson_impact). REST: `search.ts` + `chat.ts` fully migrated to `callerPrincipalOf` (their local
+`callerScopeOf` helpers + `CallerScope`/`Request` imports deleted); `projects.ts` index route threaded
+`actingPrincipalId` (stays MIXED — keeps `callerScopeOf` for un-migrated domain-7 create/update/group/
+exchange calls). `searchCode`'s sub-query recursion now forwards `actingPrincipalId` (was a latent
+unprincipled self-call). Internal cross-fn callers (faqBuilder/qcEval/jobExecutor/workspaceTracker/smoke)
+pass no principal — covered by the F2g system-principal prerequisite, same as prior domains.
+
+**Tests:** new **`search-authz.test.ts`** (10 auth-ON grant-based tests: 6 reads cross-tenant → NOT_FOUND,
+indexProject cross-tenant + over-capability → FORBIDDEN, allow-past-gate, unknown principal → NOT_FOUND).
+Removed the indexer/retriever/tieredRetriever/KG DEFERRED-029 cases from `d4-scope.test.ts` (now guardrails-
+only, domain 7). Search/index FUNCTIONAL + internal callers never passed callerScope, none broke.
+
+**What's next:** domains 7–8 (jobs/exchange/taxonomy/guardrails/projectGroups/reviewRequests/coordEvents
+next, then retire REST scope/role middleware) + the mandated 3rd cold-start adversary pass. F2g
+prerequisites already logged.
+
+---
+
+# CHECKPOINT — F2f domain 5 (git/workspace/snapshot) enforcement wired (2026-06-20, session 12)
+
+**Branch:** `feature/actor-data-boundary`. Serial /loom rollout continuing. Auth stays **OFF** (inert).
+Full unit suite **1148 pass / 2 skip**, tsc clean.
+
+**Domain 5 — git/workspace (PURE REPLACE)**, all project-scoped: `gitIntelligence.ts` (ingest/suggest/
+link=write, listCommits/getCommit/analyzeImpact=read), `repoSources.ts` (configure/prepare=write,
+get=read), `workspaceTracker.ts` (register/scan=write, list=read), `snapshot.ts` (rebuild=write,
+get=read). All `assertCallerScope` → `assertAuthorized({kind:'project'})`; `callerScope` removed.
+Threaded through REST git/workspace routes + the projects route's snapshot & `deleteWorkspace` calls
+(+ `callerPrincipalOf`) and ~14 MCP handlers (`resolveMcpCallerScopeOrThrow` →
+`resolveActingActorOrThrow`). No resolver change needed (all project-level).
+
+**Tests:** rewrote `git-workspace-scope.test.ts` as auth-ON (18 grant-based tests across all 14 fns:
+read cross-tenant → NOT_FOUND, write cross-tenant + over-capability → FORBIDDEN, allow, unknown
+principal). Removed the 2 snapshot cases from `d4-scope.test.ts` (indexer/retriever/KG stay — domains
+6–7). git/workspace FUNCTIONAL tests never passed callerScope, none broke.
+
+**What's next:** domains 6–8 (search/retrieval next). F2g prerequisites already logged.
+
+---
+
+# CHECKPOINT — F2f domain 4 (documents) enforcement wired (2026-06-20, session 12)
+
+**Branch:** `feature/actor-data-boundary`. Serial /loom rollout continuing. Auth stays **OFF** (inert).
+Full unit suite **1145 pass / 2 skip**, tsc clean.
+
+**Domain 4 — documents (PURE REPLACE)** across `documents.ts` (create=write, list/get=read,
+delete=admin, link/unlink=write·[doc+lesson], listDocumentLessons=read·doc), `documentChunks.ts`
+(searchChunks/searchChunksMulti=read·project, per-project), `generatedDocs.ts` (upsert/promote=write,
+list/get=read), `extraction/pipeline.ts` (runExtraction/updateChunk/deleteChunk=write,
+listDocumentChunks=read). All `assertCallerScope`/`assertDocumentScope`/`assertLessonScope` →
+`assertAuthorized`; `callerScope` removed. Threaded through REST documents/generated-docs/chat routes
+(+ `callerPrincipalOf`) and the doc MCP handlers (`resolveMcpCallerScopeOrThrow` →
+`resolveActingActorOrThrow`).
+
+**Resolver extension:** `ResourceRef.kind` gained `lesson` (→ project, UUID-guarded; shares the `doc`
+branch). The link/unlink fns authorize BOTH endpoints (doc AND lesson) — preserves the PR F SEC-4
+no-cross-tenant-edge guarantee for the project_id-less `document_lessons` join.
+
+**Tests:** rewrote `documents-scope.test.ts` to keep only the exchange (export/import) cases (domain 7)
+→ new **`documents-authz.test.ts`** (13 auth-ON tests incl. the doc→project resolver + the SEC-4
+no-edge/no-oracle property). Removed the 2 SEC-4 link/unlink cases from `pr-f-adversary-fixes.test.ts`
+(migrated to documents-authz). Document FUNCTIONAL tests never passed callerScope, none broke.
+
+**What's next:** domains 5–8 (git/workspace next). F2g prerequisites already logged.
+
+---
+
+# CHECKPOINT — F2f domain 3 (decisions) enforcement wired (2026-06-20, session 12)
+
+**Branch:** `feature/actor-data-boundary`. Serial /loom rollout continuing. Auth stays **OFF** (inert).
+Full unit suite **1151 pass / 2 skip**, tsc clean.
+
+**Domain 3 — decisions (PURE REPLACE)** across `decisionBodies.ts` (createBody=admin·project,
+addBodyMember=admin·body, getBody=read, listBodies=read), `motions.ts` (proposeMotion=write·topic,
+second/cast/veto/tally=write·motion, getMotion=read, listMotions=read·topic), `proxies.ts`
+(grant/revoke=write·body, list=read), `requests.ts` (submit=write·topic, decideStep=write·request,
+get=read, list=read·topic), `intake.ts` (submit=write·project, triage=write [intake+topic],
+dismiss=write·intake, get=read, list=read·project), `disputes.ts` (open=write·topic,
+resolve=write·dispute, get=read, list=read·topic). All `assertBodyScope`/`assertMotionScope`/
+`assertDisputeScope`/`assertRequestScope`/`assertIntakeScope`/`assertCallerScope` → `assertAuthorized`;
+`callerScope` removed. Threaded through 4 REST routes (motions/requests/intake/disputes, +
+`callerPrincipalOf`) and ~27 MCP decision handlers (`resolveMcpCallerScopeOrThrow` →
+`resolveActingActorOrThrow`).
+
+**Resolver extension:** `ResourceRef.kind` gained 5 more input shorthands — `body`/`intake` → project,
+`motion`/`dispute`/`request` → topic (all UUID-guarded, queries mirror the retired scopeResolvers).
+Topic-level resolution for motion/dispute/request is MORE precise than the old project-level guard
+(a project grant still covers via the lattice; a topic grant now also works).
+
+**Tests:** removed the 2 intake DEFERRED-029 cases from `coordination-scope.test.ts` (reviewRequests
+cases stay — domain 7) → new **`decisions-authz.test.ts`** (12 auth-ON tests exercising the body→
+project and motion→topic resolvers). Fixed `proxies.test.ts` 15.11 (its auth-ON proxy-verification
+test now mints a write-granted principal to pass the new outer gate). Migrated the **SEC-2** cross-
+tenant intake-injection regression in `pr-f-adversary-fixes-db.test.ts` to auth-ON (now FORBIDDEN
+instead of NOT_FOUND on the resolvable cross-tenant topic; the no-event-injection guarantee is
+identical). Decision FUNCTIONAL tests never passed callerScope, so none broke.
+
+**What's next:** domains 4–8 (documents next; the `doc` resolver kind is already wired). Plus the
+coordination-events tool (`replayEvents` in `coordinationEvents.ts`) still on callerScope — fold into
+a later domain. F2g prerequisites already logged.
+
+---
+
+# CHECKPOINT — F2f domain 2 (coordination board) enforcement wired (2026-06-20, session 12)
+
+**Branch:** `feature/actor-data-boundary`. Serial /loom rollout continuing. Auth stays **OFF** (inert).
+Full unit suite **1144 pass / 1 skip**, tsc clean.
+
+**Domain 2 — board (PURE REPLACE)** across `board.ts` (postTask=write, listBoard=read, claim/release/
+completeTask=write·task), `topics.ts` (charterTopic=write·project, joinTopic=write, grantLevel=admin,
+getTopic=read, closeTopic=admin·topic), `artifacts.ts` (writeArtifact/baselineArtifact=write·artifact),
+`artifactLeases.ts` (claim/release/renew=write, listActiveClaims/checkAvailability=read,
+forceRelease=admin·project). All `assertTopicScope`/`assertTaskScope`/`assertArtifactScope`/
+`assertCallerScope` → `assertAuthorized`; `callerScope` param removed. Callers threaded: REST board/
+topics/artifactLeases routes (+ `callerPrincipalOf`) and ~18 MCP coordination handlers
+(`resolveMcpCallerScopeOrThrow` → `resolveActingActorOrThrow`).
+
+**Resolver extension (additive to the F2b chokepoint):** `ResourceRef.kind` gained input-only
+shorthands `artifact` (→ its task scope; `artifact_id` is TEXT) and `doc` (→ its project scope;
+`doc_id` is UUID-guarded). The resolved `ResourceScope` lattice is unchanged. So an artifact authorizes
+at its task scope — a task/topic/project/global grant all correctly cover it. (`doc` is pre-wired for
+domain 4.)
+
+**Tests:** the 6 DEFERRED-029 artifactLeases callerScope cases in `d3-scope.test.ts` (which also covers
+un-migrated jobs/taxonomy/projectGroups/projects — those stay) → replaced by
+**`board-authz.test.ts`** (7 auth-ON tests incl. artifact→task resolver exercise: topic read
+cross-tenant NOT_FOUND, task/artifact/lease write over-capability FORBIDDEN, granted read resolves,
+unknown principal NOT_FOUND). The board FUNCTIONAL tests never passed callerScope, so none broke.
+
+**What's next:** domains 3–8 (decisions next). Same pattern + the F2g prerequisites already logged.
+
+---
+
+# CHECKPOINT — F2f.0 foundation + domain 1 (lessons) enforcement wired (2026-06-20, session 12)
+
+**Branch:** `feature/actor-data-boundary`. Continuing the F2f enforcement rollout serially under
+**/loom** (the `/warp` disjointness gate was run and **failed** — `src/mcp/index.ts` is a shared-write
+magnet every domain touches; per warp.md that mandates serial /loom). Auth stays **OFF** — every
+migrated site no-ops via `assertAuthorized`'s AUTH_DISABLED pass-through until the F2g flip. Full unit
+suite **1142 pass / 2 skip**, tsc clean.
+
+**F2f.0 foundation (REST principal threading):** the rollout doc's claim "REST bearerAuth provides the
+principal" was **inaccurate** — `bearerAuth` attached only `apiKeyScope`. Fixed: it now also attaches
+`req.apiKeyPrincipalId = keyEntry.principal_id` (data already loaded by `validateApiKey`), and a new
+exported `callerPrincipalOf(req)` helper (`src/api/middleware/auth.ts`) is the REST analog of MCP's
+`resolveActingActorOrThrow → actingPrincipalId`.
+
+**Domain 1 — lessons (PURE REPLACE):** every `assertCallerScope`/`assertCallerScopeMulti` in
+`src/services/lessons.ts` (10 sites across addLesson/listLessons/searchLessons/searchLessonsMulti/
+updateLesson/listLessonVersions/batchUpdateLessonStatus/updateLessonStatus/deleteWorkspace) replaced
+with `assertAuthorized(actingPrincipalId, ACTION, resource)`. The `callerScope` param is GONE
+(renamed → `actingPrincipalId`). Action mapping: read for search/list/versions; write for add/update/
+status/batch and the writer-gated AI improve/suggest-tags routes (consolidates the role check into
+authorize); admin for the destructive `deleteWorkspace`. Multi-project reads authorize EACH project
+(stricter + more correct than the old strict-reject); list-all-projects requires global read.
+Callers threaded: REST `lessons.ts` route + `chat.ts` (searchLessons) + 9 MCP handlers
+(`resolveMcpCallerScopeOrThrow` → `resolveActingActorOrThrow`).
+
+**Frozen-interface change:** `authorize`/`assertAuthorized`/`explainAuthorization` first param widened
+`string | null` → `string | null | undefined` (additive; the pure `decide` core is untouched) so an
+optional `actingPrincipalId` threads without `?? null` at every site.
+
+**Tests:** the 9 DEFERRED-029 callerScope cross-tenant unit tests in `lessons.test.ts` + the
+`deleteWorkspace` case in `d4-scope.test.ts` tested the now-removed synchronous guard — replaced by
+**`src/services/lessons-authz.test.ts`** (6 auth-ON grant-based tests: cross-tenant read → NOT_FOUND,
+over-capability write/admin → FORBIDDEN, granted read resolves, unknown principal → NOT_FOUND).
+Registered in `package.json`.
+
+**F2g posture-flip prerequisites discovered (NOT blockers now — auth is off):**
+1. **Internal/system callers** of lesson fns (import, faqBuilder, salience, seeds, jobs) pass no
+   principal → under auth-ON they would `NO_PRINCIPAL`-deny. Before the flip they need a system/root
+   principal threaded (or an explicit exemption). This applies to EVERY domain.
+2. The deprecated **env-token fast path** (`CONTEXT_HUB_WORKSPACE_TOKEN`) carries no principal → loses
+   access at flip. Consistent with DEFERRED-029 PR E retiring it; must be gone before flip.
+3. **`projects.ts` REST `deleteWorkspace(projectId)`** (no opts) still passes no principal — inert now;
+   thread `callerPrincipalOf(req)` in domain 7.
+
+**What's next:** F2f domains 2–8 (board → decisions → documents → git/workspace → search → jobs/misc →
+REST middleware retire), same pattern. Then the 3rd cold-start adversary pass over the wired
+enforcement, then F2g prerequisites. `MCP_AUTH_ENABLED` flip stays human-gated.
+
+---
+
+# CHECKPOINT — F2 authorization machinery (F2a–F2e) COMPLETE (2026-06-20, session 12)
+
+**Branch:** `feature/actor-data-boundary`. Driven as one continuous **/loom** XL effort. The entire F2
+**authorization mechanism + lockout guard is built**, twice cold-start-adversary-reviewed, and
+`/review-impl`'d. Auth stays **OFF** (everything inert until the F2g posture flip — human-gated, NOT
+done). Full unit suite **1141 pass / 2 skip**, tsc clean. Commits `ecdf6b4`→`eacbe2e`.
+
+**Decisions (checkpointed):** authority model = **REPLACE NOW** (authorize() sole gate, role/scope
+deprecated) + **FULL ENFORCEMENT NOW** (F4 collapsed into F2). Captured in
+`docs/specs/2026-06-19-actor-data-boundary-F2-{clarify,design}.md`.
+
+**Sub-phases shipped:**
+- **F2a** `grants` substrate — migration 0066 (delegation edges, active-edge unique index NULLS NOT
+  DISTINCT), service (createGrant idempotent/bounded-loop, revoke, list).
+- **F2b** `authorize()` chokepoint — migration 0067 `authz_decisions`; pure core (capability lattice
+  read⊂write⊂admin + delegate orthogonal, scope coverage global⊃project⊃topic⊃task), total async
+  wrapper (auth-off fast path, oracle-safe ordering, task→topic→project resolver), best-effort log.
+- **F2c** delegation invariant — grantCapability (hold `delegate` AND the capability, covering scope;
+  refuses under auth-off) + revokeGrantAuthorized; added `FORBIDDEN` (403) code.
+- **F2d** 5 MCP tools — grant_capability, revoke_grant, list_grants, explain_authorization (read-only,
+  scope_chain nulled on deny), list_principals.
+- **F2e** backfill (`backfill:grants`) + `assertEnforceReady` grant-**coverage** gate — maps each live
+  credential's (role, scope)→grant; refuses enforce-ready until every principal-bound non-root
+  credential is covered; won't resurrect a revoked grant.
+
+**Reviews:** cold-start adversary **pass 1** (CRITICAL auth-off grant fabrication + 3) and **pass 2**
+(CRITICAL enforce-ready existence-vs-coverage + HIGH resurrection) — all fixed; `/review-impl` (7
+coverage/drift findings) — all fixed. Migrations 0066–0068. New CLI: `backfill:grants`.
+
+**What's next — F2f (the blast radius):** wire `authorize()` into the handlers, **replacing**
+`assertCallerScope`/role checks, domain by domain. Then F2g posture prerequisites. The
+`MCP_AUTH_ENABLED` default flip stays parked behind an explicit human go. **Open fork for F2f:**
+tenant containment — thread `callerScope` as defence-in-depth, or commit fully to "grants supersede
+callerScope" (see F2-design §7b). A 3rd cold-start adversary pass should run after F2f.
+
+---
+
+# CHECKPOINT — F1 post-merge `/review-impl` pass (2026-06-19, session 11)
+
+**Branch:** `feature/actor-data-boundary`. A fresh `/review-impl` (coverage/drift mode, distinct from
+the 4 saturated adversary passes) over the F1 surface found **0 HIGH** but surfaced one **real
+data-integrity miss** plus audit/consistency/coverage gaps. All five fixed. Full unit suite
+**1079/1079** (+8), tsc clean.
+
+**Findings & fixes:**
+1. **(LOW, audit)** `grant_proxy` summary logged the raw, possibly-overridden `principal`/`proxy` args
+   instead of what was persisted → now logs `resolvedPrincipal`/`proxyId` (mirrors `revoke_proxy`).
+2. **(LOW, consistency)** `grant_proxy` silently coerced a mismatched `principal` to self under
+   auth-ON while `granted_by` hard-rejected → now both reject via a new pure, unit-tested predicate
+   `claimedSelfMismatch` (actingPrincipal.ts; 5 tests).
+3. **(MED, real miss)** `proxies.granted_by` was **absent from the coordination migration** though
+   `proxies.principal` (its write-time equal, `grantProxy` enforces `granted_by===principal`) IS
+   migrated — a legacy row would end up `principal=<uuid>`/`granted_by=<string>`. Added the column;
+   added a **schema-coverage guard test** (exists-with-type + un-listed-actor-column tripwire) and a
+   documented `DELIBERATELY_EXCLUDED_ACTOR_COLUMNS` list (api_keys.created_by, review_requests.* — all
+   audit/filter-only, no authz comparison; verified via reviewRequests.ts).
+4. **(LOW, coverage)** Added a mixed-array migration test (legacy + already-principal + sentinel in one
+   `parties[]` → only the legacy element rewritten, order/others preserved).
+5. **(LOW, verify)** Confirmed `replayEvents` is a cursor READ (not state reconstruction) so the
+   `coordination_events.actor_id`-rewritten / `payload`-preserved split cannot diverge any authz
+   decision — documented in the migration header.
+
+**Net:** identity audit logs now reflect persisted values; the migration column list is now
+schema-guarded against future drift; one genuine stranding gap (`proxies.granted_by`) closed before
+auth-ON is ever enabled.
+
+---
+
+# CHECKPOINT — Actor data-boundary F1 COMPLETE (2026-06-19, session 10)
+
+**Branch:** `feature/actor-data-boundary`. **F1 (identity substrate) is DONE** — all sub-phases built
+TDD-first, each gated by a cold-start adversary, plus a saturating multi-pass at the end. Built via
+`/loop` (self-paced). Committed through `51a371d`. Full unit suite **1071/1071, tsc clean.**
+
+**What F1 delivers:** identity is real instead of asserted. A `principals` table is the single subject;
+credentials bind to principals; a root of trust is established out-of-band; the acting identity is
+derived from the credential (un-spoofable when auth is ON); and the entire coordination actor
+namespace is unified onto principals.
+
+**Sub-phases (each adversary-cleared):**
+- **F1a** `principals` substrate — migration 0064 (opaque UUID id, kind/status, single-root guard),
+  service. Adv: root un-brickable, `retired` terminal.
+- **F1b** api_keys↔principal binding — active-gated `validateApiKey`, atomic bind, root fail-closed.
+- **F1c** out-of-band root bootstrap — migration 0065 (`is_bootstrap`), `ROOT_BOOTSTRAP_TOKEN`,
+  `bootstrap:root` CLI, atomic root-key rotation, `assertEnforceReady` lockout guard.
+- **F1d** authenticated-principal resolution — `resolveActingPrincipal`, `resolveMcpCaller`,
+  `whoami`, `ASSERTED_IDENTITY_REJECTED`/`CREDENTIAL_EXPIRED`.
+- **F1e** stop trusting asserted actor_id — `resolveActingActor` wired into ~24 MCP handlers
+  (caller fields).
+- **F1f** namespace unification (user chose "full migration now" after F1-adv pass 1 found the
+  free-text actor_id split): target/reference fields validated as principals (F1f.1/.2); data
+  migration `migrate:coordination-actors` (F1f.3, ~19 cols + 2 text[] arrays, idempotent,
+  sentinel-aware); `assertEnforceReady` coordination gate (F1f.4); reserved `system:`/`motion:`
+  prefixes (F1-adv pass 3).
+- **F1-adv** saturating multi-pass: CRITICAL+2HIGH → MED+LOW → HIGH → **CLEAR** (4 passes). Every
+  HIGH/MED fixed in-phase.
+
+**Migrations added:** 0064 (principals), 0065 (api_key bootstrap marker). **New CLIs:**
+`npm run bootstrap:root`, `npm run migrate:coordination-actors`.
+
+**Deferred to F4 (enforcement posture):** hard boot-gate of `MCP_AUTH_ENABLED` on `assertEnforceReady`;
+`MCP_LEGACY_TOKEN_DISABLED` default flip. **DEFERRED-043 RESOLVED** (superseded by F1f).
+
+**Not from F1 (left as-is):** the competency-eval corpus committed separately (`b737085`).
+
+**What's next:** F2 (delegation + scope / `authorize()` + grants) per the FOUNDATION plan; or build the
+FE pages (identity/delegation/authorization/access-control-v2 drafts). Auth stays OFF until F4 wires
+the boot-gate; before any auth-ON rollout run `bootstrap:root` then `migrate:coordination-actors`.
+
+---
+
+# CHECKPOINT — Actor data-boundary F1d: authenticated-principal resolution SHIPPED (2026-06-19, session 10)
+
+**Branch:** `feature/actor-data-boundary`. **F1d landed (commit `ce942f4`).** `/loop` self-paced.
+Also committed separately: the unrelated competency-eval corpus (`b737085`) the user OK'd.
+
+**F1d — the acting identity is now un-spoofable (DONE, verified, adversary-cleared):**
+- `resolveActingPrincipal` (pure): auth ON + bound credential → asserted must equal authenticated
+  (case-insensitive) else `ASSERTED_IDENTITY_REJECTED`; auth ON + unbound → honor asserted only when
+  `allowUnboundAssertion` (default fail-closed); auth OFF → honor asserted / root-dev fallback.
+- `mcp/auth.ts resolveMcpCaller` → `{scope, principalId, expiresAt}` (scope-only delegates); surfaces
+  `CREDENTIAL_EXPIRED` for expired/revoked creds. `classifyCredentialFailure` in apiKeys.
+- `whoami` MCP tool → caller's authenticated principal.
+- New codes `ASSERTED_IDENTITY_REJECTED` (403) + `CREDENTIAL_EXPIRED` (401).
+- **Adversary (identity chokepoint) found 2 HIGH + 3 MED, all fixed:** HIGH unbound-credential
+  impersonation → gated behind `allowUnboundAssertion`; HIGH principal-lifecycle info leak →
+  `principal_inactive` folded to generic UNAUTHORIZED; MED UUID canonical compare; MED #3 (validate
+  asserted vs active principal) + #4 (single-query refactor) → **F1e contracts (in plan)**.
+- **33/33 F1d unit tests, tsc clean.**
+
+**What's next:** **F1e** — stop trusting asserted `actor_id`: apply `resolveActingPrincipal` at the MCP
+boundary for the ~19 asserted-identity tools + `appendEvent`. MUSTs from F1d adversary: pass
+`allowUnboundAssertion = !MCP_LEGACY_TOKEN_DISABLED`; validate any honored-asserted value resolves to an
+active in-tenant principal before persisting. Then F1-adv (saturating multi-pass over all F1 code).
+
+---
+
+# CHECKPOINT — Actor data-boundary F1c: out-of-band root bootstrap SHIPPED (2026-06-19, session 10)
+
+**Branch:** `feature/actor-data-boundary`. **F1c landed (commit `67761ac`).** `/loop` self-paced.
+
+**F1c — the trust anchor, established out-of-band (DONE, verified, adversary-cleared):**
+- migration 0065: `api_keys.is_bootstrap` + partial unique index (≤1 live root credential).
+- `ROOT_BOOTSTRAP_TOKEN` env (deployment secret). Root principal = `kind='system'` (headless anchor;
+  human operator is separate, F-AUTH).
+- `createBootstrapRootKey` — ONLY path that sets is_bootstrap + binds root; atomic rotation (revoke
+  old + insert in one txn). `validateApiKey` root predicate relaxed to `(is_root=false OR is_bootstrap)`.
+- `services/bootstrap.ts`: `bootstrapRoot` (create | reissue-on-lockout | no-op, constant-time token
+  compare) + `assertEnforceReady` lockout guard. `scripts/bootstrapRoot.ts` + `npm run bootstrap:root`.
+- **Adversary (crux phase) found 2 HIGH + 3 MED/LOW, all fixed:** HIGH non-atomic bootstrap → atomic
+  rotation + DB index (proven exactly-one-live-root-credential); HIGH legacy `CONTEXT_HUB_WORKSPACE_TOKEN`
+  bypass → `assertEnforceReady` refuses while it's live; MED name-collision → unique name+CONFLICT; +coverage.
+- **Deferred to F4** (cross-cutting): hard boot-gate of `MCP_AUTH_ENABLED` on `assertEnforceReady`;
+  `MCP_LEGACY_TOKEN_DISABLED` default flip.
+- **34/34 unit tests, 0 skipped** (advisory lock serializes the 3 root-creating test files); auth
+  regression 25/25; tsc clean.
+
+**Note:** unrelated `corpus/**` + `docs/qc/**competency**` + `src/qc/ingestCorpus.ts` appeared in the
+working tree during this session (not from F1 work); left uncommitted/untouched.
+
+**What's next:** **F1d** — authenticated-principal resolution: thread the principal (not just scope)
+out of `mcp/auth.ts` + REST `auth.ts`; `resolveActingPrincipal` helper (ASSERTED_IDENTITY_REJECTED /
+CREDENTIAL_EXPIRED codes); `whoami` MCP tool. Then F1e (stop trusting asserted actor_id across ~19
+tools), F1-adv (saturating multi-pass).
+
+---
+
+# CHECKPOINT — Actor data-boundary F1b: api_keys↔principal binding SHIPPED (2026-06-19, session 10)
+
+**Branch:** `feature/actor-data-boundary`. **F1b landed (commit `22f4694`).** `/loop` self-paced through
+F1 sub-phases.
+
+**F1b — credential authenticates TO a principal (DONE, verified, adversary-cleared):**
+- `api_keys.principal_id` on `ApiKeyEntry`; `createApiKey({principal_id})` binds only to an existing,
+  ACTIVE, non-root principal (root binding refused — root creds are F1c bootstrap-only).
+- `validateApiKey` LEFT JOINs principals, requires bound principal `active` ⇒ suspend/retire instantly
+  denies all its credentials (closes prior adversary MED #3 + review #6). Legacy NULL-principal keys
+  unchanged.
+- **Adversary found 1 HIGH + 2 MED, all fixed:** HIGH TOCTOU (bind now ATOMIC via guarded
+  INSERT...SELECT); MED validateApiKey FAILS CLOSED on root-bound keys (`p.is_root=false`); MED coverage
+  (root-denial + legacy-with-bystander tests).
+- **15/15 unit tests (9 F1b + 6 regression), tsc clean.**
+
+**F1c carries two decisions (in plan):** root `kind` (human vs system); add a bootstrap-provenance
+marker (`api_keys.is_bootstrap`) and relax the validator's root fail-closed predicate to
+`(p.is_root=false OR k.is_bootstrap)` when minting the legitimate root credential.
+
+**What's next:** **F1c** — `ROOT_BOOTSTRAP_TOKEN` env + `bootstrap:root` CLI (seed root principal +
+mint marked root credential, idempotent) + enforce-ready preflight (lockout guard). Then F1d
+(authenticated-principal resolution + resolveActingPrincipal + whoami), F1e (stop trusting asserted
+actor_id), F1-adv (saturating multi-pass).
+
+---
+
+# CHECKPOINT — Actor data-boundary F1a: identity substrate SHIPPED (2026-06-19, session 10)
+
+**Branch:** `feature/actor-data-boundary`. **First F1 code landed (commit `37c03be`).** Running via `/loop`
+(self-paced) through the F1 sub-phases. Plan: `docs/plans/2026-06-19-actor-data-boundary-F1.md`.
+
+**F1a — principals identity substrate (DONE, verified, adversary-cleared):**
+- **migration 0064** — `principals` (UUID `principal_id`, `kind` human|agent|system, `status`
+  active|suspended|retired, `is_root` + single-root partial unique index) + `api_keys.principal_id`
+  nullable FK (ON DELETE RESTRICT; legacy/env-token keys stay NULL).
+- **`src/services/principals.ts`** — createPrincipal (is_root always false), get/getRoot/list,
+  setPrincipalStatus, seedRootPrincipal (only is_root path, race-safe via 23505).
+- **`ContextHubError 'CONFLICT'`** + errorHandler 409.
+- **Cold-start adversary found 2 HIGH, both fixed + tested:** #1 root could be suspended/retired
+  (brick trust anchor, no recovery); #2 `retired` wasn't terminal (silent resurrection). Guards now in
+  the `setPrincipalStatus` WHERE clause. MED #3 → F1b contract (validateApiKey denies non-active principal).
+- **12/12 unit tests, tsc clean.**
+
+**Implementation decisions (recorded in plan):** principal_id = UUID not ULID (codebase convention, no
+new dep, same opaqueness); is_root = guarded column (partial unique index), not a grantable flag.
+
+**What's next (loop continues):** **F1b** — bind api_keys↔principal: `createApiKey({principal_id})`,
+`validateApiKey` joins+returns the bound principal and denies when its status≠active (closes adversary
+MED #3). Then F1c (root bootstrap CLI + enforce-ready preflight), F1d (authenticated-principal
+resolution + `resolveActingPrincipal` + whoami), F1e (stop trusting asserted actor_id across ~19 tools),
+F1-adv (saturating multi-pass adversary).
+
+---
+
+# CHECKPOINT — Actor data-boundary: DESIGN PHASE CLOSED (2026-06-19, session 9)
+
+**Branch:** `feature/actor-data-boundary`. **Design phase complete — no code yet; F1 starts next, clean.**
+
+Closed the full design pile in one pass after the FE+MCP coverage eval:
+- **G1 (HIGH) closed** — `docs/gui-drafts/pages/bootstrap.html`: first-run root establishment
+  out-of-band (`ROOT_BOOTSTRAP_TOKEN` / `npm run bootstrap:root`) → operator principal → enforcement
+  flip with a lockout guard (verifies you can sign in before locking the door).
+- **G2 (HIGH) closed** — `docs/gui-drafts/components/sidebar-v3-governance.html`: Governance nav group
+  (Identity / Delegation / Authorization / NHI Access Review + disabled Codices), Settings sub-tree
+  (Access Control, Sessions & Security), signed-in-as account footer, IA route map, scope-gated visibility.
+- **G3/G6/G11 (MED) resolved** as contracts in `-mcp-fe-design.md` §3b: `CREDENTIAL_EXPIRED` error +
+  `whoami.expires_at` (no retry-loop); agent self-service bounded by subtree incl. `mint_ephemeral_key`
+  (durable keys + human registration stay human/REST); "Rebind" removed → revoke+reissue (true rebind is
+  root-only + re-auth + `credential.rebind` audit, shipped OFF).
+- **G4/G5/G7/G8/G10 (LOW) → DEFERRED-042** (per-page polish during FE build; no backend blocker).
+
+**Design deliverable (final):** 4 specs (`-FOUNDATION`, `-mcp-fe-design`, `-standards-gap`,
+`-fe-mcp-eval`) + 10 draft HTML (identity, delegation, authorization, access-control-v2, login,
+register, sessions, nhi-access-review, bootstrap, sidebar-v3-governance) + v1–v5 governance-OS research
+track retained. **DEFERRED-041 → DESIGNED; DEFERRED-042 opened.**
+
+**What's next:** **F1 code** TDD-first — `principals` (opaque id, kind, status) + `api_keys→principal`
++ out-of-band root (token/CLI + lockout-guarded enforce) + stop-trusting-asserted-`actor_id`. Per-phase
+cold-start adversary against the CODE. Then F2 (grants/scope) · F3 (attribute+fence) · F-AUTH
+(human login/MFA/session, parallel to F2/F3) · NHI hardening (rides F1).
+
+---
+
+# CHECKPOINT — Actor data-boundary: industry-standards gap + human-auth/NHI design (2026-06-19, session 9)
+
+**Branch:** `feature/actor-data-boundary` (still design only; no code yet).
+
+**Why:** user asked to web-search industry standards and noticed the design had "no register/login
+screen." Correct — the foundation + first design pass covered the *authorization/delegation/machine*
+axis (ahead of the curve for agent governance) but had **zero human-authentication axis**.
+
+**Web search → standards anchored:** NIST 800-63B (AAL1 single / **AAL2 = MFA** / AAL3 hardware;
+session re-auth 30d@AAL1, 12h+15min-idle@AAL3), OWASP ASVS V6 (soft/hard lockout, ≤100 fails/hr,
+reset-never-locks, ≥12-char passwords, anti-automation), and NHI governance best-practice
+(short-lived/ephemeral creds, rotation+expiry, log-based access review "used in last 90d?", named owner).
+
+**Gap reading:** ahead on agent governance (agents = API-key machine identity, the modern pattern,
+no human login needed); behind on the **human operator** browser login = exactly DEFERRED-041. NHI
+hardening (rotation enforce, ephemeral keys, unused-90d review) was also only partial.
+
+**User decision:** add **both** human-auth screens **and** NHI hardening to this design pass.
+
+**Produced (1 spec + 4 HTML drafts):**
+- `docs/specs/2026-06-19-actor-data-boundary-standards-gap.md` — the gap table + the model extension:
+  *principal stays the single subject; humans add `password+MFA → session`, agents keep `api_key`* —
+  **no change to `authorize()`/grants**. New objects: `human_credentials`, `mfa_factors`, `sessions`,
+  `invites`, verify/reset tokens; NHI fields (enforced expiry, ephemeral keys, rotation, last-used
+  review). New REST `/api/auth/*` + `/api/invites` + `/api/access-review`. Sequenced as phase F-AUTH
+  (after F1, parallel to F2/F3); NHI hardening rides on F1.
+- `docs/gui-drafts/pages/login.html` — login, MFA challenge (AAL2), soft-lockout, forgot-password, auth-off notice.
+- `docs/gui-drafts/pages/register.html` — invite accept, password policy meter, email verify, MFA enroll (TOTP/WebAuthn), backup codes, admin issue-invite.
+- `docs/gui-drafts/pages/sessions.html` — active sessions (revoke, current device, AAL badge) + deployment auth policy (require-MFA, re-auth/idle windows, lockout).
+- `docs/gui-drafts/pages/nhi-access-review.html` — credential review (age/last-used/expiry/rotation), unused-90d → revoke, rotate-with-overlap modal, ephemeral key mint.
+
+**DEFERRED-041 → DESIGNED** (was OPEN); build pending as F-AUTH.
+
+**Out of scope (DLF-growth):** SSO/SAML/OIDC federation, IAL identity-proofing, risk-based/adaptive
+auth, SCIM — all attach to the same principal+session model later without a rewrite.
+
+**What's next:** still F1 code first (identity substrate everything else needs), then F2/F3 + F-AUTH
+in parallel. Drafts → real pages follow the backend phases.
+
+---
+
+# CHECKPOINT — Actor data-boundary: MCP + FE design pass (2026-06-19, session 9)
+
+**Branch:** `feature/actor-data-boundary` (still design only; no code yet).
+
+**Why:** before starting F1 code, the foundation had no external-surface design — the user flagged
+"first feature build lacks MCP and FE design… huge feature with a lot of audit and explanation."
+Surveyed the existing `docs/gui-drafts/` house style (Tailwind CDN, dark zinc, draft-comment →
+breadcrumb → header → stat row → tabs → cards/timeline → slide-over/modal, alt states under `mt-12`).
+The two existing pages this feature reshapes: `access-control.html` (keys carry role+project string)
+and `agent-audit.html` (timeline of *asserted* actor names).
+
+**Produced (1 spec + 4 HTML drafts):**
+- `docs/specs/2026-06-19-actor-data-boundary-mcp-fe-design.md` — shared vocabulary (Principal, Scope
+  {global|project|topic|task}, Capability {read⊂write⊂admin, delegate}, Grant, `authorize()` with
+  machine-readable reasons), the MCP tool surface (`whoami`, `explain_authorization`, `list_principals`,
+  `list_grants`, `grant_capability`, `revoke_grant`) and the **F1 breaking note** (stop trusting
+  asserted `actor_id`; derive principal from credential; reject mismatch when auth ON, honor when OFF).
+- `docs/gui-drafts/pages/identity.html` — principal directory; root marked axiomatic/out-of-band;
+  auth on/off posture banner; principal slide-over (bound keys + grants).
+- `docs/gui-drafts/pages/delegation.html` — the delegation **tree** + flat table; grant modal with
+  live "within your subtree" check + the upward/sideways-reject state; scope-coverage explainer.
+- `docs/gui-drafts/pages/authorization.html` — decision log (ALLOW/DENY + reason token + matched grant
+  / failed condition) and the **"why" inspector** (simulate X·action·resource → evaluation chain);
+  reasons: COVERING_GRANT, OUT_OF_SCOPE, NO_COVERING_GRANT, PRINCIPAL_INACTIVE, ROOT_SHORT_CIRCUIT,
+  ASSERTED_IDENTITY_REJECTED.
+- `docs/gui-drafts/pages/access-control-v2.html` — rework: keys **bind to a principal**; effective-access
+  matrix is *derived from grants* (not an editable RBAC table); generate-key modal binds a principal.
+
+**Design invariants the drafts enforce:** never a bare verdict (always show the reason + matched grant /
+failed condition); root is visually distinct and labeled out-of-band everywhere; posture banner always
+visible (dev-mode allow must never be mistaken for a real grant). Codices left as a disabled "later" tab.
+
+**What's next:** start **F1** code (migrations + principal/identity + root config + stop-trusting-id)
+TDD-first, per-phase cold-start adversary against the CODE. Drafts → real `gui/src/app/{identity,
+delegation,authorization}/page.tsx` + `settings/access` rework follow the backend phases.
+
+---
+
+# CHECKPOINT — Actor data-boundary: 5 design rounds → cleared foundation (2026-06-19, session 9)
+
+**Branch:** `feature/actor-data-boundary` (design only; no code yet).
+
+**Asked:** after the single-port gateway shipped, "explicit data boundary between actors (human,
+agent) and projects/tasks" — the project reframing from team-memory toward a multi-actor AI
+governance system.
+
+**What happened — a 5-round design→eval loop that did NOT converge.** CLARIFY+DESIGN (v1) →
+scenario eval (3 cold-start red-team agents, ~46 scenarios) → v2 (DLF-grounded: Role=Codex, Topic=job,
+Appointment, Instance; refer-back; tier-crossing) → eval → v3 (mechanism-complete) → eval → v4
+(code-grounded) → eval → v5 (contradiction-resolved) → eval. Each round ~46 scenarios. The headline
+security mechanisms (sealing, trust-root identity, self-kind) **relocated one indirection per round and
+never closed**; v4/v5 even drifted from the real code (false anchors: `NOT NULL NOT VALID` isn't valid
+PG; a cited CLI doesn't exist). All five evals + the convergence analysis are committed
+(`docs/specs/2026-06-19-actor-data-boundary-{design-v1..v5, *-eval}.md`).
+
+**The unlock (brainstorm, not paperwork):** the non-convergence was one root error — **trying to gate
+the root of trust in-system.** A root of trust is **axiomatic + out-of-band** (single 1-of-1 or peer
+k-of-n; same machinery). Deleting that error deletes ~4 of the recurring whack-a-moles AND gives the
+threat boundary the evals lacked: **a compromised root is OUT OF SCOPE.**
+
+**Decision:** build the **small real data boundary now** as a **foundation**, Codex-ready so the
+governance-OS grows additively (new Codices / Phase-15 bodies), not a rewrite. v5 reframed as the
+**governance-OS research track**; near-term plan = `docs/specs/2026-06-19-actor-data-boundary-FOUNDATION.md`.
+
+**Model (5 lines):** root axiomatic+out-of-band (single for this deployment); compromised-root OOS;
+below root = a delegation tree (grants + project/task scope, reusing callerScope/assertXScope + the
+fence); human/agent = attribute; a Codex = additive capability/policy unit on the same grant tables.
+
+**Build plan (TDD-first, per-phase cold-start adversary against CODE — no more paper eval loop):**
+F1 identity + out-of-band root + stop-trusting-asserted-id · F2 delegation + scope (the boundary) ·
+F3 human/agent attribute + fence on authenticated principal · F4 enforcement posture (auth-on enforced,
+auth-off = root/dev) + auth-on CI lane.
+
+**What's next:** start **F1** (migrations + principal/identity + root config) TDD-first.
+
+---
+
 # CHECKPOINT — Single-port gateway consolidation + security hardening (2026-06-19, session 9)
 
 **Branch:** none — committed directly to `main` (trunk-based).

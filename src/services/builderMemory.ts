@@ -340,6 +340,8 @@ async function synthesizeMemoryChunked(sample: string, env: Env): Promise<string
 /** Deep-loop step: LLM synthesizes a large “project memory” artifact; indexed on next index.run. */
 export async function buildProjectMemoryArtifact(input: {
   projectId: string;
+  /** F2g — the worker's system-worker identity, threaded into the guarded upsert. */
+  actingPrincipalId?: string | null;
   root: string;
   correlationId?: string;
   sourceJobId?: string;
@@ -373,6 +375,7 @@ export async function buildProjectMemoryArtifact(input: {
   const docKey = `phase6/builder_memory/${stamp}`;
   await upsertGeneratedDocument({
     projectId: input.projectId,
+    actingPrincipalId: input.actingPrincipalId,
     docType: 'benchmark_artifact',
     docKey,
     title: `Phase6 builder memory ${stamp}`,

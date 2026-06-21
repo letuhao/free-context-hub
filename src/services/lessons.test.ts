@@ -291,75 +291,10 @@ test('DEFERRED-027: updateLesson rejects a non-uuid lessonId with BAD_REQUEST', 
   );
 });
 
-// ── DEFERRED-029 PR B: cross-tenant scope must throw NOT_FOUND before any DB call.
-// assertCallerScope fires at the top of each fn; tests do not need a live DB.
-import { addLesson, listLessons, searchLessons, searchLessonsMulti, listLessonVersions, batchUpdateLessonStatus } from './lessons.js';
-import { ContextHubError as _CHE } from '../core/errors.js';
-
-const isNotFound = (err: unknown): boolean => err instanceof _CHE && (err as _CHE).code === 'NOT_FOUND';
-
-test('DEFERRED-029: searchLessons cross-tenant → NOT_FOUND', async () => {
-  await assert.rejects(
-    searchLessons({ projectId: 'proj-A', callerScope: 'proj-B', query: 'x' }),
-    isNotFound,
-  );
-});
-
-test('DEFERRED-029: searchLessonsMulti cross-tenant → NOT_FOUND (strict-reject)', async () => {
-  await assert.rejects(
-    searchLessonsMulti({ projectIds: ['proj-A', 'proj-B'], callerScope: 'proj-A', query: 'x' }),
-    isNotFound,
-  );
-});
-
-test('DEFERRED-029: addLesson cross-tenant → NOT_FOUND', async () => {
-  await assert.rejects(
-    addLesson({ project_id: 'proj-A', callerScope: 'proj-B', lesson_type: 'decision' as any, title: 't', content: 'c' } as any),
-    isNotFound,
-  );
-});
-
-test('DEFERRED-029: updateLesson cross-tenant → NOT_FOUND (before assertUuid)', async () => {
-  await assert.rejects(
-    updateLesson({ projectId: 'proj-A', callerScope: 'proj-B', lessonId: '11111111-1111-1111-1111-111111111111' }),
-    isNotFound,
-  );
-});
-
-test('DEFERRED-029: updateLessonStatus cross-tenant → NOT_FOUND', async () => {
-  await assert.rejects(
-    updateLessonStatus({ projectId: 'proj-A', callerScope: 'proj-B', lessonId: '11111111-1111-1111-1111-111111111111', status: 'active' as any }),
-    isNotFound,
-  );
-});
-
-test('DEFERRED-029: batchUpdateLessonStatus cross-tenant → NOT_FOUND', async () => {
-  await assert.rejects(
-    batchUpdateLessonStatus({ projectId: 'proj-A', callerScope: 'proj-B', lessonIds: ['11111111-1111-1111-1111-111111111111'], status: 'archived' as any }),
-    isNotFound,
-  );
-});
-
-test('DEFERRED-029: listLessonVersions cross-tenant → NOT_FOUND', async () => {
-  await assert.rejects(
-    listLessonVersions({ projectId: 'proj-A', callerScope: 'proj-B', lessonId: '11111111-1111-1111-1111-111111111111' }),
-    isNotFound,
-  );
-});
-
-test('DEFERRED-029: listLessons cross-tenant (single projectId) → NOT_FOUND', async () => {
-  await assert.rejects(
-    listLessons({ projectId: 'proj-A', callerScope: 'proj-B' }),
-    isNotFound,
-  );
-});
-
-test('DEFERRED-029: listLessons cross-tenant (multi projectIds) → NOT_FOUND', async () => {
-  await assert.rejects(
-    listLessons({ projectIds: ['proj-A', 'proj-B'], callerScope: 'proj-A' }),
-    isNotFound,
-  );
-});
+// ── DEFERRED-029 PR B cross-tenant callerScope tests REMOVED by Actor Data Boundary F2f.
+// That synchronous callerScope guard is gone — tenant isolation now rests on authorize() + grants,
+// which is auth-ON + grant-based and needs a live DB. The replacement enforcement coverage lives in
+// lessons-authz.test.ts (cross-tenant read → NOT_FOUND, over-capability write/admin → FORBIDDEN).
 
 // ── DEFERRED-030: min_rerank_score floor (pure-function helper) ──
 import { applyRerankMinScore } from './lessons.js';

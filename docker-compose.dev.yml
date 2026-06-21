@@ -1,0 +1,21 @@
+# F2g — local dev override: turns the committed-HARDENED base stack back to the
+# auth-OFF dev posture. The base docker-compose.yml now ships the hardened
+# production posture (auth ON + legacy token disabled + DEPLOYMENT_PROFILE=production),
+# so local development uses this overlay:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
+# DEPLOYMENT_PROFILE=dev keeps the boot-posture guard inert and MCP_AUTH_ENABLED=false
+# restores the unauthenticated dev surface (host-side QC/smoke tooling on
+# localhost:3000/:3001 keeps working without tokens).
+services:
+  mcp:
+    environment:
+      DEPLOYMENT_PROFILE: "dev"
+      MCP_AUTH_ENABLED: "false"
+      MCP_LEGACY_TOKEN_DISABLED: "false"
+  worker:
+    environment:
+      DEPLOYMENT_PROFILE: "dev"
+      MCP_AUTH_ENABLED: "false"
+      MCP_LEGACY_TOKEN_DISABLED: "false"

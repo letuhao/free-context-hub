@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { requireProjectScope, requireResourceScope } from '../middleware/requireResourceScope.js';
 import {
   createConversation,
   listConversations,
@@ -9,15 +8,17 @@ import {
   deleteConversation,
 } from '../../services/chatHistory.js';
 import { resolveProjectIdOrThrow } from '../../core/index.js';
+import { callerPrincipalOf } from '../middleware/auth.js';
 
 const router = Router();
 
 /** POST /api/chat/conversations — create a new conversation */
-router.post('/', requireProjectScope('body'), async (req, res, next) => {
+router.post('/', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await createConversation({
       projectId,
+      actingPrincipalId: callerPrincipalOf(req),
       title: req.body.title,
     });
     res.status(201).json(result);
@@ -25,11 +26,12 @@ router.post('/', requireProjectScope('body'), async (req, res, next) => {
 });
 
 /** GET /api/chat/conversations — list conversations for a project */
-router.get('/', requireProjectScope('query'), async (req, res, next) => {
+router.get('/', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
     const result = await listConversations({
       projectId,
+      actingPrincipalId: callerPrincipalOf(req),
       limit: req.query.limit ? Number(req.query.limit) : undefined,
     });
     res.json(result);
@@ -37,12 +39,13 @@ router.get('/', requireProjectScope('query'), async (req, res, next) => {
 });
 
 /** GET /api/chat/conversations/:id — get conversation with messages */
-router.get('/:id', requireResourceScope('conversation', 'id'), async (req, res, next) => {
+router.get('/:id', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
     const result = await getConversation({
       conversationId: String(req.params.id),
       projectId,
+      actingPrincipalId: callerPrincipalOf(req),
     });
     if (!result) {
       res.status(404).json({ status: 'error', error: 'conversation not found' });
@@ -53,12 +56,13 @@ router.get('/:id', requireResourceScope('conversation', 'id'), async (req, res, 
 });
 
 /** POST /api/chat/conversations/:id/messages — add a message */
-router.post('/:id/messages', requireResourceScope('conversation', 'id'), async (req, res, next) => {
+router.post('/:id/messages', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await addMessage({
       conversationId: String(req.params.id),
       projectId,
+      actingPrincipalId: callerPrincipalOf(req),
       role: req.body.role,
       content: req.body.content,
       metadata: req.body.metadata,
@@ -72,11 +76,12 @@ router.post('/:id/messages', requireResourceScope('conversation', 'id'), async (
 });
 
 /** PATCH /api/chat/conversations/:id/messages/:msgId/pin — toggle pin */
-router.patch('/:id/messages/:msgId/pin', requireResourceScope('conversation', 'id'), async (req, res, next) => {
+router.patch('/:id/messages/:msgId/pin', async (req, res, next) => {
   try {
     const result = await toggleMessagePin({
       conversationId: String(req.params.id),
       messageId: String(req.params.msgId),
+      actingPrincipalId: callerPrincipalOf(req),
     });
     if (!result) {
       res.status(404).json({ status: 'error', error: 'message not found' });
@@ -87,12 +92,13 @@ router.patch('/:id/messages/:msgId/pin', requireResourceScope('conversation', 'i
 });
 
 /** DELETE /api/chat/conversations/:id — delete conversation + messages */
-router.delete('/:id', requireResourceScope('conversation', 'id'), async (req, res, next) => {
+router.delete('/:id', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow((req.query.project_id as string | undefined) ?? req.body?.project_id);
     const deleted = await deleteConversation({
       conversationId: String(req.params.id),
       projectId,
+      actingPrincipalId: callerPrincipalOf(req),
     });
     if (!deleted) {
       res.status(404).json({ status: 'error', error: 'conversation not found' });

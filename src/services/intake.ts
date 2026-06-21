@@ -19,9 +19,7 @@
 import type { PoolClient } from 'pg';
 import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
-import { assertCallerScope } from '../core/security/callerScope.js';
-import { assertIntakeScope, assertTopicScope } from '../core/security/scopeResolvers.js';
-import type { CallerScope } from '../core/security/callerScope.js';
+import { assertAuthorized } from './authorize.js';
 import { appendEvent } from './coordinationEvents.js';
 import { createModuleLogger } from '../utils/logger.js';
 
@@ -79,8 +77,8 @@ const VALID_KINDS: ReadonlySet<string> = new Set(['violation_report', 'suggestio
 
 export async function submitIntake(params: {
   project_id: string;
-  /** DEFERRED-029: caller's scope; enforced against project_id. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() gate (project scope). */
+  actingPrincipalId?: string | null;
   topic_id?: string;
   kind: string;
   body: string;
@@ -95,7 +93,7 @@ export async function submitIntake(params: {
   if (!projectId || !kind || !body || !submittedBy) {
     throw new ContextHubError('BAD_REQUEST', 'project_id, kind, body, submitted_by are required');
   }
-  assertCallerScope(params.callerScope, projectId);
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: projectId });
   if (!VALID_KINDS.has(kind)) {
     throw new ContextHubError(
       'BAD_REQUEST',
@@ -169,7 +167,7 @@ export async function triageIntake(
   intake_id: string,
   route: TriageRoute,
   /** DEFERRED-029: caller's scope; enforced via the intake's project_id (and propagated to openDispute). */
-  opts?: { callerScope?: CallerScope },
+  opts?: { actingPrincipalId?: string | null },
 ): Promise<TriageResult> {
   const intakeId = (intake_id ?? '').trim();
   const topicId = (route.topic_id ?? '').trim();
@@ -179,7 +177,7 @@ export async function triageIntake(
   }
 
   const pool = getDbPool();
-  await assertIntakeScope(pool, opts?.callerScope, intakeId);
+  await assertAuthorized(opts?.actingPrincipalId, 'write', { kind: 'intake', id: intakeId });
   // PR F SEC-2 (Adversary CRITICAL #2): route.topic_id is caller-supplied
   // and was NEVER scope-checked on the link-only path. A scoped-A attacker
   // could pass a cross-tenant topic_id and have triageIntake write an
@@ -187,7 +185,7 @@ export async function triageIntake(
   // corrupt the intake row's topic_id FK). Gate on assertTopicScope BEFORE
   // any read/write that uses route.topic_id. Dispute path also benefits
   // (openDispute would re-check, but here we stop earlier with same shape).
-  await assertTopicScope(pool, opts?.callerScope, topicId);
+  await assertAuthorized(opts?.actingPrincipalId, 'write', { kind: 'topic', id: topicId });
 
   // Validate topic is active before acquiring the intake row lock
   const topicCheck = await pool.query<{ status: string }>(
@@ -236,7 +234,7 @@ export async function triageIntake(
       const { openDispute } = await import('./disputes.js');
       const disputeRes = await openDispute({
         topic_id: topicId,
-        callerScope: opts?.callerScope,
+        actingPrincipalId: opts?.actingPrincipalId,
         subject_ref: route.subject_ref,
         parties: route.parties,
         procedure: route.procedure,
@@ -300,7 +298,7 @@ export async function triageIntake(
 export async function dismissIntake(
   intake_id: string,
   /** DEFERRED-029: caller's scope; enforced via the intake's project_id. */
-  opts?: { callerScope?: CallerScope },
+  opts?: { actingPrincipalId?: string | null },
 ): Promise<IntakeItem> {
   const intakeId = (intake_id ?? '').trim();
   if (!intakeId) {
@@ -308,7 +306,7 @@ export async function dismissIntake(
   }
 
   const pool = getDbPool();
-  await assertIntakeScope(pool, opts?.callerScope, intakeId);
+  await assertAuthorized(opts?.actingPrincipalId, 'write', { kind: 'intake', id: intakeId });
   const res = await pool.query<IntakeItem>(
     `UPDATE intake_items
         SET status='dismissed'
@@ -342,13 +340,13 @@ export async function dismissIntake(
 export async function getIntake(
   intake_id: string,
   /** DEFERRED-029: caller's scope; enforced via the intake's project_id. */
-  opts?: { callerScope?: CallerScope },
+  opts?: { actingPrincipalId?: string | null },
 ): Promise<IntakeItem> {
   const intakeId = (intake_id ?? '').trim();
   if (!intakeId) throw new ContextHubError('BAD_REQUEST', 'intake_id is required');
 
   const pool = getDbPool();
-  await assertIntakeScope(pool, opts?.callerScope, intakeId);
+  await assertAuthorized(opts?.actingPrincipalId, 'read', { kind: 'intake', id: intakeId });
   const res = await pool.query<IntakeItem>(
     `SELECT intake_id, project_id, topic_id, kind, body, submitted_by, status, routed_to,
             created_at::text AS created_at
@@ -371,13 +369,13 @@ export async function listIntake(
     status?: string;
     limit?: number;
     offset?: number;
-    /** DEFERRED-029: caller's scope; enforced against project_id. */
-    callerScope?: CallerScope;
+    /** F2f — acting principal; authorize() gate (project scope). */
+    actingPrincipalId?: string | null;
   },
 ): Promise<{ items: IntakeItem[]; total: number }> {
   const projectId = (project_id ?? '').trim();
   if (!projectId) throw new ContextHubError('BAD_REQUEST', 'project_id is required');
-  assertCallerScope(opts?.callerScope, projectId);
+  await assertAuthorized(opts?.actingPrincipalId, 'read', { kind: 'project', id: projectId });
 
   const pool = getDbPool();
   const params: unknown[] = [projectId];

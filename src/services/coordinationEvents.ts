@@ -13,8 +13,7 @@ import type { Pool, PoolClient } from 'pg';
 import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
 import { EVENT_TYPE_SET, SUBJECT_TYPE_SET } from './coordinationConstants.js';
-import { assertTopicScope } from '../core/security/scopeResolvers.js';
-import type { CallerScope } from '../core/security/callerScope.js';
+import { assertAuthorized } from './authorize.js';
 
 const DEFAULT_REPLAY_LIMIT = 1000;
 
@@ -131,10 +130,10 @@ export async function appendEvent(
  * = older events exist before the window.
  */
 export async function replayEvents(
-  params: { topic_id: string; callerScope?: CallerScope; since_seq?: number; limit?: number; tail?: boolean },
+  params: { topic_id: string; actingPrincipalId?: string | null; since_seq?: number; limit?: number; tail?: boolean },
   executor: Pool | PoolClient = getDbPool(),
 ): Promise<ReplayResult> {
-  await assertTopicScope(executor, params.callerScope, params.topic_id);
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'topic', id: params.topic_id }, executor);
   const sinceSeq = params.since_seq ?? 0;
   const limit = params.limit ?? DEFAULT_REPLAY_LIMIT;
 

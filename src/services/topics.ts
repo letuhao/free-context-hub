@@ -20,7 +20,7 @@ import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
-import { assertCallerScope, assertTopicScope, type CallerScope } from '../core/index.js';
+import { assertAuthorized } from './authorize.js';
 import { createModuleLogger } from '../utils/logger.js';
 import { appendEvent, replayEvents } from './coordinationEvents.js';
 import type { CoordinationEvent } from './coordinationEvents.js';
@@ -137,13 +137,13 @@ async function fetchTopicWithRoster(
  */
 export async function charterTopic(params: {
   project_id: string;
-  /** DEFERRED-029: caller's scope; enforced against project_id. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() is the tenant/authz gate (project scope). */
+  actingPrincipalId?: string | null;
   name: string;
   charter: string;
   created_by: string;
 }): Promise<TopicRecord> {
-  assertCallerScope(params.callerScope, params.project_id);
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.project_id });
   const projectId = (params.project_id ?? '').trim();
   const name = (params.name ?? '').trim();
   const charter = (params.charter ?? '').trim();
@@ -205,15 +205,15 @@ export async function charterTopic(params: {
  */
 export async function joinTopic(params: {
   topic_id: string;
-  /** DEFERRED-029: caller's scope; enforced via the topic's derived project_id. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() is the tenant/authz gate (topic scope). */
+  actingPrincipalId?: string | null;
   actor_id: string;
   actor_type: string;
   display_name: string;
   level: string;
   since_seq?: number;
 }): Promise<InductionPack> {
-  await assertTopicScope(getDbPool(), params.callerScope, params.topic_id);
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'topic', id: params.topic_id });
   const topicId = (params.topic_id ?? '').trim();
   const actorId = (params.actor_id ?? '').trim();
   const displayName = (params.display_name ?? '').trim();
@@ -308,11 +308,17 @@ export async function joinTopic(params: {
     // pack carries the most-recent events (incl. the joiner's own topic.actor_joined)
     // rather than the oldest 1000 on a large topic. A re-prime (since_seq>0) keeps the
     // forward cursor-continuation contract.
-    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    // REPEATABLE READ gives the coherent induction snapshot. NOT declared READ ONLY: replayEvents now
+    // re-asserts read@topic via authorize(), whose best-effort decision log INSERTs into authz_decisions
+    // on this same client — a READ ONLY txn would reject that INSERT (25P02) and poison the read.
+    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ');
     const tr = await fetchTopicWithRoster(client, topicId);
+    // F2f: forward the caller's principal — joinTopic already authorized write@topic above, and
+    // replayEvents re-asserts read@topic. Without this, at the auth-ON flip the induction read denies
+    // with NO_PRINCIPAL → NOT_FOUND, breaking every authorized join after txn-1 already committed.
     const ev = sinceSeq === 0
-      ? await replayEvents({ topic_id: topicId, tail: true }, client)
-      : await replayEvents({ topic_id: topicId, since_seq: sinceSeq }, client);
+      ? await replayEvents({ topic_id: topicId, actingPrincipalId: params.actingPrincipalId, tail: true }, client)
+      : await replayEvents({ topic_id: topicId, actingPrincipalId: params.actingPrincipalId, since_seq: sinceSeq }, client);
     await client.query('COMMIT');
     if (!tr) {
       // Unreachable: the topic existed under FOR UPDATE in txn 1 and is never deleted.
@@ -349,13 +355,13 @@ export async function joinTopic(params: {
  */
 export async function grantLevel(params: {
   topic_id: string;
-  /** DEFERRED-029: caller's scope; enforced via the topic's derived project_id. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() is the tenant/authz gate (topic scope). */
+  actingPrincipalId?: string | null;
   actor_id: string;
   level: string;
   granted_by: string;
 }): Promise<GrantLevelResult> {
-  await assertTopicScope(getDbPool(), params.callerScope, params.topic_id);
+  await assertAuthorized(params.actingPrincipalId, 'admin', { kind: 'topic', id: params.topic_id });
   const topicId = (params.topic_id ?? '').trim();
   const targetActor = (params.actor_id ?? '').trim();
   const level = params.level;
@@ -444,10 +450,10 @@ export async function grantLevel(params: {
 }
 
 /** Get a topic's record + full participant roster (one-query snapshot). */
-export async function getTopic(params: { topic_id: string; callerScope?: CallerScope }): Promise<TopicWithRoster> {
+export async function getTopic(params: { topic_id: string; actingPrincipalId?: string | null }): Promise<TopicWithRoster> {
   const topicId = (params.topic_id ?? '').trim();
   if (!topicId) throw new ContextHubError('BAD_REQUEST', 'topic_id is required');
-  await assertTopicScope(getDbPool(), params.callerScope, topicId);
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'topic', id: topicId });
   const tr = await fetchTopicWithRoster(getDbPool(), topicId);
   if (!tr) throw new ContextHubError('NOT_FOUND', `topic ${topicId} not found`);
   return tr;
@@ -467,8 +473,8 @@ export async function getTopic(params: { topic_id: string; callerScope?: CallerS
  */
 export async function closeTopic(params: {
   topic_id: string;
-  /** DEFERRED-029: caller's scope; enforced via the topic's derived project_id. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() is the tenant/authz gate (topic scope). */
+  actingPrincipalId?: string | null;
   actor_id: string;
   /**
    * Sprint 15.7 — optional per-call statement timeout. When set, every internal
@@ -482,7 +488,7 @@ export async function closeTopic(params: {
   const topicId = (params.topic_id ?? '').trim();
   const actorId = (params.actor_id ?? '').trim();
   const stmtTimeoutMs = params.statementTimeoutMs;
-  await assertTopicScope(getDbPool(), params.callerScope, topicId);
+  await assertAuthorized(params.actingPrincipalId, 'admin', { kind: 'topic', id: topicId });
   if (!topicId || !actorId) {
     throw new ContextHubError('BAD_REQUEST', 'topic_id and actor_id are required');
   }

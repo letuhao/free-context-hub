@@ -1,8 +1,7 @@
 import { getEnv } from '../env.js';
 import { getNeo4jDriver } from './client.js';
 import { isFeatureEnabled } from '../services/featureToggles.js';
-import { assertCallerScope } from '../core/security/callerScope.js';
-import type { CallerScope } from '../core/security/callerScope.js';
+import { assertAuthorized } from '../services/authorize.js';
 
 function kgDisabledWarning() {
   return { warning: 'Knowledge graph is disabled (env or project toggle).' };
@@ -18,12 +17,12 @@ export type SearchSymbolsMatch = {
 
 export async function searchSymbols(params: {
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** F2f: acting principal; authorize() enforces read on the project. */
+  actingPrincipalId?: string | null;
   query: string;
   limit?: number;
 }): Promise<{ matches: SearchSymbolsMatch[]; warning?: string }> {
-  assertCallerScope(params.callerScope, params.projectId);
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id: params.projectId });
   const env = getEnv();
   if (!env.KG_ENABLED || !(await isFeatureEnabled(params.projectId, 'knowledge_graph'))) {
     return { matches: [], ...kgDisabledWarning() };
@@ -80,8 +79,8 @@ export type SymbolEdge = {
 
 export async function getSymbolNeighbors(params: {
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** F2f: acting principal; authorize() enforces read on the project. */
+  actingPrincipalId?: string | null;
   symbolId: string;
   depth?: number;
   limit?: number;
@@ -91,7 +90,7 @@ export async function getSymbolNeighbors(params: {
   edges: SymbolEdge[];
   warning?: string;
 }> {
-  assertCallerScope(params.callerScope, params.projectId);
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id: params.projectId });
   const env = getEnv();
   if (!env.KG_ENABLED || !(await isFeatureEnabled(params.projectId, 'knowledge_graph'))) {
     return { center: null, neighbors: [], edges: [], ...kgDisabledWarning() };
@@ -193,8 +192,8 @@ LIMIT toInteger($limit)`;
 
 export async function traceDependencyPath(params: {
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** F2f: acting principal; authorize() enforces read on the project. */
+  actingPrincipalId?: string | null;
   fromSymbolId: string;
   toSymbolId: string;
   maxHops?: number;
@@ -205,7 +204,7 @@ export async function traceDependencyPath(params: {
   hops: number;
   warning?: string;
 }> {
-  assertCallerScope(params.callerScope, params.projectId);
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id: params.projectId });
   const env = getEnv();
   if (!env.KG_ENABLED || !(await isFeatureEnabled(params.projectId, 'knowledge_graph'))) {
     return { found: false, path_nodes: [], path_edges: [], hops: 0, ...kgDisabledWarning() };
@@ -264,8 +263,8 @@ export async function traceDependencyPath(params: {
 
 export async function getLessonImpact(params: {
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** F2f: acting principal; authorize() enforces read on the project. */
+  actingPrincipalId?: string | null;
   lessonId: string;
   limit?: number;
 }): Promise<{
@@ -275,7 +274,7 @@ export async function getLessonImpact(params: {
   rationale: string;
   warning?: string;
 }> {
-  assertCallerScope(params.callerScope, params.projectId);
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id: params.projectId });
   const env = getEnv();
   if (!env.KG_ENABLED || !(await isFeatureEnabled(params.projectId, 'knowledge_graph'))) {
     return {

@@ -16,7 +16,7 @@
 
 import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
-import { assertBodyScope, type CallerScope } from '../core/index.js';
+import { assertAuthorized } from './authorize.js';
 
 const MAX_FIELD_LEN = 256;
 
@@ -42,13 +42,13 @@ export type ProxyRecord = {
  */
 export async function grantProxy(params: {
   body_id: string;
-  /** DEFERRED-029: caller's scope; enforced via the body's derived project_id. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() gate (body → project scope). */
+  actingPrincipalId?: string | null;
   principal: string;
   proxy: string;
   granted_by: string;
 }): Promise<GrantProxyResult> {
-  await assertBodyScope(getDbPool(), params.callerScope, params.body_id);
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'body', id: params.body_id });
   const bodyId = (params.body_id ?? '').trim();
   const principal = (params.principal ?? '').trim();
   const proxy = (params.proxy ?? '').trim();
@@ -95,12 +95,12 @@ export async function grantProxy(params: {
 /** Revoke a proxy grant. */
 export async function revokeProxy(params: {
   body_id: string;
-  /** DEFERRED-029: caller's scope; enforced via the body's derived project_id. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() gate (body → project scope). */
+  actingPrincipalId?: string | null;
   principal: string;
   proxy: string;
 }): Promise<RevokeProxyResult> {
-  await assertBodyScope(getDbPool(), params.callerScope, params.body_id);
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'body', id: params.body_id });
   const bodyId = (params.body_id ?? '').trim();
   const principal = (params.principal ?? '').trim();
   const proxy = (params.proxy ?? '').trim();
@@ -116,8 +116,8 @@ export async function revokeProxy(params: {
 }
 
 /** List all proxy grants for a body. */
-export async function listProxies(params: { body_id: string; callerScope?: CallerScope }): Promise<{ proxies: ProxyRecord[] }> {
-  await assertBodyScope(getDbPool(), params.callerScope, params.body_id);
+export async function listProxies(params: { body_id: string; actingPrincipalId?: string | null }): Promise<{ proxies: ProxyRecord[] }> {
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'body', id: params.body_id });
   const bodyId = (params.body_id ?? '').trim();
   if (!bodyId) throw new ContextHubError('BAD_REQUEST', 'body_id is required');
   const pool = getDbPool();

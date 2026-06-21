@@ -74,6 +74,8 @@ function aggregateByGroup(results: ProductionEvalRow[]): ProductionEvalArtifact[
 
 export async function runProductionGoldenEval(params: {
   projectId: string;
+  /** F2g — threaded so the worker's eval searches authorize as the system-worker identity. */
+  actingPrincipalId?: string | null;
   queriesPath: string;
   hybridMode: 'off' | 'lexical';
   kgAssistByDefault: boolean;
@@ -88,6 +90,7 @@ export async function runProductionGoldenEval(params: {
     const kgAssist = params.kgAssistByDefault || ['kg', 'queue', 'mcp-server'].includes(String(q.group ?? '').trim().toLowerCase());
     const out = await searchCode({
       projectId: params.projectId,
+      actingPrincipalId: params.actingPrincipalId,
       query: q.query,
       pathGlob: q.path_glob,
       hybridMode: params.hybridMode,
@@ -239,6 +242,8 @@ function parseBaselineContent(content: string): ProductionEvalArtifact | null {
 
 export async function runQualityEvalAndPersist(params: {
   projectId: string;
+  /** F2g — the worker's system-worker identity, threaded into every guarded leaf. */
+  actingPrincipalId?: string | null;
   env: Env;
   queriesPath: string;
   hybridMode: 'off' | 'lexical';
@@ -257,6 +262,7 @@ export async function runQualityEvalAndPersist(params: {
   let baseline: ProductionEvalArtifact | null = null;
   const baselineRow = await getGeneratedDocument({
     projectId: params.projectId,
+    actingPrincipalId: params.actingPrincipalId,
     docType: 'benchmark_artifact',
     docKey: baselineKey,
   });
@@ -266,6 +272,7 @@ export async function runQualityEvalAndPersist(params: {
 
   const artifact = await runProductionGoldenEval({
     projectId: params.projectId,
+    actingPrincipalId: params.actingPrincipalId,
     queriesPath: params.queriesPath,
     hybridMode: params.hybridMode,
     kgAssistByDefault: params.env.QUALITY_EVAL_KG_ASSIST,
@@ -279,6 +286,7 @@ export async function runQualityEvalAndPersist(params: {
 
   await upsertGeneratedDocument({
     projectId: params.projectId,
+    actingPrincipalId: params.actingPrincipalId,
     docType: 'benchmark_artifact',
     docKey,
     title: `Quality eval ${stamp}`,
@@ -297,6 +305,7 @@ export async function runQualityEvalAndPersist(params: {
   if (params.setBaseline) {
     await upsertGeneratedDocument({
       projectId: params.projectId,
+      actingPrincipalId: params.actingPrincipalId,
       docType: 'benchmark_artifact',
       docKey: baselineKey,
       title: 'Quality eval baseline',

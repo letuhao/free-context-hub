@@ -5,10 +5,16 @@
 # and seeded DB-backed keys exercise the requireRole + requireScope code paths.
 # The base CONTEXT_HUB_WORKSPACE_TOKEN remains the env-var admin token.
 
+# NOTE (F2g): the base docker-compose.yml now ships DEPLOYMENT_PROFILE=production, which
+# would make this auth-ON-with-legacy-token rig hit the assertEnforceReady() boot gate and
+# refuse to start. This overlay pins DEPLOYMENT_PROFILE=dev so it lands on the intended
+# "dev + auth ON → boot normally" branch (the legacy token stays live here on purpose).
 services:
   mcp:
     environment:
+      DEPLOYMENT_PROFILE: "dev"
       MCP_AUTH_ENABLED: "true"
   worker:
     environment:
+      DEPLOYMENT_PROFILE: "dev"
       MCP_AUTH_ENABLED: "true"

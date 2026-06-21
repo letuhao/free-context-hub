@@ -5,6 +5,7 @@ import fg from 'fast-glob';
 
 import { getDbPool } from '../db/client.js';
 import { getEnv } from '../env.js';
+import { assertAuthorized } from './authorize.js';
 import { upsertGeneratedDocument } from './generatedDocs.js';
 import { builderChatCompletion } from './builderMemory.js';
 import { loadIgnorePatternsFromRoot } from '../utils/ignore.js';
@@ -205,7 +206,12 @@ function moduleKeyForShard(shardId: string): string {
 async function loadLeafBodiesFromDb(
   projectId: string,
   runId: string,
+  actingPrincipalId?: string | null,
 ): Promise<Map<number, { shardId: string; moduleKey: string; text: string; docKey: string }>> {
+  // [DEFERRED-052] This raw read of generated_documents runs as the FIRST DB op of a resumed build (before
+  // the first upsert gate), so gate it explicitly on project read. Worker-internal today (system principal,
+  // global write ⊃ read); the guard makes it fail-closed if ever reached from a non-reader. auth-off → no-op.
+  await assertAuthorized(actingPrincipalId, 'read', { kind: 'project', id: projectId });
   const pool = getDbPool();
   const prefix = `phase6/builder_memory/leaf/${runId}/`;
   const res = await pool.query<{ content: string; doc_key: string; metadata: Record<string, unknown> }>(
@@ -314,6 +320,8 @@ async function mergeTextsBatched(
 
 export type BuildLargeRepoMemoryInput = {
   projectId: string;
+  /** F2g — the worker's system-worker identity, threaded into every guarded upsert. */
+  actingPrincipalId?: string | null;
   root: string;
   correlationId?: string;
   sourceJobId?: string;
@@ -370,11 +378,12 @@ export async function buildLargeRepoProjectMemory(
 
   const existingLeaves =
     resumeFrom > 0
-      ? await loadLeafBodiesFromDb(input.projectId, runId)
+      ? await loadLeafBodiesFromDb(input.projectId, runId, input.actingPrincipalId)
       : new Map<number, { shardId: string; moduleKey: string; text: string; docKey: string }>();
 
   await upsertGeneratedDocument({
     projectId: input.projectId,
+    actingPrincipalId: input.actingPrincipalId,
     docType: 'benchmark_artifact',
     docKey: `phase6/builder_memory/manifest/${runId}`,
     title: `Builder memory manifest ${runId}`,
@@ -447,6 +456,7 @@ export async function buildLargeRepoProjectMemory(
 
     await upsertGeneratedDocument({
       projectId: input.projectId,
+      actingPrincipalId: input.actingPrincipalId,
       docType: 'benchmark_artifact',
       docKey,
       title: `Builder memory leaf ${runId} ${sh.shardId}`,
@@ -517,6 +527,7 @@ export async function buildLargeRepoProjectMemory(
     moduleTexts.push(merged);
     await upsertGeneratedDocument({
       projectId: input.projectId,
+      actingPrincipalId: input.actingPrincipalId,
       docType: 'benchmark_artifact',
       docKey: mk,
       title: `Builder memory module ${runId} ${mkey}`,
@@ -569,6 +580,7 @@ export async function buildLargeRepoProjectMemory(
     globalKey = `phase6/builder_memory/global/${runId}`;
     await upsertGeneratedDocument({
       projectId: input.projectId,
+      actingPrincipalId: input.actingPrincipalId,
       docType: 'benchmark_artifact',
       docKey: globalKey,
       title: `Builder memory global ${runId}`,

@@ -1,6 +1,5 @@
 import { getDbPool } from '../db/client.js';
-import { assertCallerScope, assertCallerScopeMulti } from '../core/security/callerScope.js';
-import type { CallerScope } from '../core/security/callerScope.js';
+import { assertAuthorized } from './authorize.js';
 
 export type ActionContext = {
   action: string;
@@ -46,13 +45,13 @@ export type GuardrailRule = {
 
 export async function listGuardrailRules(
   projectIdOrIds: string | string[],
-  /** DEFERRED-029: caller's scope; enforced against projectIdOrIds. */
-  opts?: { limit?: number; offset?: number; callerScope?: CallerScope },
+  /** F2f: acting principal; authorize() enforces read on each project (strict-reject). */
+  opts?: { limit?: number; offset?: number; actingPrincipalId?: string | null },
 ): Promise<{ rules: GuardrailRule[]; total_count: number }> {
-  if (Array.isArray(projectIdOrIds)) {
-    assertCallerScopeMulti(opts?.callerScope, projectIdOrIds);
-  } else {
-    assertCallerScope(opts?.callerScope, projectIdOrIds);
+  // Strict-reject: the caller must be able to read EVERY listed project (first deny throws).
+  const ids = Array.isArray(projectIdOrIds) ? projectIdOrIds : [projectIdOrIds];
+  for (const pid of ids) {
+    await assertAuthorized(opts?.actingPrincipalId, 'read', { kind: 'project', id: pid });
   }
   const pool = getDbPool();
   const limit = Math.min(opts?.limit ?? 50, 200);
@@ -88,11 +87,11 @@ export type SimulateResult = {
 export async function simulateGuardrails(
   projectId: string,
   actions: string[],
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  opts?: { callerScope?: CallerScope },
+  /** F2f: acting principal; authorize() enforces read on the project. */
+  opts?: { actingPrincipalId?: string | null },
 ): Promise<SimulateResult[]> {
-  assertCallerScope(opts?.callerScope, projectId);
-  const { rules } = await listGuardrailRules(projectId, { limit: 200, callerScope: opts?.callerScope });
+  await assertAuthorized(opts?.actingPrincipalId, 'read', { kind: 'project', id: projectId });
+  const { rules } = await listGuardrailRules(projectId, { limit: 200, actingPrincipalId: opts?.actingPrincipalId });
   return actions.map((action) => {
     const matched = rules.filter((r) => matchTrigger(r.trigger, action));
     return {
@@ -110,10 +109,10 @@ export async function simulateGuardrails(
 export async function checkGuardrails(
   projectId: string,
   actionContext: ActionContext,
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  opts?: { callerScope?: CallerScope },
+  /** F2f: acting principal; authorize() enforces read on the project. */
+  opts?: { actingPrincipalId?: string | null },
 ): Promise<GuardrailCheckResult> {
-  assertCallerScope(opts?.callerScope, projectId);
+  await assertAuthorized(opts?.actingPrincipalId, 'read', { kind: 'project', id: projectId });
   const pool = getDbPool();
 
   // Only check guardrails whose parent lesson is active (not superseded/archived).

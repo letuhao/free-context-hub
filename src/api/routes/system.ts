@@ -16,8 +16,21 @@ publicRouter.get('/health', (_req, res) => {
 const router = Router();
 
 /** GET /api/system/info — server info + feature flags (requires auth) */
-router.get('/info', (_req, res) => {
+router.get('/info', (req, res) => {
   const env = getEnv();
+  // F-AUTH hardening (adversary A1): the bearerAuth cookie-defer lets a header-less request
+  // carrying any `chub_session=` cookie fall through to sessionAuth. For an INVALID cookie no
+  // principal is attached, and this recon-sensitive payload has no in-service authz of its own —
+  // so it would be reachable unauthenticated. Reaching here without an Authorization header AND
+  // without a resolved session (authMethod !== 'session') under auth-ON means exactly that: deny.
+  if (
+    env.MCP_AUTH_ENABLED &&
+    !req.headers.authorization &&
+    (req as { authMethod?: string }).authMethod !== 'session'
+  ) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
   res.json({
     name: 'contexthub-self-hosted',
     version: '0.1.0',

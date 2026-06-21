@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import type { Request } from 'express';
-import { requireProjectScope } from '../middleware/requireResourceScope.js';
 import {
   ingestGitHistory,
   listCommits,
@@ -10,23 +9,18 @@ import {
   resolveProjectIdOrThrow,
   resolveProjectRoot,
 } from '../../core/index.js';
-import type { CallerScope } from '../../core/index.js';
-
-/** DEFERRED-029: read the caller's project scope attached by bearerAuth. */
-function callerScopeOf(req: Request): CallerScope {
-  return (req as { apiKeyScope?: CallerScope }).apiKeyScope;
-}
+import { callerPrincipalOf } from '../middleware/auth.js';
 
 const router = Router();
 
 /** POST /api/git/ingest — ingest git history for a project */
-router.post('/ingest', requireProjectScope('body'), async (req, res, next) => {
+router.post('/ingest', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
-    const root = await resolveProjectRoot(projectId, req.body.root);
+    const root = await resolveProjectRoot(projectId, req.body.root, callerPrincipalOf(req));
     const result = await ingestGitHistory({
       projectId,
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       root,
       maxCommits: req.body.max_commits,
       since: req.body.since,
@@ -36,12 +30,12 @@ router.post('/ingest', requireProjectScope('body'), async (req, res, next) => {
 });
 
 /** GET /api/git/commits — list commits for a project */
-router.get('/commits', requireProjectScope('query'), async (req, res, next) => {
+router.get('/commits', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
     const result = await listCommits({
       projectId,
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       limit: req.query.limit ? Number(req.query.limit) : undefined,
       offset: req.query.offset ? Number(req.query.offset) : undefined,
     });
@@ -50,21 +44,21 @@ router.get('/commits', requireProjectScope('query'), async (req, res, next) => {
 });
 
 /** GET /api/git/commits/:sha — get a single commit */
-router.get('/commits/:sha', requireProjectScope('query'), async (req, res, next) => {
+router.get('/commits/:sha', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
-    const result = await getCommit({ projectId, callerScope: callerScopeOf(req), sha: String(req.params.sha) });
+    const result = await getCommit({ projectId, actingPrincipalId: callerPrincipalOf(req), sha: String(req.params.sha) });
     res.json(result);
   } catch (e) { next(e); }
 });
 
 /** POST /api/git/suggest-lessons — suggest lessons from recent commits */
-router.post('/suggest-lessons', requireProjectScope('body'), async (req, res, next) => {
+router.post('/suggest-lessons', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await suggestLessonsFromCommits({
       projectId,
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       commitShas: req.body.commit_shas,
       limit: req.body.limit,
     });
@@ -73,12 +67,12 @@ router.post('/suggest-lessons', requireProjectScope('body'), async (req, res, ne
 });
 
 /** POST /api/git/analyze-impact — analyze impact of a commit */
-router.post('/analyze-impact', requireProjectScope('body'), async (req, res, next) => {
+router.post('/analyze-impact', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     const result = await analyzeCommitImpact({
       projectId,
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       commitSha: req.body.sha,
     });
     res.json(result);

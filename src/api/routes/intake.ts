@@ -25,15 +25,7 @@ import {
   getIntake,
   listIntake,
 } from '../../core/index.js';
-import type { CallerScope } from '../../core/index.js';
-import { requireRole } from '../middleware/requireRole.js';
-import { requireResourceScope, requireBodyProjectScope } from '../middleware/requireResourceScope.js';
-import { requireScope } from '../middleware/requireScope.js';
-
-/** DEFERRED-029: read the caller's project scope attached by bearerAuth. */
-function callerScopeOf(req: Request): CallerScope {
-  return (req as { apiKeyScope?: CallerScope }).apiKeyScope;
-}
+import { callerPrincipalOf } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -52,12 +44,12 @@ function asString(v: unknown): string {
 }
 
 // ── POST /api/intake — submit an intake item ─────────────────────────────────
-router.post('/intake', requireRole('writer'), requireBodyProjectScope(), async (req: Request, res: Response, next: NextFunction) => {
+router.post('/intake', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = req.body ?? {};
     const result = await submitIntake({
       project_id: asString(body.project_id),
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       topic_id: typeof body.topic_id === 'string' ? body.topic_id : undefined,
       kind: asString(body.kind),
       body: asString(body.body),
@@ -68,15 +60,15 @@ router.post('/intake', requireRole('writer'), requireBodyProjectScope(), async (
 });
 
 // ── GET /api/intake/:id — get a single intake item ──────────────────────────
-router.get('/intake/:id', requireRole('reader'), requireResourceScope('intake'), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/intake/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const result = await getIntake(String(req.params.id), { callerScope: callerScopeOf(req) });
+    const result = await getIntake(String(req.params.id), { actingPrincipalId: callerPrincipalOf(req) });
     res.json({ status: 'ok', data: result });
   } catch (e) { next(e); }
 });
 
 // ── POST /api/intake/:id/triage — triage an intake item ──────────────────────
-router.post('/intake/:id/triage', requireRole('writer'), requireResourceScope('intake'), async (req: Request, res: Response, next: NextFunction) => {
+router.post('/intake/:id/triage', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = req.body ?? {};
     const routeKind = asString(body.route_kind);
@@ -109,21 +101,21 @@ router.post('/intake/:id/triage', requireRole('writer'), requireResourceScope('i
       throw new ContextHubError('BAD_REQUEST', `route_kind must be one of: task, request, motion, dispute; got: ${routeKind}`);
     }
 
-    const result = await triageIntake(String(req.params.id), route, { callerScope: callerScopeOf(req) });
+    const result = await triageIntake(String(req.params.id), route, { actingPrincipalId: callerPrincipalOf(req) });
     res.status(200).json({ status: 'ok', data: result });
   } catch (e) { next(e); }
 });
 
 // ── POST /api/intake/:id/dismiss — dismiss an intake item ────────────────────
-router.post('/intake/:id/dismiss', requireRole('writer'), requireResourceScope('intake'), async (req: Request, res: Response, next: NextFunction) => {
+router.post('/intake/:id/dismiss', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const result = await dismissIntake(String(req.params.id), { callerScope: callerScopeOf(req) });
+    const result = await dismissIntake(String(req.params.id), { actingPrincipalId: callerPrincipalOf(req) });
     res.status(200).json({ status: 'ok', data: result });
   } catch (e) { next(e); }
 });
 
 // ── GET /api/projects/:id/intake — list intake items for a project ────────────
-router.get('/projects/:id/intake', requireRole('reader'), requireScope('id'), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/projects/:id/intake', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const projectId = String(req.params.id);
     const kind = typeof req.query.kind === 'string' ? req.query.kind : undefined;
@@ -131,7 +123,7 @@ router.get('/projects/:id/intake', requireRole('reader'), requireScope('id'), as
     const limit = typeof req.query.limit === 'string' ? parseInt(req.query.limit, 10) : undefined;
     const offset = typeof req.query.offset === 'string' ? parseInt(req.query.offset, 10) : undefined;
 
-    const result = await listIntake(projectId, { kind, status, limit, offset, callerScope: callerScopeOf(req) });
+    const result = await listIntake(projectId, { kind, status, limit, offset, actingPrincipalId: callerPrincipalOf(req) });
     res.json({ status: 'ok', data: result });
   } catch (e) { next(e); }
 });

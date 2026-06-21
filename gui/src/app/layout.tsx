@@ -8,9 +8,7 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { ProjectProvider } from "@/contexts/project-context";
 import { ToastProvider } from "@/components/ui/toast";
-import { Sidebar } from "@/components/sidebar";
-import { KeyboardShortcutsTrigger } from "@/components/keyboard-shortcuts-trigger";
-import { CommandPalette } from "@/components/ui/command-palette";
+import { AppShell } from "@/components/app-shell";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -31,10 +29,7 @@ export default function RootLayout({
       <body className="h-screen overflow-hidden flex bg-zinc-950 text-zinc-100 font-[family-name:var(--font-geist-sans)]">
         <ProjectProvider>
           <ToastProvider>
-            <Sidebar />
-            <main className="flex-1 flex flex-col min-h-0 pt-12 md:pt-0">{children}</main>
-            <KeyboardShortcutsTrigger />
-            <CommandPalette />
+            <AppShell>{children}</AppShell>
           </ToastProvider>
         </ProjectProvider>
       </body>

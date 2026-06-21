@@ -4,8 +4,7 @@ import amqplib from 'amqplib';
 import { getDbPool } from '../db/client.js';
 import { getEnv } from '../env.js';
 import { ContextHubError } from '../core/errors.js';
-import { assertCallerScope } from '../core/security/callerScope.js';
-import type { CallerScope } from '../core/security/callerScope.js';
+import { assertAuthorized, hasGlobalGrant } from './authorize.js';
 
 export type JobType =
   | 'repo.sync'
@@ -27,8 +26,8 @@ type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'dead_letter' |
 
 type QueuePayload = {
   project_id?: string;
-  /** DEFERRED-029: caller's scope; enforced against project_id when both are set. */
-  callerScope?: CallerScope;
+  /** F2f: acting principal; authorize() enforces write on project_id. */
+  actingPrincipalId?: string | null;
   job_type: JobType;
   payload: Record<string, unknown>;
   correlation_id?: string;
@@ -70,39 +69,54 @@ async function ensureRabbitQueue(queueName: string): Promise<void> {
 }
 
 export async function enqueueJob(input: QueuePayload): Promise<{ status: 'queued'; job_id: string; backend: 'postgres' | 'rabbitmq' }> {
-  // PR F SEC-3 (Adversary HIGH #3): when a scoped caller omits project_id,
-  // the previous code silently allowed an unscoped job to be enqueued. The
-  // worker then runs it with callerScope=undefined (unrestricted by design)
-  // — letting a scoped caller drive index.run / git.ingest against any
-  // filesystem path via payload.root. Auto-bind project_id to the caller's
-  // scope when scoped; throw if the caller declared a different project_id.
-  if (typeof input.callerScope === 'string') {
-    if (!input.project_id) {
-      input = { ...input, project_id: input.callerScope };
-    } else {
-      assertCallerScope(input.callerScope, input.project_id);
-    }
-    // PR F SEC-6 (Adversary #3 HIGH): SEC-3 pinned the DB project_id to the
-    // caller's scope, but the worker still reads `payload.root` verbatim and
-    // walks that filesystem path. A scoped-A attacker could pass
-    // payload.root='<path to projB cache>' and the indexer would write
-    // proj-B's source into chunks tagged project_id='A' (then read it via
-    // search_code). Same trick works for git.ingest / workspace.scan /
-    // *.build / *.loop.* jobs. Defense: scoped callers cannot specify a
-    // filesystem root — the worker auto-resolves from project_sources for
-    // the bound project_id (see resolveProjectRoot). Admin/auth-off callers
-    // (callerScope=null/undefined) keep full control by design.
-    const payloadRoot = (input.payload as Record<string, unknown> | undefined)?.root;
-    if (typeof payloadRoot === 'string' && payloadRoot.trim().length > 0) {
-      throw new ContextHubError(
-        'BAD_REQUEST',
-        'scoped callers must omit payload.root — the worker resolves the root from project_sources for the bound project_id',
-      );
-    }
-  } else if (input.project_id) {
-    // auth-off / global key + explicit project_id → still enforce (no-op on
-    // undefined/null but keeps the contract uniform).
-    assertCallerScope(input.callerScope, input.project_id);
+  // [DEFERRED-045] actor-native re-implementation of PR F's SEC-1/3/5/6. The actor model has no single
+  // "caller scope" to auto-bind to, so:
+  //  - project_id is REQUIRED unless the caller is GLOBALLY privileged (a global-write grant or root);
+  //    a project-scoped principal must name a project it can write (authorize() enforces it). This
+  //    closes SEC-3 (no silently-unscoped job from a non-global caller).
+  //  - SEC-6: payload.root walks an ARBITRARY filesystem path that the worker indexes under the bound
+  //    project_id (a cross-tenant filesystem write). That is a GLOBAL capability — only a globally
+  //    privileged principal may pass it; everyone else must let the worker resolve the root from
+  //    project_sources for the bound project_id.
+  const isGlobal = await hasGlobalGrant(input.actingPrincipalId, 'write');
+  if (input.project_id) {
+    await assertAuthorized(input.actingPrincipalId, 'write', { kind: 'project', id: input.project_id });
+  } else if (!isGlobal) {
+    throw new ContextHubError(
+      'BAD_REQUEST',
+      'project_id is required — only a globally-privileged principal may enqueue an unscoped job',
+    );
+  }
+  const payloadRoot = (input.payload as Record<string, unknown> | undefined)?.root;
+  const hasExplicitRoot = typeof payloadRoot === 'string' && payloadRoot.trim().length > 0;
+  if (hasExplicitRoot && !isGlobal) {
+    throw new ContextHubError(
+      'BAD_REQUEST',
+      'only a globally-privileged principal may specify payload.root — the worker resolves the root from project_sources for the bound project_id',
+    );
+  }
+  // [DEFERRED-048 REVIEW-CODE #2] `payload.cache_root` is the SAME arbitrary-filesystem capability by a
+  // different name: repo.sync computes `repo_root = resolve(cache_root, project)` and re-enqueues
+  // index.run with that root stamped by the SYSTEM principal — so a non-global caller could launder an
+  // attacker-chosen parent dir (`/`, `../..`) into a global stamp (confused deputy). Gate it identically:
+  // only a globally-privileged principal may override the repo cache location.
+  const payloadCacheRoot = (input.payload as Record<string, unknown> | undefined)?.cache_root;
+  if (typeof payloadCacheRoot === 'string' && payloadCacheRoot.trim().length > 0 && !isGlobal) {
+    throw new ContextHubError(
+      'BAD_REQUEST',
+      'only a globally-privileged principal may specify payload.cache_root — the worker uses the configured repo cache base for the bound project_id',
+    );
+  }
+  // [DEFERRED-048] Stamp WHO authorized the arbitrary root (a global principal — guaranteed by the gate
+  // above) so execution (resolveRoot) can re-verify across the durable-queue boundary. OVERWRITE any
+  // caller-supplied value — never trust the payload's own authorizer claim — and strip it when no root
+  // is set, so a forged stamp can never ride along. Under auth-off actingPrincipalId is null → the stamp
+  // is null and the exec check is inert (honored as today).
+  const stampedPayload: Record<string, unknown> = { ...((input.payload as Record<string, unknown>) ?? {}) };
+  if (hasExplicitRoot) {
+    stampedPayload.root_authorized_by = input.actingPrincipalId ?? null;
+  } else {
+    delete stampedPayload.root_authorized_by;
   }
   const pool = getDbPool();
   const jobId = randomUUID();
@@ -113,7 +127,7 @@ export async function enqueueJob(input: QueuePayload): Promise<{ status: 'queued
   await pool.query(
     `INSERT INTO async_jobs(job_id, project_id, job_type, queue_name, payload, correlation_id, status, max_attempts, available_at, queued_at)
      VALUES ($1,$2,$3,$4,$5::jsonb,$6,'queued',$7, now(), now())`,
-    [jobId, input.project_id ?? null, input.job_type, queueName, JSON.stringify(input.payload ?? {}), correlationId, maxAttempts],
+    [jobId, input.project_id ?? null, input.job_type, queueName, JSON.stringify(stampedPayload), correlationId, maxAttempts],
   );
 
   const env = getEnv();
@@ -269,21 +283,19 @@ export async function isJobCancelled(jobId: string): Promise<boolean> {
 export async function cancelJob(
   jobId: string,
   projectId?: string,
-  /** DEFERRED-029: caller's scope; enforced against projectId when both are set. */
-  opts?: { callerScope?: CallerScope },
+  /** F2f: acting principal; authorize() enforces write on projectId. */
+  opts?: { actingPrincipalId?: string | null },
 ): Promise<boolean> {
-  // PR F SEC-5 (Adversary #2 MEDIUM latent): the previous `if (projectId)`
-  // guard was the same trap shape as SEC-3 — a scoped caller could call
-  // cancelJob(jobId, undefined, {callerScope:'A'}) and the UPDATE would run
-  // unscoped (cross-tenant cancel). Today's only caller passes a truthy
-  // projectId, but the contract was a footgun for the next refactor / MCP
-  // exposure. Fix: when callerScope is a string and projectId is absent,
-  // auto-bind. Auth-off / global keys still allowed to cancel by job_id alone.
-  if (typeof opts?.callerScope === 'string') {
-    if (!projectId) projectId = opts.callerScope;
-    else assertCallerScope(opts.callerScope, projectId);
-  } else if (projectId) {
-    assertCallerScope(opts?.callerScope, projectId);
+  // [DEFERRED-045] SEC-5 actor-native: cancelling is a write on the job's project. projectId is
+  // REQUIRED unless the caller is globally privileged (who may cancel by job_id alone); a non-global
+  // caller cannot cancel without naming a project it can write — no unscoped cross-tenant cancel.
+  if (projectId) {
+    await assertAuthorized(opts?.actingPrincipalId, 'write', { kind: 'project', id: projectId });
+  } else if (!(await hasGlobalGrant(opts?.actingPrincipalId, 'write'))) {
+    throw new ContextHubError(
+      'BAD_REQUEST',
+      'projectId is required to cancel a job — only a globally-privileged principal may cancel by job_id alone',
+    );
   }
   const pool = getDbPool();
   const res = projectId
@@ -325,8 +337,8 @@ export async function failJob(jobId: string, attempts: number, maxAttempts: numb
 export async function listJobs(params: {
   projectId?: string;
   projectIds?: string[];
-  /** DEFERRED-029: caller's scope; enforced against projectId / projectIds when set. */
-  callerScope?: CallerScope;
+  /** F2f: acting principal; authorize() enforces read on projectId / projectIds. */
+  actingPrincipalId?: string | null;
   correlationId?: string;
   status?: JobStatus;
   limit?: number;
@@ -347,19 +359,19 @@ export async function listJobs(params: {
   }>;
   total_count: number;
 }> {
-  if (params.projectId) {
-    assertCallerScope(params.callerScope, params.projectId);
-  } else if (params.projectIds && params.projectIds.length > 0) {
-    // Multi-project listing: a scoped caller may only see its own project.
-    const { assertCallerScopeMulti } = await import('../core/security/callerScope.js');
-    assertCallerScopeMulti(params.callerScope, params.projectIds);
-  } else if (typeof params.callerScope === 'string') {
-    // PR F SEC-1 (Adversary CRITICAL #1): when a scoped caller omits both
-    // projectId AND projectIds, the previous WHERE clause was unconstrained
-    // ('1=1') → cross-tenant read of every project's jobs. Pin the listing to
-    // the caller's scope. Auth-off (undefined) and global keys (null) still
-    // see all projects — that path is unchanged.
-    params = { ...params, projectId: params.callerScope };
+  // [DEFERRED-045] SEC-1 actor-native: read on every named project (strict-reject). A caller with
+  // NO project filter would otherwise hit `WHERE 1=1` (every project's jobs) — allow that ONLY for a
+  // globally-privileged principal; everyone else MUST name a project filter.
+  const ids = params.projectIds ?? (params.projectId ? [params.projectId] : []);
+  if (ids.length > 0) {
+    for (const pid of ids) {
+      await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id: pid });
+    }
+  } else if (!(await hasGlobalGrant(params.actingPrincipalId, 'read'))) {
+    throw new ContextHubError(
+      'BAD_REQUEST',
+      'a project_id or project_ids filter is required — only a globally-privileged principal may list jobs across all projects',
+    );
   }
   const pool = getDbPool();
   const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);

@@ -1,0 +1,401 @@
+/**
+ * Actor Data Boundary F2b — authorize(), the single authorization chokepoint.
+ *
+ * authorize(principal, action, resource) = principal is active ∧ ∃ active grant whose capability
+ * covers the action ∧ whose scope covers the resource. Root short-circuits ALLOW. Every decision
+ * (allow + deny) is logged to coordination_events (authz.decision). The pure core (capabilityCovers,
+ * scopeCovers, decide) carries the logic and is exhaustively unit-tested with no DB; the async
+ * wrapper loads principal + grants, resolves the resource's scope chain, decides, and logs.
+ *
+ * See docs/specs/2026-06-19-actor-data-boundary-F2-design.md.
+ */
+
+import type { Pool, PoolClient } from 'pg';
+import { validate as isUuid } from 'uuid';
+import { getDbPool } from '../db/client.js';
+import { getEnv } from '../env.js';
+import { ContextHubError } from '../core/errors.js';
+import { createModuleLogger } from '../utils/logger.js';
+import type { Capability, ScopeType } from './grants.js';
+
+const logger = createModuleLogger('authorize');
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+/** What a handler is trying to do. read⊂write⊂admin are resource verbs; delegate = re-grant. */
+export type Action = 'read' | 'write' | 'admin' | 'delegate';
+
+/** A resource expressed as its FULLY-RESOLVED scope chain (project→topic→task ancestry filled in).
+ *  [DEFERRED-049 B2] `group` is a parallel leaf — it carries group_id and NO project_id, so the
+ *  discriminated-union shape itself keeps a project grant from matching a group resource. */
+export type ResourceScope =
+  | { kind: 'global' }
+  | { kind: 'project'; project_id: string }
+  | { kind: 'topic'; project_id: string; topic_id: string }
+  | { kind: 'task'; project_id: string; topic_id: string; task_id: string }
+  | { kind: 'group'; group_id: string };
+
+/** The fields of a grant the decision needs (a subset of services/grants.ts Grant). */
+export interface GrantLike {
+  grant_id: string;
+  scope_type: ScopeType;
+  scope_id: string | null;
+  capability: Capability;
+}
+
+export interface PrincipalLike {
+  is_root: boolean;
+  status: 'active' | 'suspended' | 'retired';
+}
+
+export type AllowReason = 'ROOT' | 'GRANT' | 'AUTH_DISABLED';
+export type DenyReason =
+  | 'NO_PRINCIPAL'
+  | 'PRINCIPAL_INACTIVE'
+  | 'NO_COVERING_GRANT'
+  | 'OUT_OF_SCOPE'
+  | 'GRANT_REVOKED';
+
+export type Decision =
+  | { allow: true; reason: AllowReason; matched_grant_id?: string }
+  | { allow: false; reason: DenyReason };
+
+/**
+ * Why authorize() was called — recorded in the decision log so the FE can separate real
+ * resource-access decisions ('access', the default) from internal permission-checks made by the
+ * management paths. [review-impl #3]
+ */
+export type AuthzContext = 'access' | 'delegation_check' | 'tool_auth';
+
+// ── Pure core ───────────────────────────────────────────────────────────────────
+
+const RESOURCE_RANK: Record<'read' | 'write' | 'admin', number> = { read: 1, write: 2, admin: 3 };
+
+/**
+ * read ⊂ write ⊂ admin for resource actions; `delegate` is ORTHOGONAL — it covers only the
+ * `delegate` action and no resource action, and no resource capability confers `delegate`.
+ */
+export function capabilityCovers(granted: Capability, action: Action): boolean {
+  if (action === 'delegate') return granted === 'delegate';
+  if (granted === 'delegate') return false;
+  return RESOURCE_RANK[granted] >= RESOURCE_RANK[action];
+}
+
+/**
+ * A grant's scope covers a resource iff the resource sits at-or-below it on the SAME branch.
+ * global ⊃ project ⊃ topic ⊃ task. Pure — operates on the already-resolved resource chain.
+ */
+export function scopeCovers(grant: GrantLike, resource: ResourceScope): boolean {
+  switch (grant.scope_type) {
+    case 'global':
+      return true;
+    case 'project':
+      // [DEFERRED-049 B2] explicit kind guard: a project grant covers project/topic/task only — NOT a
+      // group resource (which carries group_id, not project_id, so the equality would be `=== undefined`
+      // anyway; the guard makes the namespace split unmistakable to a future reader).
+      return (resource.kind === 'project' || resource.kind === 'topic' || resource.kind === 'task')
+        && grant.scope_id === resource.project_id;
+    case 'topic':
+      return (resource.kind === 'topic' || resource.kind === 'task') && grant.scope_id === resource.topic_id;
+    case 'task':
+      return resource.kind === 'task' && grant.scope_id === resource.task_id;
+    case 'group':
+      // [DEFERRED-049 B2] a group grant covers ONLY its own group (leaf under global). It never reaches
+      // into the project subtree (group membership is knowledge-sharing, not scope nesting).
+      return resource.kind === 'group' && grant.scope_id === resource.group_id;
+    default:
+      return false;
+  }
+}
+
+/**
+ * The decision truth table (pure). Order matters: NO_PRINCIPAL → ROOT short-circuit → status gate →
+ * covering-grant search. The status gate runs only for non-root (root is axiomatically active).
+ */
+export function decide(
+  principal: PrincipalLike | null,
+  action: Action,
+  resource: ResourceScope,
+  activeGrants: readonly GrantLike[],
+): Decision {
+  if (!principal) return { allow: false, reason: 'NO_PRINCIPAL' };
+  if (principal.is_root) return { allow: true, reason: 'ROOT' };
+  if (principal.status !== 'active') return { allow: false, reason: 'PRINCIPAL_INACTIVE' };
+  const g = activeGrants.find((gr) => capabilityCovers(gr.capability, action) && scopeCovers(gr, resource));
+  return g
+    ? { allow: true, reason: 'GRANT', matched_grant_id: g.grant_id }
+    : { allow: false, reason: 'NO_COVERING_GRANT' };
+}
+
+// ── Async wrapper + resolver + logging ────────────────────────────────────────
+
+/**
+ * A handler's reference to the resource it acts on: a kind + (for non-global) its id. The input
+ * kind is the lattice levels PLUS entity shorthands the resolver maps UP to a lattice scope:
+ *   - `artifact` → its task; `motion`/`dispute`/`request` → their topic;
+ *   - `doc`/`body`/`intake` → their project.
+ * The RESOLVED ResourceScope is always a lattice level; these shorthands are input-only.
+ */
+export interface ResourceRef {
+  kind: ResourceScope['kind'] | 'artifact' | 'doc' | 'lesson' | 'body' | 'intake' | 'motion' | 'dispute' | 'request';
+  id?: string | null;
+}
+
+/**
+ * Resolve a resource reference to its FULL scope chain by walking task→topic→project. Returns
+ * (never throws) so authorize() stays total. `unresolvable: NOT_FOUND` covers both a missing id and
+ * a non-existent ancestry — the handler maps it to NOT_FOUND, no existence oracle. global is a no-op.
+ */
+export async function resolveResourceScope(
+  ref: ResourceRef,
+  executor?: Pool | PoolClient,
+): Promise<{ ok: ResourceScope } | { unresolvable: 'NOT_FOUND' }> {
+  if (ref.kind === 'global') return { ok: { kind: 'global' } };
+  const runner = executor ?? getDbPool();
+  const id = typeof ref.id === 'string' ? ref.id.trim() : '';
+  if (!id) return { unresolvable: 'NOT_FOUND' };
+
+  if (ref.kind === 'project') return { ok: { kind: 'project', project_id: id } };
+
+  // [DEFERRED-049 B2] a group authorizes in its OWN namespace. Like `project`, trust the id with NO
+  // existence check so createGroup can authorize a not-yet-created group id (createGroup gates write@group
+  // BEFORE inserting the row). A group is a leaf — no ancestry to walk.
+  if (ref.kind === 'group') return { ok: { kind: 'group', group_id: id } };
+
+  if (ref.kind === 'topic') {
+    const r = await runner.query<{ project_id: string }>(
+      `SELECT project_id FROM topics WHERE topic_id = $1`,
+      [id],
+    );
+    if (!r.rows[0]) return { unresolvable: 'NOT_FOUND' };
+    return { ok: { kind: 'topic', project_id: r.rows[0].project_id, topic_id: id } };
+  }
+
+  if (ref.kind === 'artifact') {
+    // [F2f domain 2] artifact_id is TEXT (no 22P02 risk). An artifact hangs off a task → enforce at
+    // that task's scope, so a task/topic/project/global grant all cover it.
+    const r = await runner.query<{ task_id: string; topic_id: string; project_id: string }>(
+      `SELECT tk.task_id, tk.topic_id, t.project_id
+         FROM artifacts a JOIN tasks tk ON tk.task_id = a.task_id JOIN topics t ON t.topic_id = tk.topic_id
+        WHERE a.artifact_id = $1`,
+      [id],
+    );
+    if (!r.rows[0]) return { unresolvable: 'NOT_FOUND' };
+    return { ok: { kind: 'task', project_id: r.rows[0].project_id, topic_id: r.rows[0].topic_id, task_id: r.rows[0].task_id } };
+  }
+
+  if (ref.kind === 'doc' || ref.kind === 'lesson') {
+    // [F2f domain 4] doc_id / lesson_id are UUID — guard against 22P02. Both live directly under a project.
+    if (!isUuid(id)) return { unresolvable: 'NOT_FOUND' };
+    const sql = ref.kind === 'doc'
+      ? `SELECT project_id FROM documents WHERE doc_id = $1`
+      : `SELECT project_id FROM lessons WHERE lesson_id = $1`;
+    const r = await runner.query<{ project_id: string }>(sql, [id]);
+    if (!r.rows[0]) return { unresolvable: 'NOT_FOUND' };
+    return { ok: { kind: 'project', project_id: r.rows[0].project_id } };
+  }
+
+  // [F2f domain 3] decision entities — all UUID-typed (guard 22P02). body/intake live directly under
+  // a project; motion/dispute/request hang off a topic → enforce at that topic's scope (a topic/
+  // project/global grant all cover it). Queries mirror the retired scopeResolvers.ts SSOT.
+  if (ref.kind === 'body' || ref.kind === 'intake') {
+    if (!isUuid(id)) return { unresolvable: 'NOT_FOUND' };
+    const sql = ref.kind === 'body'
+      ? `SELECT project_id FROM decision_bodies WHERE body_id = $1`
+      : `SELECT project_id FROM intake_items WHERE intake_id = $1`;
+    const r = await runner.query<{ project_id: string }>(sql, [id]);
+    if (!r.rows[0]) return { unresolvable: 'NOT_FOUND' };
+    return { ok: { kind: 'project', project_id: r.rows[0].project_id } };
+  }
+
+  if (ref.kind === 'motion' || ref.kind === 'dispute' || ref.kind === 'request') {
+    if (!isUuid(id)) return { unresolvable: 'NOT_FOUND' };
+    const sql = ref.kind === 'motion'
+      ? `SELECT m.topic_id, t.project_id FROM motions m JOIN topics t ON t.topic_id = m.topic_id WHERE m.motion_id = $1`
+      : ref.kind === 'dispute'
+      ? `SELECT d.topic_id, t.project_id FROM disputes d JOIN topics t ON t.topic_id = d.topic_id WHERE d.dispute_id = $1`
+      : `SELECT r.topic_id, t.project_id FROM requests r JOIN topics t ON t.topic_id = r.topic_id WHERE r.request_id = $1`;
+    const r = await runner.query<{ topic_id: string; project_id: string }>(sql, [id]);
+    if (!r.rows[0]) return { unresolvable: 'NOT_FOUND' };
+    return { ok: { kind: 'topic', project_id: r.rows[0].project_id, topic_id: r.rows[0].topic_id } };
+  }
+
+  // task — task_id is UUID; guard against 22P02 on a malformed id (treat as not found).
+  if (!isUuid(id)) return { unresolvable: 'NOT_FOUND' };
+  const r = await runner.query<{ topic_id: string; project_id: string }>(
+    `SELECT t.topic_id, tp.project_id
+       FROM tasks t JOIN topics tp ON tp.topic_id = t.topic_id
+      WHERE t.task_id = $1`,
+    [id],
+  );
+  if (!r.rows[0]) return { unresolvable: 'NOT_FOUND' };
+  return { ok: { kind: 'task', project_id: r.rows[0].project_id, topic_id: r.rows[0].topic_id, task_id: id } };
+}
+
+async function loadPrincipalLite(principalId: string | null | undefined, executor?: Pool | PoolClient): Promise<PrincipalLike | null> {
+  if (typeof principalId !== 'string' || !isUuid(principalId)) return null;
+  const runner = executor ?? getDbPool();
+  const r = await runner.query<PrincipalLike>(
+    `SELECT is_root, status FROM principals WHERE principal_id = $1`,
+    [principalId],
+  );
+  return r.rows[0] ?? null;
+}
+
+async function loadActiveGrants(principalId: string, executor?: Pool | PoolClient): Promise<GrantLike[]> {
+  const runner = executor ?? getDbPool();
+  const r = await runner.query<GrantLike>(
+    `SELECT grant_id, scope_type, scope_id, capability
+       FROM grants WHERE grantee_principal = $1 AND revoked_at IS NULL`,
+    [principalId],
+  );
+  return r.rows ?? [];
+}
+
+/** Append the decision to authz_decisions. BEST-EFFORT: a logging failure never alters the decision. */
+async function logDecision(
+  principalId: string | null | undefined,
+  action: Action,
+  ref: ResourceRef,
+  d: Decision,
+  context: AuthzContext,
+  executor?: Pool | PoolClient,
+): Promise<void> {
+  try {
+    const runner = executor ?? getDbPool();
+    await runner.query(
+      `INSERT INTO authz_decisions
+         (principal_id, action, resource_kind, resource_id, allow, reason, matched_grant_id, origin)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        principalId ?? null,
+        action,
+        ref.kind,
+        // [F2-adv #6] resource_id is raw caller input; cap its length so the append-only audit log
+        // can't be bloated with arbitrary attacker text.
+        typeof ref.id === 'string' ? ref.id.slice(0, 256) : null,
+        d.allow,
+        d.reason,
+        d.allow ? (d.matched_grant_id ?? null) : null,
+        context,
+      ],
+    );
+  } catch (err) {
+    logger.warn({ err }, 'authz: decision log write failed (decision unaffected)');
+  }
+}
+
+/**
+ * The shared decision computation (NO logging, NO auth-off check). Oracle-safe ordering: a
+ * null/inactive principal is denied BEFORE the resource is resolved, so an unauthorized caller never
+ * learns whether a resource exists. Returns the resolved scope chain too (for explain). Total.
+ */
+async function evaluate(
+  principalId: string | null | undefined,
+  action: Action,
+  resource: ResourceRef,
+  executor?: Pool | PoolClient,
+): Promise<{ decision: Decision; resolved: ResourceScope | null }> {
+  const principal = await loadPrincipalLite(principalId, executor);
+  if (!principal) return { decision: { allow: false, reason: 'NO_PRINCIPAL' }, resolved: null };
+  if (principal.is_root) return { decision: { allow: true, reason: 'ROOT' }, resolved: null };
+  if (principal.status !== 'active') return { decision: { allow: false, reason: 'PRINCIPAL_INACTIVE' }, resolved: null };
+
+  const r = await resolveResourceScope(resource, executor);
+  if ('unresolvable' in r) return { decision: { allow: false, reason: 'OUT_OF_SCOPE' }, resolved: null };
+
+  const grants = await loadActiveGrants(principalId as string, executor);
+  return { decision: decide(principal, action, r.ok, grants), resolved: r.ok };
+}
+
+/**
+ * The single authorization chokepoint. Computes the decision, LOGS it, returns it. Total — never
+ * throws for an authz reason.
+ *
+ * AUTH-OFF fast path: when MCP_AUTH_ENABLED=false this returns ALLOW/AUTH_DISABLED immediately (no
+ * DB, no log) — the dev/root posture is unchanged and the whole F2 enforcement layer is inert until
+ * the posture flip (F2g, human-gated).
+ */
+export async function authorize(
+  principalId: string | null | undefined,
+  action: Action,
+  resource: ResourceRef,
+  executor?: Pool | PoolClient,
+  context: AuthzContext = 'access',
+): Promise<Decision> {
+  if (!getEnv().MCP_AUTH_ENABLED) return { allow: true, reason: 'AUTH_DISABLED' };
+  const { decision } = await evaluate(principalId, action, resource, executor);
+  await logDecision(principalId, action, resource, decision, context, executor);
+  return decision;
+}
+
+/**
+ * Actor Data Boundary F2f — the enforcement workhorse. Authorize, and THROW on deny with the no-leak
+ * mapping that replaces assertCallerScope at every call site:
+ *   - a `read` deny, or any unresolvable resource (OUT_OF_SCOPE) → NOT_FOUND (no existence oracle,
+ *     exactly the shape assertCallerScope produced for a cross-tenant resource).
+ *   - a write/admin/delegate deny on a resolvable resource → FORBIDDEN (403; existence isn't secret —
+ *     you reached a real resource you may not mutate).
+ * Returns void on ALLOW (incl. root short-circuit and the auth-off AUTH_DISABLED pass-through, so it
+ * is a no-op while enforcement is off — every migrated site stays dev-safe until the F2g flip).
+ */
+export async function assertAuthorized(
+  principalId: string | null | undefined,
+  action: Action,
+  resource: ResourceRef,
+  executor?: Pool | PoolClient,
+): Promise<void> {
+  const d = await authorize(principalId, action, resource, executor);
+  if (d.allow) return;
+  if (d.reason === 'OUT_OF_SCOPE' || action === 'read') {
+    throw new ContextHubError('NOT_FOUND', 'not found');
+  }
+  throw new ContextHubError('FORBIDDEN', `not authorized to ${action} this resource`);
+}
+
+/**
+ * Is this principal GLOBALLY privileged for `action` — i.e. root, or holding an active global-scope
+ * grant whose capability covers the action? Used by surfaces where a global capability (not a single
+ * project grant) is the gate — e.g. jobQueue's `payload.root` (arbitrary filesystem access) and
+ * unscoped job enqueue/list. Honors the auth-off posture symmetrically: when MCP_AUTH_ENABLED=false
+ * this returns true (the dev/admin posture is fully privileged), so the gated capability stays usable
+ * in dev exactly as the legacy `callerScope=null/undefined` admin path did. [DEFERRED-045]
+ */
+export async function hasGlobalGrant(
+  principalId: string | null | undefined,
+  action: Action = 'write',
+  executor?: Pool | PoolClient,
+): Promise<boolean> {
+  if (!getEnv().MCP_AUTH_ENABLED) return true;
+  const principal = await loadPrincipalLite(principalId, executor);
+  if (!principal) return false;
+  if (principal.is_root) return true;
+  if (principal.status !== 'active') return false;
+  const grants = await loadActiveGrants(principalId as string, executor);
+  return grants.some((g) => g.scope_type === 'global' && capabilityCovers(g.capability, action));
+}
+
+export interface ExplainResult {
+  decision: Decision;
+  /** the resolved resource scope chain, or null when the principal failed before resolution or the
+   *  resource was unresolvable. */
+  scope_chain: ResourceScope | null;
+}
+
+/**
+ * Read-only "why": the same decision as authorize(), but NEVER logs and NEVER mutates — for the
+ * explain_authorization tool + the FE "why" inspector. Honors the auth-off posture symmetrically.
+ */
+export async function explainAuthorization(
+  principalId: string | null | undefined,
+  action: Action,
+  resource: ResourceRef,
+  executor?: Pool | PoolClient,
+): Promise<ExplainResult> {
+  if (!getEnv().MCP_AUTH_ENABLED) return { decision: { allow: true, reason: 'AUTH_DISABLED' }, scope_chain: null };
+  const { decision, resolved } = await evaluate(principalId, action, resource, executor);
+  // [F2-adv #3] Only reveal the resolved scope chain (project→topic→task ancestry) on an ALLOW. On a
+  // deny, null it — otherwise explain becomes an existence/ancestry oracle for resources the caller
+  // cannot access (the resolver walks the resource regardless of the caller's grants).
+  return { decision, scope_chain: decision.allow ? resolved : null };
+}

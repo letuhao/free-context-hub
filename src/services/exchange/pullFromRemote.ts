@@ -65,8 +65,7 @@ import {
   type ImportResult,
   type ConflictPolicy,
 } from './importProject.js';
-import { assertCallerScope } from '../../core/security/callerScope.js';
-import type { CallerScope } from '../../core/security/callerScope.js';
+import { assertAuthorized } from '../authorize.js';
 import { createModuleLogger } from '../../utils/logger.js';
 
 const logger = createModuleLogger('pull-from-remote');
@@ -128,8 +127,8 @@ export class PullError extends Error {
 export interface PullFromRemoteOptions {
   /** Target project on THIS instance (from the URL param). */
   targetProjectId: string;
-  /** DEFERRED-029: caller's scope; enforced against targetProjectId. */
-  callerScope?: CallerScope;
+  /** F2f: acting principal; authorize() enforces write on the local target project. */
+  actingPrincipalId?: string | null;
   /** Base URL of the remote ContextHub, e.g. `https://peer.example.com`. */
   remoteUrl: string;
   /** Project id on the remote instance. */
@@ -221,9 +220,9 @@ export class StallTransform extends Transform {
 export async function pullFromRemote(
   opts: PullFromRemoteOptions,
 ): Promise<PullFromRemoteResult> {
-  // DEFERRED-029: enforce scope on the LOCAL target before issuing any remote call.
+  // F2f: enforce write on the LOCAL target before issuing any remote call.
   // The remote scope (apiKey there) is independent — that's the remote instance's auth.
-  assertCallerScope(opts.callerScope, opts.targetProjectId);
+  await assertAuthorized(opts.actingPrincipalId, 'write', { kind: 'project', id: opts.targetProjectId });
   // Validate remote_url
   let parsed: URL;
   try {
@@ -415,7 +414,7 @@ export async function pullFromRemote(
     // guard) live in that service.
     const result = await importProject({
       targetProjectId: opts.targetProjectId,
-      callerScope: opts.callerScope,
+      actingPrincipalId: opts.actingPrincipalId,
       bundlePath: tmpPath,
       policy: opts.policy,
       dryRun: opts.dryRun,

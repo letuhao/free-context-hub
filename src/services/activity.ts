@@ -1,4 +1,17 @@
 import { getDbPool } from '../db/client.js';
+import { assertAuthorized, authorize } from './authorize.js';
+
+/** F2f: authorize `read` on every project in the (single-or-multi) filter, strict-reject. */
+async function assertReadAll(
+  actingPrincipalId: string | null | undefined,
+  projectIdOrIds: string | string[] | undefined,
+): Promise<void> {
+  const ids = Array.isArray(projectIdOrIds) ? projectIdOrIds : projectIdOrIds ? [projectIdOrIds] : [];
+  // Empty filter → fail closed (authorize a null project → NOT_FOUND under auth-ON).
+  for (const pid of (ids.length ? ids : [null])) {
+    await assertAuthorized(actingPrincipalId, 'read', { kind: 'project', id: pid });
+  }
+}
 
 function safeStringify(obj: unknown): string | null {
   try { return JSON.stringify(obj); } catch { return null; }
@@ -49,11 +62,14 @@ export async function logActivity(params: {
 export async function listActivity(params: {
   projectId?: string;
   projectIds?: string[];
+  /** F2f: acting principal; authorize() enforces read on each project. */
+  actingPrincipalId?: string | null;
   eventType?: string;
   since?: string;
   limit?: number;
   offset?: number;
 }): Promise<{ items: ActivityEntry[]; total_count: number }> {
+  await assertReadAll(params.actingPrincipalId, params.projectIds ?? params.projectId);
   const pool = getDbPool();
   const limit = Math.min(params.limit ?? 50, 200);
   const offset = Math.max(params.offset ?? 0, 0);
@@ -107,7 +123,12 @@ export interface Notification {
   project_id?: string;
 }
 
-/** Create notifications for a user from an activity event. */
+/** Create notifications for a user from an activity event.
+ *  [DEFERRED-050 / review-impl #3] `userId` MUST be a principal id (the notification-isolation key the
+ *  routes derive from `callerPrincipalOf`). Passing a free-text string here would break per-principal
+ *  isolation. This is dormant today (no callers); whoever wires it must pass a principal id, and should
+ *  only notify a principal about events it is entitled to (the listNotifications JOIN filter is the
+ *  defense-in-depth backstop, not a license to over-notify). */
 export async function createNotification(params: {
   userId: string;
   activityId: string;
@@ -119,35 +140,49 @@ export async function createNotification(params: {
   );
 }
 
-/** List notifications for a user (joined with activity_log). */
+/** Upper bound on rows scanned before the per-row authz filter. A per-user notification feed never
+ *  approaches this; it bounds the JS-side filter for the (dormant) feature. [DEFERRED-050] */
+const NOTIFICATION_MAX_SCAN = 500;
+
+/**
+ * List notifications for a user (joined with activity_log).
+ *
+ * [DEFERRED-050 D2] The caller is identified by `userId` (= the authenticated principal, set by the route),
+ * and — defense-in-depth — a notification carrying a `project_id` the principal cannot `read` is dropped, so
+ * even a mis-created notification can't leak project metadata via the JOIN. `unreadOnly`/`limit` are applied
+ * AFTER the authz filter (in JS) so the filter runs first and `unread_count` reflects the visible set.
+ * auth-OFF → authorize short-circuits ALLOW → every row kept (unchanged behavior).
+ */
 export async function listNotifications(params: {
   userId: string;
+  actingPrincipalId?: string | null;
   unreadOnly?: boolean;
   limit?: number;
 }): Promise<{ items: Notification[]; unread_count: number }> {
   const pool = getDbPool();
   const limit = Math.min(params.limit ?? 50, 100);
 
-  let where = 'WHERE n.user_id = $1';
-  if (params.unreadOnly) where += ' AND n.read = false';
-
-  const result = await pool.query(
+  const result = await pool.query<Notification>(
     `SELECT n.*, a.event_type, a.title, a.detail, a.actor, a.project_id
      FROM notifications n
      JOIN activity_log a ON a.activity_id = n.activity_id
-     ${where}
+     WHERE n.user_id = $1
      ORDER BY n.created_at DESC LIMIT $2`,
-    [params.userId, limit],
+    [params.userId, NOTIFICATION_MAX_SCAN],
   );
 
-  const unreadRes = await pool.query(
-    `SELECT COUNT(*) AS cnt FROM notifications WHERE user_id = $1 AND read = false`,
-    [params.userId],
-  );
+  const visible: Notification[] = [];
+  for (const r of result.rows) {
+    // Keep a non-project-scoped personal notification; otherwise require read on its project.
+    if (!r.project_id || (await authorize(params.actingPrincipalId, 'read', { kind: 'project', id: r.project_id })).allow) {
+      visible.push(r);
+    }
+  }
 
+  const unread = visible.filter((r) => !r.read);
   return {
-    items: result.rows,
-    unread_count: parseInt(unreadRes.rows[0]?.cnt ?? '0', 10),
+    items: (params.unreadOnly ? unread : visible).slice(0, limit),
+    unread_count: unread.length,
   };
 }
 

@@ -53,16 +53,15 @@ import {
   type BundleDocumentRead,
 } from './bundleFormat.js';
 import { encodeStreamToBase64 } from './base64Stream.js';
-import { assertCallerScope } from '../../core/security/callerScope.js';
-import type { CallerScope } from '../../core/security/callerScope.js';
+import { assertAuthorized } from '../authorize.js';
 
 export type ConflictPolicy = 'skip' | 'overwrite' | 'fail';
 
 export interface ImportProjectOptions {
   /** Target project (from the URL). Auto-created if missing. */
   targetProjectId: string;
-  /** DEFERRED-029: caller's scope; enforced against targetProjectId. */
-  callerScope?: CallerScope;
+  /** F2f: acting principal; authorize() enforces write on the target project. */
+  actingPrincipalId?: string | null;
   /** Path to the uploaded bundle zip on disk. */
   bundlePath: string;
   /** What to do when a row's primary key already exists. Default 'skip'. */
@@ -188,7 +187,7 @@ export async function importProject(opts: ImportProjectOptions): Promise<ImportR
   const dryRun = opts.dryRun ?? false;
   const cap = Math.min(Math.max(1, opts.conflictsCap ?? DEFAULT_CONFLICTS_CAP), MAX_CONFLICTS_CAP);
   const targetProjectId = opts.targetProjectId;
-  assertCallerScope(opts.callerScope, targetProjectId);
+  await assertAuthorized(opts.actingPrincipalId, 'write', { kind: 'project', id: targetProjectId });
 
   // ---- decode bundle ----
   let reader: BundleReader;

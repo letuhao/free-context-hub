@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: Delegation (Grants)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen font-sans">
+  <div class="p-6">
+    <p class="text-xs text-zinc-600 mb-4">Draft: pages/delegation | Source: gui/src/app/delegation/page.tsx | Spec: docs/specs/2026-06-19-actor-data-boundary-mcp-fe-design.md</p>
+
+    <!-- Breadcrumb -->
+    <div class="flex items-center gap-1.5 text-xs text-zinc-500 mb-4">
+      <span>Governance</span>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      <span class="text-zinc-400">Delegation</span>
+    </div>
+
+    <!-- Page Header -->
+    <div class="flex items-center justify-between mb-5">
+      <div>
+        <h1 class="text-lg font-semibold text-zinc-100">Delegation</h1>
+        <p class="text-xs text-zinc-500 mt-0.5">The data boundary, made of rows. Every authority flows down from root as a scoped grant. Nothing grants upward or sideways.</p>
+      </div>
+      <button class="px-4 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white font-medium transition-colors flex items-center gap-1.5">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Grant Capability
+      </button>
+    </div>
+
+    <!-- Scope coverage explainer -->
+    <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4 mb-6">
+      <p class="text-[10px] uppercase tracking-wide text-zinc-600 mb-2">Scope coverage &mdash; a grant covers a resource at-or-below its scope</p>
+      <div class="flex items-center gap-2 text-xs flex-wrap">
+        <span class="px-2 py-1 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">global</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-zinc-600"><polyline points="9 18 15 12 9 6"/></svg>
+        <span class="px-2 py-1 rounded bg-blue-500/10 text-blue-300">project:&lt;id&gt;</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-zinc-600"><polyline points="9 18 15 12 9 6"/></svg>
+        <span class="px-2 py-1 rounded bg-sky-500/10 text-sky-300">topic:&lt;id&gt;</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-zinc-600"><polyline points="9 18 15 12 9 6"/></svg>
+        <span class="px-2 py-1 rounded bg-teal-500/10 text-teal-300">task:&lt;id&gt;</span>
+        <span class="text-[11px] text-zinc-600 ml-3">project reuses <code class="text-zinc-500">callerScope / assertProjectScope</code> &mdash; cross-scope reads return <code class="text-zinc-500">NOT_FOUND</code>, never a leak.</span>
+      </div>
+    </div>
+
+    <!-- Toggle: tree / flat -->
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex gap-1 border border-zinc-800 rounded-md p-0.5">
+        <button class="px-3 py-1 text-xs font-medium bg-zinc-800 text-zinc-200 rounded">Tree</button>
+        <button class="px-3 py-1 text-xs text-zinc-500 hover:text-zinc-300 rounded">Flat table</button>
+      </div>
+      <div class="flex gap-2">
+        <select class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-md text-xs text-zinc-300 outline-none appearance-none cursor-pointer">
+          <option>All scopes</option>
+          <option>project:free-context-hub</option>
+          <option>Global only</option>
+        </select>
+        <select class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-md text-xs text-zinc-300 outline-none appearance-none cursor-pointer">
+          <option>Active grants</option>
+          <option>Include revoked</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- ── DELEGATION TREE ── -->
+    <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-5">
+
+      <!-- root -->
+      <div class="flex items-center gap-2 mb-1">
+        <div class="w-6 h-6 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-amber-400"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+        </div>
+        <span class="text-sm font-semibold text-amber-100">root</span>
+        <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/20">axiomatic &middot; origin of the tree</span>
+        <span class="text-[10px] text-zinc-600">out-of-band &middot; not grantable</span>
+      </div>
+
+      <!-- level 1 -->
+      <div class="ml-3 border-l border-zinc-800 pl-5 pt-2 space-y-3">
+
+        <!-- human -->
+        <div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-[10px] text-zinc-600">└─ grants</span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">delegate</span>
+            <span class="text-xs text-zinc-500">@</span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">global</span>
+            <span class="text-xs text-zinc-500">to</span>
+            <span class="text-sm font-medium text-zinc-200">Le Tu Hao</span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400">human</span>
+          </div>
+
+          <!-- level 2 under human -->
+          <div class="ml-3 border-l border-zinc-800 pl-5 pt-2 space-y-2">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-[10px] text-zinc-600">└─ grants</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">write</span>
+              <span class="text-xs text-zinc-500">@</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300">project:free-context-hub</span>
+              <span class="text-xs text-zinc-500">to</span>
+              <span class="text-sm font-medium text-zinc-200">claude-code</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400">agent</span>
+              <button class="text-[10px] text-zinc-600 hover:text-red-400 ml-1">revoke</button>
+            </div>
+            <div class="ml-3 border-l border-zinc-800 pl-5 pt-1 space-y-2">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-[10px] text-zinc-600">└─ grants</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-zinc-700 text-zinc-300">read</span>
+                <span class="text-xs text-zinc-500">@</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-300">topic:phase-17-eval</span>
+                <span class="text-xs text-zinc-500">to</span>
+                <span class="text-sm font-medium text-zinc-200">ci-indexer</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400">agent</span>
+                <button class="text-[10px] text-zinc-600 hover:text-red-400 ml-1">revoke</button>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-[10px] text-zinc-600">└─ grants</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">write</span>
+              <span class="text-xs text-zinc-500">@</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-teal-500/10 text-teal-300">task:T-4821</span>
+              <span class="text-xs text-zinc-500">to</span>
+              <span class="text-sm font-medium text-zinc-200">claude-code</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400">agent</span>
+              <button class="text-[10px] text-zinc-600 hover:text-red-400 ml-1">revoke</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- another human, admin on one project -->
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-[10px] text-zinc-600">└─ grants</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-300">admin</span>
+          <span class="text-xs text-zinc-500">@</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300">project:api-gateway</span>
+          <span class="text-xs text-zinc-500">to</span>
+          <span class="text-sm font-medium text-zinc-200">Mai Anh</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400">human</span>
+          <button class="text-[10px] text-zinc-600 hover:text-red-400 ml-1">revoke</button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <h2 class="text-sm font-medium text-zinc-400 mt-12 mb-3">Flat table view</h2>
+
+    <div class="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+      <table class="w-full text-xs">
+        <thead>
+          <tr class="border-b border-zinc-800">
+            <th class="text-left px-4 py-3 text-zinc-500 font-medium">Grantee</th>
+            <th class="text-left px-4 py-3 text-zinc-500 font-medium">Capability</th>
+            <th class="text-left px-4 py-3 text-zinc-500 font-medium">Scope</th>
+            <th class="text-left px-4 py-3 text-zinc-500 font-medium">Granted by</th>
+            <th class="text-left px-4 py-3 text-zinc-500 font-medium">When</th>
+            <th class="text-left px-4 py-3 text-zinc-500 font-medium">Status</th>
+            <th class="px-4 py-3"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="border-b border-zinc-800/50">
+            <td class="px-4 py-2.5 text-zinc-300">claude-code <span class="text-[10px] text-violet-400">agent</span></td>
+            <td class="px-4 py-2.5"><span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">write</span></td>
+            <td class="px-4 py-2.5"><span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300">project:free-context-hub</span></td>
+            <td class="px-4 py-2.5 text-zinc-400">Le Tu Hao</td>
+            <td class="px-4 py-2.5 text-zinc-500">5 days ago</td>
+            <td class="px-4 py-2.5"><span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">active</span></td>
+            <td class="px-4 py-2.5 text-right"><button class="text-[11px] text-zinc-500 hover:text-red-400">Revoke</button></td>
+          </tr>
+          <tr class="border-b border-zinc-800/50">
+            <td class="px-4 py-2.5 text-zinc-300">ci-indexer <span class="text-[10px] text-violet-400">agent</span></td>
+            <td class="px-4 py-2.5"><span class="text-[10px] px-1.5 py-0.5 rounded bg-zinc-700 text-zinc-300">read</span></td>
+            <td class="px-4 py-2.5"><span class="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-300">topic:phase-17-eval</span></td>
+            <td class="px-4 py-2.5 text-zinc-400">Le Tu Hao</td>
+            <td class="px-4 py-2.5 text-zinc-500">2 days ago</td>
+            <td class="px-4 py-2.5"><span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">active</span></td>
+            <td class="px-4 py-2.5 text-right"><button class="text-[11px] text-zinc-500 hover:text-red-400">Revoke</button></td>
+          </tr>
+          <tr class="border-b border-zinc-800/50">
+            <td class="px-4 py-2.5 text-zinc-300">Mai Anh <span class="text-[10px] text-sky-400">human</span></td>
+            <td class="px-4 py-2.5"><span class="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-300">admin</span></td>
+            <td class="px-4 py-2.5"><span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300">project:api-gateway</span></td>
+            <td class="px-4 py-2.5 text-zinc-400">root</td>
+            <td class="px-4 py-2.5 text-zinc-500">8 days ago</td>
+            <td class="px-4 py-2.5"><span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">active</span></td>
+            <td class="px-4 py-2.5 text-right"><button class="text-[11px] text-zinc-500 hover:text-red-400">Revoke</button></td>
+          </tr>
+          <tr class="opacity-50">
+            <td class="px-4 py-2.5 text-zinc-400 line-through">cursor-agent <span class="text-[10px] text-violet-400">agent</span></td>
+            <td class="px-4 py-2.5"><span class="text-[10px] px-1.5 py-0.5 rounded bg-zinc-700 text-zinc-400">write</span></td>
+            <td class="px-4 py-2.5 text-zinc-500">project:free-context-hub</td>
+            <td class="px-4 py-2.5 text-zinc-500">Le Tu Hao</td>
+            <td class="px-4 py-2.5 text-zinc-600">revoked 3h ago</td>
+            <td class="px-4 py-2.5"><span class="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400">revoked</span></td>
+            <td class="px-4 py-2.5"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <h2 class="text-sm font-medium text-zinc-400 mt-12 mb-3">Grant Capability Modal</h2>
+
+    <div class="w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl">
+      <div class="px-6 pt-5 pb-4 border-b border-zinc-800">
+        <h2 class="text-base font-semibold text-zinc-100">Grant Capability</h2>
+        <p class="text-xs text-zinc-500 mt-0.5">You can only grant within your own subtree &mdash; a capability you hold, at a scope you cover.</p>
+      </div>
+      <div class="px-6 py-5 space-y-4">
+        <div>
+          <label class="block text-xs text-zinc-400 mb-1.5">Grantee <span class="text-red-400">*</span></label>
+          <select class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-300 outline-none appearance-none cursor-pointer focus:border-zinc-600">
+            <option>claude-code (agent)</option>
+            <option>ci-indexer (agent)</option>
+            <option>Mai Anh (human)</option>
+          </select>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-zinc-400 mb-1.5">Capability <span class="text-red-400">*</span></label>
+            <select class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-300 outline-none appearance-none cursor-pointer focus:border-zinc-600">
+              <option>read</option>
+              <option selected>write</option>
+              <option>admin</option>
+              <option>delegate</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-zinc-400 mb-1.5">Scope type <span class="text-red-400">*</span></label>
+            <select class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-300 outline-none appearance-none cursor-pointer focus:border-zinc-600">
+              <option>project</option>
+              <option>topic</option>
+              <option>task</option>
+              <option disabled>global (root only)</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs text-zinc-400 mb-1.5">Scope target <span class="text-red-400">*</span></label>
+          <select class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-300 outline-none appearance-none cursor-pointer focus:border-zinc-600">
+            <option>free-context-hub</option>
+            <option>api-gateway</option>
+          </select>
+        </div>
+        <!-- live bound check -->
+        <div class="bg-emerald-500/5 border border-emerald-500/20 rounded-md p-3 flex items-start gap-2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-emerald-400 shrink-0 mt-0.5"><polyline points="20 6 9 17 4 12"/></svg>
+          <p class="text-[11px] text-zinc-400">Within your subtree: you hold <span class="text-emerald-300">delegate @ global</span>, which covers <span class="text-emerald-300">write @ project:free-context-hub</span>. This grant is permitted.</p>
+        </div>
+      </div>
+      <div class="px-6 py-4 border-t border-zinc-800 flex justify-end gap-2">
+        <button class="px-3 py-1.5 text-xs border border-zinc-700 rounded-md text-zinc-400">Cancel</button>
+        <button class="px-4 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white font-medium">Grant</button>
+      </div>
+    </div>
+
+    <!-- rejected grant (out of subtree) -->
+    <div class="w-full max-w-lg mt-4 bg-red-500/5 border border-red-500/20 rounded-md p-3 flex items-start gap-2">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-red-400 shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+      <div>
+        <p class="text-[11px] text-red-300 font-medium">Rejected &mdash; outside your subtree.</p>
+        <p class="text-[11px] text-zinc-500 mt-0.5">You tried to grant <span class="text-zinc-300">admin @ project:api-gateway</span> but you hold no <code class="text-zinc-400">delegate</code>/<code class="text-zinc-400">admin</code> that covers <code class="text-zinc-400">api-gateway</code>. You cannot grant upward or sideways.</p>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

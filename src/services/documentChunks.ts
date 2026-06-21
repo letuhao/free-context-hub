@@ -16,8 +16,7 @@ import { embedTexts } from './embedder.js';
 import { buildFtsQuery } from '../utils/ftsTokenizer.js';
 import { createModuleLogger } from '../utils/logger.js';
 import { nearSemanticKey } from '../utils/nearSemanticKey.js';
-import { assertCallerScope, assertCallerScopeMulti } from '../core/security/callerScope.js';
-import type { CallerScope } from '../core/security/callerScope.js';
+import { assertAuthorized } from './authorize.js';
 // DEFERRED-034: reuse the shared (lesson-agnostic) rerank dispatcher so the
 // chunks surface reranks like lessons/code. No cycle — lessons does not import
 // this module.
@@ -187,8 +186,8 @@ export type ChunkTypeFilter = 'text' | 'table' | 'code' | 'diagram_description' 
 
 export interface SearchChunksParams {
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() gate (project scope). */
+  actingPrincipalId?: string | null;
   query: string;
   limit?: number;
   /** Restrict to specific chunk types (empty/undefined = all). */
@@ -316,7 +315,7 @@ function isChunksDedupDisabled(): boolean {
 }
 
 export async function searchChunks(params: SearchChunksParams): Promise<SearchChunksResult> {
-  assertCallerScope(params.callerScope, params.projectId);
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id: params.projectId });
   const pool = getDbPool();
   // Hard-cap at 100 — chunks are shorter than lessons so a wider pool is
   // fine, and the GUI's "Load more" button walks up to this ceiling.
@@ -514,8 +513,8 @@ export async function searchChunks(params: SearchChunksParams): Promise<SearchCh
 /** Multi-project variant (mirrors searchLessonsMulti). */
 export async function searchChunksMulti(params: {
   projectIds: string[];
-  /** DEFERRED-029: caller's scope; strict-reject if request reaches outside it. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() gate (per-project read). */
+  actingPrincipalId?: string | null;
   query: string;
   limit?: number;
   chunkTypes?: ChunkTypeFilter[];
@@ -525,11 +524,13 @@ export async function searchChunksMulti(params: {
 }): Promise<SearchChunksResult> {
   const projectIds = [...new Set(params.projectIds.filter(Boolean))];
   if (projectIds.length === 0) return { matches: [], explanations: ['no project_ids provided'] };
-  assertCallerScopeMulti(params.callerScope, projectIds);
+  for (const id of projectIds) {
+    await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id });
+  }
   if (projectIds.length === 1) {
     return searchChunks({
       projectId: projectIds[0],
-      callerScope: params.callerScope,
+      actingPrincipalId: params.actingPrincipalId,
       query: params.query,
       limit: params.limit,
       chunkTypes: params.chunkTypes,

@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft: Authorization (Decisions + Why)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen font-sans">
+  <div class="p-6">
+    <p class="text-xs text-zinc-600 mb-4">Draft: pages/authorization | Source: gui/src/app/authorization/page.tsx | Spec: docs/specs/2026-06-19-actor-data-boundary-mcp-fe-design.md</p>
+
+    <!-- Breadcrumb -->
+    <div class="flex items-center gap-1.5 text-xs text-zinc-500 mb-4">
+      <span>Governance</span>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      <span class="text-zinc-400">Authorization</span>
+    </div>
+
+    <!-- Page Header -->
+    <div class="flex items-center justify-between mb-5">
+      <div>
+        <h1 class="text-lg font-semibold text-zinc-100">Authorization</h1>
+        <p class="text-xs text-zinc-500 mt-0.5">Every allow and deny, with its reason. No bare verdicts &mdash; an allow shows its matched grant; a deny shows which condition failed.</p>
+      </div>
+      <div class="flex gap-2">
+        <select class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-md text-xs text-zinc-300 outline-none appearance-none cursor-pointer">
+          <option>All principals</option>
+          <option>claude-code</option>
+          <option>ci-indexer</option>
+        </select>
+        <select class="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-md text-xs text-zinc-300 outline-none appearance-none cursor-pointer">
+          <option>Last 24 hours</option>
+          <option>Last 7 days</option>
+          <option>All time</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
+        <p class="text-2xl font-semibold text-zinc-100">1,284</p>
+        <p class="text-xs text-zinc-500 mt-0.5">Decisions (24h)</p>
+      </div>
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
+        <p class="text-2xl font-semibold text-emerald-400">96.2%</p>
+        <p class="text-xs text-zinc-500 mt-0.5">Allowed</p>
+      </div>
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
+        <p class="text-2xl font-semibold text-red-400">48</p>
+        <p class="text-xs text-zinc-500 mt-0.5">Denied</p>
+      </div>
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
+        <p class="text-2xl font-semibold text-amber-400">11</p>
+        <p class="text-xs text-zinc-500 mt-0.5">Root short-circuits</p>
+      </div>
+    </div>
+
+    <!-- ── "WHY" INSPECTOR ── -->
+    <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5 mb-8">
+      <div class="flex items-center gap-2 mb-3">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-blue-400"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <h2 class="text-sm font-semibold text-zinc-200">Why inspector</h2>
+        <span class="text-[10px] text-zinc-600">simulate a decision &mdash; read-only, mutates nothing &middot; maps to MCP <code class="text-zinc-500">explain_authorization</code></span>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+        <div>
+          <label class="block text-[10px] uppercase tracking-wide text-zinc-600 mb-1">Principal</label>
+          <select class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-300 outline-none appearance-none cursor-pointer focus:border-zinc-600">
+            <option>claude-code (agent)</option>
+            <option>ci-indexer (agent)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[10px] uppercase tracking-wide text-zinc-600 mb-1">Action</label>
+          <select class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-300 outline-none appearance-none cursor-pointer focus:border-zinc-600">
+            <option>write</option>
+            <option>read</option>
+            <option>admin</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[10px] uppercase tracking-wide text-zinc-600 mb-1">Resource</label>
+          <input type="text" value="lesson @ project:free-context-hub" class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-300 outline-none focus:border-zinc-600" />
+        </div>
+      </div>
+
+      <!-- ALLOW result -->
+      <div class="bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-4">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-[11px] px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 font-semibold">ALLOW</span>
+          <span class="text-xs text-zinc-400">claude-code &middot; write &middot; lesson @ project:free-context-hub</span>
+        </div>
+        <p class="text-[10px] uppercase tracking-wide text-zinc-600 mb-2">Evaluation chain</p>
+        <div class="space-y-1.5 text-xs">
+          <div class="flex items-center gap-2"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-emerald-400 shrink-0"><polyline points="20 6 9 17 4 12"/></svg><span class="text-zinc-400">principal <span class="text-zinc-200">claude-code</span> is <span class="text-emerald-300">active</span></span></div>
+          <div class="flex items-center gap-2"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-emerald-400 shrink-0"><polyline points="20 6 9 17 4 12"/></svg><span class="text-zinc-400">covering grant found: <span class="text-blue-300">write</span> @ <span class="text-blue-300">project:free-context-hub</span> <code class="text-zinc-600">grn_01J0…9K2</code></span></div>
+          <div class="flex items-center gap-2"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-emerald-400 shrink-0"><polyline points="20 6 9 17 4 12"/></svg><span class="text-zinc-400">capability <span class="text-zinc-200">write</span> covers action <span class="text-zinc-200">write</span></span></div>
+          <div class="flex items-center gap-2"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-emerald-400 shrink-0"><polyline points="20 6 9 17 4 12"/></svg><span class="text-zinc-400">scope <span class="text-zinc-200">project:free-context-hub</span> covers resource</span></div>
+        </div>
+        <p class="text-[10px] text-zinc-600 mt-3">reason <code class="text-emerald-300">COVERING_GRANT</code> &middot; granted by Le Tu Hao 5 days ago</p>
+      </div>
+    </div>
+
+    <!-- ── DECISION LOG ── -->
+    <div class="flex gap-1 mb-4 border-b border-zinc-800 pb-px">
+      <button class="px-4 py-2 text-xs font-medium text-blue-400 border-b-2 border-blue-400">All decisions</button>
+      <button class="px-4 py-2 text-xs text-zinc-500 hover:text-zinc-300">Denied only</button>
+      <button class="px-4 py-2 text-xs text-zinc-500 hover:text-zinc-300">Root short-circuits</button>
+      <button class="px-4 py-2 text-xs text-zinc-500 hover:text-zinc-300">Asserted-identity rejects</button>
+    </div>
+
+    <div class="space-y-2.5">
+
+      <!-- ALLOW -->
+      <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-3.5">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 font-semibold">ALLOW</span>
+          <span class="text-xs font-medium text-zinc-200">claude-code</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">write</span>
+          <span class="text-xs text-zinc-500">lesson @ project:free-context-hub</span>
+          <span class="text-[10px] text-zinc-600 ml-auto">2 min ago</span>
+        </div>
+        <p class="text-[11px] text-zinc-500 mt-1.5">reason <code class="text-emerald-300">COVERING_GRANT</code> &middot; matched <code class="text-zinc-600">grn_01J0…9K2</code> (write @ project) &middot; via MCP <code class="text-zinc-500">add_lesson</code></p>
+      </div>
+
+      <!-- DENY: out of scope -->
+      <div class="bg-zinc-900 border border-red-500/20 rounded-lg p-3.5">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-300 font-semibold">DENY</span>
+          <span class="text-xs font-medium text-zinc-200">ci-indexer</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-zinc-700 text-zinc-300">read</span>
+          <span class="text-xs text-zinc-500">lesson @ project:api-gateway</span>
+          <span class="text-[10px] text-zinc-600 ml-auto">18 min ago</span>
+        </div>
+        <p class="text-[11px] text-zinc-500 mt-1.5">reason <code class="text-red-300">OUT_OF_SCOPE</code> &middot; ci-indexer holds read @ <span class="text-zinc-400">topic:phase-17-eval</span> only; <span class="text-zinc-400">api-gateway</span> is not at-or-below it. Returned <code class="text-zinc-500">NOT_FOUND</code> to caller (no existence leak).</p>
+      </div>
+
+      <!-- DENY: no covering grant -->
+      <div class="bg-zinc-900 border border-red-500/20 rounded-lg p-3.5">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-300 font-semibold">DENY</span>
+          <span class="text-xs font-medium text-zinc-200">ci-indexer</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">write</span>
+          <span class="text-xs text-zinc-500">lesson @ topic:phase-17-eval</span>
+          <span class="text-[10px] text-zinc-600 ml-auto">42 min ago</span>
+        </div>
+        <p class="text-[11px] text-zinc-500 mt-1.5">reason <code class="text-red-300">NO_COVERING_GRANT</code> &middot; ci-indexer has <span class="text-zinc-400">read</span> at that scope but no <span class="text-zinc-400">write</span>. read does not cover write.</p>
+      </div>
+
+      <!-- DENY: principal inactive -->
+      <div class="bg-zinc-900 border border-amber-500/20 rounded-lg p-3.5">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-300 font-semibold">DENY</span>
+          <span class="text-xs font-medium text-zinc-300">cursor-agent</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">write</span>
+          <span class="text-xs text-zinc-500">lesson @ project:free-context-hub</span>
+          <span class="text-[10px] text-zinc-600 ml-auto">3 h ago</span>
+        </div>
+        <p class="text-[11px] text-zinc-500 mt-1.5">reason <code class="text-amber-300">PRINCIPAL_INACTIVE</code> &middot; cursor-agent is <span class="text-amber-300">suspended</span>; checked before any grant lookup. Grants retained.</p>
+      </div>
+
+      <!-- ASSERTED IDENTITY REJECTED -->
+      <div class="bg-zinc-900 border border-red-500/20 rounded-lg p-3.5">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-300 font-semibold">REJECT</span>
+          <span class="text-xs font-medium text-zinc-200">claude-code</span>
+          <span class="text-xs text-zinc-500">add_lesson with <code class="text-zinc-400">actor_id="root"</code> in payload</span>
+          <span class="text-[10px] text-zinc-600 ml-auto">5 h ago</span>
+        </div>
+        <p class="text-[11px] text-zinc-500 mt-1.5">reason <code class="text-red-300">ASSERTED_IDENTITY_REJECTED</code> &middot; credential authenticates as <span class="text-zinc-400">claude-code</span> but payload asserted <span class="text-zinc-400">root</span>. With auth ON, asserted identity is never honored.</p>
+      </div>
+
+      <!-- ROOT short-circuit -->
+      <div class="bg-zinc-900 border border-amber-500/20 rounded-lg p-3.5">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 font-semibold">ALLOW</span>
+          <span class="text-xs font-medium text-amber-100">root</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/20">axiomatic</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-300">admin</span>
+          <span class="text-xs text-zinc-500">grant @ global</span>
+          <span class="text-[10px] text-zinc-600 ml-auto">6 h ago</span>
+        </div>
+        <p class="text-[11px] text-zinc-500 mt-1.5">reason <code class="text-amber-300">ROOT_SHORT_CIRCUIT</code> &middot; root bypasses grant evaluation by axiom &mdash; the bypass itself is logged here for audit.</p>
+      </div>
+
+    </div>
+
+    <!-- Pagination -->
+    <div class="flex items-center justify-between mt-6 pt-4 border-t border-zinc-800">
+      <p class="text-xs text-zinc-600">Showing 1-20 of 1,284 decisions</p>
+      <div class="flex gap-1">
+        <button class="px-3 py-1.5 text-xs border border-zinc-700 rounded-md text-zinc-500 cursor-not-allowed opacity-50">Previous</button>
+        <button class="px-3 py-1.5 text-xs bg-blue-600 rounded-md text-white">1</button>
+        <button class="px-3 py-1.5 text-xs border border-zinc-700 rounded-md text-zinc-400 hover:border-zinc-600">2</button>
+        <button class="px-3 py-1.5 text-xs border border-zinc-700 rounded-md text-zinc-400 hover:border-zinc-600">Next</button>
+      </div>
+    </div>
+
+    <p class="text-[11px] text-zinc-600 mt-6">Each row is one append-only <code class="text-zinc-500">coordination_events</code> entry tagged <code class="text-zinc-500">authz.decision</code> &mdash; the same log Phase-15 already writes. Nothing here is editable.</p>
+
+  </div>
+</body>
+</html>

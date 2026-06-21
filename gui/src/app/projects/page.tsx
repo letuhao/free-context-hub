@@ -269,7 +269,7 @@ export default function ProjectsPage() {
                 <div key={g.group_id} className="flex items-center justify-between px-3 py-2 bg-zinc-800/40 border border-zinc-800 rounded-lg">
                   <div>
                     <div className="text-xs text-zinc-300">{g.name}</div>
-                    {g.member_count !== undefined && (
+                    {g.member_count != null && (
                       <div className="text-[10px] text-zinc-600">{g.member_count} projects</div>
                     )}
                   </div>

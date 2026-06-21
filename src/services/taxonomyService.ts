@@ -16,8 +16,7 @@
 import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
 import { BUILTIN_LESSON_TYPES } from '../constants/lessonTypes.js';
-import { assertCallerScope } from '../core/security/callerScope.js';
-import type { CallerScope } from '../core/security/callerScope.js';
+import { assertAuthorized } from './authorize.js';
 
 export interface ProfileLessonType {
   type: string;
@@ -308,10 +307,10 @@ export async function upsertBuiltinProfile(params: {
  */
 export async function getActiveProfile(
   projectId: string,
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  opts?: { callerScope?: CallerScope },
+  /** F2f: acting principal; authorize() enforces read on the project. */
+  opts?: { actingPrincipalId?: string | null },
 ): Promise<TaxonomyProfile | null> {
-  assertCallerScope(opts?.callerScope, projectId);
+  await assertAuthorized(opts?.actingPrincipalId, 'read', { kind: 'project', id: projectId });
   const pool = getDbPool();
   const r = await pool.query<ProfileRow>(
     `SELECT tp.* FROM taxonomy_profiles tp
@@ -328,12 +327,12 @@ export async function getActiveProfile(
  */
 export async function activateProfile(params: {
   project_id: string;
-  /** DEFERRED-029: caller's scope; enforced against project_id. */
-  callerScope?: CallerScope;
+  /** F2f: acting principal; authorize() enforces write on the project. */
+  actingPrincipalId?: string | null;
   slug: string;
   activated_by?: string;
 }): Promise<{ status: 'activated'; profile: TaxonomyProfile } | { status: 'profile_not_found' }> {
-  assertCallerScope(params.callerScope, params.project_id);
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.project_id });
   const pool = getDbPool();
   // Look up profile: either built-in (NULL owner) or owned by this project.
   const pr = await pool.query<ProfileRow>(
@@ -363,10 +362,10 @@ export async function activateProfile(params: {
  */
 export async function deactivateProfile(
   projectId: string,
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  opts?: { callerScope?: CallerScope },
+  /** F2f: acting principal; authorize() enforces write on the project. */
+  opts?: { actingPrincipalId?: string | null },
 ): Promise<{ status: 'deactivated' | 'no_active_profile' }> {
-  assertCallerScope(opts?.callerScope, projectId);
+  await assertAuthorized(opts?.actingPrincipalId, 'write', { kind: 'project', id: projectId });
   const pool = getDbPool();
   const r = await pool.query(
     `DELETE FROM project_taxonomy_profiles WHERE project_id = $1`,

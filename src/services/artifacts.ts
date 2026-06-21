@@ -26,8 +26,7 @@ import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
 import { createModuleLogger } from '../utils/logger.js';
 import { appendEvent } from './coordinationEvents.js';
-import { assertArtifactScope } from '../core/security/scopeResolvers.js';
-import type { CallerScope } from '../core/security/callerScope.js';
+import { assertAuthorized } from './authorize.js';
 
 const logger = createModuleLogger('artifacts');
 
@@ -110,15 +109,15 @@ const BASELINE_WRITABLE_STATES = ['draft', 'working'] as const;
  */
 export async function writeArtifact(params: {
   artifact_id: string;
-  /** DEFERRED-029: caller's scope; enforced via the artifact's derived project_id. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() is the tenant/authz gate (artifact → task scope). */
+  actingPrincipalId?: string | null;
   claim_id: string;
   fencing_token: number;
   content_ref: string;
   actor_id: string;
 }): Promise<WriteResult> {
   const artifactId = (params.artifact_id ?? '').trim();
-  await assertArtifactScope(getDbPool(), params.callerScope, artifactId);
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'artifact', id: artifactId });
   const claimId = (params.claim_id ?? '').trim();
   const actorId = (params.actor_id ?? '').trim();
   const contentRef = params.content_ref;
@@ -234,14 +233,14 @@ export async function writeArtifact(params: {
  */
 export async function baselineArtifact(params: {
   artifact_id: string;
-  /** DEFERRED-029: caller's scope; enforced via the artifact's derived project_id. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() is the tenant/authz gate (artifact → task scope). */
+  actingPrincipalId?: string | null;
   claim_id: string;
   fencing_token: number;
   actor_id: string;
 }): Promise<BaselineResult> {
   const artifactId = (params.artifact_id ?? '').trim();
-  await assertArtifactScope(getDbPool(), params.callerScope, artifactId);
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'artifact', id: artifactId });
   const claimId = (params.claim_id ?? '').trim();
   const actorId = (params.actor_id ?? '').trim();
   const fencingToken = params.fencing_token;

@@ -22,8 +22,7 @@
 import type { PoolClient } from 'pg';
 import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
-import { assertTopicScope, assertDisputeScope } from '../core/security/scopeResolvers.js';
-import type { CallerScope } from '../core/security/callerScope.js';
+import { assertAuthorized } from './authorize.js';
 import { appendEvent } from './coordinationEvents.js';
 import { submitRequest } from './requests.js';
 import { createModuleLogger } from '../utils/logger.js';
@@ -64,8 +63,8 @@ export type DisputeDetail = Dispute & {
 
 export async function openDispute(params: {
   topic_id: string;
-  /** DEFERRED-029: caller's scope; enforced via the topic's derived project_id. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() gate (topic scope). */
+  actingPrincipalId?: string | null;
   subject_ref: string;
   parties: string[];
   procedure: 'unilateral' | 'collective';
@@ -98,8 +97,8 @@ export async function openDispute(params: {
 
   const pool = getDbPool();
 
-  // DEFERRED-029: enforce tenant scope via the topic's derived project_id before any reads.
-  await assertTopicScope(pool, params.callerScope, topicId);
+  // F2f: enforce tenant/authz via the topic before any reads (open a dispute = write).
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'topic', id: topicId });
 
   // Pre-check: topic exists and is active
   const topicRes = await pool.query<{ status: string }>(
@@ -125,11 +124,11 @@ export async function openDispute(params: {
   const disputeId = dispute.dispute_id;
 
   // Step 2: submit the resolution request (uses its own connection/transaction).
-  // callerScope is forwarded so submitRequest's own assertTopicScope is a no-op
-  // (we already enforced above) but the contract is preserved end-to-end.
+  // actingPrincipalId is forwarded so submitRequest's own authorize() check is consistent
+  // (we already enforced write@topic above); the contract is preserved end-to-end.
   const submitResult = await submitRequest({
     topic_id: topicId,
-    callerScope: params.callerScope,
+    actingPrincipalId: params.actingPrincipalId,
     subject_type: 'dispute',
     subject_id: disputeId,
     kind,
@@ -210,13 +209,13 @@ const TERMINAL_REQUEST_STATUSES = new Set(['approved', 'returned', 'rejected']);
 export async function resolveDispute(
   dispute_id: string,
   /** DEFERRED-029: caller's scope; enforced via the dispute's derived project_id. */
-  opts?: { callerScope?: CallerScope },
+  opts?: { actingPrincipalId?: string | null },
 ): Promise<Dispute> {
   const disputeId = (dispute_id ?? '').trim();
   if (!disputeId) throw new ContextHubError('BAD_REQUEST', 'dispute_id is required');
 
   const pool = getDbPool();
-  await assertDisputeScope(pool, opts?.callerScope, disputeId);
+  await assertAuthorized(opts?.actingPrincipalId, 'write', { kind: 'dispute', id: disputeId });
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -300,13 +299,13 @@ export async function resolveDispute(
 export async function getDispute(
   dispute_id: string,
   /** DEFERRED-029: caller's scope; enforced via the dispute's derived project_id. */
-  opts?: { callerScope?: CallerScope },
+  opts?: { actingPrincipalId?: string | null },
 ): Promise<DisputeDetail> {
   const disputeId = (dispute_id ?? '').trim();
   if (!disputeId) throw new ContextHubError('BAD_REQUEST', 'dispute_id is required');
 
   const pool = getDbPool();
-  await assertDisputeScope(pool, opts?.callerScope, disputeId);
+  await assertAuthorized(opts?.actingPrincipalId, 'read', { kind: 'dispute', id: disputeId });
   const disputeRes = await pool.query<Dispute>(
     `SELECT dispute_id, topic_id, subject_ref, parties, status, resolution_request_id,
             created_at::text AS created_at
@@ -351,15 +350,15 @@ export async function listDisputes(
     status?: string;
     limit?: number;
     offset?: number;
-    /** DEFERRED-029: caller's scope; enforced via the topic's derived project_id. */
-    callerScope?: CallerScope;
+    /** F2f — acting principal; authorize() gate (topic scope). */
+    actingPrincipalId?: string | null;
   },
 ): Promise<{ disputes: Dispute[]; total: number }> {
   const topicId = (topic_id ?? '').trim();
   if (!topicId) throw new ContextHubError('BAD_REQUEST', 'topic_id is required');
 
   const pool = getDbPool();
-  await assertTopicScope(pool, opts?.callerScope, topicId);
+  await assertAuthorized(opts?.actingPrincipalId, 'read', { kind: 'topic', id: topicId });
   const params: unknown[] = [topicId];
   const conditions: string[] = ['topic_id=$1'];
 

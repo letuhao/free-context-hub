@@ -3,9 +3,10 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 import { getDbPool } from '../db/client.js';
+import { getEnv } from '../env.js';
+import { ContextHubError } from '../core/errors.js';
 import { indexProject } from './indexer.js';
-import { assertCallerScope } from '../core/security/callerScope.js';
-import type { CallerScope } from '../core/security/callerScope.js';
+import { assertAuthorized, hasGlobalGrant } from './authorize.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -16,12 +17,22 @@ async function runGit(root: string, args: string[]): Promise<string> {
 
 export async function registerWorkspaceRoot(params: {
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() gate (project scope). */
+  actingPrincipalId?: string | null;
   rootPath: string;
   active?: boolean;
 }): Promise<{ status: 'ok'; workspace_id: string; project_id: string; root_path: string }> {
-  assertCallerScope(params.callerScope, params.projectId);
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.projectId });
+  // [DEFERRED-048 full closure] A workspace root_path is an ARBITRARY filesystem path the worker indexes —
+  // a cross-tenant, GLOBAL capability (there is no server-confined base for dev workspace paths). Under
+  // enforcement, require global write and STAMP the authorizer for resolveProjectRoot's re-verify.
+  if (getEnv().MCP_AUTH_ENABLED && !(await hasGlobalGrant(params.actingPrincipalId, 'write'))) {
+    throw new ContextHubError(
+      'FORBIDDEN',
+      'registering a workspace root_path is a global capability — not authorized for this principal',
+    );
+  }
+  const rootAuthBy = params.actingPrincipalId ?? null;
   const pool = getDbPool();
   const root = path.resolve(params.rootPath);
   await pool.query(
@@ -31,12 +42,12 @@ export async function registerWorkspaceRoot(params: {
     [params.projectId, params.projectId],
   );
   const q = await pool.query(
-    `INSERT INTO project_workspaces(project_id, root_path, is_active, updated_at)
-     VALUES ($1,$2,$3, now())
+    `INSERT INTO project_workspaces(project_id, root_path, root_path_authorized_by, is_active, updated_at)
+     VALUES ($1,$2,$3,$4, now())
      ON CONFLICT (project_id, root_path)
-     DO UPDATE SET is_active=EXCLUDED.is_active, updated_at=now()
+     DO UPDATE SET root_path_authorized_by=EXCLUDED.root_path_authorized_by, is_active=EXCLUDED.is_active, updated_at=now()
      RETURNING workspace_id, project_id, root_path`,
-    [params.projectId, root, params.active ?? true],
+    [params.projectId, root, rootAuthBy, params.active ?? true],
   );
   return {
     status: 'ok',
@@ -48,12 +59,12 @@ export async function registerWorkspaceRoot(params: {
 
 export async function listWorkspaceRoots(
   projectId: string,
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  opts?: { callerScope?: CallerScope },
+  /** F2f — acting principal; authorize() gate (project scope). */
+  opts?: { actingPrincipalId?: string | null },
 ): Promise<{
   items: Array<{ workspace_id: string; root_path: string; is_active: boolean; updated_at: any }>;
 }> {
-  assertCallerScope(opts?.callerScope, projectId);
+  await assertAuthorized(opts?.actingPrincipalId, 'read', { kind: 'project', id: projectId });
   const pool = getDbPool();
   const q = await pool.query(
     `SELECT workspace_id, root_path, is_active, updated_at
@@ -67,8 +78,8 @@ export async function listWorkspaceRoots(
 
 export async function scanWorkspaceChanges(params: {
   projectId: string;
-  /** DEFERRED-029: caller's scope; enforced against projectId. */
-  callerScope?: CallerScope;
+  /** F2f — acting principal; authorize() gate (project scope). */
+  actingPrincipalId?: string | null;
   rootPath: string;
   runDeltaIndex?: boolean;
 }): Promise<{
@@ -81,7 +92,7 @@ export async function scanWorkspaceChanges(params: {
   index_result?: { status: 'ok' | 'error'; files_indexed: number; duration_ms: number; errors: Array<{ path: string; message: string }> };
   error?: string;
 }> {
-  assertCallerScope(params.callerScope, params.projectId);
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.projectId });
   const pool = getDbPool();
   const root = path.resolve(params.rootPath);
   try {
@@ -101,7 +112,7 @@ export async function scanWorkspaceChanges(params: {
       if (x === '?' && y === '?') untracked.add(file);
     }
 
-    const reg = await registerWorkspaceRoot({ projectId: params.projectId, callerScope: params.callerScope, rootPath: root, active: true });
+    const reg = await registerWorkspaceRoot({ projectId: params.projectId, actingPrincipalId: params.actingPrincipalId, rootPath: root, active: true });
     const ins = await pool.query(
       `INSERT INTO workspace_deltas(project_id, workspace_id, root_path, modified_files, untracked_files, staged_files, scanned_at)
        VALUES ($1,$2,$3,$4::text[],$5::text[],$6::text[], now())
@@ -113,7 +124,7 @@ export async function scanWorkspaceChanges(params: {
       | { status: 'ok' | 'error'; files_indexed: number; duration_ms: number; errors: Array<{ path: string; message: string }> }
       | undefined;
     if (params.runDeltaIndex) {
-      indexResult = await indexProject({ projectId: params.projectId, root });
+      indexResult = await indexProject({ projectId: params.projectId, actingPrincipalId: params.actingPrincipalId, root });
     }
 
     return {

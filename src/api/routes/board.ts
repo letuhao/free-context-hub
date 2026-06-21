@@ -29,14 +29,7 @@ import {
   baselineArtifact,
   ContextHubError,
 } from '../../core/index.js';
-import type { CallerScope } from '../../core/index.js';
-import { requireRole } from '../middleware/requireRole.js';
-import { requireResourceScope, requireBodyProjectScope } from '../middleware/requireResourceScope.js';
-
-/** DEFERRED-029: read the caller's project scope attached by bearerAuth. */
-function callerScopeOf(req: Request): CallerScope {
-  return (req as { apiKeyScope?: CallerScope }).apiKeyScope;
-}
+import { callerPrincipalOf } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -88,12 +81,12 @@ function asRaci(v: unknown): Record<string, unknown> | undefined {
 }
 
 // POST /api/topics/:id/tasks — post a task onto a topic's board
-router.post('/topics/:id/tasks', requireRole('writer'), requireResourceScope('topic'), async (req, res, next) => {
+router.post('/topics/:id/tasks', async (req, res, next) => {
   try {
     const body = req.body ?? {};
     const result = await postTask({
       topic_id: String(req.params.id),
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       title: asString(body.title),
       topology: asString(body.topology),
       depends_on: Array.isArray(body.depends_on) ? body.depends_on : undefined,
@@ -107,22 +100,22 @@ router.post('/topics/:id/tasks', requireRole('writer'), requireResourceScope('to
 });
 
 // GET /api/topics/:id/board — list a topic's board
-router.get('/topics/:id/board', requireResourceScope('topic'), async (req, res, next) => {
+router.get('/topics/:id/board', async (req, res, next) => {
   try {
     const statusQ = req.query.status;
     const status = typeof statusQ === 'string' && statusQ ? statusQ : undefined;
-    const result = await listBoard({ topic_id: String(req.params.id), callerScope: callerScopeOf(req), status });
+    const result = await listBoard({ topic_id: String(req.params.id), actingPrincipalId: callerPrincipalOf(req), status });
     res.json({ status: 'ok', data: result });
   } catch (e) { next(e); }
 });
 
 // POST /api/tasks/:id/claim — claim a task
-router.post('/tasks/:id/claim', requireRole('writer'), requireResourceScope('task'), async (req, res, next) => {
+router.post('/tasks/:id/claim', async (req, res, next) => {
   try {
     const body = req.body ?? {};
     const result = await claimTask({
       task_id: String(req.params.id),
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       actor_id: asString(body.actor_id),
       ttl_minutes: typeof body.ttl_minutes === 'number' ? body.ttl_minutes : undefined,
     });
@@ -131,12 +124,12 @@ router.post('/tasks/:id/claim', requireRole('writer'), requireResourceScope('tas
 });
 
 // POST /api/tasks/:id/release — voluntarily release a live claim
-router.post('/tasks/:id/release', requireRole('writer'), requireResourceScope('task'), async (req, res, next) => {
+router.post('/tasks/:id/release', async (req, res, next) => {
   try {
     const body = req.body ?? {};
     const result = await releaseTask({
       task_id: String(req.params.id),
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       actor_id: asString(body.actor_id),
     });
     res.status(statusToHttp(result.status)).json({ status: 'ok', data: result });
@@ -144,12 +137,12 @@ router.post('/tasks/:id/release', requireRole('writer'), requireResourceScope('t
 });
 
 // POST /api/tasks/:id/complete — complete a task
-router.post('/tasks/:id/complete', requireRole('writer'), requireResourceScope('task'), async (req, res, next) => {
+router.post('/tasks/:id/complete', async (req, res, next) => {
   try {
     const body = req.body ?? {};
     const result = await completeTask({
       task_id: String(req.params.id),
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       actor_id: asString(body.actor_id),
     });
     res.status(statusToHttp(result.status)).json({ status: 'ok', data: result });
@@ -157,12 +150,12 @@ router.post('/tasks/:id/complete', requireRole('writer'), requireResourceScope('
 });
 
 // PUT /api/artifacts/:id — write a new artifact version
-router.put('/artifacts/:id', requireRole('writer'), async (req, res, next) => {
+router.put('/artifacts/:id', async (req, res, next) => {
   try {
     const body = req.body ?? {};
     const result = await writeArtifact({
       artifact_id: String(req.params.id),
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       claim_id: asString(body.claim_id),
       fencing_token: typeof body.fencing_token === 'number' ? body.fencing_token : NaN,
       content_ref: asString(body.content_ref),
@@ -173,12 +166,12 @@ router.put('/artifacts/:id', requireRole('writer'), async (req, res, next) => {
 });
 
 // POST /api/artifacts/:id/baseline — mark an artifact checkpoint
-router.post('/artifacts/:id/baseline', requireRole('writer'), requireResourceScope('artifact'), async (req, res, next) => {
+router.post('/artifacts/:id/baseline', async (req, res, next) => {
   try {
     const body = req.body ?? {};
     const result = await baselineArtifact({
       artifact_id: String(req.params.id),
-      callerScope: callerScopeOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       claim_id: asString(body.claim_id),
       fencing_token: typeof body.fencing_token === 'number' ? body.fencing_token : NaN,
       actor_id: asString(body.actor_id),

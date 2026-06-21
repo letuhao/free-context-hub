@@ -1,4 +1,14 @@
 import { getDbPool } from '../db/client.js';
+import { assertAuthorized } from './authorize.js';
+
+/** F2f (DEFERRED-047/adv): resolve a learning_paths row to its project so a path-keyed op can gate on it. */
+async function pathProjectId(pathId: string): Promise<string | null> {
+  const r = await getDbPool().query<{ project_id: string }>(
+    `SELECT project_id FROM learning_paths WHERE path_id = $1`,
+    [pathId],
+  );
+  return r.rows[0]?.project_id ?? null;
+}
 
 export interface LearningPathItem {
   path_id: string;
@@ -13,10 +23,12 @@ export interface LearningPathItem {
 /** Add a lesson to the learning path. */
 export async function addToLearningPath(params: {
   projectId: string;
+  actingPrincipalId?: string | null;
   section: string;
   lessonId: string;
   sortOrder?: number;
 }): Promise<LearningPathItem> {
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.projectId });
   const pool = getDbPool();
   const result = await pool.query(
     `INSERT INTO learning_paths (project_id, section, lesson_id, sort_order)
@@ -31,7 +43,9 @@ export async function addToLearningPath(params: {
 /** Remove a lesson from the learning path. */
 export async function removeFromLearningPath(params: {
   pathId: string;
+  actingPrincipalId?: string | null;
 }): Promise<boolean> {
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: await pathProjectId(params.pathId) });
   const pool = getDbPool();
   const result = await pool.query(`DELETE FROM learning_paths WHERE path_id = $1`, [params.pathId]);
   return (result.rowCount ?? 0) > 0;
@@ -40,12 +54,14 @@ export async function removeFromLearningPath(params: {
 /** Get full learning path with progress for a user. */
 export async function getLearningPath(params: {
   projectId: string;
+  actingPrincipalId?: string | null;
   userId: string;
 }): Promise<{
   sections: { name: string; items: LearningPathItem[] }[];
   total: number;
   completed: number;
 }> {
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id: params.projectId });
   const pool = getDbPool();
   const result = await pool.query(
     `SELECT lp.path_id, lp.section, lp.lesson_id, lp.sort_order,
@@ -86,7 +102,9 @@ export async function getLearningPath(params: {
 export async function markCompleted(params: {
   userId: string;
   pathId: string;
+  actingPrincipalId?: string | null;
 }): Promise<{ status: 'ok' }> {
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: await pathProjectId(params.pathId) });
   const pool = getDbPool();
   await pool.query(
     `INSERT INTO learning_progress (user_id, path_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
@@ -99,7 +117,9 @@ export async function markCompleted(params: {
 export async function unmarkCompleted(params: {
   userId: string;
   pathId: string;
+  actingPrincipalId?: string | null;
 }): Promise<boolean> {
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: await pathProjectId(params.pathId) });
   const pool = getDbPool();
   const result = await pool.query(
     `DELETE FROM learning_progress WHERE user_id = $1 AND path_id = $2`,

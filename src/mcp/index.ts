@@ -127,14 +127,25 @@ import { isFeatureEnabled } from '../services/featureToggles.js';
 import { searchChunks } from '../services/documentChunks.js';
 import { logLessonAccess, isSalienceDisabled, type AccessLogEntry } from '../services/salience.js';
 import { getDbPool } from '../db/client.js';
-import { resolveMcpCallerScope } from './auth.js';
+import { resolveMcpCallerScope, resolveMcpCaller, resolveActingActor, resolveTargetActor, resolveTargetActors, type McpCaller } from './auth.js';
+import { claimedSelfMismatch } from '../services/actingPrincipal.js';
+import { getPrincipal, listPrincipals } from '../services/principals.js';
+import { grantCapability, revokeGrantAuthorized } from '../services/grantCapability.js';
+import { listGrants } from '../services/grants.js';
+import { authorize, explainAuthorization, type Action } from '../services/authorize.js';
 import type { CallerScope } from '../core/index.js';
 
 // ── MCP error boundary: convert ContextHubError → McpError at protocol edge ──
 const CONTEXT_HUB_TO_MCP_CODE: Record<string, number> = {
   UNAUTHORIZED: ErrorCode.InvalidParams,
+  FORBIDDEN: ErrorCode.InvalidParams,
   BAD_REQUEST: ErrorCode.InvalidParams,
   NOT_FOUND: ErrorCode.InvalidParams,
+  CONFLICT: ErrorCode.InvalidParams,
+  // F1d: surfaced to the agent as InvalidParams (MCP has no dedicated auth codes); the message
+  // carries the distinction so an agent can stop + re-auth rather than retry-loop.
+  ASSERTED_IDENTITY_REJECTED: ErrorCode.InvalidParams,
+  CREDENTIAL_EXPIRED: ErrorCode.InvalidParams,
   INTERNAL: ErrorCode.InternalError,
   SERVICE_UNAVAILABLE: ErrorCode.InternalError,
 };
@@ -146,6 +157,58 @@ const CONTEXT_HUB_TO_MCP_CODE: Record<string, number> = {
  *  (→ keyEntry.project_scope). */
 async function resolveMcpCallerScopeOrThrow(token?: string): Promise<CallerScope> {
   try { return await resolveMcpCallerScope(token); }
+  catch (e) {
+    if (e instanceof ContextHubError) throw new McpError(CONTEXT_HUB_TO_MCP_CODE[e.code] ?? ErrorCode.InternalError, e.message);
+    throw e;
+  }
+}
+
+/** F1d: full authenticated caller (scope + bound principal + expiry), McpError-mapped. */
+async function resolveMcpCallerOrThrow(token?: string): Promise<McpCaller> {
+  try { return await resolveMcpCaller(token); }
+  catch (e) {
+    if (e instanceof ContextHubError) throw new McpError(CONTEXT_HUB_TO_MCP_CODE[e.code] ?? ErrorCode.InternalError, e.message);
+    throw e;
+  }
+}
+
+/**
+ * F1e: resolve the tenant scope AND the ACTING principal for a previously-asserting tool. Replaces
+ * the bare resolveMcpCallerScopeOrThrow + trusting an args actor field. Pass the tool's asserted
+ * actor/created_by/submitted_by; the returned actingPrincipalId is what the service must persist
+ * (auth-OFF: equals the asserted value → unchanged; auth-ON bound: the credential's principal;
+ * auth-ON mismatch/unbound: rejected). McpError-mapped at this protocol edge.
+ */
+async function resolveActingActorOrThrow(
+  token: string | undefined,
+  assertedActorId?: string | null,
+): Promise<{ scope: CallerScope; actingPrincipalId: string | null }> {
+  try { return await resolveActingActor(token, assertedActorId); }
+  catch (e) {
+    if (e instanceof ContextHubError) throw new McpError(CONTEXT_HUB_TO_MCP_CODE[e.code] ?? ErrorCode.InternalError, e.message);
+    throw e;
+  }
+}
+
+/** F1f: validate a TARGET/reference actor (member, vote-owner, proxy delegate, veto holder, dispute
+ *  party) is an active principal under auth-ON; passthrough under auth-OFF. McpError-mapped. */
+async function resolveTargetActorOrThrow(actorId: string): Promise<string> {
+  try { return await resolveTargetActor(actorId); }
+  catch (e) {
+    if (e instanceof ContextHubError) throw new McpError(CONTEXT_HUB_TO_MCP_CODE[e.code] ?? ErrorCode.InternalError, e.message);
+    throw e;
+  }
+}
+async function resolveTargetActorsOrThrow(actorIds: readonly string[]): Promise<string[]> {
+  try { return await resolveTargetActors(actorIds); }
+  catch (e) {
+    if (e instanceof ContextHubError) throw new McpError(CONTEXT_HUB_TO_MCP_CODE[e.code] ?? ErrorCode.InternalError, e.message);
+    throw e;
+  }
+}
+/** F2: run a service call, mapping any ContextHubError → McpError at the protocol edge. */
+async function mcpCall<T>(fn: () => Promise<T>): Promise<T> {
+  try { return await fn(); }
   catch (e) {
     if (e instanceof ContextHubError) throw new McpError(CONTEXT_HUB_TO_MCP_CODE[e.code] ?? ErrorCode.InternalError, e.message);
     throw e;
@@ -774,6 +837,244 @@ function createMcpToolsServer() {
   );
 
   server.registerTool(
+    'whoami',
+    {
+      description:
+        "Actor Data Boundary F1 — the caller's AUTHENTICATED principal (derived from the credential, " +
+        'not asserted). Lets an agent discover its own identity instead of claiming one. Returns ' +
+        'authenticated=false when the credential is unbound (legacy token / pre-F1 key) or auth is off.',
+      inputSchema: z.object({
+        workspace_token: z
+          .string()
+          .optional()
+          .describe('Workspace token (required only if MCP_AUTH_ENABLED=true).'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        authenticated: z.boolean(),
+        principal_id: z.string().nullable(),
+        kind: z.enum(['human', 'agent', 'system']).nullable(),
+        status: z.enum(['active', 'suspended', 'retired']).nullable(),
+        is_root: z.boolean(),
+        display_name: z.string().nullable(),
+        expires_at: z.string().nullable(),
+        note: z.string(),
+      }),
+    },
+    async ({ workspace_token, output_format }) => {
+      const caller = await resolveMcpCallerOrThrow(workspace_token);
+      const principal = caller.principalId ? await getPrincipal(caller.principalId) : null;
+
+      const result = principal
+        ? {
+            authenticated: true,
+            principal_id: principal.principal_id,
+            kind: principal.kind,
+            status: principal.status,
+            is_root: principal.is_root,
+            display_name: principal.display_name,
+            expires_at: caller.expiresAt,
+            note: 'Identity is derived from your credential. Tools reject an actor_id that disagrees.',
+          }
+        : {
+            authenticated: false,
+            principal_id: null,
+            kind: null,
+            status: null,
+            is_root: false,
+            display_name: null,
+            expires_at: caller.expiresAt,
+            note: getEnv().MCP_AUTH_ENABLED
+              ? 'Unbound credential (legacy single-shared token or pre-F1 key) — no principal identity; asserted actor_id is workspace-trusted during migration.'
+              : 'Auth is disabled (MCP_AUTH_ENABLED=false) — dev/root posture; no enforced principal identity.',
+          };
+
+      const summary = result.authenticated
+        ? `whoami: ${result.display_name} (${result.kind}${result.is_root ? ', root' : ''})`
+        : 'whoami: unauthenticated (no bound principal)';
+      return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  // ── Actor Data Boundary F2 — delegation + authorization tools ────────────────
+  server.registerTool(
+    'grant_capability',
+    {
+      description:
+        'Actor Data Boundary F2 — grant a capability to a principal at a scope. You may grant only a ' +
+        'capability you yourself hold AND only if you hold `delegate`, at a scope that COVERS the target ' +
+        '(no upward/sideways grants, no granting more than you hold). Root may grant anything. Idempotent.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        grantee_principal: z.string().min(1).describe('The principal UUID receiving the grant.'),
+        scope_type: z.enum(['global', 'project', 'topic', 'task', 'group']),
+        scope_id: z.string().optional().describe('Required for project/topic/task/group; omit for global.'),
+        capability: z.enum(['read', 'write', 'admin', 'delegate']),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        grant_id: z.string(),
+        grantee_principal: z.string(),
+        scope_type: z.string(),
+        scope_id: z.string().nullable(),
+        capability: z.string(),
+        granted_by: z.string(),
+        granted_at: z.string(),
+        revoked_at: z.string().nullable(),
+      }),
+    },
+    async ({ workspace_token, grantee_principal, scope_type, scope_id, capability, output_format }) => {
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const g = await mcpCall(() =>
+        grantCapability({ callerPrincipalId: actingPrincipalId, grantee_principal, scope_type, scope_id, capability }),
+      );
+      const summary = `grant_capability: ${capability}@${scope_type}${scope_id ? ':' + scope_id : ''} -> ${grantee_principal}`;
+      return formatToolResponse({
+        grant_id: g.grant_id,
+        grantee_principal: g.grantee_principal,
+        scope_type: g.scope_type,
+        scope_id: g.scope_id,
+        capability: g.capability,
+        granted_by: g.granted_by,
+        granted_at: g.granted_at,
+        revoked_at: g.revoked_at,
+      }, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'revoke_grant',
+    {
+      description:
+        'Actor Data Boundary F2 — revoke a grant by id. Allowed for the grant\'s granter, a principal ' +
+        'holding admin/delegate over the grant\'s scope, or root. Idempotent (unknown/already-revoked = noop).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        grant_id: z.string().min(1),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({ status: z.string() }),
+    },
+    async ({ workspace_token, grant_id, output_format }) => {
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const r = await mcpCall(() => revokeGrantAuthorized({ callerPrincipalId: actingPrincipalId, grant_id }));
+      return formatToolResponse({ status: r.status }, `revoke_grant: ${grant_id} -> ${r.status}`, output_format);
+    },
+  );
+
+  server.registerTool(
+    'list_grants',
+    {
+      description:
+        'Actor Data Boundary F2 — list grants. A principal may always list its OWN grants; listing ' +
+        'another principal\'s (or a scope\'s) requires admin over that scope (or root).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        principal_id: z.string().optional().describe('Filter by grantee; defaults to the caller.'),
+        scope_type: z.enum(['global', 'project', 'topic', 'task', 'group']).optional(),
+        scope_id: z.string().optional(),
+        include_revoked: z.boolean().default(false),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        grants: z.array(z.object({
+          grant_id: z.string(),
+          grantee_principal: z.string(),
+          scope_type: z.string(),
+          scope_id: z.string().nullable(),
+          capability: z.string(),
+          granted_by: z.string(),
+          granted_at: z.string(),
+          revoked_at: z.string().nullable(),
+        })),
+      }),
+    },
+    async ({ workspace_token, principal_id, scope_type, scope_id, include_revoked, output_format }) => {
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const target = principal_id ?? actingPrincipalId ?? undefined;
+      // Own grants are always listable. Otherwise require admin over the queried scope (global if no
+      // scope filter) — authorize() handles root + auth-off.
+      const isOwn = !!target && target === actingPrincipalId;
+      if (!isOwn) {
+        const d = await authorize(actingPrincipalId, 'admin', { kind: scope_type ?? 'global', id: scope_id ?? null }, undefined, 'tool_auth');
+        if (!d.allow) {
+          throw new McpError(ErrorCode.InvalidParams, 'not authorized to list these grants (need admin over the scope, or list your own).');
+        }
+      }
+      const grants = await listGrants({ grantee_principal: target, scope_type, scope_id, include_revoked });
+      return formatToolResponse({ grants }, `list_grants: ${grants.length} grant(s)`, output_format);
+    },
+  );
+
+  server.registerTool(
+    'explain_authorization',
+    {
+      description:
+        'Actor Data Boundary F2 — the read-only "why": evaluate whether a principal may perform an ' +
+        'action on a resource and return the decision + reason + matched grant + resolved scope chain. ' +
+        'Never mutates, never logs. About yourself by default; about another principal requires admin.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        action: z.enum(['read', 'write', 'admin', 'delegate']),
+        resource_kind: z.enum(['global', 'project', 'topic', 'task', 'group']),
+        resource_id: z.string().optional(),
+        principal_id: z.string().optional().describe('Whose authority to explain; defaults to the caller.'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        decision: z.object({ allow: z.boolean(), reason: z.string(), matched_grant_id: z.string().optional() }),
+        scope_chain: z.any().nullable(),
+        subject_principal_id: z.string().nullable(),
+      }),
+    },
+    async ({ workspace_token, action, resource_kind, resource_id, principal_id, output_format }) => {
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const subject = principal_id ?? actingPrincipalId ?? null;
+      if (subject !== actingPrincipalId) {
+        const d = await authorize(actingPrincipalId, 'admin', { kind: 'global' }, undefined, 'tool_auth');
+        if (!d.allow) {
+          throw new McpError(ErrorCode.InvalidParams, 'not authorized to explain another principal\'s authority (admin required).');
+        }
+      }
+      const result = await explainAuthorization(subject, action as Action, { kind: resource_kind, id: resource_id ?? null });
+      const summary = `explain_authorization: ${action}@${resource_kind}${resource_id ? ':' + resource_id : ''} -> ${result.decision.allow ? 'ALLOW' : 'DENY'} (${result.decision.reason})`;
+      return formatToolResponse({ ...result, subject_principal_id: subject }, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'list_principals',
+    {
+      description:
+        'Actor Data Boundary F2 — the principal directory (id, kind, status, is_root, display_name). ' +
+        'Requires admin at global scope (or root).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+      outputSchema: z.object({
+        principals: z.array(z.object({
+          principal_id: z.string(),
+          kind: z.string(),
+          status: z.string(),
+          is_root: z.boolean(),
+          display_name: z.string(),
+          created_at: z.string(),
+        })),
+      }),
+    },
+    async ({ workspace_token, output_format }) => {
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const d = await authorize(actingPrincipalId, 'admin', { kind: 'global' }, undefined, 'tool_auth');
+      if (!d.allow) {
+        throw new McpError(ErrorCode.InvalidParams, 'not authorized to list principals (admin at global scope required).');
+      }
+      const principals = await listPrincipals();
+      return formatToolResponse({ principals }, `list_principals: ${principals.length}`, output_format);
+    },
+  );
+
+  server.registerTool(
     'index_project',
     {
       description: 'Idempotent project indexing: discovers files, chunks, embeds, and stores vectors.',
@@ -821,12 +1122,12 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, root, output_format, options }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
-      const resolvedRoot = await resolveProjectRoot(projectId, root);
+      const resolvedRoot = await resolveProjectRoot(projectId, root, actingPrincipalId);
       const result = await indexProject({
         projectId,
-        callerScope,
+        actingPrincipalId,
         root: resolvedRoot,
         linesPerChunk: options?.lines_per_chunk,
         embeddingBatchSize: options?.embedding_batch_size,
@@ -896,11 +1197,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, query, filters, limit, debug, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       const result = await searchCode({
         projectId,
-        callerScope,
+        actingPrincipalId,
         query,
         pathGlob: filters?.path_glob,
         includeTests: filters?.include_tests,
@@ -986,11 +1287,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, query, kind, filters, max_files, semantic_threshold, debug, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       const result = await tieredSearch({
         projectId,
-        callerScope,
+        actingPrincipalId,
         query,
         kind: kind as any,
         includeTests: filters?.include_tests,
@@ -1066,11 +1367,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, filters, page, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       const result = await listLessons({
         projectId,
-        callerScope,
+        actingPrincipalId,
         limit: page?.limit,
         after: page?.after,
         filters: filters as { lesson_type?: any; tags_any?: string[]; status?: any },
@@ -1152,7 +1453,7 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, project_ids, group_id, include_groups, query, filters, limit, rerank, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const filtersTyped = filters as { lesson_type?: any; tags_any?: string[]; include_all_statuses?: boolean } | undefined;
 
       // Priority: project_ids > group_id > project_id + include_groups > project_id alone
@@ -1168,16 +1469,16 @@ function createMcpToolsServer() {
         const projectId = resolveProjectIdOrThrow(project_id);
         if (include_groups) {
           // Expand to include all groups this project belongs to.
-          resolvedIds = await resolveProjectIds(projectId, true);
+          resolvedIds = await resolveProjectIds(projectId, true, actingPrincipalId);
         } else {
           // Single project search (backwards compat — identical to previous behavior).
-          const result = await searchLessons({ projectId, callerScope, query, limit, rerank, filters: filtersTyped });
+          const result = await searchLessons({ projectId, actingPrincipalId, query, limit, rerank, filters: filtersTyped });
           const summary = `search_lessons: matches=${result.matches.length}`;
           return formatToolResponse(result, summary, output_format);
         }
       }
 
-      const result = await searchLessonsMulti({ projectIds: resolvedIds, callerScope, query, limit, rerank, filters: filtersTyped });
+      const result = await searchLessonsMulti({ projectIds: resolvedIds, actingPrincipalId, query, limit, rerank, filters: filtersTyped });
       const summary = `search_lessons: matches=${result.matches.length} (multi-project: ${resolvedIds.length})`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -1246,11 +1547,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, query, chunk_types, doc_ids, limit, min_score, rerank, snippet_max_chars, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       const result = await searchChunks({
         projectId,
-        callerScope,
+        actingPrincipalId,
         query,
         limit,
         chunkTypes: chunk_types as any,
@@ -1293,11 +1594,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, doc_type, doc_status, include_content, limit, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       const res = await listGeneratedDocuments({
         projectId,
-        callerScope,
+        actingPrincipalId,
         docType: doc_type,
         docStatus: doc_status,
         includeContent: include_content,
@@ -1341,14 +1642,14 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, doc_id, doc_type, doc_key, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       if (!doc_id && (!doc_type || !doc_key)) {
         throw new McpError(ErrorCode.InvalidParams, 'Provide doc_id or both doc_type + doc_key');
       }
       const item = await getGeneratedDocument({
         projectId,
-        callerScope,
+        actingPrincipalId,
         docId: doc_id,
         docType: doc_type,
         docKey: doc_key,
@@ -1377,14 +1678,14 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, doc_id, doc_type, doc_key, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       if (!doc_id && (!doc_type || !doc_key)) {
         throw new McpError(ErrorCode.InvalidParams, 'Provide doc_id or both doc_type + doc_key');
       }
       const result = await promoteGeneratedDocument({
         projectId,
-        callerScope,
+        actingPrincipalId,
         docId: doc_id,
         docType: doc_type,
         docKey: doc_key,
@@ -1452,9 +1753,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, lesson_payload, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, lesson_payload.captured_by);
       const projectId = resolveProjectIdOrThrow(lesson_payload.project_id);
-      const result = await addLesson({ ...lesson_payload, project_id: projectId, callerScope } as any);
+      const result = await addLesson({ ...lesson_payload, project_id: projectId, actingPrincipalId, captured_by: actingPrincipalId ?? lesson_payload.captured_by } as any);
       const summary = `add_lesson: lesson_id=${result.lesson_id ?? '(unknown)'}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -1498,7 +1799,7 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, action_context, include_groups, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const explicit = action_context.project_id ?? action_context.workspace;
       const projectId = explicit && String(explicit).trim() ? String(explicit) : resolveProjectIdOrThrow(undefined);
 
@@ -1509,7 +1810,7 @@ function createMcpToolsServer() {
         // (NOT_FOUND). Graceful-skip preserves the security contract while
         // not breaking the include_groups feature — the root projectId was
         // already scope-asserted via the resolver above.
-        const allIds = await resolveProjectIds(projectId, true);
+        const allIds = await resolveProjectIds(projectId, true, actingPrincipalId);
         let totalChecked = 0;
         const allMatched: Array<{ rule_id: string; verification_method: string; requirement: string }> = [];
         let anyFailed = false;
@@ -1518,11 +1819,12 @@ function createMcpToolsServer() {
         for (const pid of allIds) {
           let r;
           try {
-            r = await checkGuardrails(pid, action_context, { callerScope });
+            r = await checkGuardrails(pid, action_context, { actingPrincipalId });
           } catch (e: any) {
-            // Cross-tenant group member → service threw NOT_FOUND. Skip
-            // silently for scoped callers.
-            if (e?.code === 'NOT_FOUND' && typeof callerScope === 'string') continue;
+            // include_groups is best-effort enrichment: a group member the caller
+            // cannot read (or that doesn't exist) → NOT_FOUND → skip it. The root
+            // projectId was already authorized via checkGuardrails below / the loop.
+            if (e?.code === 'NOT_FOUND') continue;
             throw e;
           }
           totalChecked += r.rules_checked;
@@ -1544,7 +1846,7 @@ function createMcpToolsServer() {
         return formatToolResponse(merged, summary, output_format);
       }
 
-      const result = await checkGuardrails(projectId, action_context, { callerScope });
+      const result = await checkGuardrails(projectId, action_context, { actingPrincipalId });
       const summary = `check_guardrails: pass=${result.pass}, rules_checked=${result.rules_checked}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -1585,7 +1887,7 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, task, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       const env = getEnv();
 
@@ -1595,7 +1897,7 @@ function createMcpToolsServer() {
         'docs/sessions/SESSION_PATCH.md',
       ];
 
-      const project_snapshot = await getProjectSnapshotBody(pid, { callerScope });
+      const project_snapshot = await getProjectSnapshotBody(pid, { actingPrincipalId });
 
       const suggested_next_calls: Array<{ tool: string; arguments: any; reason: string }> = [];
       const q = task?.query ?? task?.intent ?? '';
@@ -1666,9 +1968,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, lesson_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const result = await listLessonVersions({ projectId: pid, callerScope, lessonId: lesson_id });
+      const result = await listLessonVersions({ projectId: pid, actingPrincipalId, lessonId: lesson_id });
       const summary = `list_lesson_versions: ${result.total_count ?? 0} version(s)`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -1702,11 +2004,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, lesson_id, title, content, tags, source_refs, changed_by, change_summary, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       const result = await updateLesson({
         projectId: pid,
-        callerScope,
+        actingPrincipalId,
         lessonId: lesson_id,
         title,
         content,
@@ -1744,7 +2046,7 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, lesson_id, status, superseded_by, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       // Phase 13 Sprint 13.3 runtime guard: belt-and-suspenders for raw callers bypassing zod.
       if ((status as string) === 'pending-review') {
@@ -1755,7 +2057,7 @@ function createMcpToolsServer() {
       }
       const result = await updateLessonStatus({
         projectId: pid,
-        callerScope,
+        actingPrincipalId,
         lessonId: lesson_id,
         status: status as any,
         supersededBy: superseded_by,
@@ -1785,9 +2087,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const body = (await getProjectSnapshotBody(pid, { callerScope })) ?? '';
+      const body = (await getProjectSnapshotBody(pid, { actingPrincipalId })) ?? '';
       const result = { project_id: pid, body, updated_hint: 'Snapshot rebuilds on add_lesson and index_project.' };
       const summary = `get_project_summary: chars=${body.length}`;
       return formatToolResponse(result, summary, output_format);
@@ -1817,14 +2119,14 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, topic, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       if (!(await isFeatureEnabled(pid, 'distillation'))) {
         return formatToolResponse({ answer: '', warning: 'Distillation is disabled for this project.' }, 'reflect: disabled', output_format);
       }
       const retrieved = await searchLessons({
         projectId: pid,
-        callerScope,
+        actingPrincipalId,
         query: topic,
         limit: 12,
         filters: { include_all_statuses: false },
@@ -1911,9 +2213,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
-      const result = await deleteWorkspace(projectId, { callerScope });
+      const result = await deleteWorkspace(projectId, { actingPrincipalId });
       const summary = `delete_workspace: deleted=${result.deleted}, project_id=${result.deleted_project_id}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -1944,9 +2246,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, query, limit, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const result = await searchSymbols({ projectId: pid, callerScope, query, limit });
+      const result = await searchSymbols({ projectId: pid, actingPrincipalId, query, limit });
       const summary = `search_symbols: matches=${result.matches.length}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -1989,9 +2291,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, symbol_id, depth, limit, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const result = await getSymbolNeighbors({ projectId: pid, callerScope, symbolId: symbol_id, depth, limit });
+      const result = await getSymbolNeighbors({ projectId: pid, actingPrincipalId, symbolId: symbol_id, depth, limit });
       const summary = `get_symbol_neighbors: neighbors=${result.neighbors.length}, edges=${result.edges.length}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2018,11 +2320,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, from_symbol_id, to_symbol_id, max_hops, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       const result = await traceDependencyPath({
         projectId: pid,
-        callerScope,
+        actingPrincipalId,
         fromSymbolId: from_symbol_id,
         toSymbolId: to_symbol_id,
         maxHops: max_hops,
@@ -2066,9 +2368,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, lesson_id, limit, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const result = await getLessonImpact({ projectId: pid, callerScope, lessonId: lesson_id, limit });
+      const result = await getLessonImpact({ projectId: pid, actingPrincipalId, lessonId: lesson_id, limit });
       const summary = `get_lesson_impact: linked_symbols=${result.linked_symbols.length}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2097,12 +2399,12 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, root, since, max_commits, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const resolvedRoot = await resolveProjectRoot(pid, root);
+      const resolvedRoot = await resolveProjectRoot(pid, root, actingPrincipalId);
       const result = await ingestGitHistory({
         projectId: pid,
-        callerScope,
+        actingPrincipalId,
         root: resolvedRoot,
         since,
         maxCommits: max_commits,
@@ -2140,9 +2442,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, limit, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const result = await listCommits({ projectId: pid, callerScope, limit });
+      const result = await listCommits({ projectId: pid, actingPrincipalId, limit });
       const summary = `list_commits: items=${result.items.length}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2184,9 +2486,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, sha, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const result = await getCommit({ projectId: pid, callerScope, sha });
+      const result = await getCommit({ projectId: pid, actingPrincipalId, sha });
       const summary = `get_commit: found=${Boolean(result.commit).toString()}, files=${result.files.length}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2221,11 +2523,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, commit_shas, limit, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       const result = await suggestLessonsFromCommits({
         projectId: pid,
-        callerScope,
+        actingPrincipalId,
         commitShas: commit_shas,
         limit,
       });
@@ -2253,11 +2555,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, commit_sha, lesson_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       const result = await linkCommitToLesson({
         projectId: pid,
-        callerScope,
+        actingPrincipalId,
         commitSha: commit_sha,
         lessonId: lesson_id,
       });
@@ -2299,11 +2601,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, commit_sha, limit, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       const result = await analyzeCommitImpact({
         projectId: pid,
-        callerScope,
+        actingPrincipalId,
         commitSha: commit_sha,
         limit,
       });
@@ -2332,11 +2634,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, source_type, git_url, default_ref, enabled, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       const result = await configureProjectSource({
         projectId: pid,
-        callerScope,
+        actingPrincipalId,
         sourceType: source_type,
         gitUrl: git_url,
         defaultRef: default_ref,
@@ -2379,12 +2681,12 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, git_url, ref, depth, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
       const env = getEnv();
       const result = await prepareRepo({
         projectId: pid,
-        callerScope,
+        actingPrincipalId,
         gitUrl: git_url,
         ref,
         depth,
@@ -2420,9 +2722,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, source_type, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const source = await getProjectSource(pid, source_type, { callerScope });
+      const source = await getProjectSource(pid, source_type, { actingPrincipalId });
       const result = { source };
       const summary = `get_project_source: found=${Boolean(source).toString()}`;
       return formatToolResponse(result, summary, output_format);
@@ -2448,10 +2750,10 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, root_path, active, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const resolvedRoot = await resolveProjectRoot(pid, root_path);
-      const result = await registerWorkspaceRoot({ projectId: pid, callerScope, rootPath: resolvedRoot, active });
+      const resolvedRoot = await resolveProjectRoot(pid, root_path, actingPrincipalId);
+      const result = await registerWorkspaceRoot({ projectId: pid, actingPrincipalId, rootPath: resolvedRoot, active });
       const summary = `register_workspace_root: workspace_id=${result.workspace_id}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2478,9 +2780,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const result = await listWorkspaceRoots(pid, { callerScope });
+      const result = await listWorkspaceRoots(pid, { actingPrincipalId });
       const summary = `list_workspace_roots: items=${result.items.length}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2518,12 +2820,12 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, root_path, run_delta_index, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = resolveProjectIdOrThrow(project_id);
-      const resolvedRoot = await resolveProjectRoot(pid, root_path);
+      const resolvedRoot = await resolveProjectRoot(pid, root_path, actingPrincipalId);
       const result = await scanWorkspaceChanges({
         projectId: pid,
-        callerScope,
+        actingPrincipalId,
         rootPath: resolvedRoot,
         runDeltaIndex: run_delta_index,
       });
@@ -2579,11 +2881,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, job_type, payload, correlation_id, queue_name, max_attempts, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = project_id ? resolveProjectIdOrThrow(project_id) : undefined;
       const result = await enqueueJob({
         project_id: pid,
-        callerScope,
+        actingPrincipalId,
         job_type,
         payload: payload ?? {},
         correlation_id,
@@ -2627,9 +2929,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, correlation_id, status, limit, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const pid = project_id ? resolveProjectIdOrThrow(project_id) : undefined;
-      const result = await listJobs({ projectId: pid, callerScope, correlationId: correlation_id, status, limit });
+      const result = await listJobs({ projectId: pid, actingPrincipalId, correlationId: correlation_id, status, limit });
       const summary = `list_jobs: items=${result.items.length}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2654,10 +2956,11 @@ function createMcpToolsServer() {
     },
     async ({ workspace_token, queue_name, output_format }) => {
       const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      // DEFERRED-024 + 029: a scoped caller drains ONLY its own project's queue;
-      // global/auth-off (null/undefined) → all projects.
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      // DEFERRED-024: a scoped caller drains ONLY its own project's queue; global/auth-off → all
+      // projects. runNextJob gates execution (write@project, or hasGlobalGrant for the unscoped drain).
       const projectScope = callerScope ?? undefined;
-      const result = await runNextJob(queue_name, projectScope);
+      const result = await runNextJob(queue_name, projectScope, { actingPrincipalId });
       const summary = `run_next_job: status=${result.status}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2678,15 +2981,18 @@ function createMcpToolsServer() {
           group_id: z.string(),
           name: z.string(),
           description: z.string().nullable(),
-          member_count: z.number(),
+          // [DEFERRED-049 adv #3] nullable: listGroups REDACTS member_count to null for groups the caller
+          // has no read@group grant on (the name stays for the dropdown). A non-nullable schema would
+          // crash the tool for exactly the scoped callers the redaction serves.
+          member_count: z.number().nullable(),
         })),
       }),
     },
     async ({ workspace_token, output_format }) => {
-      // list_groups: admin op (global listing, no project scope to enforce).
-      // Token validated via resolver so deprecation/disable gates fire consistently.
-      await resolveMcpCallerScopeOrThrow(workspace_token);
-      const groups = await listGroups();
+      // list_groups: global name catalog. [DEFERRED-049] resolve the acting principal so listGroups can
+      // REDACT member_count for groups the caller has no read@group grant on (names stay visible).
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const groups = await listGroups(actingPrincipalId);
       const summary = `list_groups: count=${groups.length}`;
       return formatToolResponse({ groups }, summary, output_format);
     },
@@ -2710,9 +3016,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, group_id, name, description, output_format }) => {
-      // create_group: admin op — group itself is global, not project-scoped.
-      await resolveMcpCallerScopeOrThrow(workspace_token);
-      const result = await createGroup({ group_id, name, description });
+      // create_group: authorize() enforces write on the group (a projects-table row). [DEFERRED-046]
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const result = await createGroup({ group_id, name, description, actingPrincipalId });
       const summary = `create_group: group_id=${result.group_id}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2730,9 +3036,9 @@ function createMcpToolsServer() {
       outputSchema: z.object({ deleted: z.boolean() }),
     },
     async ({ workspace_token, group_id, output_format }) => {
-      // delete_group: admin op — group itself is global.
-      await resolveMcpCallerScopeOrThrow(workspace_token);
-      const result = await deleteGroup(group_id);
+      // delete_group: authorize() enforces admin on the group. [DEFERRED-046]
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const result = await deleteGroup(group_id, { actingPrincipalId });
       const summary = `delete_group: deleted=${result.deleted}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2751,8 +3057,8 @@ function createMcpToolsServer() {
       outputSchema: z.object({ added: z.boolean() }),
     },
     async ({ workspace_token, group_id, project_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const result = await addProjectToGroup(group_id, project_id, { callerScope });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const result = await addProjectToGroup(group_id, project_id, { actingPrincipalId });
       const summary = `add_project_to_group: group=${group_id} project=${project_id} added=${result.added}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2771,8 +3077,8 @@ function createMcpToolsServer() {
       outputSchema: z.object({ removed: z.boolean() }),
     },
     async ({ workspace_token, group_id, project_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const result = await removeProjectFromGroup(group_id, project_id, { callerScope });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const result = await removeProjectFromGroup(group_id, project_id, { actingPrincipalId });
       const summary = `remove_project_from_group: group=${group_id} project=${project_id} removed=${result.removed}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2790,11 +3096,10 @@ function createMcpToolsServer() {
       outputSchema: z.object({ group_id: z.string(), members: z.array(z.string()) }),
     },
     async ({ workspace_token, group_id, output_format }) => {
-      // list_group_members: admin op (returns project IDs that belong to a group;
-      // no per-member tenant filter applied here — caller is expected to filter on
-      // the returned list if scoped).
-      await resolveMcpCallerScopeOrThrow(workspace_token);
-      const members = await listGroupMembers(group_id);
+      // list_group_members: authorize() enforces read on the group (member project_ids are sensitive
+      // cross-project topology). [DEFERRED-046/adv]
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const members = await listGroupMembers(group_id, { actingPrincipalId });
       const summary = `list_group_members: group=${group_id} count=${members.length}`;
       return formatToolResponse({ group_id, members }, summary, output_format);
     },
@@ -2815,9 +3120,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
-      const groups = await listGroupsForProject(projectId, { callerScope });
+      const groups = await listGroupsForProject(projectId, { actingPrincipalId });
       const summary = `list_project_groups: project=${projectId} groups=${groups.length}`;
       return formatToolResponse({ project_id: projectId, groups }, summary, output_format);
     },
@@ -2857,11 +3162,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, agent_id, artifact_type, artifact_id, task_description, ttl_minutes, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       const result = await claimArtifact({
         project_id: projectId,
-        callerScope,
+        actingPrincipalId,
         agent_id,
         artifact_type,
         artifact_id,
@@ -2889,9 +3194,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, agent_id, lease_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
-      const result = await releaseArtifact({ project_id: projectId, callerScope, agent_id, lease_id });
+      const result = await releaseArtifact({ project_id: projectId, actingPrincipalId, agent_id, lease_id });
       const summary = `release_artifact: ${result.status}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2917,9 +3222,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, agent_id, lease_id, extend_by_minutes, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
-      const result = await renewArtifact({ project_id: projectId, callerScope, agent_id, lease_id, extend_by_minutes });
+      const result = await renewArtifact({ project_id: projectId, actingPrincipalId, agent_id, lease_id, extend_by_minutes });
       const summary = `renew_artifact: ${result.status}${'effective_extension_minutes' in result ? ` ext=${result.effective_extension_minutes}min` : ''}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2948,9 +3253,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, artifact_type, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
-      const result = await listActiveClaims({ project_id: projectId, callerScope, artifact_type });
+      const result = await listActiveClaims({ project_id: projectId, actingPrincipalId, artifact_type });
       const summary = `list_active_claims: ${result.claims.length} claim(s)`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -2981,9 +3286,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, artifact_type, artifact_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
-      const result = await checkArtifactAvailability({ project_id: projectId, callerScope, artifact_type, artifact_id });
+      const result = await checkArtifactAvailability({ project_id: projectId, actingPrincipalId, artifact_type, artifact_id });
       const summary = `check_artifact_availability: available=${result.available}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -3015,11 +3320,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, agent_id, lesson_id, reviewer_note, intended_reviewer, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       const result = await submitForReview({
         project_id: projectId,
-        callerScope,
+        actingPrincipalId,
         agent_id,
         lesson_id,
         reviewer_note,
@@ -3062,11 +3367,11 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, status, submitted_by, limit, offset, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       const result = await listReviewRequests({
         project_id: projectId,
-        callerScope,
+        actingPrincipalId,
         status,
         submitted_by,
         limit,
@@ -3135,9 +3440,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, name, charter, created_by, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, created_by);
       const projectId = resolveProjectIdOrThrow(project_id);
-      const t = await charterTopic({ project_id: projectId, callerScope, name, charter, created_by });
+      const t = await charterTopic({ project_id: projectId, actingPrincipalId, name, charter, created_by: actingPrincipalId ?? created_by });
       const result = {
         status: 'ok',
         topic_id: t.topic_id,
@@ -3177,8 +3482,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, actor_id, actor_type, display_name, level, since, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const pack = await joinTopic({ topic_id, callerScope, actor_id, actor_type, display_name, level, since_seq: since });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, actor_id);
+      const pack = await joinTopic({ topic_id, actingPrincipalId, actor_id: actingPrincipalId ?? actor_id, actor_type, display_name, level, since_seq: since });
       const result = {
         status: 'ok',
         topic: pack.topic,
@@ -3208,8 +3513,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const tr = await getTopic({ topic_id, callerScope });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const tr = await getTopic({ topic_id, actingPrincipalId });
       const result = { status: 'ok', topic: tr.topic, roster: tr.roster };
       const summary = `get_topic: topic=${topic_id} status=${tr.topic.status} roster=${tr.roster.length}`;
       return formatToolResponse(result, summary, output_format);
@@ -3234,8 +3539,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, actor_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await closeTopic({ topic_id, callerScope, actor_id });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, actor_id);
+      const r = await closeTopic({ topic_id, actingPrincipalId, actor_id: actingPrincipalId ?? actor_id });
       const result = {
         status: 'ok',
         topic_id: r.topic_id,
@@ -3268,8 +3573,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, actor_id, level, granted_by, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await grantLevel({ topic_id, callerScope, actor_id, level, granted_by });
+      // The ACTING identity here is the GRANTOR (granted_by); actor_id is the target participant.
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, granted_by);
+      const r = await grantLevel({ topic_id, actingPrincipalId, actor_id, level, granted_by: actingPrincipalId ?? granted_by });
       const summary = `grant_level: topic=${topic_id} target=${actor_id} level=${level} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3294,8 +3600,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, since, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await replayEvents({ topic_id, callerScope, since_seq: since });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const r = await replayEvents({ topic_id, actingPrincipalId, since_seq: since });
       const result = {
         status: 'ok',
         topic_id: r.topic_id,
@@ -3364,8 +3670,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, title, topology, depends_on, raci, slot, kind, created_by, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const task = await postTask({ topic_id, callerScope, title, topology, depends_on, raci, slot, kind, created_by });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, created_by);
+      const task = await postTask({ topic_id, actingPrincipalId, title, topology, depends_on, raci, slot, kind, created_by: actingPrincipalId ?? created_by });
       const result = { status: 'ok' as const, task };
       const summary = `post_task: task_id=${task.task_id} artifact_id=${task.artifact_id} status=${task.status}`;
       return formatToolResponse(result, summary, output_format);
@@ -3388,8 +3694,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, status, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const board = await listBoard({ topic_id, callerScope, status });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const board = await listBoard({ topic_id, actingPrincipalId, status });
       const result = { status: 'ok' as const, tasks: board.tasks };
       const summary = `list_board: topic=${topic_id} tasks=${board.tasks.length}`;
       return formatToolResponse(result, summary, output_format);
@@ -3418,8 +3724,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, task_id, actor_id, ttl_minutes, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await claimTask({ task_id, callerScope, actor_id, ttl_minutes });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, actor_id);
+      const r = await claimTask({ task_id, actingPrincipalId, actor_id: actingPrincipalId ?? actor_id, ttl_minutes });
       const summary = `claim_task: task=${task_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3440,8 +3746,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, task_id, actor_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await releaseTask({ task_id, callerScope, actor_id });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, actor_id);
+      const r = await releaseTask({ task_id, actingPrincipalId, actor_id: actingPrincipalId ?? actor_id });
       const summary = `release_task: task=${task_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3462,8 +3768,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, task_id, actor_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await completeTask({ task_id, callerScope, actor_id });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, actor_id);
+      const r = await completeTask({ task_id, actingPrincipalId, actor_id: actingPrincipalId ?? actor_id });
       const summary = `complete_task: task=${task_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3490,8 +3796,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, artifact_id, claim_id, fencing_token, content_ref, actor_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await writeArtifact({ artifact_id, callerScope, claim_id, fencing_token, content_ref, actor_id });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, actor_id);
+      const r = await writeArtifact({ artifact_id, actingPrincipalId, claim_id, fencing_token, content_ref, actor_id: actingPrincipalId ?? actor_id });
       const summary = `write_artifact: artifact=${artifact_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3517,8 +3823,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, artifact_id, claim_id, fencing_token, actor_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await baselineArtifact({ artifact_id, callerScope, claim_id, fencing_token, actor_id });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, actor_id);
+      const r = await baselineArtifact({ artifact_id, actingPrincipalId, claim_id, fencing_token, actor_id: actingPrincipalId ?? actor_id });
       const summary = `baseline_artifact: artifact=${artifact_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3561,16 +3867,16 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, subject_id, kind, weight, procedure, submitted_by, execution_task, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, submitted_by);
       const r = await submitRequest({
-        callerScope,
+        actingPrincipalId,
         topic_id,
         subject_type: 'artifact',
         subject_id,
         kind,
         weight,
         procedure: procedure ?? 'unilateral',
-        submitted_by,
+        submitted_by: actingPrincipalId ?? submitted_by,
         execution_task,
       });
       const summary = `submit_request: topic=${topic_id} status=${r.status}`;
@@ -3617,8 +3923,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, status, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await listRequests({ topic_id, callerScope, status });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const r = await listRequests({ topic_id, actingPrincipalId, status });
       const result = { status: 'ok' as const, requests: r.requests };
       const summary = `list_requests: topic=${topic_id} count=${r.requests.length}`;
       return formatToolResponse(result, summary, output_format);
@@ -3663,8 +3969,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, request_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const req = await getRequest({ request_id, callerScope });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const req = await getRequest({ request_id, actingPrincipalId });
       const result = req
         ? { status: 'ok', request: req }
         : { status: 'not_found', request: undefined };
@@ -3702,8 +4008,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, request_id, step_index, actor_id, decision, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await decideStep({ request_id, callerScope, step_index, actor_id, decision });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, actor_id);
+      const r = await decideStep({ request_id, actingPrincipalId, step_index, actor_id: actingPrincipalId ?? actor_id, decision });
       const summary = `decide_request_step: request=${request_id} step=${step_index} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3775,8 +4081,10 @@ function createMcpToolsServer() {
       outputSchema: bodyRecordShape,
     },
     async ({ workspace_token, project_id, name, quorum, threshold, veto_holders, created_by, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await createBody({ project_id, callerScope, name, quorum, threshold, veto_holders, created_by });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, created_by);
+      // (F1f) veto_holders are target identity references — require active principals under auth-ON.
+      const vetoHolders = veto_holders ? await resolveTargetActorsOrThrow(veto_holders) : veto_holders;
+      const r = await createBody({ project_id, actingPrincipalId, name, quorum, threshold, veto_holders: vetoHolders, created_by: actingPrincipalId ?? created_by });
       const summary = `create_decision_body: body_id=${r.body_id} name=${r.name}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3801,8 +4109,12 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, body_id, actor_id, vote_weight, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await addBodyMember({ body_id, callerScope, actor_id, vote_weight });
+      // actor_id is the TARGET member being added (data), not the caller's identity — authenticate
+      // the caller (scope + reject unbound under auth-ON), and (F1f) require the member to be an
+      // active principal under auth-ON so membership comparisons are principal-keyed.
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const memberId = await resolveTargetActorOrThrow(actor_id);
+      const r = await addBodyMember({ body_id, actingPrincipalId, actor_id: memberId, vote_weight });
       const summary = `add_body_member: body=${body_id} actor=${actor_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3829,9 +4141,32 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, body_id, principal, proxy, granted_by, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await grantProxy({ body_id, callerScope, principal, proxy, granted_by });
-      const summary = `grant_proxy: body=${body_id} principal=${principal} proxy=${proxy} status=${r.status}`;
+      // principal == granted_by == the delegating CALLER (only self-delegation); proxy is the target
+      // delegate. (F1f) Resolve the caller for both principal+granted_by under auth-ON; validate the
+      // proxy is an active principal. Auth-OFF: principal stays caller-supplied (behavior unchanged).
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, granted_by);
+      const self = actingPrincipalId ?? granted_by;
+      const proxyId = await resolveTargetActorOrThrow(proxy);
+      // Proxy delegation is self-only — the `principal` (delegator) IS the caller. Under auth-ON,
+      // REJECT a `principal` arg that disagrees with the credential rather than silently coercing it
+      // to self; this matches the contract resolveActingActor already enforces on granted_by, so both
+      // identity args on this call fail the same way instead of one rejecting and one swallowing.
+      // [review-impl F1 #2]
+      if (claimedSelfMismatch({ authEnabled: Boolean(getEnv().MCP_AUTH_ENABLED), claimed: principal, self })) {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          'principal does not match the authenticated caller; a proxy may only be granted from your own identity (identity is derived from the credential, not the request body).',
+        );
+      }
+      const resolvedPrincipal = getEnv().MCP_AUTH_ENABLED ? self : principal;
+      // A principal cannot proxy to itself (DB CHECK principal<>proxy) — fail clean, not a raw 23514.
+      if (resolvedPrincipal === proxyId) {
+        throw new McpError(ErrorCode.InvalidParams, 'proxy must differ from the principal (cannot delegate your vote to yourself).');
+      }
+      const r = await grantProxy({ body_id, actingPrincipalId, principal: resolvedPrincipal, proxy: proxyId, granted_by: self });
+      // Log the PERSISTED identities (resolvedPrincipal/proxyId), not the raw args — under auth-ON the
+      // args may differ from what was stored. Mirrors revoke_proxy's summary. [review-impl F1 #1]
+      const summary = `grant_proxy: body=${body_id} principal=${resolvedPrincipal} proxy=${proxyId} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
   );
@@ -3850,9 +4185,13 @@ function createMcpToolsServer() {
       outputSchema: z.object({ status: z.string() }),
     },
     async ({ workspace_token, body_id, principal, proxy, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await revokeProxy({ body_id, callerScope, principal, proxy });
-      const summary = `revoke_proxy: body=${body_id} principal=${principal} proxy=${proxy} status=${r.status}`;
+      // Mirror grant_proxy's self-authorization: only the principal may revoke THEIR OWN delegation.
+      // Under auth-ON `principal` IS the acting caller; auth-OFF keeps it caller-supplied. Without
+      // this, any project-scoped caller could strip another member's proxy grant. [F1f-adv pass 2 #2]
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, principal);
+      const resolvedPrincipal = getEnv().MCP_AUTH_ENABLED ? (actingPrincipalId ?? principal) : principal;
+      const r = await revokeProxy({ body_id, actingPrincipalId, principal: resolvedPrincipal, proxy });
+      const summary = `revoke_proxy: body=${body_id} principal=${resolvedPrincipal} proxy=${proxy} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
   );
@@ -3876,8 +4215,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, body_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await listProxies({ body_id, callerScope });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const r = await listProxies({ body_id, actingPrincipalId });
       const summary = `list_proxies: body=${body_id} count=${r.proxies.length}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3898,8 +4237,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, body_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const body = await getBody({ body_id, callerScope });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const body = await getBody({ body_id, actingPrincipalId });
       const result = body
         ? { status: 'ok', body }
         : { status: 'not_found', body: undefined };
@@ -3923,8 +4262,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await listBodies({ project_id, callerScope });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const r = await listBodies({ project_id, actingPrincipalId });
       const result = { status: 'ok' as const, bodies: r.bodies };
       const summary = `list_decision_bodies: count=${r.bodies.length}`;
       return formatToolResponse(result, summary, output_format);
@@ -3955,8 +4294,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, body_id, subject_ref, proposed_by, deadline_minutes, execution_task, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await proposeMotion({ topic_id, callerScope, body_id, subject_ref, proposed_by, deadline_minutes, execution_task });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, proposed_by);
+      const r = await proposeMotion({ topic_id, actingPrincipalId, body_id, subject_ref, proposed_by: actingPrincipalId ?? proposed_by, deadline_minutes, execution_task });
       const summary = `propose_motion: topic=${topic_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -3978,8 +4317,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, status, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await listMotions({ topic_id, callerScope, status });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const r = await listMotions({ topic_id, actingPrincipalId, status });
       const result = { status: 'ok' as const, motions: r.motions };
       const summary = `list_motions: topic=${topic_id} count=${r.motions.length}`;
       return formatToolResponse(result, summary, output_format);
@@ -4001,8 +4340,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, motion_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const motion = await getMotion({ motion_id, callerScope });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const motion = await getMotion({ motion_id, actingPrincipalId });
       const result = motion
         ? { status: 'ok', motion }
         : { status: 'not_found', motion: undefined };
@@ -4027,8 +4366,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, motion_id, actor_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await secondMotion({ motion_id, callerScope, actor_id });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, actor_id);
+      const r = await secondMotion({ motion_id, actingPrincipalId, actor_id: actingPrincipalId ?? actor_id });
       const summary = `second_motion: motion=${motion_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -4051,13 +4390,20 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, motion_id, actor_id, choice, proxy_for, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      // The acting CALLER is whoever casts: the proxy holder if proxied, else the voter. actor_id is
+      // the vote OWNER (data the service validates as a body member); resolve only the caster.
+      const caster = proxy_for ?? actor_id;
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, caster);
+      const resolvedCaster = actingPrincipalId ?? caster;
+      // (F1f) In the proxy branch the vote OWNER (actor_id) is a target reference — require it to be
+      // an active principal under auth-ON so the votes/membership rows are principal-keyed.
+      const ownerId = proxy_for ? await resolveTargetActorOrThrow(actor_id) : resolvedCaster;
       const r = await castVote({
-        callerScope,
+        actingPrincipalId,
         motion_id,
-        actor_id,
+        actor_id: ownerId,
         choice: choice as 'for' | 'against' | 'abstain',
-        proxy_for,
+        proxy_for: proxy_for ? resolvedCaster : undefined,
       });
       const summary = `cast_vote: motion=${motion_id} actor=${actor_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
@@ -4079,8 +4425,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, motion_id, actor_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await vetoMotion({ motion_id, callerScope, actor_id });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, actor_id);
+      const r = await vetoMotion({ motion_id, actingPrincipalId, actor_id: actingPrincipalId ?? actor_id });
       const summary = `veto_motion: motion=${motion_id} actor=${actor_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -4110,8 +4456,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, motion_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const r = await tallyMotion({ motion_id, callerScope });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const r = await tallyMotion({ motion_id, actingPrincipalId });
       const summary = `tally_motion: motion=${motion_id} status=${r.status}`;
       return formatToolResponse(r, summary, output_format);
     },
@@ -4143,8 +4489,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, topic_id, kind, body, submitted_by, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const result = await submitIntake({ project_id, callerScope, topic_id, kind, body, submitted_by });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, submitted_by);
+      const result = await submitIntake({ project_id, actingPrincipalId, topic_id, kind, body, submitted_by: actingPrincipalId ?? submitted_by });
       const summary = `submit_intake: project=${project_id} kind=${kind} id=${result.intake_id}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -4178,29 +4524,32 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, intake_id, route_kind, actor_id, topic_id, routed_to, subject_ref, parties, procedure, submitted_by, kind, weight, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      // actor_id is the triaging CALLER. Resolve it from the credential; submitted_by defaults to it.
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, actor_id);
+      const actingActor = actingPrincipalId ?? actor_id;
       let route: Parameters<typeof triageIntake>[1];
       if (route_kind === 'dispute') {
         route = {
           route_kind: 'dispute',
-          actor_id,
+          actor_id: actingActor,
           topic_id,
           subject_ref: subject_ref ?? '',
-          parties: parties ?? [],
+          // (F1f) dispute parties are target identity references — active principals under auth-ON.
+          parties: await resolveTargetActorsOrThrow(parties ?? []),
           procedure: (procedure ?? 'unilateral') as 'unilateral' | 'collective',
-          submitted_by: submitted_by ?? actor_id,
+          submitted_by: submitted_by ?? actingActor,
           kind,
           weight,
         };
       } else {
         route = {
           route_kind: route_kind as 'task' | 'request' | 'motion',
-          actor_id,
+          actor_id: actingActor,
           topic_id,
           routed_to: routed_to ?? '',
         };
       }
-      const result = await triageIntake(intake_id, route, { callerScope });
+      const result = await triageIntake(intake_id, route, { actingPrincipalId });
       const summary = `triage_intake: id=${intake_id} route=${route_kind} status=${result.status}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -4221,8 +4570,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, intake_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const result = await dismissIntake(intake_id, { callerScope });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const result = await dismissIntake(intake_id, { actingPrincipalId });
       const summary = `dismiss_intake: id=${intake_id} status=${result.status}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -4250,8 +4599,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, intake_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const result = await getIntake(intake_id, { callerScope });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const result = await getIntake(intake_id, { actingPrincipalId });
       const summary = `get_intake: id=${intake_id} status=${result.status}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -4285,8 +4634,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, kind, status, limit, offset, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const result = await listIntake(project_id, { kind, status, limit, offset, callerScope });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const result = await listIntake(project_id, { kind, status, limit, offset, actingPrincipalId });
       const summary = `list_intake: project=${project_id} total=${result.total}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -4321,8 +4670,10 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, subject_ref, parties, procedure, submitted_by, kind, weight, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const result = await openDispute({ topic_id, callerScope, subject_ref, parties, procedure, submitted_by, kind, weight });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token, submitted_by);
+      // (F1f) dispute parties are target identity references — require active principals under auth-ON.
+      const resolvedParties = parties ? await resolveTargetActorsOrThrow(parties) : parties;
+      const result = await openDispute({ topic_id, actingPrincipalId, subject_ref, parties: resolvedParties, procedure, submitted_by: actingPrincipalId ?? submitted_by, kind, weight });
       const summary = `open_dispute: topic=${topic_id} id=${result.dispute.dispute_id}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -4348,8 +4699,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, dispute_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const result = await resolveDispute(dispute_id, { callerScope });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const result = await resolveDispute(dispute_id, { actingPrincipalId });
       const summary = `resolve_dispute: id=${dispute_id} status=${result.status}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -4386,8 +4737,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, dispute_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const result = await getDispute(dispute_id, { callerScope });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const result = await getDispute(dispute_id, { actingPrincipalId });
       const summary = `get_dispute: id=${dispute_id} status=${result.status}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -4419,8 +4770,8 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, topic_id, status, limit, offset, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
-      const result = await listDisputes(topic_id, { status, limit, offset, callerScope });
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const result = await listDisputes(topic_id, { status, limit, offset, actingPrincipalId });
       const summary = `list_disputes: topic=${topic_id} total=${result.total}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -4490,9 +4841,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
-      const profile = await getActiveProfile(projectId, { callerScope });
+      const profile = await getActiveProfile(projectId, { actingPrincipalId });
       const valid_lesson_types = await getValidLessonTypes(projectId);
       const summary = `get_active_taxonomy_profile: ${profile ? profile.slug : 'none'} (valid_types=${valid_lesson_types.length})`;
       return formatToolResponse({ profile, valid_lesson_types }, summary, output_format);
@@ -4516,9 +4867,9 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, slug, activated_by, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
-      const result = await activateProfile({ project_id: projectId, callerScope, slug, activated_by });
+      const result = await activateProfile({ project_id: projectId, actingPrincipalId, slug, activated_by });
       const summary = `activate_taxonomy_profile: ${result.status} slug=${slug}`;
       return formatToolResponse(result, summary, output_format);
     },
@@ -4538,11 +4889,54 @@ function createMcpToolsServer() {
       }),
     },
     async ({ workspace_token, project_id, output_format }) => {
-      const callerScope = await resolveMcpCallerScopeOrThrow(workspace_token);
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
-      const result = await deactivateProfile(projectId, { callerScope });
+      const result = await deactivateProfile(projectId, { actingPrincipalId });
       const summary = `deactivate_taxonomy_profile: ${result.status}`;
       return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  // Actor Data Boundary completion (warp S5/§2.8) — NHI ephemeral credential minting.
+  server.registerTool(
+    'mint_ephemeral_key',
+    {
+      description:
+        'Mint a short-lived, principal-bound API key for CI / one-shot agents. Auto-expires at TTL ' +
+        '(default 1h, max 24h) — no review, rotation, or cleanup. Returns the full key ONCE. Admin@global only.',
+      inputSchema: z.object({
+        workspace_token: z.string().optional(),
+        name: z.string().min(1).max(128).describe('Human-readable key name (unique among active keys).'),
+        principal_id: z.string().uuid().optional()
+          .describe('Bind to this existing, active, non-root principal. Omit for an ownerless dev/CI key.'),
+        role: z.enum(['admin', 'writer', 'reader']).optional().describe("Defaults to 'writer'."),
+        project_scope: z.string().optional().describe('Restrict to one project_id; omit for all projects.'),
+        ttl_minutes: z.number().int().positive().max(1440).optional()
+          .describe('Lifetime in minutes. Default 60, capped at 1440 (24h).'),
+        output_format: OutputFormatSchema.default('auto_both'),
+      }),
+    },
+    async ({ workspace_token, name, principal_id, role, project_scope, ttl_minutes, output_format }) => {
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const { assertAuthorized } = await import('../services/authorize.js');
+      await assertAuthorized(actingPrincipalId, 'admin', { kind: 'global' });
+      const { createEphemeralApiKey } = await import('../services/apiKeys.js');
+      const result = await createEphemeralApiKey({
+        name,
+        role,
+        project_scope,
+        principal_id,
+        ttlMs: ttl_minutes !== undefined ? ttl_minutes * 60_000 : undefined,
+        // created_by is the minting KEY NAME (per-creator-limit grouping), not a principal id — the MCP
+        // registry doesn't thread the caller's key name here, so leave it unset rather than mis-key the
+        // limit with a principal UUID. Ephemeral keys are short-TTL; the per-creator cap is non-critical.
+      });
+      const summary = `mint_ephemeral_key: created name=${name} expires_at=${result.expires_at}`;
+      return formatToolResponse(
+        { status: 'created', key: result.key, expires_at: result.expires_at, entry: result.entry },
+        summary,
+        output_format,
+      );
     },
   );
 

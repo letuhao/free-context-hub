@@ -11,7 +11,8 @@ type Group = {
   group_id: string;
   name: string;
   description: string | null;
-  member_count: number;
+  // [DEFERRED-049] member_count is REDACTED to null when the caller has no read@group grant (auth-on).
+  member_count: number | null;
 };
 
 export default function GroupsPage() {
@@ -259,7 +260,7 @@ export default function GroupsPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-zinc-500">
-                    {g.member_count} {g.member_count === 1 ? "member" : "members"}
+                    {g.member_count == null ? "—" : `${g.member_count} ${g.member_count === 1 ? "member" : "members"}`}
                   </span>
                   <Button
                     size="sm"

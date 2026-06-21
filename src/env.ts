@@ -85,6 +85,46 @@ const EnvSchema = z.object({
     .preprocess(v => parseBooleanEnv(v), z.boolean().optional())
     .default(false),
 
+  // Actor Data Boundary F2g — deployment profile. The signal that a deployment is externally
+  // exposed (a published gateway) vs a local dev / test stack. Default 'dev' keeps every guard
+  // inert for local runs and the unit suite. When 'production' the boot-posture guard (src/index.ts)
+  // (1) REFUSES to start with MCP_AUTH_ENABLED=false (no unauthenticated production), and (2) runs
+  // assertEnforceReady() as a hard boot gate when auth is on (no half-enforced / locked-out start).
+  // Scoped to 'production' on purpose: non-production auth-ON test rigs (docker-compose.auth-test.yml)
+  // legitimately run with the legacy token, which assertEnforceReady rejects.
+  DEPLOYMENT_PROFILE: z.enum(['dev', 'production']).default('dev'),
+
+  // Actor Data Boundary F1c — the out-of-band root bootstrap secret. Whoever holds this (the
+  // deployment owner, alongside DATABASE_URL) can establish the single root principal via
+  // `npm run bootstrap:root` (or, later, the first-run HTTP bootstrap). It is NOT a password and
+  // proves out-of-band possession. Must be set before root can be established; unset disables
+  // bootstrap entirely (refuse). Keep it secret and rotate it after first use.
+  ROOT_BOOTSTRAP_TOKEN: z.string().min(1).optional(),
+
+  // ── F-AUTH (warp S3): human authentication / session / lockout config ──
+  // Declared here ONLY for validation + documentation (§2.9). The AUTHORITATIVE DEFAULTS live in the S3
+  // services (sessions.ts / lockout.ts / passwordCredentials.ts), which read these via `process.env`
+  // directly with their own fallbacks — so these entries deliberately carry NO `.default()` (a default
+  // here would be a non-consumed second source of truth that silently drifts from the services). If a
+  // key is set, it is validated as the right shape; if unset, the service default applies.
+  // AUTH_SESSION_SIGNING_SECRET MUST be set in production (the boot guard in index.ts refuses otherwise).
+  AUTH_SESSION_SIGNING_SECRET: z.string().min(1).optional(),
+  AUTH_SESSION_COOKIE_NAME: z.string().min(1).optional(),
+  AUTH_COOKIE_SAMESITE: z.enum(['lax', 'strict', 'none']).optional(),
+  AUTH_SESSION_ABSOLUTE_TTL_SECONDS: z.coerce.number().int().positive().optional(),
+  AUTH_SESSION_IDLE_TTL_SECONDS: z.coerce.number().int().positive().optional(),
+  AUTH_LOCKOUT_SOFT_THRESHOLD: z.coerce.number().int().positive().optional(),
+  AUTH_LOCKOUT_HARD_THRESHOLD: z.coerce.number().int().positive().optional(),
+  AUTH_LOCKOUT_SOFT_BASE_DELAY_SECONDS: z.coerce.number().int().positive().optional(),
+  AUTH_LOCKOUT_SOFT_MAX_DELAY_SECONDS: z.coerce.number().int().positive().optional(),
+  AUTH_ARGON2_MEMORY_COST: z.coerce.number().int().positive().optional(),
+  AUTH_ARGON2_TIME_COST: z.coerce.number().int().positive().optional(),
+  AUTH_ARGON2_PARALLELISM: z.coerce.number().int().positive().optional(),
+  AUTH_TOTP_ISSUER: z.string().min(1).optional(),
+  AUTH_INVITE_TTL_SECONDS: z.coerce.number().int().positive().optional(),
+  AUTH_RESET_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().optional(),
+  AUTH_EXPOSE_DEV_RESET_TOKEN: z.enum(['true', 'false']).optional(),
+
   // Single-port gateway: the human GUI is same-origin, so the REST API does NOT
   // need permissive CORS. This is a comma-separated allowlist of origins that
   // may make cross-origin browser requests with credentials. Default empty =

@@ -2,6 +2,9 @@ import path from 'node:path';
 
 import { analyzeCommitImpact, ingestGitHistory } from './gitIntelligence.js';
 import { claimNextQueuedJob, claimQueuedJobById, completeJob, enqueueJob, failJob, type JobType } from './jobQueue.js';
+import { assertAuthorized, hasGlobalGrant } from './authorize.js';
+import { getDbPool } from '../db/client.js';
+import { ContextHubError } from '../core/errors.js';
 import { indexProject } from './indexer.js';
 import { buildFaq } from './faqBuilder.js';
 import { buildRaptorSummaries } from './raptorBuilder.js';
@@ -23,7 +26,13 @@ const logger = createModuleLogger('jobExecutor');
 
 /** Resolve root from payload or auto-resolve from project config. */
 async function resolveRoot(projectId: string | null, payload: Record<string, unknown>): Promise<string> {
-  return resolveProjectRoot(projectId, payload.root ? String(payload.root) : undefined);
+  const explicitRoot = payload.root ? String(payload.root) : undefined;
+  // [DEFERRED-048] The job-time authorizer for an explicit root is the enqueue-time stamp
+  // (`root_authorized_by`), re-verified across the durable-queue boundary. resolveProjectRoot is the
+  // single chokepoint that enforces the global-write gate (same for every caller); a pre-flip / auth-off
+  // row has a null stamp → hasGlobalGrant(null) is false under enforcement → FORBIDDEN (fail closed).
+  const authBy = payload.root_authorized_by ? String(payload.root_authorized_by) : null;
+  return resolveProjectRoot(projectId, explicitRoot, authBy);
 }
 
 async function executeByType(
@@ -32,8 +41,15 @@ async function executeByType(
   payload: Record<string, unknown>,
   correlationId: string | null,
   sourceJobId?: string,
+  // [F2g] The worker authenticates as the system-worker principal; threaded into every guarded leaf
+  // so jobs don't NO_PRINCIPAL-deny once auth is flipped on. null/undefined under auth-off (inert).
+  actingPrincipalId?: string | null,
 ): Promise<Record<string, unknown>> {
   const chainCorrelation = correlationId ?? undefined;
+  // [F2g] worker-internal re-enqueues inherit the worker's system-worker identity, so the chained
+  // jobs pass enqueueJob's write@project gate once auth is on.
+  const enqueueChained = (args: Parameters<typeof enqueueJob>[0]) =>
+    enqueueJob({ ...args, actingPrincipalId });
   switch (jobType) {
     case 'repo.sync': {
       if (!projectId) throw new Error('project_id is required for repo.sync');
@@ -43,6 +59,7 @@ async function executeByType(
       if (!gitUrl) throw new Error('payload.git_url is required');
       const res = await prepareRepo({
         projectId,
+        actingPrincipalId,
         gitUrl,
         cacheRoot,
         ref: payload.ref ? String(payload.ref) : undefined,
@@ -50,21 +67,17 @@ async function executeByType(
         sourceStorageMode: (payload.source_storage_mode ? String(payload.source_storage_mode) : env.SOURCE_STORAGE_MODE) as any,
       });
       if (res.status !== 'ok') throw new Error(res.error ?? 'repo.sync failed');
-      // PR F Adversary #4 MEDIUM-3: explicit callerScope:null on worker-internal
-      // chains. The worker is a trusted "global" actor — it's not a scoped caller.
-      // Setting callerScope=null self-documents the intent and is future-proof
-      // against an accidental "default to current scope" refactor that could
-      // re-introduce a SEC-3-shaped trap.
-      await enqueueJob({
+      // [F2f/DEFERRED-045 · F2g] worker-internal chain. enqueueChained forwards the worker's
+      // system-worker identity (F2g) so these follow-up jobs pass enqueueJob's write@project authorize()
+      // once auth is on. Inert while auth is OFF (actingPrincipalId is null → short-circuit ALLOW).
+      await enqueueChained({
         project_id: projectId,
-        callerScope: null,
         job_type: 'git.ingest',
         payload: { root: res.repo_root, since: payload.since ?? null, max_commits: payload.max_commits ?? null },
         correlation_id: chainCorrelation,
       });
-      await enqueueJob({
+      await enqueueChained({
         project_id: projectId,
-        callerScope: null,
         job_type: 'index.run',
         payload: { root: res.repo_root },
         correlation_id: chainCorrelation,
@@ -76,6 +89,7 @@ async function executeByType(
       const root = await resolveRoot(projectId, payload);
       return (await ingestGitHistory({
         projectId,
+        actingPrincipalId,
         root,
         since: payload.since ? String(payload.since) : undefined,
         maxCommits: payload.max_commits ? Number(payload.max_commits) : undefined,
@@ -84,23 +98,20 @@ async function executeByType(
     case 'index.run': {
       if (!projectId) throw new Error('project_id is required for index.run');
       const root = await resolveRoot(projectId, payload);
-      return (await indexProject({ projectId, root })) as unknown as Record<string, unknown>;
+      return (await indexProject({ projectId, root, actingPrincipalId })) as unknown as Record<string, unknown>;
     }
     case 'workspace.scan': {
       if (!projectId) throw new Error('project_id is required for workspace.scan');
       const root = await resolveRoot(projectId, payload);
-      const scan = await scanWorkspaceChanges({ projectId, rootPath: root, runDeltaIndex: false });
-      // MEDIUM-3: explicit callerScope:null on worker-internal chains.
-      await enqueueJob({
+      const scan = await scanWorkspaceChanges({ projectId, actingPrincipalId, rootPath: root, runDeltaIndex: false });
+      await enqueueChained({
         project_id: projectId,
-        callerScope: null,
         job_type: 'workspace.delta_index',
         payload: { root },
         correlation_id: chainCorrelation,
       });
-      await enqueueJob({
+      await enqueueChained({
         project_id: projectId,
-        callerScope: null,
         job_type: 'knowledge.refresh',
         payload: { root },
         correlation_id: chainCorrelation,
@@ -110,13 +121,13 @@ async function executeByType(
     case 'workspace.delta_index': {
       if (!projectId) throw new Error('project_id is required for workspace.delta_index');
       const root = await resolveRoot(projectId, payload);
-      return (await indexProject({ projectId, root })) as unknown as Record<string, unknown>;
+      return (await indexProject({ projectId, root, actingPrincipalId })) as unknown as Record<string, unknown>;
     }
     case 'knowledge.refresh': {
       if (!projectId) throw new Error('project_id is required for knowledge.refresh');
       const commitSha = payload.commit_sha ? String(payload.commit_sha) : '';
       if (!commitSha) return { status: 'ok', skipped: true, reason: 'commit_sha not provided' };
-      return (await analyzeCommitImpact({ projectId, commitSha, limit: payload.limit ? Number(payload.limit) : undefined })) as unknown as Record<string, unknown>;
+      return (await analyzeCommitImpact({ projectId, actingPrincipalId, commitSha, limit: payload.limit ? Number(payload.limit) : undefined })) as unknown as Record<string, unknown>;
     }
     case 'quality.eval': {
       if (!projectId) throw new Error('project_id is required for quality.eval');
@@ -143,6 +154,7 @@ async function executeByType(
       const baselineDocKey = payload.baseline_doc_key ? String(payload.baseline_doc_key) : undefined;
       const { artifact, gate, baseline, doc_key } = await runQualityEvalAndPersist({
         projectId,
+        actingPrincipalId,
         env,
         queriesPath: path.resolve(queriesPath),
         hybridMode,
@@ -200,6 +212,7 @@ async function executeByType(
       if (runFaq) {
         parts.faq = await buildFaq({
           projectId,
+          actingPrincipalId,
           root,
           sourceJobId,
           correlationId: chainCorrelation,
@@ -208,6 +221,7 @@ async function executeByType(
       if (runRaptor) {
         parts.raptor = await buildRaptorSummaries({
           projectId,
+          actingPrincipalId,
           root,
           pathGlob: payload.path_glob ? String(payload.path_glob) : undefined,
           maxLevels: payload.max_levels ? Number(payload.max_levels) : undefined,
@@ -215,11 +229,12 @@ async function executeByType(
           correlationId: chainCorrelation,
         });
       }
-      const idx = await indexProject({ projectId, root });
+      const idx = await indexProject({ projectId, root, actingPrincipalId });
       const stamp = new Date().toISOString().replace(/[:.]/g, '-');
       const shallowKey = `phase6/shallow/${stamp}`;
       await upsertGeneratedDocument({
         projectId,
+        actingPrincipalId,
         docType: 'benchmark_artifact',
         docKey: shallowKey,
         title: `Phase6 shallow ${stamp}`,
@@ -276,11 +291,12 @@ async function executeByType(
       for (let round = 1; round <= maxRounds; round++) {
         if (payload.run_shallow !== false && round === 1) {
           if (payload.run_faq !== false) {
-            await buildFaq({ projectId, root, sourceJobId, correlationId: chainCorrelation });
+            await buildFaq({ projectId, actingPrincipalId, root, sourceJobId, correlationId: chainCorrelation });
           }
           if (payload.run_raptor !== false) {
             await buildRaptorSummaries({
               projectId,
+              actingPrincipalId,
               root,
               pathGlob: payload.path_glob ? String(payload.path_glob) : undefined,
               maxLevels: payload.max_levels ? Number(payload.max_levels) : undefined,
@@ -314,6 +330,7 @@ async function executeByType(
           const bm = useLarge
             ? await buildLargeRepoProjectMemory({
                 projectId,
+                actingPrincipalId,
                 root,
                 correlationId: chainCorrelation,
                 sourceJobId,
@@ -328,6 +345,7 @@ async function executeByType(
               })
             : await buildProjectMemoryArtifact({
                 projectId,
+                actingPrincipalId,
                 root,
                 correlationId: chainCorrelation,
                 sourceJobId,
@@ -350,9 +368,10 @@ async function executeByType(
             'phase6 deep builder memory step',
           );
         }
-        await indexProject({ projectId, root });
+        await indexProject({ projectId, root, actingPrincipalId });
         const evalResult = await runQualityEvalAndPersist({
           projectId,
+          actingPrincipalId,
           env,
           queriesPath: path.resolve(queriesPath),
           hybridMode,
@@ -384,6 +403,7 @@ async function executeByType(
       const summaryKey = `phase6/deep/summary/${summaryStamp}`;
       await upsertGeneratedDocument({
         projectId,
+        actingPrincipalId,
         docType: 'benchmark_artifact',
         docKey: summaryKey,
         title: `Phase6 deep summary ${summaryStamp}`,
@@ -422,6 +442,7 @@ async function executeByType(
       const root = await resolveRoot(projectId, payload);
       const res = await buildFaq({
         projectId,
+        actingPrincipalId,
         root,
         modules: Array.isArray(payload.modules) ? (payload.modules as any[]).map(s => String(s)) : undefined,
         maxItems: payload.max_items ? Number(payload.max_items) : undefined,
@@ -429,10 +450,8 @@ async function executeByType(
         sourceJobId,
         correlationId: chainCorrelation,
       });
-      // MEDIUM-3: explicit callerScope:null on worker-internal chain.
-      await enqueueJob({
+      await enqueueChained({
         project_id: projectId,
-        callerScope: null,
         job_type: 'index.run',
         payload: { root },
         correlation_id: chainCorrelation,
@@ -444,16 +463,15 @@ async function executeByType(
       const root = await resolveRoot(projectId, payload);
       const res = await buildRaptorSummaries({
         projectId,
+        actingPrincipalId,
         root,
         pathGlob: payload.path_glob ? String(payload.path_glob) : undefined,
         maxLevels: payload.max_levels ? Number(payload.max_levels) : undefined,
         sourceJobId,
         correlationId: chainCorrelation,
       });
-      // MEDIUM-3: explicit callerScope:null on worker-internal chain.
-      await enqueueJob({
+      await enqueueChained({
         project_id: projectId,
-        callerScope: null,
         job_type: 'index.run',
         payload: { root },
         correlation_id: chainCorrelation,
@@ -465,6 +483,7 @@ async function executeByType(
       const root = await resolveRoot(projectId, payload);
       const res = await buildLargeRepoProjectMemory({
         projectId,
+        actingPrincipalId,
         root,
         correlationId: chainCorrelation,
         sourceJobId,
@@ -475,10 +494,8 @@ async function executeByType(
           payload.resume_from_shard_index !== undefined ? Number(payload.resume_from_shard_index) : undefined,
       });
       if (res.status === 'ok') {
-        // MEDIUM-3: explicit callerScope:null on worker-internal chain.
-        await enqueueJob({
+        await enqueueChained({
           project_id: projectId,
-          callerScope: null,
           job_type: 'index.run',
           payload: { root },
           correlation_id: chainCorrelation,
@@ -497,6 +514,7 @@ async function executeByType(
       const result = await runExtraction({
         docId,
         projectId,
+        actingPrincipalId,
         mode: 'vision',
         template,
         jobId: sourceJobId, // pass through for progress + cancel checks
@@ -523,6 +541,7 @@ async function executeByType(
 export async function runNextJob(
   queueName = 'default',
   projectScope?: string | null,
+  opts?: { actingPrincipalId?: string | null },
 ): Promise<{
   status: 'idle' | 'ok' | 'error';
   job_id?: string;
@@ -530,8 +549,20 @@ export async function runNextJob(
   result?: Record<string, unknown>;
   error?: string;
 }> {
-  // DEFERRED-024 — a project-scoped caller (/run-next with a scoped api key) drains
-  // only its own project's queue; undefined/null → all projects (worker unchanged).
+  // [F2f/adv DEFERRED-045] /run-next POPS AND EXECUTES a job (the worker walks payload.root). Gate it
+  // like the rest of jobQueue: a project scope drains that project (write@project); an UNSCOPED drain
+  // executes jobs across ALL projects → globally-privileged only (mirrors listJobs' no-filter rule),
+  // closing the previously-ungated execute path. DEFERRED-024 — a scoped api key still drains only its
+  // own project's queue; undefined/null → all projects (the background worker passes a system/root
+  // principal at the F2g flip; inert while auth is OFF since hasGlobalGrant returns true).
+  if (typeof projectScope === 'string' && projectScope.length > 0) {
+    await assertAuthorized(opts?.actingPrincipalId, 'write', { kind: 'project', id: projectScope });
+  } else if (!(await hasGlobalGrant(opts?.actingPrincipalId, 'write'))) {
+    throw new ContextHubError(
+      'BAD_REQUEST',
+      'a project scope is required to run jobs — only a globally-privileged principal may drain all queues',
+    );
+  }
   const job = await claimNextQueuedJob(queueName, projectScope);
   if (!job) return { status: 'idle' };
   try {
@@ -553,7 +584,7 @@ export async function runNextJob(
       },
       'job started',
     );
-    const result = await executeByType(job.job_type, job.project_id, job.payload, job.correlation_id, job.job_id);
+    const result = await executeByType(job.job_type, job.project_id, job.payload, job.correlation_id, job.job_id, opts?.actingPrincipalId);
     await completeJob(job.job_id);
     logger.info(
       {
@@ -575,13 +606,40 @@ export async function runNextJob(
   }
 }
 
-export async function runJobById(jobId: string): Promise<{
+export async function runJobById(
+  jobId: string,
+  opts?: { actingPrincipalId?: string | null },
+): Promise<{
   status: 'idle' | 'ok' | 'error';
   job_id?: string;
   job_type?: JobType;
   result?: Record<string, unknown>;
   error?: string;
 }> {
+  // [DEFERRED-051] Gate BEFORE claiming. Peek the job's project_id with a non-claiming SELECT and
+  // authorize on it FIRST; only then claim. Previously the gate ran AFTER claimQueuedJobById marked the
+  // job `running`, so a denied caller stranded the job in `running` (latent — the worker, system
+  // principal, is never denied). A not-queued/missing job peeks to null → idle (unchanged). TOCTOU on
+  // project_id is benign: a job's project_id never changes.
+  const peek = await getDbPool().query<{ project_id: string | null }>(
+    `SELECT project_id FROM async_jobs WHERE job_id = $1 AND status = 'queued'`,
+    [jobId],
+  );
+  if (peek.rowCount === 0) return { status: 'idle' };
+  const peekedProjectId = peek.rows[0].project_id;
+  // [F2g/REVIEW-CODE adv #3] Gate the rabbit/by-id execute path symmetrically with runNextJob, on the
+  // job's own project (jobs carry their own project_id, independent of the caller's scope): a project job
+  // → write@project; a global job (project_id null, e.g. leases.sweep) → globally privileged only. The
+  // worker passes the system principal (global write), so both branches pass; this rejects any
+  // non-covering principal UP FRONT — before the claim, so a denial never strands the job.
+  if (peekedProjectId) {
+    await assertAuthorized(opts?.actingPrincipalId, 'write', { kind: 'project', id: peekedProjectId });
+  } else if (!(await hasGlobalGrant(opts?.actingPrincipalId, 'write'))) {
+    throw new ContextHubError(
+      'BAD_REQUEST',
+      'a global job may be executed only by a globally-privileged principal',
+    );
+  }
   const job = await claimQueuedJobById(jobId);
   if (!job) return { status: 'idle' };
   try {
@@ -603,7 +661,7 @@ export async function runJobById(jobId: string): Promise<{
       },
       'job started by id',
     );
-    const result = await executeByType(job.job_type, job.project_id, job.payload, job.correlation_id, job.job_id);
+    const result = await executeByType(job.job_type, job.project_id, job.payload, job.correlation_id, job.job_id, opts?.actingPrincipalId);
     await completeJob(job.job_id);
     logger.info(
       {

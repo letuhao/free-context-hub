@@ -1,4 +1,21 @@
 import { getDbPool } from '../db/client.js';
+import { assertAuthorized } from './authorize.js';
+
+/**
+ * F2f: authorize `read` on every project in the (single-or-multi) filter, strict-reject.
+ * First-line guard for the analytics read surfaces (DEFERRED-047 read-sweep).
+ */
+async function assertReadAll(
+  actingPrincipalId: string | null | undefined,
+  projectIdOrIds: string | string[] | undefined,
+): Promise<void> {
+  const ids = Array.isArray(projectIdOrIds) ? projectIdOrIds : projectIdOrIds ? [projectIdOrIds] : [];
+  // Empty filter → authorize a null project (unresolvable → NOT_FOUND under auth-ON) so the readers
+  // fail closed by construction rather than degrading to an unconstrained/empty-match query.
+  for (const pid of (ids.length ? ids : [null])) {
+    await assertAuthorized(actingPrincipalId, 'read', { kind: 'project', id: pid });
+  }
+}
 
 /**
  * Helper: resolve project filter for SQL queries.
@@ -18,6 +35,8 @@ function projectFilter(
 export async function getRetrievalStats(params: {
   projectId?: string;
   projectIds?: string[];
+  /** F2f: acting principal; authorize() enforces read on each project. */
+  actingPrincipalId?: string | null;
   days?: number;
 }): Promise<{
   total_retrievals: number;
@@ -29,6 +48,7 @@ export async function getRetrievalStats(params: {
   const pool = getDbPool();
   const days = params.days ?? 30;
   const staleDays = 90;
+  await assertReadAll(params.actingPrincipalId, params.projectIds ?? params.projectId);
   const pf = projectFilter(params.projectIds ?? params.projectId ?? '', 1);
 
   const activeRes = await pool.query(
@@ -67,8 +87,11 @@ export async function getRetrievalStats(params: {
 export async function getLessonsByType(params: {
   projectId?: string;
   projectIds?: string[];
+  /** F2f: acting principal; authorize() enforces read on each project. */
+  actingPrincipalId?: string | null;
 }): Promise<{ breakdown: { lesson_type: string; count: number; percentage: number }[] }> {
   const pool = getDbPool();
+  await assertReadAll(params.actingPrincipalId, params.projectIds ?? params.projectId);
   const pf = projectFilter(params.projectIds ?? params.projectId ?? '', 1);
   const result = await pool.query(
     `SELECT lesson_type, COUNT(*) AS cnt FROM lessons
@@ -89,10 +112,13 @@ export async function getLessonsByType(params: {
 export async function getRetrievalTimeseries(params: {
   projectId?: string;
   projectIds?: string[];
+  /** F2f: acting principal; authorize() enforces read on each project. */
+  actingPrincipalId?: string | null;
   days?: number;
 }): Promise<{ points: { date: string; count: number }[] }> {
   const pool = getDbPool();
   const days = params.days ?? 30;
+  await assertReadAll(params.actingPrincipalId, params.projectIds ?? params.projectId);
   const pf = projectFilter(params.projectIds ?? params.projectId ?? '', 1);
   const result = await pool.query(
     `SELECT d::date AS date, COALESCE(cnt, 0)::int AS count
@@ -120,10 +146,13 @@ export async function getRetrievalTimeseries(params: {
 export async function getMostRetrievedLessons(params: {
   projectId?: string;
   projectIds?: string[];
+  /** F2f: acting principal; authorize() enforces read on each project. */
+  actingPrincipalId?: string | null;
   limit?: number;
 }): Promise<{ items: any[] }> {
   const pool = getDbPool();
   const limit = Math.min(params.limit ?? 10, 50);
+  await assertReadAll(params.actingPrincipalId, params.projectIds ?? params.projectId);
   const pf = projectFilter(params.projectIds ?? params.projectId ?? '', 1);
   const result = await pool.query(
     `SELECT l.lesson_id, l.title, l.lesson_type, l.status, l.project_id,
@@ -148,10 +177,13 @@ export async function getMostRetrievedLessons(params: {
 export async function getDeadKnowledge(params: {
   projectId?: string;
   projectIds?: string[];
+  /** F2f: acting principal; authorize() enforces read on each project. */
+  actingPrincipalId?: string | null;
   limit?: number;
 }): Promise<{ items: any[] }> {
   const pool = getDbPool();
   const limit = Math.min(params.limit ?? 10, 50);
+  await assertReadAll(params.actingPrincipalId, params.projectIds ?? params.projectId);
   const pf = projectFilter(params.projectIds ?? params.projectId ?? '', 1);
   const result = await pool.query(
     `SELECT l.lesson_id, l.title, l.lesson_type, l.created_at, l.project_id
@@ -169,8 +201,11 @@ export async function getDeadKnowledge(params: {
 export async function getAgentActivity(params: {
   projectId?: string;
   projectIds?: string[];
+  /** F2f: acting principal; authorize() enforces read on each project. */
+  actingPrincipalId?: string | null;
 }): Promise<{ agents: any[] }> {
   const pool = getDbPool();
+  await assertReadAll(params.actingPrincipalId, params.projectIds ?? params.projectId);
   const pf = projectFilter(params.projectIds ?? params.projectId ?? '', 1);
   const result = await pool.query(
     `SELECT

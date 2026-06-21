@@ -326,37 +326,10 @@ test('F1: POST decide — apiKeyName == body actor_id → endorses (200)', async
     `expected endorsed/approved, got ${res.json.data.status}`);
 });
 
-test('F1 precondition (AC1b): a reader-role key POST is still 403 (requireRole writer gate)', async () => {
-  const topicId = await mkTopicWithParticipants();
-  const artifactId = await mkForReviewArtifact(topicId, 'doc-f1e', 'execution-actor');
-  const res = await request('POST', `/api/topics/${topicId}/requests`, {
-    subject_id: artifactId, kind: 'artifact_review', weight: 10,
-    procedure: 'unilateral', submitted_by: 'execution-actor',
-  }, { 'x-test-key-role': 'reader' });
-  assert.equal(res.status, 403, `expected 403, got ${res.status}: ${JSON.stringify(res.json)}`);
-});
-
-// ── F4: the GET routes require the reader role ──────────────────────────────
-
-test('F4: GET /api/topics/:id/requests with an unknown role → 403', async () => {
-  const topicId = await mkTopicWithParticipants();
-  const res = await request('GET', `/api/topics/${topicId}/requests`, undefined,
-    { 'x-test-key-role': 'intruder' });
-  assert.equal(res.status, 403, `expected 403, got ${res.status}: ${JSON.stringify(res.json)}`);
-});
-
-test('F4: GET /api/requests/:id with an unknown role → 403', async () => {
-  const res = await request('GET', '/api/requests/00000000-0000-0000-0000-000000000000', undefined,
-    { 'x-test-key-role': 'intruder' });
-  assert.equal(res.status, 403, `expected 403, got ${res.status}: ${JSON.stringify(res.json)}`);
-});
-
-test('F4: GET /api/topics/:id/requests with role reader → not 403 (reader admitted)', async () => {
-  const topicId = await mkTopicWithParticipants();
-  const res = await request('GET', `/api/topics/${topicId}/requests`, undefined,
-    { 'x-test-key-role': 'reader' });
-  assert.notEqual(res.status, 403, `reader must pass the gate; got ${res.status}`);
-});
+// [Domain 8] REMOVED: the reader-role-403 precondition + the F4 "GET routes require the reader role"
+// section. Those asserted the now-deleted `requireRole` middleware (coarse key-role). The role/scope
+// gate is now `authorize()` over principal grants — exercised by the service-level *-authz suites
+// (requests via topic/request scope), not by header-role shims.
 
 // ── Sprint 15.9 (DEFERRED-020 LOW-7) — route-layer fractional step-index guard ──
 
