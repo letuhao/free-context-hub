@@ -1,7 +1,40 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 055 -->
+<!-- Next ID: 058 -->
+
+## DEFERRED-057
+
+- **Title:** F2g flip-adversary LOW — no test pins the legacy-token predicate across its 3 sites
+- **Status:** OPEN (2026-06-21). LOW; drift guard.
+- **Context:** `assertEnforceReady` refuses enforce-ready when `CONTEXT_HUB_WORKSPACE_TOKEN && !MCP_LEGACY_TOKEN_DISABLED`
+  (bootstrap.ts:201); the two real fast-paths (`src/api/middleware/auth.ts`, `src/mcp/auth.ts`) gate on the same
+  predicate. They agree today; only a code comment keeps them in sync.
+- **Scope when picked up:** a unit test asserting the boot-gate predicate and both fast-path predicates agree across
+  `{token set/unset} × {disabled true/false}`.
+- **Trigger:** any change to the legacy-token gating, or the next auth-surface review.
+
+## DEFERRED-056
+
+- **Title:** F2g flip-adversary LOW — per-MCP-tool auth is by convention, not structural
+- **Status:** OPEN (2026-06-21). LOW (no current gap — all ~105 tools verified to call a resolver).
+- **Context:** The `/mcp` transport does no auth itself; each tool handler calls `resolveMcpCaller*OrThrow`. The
+  adversary enumerated all registered tools and confirmed none currently skip it, but nothing structurally forces
+  it — the next tool that forgets the resolver call is an unauthenticated endpoint under auth-ON.
+- **Scope when picked up:** wrap tool registration in a helper that resolves the caller once and passes
+  `{scope, actingPrincipalId}` into the handler; add a test that fails if any registered tool omits the resolver.
+- **Trigger:** adding new MCP tools, or the next auth-surface review.
+
+## DEFERRED-055
+
+- **Title:** F2g flip-adversary LOW — `bearerAuth` env-token compare is non-constant-time
+- **Status:** OPEN (2026-06-21). LOW; inert under the hardened posture (legacy token disabled → path 401s).
+- **Context:** `src/api/middleware/auth.ts` compares `token === env.CONTEXT_HUB_WORKSPACE_TOKEN` (non-constant-time)
+  where the bootstrap path uses `timingSafeEqual`. A timing oracle on the shared admin secret — but only reachable
+  in the *non-hardened* auth-ON posture (legacy token enabled); the shipped hardened posture disables that path.
+- **Scope when picked up:** use a hashed `timingSafeEqual` for the env-token fast path in both `auth.ts` files (mirror
+  `secretsMatch` in bootstrap.ts), or drop the fast path entirely when `MCP_LEGACY_TOKEN_DISABLED`.
+- **Trigger:** a deployment that runs auth-ON with the legacy token still enabled, or the next auth-surface review.
 
 ## DEFERRED-054
 

@@ -1,3 +1,58 @@
+# CHECKPOINT — F2g: the MCP_AUTH_ENABLED flip — hardened deployment posture + boot guard (2026-06-21, session 13)
+
+**Branch:** `feature/actor-data-boundary`. This is THE flip — the final F2g step. The **code default stays
+`MCP_AUTH_ENABLED=false`** (A3: the flip is a *deployment posture*, not a code default); local dev + the unit suite
+are unchanged. Full suite **1220 / 1201 pass / 0 fail / 19 skip** (+4 bootPosture), tsc clean (backend + GUI).
+POST-REVIEW honored — human chose **A3 + ship + B2 (full hardened)** and **fix GUI auth now**.
+
+**What shipped (the flip is a deployment posture + boot guard):**
+- **Boot guard** — new `DEPLOYMENT_PROFILE` env (`dev`|`production`, default `dev`) + pure `src/services/bootPosture.ts`
+  decision, wired into **`src/index.ts`** and **`src/worker.ts`** (after `applyMigrations`, before any listener):
+  `production` + auth-OFF → **refuse boot**; `production` + auth-ON → run **`assertEnforceReady()`** as a hard boot
+  gate (the "F4" gate its own comment anticipated). Scoped to the production profile so non-production auth-ON test
+  rigs (`docker-compose.auth-test.yml`, which keeps the legacy token) still boot.
+- **Base `docker-compose.yml` flipped to HARDENED** (literal `DEPLOYMENT_PROFILE=production`, `MCP_AUTH_ENABLED=true`,
+  `MCP_LEGACY_TOKEN_DISABLED=true` on `mcp`/`worker`/`mcp-ca` — literals so a stray `.env=false` can't un-harden it).
+  New **`docker-compose.dev.yml`** restores local auth-OFF (`-f docker-compose.yml -f docker-compose.dev.yml`).
+- **GUI auth (adversary HIGH #1 fix)** — under hardened auth the browser ships no token. `gui/src/proxy.ts` (the Next
+  16 gateway proxy) now injects a **server-only** `CONTEXTHUB_GATEWAY_TOKEN` as `Authorization: Bearer …` on proxied
+  `/api` calls via `NextResponse.next({ request: { headers } })` (documented BFF idiom — upstream-only, never exposed
+  to the client). Skipped when the caller already sent a bearer (agents keep their own identity) and when unset
+  (dev). Wired into the `gui` service env + `.env.example`.
+
+**Cold-start security adversary** (HARD pre-prod trigger): verified the **auth core + boot decision are sound** (no
+scopeCovers over-coverage; bootPosture matrix exhaustive; no listener binds after a failed guard; `NO_PRINCIPAL`
+denies under auth-ON). 9 findings — **fixed 4**: HIGH #1 GUI lockout (above), #2 `auth-test.yml` re-gated to
+`DEPLOYMENT_PROFILE=dev` (the production base would otherwise hit the enforce-ready gate and refuse), #3 `mcp-ca`
+ports → loopback (`127.0.0.1:`), #4 worker gate mirrored to the full `evaluateBootPosture`+`assertEnforceReady`.
+Deferred 3 LOWs → DEFERRED.md (non-const-time legacy compare — inert under hardened; per-tool-auth-by-convention;
+a legacy-token predicate-drift test).
+
+**Live verification (backend run directly via `tsx` vs the dev DB — NOT a container rebuild):**
+- AC1 `production`+auth-OFF → **FATAL refuse**, exit 1 (exact message). AC2 not-ready → **FATAL** with the precise
+  `assertEnforceReady` reason. **AC2-pass** (after the runbook) → `enforce-ready: production auth-ON boot gate passed`
+  + MCP listening. AC3 dev default → boots + binds.
+- Enforcement (hardened backend): **no-token 401, bad-token 401, legacy `change-me` token 401 (B2 reject), minted
+  admin api-key 200** (no false lockout). Drill artifacts (principal+grant+key) revoked afterward.
+
+**Dev-DB side effects (idempotent, required pre-flip, inert under the still-running auth-OFF container):**
+`bootstrap:root` reissued the root credential (I wiped my copy — re-run `bootstrap:root` for a fresh root key);
+`migrate:coordination-actors` imported 62 principals + rewrote 20+2 columns; `bootstrap:system` no-op; `backfill:grants`
+created 0. **Incident:** while clearing stray test backends off ports 3000/3001, a port-kill caught `com.docker.backend`
+and briefly took Docker Desktop offline; restarted it, all containers (contexthub DB + the unrelated `infra` stack)
+recovered via restart policies. No data lost.
+
+**New/modified:** `src/env.ts`, `src/services/bootPosture.ts` (+`.test.ts`), `src/index.ts`, `src/worker.ts`,
+`package.json`, `docker-compose.yml`, `docker-compose.dev.yml`, `docker-compose.auth-test.yml`, `.env.example`,
+`gui/src/proxy.ts`, the FLIP-clarify + FLIP-DESIGN specs.
+
+**What's next:** **rebuild the running stack hardened** (`docker compose up -d --build`) with `CONTEXTHUB_GATEWAY_TOKEN`
+set to a freshly-minted api-key, and **live-verify the GUI** works end-to-end against the deployed hardened stack
+(the proxy injection has been built + tsc-checked but not yet proven against a real container build). The code default
+stays `false`; the running container is still auth-OFF until that rebuild.
+
+---
+
 # CHECKPOINT — F2g Domain 8: retire legacy REST middleware → authorize() is the SOLE gate (2026-06-21, session 13)
 
 **Branch:** `feature/actor-data-boundary`. Auth **OFF** (inert) — the `MCP_AUTH_ENABLED` default flip is the ONLY

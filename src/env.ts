@@ -85,6 +85,15 @@ const EnvSchema = z.object({
     .preprocess(v => parseBooleanEnv(v), z.boolean().optional())
     .default(false),
 
+  // Actor Data Boundary F2g — deployment profile. The signal that a deployment is externally
+  // exposed (a published gateway) vs a local dev / test stack. Default 'dev' keeps every guard
+  // inert for local runs and the unit suite. When 'production' the boot-posture guard (src/index.ts)
+  // (1) REFUSES to start with MCP_AUTH_ENABLED=false (no unauthenticated production), and (2) runs
+  // assertEnforceReady() as a hard boot gate when auth is on (no half-enforced / locked-out start).
+  // Scoped to 'production' on purpose: non-production auth-ON test rigs (docker-compose.auth-test.yml)
+  // legitimately run with the legacy token, which assertEnforceReady rejects.
+  DEPLOYMENT_PROFILE: z.enum(['dev', 'production']).default('dev'),
+
   // Actor Data Boundary F1c — the out-of-band root bootstrap secret. Whoever holds this (the
   // deployment owner, alongside DATABASE_URL) can establish the single root principal via
   // `npm run bootstrap:root` (or, later, the first-run HTTP bootstrap). It is NOT a password and

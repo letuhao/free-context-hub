@@ -42,6 +42,30 @@ const ALLOWED_ORIGINS = (process.env.GATEWAY_ALLOWED_ORIGINS ?? "")
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
+/**
+ * [F2g] Gateway-side auth injection (backend-for-frontend).
+ *
+ * Under the hardened backend (MCP_AUTH_ENABLED=true) the browser GUI ships NO bearer
+ * token — its same-origin `/api` calls would 401. This SERVER-ONLY credential (never a
+ * NEXT_PUBLIC_* var, never exposed to the client) is injected as `Authorization: Bearer …`
+ * on proxied requests via `NextResponse.next({ request: { headers } })`, which mutates only
+ * the upstream request the backend receives. It is the gateway's own api_keys-bound principal
+ * (mint one scoped to what the GUI needs — typically global for a single-operator deploy).
+ *
+ * Inert when unset (dev / auth-OFF backend ignores it). Skipped when the caller already sent
+ * an Authorization header, so an agent calling through the gateway keeps its OWN identity.
+ */
+const GATEWAY_TOKEN = (process.env.CONTEXTHUB_GATEWAY_TOKEN ?? "").trim();
+
+function allow(req: NextRequest): NextResponse {
+  if (GATEWAY_TOKEN && !req.headers.get("authorization")) {
+    const headers = new Headers(req.headers);
+    headers.set("authorization", `Bearer ${GATEWAY_TOKEN}`);
+    return NextResponse.next({ request: { headers } });
+  }
+  return NextResponse.next();
+}
+
 function blocked(reason: string) {
   return NextResponse.json(
     { error: `Forbidden: cross-site request to gateway rejected (${reason})` },
@@ -67,7 +91,7 @@ export function proxy(req: NextRequest) {
     if (disallowed && !originAllowed) {
       return blocked(`sec-fetch-site=${site}`);
     }
-    return NextResponse.next();
+    return allow(req);
   }
 
   // No Sec-Fetch-Site. Either a non-browser client (allow) or an old browser.
@@ -87,7 +111,7 @@ export function proxy(req: NextRequest) {
     }
   }
 
-  return NextResponse.next();
+  return allow(req);
 }
 
 export const config = {

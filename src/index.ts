@@ -20,6 +20,44 @@ async function main() {
   const env = getEnv();
   logStartupEnvSummary();
   await applyMigrations();
+
+  // F2g — boot-posture guard. Runs AFTER applyMigrations so assertEnforceReady's
+  // DB checks see a ready schema, and BEFORE we bind any listener so a misconfigured
+  // production deploy never accepts a request. The decision is pure (bootPosture.ts);
+  // the DB call + fatal exit live here.
+  {
+    const { evaluateBootPosture } = await import('./services/bootPosture.js');
+    const posture = evaluateBootPosture(env);
+    if (posture.kind === 'refuse') {
+      logger.fatal(posture.reason);
+      process.exit(1);
+    }
+    if (posture.kind === 'enforce-ready-required') {
+      try {
+        const { assertEnforceReady } = await import('./services/bootstrap.js');
+        const root = await assertEnforceReady();
+        logger.info(
+          { root_principal: root.principal_id },
+          'enforce-ready: production auth-ON boot gate passed',
+        );
+      } catch (e) {
+        logger.fatal(
+          { error: e instanceof Error ? e.message : String(e) },
+          'not enforce-ready — refusing to boot production auth-ON (enabling enforcement would lock '
+            + 'callers and/or the background worker out). Resolve the reason above, then restart.',
+        );
+        process.exit(1);
+      }
+    }
+    if (posture.kind === 'warn-unauthenticated') {
+      logger.warn(
+        'MCP_AUTH_ENABLED=false — backend is UNAUTHENTICATED. Anyone who can reach the gateway port '
+          + 'can call all MCP tools and REST endpoints. Set MCP_AUTH_ENABLED=true and use scoped '
+          + 'api_keys for any non-localhost deployment.',
+      );
+    }
+  }
+
   await bootstrapKgIfEnabled().catch(err => {
     logger.error({ error: err instanceof Error ? err.message : String(err) }, 'kg bootstrap failed');
   });
@@ -102,18 +140,8 @@ async function main() {
     logger.info({ port: env.API_PORT, prefix: '/api' }, 'REST API listening');
   });
 
-  // Security posture warning: with auth off, the single-port gateway is an
-  // unauthenticated proxy to the full MCP/REST surface. Safe for a loopback /
-  // trusted-network self-host; dangerous if the gateway port is publicly
-  // exposed. The gateway's cross-site guard still blocks browser-driven attacks,
-  // but does not authenticate direct (curl/SDK) callers.
-  if (!env.MCP_AUTH_ENABLED) {
-    logger.warn(
-      'MCP_AUTH_ENABLED=false — backend is UNAUTHENTICATED. Anyone who can reach '
-        + 'the gateway port can call all MCP tools and REST endpoints. Set '
-        + 'MCP_AUTH_ENABLED=true and use scoped api_keys for any non-localhost deployment.',
-    );
-  }
+  // (Security-posture warning + the production enforce-ready boot gate run earlier,
+  //  right after applyMigrations — see the F2g boot-posture guard above.)
 
   process.on('SIGINT', () => process.exit(0));
 }

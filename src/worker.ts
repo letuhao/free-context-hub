@@ -56,6 +56,32 @@ async function main() {
   const env = getEnv();
   await applyMigrations();
 
+  // [F2g] Mirror the server's boot-posture guard (src/index.ts) so both processes apply the IDENTICAL
+  // gate — not a narrower subset. Under DEPLOYMENT_PROFILE=production: refuse to start auth-off, and run
+  // assertEnforceReady() (root + system identity + migrations + every credential granted) as a hard
+  // boot gate. Runs after applyMigrations so the DB checks see a ready schema; the narrower system-
+  // identity check below still covers non-production auth-ON test rigs.
+  {
+    const { evaluateBootPosture } = await import('./services/bootPosture.js');
+    const posture = evaluateBootPosture(env);
+    if (posture.kind === 'refuse') {
+      logger.fatal({ event: 'worker_refuse_unauthenticated_production' }, posture.reason);
+      process.exit(1);
+    }
+    if (posture.kind === 'enforce-ready-required') {
+      try {
+        const { assertEnforceReady } = await import('./services/bootstrap.js');
+        await assertEnforceReady();
+      } catch (e) {
+        logger.fatal(
+          { event: 'worker_not_enforce_ready', error: e instanceof Error ? e.message : String(e) },
+          'worker: not enforce-ready — refusing to start under production auth-ON. Resolve the reason above.',
+        );
+        process.exit(1);
+      }
+    }
+  }
+
   // [F2g] The worker authenticates every guarded leaf as the system-worker principal. Under auth-off
   // this is null and authorize() short-circuits ALLOW (dev posture unchanged). Under auth-on it MUST
   // exist with its global-write grant, or every job would NO_PRINCIPAL-deny — so fail fast and loud
