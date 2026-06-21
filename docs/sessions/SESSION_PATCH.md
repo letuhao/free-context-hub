@@ -1,3 +1,41 @@
+# CHECKPOINT — DEFERRED-050: notification user-identity isolation (the user IS the principal) (2026-06-21, session 13)
+
+**Branch:** `feature/actor-data-boundary`. Auth stays **OFF** (inert) — flip + Domain 8 remain human-gated, NOT
+touched. Full unit suite **1255 / 1236 pass / 0 fail / 19 skip** (3× stable), tsc clean. POST-REVIEW honored.
+DEFERRED-050 closed; no new deferrals.
+
+**The problem:** `GET /api/notifications` + `PATCH .../mark-read` were keyed by a caller-supplied `user_id` with
+NO check (passing `user_id=<victim>` would read/mark another user's notifications); settings were project-gated
+but still keyed by request `user_id`. The deferred assumed this needed a new user↔principal substrate.
+
+**The correction (CLARIFY):** no new substrate — F1's principal IS the human identity (every request carries it
+via `callerPrincipalOf`), and the `notifications` table is **dormant** (`createNotification` has zero callers).
+User chose **D2** (derive-from-principal + defense-in-depth JOIN filter).
+
+**The fix (2 files, no migration):**
+- `src/api/routes/activity.ts` — new `notificationUserOf(req) = callerPrincipalOf(req) ?? 'gui-user'`; all 4
+  `/api/notifications*` handlers derive the user from it and **ignore any request-supplied `user_id`**. auth-OFF
+  → `'gui-user'` (GUI + existing settings rows unchanged).
+- `src/services/activity.ts` — `listNotifications` gains `actingPrincipalId` and drops any notification whose
+  `project_id` the principal can't `read` (defense-in-depth), `unread_count` over the visible set, bounded by
+  `NOTIFICATION_MAX_SCAN=500`. auth-OFF → `authorize` short-circuits ALLOW → all kept.
+
+**Reviews:** 2-stage REVIEW-CODE self-review (mark-read fenced by `user_id=principal`; orphan-project fail-closed)
++ `/review-impl` (no HIGH/MED; verified `bearerAuth` gates `/api/notifications` so no unauth `gui-user` collapse,
+no MCP surface; LOWs documented in code: env-token/unbound → shared bucket, `createNotification` principal-id
+contract). **VERIFY note:** an initial full-suite flake (`actual:2 expected:1`) was root-caused to a mid-file
+`MCP_AUTH_ENABLED=false` toggle in the new test racing other auth-ON files in the shared runner — removed that
+sub-test; 3× stable since.
+
+**New files:** `src/services/notifications-authz.test.ts` (4: helper×3 + DB JOIN-filter×1), DEFERRED-050
+CLARIFY/DESIGN docs. **Modified:** `src/api/routes/activity.ts`, `src/services/activity.ts`, package.json.
+
+**What's next (all human-gated):** DEFERRED-051/052/053/054 (worker-only/latent least-privilege items) — then
+Domain 8 (retire legacy REST `requireScope`/role middleware) — then the `MCP_AUTH_ENABLED` default flip itself
+(own checkpoint + cold-start security adversary + live auth-ON verification).
+
+---
+
 # CHECKPOINT — DEFERRED-049: `group` becomes a real scope level (namespace split) + resolveProjectIds self-defense (2026-06-21, session 13)
 
 **Branch:** `feature/actor-data-boundary`. Auth stays **OFF** (`MCP_AUTH_ENABLED=false`, inert) — the flip and

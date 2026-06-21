@@ -61,7 +61,18 @@
 ## DEFERRED-050
 
 - **Title:** F2f — user-scoped notification list/mark needs user-identity isolation (not project authz)
-- **Status:** OPEN (2026-06-20). MED. Split from DEFERRED-047 (read-sweep). F2g-flip item.
+- **Status:** **RESOLVED (2026-06-21)** — closed WITHOUT a new substrate. The deferred assumed a missing
+  user↔principal model, but F1's principal IS the human identity (every request carries it via
+  `callerPrincipalOf`), and the `notifications` table is dormant (`createNotification` has zero callers). Fix
+  (D2): new `notificationUserOf(req) = callerPrincipalOf(req) ?? 'gui-user'`; all 4 `/api/notifications*`
+  handlers derive the user from it and **ignore any request-supplied `user_id`** (the isolation hole);
+  `listNotifications` additionally filters the `activity_log` JOIN to projects the principal can `read`
+  (defense-in-depth) with `unread_count` over the visible set. auth-OFF → `'gui-user'` fallback (GUI +
+  existing settings rows unchanged). Reviews: 2-stage self-review + `/review-impl` (no HIGH/MED; verified
+  bearerAuth gates the routes, no MCP surface, mark-read fenced by `user_id=principal`; LOWs documented:
+  env-token/unbound → shared bucket, createNotification principal-id contract). Tests:
+  `notifications-authz.test.ts` (4). No migration. Original write-up:
+- ~~OPEN~~ MED. Split from DEFERRED-047 (read-sweep). F2g-flip item.
 - **Context:** `activity.listNotifications` / `markNotificationsRead` (src/services/activity.ts) and their
   `/api/notifications` routes are keyed by a caller-supplied `user_id` with no check. `listNotifications`
   JOINs `activity_log` and returns `a.project_id / title / detail / actor` — so passing `user_id=<victim>`

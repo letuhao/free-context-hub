@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import {
   logActivity, listActivity,
   listNotifications, markNotificationsRead,
@@ -9,6 +9,23 @@ import { callerPrincipalOf } from '../middleware/auth.js';
 import { assertAuthorized } from '../../services/authorize.js';
 
 const router = Router();
+
+/**
+ * [DEFERRED-050] The notification "user" IS the authenticated principal — F1's principal model is the human
+ * identity, so there is no separate user table to consult. Derive it from the request and NEVER honor a
+ * request-supplied `user_id` (that was the cross-user isolation hole). Under auth-OFF `callerPrincipalOf`
+ * is null → a fixed dev id, preserving today's GUI behavior + existing settings rows.
+ *
+ * [review-impl #1] This assumes principal-BOUND keys: under auth-ON the env-token fast-path and legacy
+ * unbound api_keys reach handlers with no `apiKeyPrincipalId`, so they too map to LOCAL_NOTIFICATION_USER
+ * (one shared bucket). That is acceptable — those are the deprecated global-admin paths, the feature is
+ * dormant, and the MCP_AUTH_ENABLED flip already requires principal-bound keys (DEFERRED-029 PR E). Per-
+ * identity isolation holds for every principal-bound (DB-key) caller.
+ */
+export const LOCAL_NOTIFICATION_USER = 'gui-user';
+export function notificationUserOf(req: Request): string {
+  return callerPrincipalOf(req) ?? LOCAL_NOTIFICATION_USER;
+}
 
 /** GET /api/activity — list activity feed for a project or projects */
 router.get('/', async (req, res, next) => {
@@ -52,7 +69,8 @@ const notifRouter = Router();
 notifRouter.get('/', async (req, res, next) => {
   try {
     const result = await listNotifications({
-      userId: req.query.user_id as string,
+      userId: notificationUserOf(req),
+      actingPrincipalId: callerPrincipalOf(req),
       unreadOnly: req.query.unread_only === 'true',
       limit: req.query.limit ? Number(req.query.limit) : undefined,
     });
@@ -64,7 +82,7 @@ notifRouter.get('/', async (req, res, next) => {
 notifRouter.patch('/mark-read', async (req, res, next) => {
   try {
     const result = await markNotificationsRead({
-      userId: req.body.user_id,
+      userId: notificationUserOf(req),
       notificationId: req.body.notification_id,
     });
     res.json(result);
@@ -76,7 +94,7 @@ notifRouter.get('/settings', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.query.project_id as string | undefined);
     await assertAuthorized(callerPrincipalOf(req), 'read', { kind: 'project', id: projectId });
-    const userId = (req.query.user_id as string) ?? 'gui-user';
+    const userId = notificationUserOf(req);
     const { getDbPool } = await import('../../db/client.js');
     const pool = getDbPool();
     const result = await pool.query(
@@ -94,7 +112,7 @@ notifRouter.put('/settings', async (req, res, next) => {
   try {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
     await assertAuthorized(callerPrincipalOf(req), 'write', { kind: 'project', id: projectId });
-    const userId = req.body.user_id ?? 'gui-user';
+    const userId = notificationUserOf(req);
     const rawSettings = req.body.settings ?? {};
     // Validate: only boolean values, sanitize keys
     const settings: [string, boolean][] = Object.entries(rawSettings)
