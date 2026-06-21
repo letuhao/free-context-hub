@@ -1,11 +1,66 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 059 -->
+<!-- Next ID: 063 -->
+
+## DEFERRED-062
+
+- **Title:** Governance GUI polish — sidebar account footer + scope-gated nav visibility + FeatureToggles import-swap
+- **Status:** OPEN (2026-06-21, session 14). Deferred during the /warp reconcile as non-load-bearing polish.
+- **Items:** (1) the sidebar **account footer** ("signed in as {display_name}" + sign-out via `authApi.logout`,
+  reading `governanceApi.me()`) was specced in §2.3 but not wired — sign-out currently lives on `/settings/sessions`.
+  (2) the **Governance nav group is not scope-gated** (visible to all; every page is admin@global-gated at the API
+  regardless, so no security gap — cosmetic). (3) S6 built `gui/src/components/feature-toggles.tsx` but the
+  **import-swap** into `gui/src/app/projects/settings/page.tsx` (replace the inline Features block) was deferred —
+  the component is unused until swapped; behaviourally identical so the page works unchanged.
+- **Trigger:** next governance-GUI polish pass.
+
+## DEFERRED-061
+
+- **Title:** GUI features removed during contract reconcile for lack of a backend endpoint
+- **Status:** OPEN (2026-06-21, session 14). During the S4↔S3 / S2↔S1 contract reconcile, several GUI affordances had
+  no corresponding backend route and were short-circuited (not fabricated): the **auth-policy panel** + **"revoke all
+  other sessions"** on `/settings/sessions`; the **invite-preview (GET)** + **email-verify** steps on `/register`.
+- **Resolution:** either build the backing endpoints (`GET /api/auth/policy` + `PATCH`, `DELETE /api/auth/sessions?scope=others`,
+  `GET /api/auth/register?token=` preview, an email-verify step) or remove the UI affordances permanently.
+- **Trigger:** when the F-AUTH human-login flow is taken to full production E2E.
+
+## DEFERRED-060
+
+- **Title:** F-AUTH security-hardening residuals from the cold-start adversary (C1/C2 + /api/me consistency, A4)
+- **Status:** OPEN (2026-06-21, session 14). The pass-2 adversary cleared all HIGH/CRITICAL; these LOW/MEDIUM remain:
+  - **C2 (MEDIUM, pre-existing):** the login lockout `429 "Account locked"` vs `401` is an account-existence oracle
+    (an existing email can be driven to 429; non-existent always 401). Fix: return generic 401 for the soft-lock case,
+    or apply the throttle counter to non-existent emails too. NOT introduced by this work.
+  - **C1 (LOW):** pre-auth `/api/auth/*` cookie-authed mutations (logout, session-revoke, mfa-enroll) bypass
+    `csrfGuard` (mounted after the auth router). Mitigated by default `SameSite=Lax`; rises to MEDIUM under
+    `AUTH_COOKIE_SAMESITE=none`. Fix: add `csrfGuard` to those session-scoped routes.
+  - **`/api/me` consistency:** same class as A1 (no in-service authz; returns `role:admin`/`principal:null` to a
+    junk-cookie caller under auth-ON) — grants nothing, but worth the same guard as `/api/system/info` for consistency.
+    Interacts with the GUI auth-state detection, so do it WITH the full-login E2E.
+  - **A4 (MEDIUM, accepted tradeoff):** hard-lockout is an account-DoS vector (10 bad passwords locks a known email
+    until admin/reset). Inherent to account lockout; mitigate with auto-expiring hard-lock or per-IP throttling.
+  - **C3/C4 (LOW):** dummy-verify warmup + forgot-token INSERT timing — negligible; optional.
+- **Trigger:** next auth-hardening pass / before public exposure.
+
+## DEFERRED-059
+
+- **Title:** Full F-AUTH human-login E2E in hardened (auth-ON) posture — bootstrap → operator → login → MFA
+- **Status:** OPEN (2026-06-21, session 14). The /warp build + reconcile is live-smoked in **dev/auth-off** posture
+  (API boots, all routes serve, GUI pages render, `POST /api/auth/login`→401). The full **hardened** path was NOT
+  yet exercised end-to-end: set `AUTH_SESSION_SIGNING_SECRET` + `DEPLOYMENT_PROFILE=production` + `MCP_AUTH_ENABLED=true`,
+  boot (A6 guard now requires the secret), run the bootstrap wizard (`POST /api/bootstrap/root` → operator → enforce),
+  then a real human `login → session cookie → /api/me → MFA enroll/verify`, and confirm the GUI session flow + the
+  `AppShell` pre-auth shell live. Then **retire the gateway-token shim** (`gui/src/proxy.ts` + `CONTEXTHUB_GATEWAY_TOKEN`)
+  per plan §2.7/§7 once the cookie path is proven live, and re-flip to the hardened public posture.
+- **Trigger:** taking the deployment to a real human-authenticated production posture.
 
 ## DEFERRED-058
 
 - **Title:** Actor-data-boundary HUMAN-FACING half — governance GUI + F-AUTH + NHI hardening (the untracked gap)
+- **Status:** ✅ **BUILT (2026-06-21, session 14)** via `/warp` — 6 file-disjoint slices, reconciled, safety-cleared
+  (S1 CLEAR; S3 BLOCKED→fixed→CLEAR), contract-reconciled, live-smoked in dev posture. Residuals tracked as
+  DEFERRED-059..062. Originally PLANNED below.
 - **Status:** PLANNED (2026-06-21). The branch built the agent-facing half (principals/grants/authorize/decision-log/
   api-keys/MCP/the hardened flip) but the human-facing half was designed (HTML drafts + backend services) and never
   built — and never tracked. A full draft-vs-GUI audit (6 parallel comparators) confirmed: the knowledge/project GUI

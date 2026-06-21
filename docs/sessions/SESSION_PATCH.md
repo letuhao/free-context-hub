@@ -1,3 +1,52 @@
+# CHECKPOINT — Actor-data-boundary COMPLETION built via /warp: 6 disjoint slices → reconcile → safety-cleared → live (2026-06-21, session 14)
+
+**Branch:** `feature/actor-data-boundary` (not yet PR'd). **Mode:** `/warp` parallel fan-out. Executes the plan from
+session 13 (`docs/plans/2026-06-21-actor-data-boundary-COMPLETION-plan.md`). Discharges **DEFERRED-058** (and 041/042).
+
+**Planning (3 cold-start adversary passes on the SLICING, saturation 3→1→0 BLOCK):** the first plan draft's
+disjointness proof was WRONG — it claimed three magnets were hoisted that weren't. The REVIEW(des) gate caught:
+`src/mcp/index.ts` (tool registry), the access-page key-create coupling, `src/env.ts`, then `gui/src/app/layout.tsx`
+(single root layout renders `<Sidebar/>` — pre-auth pages can't go shell-less from a Next child). Frozen interface
+ended at **nine** integrator-only magnets; resolved via a conditional-shell `AppShell` gated on `PRE_AUTH_ROUTES`.
+
+**BUILD — 6 file-disjoint worktree sub-agents, concurrent:** S1 Governance REST · S2 Governance GUI · S3 F-AUTH
+backend · S4 F-AUTH GUI · S5 NHI · S6 Polish. **Worktree hazard hit + recovered:** S4 and S6 worktrees were cut from
+`main` (stale, lacked the plan), not BASE — caught by the `git merge-base --is-ancestor` sanity check. Their scoped
+diffs touched only new files on non-diverged paths → salvaged by cherry-pick onto BASE (no re-run). S1/S2/S3/S5 were
+BASE-correct (S3 detected its own stale worktree and branched from BASE itself).
+
+**RECONCILE:** merged all six in integrate order — **zero write-set conflicts** (the disjointness dividend held).
+Wired the nine magnets: `src/api/index.ts` (pre-auth `/api/auth`+`/api/bootstrap` before the gate; sessionAuth+csrfGuard
+after; governance/NHI routes), `bearerAuth` cookie-defer, `src/env.ts` (15 AUTH_* keys), `src/mcp/index.ts`
+(`mint_ephemeral_key`), sidebar Governance group, the `AppShell` shell-gate, `package.json` (argon2 + 13 test files).
+
+**SAFETY REVIEW (mandatory — auth + authz primitives):** cold-start hostile-actor adversaries on the *integrated*
+code. S1 governance = **CLEAR** (B1/B2 LOW, dev-posture). S3 F-AUTH = **BLOCKED** pass 1 → fixed → **CLEAR** pass 2:
+- **A1 (HIGH, my reconcile regression):** the bearerAuth cookie-defer opened `GET /api/system/info` to unauth recon
+  (the lone post-gate route with no in-service authz). Gated it. The defer is verified safe for every other route.
+- **A2** csrfGuard was exported but never mounted (dead CSRF) → mounted globally (skips Bearer/agent). **A3** login
+  timing oracle → dummy argon2 verify. **A5** forgot dev-token leak → explicit opt-in flag. **A6** prod boot now
+  fails closed without `AUTH_SESSION_SIGNING_SECRET`.
+
+**CONTRACT RECONCILE + LIVE SMOKE:** aligned the GUI clients (`governanceApi`/`authApi`) to the actual S1/S3 shapes
+(decisions `allow`+keyset-cursor not `result`+offset; `/api/me` not `/api/auth/me`; MFA email+password re-submit;
+CSRF token in body; otpauth_uri not qr_data_url). Rebuilt the dev stack and smoked it LIVE: API boots clean;
+`GET /api/authz/decisions` **serves real who-tried-what rows (the net-new reader — the single biggest backend gap,
+now closed)**; `/api/principals`, `/api/access-review` return data; `POST /api/auth/login` → 401 (pre-auth mount
+works); all 8 new GUI pages render 200.
+
+**Evidence:** `tsc` clean · `npm test` **1302 pass / 0 fail / 19 skip** (~106 new slice tests) · `gui build` clean ·
+live dev-stack smoke green. **Commits:** plan(14ed9bf,4bc06dc) → merges → reconcile-node(684239c) → sec-fixes(15f81d4)
+→ gui-contracts(85535fa). **Posture:** dev/auth-off on `127.0.0.1:3002` (loopback) until a human operator is
+bootstrapped (hardened auth-ON would lock everyone out with no login yet).
+
+**Remaining (tracked):** full bootstrap→operator→login→MFA E2E in hardened posture; the auth-hardening residuals
+(C1/C2 + `/api/me` consistency); GUI features removed for lack of a backend endpoint (auth-policy panel, revoke-all,
+invite-preview, email-verify); deferred polish (sidebar account footer + scope-gating, FeatureToggles import-swap).
+See DEFERRED-059..062.
+
+---
+
 # CHECKPOINT — Architecture correction: the human-facing half was never built/tracked → COMPLETION plan (2026-06-21, session 13)
 
 **Branch:** `feature/actor-data-boundary` (not yet PR'd). **Triggered by the user:** "why does the GUI not require
