@@ -10,6 +10,7 @@ import {
   prewarmReranker,
 } from './core/index.js';
 import { createMcpToolsServer } from './mcp/index.js';
+import { injectBearerWorkspaceToken } from './mcp/headerAuth.js';
 import { createApiApp } from './api/index.js';
 import { startSweepScheduler } from './services/sweepScheduler.js';  // Phase 13 Sprint 13.2
 import { startClaimsSweepScheduler } from './services/coordinationSweep.js';  // Phase 15 Sprint 15.2
@@ -103,6 +104,7 @@ async function main() {
   // No session IDs, no stale session errors.
   mcpApp.post('/mcp', async (req: any, res: any) => {
     try {
+      injectBearerWorkspaceToken(req);
       const server = createMcpToolsServer();
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
