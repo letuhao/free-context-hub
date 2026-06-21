@@ -346,8 +346,10 @@ export const governanceApi = {
       bootstrapHeaders(token),
     ),
 
-  bootstrapOperator: (token: string, body: { display_name: string }) =>
-    gRequest<{ status: string; principal: PrincipalSummary }>(
+  // [DEFERRED-063] Issues a single-use OPERATOR INVITE (not a bare principal); the operator then
+  // registers at /register with the returned token to create their login.
+  bootstrapOperator: (token: string, body: { email: string; display_name?: string }) =>
+    gRequest<{ status: string; invite_id: string; invite_token: string; email: string; expires_at: string }>(
       "POST",
       "/api/bootstrap/operator",
       body,

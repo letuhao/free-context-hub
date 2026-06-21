@@ -26,7 +26,8 @@ import {
   assertEnforceReady,
   hasUsableRootCredential,
 } from '../../services/bootstrap.js';
-import { getRootPrincipal, createPrincipal } from '../../services/principals.js';
+import { getRootPrincipal } from '../../services/principals.js';
+import { issueInvite } from '../../services/invites.js';
 import { getEnv } from '../../core/index.js';
 import { ContextHubError } from '../../core/errors.js';
 
@@ -117,24 +118,42 @@ router.post('/root', async (req, res, next) => {
 });
 
 /**
- * POST /api/bootstrap/operator — create the human operator principal (the daily login; NOT root).
- * Body: { display_name }. The actual login credential / password is established by F-AUTH (S3); this
- * step only seeds the principal so the operator account exists at first-run. Token-gated.
+ * POST /api/bootstrap/operator — ISSUE THE OPERATOR INVITE (the daily login; NOT root). [DEFERRED-063]
+ * Body: { email, display_name? }. Returns a single-use invite token to convey out-of-band; the operator
+ * completes setup at POST /api/auth/register (which mints the human principal + password credential).
+ *
+ * Why an invite, not a bare principal: login resolves email→principal through the invites trail, and
+ * acceptInvite mints its OWN principal — so the prior `createPrincipal` step produced an orphaned
+ * principal that could NEVER be logged into. Issuing an invite (attributed to root) makes the wizard
+ * yield a registrable operator end-to-end: root → operator-invite → /register → login. (The operator
+ * still needs a grant to act; that is granted by root after first login — invites can't seed global.)
+ * Token-gated (the ROOT_BOOTSTRAP_TOKEN), and root must exist first (the invite's delegation origin).
  */
 router.post('/operator', async (req, res, next) => {
   try {
     assertBootstrapToken(req);
-    // Root must exist first — the operator is created against an established trust anchor.
-    if (!(await getRootPrincipal())) {
+    const root = await getRootPrincipal();
+    if (!root) {
       throw new ContextHubError('CONFLICT', 'establish root first (POST /api/bootstrap/root).');
     }
-    const { display_name } = (req.body ?? {}) as { display_name?: string };
-    if (!display_name || typeof display_name !== 'string') {
-      res.status(400).json({ error: 'display_name is required' });
+    const { email, display_name } = (req.body ?? {}) as { email?: string; display_name?: string };
+    if (!email || typeof email !== 'string' || !email.includes('@')) {
+      res.status(400).json({ error: 'a valid operator email is required' });
       return;
     }
-    const principal = await createPrincipal({ kind: 'human', display_name });
-    res.status(201).json({ status: 'created', principal });
+    const invite = await issueInvite({
+      email,
+      createdBy: root.principal_id,
+      display_name: typeof display_name === 'string' && display_name.trim() ? display_name.trim() : undefined,
+      intended_kind: 'human',
+    });
+    res.status(201).json({
+      status: 'invited',
+      invite_id: invite.invite_id,
+      invite_token: invite.token,
+      email: invite.email,
+      expires_at: invite.expires_at,
+    });
   } catch (e) { next(e); }
 });
 

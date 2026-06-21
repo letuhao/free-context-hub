@@ -15,7 +15,7 @@
 import { useState } from "react";
 import { governanceApi, type BootstrapStatus } from "@/lib/governanceApi";
 import { cn } from "@/lib/cn";
-import { Home, Check, AlertTriangle, ShieldCheck, Lock } from "lucide-react";
+import { Home, Check, AlertTriangle, ShieldCheck } from "lucide-react";
 
 type Step = 1 | 2 | 3 | "done";
 
@@ -28,9 +28,11 @@ export default function BootstrapPage() {
   // Step 1 — root. The ROOT_BOOTSTRAP_TOKEN gates EVERY bootstrap call (incl.
   // /status), so it is held in memory and threaded through each request.
   const [token, setToken] = useState("");
-  // Step 2 — operator (the bootstrap route seeds only the principal; the daily
-  // password/login is established later by F-AUTH, so only a display_name here).
+  // Step 2 — operator. [DEFERRED-063] The route now ISSUES AN INVITE (root → invite → register), so
+  // we collect an email; the returned single-use token is shown for the operator to register with.
+  const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
   // Step 3 — enforce
   const [acknowledged, setAcknowledged] = useState(false);
 
@@ -65,15 +67,17 @@ export default function BootstrapPage() {
   };
 
   const createOperator = async () => {
-    if (!displayName.trim()) return;
+    if (!email.trim()) return;
     setBusy(true);
     setError(null);
     try {
-      await governanceApi.bootstrapOperator(token.trim(), { display_name: displayName.trim() });
-      await refreshStatus(token.trim());
-      setStep(3);
+      const res = await governanceApi.bootstrapOperator(token.trim(), {
+        email: email.trim(),
+        display_name: displayName.trim() || undefined,
+      });
+      setInviteToken(res.invite_token);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create operator");
+      setError(err instanceof Error ? err.message : "Failed to issue the operator invite");
     } finally {
       setBusy(false);
     }
@@ -159,35 +163,71 @@ export default function BootstrapPage() {
           </div>
         )}
 
-        {/* Step 2 — create operator */}
+        {/* Step 2 — invite operator [DEFERRED-063] */}
         {step === 2 && (
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-            <h2 className="text-base font-semibold text-zinc-100 mb-1">Create your account</h2>
-            <p className="text-xs text-zinc-500 mb-4">
-              Root is the anchor, not a daily login. Seed a human operator principal for everyday
-              operation — root is used only to recover or re-seed. You&apos;ll set this account&apos;s
-              password and MFA from the <span className="text-blue-300">login / register</span> flow
-              once enforcement is on.
-            </p>
-            <label className="block text-xs text-zinc-400 mb-1.5">Operator display name</label>
-            <input
-              type="text"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="e.g. Jane Operator"
-              className="w-full px-3 py-2 mb-3 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 outline-none focus:border-zinc-600"
-            />
-            <div className="flex items-center gap-2 mb-4 text-[11px] text-zinc-500">
-              <Lock size={13} className="text-blue-400" />
-              The login credential + MFA for this operator are established separately (F-AUTH).
-            </div>
-            <button
-              onClick={createOperator}
-              disabled={busy || !displayName.trim()}
-              className="w-full px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg text-white font-medium"
-            >
-              {busy ? "Creating…" : "Create operator & continue"}
-            </button>
+            {!inviteToken ? (
+              <>
+                <h2 className="text-base font-semibold text-zinc-100 mb-1">Invite your operator</h2>
+                <p className="text-xs text-zinc-500 mb-4">
+                  Root is the anchor, not a daily login. Issue an invite for a human operator; they finish
+                  setup (password + MFA) at the <span className="text-blue-300">register</span> page. Root
+                  grants them access after their first sign-in.
+                </p>
+                <label className="block text-xs text-zinc-400 mb-1.5">Operator email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="w-full px-3 py-2 mb-3 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 outline-none focus:border-zinc-600"
+                />
+                <label className="block text-xs text-zinc-400 mb-1.5">
+                  Display name <span className="text-zinc-600">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="e.g. Jane Operator"
+                  className="w-full px-3 py-2 mb-4 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 outline-none focus:border-zinc-600"
+                />
+                <button
+                  onClick={createOperator}
+                  disabled={busy || !email.trim()}
+                  className="w-full px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg text-white font-medium"
+                >
+                  {busy ? "Issuing…" : "Issue operator invite"}
+                </button>
+              </>
+            ) : (
+              <>
+                <h2 className="text-base font-semibold text-zinc-100 mb-1">Operator invited</h2>
+                <p className="text-xs text-zinc-500 mb-3">
+                  Share this single-use token with the operator. They register at{" "}
+                  <code className="text-zinc-400">/register</code> to set a password + MFA. Then root grants
+                  them access (invites can&apos;t seed global scope).
+                </p>
+                <div className="bg-zinc-950 border border-zinc-800 rounded-md p-2.5 mb-4">
+                  <div className="text-[10px] text-zinc-600 mb-1">Invite token (shown once)</div>
+                  <code className="text-[11px] text-blue-300 break-all">{inviteToken}</code>
+                </div>
+                <div className="flex gap-2">
+                  <a
+                    href={`/register?token=${encodeURIComponent(inviteToken)}`}
+                    className="flex-1 px-3 py-2 text-xs bg-blue-600 hover:bg-blue-500 rounded-md text-white font-medium text-center"
+                  >
+                    Open register page
+                  </a>
+                  <button
+                    onClick={() => { refreshStatus(token.trim()); setStep(3); }}
+                    className="px-3 py-2 text-xs border border-zinc-700 rounded-md text-zinc-300 hover:bg-zinc-800"
+                  >
+                    Continue to enforcement
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
 

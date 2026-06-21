@@ -6,7 +6,11 @@
 ## DEFERRED-063
 
 - **Title:** `POST /api/bootstrap/operator` is a login dead-end (vestigial as built)
-- **Status:** OPEN (2026-06-21, session 15). Found while building the DEFERRED-059 hardened-login E2E.
+- **Status:** ✅ **DONE (session 15).** `/operator` now ISSUES A SINGLE-USE INVITE (attributed to root) instead of
+  minting an orphaned bare principal — body `{ email, display_name? }` → `{ status:'invited', invite_token, … }`.
+  The wizard is now coherent end-to-end: root → operator-invite → `/register` → login. GUI bootstrap Step 2 collects
+  an email and surfaces the token with an "Open register page" link. (The operator still needs a grant to act; root
+  grants it after first login — invites can't seed global scope, by design.) Tests: route happy-path + no-email 400.
 - **Context:** The first-run wizard's `/operator` step creates a bare `human` principal with **no email and no
   credential** ([bootstrap.ts:124](../../src/api/routes/bootstrap.ts)). But login resolves email→principal through the
   **invites trail** (`resolvePrincipalByEmail` joins `invites`+`human_credentials`), and `acceptInvite` **mints its own

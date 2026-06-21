@@ -92,6 +92,25 @@ test('POST /operator without a token → 401', async () => {
   assert.equal(r.status, 401);
 });
 
+test('POST /operator with token but no email → 400 [DEFERRED-063]', async () => {
+  const r = await request('POST', '/api/bootstrap/operator', { 'X-Bootstrap-Token': TOKEN }, { display_name: 'op' });
+  assert.equal(r.status, 400);
+});
+
+test('POST /operator with token + email → 201 issues a single-use invite [DEFERRED-063]', async () => {
+  // The invite is attributed to root (its delegation origin); ensure one exists on the shared DB.
+  const { getRootPrincipal, seedRootPrincipal } = await import('../../services/principals.js');
+  if (!(await getRootPrincipal())) await seedRootPrincipal({ display_name: '__test_s1_root__' });
+  const email = `__test_s1_op__${Math.random().toString(36).slice(2)}@example.com`;
+  const r = await request('POST', '/api/bootstrap/operator', { 'X-Bootstrap-Token': TOKEN }, { email, display_name: 'op' });
+  assert.equal(r.status, 201, JSON.stringify(r.json));
+  assert.equal(r.json.status, 'invited');
+  assert.ok(typeof r.json.invite_token === 'string' && r.json.invite_token.length > 0, 'returns a single-use invite token');
+  assert.equal(r.json.email, email);
+  const { getDbPool } = await import('../../db/client.js');
+  await getDbPool().query(`DELETE FROM invites WHERE email = $1`, [email]);
+});
+
 test('GET /status with token unconfigured → 400', async () => {
   await setToken(undefined);
   try {
