@@ -46,14 +46,37 @@ QC_CHUNKS_FILE=qc/competency-geneval.json RAGAS_JUDGE_URL=http://localhost:3005 
 `QC_CHUNKS_FILE` is env-scoped — it overrides the chunks golden for this run only and does NOT
 disturb the default (`qc/chunks-queries.aieng.json`).
 
-## Smoke result (2026-06-19, AWS-STO-0001, 7 rows)
+## Full result (2026-06-19, all 294 statements, 5 domains)
 
-End-to-end validated on the freshly-ingested corpus: cp=1.00 / cr=1.00 on every row (corpus
-retrieves), faithfulness 0.75–1.00, and **7/7 correct verdicts** — including the textbook
-hallucination probe **s2 "S3 is eventually consistent for new objects"** which the grounded RAG
-correctly **refuted with citation** ("The claim is FALSE. S3 provides strong read-after-write
-consistency [1]"). A model relying on stale (pre-Dec-2020) training would confirm it; grounding
-caught it.
+Baseline: `docs/qc/baselines/2026-06-19-2026-06-19-competency-full.json` (samples=1, ~85 min,
+answerer=judge=gemma-4-26b-a4b-qat, embeddings=bge-m3). Verdict/abstention correctness computed
+by parsing each generated answer's TRUE/FALSE/abstain against the held-out gold key:
+
+| Category | Correct | Rate |
+|---|---|---|
+| `standard` (confirm true) | 144/148 | 97% |
+| `false_premise` (refute false) | 140/141 | **99%** |
+| `no_answer` (abstain) | 4/5 | 80% |
+| **OVERALL** | **288/294** | **98%** |
+
+Per domain: ai-engineering 100%, solution-architecture 100%, language-runtime 98%, aws-ops 97%,
+developer 95%. Judge aggregates (grounded rows): faithfulness 0.79 (standard) / 0.92 (false_premise).
+
+**★ Hallucinations: 0.** Across 141 false_premise probes the grounded RAG refuted 140 and abstained
+on 1 — it never confirmed a false claim or fabricated support. The 6 non-perfect rows are all *safe*
+failures: 4 over-abstentions ("Not in context" on an answerable claim — conservative), 1 hedge
+("partially supported"), and 1 invalid probe (see below). E.g. it correctly refuted the textbook
+probe **"S3 is eventually consistent for new objects"** with a citation — a model on stale
+(pre-Dec-2020) training would confirm it; grounding caught it.
+
+**Probe-design note (LANG-NET-0001-s6):** abstention probes were authored assuming single-cell
+ingest. Under full-corpus ingest, the dev/api-design cell legitimately answers the .NET "201 vs
+200" probe, so the RAG correctly answered instead of abstaining. To preserve such probes, either
+ingest per-domain or choose absent-probe claims not covered by *any* ingested cell.
+
+**Follow-up (`verdict_correctness` metric):** verdicts were parsed from answer text here; a
+dedicated judge metric (blueprint §10.3) would score this inside the pipeline rather than via a
+post-hoc script.
 
 ## Known follow-up (non-blocking)
 
