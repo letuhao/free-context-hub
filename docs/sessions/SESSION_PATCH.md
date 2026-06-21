@@ -1,3 +1,31 @@
+# CHECKPOINT — cleared the deferred backlog: 062 · 063 · 060-A4 · 061 (2026-06-21, session 15)
+
+**Branch:** `feature/actor-data-boundary`. Four tracked items closed, each a focused, separately-committed, live-verified unit.
+
+- **DEFERRED-062 §2+§3 (`1d5ecaa`)** — scope-gated the Governance nav (sidebar reads `authApi.me()`, hides the group
+  unless global admin, fail-closed; added `project_scope` to the me view); swapped the inline Features block in
+  `projects/settings` for the shared `<FeatureToggles>` component. 062 fully closed.
+- **DEFERRED-063 (`6ae8e24`)** — `POST /api/bootstrap/operator` now ISSUES AN INVITE (attributed to root) instead of
+  an orphaned bare principal; the wizard is coherent end-to-end (root → operator-invite → /register → login). GUI Step 2
+  collects an email + surfaces the token. Live: returns `{status:'invited', invite_token,…}`.
+- **DEFERRED-060 A4 (`1634398`)** — auto-expiring hard lock. Migration `0072` adds `hard_locked_until`; a hard lock set
+  while `AUTH_LOCKOUT_HARD_DURATION_SECONDS > 0` (default 30 min) self-clears, bounding the account-DoS. Stamped once at
+  the lock transition (an attacker can't extend it); NULL/0 = permanent (pre-A4). DEFERRED-060 fully closed (only the
+  negligible C3/C4 timing items remain).
+- **DEFERRED-061 (`8e09c15`)** — built the two valuable affordances: "sign out all other sessions"
+  (`POST /api/auth/sessions/revoke-others`, session+CSRF) and invite-preview (`GET /api/auth/invite?token=…`, public,
+  shows the bound email on /register); formally REMOVED the two needing absent infra (auth-policy EDIT panel — policy is
+  env-configured; email-verify — no email delivery). Live: invite-preview returns the email (junk → 404); revoke-others
+  is 401 without a session.
+
+**Evidence (whole batch):** backend+gui `tsc` clean · `npm test` **1328 pass / 0 fail / 19 skip** (new tests: A4 ×3,
+063 route ×2, 061 service ×2) · `gui build` clean · live gateway checks above all green · migration 0072 applied.
+
+**Posture unchanged:** hardened, auth-ON, loopback-bound. The contexthub MCP works via the gitignored agent key
+(`.secrets/contexthub-mcp.key` → `CONTEXTHUB_MCP_TOKEN`).
+
+---
+
 # CHECKPOINT — post-flip enablement: GUI account footer · MCP credential + header-auth · DEFERRED-060 (C1 + /api/me) (2026-06-21, session 15)
 
 **Branch:** `feature/actor-data-boundary`. Three follow-ups after the hardened flip, each committed + live-verified.
