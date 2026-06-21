@@ -150,6 +150,29 @@ test('reset token is single-use', async () => {
   await assert.rejects(() => resetPassword(resetToken, 'second-Reset-Passphrase-2!'), /invalid, already used, or expired/);
 });
 
+test('recordFailure [A4 review-impl #1]: re-arms a LAPSED hard lock with a fresh window', async () => {
+  const e = email();
+  const { token } = await issueInvite({ email: e, createdBy: issuerId });
+  const { principal_id } = await acceptInvite({ token, password: STRONG_PW });
+
+  // Hard-lock, then simulate BOTH windows LAPSING (back-date hard + soft into the past). Both must
+  // lapse for the state to read unlocked — the soft window from the last failure is otherwise still live.
+  for (let i = 0; i < 12; i++) await recordFailure(principal_id);
+  assert.ok((await getLockState(principal_id))!.hardLockedUntil, 'hard lock has an auto-expiry window');
+  await getDbPool().query(
+    `UPDATE human_credentials SET hard_locked_until = now() - interval '1 hour', soft_locked_until = now() - interval '1 hour' WHERE principal_id = $1`,
+    [principal_id],
+  );
+  assert.equal(evaluateLock((await getLockState(principal_id))!).locked, false, 'a lapsed hard+soft lock reads unlocked');
+
+  // A further failure must RE-ARM a fresh FUTURE window (not stay lapsed → soft-only forever).
+  await recordFailure(principal_id);
+  const st = await getLockState(principal_id);
+  assert.ok(st!.hardLockedUntil && st!.hardLockedUntil.getTime() > Date.now(), 'a fresh future hard window');
+  assert.equal(evaluateLock(st!).locked, true, 're-armed hard lock blocks again');
+  assert.equal(evaluateLock(st!).reason, 'hard');
+});
+
 test('previewInvite [DEFERRED-061]: live invite → email+display_name; bad/consumed → null', async () => {
   const e = email();
   const { token } = await issueInvite({ email: e, createdBy: issuerId, display_name: `${PREFIX}preview` });

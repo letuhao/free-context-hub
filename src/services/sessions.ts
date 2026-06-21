@@ -206,8 +206,11 @@ export async function revokeAllSessions(principalId: string): Promise<number> {
 }
 
 /** [DEFERRED-061] Revoke every live session for a principal EXCEPT one ("sign out all OTHER devices").
- *  The caller keeps the session it presented; everything else is signed out. Returns the revoked count. */
+ *  The caller keeps the session it presented; everything else is signed out. Returns the revoked count.
+ *  SAFETY (review-impl #2): refuses an empty `exceptSessionId` — otherwise `session_id <> ''` would match
+ *  EVERY session (including the caller's own). Use revokeAllSessions() for a deliberate logout-everywhere. */
 export async function revokeOtherSessions(principalId: string, exceptSessionId: string): Promise<number> {
+  if (!exceptSessionId) return 0;
   const res = await getDbPool().query(
     `UPDATE sessions SET revoked_at = now()
       WHERE principal_id = $1 AND session_id <> $2 AND revoked_at IS NULL`,

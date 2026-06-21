@@ -252,7 +252,10 @@ router.delete('/sessions/:id', requireSession, csrfGuard, async (req, res, next)
 router.post('/sessions/revoke-others', requireSession, csrfGuard, async (req, res, next) => {
   try {
     const principalId = callerPrincipalOf(req)!;
-    const currentSessionId = String((req as { session?: { session_id?: string } }).session?.session_id ?? '');
+    // requireSession guarantees an attached session; guard anyway so a missing session_id can never
+    // become a revoke-ALL (which would sign the caller out too). [review-impl #2]
+    const currentSessionId = (req as { session?: { session_id?: string } }).session?.session_id;
+    if (!currentSessionId) { throw new ContextHubError('UNAUTHORIZED', 'no active session'); }
     const revoked = await revokeOtherSessions(principalId, currentSessionId);
     res.json({ status: 'ok', revoked });
   } catch (e) { next(e); }

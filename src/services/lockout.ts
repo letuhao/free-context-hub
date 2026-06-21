@@ -141,15 +141,21 @@ export async function recordFailure(principalId: string): Promise<{ locked: bool
   const delay = softDelaySeconds(failed, policy);
   const hard = shouldHardLock(failed, policy);
   const softUntil = delay > 0 ? new Date(Date.now() + delay * 1000) : null;
-  // [A4] Stamp the hard-lock expiry ONCE at the lock transition (CASE … AND NOT hard_locked): later
-  // failures must NOT refresh it, or an attacker who keeps hammering could extend the lock forever and
-  // defeat the auto-expiry. duration=0 → NULL (permanent). Already-hard rows keep their existing expiry.
+  // [A4] Stamp the hard-lock expiry when the lock ARMS — i.e. on the first transition into hard-lock
+  // (NOT hard_locked) OR when a previously-armed window has already LAPSED (re-arm). During an ACTIVE
+  // window we keep the existing expiry, so an attacker hammering mid-window can't extend it; but once
+  // it lapses a fresh threshold-crossing re-arms a new window rather than degrading to soft-only
+  // forever (review-impl #1). A NULL expiry is PERMANENT (duration=0 / pre-A4) and is never re-armed.
   const hardUntil = hard && policy.hardDurationSeconds > 0 ? new Date(Date.now() + policy.hardDurationSeconds * 1000) : null;
   await pool.query(
     `UPDATE human_credentials
         SET soft_locked_until = $2,
             hard_locked = (hard_locked OR $3),
-            hard_locked_until = CASE WHEN $3 AND NOT hard_locked THEN $4 ELSE hard_locked_until END
+            hard_locked_until = CASE
+              WHEN $3 AND (NOT hard_locked OR (hard_locked_until IS NOT NULL AND hard_locked_until <= now()))
+                THEN $4
+              ELSE hard_locked_until
+            END
       WHERE principal_id = $1`,
     [principalId, softUntil, hard, hardUntil],
   );
