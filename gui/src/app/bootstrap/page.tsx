@@ -12,7 +12,7 @@
  * the documented S1 /api/bootstrap contract (ABSENT at BASE).
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { governanceApi, type BootstrapStatus } from "@/lib/governanceApi";
 import { cn } from "@/lib/cn";
 import { Home, Check, AlertTriangle, ShieldCheck, Lock } from "lucide-react";
@@ -21,44 +21,42 @@ type Step = 1 | 2 | 3 | "done";
 
 export default function BootstrapPage() {
   const [status, setStatus] = useState<BootstrapStatus | null>(null);
-  const [loadError, setLoadError] = useState(false);
   const [step, setStep] = useState<Step>(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Step 1 — root
+  // Step 1 — root. The ROOT_BOOTSTRAP_TOKEN gates EVERY bootstrap call (incl.
+  // /status), so it is held in memory and threaded through each request.
   const [token, setToken] = useState("");
-  // Step 2 — operator
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  // Step 2 — operator (the bootstrap route seeds only the principal; the daily
+  // password/login is established later by F-AUTH, so only a display_name here).
+  const [displayName, setDisplayName] = useState("");
   // Step 3 — enforce
   const [acknowledged, setAcknowledged] = useState(false);
 
-  const refreshStatus = useCallback(async () => {
+  // Re-read status with the in-memory token, advancing the wizard to the
+  // earliest incomplete step. Returns the fetched status (or null on failure).
+  const refreshStatus = async (tok: string): Promise<BootstrapStatus | null> => {
     try {
-      const s = await governanceApi.bootstrapStatus();
+      const s = await governanceApi.bootstrapStatus(tok);
       setStatus(s);
-      if (s.enforcement_enabled) setStep("done");
-      else if (s.has_operator) setStep(3);
-      else if (s.has_root) setStep(2);
-      else setStep(1);
-    } catch {
-      setLoadError(true);
+      return s;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not read bootstrap status");
+      return null;
     }
-  }, []);
-
-  useEffect(() => {
-    refreshStatus();
-  }, [refreshStatus]);
+  };
 
   const establishRoot = async () => {
     if (!token.trim()) return;
     setBusy(true);
     setError(null);
+    const tok = token.trim();
     try {
-      await governanceApi.bootstrapRoot({ token: token.trim() });
-      await refreshStatus();
-      setStep(2);
+      // Validate the token + seed root in one call. The token also unlocks /status.
+      await governanceApi.bootstrapRoot(tok);
+      const s = await refreshStatus(tok);
+      if (s) setStep(2);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to establish root");
     } finally {
@@ -67,12 +65,12 @@ export default function BootstrapPage() {
   };
 
   const createOperator = async () => {
-    if (!email.trim() || password.length < 12) return;
+    if (!displayName.trim()) return;
     setBusy(true);
     setError(null);
     try {
-      await governanceApi.bootstrapOperator({ email: email.trim(), password });
-      await refreshStatus();
+      await governanceApi.bootstrapOperator(token.trim(), { display_name: displayName.trim() });
+      await refreshStatus(token.trim());
       setStep(3);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create operator");
@@ -86,11 +84,13 @@ export default function BootstrapPage() {
     setBusy(true);
     setError(null);
     try {
-      await governanceApi.bootstrapEnforce({ acknowledged: true });
-      await refreshStatus();
+      // POST /enforce is the lockout guard: 200 = safe to flip MCP_AUTH_ENABLED
+      // out-of-band; a non-2xx throws with the blocker message.
+      await governanceApi.bootstrapEnforce(token.trim());
+      await refreshStatus(token.trim());
       setStep("done");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to enable enforcement");
+      setError(err instanceof Error ? err.message : "Not enforce-ready yet");
     } finally {
       setBusy(false);
     }
@@ -114,12 +114,6 @@ export default function BootstrapPage() {
             <StepPill n={3} label="Enforce" active={step === 3} done={step === "done"} />
           </div>
         </div>
-
-        {loadError && (
-          <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-3 mb-4 text-[11px] text-amber-200">
-            Could not reach the bootstrap API. If enforcement is already configured, sign in instead.
-          </div>
-        )}
 
         {error && (
           <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-3 mb-4 text-[11px] text-red-300">
@@ -170,40 +164,29 @@ export default function BootstrapPage() {
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
             <h2 className="text-base font-semibold text-zinc-100 mb-1">Create your account</h2>
             <p className="text-xs text-zinc-500 mb-4">
-              Root is the anchor, not a daily login. Create a human principal with{" "}
-              <span className="text-blue-300">delegate @ global</span> for everyday operation — root is used
-              only to recover or re-seed.
+              Root is the anchor, not a daily login. Seed a human operator principal for everyday
+              operation — root is used only to recover or re-seed. You&apos;ll set this account&apos;s
+              password and MFA from the <span className="text-blue-300">login / register</span> flow
+              once enforcement is on.
             </p>
-            <label className="block text-xs text-zinc-400 mb-1.5">Email</label>
+            <label className="block text-xs text-zinc-400 mb-1.5">Operator display name</label>
             <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="e.g. Jane Operator"
               className="w-full px-3 py-2 mb-3 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 outline-none focus:border-zinc-600"
             />
-            <label className="block text-xs text-zinc-400 mb-1.5">
-              Password <span className="text-zinc-600">(≥12 chars)</span>
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 mb-3 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 outline-none focus:border-zinc-600"
-            />
-            {password.length > 0 && password.length < 12 && (
-              <p className="text-[10px] text-amber-400 mb-3">Password must be at least 12 characters.</p>
-            )}
             <div className="flex items-center gap-2 mb-4 text-[11px] text-zinc-500">
               <Lock size={13} className="text-blue-400" />
-              You&apos;ll enroll MFA next — required before enforcement turns on.
+              The login credential + MFA for this operator are established separately (F-AUTH).
             </div>
             <button
               onClick={createOperator}
-              disabled={busy || !email.trim() || password.length < 12}
+              disabled={busy || !displayName.trim()}
               className="w-full px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg text-white font-medium"
             >
-              {busy ? "Creating…" : "Create & enroll MFA"}
+              {busy ? "Creating…" : "Create operator & continue"}
             </button>
           </div>
         )}
@@ -217,16 +200,19 @@ export default function BootstrapPage() {
               authenticate. We verify you won&apos;t lock yourself out first.
             </p>
             <div className="space-y-2 mb-4">
-              <GuardRow ok={status?.ready.root_established ?? true} label="Root established" />
+              <GuardRow ok={status?.has_root ?? false} label="Root established" />
               <GuardRow
-                ok={status?.ready.operator_can_sign_in ?? false}
-                label="Your account can sign in (test login)"
+                ok={status?.has_usable_credential ?? false}
+                label="A usable root credential exists (you won't be locked out)"
               />
-              <GuardRow ok={status?.ready.mfa_enrolled ?? false} label="MFA enrolled (AAL2 reachable)" />
               <GuardRow
-                ok={(status?.ready.agent_key_count ?? 0) > 0}
-                warn
-                label={`Agent keys present: ${status?.ready.agent_key_count ?? 0} — agents will need keys after this`}
+                ok={status?.enforce_ready ?? false}
+                warn={!(status?.enforce_ready ?? false)}
+                label={
+                  status?.enforce_ready
+                    ? "Deployment is enforce-ready"
+                    : status?.enforce_blocker ?? "Checking enforce-readiness…"
+                }
               />
             </div>
             <label className="flex items-start gap-2 mb-4 cursor-pointer">

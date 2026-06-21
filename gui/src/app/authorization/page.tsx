@@ -9,17 +9,16 @@ import {
   type ExplainResult,
 } from "@/lib/governanceApi";
 import { Breadcrumb } from "@/components/ui";
-import { Pagination } from "@/components/ui/pagination";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
 import { relTime } from "@/lib/rel-time";
 import { Search, Check, XCircle } from "lucide-react";
 
+// allow is a boolean; the tabs map to the `allow` tri-state filter.
 const LOG_TABS = [
   { key: "all", label: "All decisions" },
   { key: "deny", label: "Denied only" },
-  { key: "root", label: "Root short-circuits" },
-  { key: "reject", label: "Asserted-identity rejects" },
+  { key: "allow", label: "Allowed only" },
 ] as const;
 
 const TIME_RANGES = [
@@ -30,10 +29,20 @@ const TIME_RANGES = [
 
 const ACTIONS = ["read", "write", "admin", "delegate"] as const;
 
-function resultBadge(result: string): string {
-  if (result === "allow") return "bg-emerald-500/15 text-emerald-300";
-  if (result === "reject") return "bg-red-500/15 text-red-300";
-  return "bg-red-500/15 text-red-300";
+/** Parse the free-text "kind @ scope:id" resource box into the explain body's
+ *  resource object. We only need `kind` (+ optional id); everything before the
+ *  first space / "@" is the kind. */
+function parseResource(input: string): { kind: string; id?: string } {
+  const trimmed = input.trim();
+  // "lesson @ project:free-context-hub" → kind "lesson". Anything after @ is
+  // scope context the backend does not take on explain, so we drop it; if the
+  // user typed a bare "kind:id" we split that into kind + id.
+  const beforeAt = trimmed.split("@")[0].trim();
+  const colon = beforeAt.indexOf(":");
+  if (colon > 0) {
+    return { kind: beforeAt.slice(0, colon).trim(), id: beforeAt.slice(colon + 1).trim() || undefined };
+  }
+  return { kind: beforeAt || trimmed };
 }
 
 export default function AuthorizationPage() {
@@ -43,7 +52,8 @@ export default function AuthorizationPage() {
 
   const [decisions, setDecisions] = useState<DecisionRow[]>([]);
   const [stats, setStats] = useState<DecisionStats | null>(null);
-  const [totalCount, setTotalCount] = useState(0);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [principals, setPrincipals] = useState<PrincipalSummary[]>([]);
@@ -51,8 +61,7 @@ export default function AuthorizationPage() {
   const [tab, setTab] = useState<(typeof LOG_TABS)[number]["key"]>("all");
   const [days, setDays] = useState(1);
   const [principalFilter, setPrincipalFilter] = useState("");
-  const [page, setPage] = useState(1);
-  const pageSize = 20;
+  const pageSize = 50;
 
   // Why inspector
   const [whoPrincipal, setWhoPrincipal] = useState("");
@@ -61,26 +70,46 @@ export default function AuthorizationPage() {
   const [explainResult, setExplainResult] = useState<ExplainResult | null>(null);
   const [explaining, setExplaining] = useState(false);
 
+  // Map the active filters to the backend query (allow tri-state + `since`).
+  const buildQuery = useCallback(
+    (cursor?: string) => ({
+      principal_id: principalFilter || undefined,
+      allow: tab === "all" ? undefined : tab === "allow",
+      since: days ? new Date(Date.now() - days * 86400_000).toISOString() : undefined,
+      limit: pageSize,
+      cursor,
+    }),
+    [tab, days, principalFilter],
+  );
+
   const fetchDecisions = useCallback(async () => {
     setLoading(true);
     setLoadError(false);
     try {
-      const res = await governanceApi.listDecisions({
-        principal_id: principalFilter || undefined,
-        result: tab === "all" ? undefined : (tab as "deny" | "reject" | "root"),
-        days: days || undefined,
-        limit: pageSize,
-        offset: (page - 1) * pageSize,
-      });
+      const res = await governanceApi.listDecisions(buildQuery());
       setDecisions(res.decisions ?? []);
       setStats(res.stats ?? null);
-      setTotalCount(res.total_count ?? 0);
+      setNextCursor(res.next_cursor ?? null);
     } catch {
       setLoadError(true);
     } finally {
       setLoading(false);
     }
-  }, [tab, days, principalFilter, page]);
+  }, [buildQuery]);
+
+  const loadMore = useCallback(async () => {
+    if (!nextCursor) return;
+    setLoadingMore(true);
+    try {
+      const res = await governanceApi.listDecisions(buildQuery(nextCursor));
+      setDecisions((prev) => [...prev, ...(res.decisions ?? [])]);
+      setNextCursor(res.next_cursor ?? null);
+    } catch {
+      /* leave the existing page intact */
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [nextCursor, buildQuery]);
 
   useEffect(() => {
     fetchDecisions();
@@ -100,7 +129,7 @@ export default function AuthorizationPage() {
       const res = await governanceApi.explain({
         principal_id: whoPrincipal || undefined,
         action: whoAction,
-        resource: whoResource.trim(),
+        resource: parseResource(whoResource),
       });
       setExplainResult(res);
     } catch (err) {
@@ -110,6 +139,12 @@ export default function AuthorizationPage() {
       setExplaining(false);
     }
   };
+
+  const principalName = useCallback(
+    (id: string | null) =>
+      id ? principals.find((p) => p.principal_id === id)?.display_name ?? id : "—",
+    [principals],
+  );
 
   return (
     <div className="flex-1 overflow-y-auto p-6">
@@ -126,10 +161,7 @@ export default function AuthorizationPage() {
         <div className="flex gap-2">
           <select
             value={principalFilter}
-            onChange={(e) => {
-              setPrincipalFilter(e.target.value);
-              setPage(1);
-            }}
+            onChange={(e) => setPrincipalFilter(e.target.value)}
             className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-md text-xs text-zinc-300 outline-none appearance-none cursor-pointer"
           >
             <option value="">All principals</option>
@@ -141,10 +173,7 @@ export default function AuthorizationPage() {
           </select>
           <select
             value={days}
-            onChange={(e) => {
-              setDays(Number(e.target.value));
-              setPage(1);
-            }}
+            onChange={(e) => setDays(Number(e.target.value))}
             className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-md text-xs text-zinc-300 outline-none appearance-none cursor-pointer"
           >
             {TIME_RANGES.map((r) => (
@@ -159,13 +188,13 @@ export default function AuthorizationPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <StatBox value={stats?.total ?? "—"} label="Decisions" />
-        <StatBox
-          value={stats ? `${Math.round(stats.allow_rate * 100)}%` : "—"}
-          label="Allowed"
-          tone="text-emerald-400"
-        />
+        <StatBox value={stats?.allowed ?? "—"} label="Allowed" tone="text-emerald-400" />
         <StatBox value={stats?.denied ?? "—"} label="Denied" tone="text-red-400" />
-        <StatBox value={stats?.root_short_circuits ?? "—"} label="Root short-circuits" tone="text-amber-400" />
+        <StatBox
+          value={stats?.distinct_principals ?? "—"}
+          label="Distinct principals"
+          tone="text-amber-400"
+        />
       </div>
 
       {/* Why inspector */}
@@ -266,19 +295,12 @@ export default function AuthorizationPage() {
                   </code>
                 </span>
               </div>
-              {explainResult.matched_grant && (
+              {explainResult.decision.matched_grant_id && (
                 <div className="flex items-center gap-2">
                   <Check size={13} className="text-emerald-400 shrink-0" />
                   <span className="text-zinc-400">
-                    covering grant: <span className="text-blue-300">{explainResult.matched_grant.capability}</span>{" "}
-                    @{" "}
-                    <span className="text-blue-300">
-                      {explainResult.matched_grant.scope_type}
-                      {explainResult.matched_grant.scope_id
-                        ? `:${explainResult.matched_grant.scope_id}`
-                        : ""}
-                    </span>{" "}
-                    <code className="text-zinc-600">{explainResult.matched_grant.grant_id}</code>
+                    covering grant{" "}
+                    <code className="text-blue-300">{explainResult.decision.matched_grant_id}</code>
                   </span>
                 </div>
               )}
@@ -292,10 +314,7 @@ export default function AuthorizationPage() {
         {LOG_TABS.map((t) => (
           <button
             key={t.key}
-            onClick={() => {
-              setTab(t.key);
-              setPage(1);
-            }}
+            onClick={() => setTab(t.key)}
             className={cn(
               "px-4 py-2 text-xs font-medium transition-colors",
               tab === t.key
@@ -322,31 +341,40 @@ export default function AuthorizationPage() {
       ) : (
         <div className="space-y-2.5">
           {decisions.map((d) => {
-            const isReject = d.result === "reject";
-            const isDeny = d.result === "deny";
+            const isDeny = !d.allow;
+            const resourceLabel = d.resource_id
+              ? `${d.resource_kind}:${d.resource_id}`
+              : d.resource_kind;
             return (
               <div
                 key={d.decision_id}
                 className={cn(
                   "bg-zinc-900 border rounded-lg p-3.5",
-                  isDeny || isReject ? "border-red-500/20" : "border-zinc-800",
+                  isDeny ? "border-red-500/20" : "border-zinc-800",
                 )}
               >
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className={cn("text-[10px] px-1.5 py-0.5 rounded font-semibold", resultBadge(d.result))}>
-                    {isReject ? "REJECT" : d.result.toUpperCase()}
+                  <span
+                    className={cn(
+                      "text-[10px] px-1.5 py-0.5 rounded font-semibold",
+                      isDeny ? "bg-red-500/15 text-red-300" : "bg-emerald-500/15 text-emerald-300",
+                    )}
+                  >
+                    {isDeny ? "DENY" : "ALLOW"}
                   </span>
                   <span className="text-xs font-medium text-zinc-200">
-                    {d.principal_display_name ?? d.principal_id ?? "—"}
+                    {principalName(d.principal_id)}
                   </span>
                   <span className="text-xs text-zinc-500">
-                    {d.action} · {d.resource}
+                    {d.action} · {resourceLabel}
                   </span>
-                  <span className="text-[10px] text-zinc-600 ml-auto">{relTime(d.created_at)}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500">
+                    {d.origin}
+                  </span>
+                  <span className="text-[10px] text-zinc-600 ml-auto">{relTime(d.ts)}</span>
                 </div>
                 <p className="text-[11px] text-zinc-500 mt-1.5">
-                  reason{" "}
-                  <code className={isDeny || isReject ? "text-red-300" : "text-emerald-300"}>{d.reason}</code>
+                  reason <code className={isDeny ? "text-red-300" : "text-emerald-300"}>{d.reason}</code>
                   {d.matched_grant_id && (
                     <>
                       {" "}
@@ -360,22 +388,22 @@ export default function AuthorizationPage() {
         </div>
       )}
 
-      {totalCount > pageSize && (
-        <div className="mt-6">
-          <Pagination
-            page={page}
-            pageSize={pageSize}
-            totalPages={Math.ceil(totalCount / pageSize)}
-            totalCount={totalCount}
-            onPageChange={setPage}
-          />
+      {nextCursor && !loading && !loadError && (
+        <div className="mt-6 flex justify-center">
+          <button
+            onClick={loadMore}
+            disabled={loadingMore}
+            className="px-4 py-1.5 text-xs border border-zinc-700 rounded-md text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+          >
+            {loadingMore ? "Loading…" : "Load more"}
+          </button>
         </div>
       )}
 
       <p className="text-[11px] text-zinc-600 mt-6">
-        Each row is one append-only <code className="text-zinc-500">coordination_events</code> entry tagged{" "}
-        <code className="text-zinc-500">authz.decision</code> — the same log Phase-15 already writes. Nothing
-        here is editable.
+        Each row is one append-only <code className="text-zinc-500">authz_decisions</code> entry written
+        by <code className="text-zinc-500">authorize()</code> — allow and deny alike. Nothing here is
+        editable.
       </p>
     </div>
   );

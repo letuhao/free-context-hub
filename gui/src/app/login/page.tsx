@@ -17,7 +17,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { Lock, AlertTriangle, ShieldAlert } from "lucide-react";
-import { authApi, AuthApiError, type LoginResult } from "@/lib/authApi";
+import { authApi, AuthApiError } from "@/lib/authApi";
 import { PreAuthShell, PreAuthCard } from "@/components/pre-auth-shell";
 
 type Stage = "login" | "mfa" | "forgot";
@@ -37,9 +37,8 @@ export default function LoginPage() {
   // Soft lockout (State 3)
   const [lockedSeconds, setLockedSeconds] = useState<number | null>(null);
 
-  // MFA challenge (State 2)
-  const [mfaToken, setMfaToken] = useState<string | null>(null);
-  const [mfaFactors, setMfaFactors] = useState<LoginResult["factors"]>(["totp"]);
+  // MFA challenge (State 2). The verify step re-submits email+password+code, so
+  // we carry the credentials forward from the login attempt (kept only in memory).
   const [code, setCode] = useState("");
   const [mfaMethod, setMfaMethod] = useState<"totp" | "backup_code">("totp");
 
@@ -82,9 +81,7 @@ export default function LoginPage() {
       setSubmitting(true);
       try {
         const res = await authApi.login({ email: email.trim(), password });
-        if (res.status === "mfa_required" || res.mfa_required) {
-          setMfaToken(res.mfa_token ?? "");
-          setMfaFactors(res.factors ?? ["totp"]);
+        if (res.status === "mfa_required") {
           setStage("mfa");
         } else {
           // Session cookie is set; go to the console.
@@ -116,8 +113,8 @@ export default function LoginPage() {
       setSubmitting(true);
       try {
         await authApi.verifyMfa({
-          mfa_token: mfaToken ?? "",
-          method: mfaMethod,
+          email: email.trim(),
+          password,
           code: code.trim(),
         });
         window.location.assign("/");
@@ -131,7 +128,7 @@ export default function LoginPage() {
         setSubmitting(false);
       }
     },
-    [mfaToken, mfaMethod, code],
+    [email, password, code],
   );
 
   const handleForgot = useCallback(
@@ -266,7 +263,6 @@ export default function LoginPage() {
 
   // ── State 2: MFA challenge ──
   if (stage === "mfa") {
-    const offersBackup = (mfaFactors ?? []).includes("backup_code");
     return (
       <PreAuthShell>
         <PreAuthCard>
@@ -297,23 +293,16 @@ export default function LoginPage() {
               Verify
             </button>
           </form>
-          <div className="flex items-center justify-between mt-4">
-            {(mfaFactors ?? []).includes("webauthn") && (
-              <button className="text-[11px] text-zinc-500 hover:text-zinc-300" type="button">
-                Use a security key (WebAuthn)
-              </button>
-            )}
-            {offersBackup && (
-              <button
-                type="button"
-                onClick={() =>
-                  setMfaMethod((m) => (m === "backup_code" ? "totp" : "backup_code"))
-                }
-                className="text-[11px] text-zinc-500 hover:text-zinc-300"
-              >
-                {mfaMethod === "backup_code" ? "Use authenticator app" : "Use a backup code"}
-              </button>
-            )}
+          <div className="flex items-center justify-end mt-4">
+            <button
+              type="button"
+              onClick={() =>
+                setMfaMethod((m) => (m === "backup_code" ? "totp" : "backup_code"))
+              }
+              className="text-[11px] text-zinc-500 hover:text-zinc-300"
+            >
+              {mfaMethod === "backup_code" ? "Use authenticator app" : "Use a backup code"}
+            </button>
           </div>
         </PreAuthCard>
       </PreAuthShell>

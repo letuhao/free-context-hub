@@ -5,24 +5,25 @@
  * Ported from docs/gui-drafts/pages/register.html.
  *
  * Pre-auth page (shell-less once the integrator adds "/register" to
- * PRE_AUTH_ROUTES, §2.10). Flow:
- *   1. accept invite + set password (≥12 chars, NIST 800-63B length-over-complexity)
- *   2. email verification notice (single-use link)
- *   3. MFA enrollment — TOTP via a SERVER-RENDERED QR data-URL (dep-free, §2.7/M1)
- *   4. one-time backup codes
+ * PRE_AUTH_ROUTES). Flow (reconciled against routes/auth.ts):
+ *   1. accept invite token + set password (≥12 chars) + display name → the
+ *      backend creates the principal AND issues an AAL1 session immediately
+ *      (POST /api/auth/register). No separate email-verification round-trip and
+ *      no invite-preview GET endpoint exist, so we go straight from accept → MFA.
+ *   2. MFA enrollment — TOTP via the otpauth_uri + base32 secret for manual
+ *      authenticator entry (the backend returns NO QR data-URL; dep-free).
+ *   3. one-time backup codes (returned at enroll time, not at confirm).
  *
- * The invite token arrives in the URL: /register?token=…. Drives the S3
- * `/api/auth/*` contract via the typed `authApi` client; degrades gracefully
- * when S3 is absent (BASE) or the token is invalid.
+ * The invite token arrives in the URL: /register?token=….
  */
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { Mail, AlertTriangle, Download } from "lucide-react";
-import { authApi, AuthApiError, type InvitePreview, type MfaEnrollment } from "@/lib/authApi";
+import { AlertTriangle, Download } from "lucide-react";
+import { authApi, AuthApiError, type MfaEnrollment } from "@/lib/authApi";
 import { PreAuthShell, PreAuthCard } from "@/components/pre-auth-shell";
 
-type Step = "accept" | "verify" | "mfa" | "backup" | "done";
+type Step = "accept" | "mfa" | "backup" | "done";
 
 function passwordChecks(pw: string) {
   const longEnough = pw.length >= 12;
@@ -36,8 +37,7 @@ function RegisterInner() {
   const token = params.get("token") ?? "";
 
   const [step, setStep] = useState<Step>("accept");
-  const [invite, setInvite] = useState<InvitePreview | null>(null);
-  const [inviteError, setInviteError] = useState<string | null>(null);
+  const tokenMissing = !token;
 
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
@@ -48,37 +48,25 @@ function RegisterInner() {
   const [mfaCode, setMfaCode] = useState("");
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
 
-  // Resolve the invite on mount.
-  useEffect(() => {
-    if (!token) {
-      setInviteError("This registration link is missing its invite token.");
-      return;
-    }
-    let active = true;
-    authApi
-      .getInvite(token)
-      .then((inv) => {
-        if (!active) return;
-        if (!inv.valid) {
-          setInviteError("This invite has expired or was already used.");
-        } else {
-          setInvite(inv);
-        }
-      })
-      .catch((err) => {
-        if (!active) return;
-        setInviteError(
-          err instanceof AuthApiError && err.status === 404
-            ? "This invite link is invalid."
-            : "Couldn't load this invite. The link may be expired.",
-        );
-      });
-    return () => {
-      active = false;
-    };
-  }, [token]);
-
   const checks = passwordChecks(password);
+
+  const beginMfaEnroll = useCallback(async () => {
+    setError(null);
+    setSubmitting(true);
+    try {
+      const enr = await authApi.enrollMfa();
+      setEnrollment(enr);
+      // Backup codes are issued at enroll time (services/mfa.ts), shown after confirm.
+      setBackupCodes(enr.backup_codes ?? []);
+      setStep("mfa");
+    } catch (err) {
+      setError(
+        err instanceof AuthApiError ? "Couldn't start MFA enrollment." : "MFA setup unavailable.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }, []);
 
   const handleAccept = useCallback(
     async (e: React.FormEvent) => {
@@ -90,46 +78,32 @@ function RegisterInner() {
       }
       setSubmitting(true);
       try {
+        // Creates the principal + an AAL1 session cookie in one call.
         await authApi.register({ token, display_name: displayName.trim(), password });
-        // Backend sends the verification email; show the notice, then proceed.
-        setStep("verify");
       } catch (err) {
         setError(
           err instanceof AuthApiError
             ? err.message || "Couldn't create the account."
             : "Registration is unavailable right now.",
         );
-      } finally {
         setSubmitting(false);
+        return;
       }
-    },
-    [token, displayName, password, checks.longEnough],
-  );
-
-  const beginMfaEnroll = useCallback(async () => {
-    setError(null);
-    setSubmitting(true);
-    try {
-      const enr = await authApi.enrollMfa();
-      setEnrollment(enr);
-      setStep("mfa");
-    } catch (err) {
-      setError(
-        err instanceof AuthApiError ? "Couldn't start MFA enrollment." : "MFA setup unavailable.",
-      );
-    } finally {
       setSubmitting(false);
-    }
-  }, []);
+      // Session is live (cookie set) — proceed straight into MFA enrollment.
+      await beginMfaEnroll();
+    },
+    [token, displayName, password, checks.longEnough, beginMfaEnroll],
+  );
 
   const handleConfirmMfa = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
       setError(null);
+      if (!enrollment) return;
       setSubmitting(true);
       try {
-        const res = await authApi.confirmMfa({ code: mfaCode.trim() });
-        setBackupCodes(res.backup_codes ?? []);
+        await authApi.confirmMfa({ factor_id: enrollment.factor_id, code: mfaCode.trim() });
         setStep("backup");
       } catch (err) {
         setError(
@@ -139,7 +113,7 @@ function RegisterInner() {
         setSubmitting(false);
       }
     },
-    [mfaCode],
+    [enrollment, mfaCode],
   );
 
   const downloadBackupCodes = useCallback(() => {
@@ -155,85 +129,51 @@ function RegisterInner() {
   const inputCls =
     "w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-zinc-600";
 
-  // ── Invite invalid / missing ──
-  if (inviteError) {
+  // ── Missing invite token ──
+  if (tokenMissing) {
     return (
       <PreAuthShell>
         <PreAuthCard tone="warning">
           <div className="flex items-center gap-2 mb-2">
             <AlertTriangle size={16} className="text-amber-400" />
-            <h1 className="text-sm font-semibold text-amber-300">Invite unavailable</h1>
+            <h1 className="text-sm font-semibold text-amber-300">Invite required</h1>
           </div>
-          <p className="text-xs text-zinc-400">{inviteError}</p>
+          <p className="text-xs text-zinc-400">
+            This registration link is missing its invite token.
+          </p>
           <p className="text-[11px] text-zinc-600 mt-3">
-            Registration is invite-only. Ask an admin to issue a fresh invite.
+            Registration is invite-only. Ask an admin to issue a fresh invite link.
           </p>
         </PreAuthCard>
       </PreAuthShell>
     );
   }
 
-  // ── Step 2: verify email ──
-  if (step === "verify") {
-    return (
-      <PreAuthShell>
-        <PreAuthCard className="text-center">
-          <div className="w-12 h-12 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-4">
-            <Mail size={20} className="text-blue-400" />
-          </div>
-          <h1 className="text-base font-semibold text-zinc-100">Check your inbox</h1>
-          <p className="text-xs text-zinc-500 mt-1 mb-4">
-            We sent a single-use verification link to{" "}
-            <span className="text-zinc-300">{invite?.email}</span>. The link is short-lived and
-            one-time.
-          </p>
-          <button
-            type="button"
-            disabled={submitting}
-            onClick={beginMfaEnroll}
-            className="w-full px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg text-white font-medium"
-          >
-            Continue to two-factor setup
-          </button>
-          {error && <p className="text-[11px] text-red-400 mt-3">{error}</p>}
-        </PreAuthCard>
-      </PreAuthShell>
-    );
-  }
-
-  // ── Step 3: MFA enrollment ──
+  // ── Step: MFA enrollment ──
   if (step === "mfa") {
     return (
       <PreAuthShell>
         <PreAuthCard>
           <h1 className="text-lg font-semibold text-zinc-100">Set up two-factor</h1>
           <p className="text-xs text-zinc-500 mt-0.5 mb-4">
-            Scan with an authenticator app, then enter the first code to confirm.
+            Add this account to an authenticator app, then enter the first code to confirm.
           </p>
-          <div className="flex gap-4 mb-4">
-            {enrollment?.qr_data_url ? (
-              // Server-rendered QR data-URL — no browser QR dependency (§2.7/M1).
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={enrollment.qr_data_url}
-                alt="TOTP enrollment QR code"
-                className="w-28 h-28 bg-white rounded-md p-1.5 shrink-0"
-              />
-            ) : (
-              <div className="w-28 h-28 bg-zinc-800 rounded-md shrink-0 animate-pulse" />
-            )}
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] uppercase tracking-wide text-zinc-600 mb-1">
-                Or enter the key
-              </p>
-              <code className="text-[11px] font-mono text-zinc-400 break-all select-all">
-                {enrollment?.secret ?? "…"}
-              </code>
-              <div className="mt-3 flex items-center gap-2 text-[11px] text-zinc-500">
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
-                  TOTP
-                </span>
-              </div>
+          <div className="mb-4">
+            <p className="text-[10px] uppercase tracking-wide text-zinc-600 mb-1">
+              Authenticator setup key (base32)
+            </p>
+            <code className="block text-[11px] font-mono text-zinc-300 break-all select-all bg-zinc-950 border border-zinc-800 rounded-md p-2.5 mb-2">
+              {enrollment?.secret ?? "…"}
+            </code>
+            <p className="text-[10px] uppercase tracking-wide text-zinc-600 mb-1">
+              Or use this otpauth URI
+            </p>
+            <code className="block text-[10px] font-mono text-zinc-500 break-all select-all bg-zinc-950 border border-zinc-800 rounded-md p-2.5">
+              {enrollment?.otpauth_uri ?? "…"}
+            </code>
+            <div className="mt-2 flex items-center gap-2 text-[11px] text-zinc-500">
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">TOTP</span>
+              Enter the key manually in your authenticator app (Google Authenticator, 1Password, …).
             </div>
           </div>
           <form onSubmit={handleConfirmMfa}>
@@ -315,26 +255,13 @@ function RegisterInner() {
       <PreAuthCard>
         <div className="bg-blue-500/5 border border-blue-500/20 rounded-md p-2.5 mb-5">
           <p className="text-[11px] text-zinc-400">
-            {invite ? (
-              <>
-                You were invited
-                {invite.inviter_display_name ? (
-                  <>
-                    {" "}
-                    by <span className="text-blue-300">{invite.inviter_display_name}</span>
-                  </>
-                ) : null}{" "}
-                to join as a <span className="text-sky-300">{invite.kind}</span> principal.
-              </>
-            ) : (
-              "Validating your invite…"
-            )}
+            You&apos;re accepting an invite to join as a human principal. Set a display name and a
+            password to finish creating your account.
           </p>
         </div>
         <h1 className="text-lg font-semibold text-zinc-100">Create your account</h1>
         <p className="text-xs text-zinc-500 mt-0.5 mb-5">
-          A principal will be registered for{" "}
-          <code className="text-zinc-400">{invite?.email ?? "…"}</code>.
+          Your invite establishes which email this principal is bound to.
         </p>
         <form onSubmit={handleAccept}>
           <label className="block text-xs text-zinc-400 mb-1.5" htmlFor="display-name">
@@ -373,7 +300,7 @@ function RegisterInner() {
           {error && <p className="text-[11px] text-red-400 mb-3">{error}</p>}
           <button
             type="submit"
-            disabled={submitting || !invite}
+            disabled={submitting || !displayName.trim() || !checks.longEnough}
             className="w-full px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg text-white font-medium"
           >
             {submitting ? "Creating…" : "Create account & continue to MFA"}

@@ -198,8 +198,20 @@ export default function DelegationPage() {
         governanceApi.listGrants({ include_revoked: true }),
         governanceApi.listPrincipals(),
       ]);
-      setGrants(gRes.grants ?? []);
-      setPrincipals(pRes.principals ?? []);
+      const ps = pRes.principals ?? [];
+      // The backend returns raw grant rows (no joined display names); enrich
+      // client-side so the tree/table keep showing names instead of UUIDs.
+      const nameOf = (id: string) => ps.find((p) => p.principal_id === id)?.display_name;
+      const kindOf = (id: string) => ps.find((p) => p.principal_id === id)?.kind;
+      setGrants(
+        (gRes.grants ?? []).map((g) => ({
+          ...g,
+          grantee_display_name: g.grantee_display_name ?? nameOf(g.grantee_principal),
+          grantee_kind: g.grantee_kind ?? kindOf(g.grantee_principal),
+          granted_by_display_name: g.granted_by_display_name ?? nameOf(g.granted_by),
+        })),
+      );
+      setPrincipals(ps);
     } catch {
       setLoadError(true);
     } finally {

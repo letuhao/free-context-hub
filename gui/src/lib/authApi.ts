@@ -4,24 +4,22 @@
  * COOKIE-BASED. The session is carried by an httpOnly, SameSite session cookie
  * that the backend SETS on `/login` (or `/mfa/verify`) and CLEARS on `/logout`.
  * This client therefore:
- *   - never reads or writes the cookie from JS (it can't — httpOnly),
+ *   - never reads or writes the session cookie from JS (it can't — httpOnly),
  *   - always sends `credentials: "same-origin"` so the browser attaches the
  *     cookie to same-origin `/api/*` calls through the single-port gateway, and
- *   - forwards the double-submit CSRF token (read from the non-httpOnly
- *     `ch_csrf` cookie the backend issues alongside the session) on every
- *     state-changing request, per the S3 contract (§4 → middleware/sessionAuth
- *     "CSRF for cookie state-changes").
+ *   - forwards the double-submit CSRF token as `X-CSRF-Token` on every
+ *     state-changing request.
  *
- * This is a thin TYPED client coded against the DOCUMENTED S3 contract
- * (2026-06-21-actor-data-boundary-COMPLETION-plan §4 — "S3 — F-AUTH backend").
- * The S3 endpoints are ABSENT at this slice's BASE; the client compiles and the
- * pages render against it (or a mock) without S3 present. See the "S3 contract
- * assumptions" note in the slice report for the exact shapes assumed.
+ * CSRF CONTRACT (reconciled against src/services/sessions.ts +
+ * middleware/sessionAuth.ts): the server returns `csrf_token` in the RESPONSE
+ * BODY of login / mfa/verify / register. It is NOT a readable cookie. We store
+ * it client-side (sessionStorage, surviving reloads within the tab) and send it
+ * back as `X-CSRF-Token` on cookie-authed mutations (logout, session revoke,
+ * mfa enroll). csrfGuard only checks it for cookie-authenticated requests.
  *
  * Base-URL resolution mirrors `api.ts` (same-origin in the browser; internal URL
- * on the server) but is duplicated locally because `api.ts` is a FROZEN magnet
- * this slice must not edit (§2.4). These pages are all client components, so the
- * browser branch is the one that runs.
+ * on the server). These pages are all client components, so the browser branch
+ * is the one that runs.
  */
 
 function resolveApiBase(): string {
@@ -35,14 +33,18 @@ function resolveApiBase(): string {
   );
 }
 
-const CSRF_COOKIE = "ch_csrf";
+const CSRF_STORAGE_KEY = "ch_csrf_token";
 
-/** Read the non-httpOnly double-submit CSRF token the backend issues with the
- *  session cookie. Returns undefined on the server or before first login. */
+/** Persist the CSRF token the backend returned in a login/mfa/register body. */
+export function storeCsrfToken(token: string | undefined | null): void {
+  if (typeof sessionStorage === "undefined") return;
+  if (token) sessionStorage.setItem(CSRF_STORAGE_KEY, token);
+}
+
+/** Read the stored double-submit CSRF token. Returns undefined before login. */
 function readCsrfToken(): string | undefined {
-  if (typeof document === "undefined") return undefined;
-  const m = document.cookie.match(new RegExp(`(?:^|; )${CSRF_COOKIE}=([^;]*)`));
-  return m ? decodeURIComponent(m[1]) : undefined;
+  if (typeof sessionStorage === "undefined") return undefined;
+  return sessionStorage.getItem(CSRF_STORAGE_KEY) ?? undefined;
 }
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -96,108 +98,114 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return (json as T) ?? (undefined as T);
 }
 
-// ── S3 contract types (documented shapes; see slice report) ──
+// ── Contract types (reconciled against src/api/routes/{auth,me}.ts) ──
 
+/**
+ * Auth state for the GUI. There is NO `/api/auth/me`; auth state comes from
+ * GET /api/me (routes/me.ts). We expose a thin `authenticated` view derived
+ * from whether a principal is bound + auth_enabled.
+ */
 export interface AuthMe {
   authenticated: boolean;
-  /** Present once a session exists. */
-  principal_id?: string;
-  email?: string;
-  display_name?: string;
-  /** Achieved assurance level for the current session. */
-  aal?: 1 | 2;
-  role?: "reader" | "writer" | "admin";
-  /** Mirrors api.ts:getCurrentUser — true when MCP_AUTH_ENABLED. */
   auth_enabled: boolean;
+  principal_id?: string;
+  display_name?: string;
+  role?: "reader" | "writer" | "admin";
 }
 
-/** Result of POST /api/auth/login. When MFA is required the backend returns
- *  `mfa_required` and a short-lived `mfa_token` to carry into /mfa/verify
- *  (no session cookie is set yet). When lockout trips it returns 429 with
- *  `retry_after_seconds`. On full success it sets the session cookie. */
+/** Raw GET /api/me body (routes/me.ts MeResponse). */
+interface MeBody {
+  role: "reader" | "writer" | "admin";
+  project_scope: string | null;
+  auth_enabled: boolean;
+  key_source: "no_auth" | "env_token" | "db_key";
+  principal: {
+    principal_id: string;
+    display_name: string;
+    kind: "human" | "agent" | "system";
+    status: "active" | "suspended" | "retired";
+    is_root: boolean;
+    is_system: boolean;
+  } | null;
+}
+
+/**
+ * Result of POST /api/auth/login. On success the backend sets the session
+ * cookie and returns { status:"ok", aal, csrf_token }. When MFA is enrolled it
+ * returns { status:"mfa_required", email } (no cookie). There is NO
+ * mfa_token/factors — the /mfa/verify step re-submits email+password+code.
+ * Lockout returns 429 with retry_after_seconds.
+ */
 export interface LoginResult {
   status: "ok" | "mfa_required";
-  mfa_required?: boolean;
-  /** Opaque token threaded into /mfa/verify; never a credential. */
-  mfa_token?: string;
-  /** Factors offered for the challenge. */
-  factors?: Array<"totp" | "webauthn" | "backup_code">;
-  me?: AuthMe;
+  /** Present on status:"ok". */
+  aal?: 1 | 2;
+  /** Present on status:"ok" — store and send as X-CSRF-Token on mutations. */
+  csrf_token?: string;
+  /** Echoed on status:"mfa_required" so the page can carry it into /mfa/verify. */
+  email?: string;
 }
 
+/** GET /api/auth/sessions row (routes/auth.ts shape). */
 export interface SessionInfo {
   session_id: string;
-  /** This is the session making the request. */
-  current: boolean;
-  user_agent: string | null;
-  /** Pretty device label derived server-side, e.g. "Chrome on Windows". */
-  device_label: string | null;
-  ip: string | null;
-  location: string | null;
   aal: 1 | 2;
-  mfa: boolean;
   created_at: string;
-  last_active_at: string | null;
-  /** ISO timestamps for the policy windows, when computed server-side. */
-  idle_expires_at: string | null;
-  absolute_expires_at: string | null;
-  /** Anomaly flag, e.g. login from a new location. */
-  flagged?: boolean;
+  last_seen: string | null;
+  ip: string | null;
+  user_agent: string | null;
+  expires_at: string | null;
+  current: boolean;
 }
 
-export interface AuthPolicy {
-  require_mfa: boolean;
-  /** Re-auth (absolute) window, seconds. */
-  reauth_window_seconds: number;
-  /** Idle timeout, seconds. */
-  idle_timeout_seconds: number;
-  /** Read-only summary of brute-force protection posture. */
-  lockout_enforced: boolean;
-}
-
-/** MFA enrollment payload — the backend issues a server-rendered QR as a
- *  data-URL so the GUI needs NO browser QR dependency (§2.7 / M1: dep-free). */
+/**
+ * MFA enrollment payload — POST /api/auth/mfa/enroll (routes/auth.ts +
+ * services/mfa.ts). There is NO qr_data_url; the page renders otpauth_uri +
+ * secret for manual authenticator entry.
+ */
 export interface MfaEnrollment {
-  /** otpauth:// URI (also usable to render a QR client-side if ever needed). */
-  otpauth_uri: string;
-  /** PNG/SVG data-URL of the QR, rendered server-side. The page just <img>s it. */
-  qr_data_url: string;
-  /** Base32 secret shown as the manual-entry fallback. */
+  factor_id: string;
   secret: string;
-}
-
-export interface BackupCodesResult {
-  /** Shown exactly once; stored hashed server-side. */
+  otpauth_uri: string;
   backup_codes: string[];
 }
 
-export interface InvitePreview {
-  email: string;
-  inviter_display_name: string | null;
-  kind: "human" | "agent";
-  expires_at: string;
-  /** Already-accepted / expired invites surface here so the page can refuse. */
-  valid: boolean;
-}
-
 export const authApi = {
-  // ── Session identity ──
-  me: () => request<AuthMe>("GET", "/api/auth/me"),
+  // ── Session identity (from /api/me, NOT /api/auth/me) ──
+  me: async (): Promise<AuthMe> => {
+    const body = await request<MeBody>("GET", "/api/me");
+    return {
+      authenticated: body.principal != null,
+      auth_enabled: body.auth_enabled,
+      principal_id: body.principal?.principal_id,
+      display_name: body.principal?.display_name,
+      role: body.role,
+    };
+  },
 
   // ── Login / logout ──
-  login: (body: { email: string; password: string }) =>
-    request<LoginResult>("POST", "/api/auth/login", body),
+  login: async (body: { email: string; password: string }): Promise<LoginResult> => {
+    const res = await request<LoginResult>("POST", "/api/auth/login", body);
+    if (res.status === "ok") storeCsrfToken(res.csrf_token);
+    return res;
+  },
 
-  /** Complete an MFA challenge. On success the backend sets the session cookie. */
-  verifyMfa: (body: {
-    mfa_token: string;
-    method: "totp" | "webauthn" | "backup_code";
-    code?: string;
-    /** WebAuthn assertion JSON, when method === "webauthn". */
-    assertion?: unknown;
-  }) => request<{ status: "ok"; me?: AuthMe }>("POST", "/api/auth/mfa/verify", body),
+  /**
+   * Complete an MFA challenge. The backend re-resolves the principal from email
+   * and re-verifies the password, so all three must be re-submitted. On success
+   * it sets the session cookie + returns a fresh csrf_token.
+   */
+  verifyMfa: async (body: { email: string; password: string; code: string }) => {
+    const res = await request<{ status: "ok"; aal: 1 | 2; csrf_token: string }>(
+      "POST",
+      "/api/auth/mfa/verify",
+      body,
+    );
+    storeCsrfToken(res.csrf_token);
+    return res;
+  },
 
-  logout: () => request<void>("POST", "/api/auth/logout"),
+  logout: () => request<{ status: "ok" }>("POST", "/api/auth/logout"),
 
   // ── Password reset (never locks the account) ──
   forgotPassword: (body: { email: string }) =>
@@ -205,36 +213,34 @@ export const authApi = {
     request<{ status: "ok" }>("POST", "/api/auth/password/forgot", body),
 
   resetPassword: (body: { token: string; password: string }) =>
-    request<{ status: "ok" }>("POST", "/api/auth/password/reset", body),
+    request<{ status: "ok"; principal_id: string }>("POST", "/api/auth/password/reset", body),
 
-  // ── Registration (invite-only) ──
-  getInvite: (token: string) =>
-    request<InvitePreview>("GET", `/api/auth/register?token=${encodeURIComponent(token)}`),
+  // ── Registration (invite-only: accept token → principal + AAL1 session) ──
+  register: async (body: { token: string; password: string; display_name?: string }) => {
+    const res = await request<{
+      status: "created";
+      principal_id: string;
+      display_name: string;
+      csrf_token: string;
+    }>("POST", "/api/auth/register", body);
+    storeCsrfToken(res.csrf_token);
+    return res;
+  },
 
-  /** Accept an invite: registers the principal + sets the password. Returns the
-   *  authenticated `me` but registration is not complete until MFA is enrolled. */
-  register: (body: { token: string; display_name: string; password: string }) =>
-    request<{ status: "ok"; me?: AuthMe }>("POST", "/api/auth/register", body),
+  /** Begin MFA enrollment — returns factor_id + secret + otpauth_uri + backup codes. */
+  enrollMfa: (body: { label?: string } = {}) =>
+    request<MfaEnrollment>("POST", "/api/auth/mfa/enroll", body),
 
-  /** Begin MFA enrollment — returns the server-rendered QR data-URL + secret. */
-  enrollMfa: () => request<MfaEnrollment>("POST", "/api/auth/mfa/enroll"),
-
-  /** Confirm enrollment with the first TOTP code; returns one-time backup codes. */
-  confirmMfa: (body: { code: string }) =>
-    request<BackupCodesResult>("POST", "/api/auth/mfa/enroll/confirm", body),
+  /** Confirm enrollment with the first TOTP code (needs the factor_id from enroll). */
+  confirmMfa: (body: { factor_id: string; code: string }) =>
+    request<{ status: "verified" }>("POST", "/api/auth/mfa/enroll/verify", body),
 
   // ── Sessions management ──
   listSessions: () => request<{ sessions: SessionInfo[] }>("GET", "/api/auth/sessions"),
 
   revokeSession: (sessionId: string) =>
-    request<void>("DELETE", `/api/auth/sessions/${encodeURIComponent(sessionId)}`),
-
-  /** Revoke every session except the current one. */
-  revokeOtherSessions: () => request<void>("DELETE", "/api/auth/sessions?scope=others"),
-
-  // ── Auth policy (admin/root; read for everyone) ──
-  getPolicy: () => request<AuthPolicy>("GET", "/api/auth/policy"),
-
-  updatePolicy: (body: Partial<AuthPolicy>) =>
-    request<AuthPolicy>("PATCH", "/api/auth/policy", body),
+    request<{ status: "revoked"; session_id: string }>(
+      "DELETE",
+      `/api/auth/sessions/${encodeURIComponent(sessionId)}`,
+    ),
 };

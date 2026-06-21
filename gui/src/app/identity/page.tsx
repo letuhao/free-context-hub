@@ -135,6 +135,9 @@ export default function IdentityPage() {
     }
   };
 
+  const principalName = (id: string) =>
+    principals.find((p) => p.principal_id === id)?.display_name ?? id;
+
   const root = principals.find((p) => p.is_root);
   const nonRoot = principals.filter((p) => !p.is_root);
   const filtered = tab === "all" ? nonRoot : nonRoot.filter((p) => p.kind === tab);
@@ -344,9 +347,7 @@ export default function IdentityPage() {
                         <code className="font-mono text-zinc-600 bg-zinc-950 px-1.5 py-0.5 rounded">
                           {p.principal_id}
                         </code>
-                        {p.key_count !== undefined && <span>{p.key_count} keys</span>}
-                        {p.grant_count !== undefined && <span>{p.grant_count} grants</span>}
-                        {p.last_seen_at && <span>Last seen {relTime(p.last_seen_at)}</span>}
+                        <span>Registered {relTime(p.created_at)}</span>
                       </div>
                     </div>
                   </div>
@@ -394,25 +395,25 @@ export default function IdentityPage() {
                   <div
                     className={cn(
                       "w-10 h-10 rounded-full border flex items-center justify-center",
-                      detail.kind === "human"
+                      detail.principal.kind === "human"
                         ? "bg-sky-500/10 border-sky-500/20"
-                        : detail.kind === "agent"
+                        : detail.principal.kind === "agent"
                           ? "bg-violet-500/10 border-violet-500/20"
                           : "bg-zinc-800 border-zinc-700",
                     )}
                   >
-                    <KindIcon kind={detail.kind} />
+                    <KindIcon kind={detail.principal.kind} />
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-sm font-semibold text-zinc-100">{detail.display_name}</h3>
+                    <h3 className="text-sm font-semibold text-zinc-100">{detail.principal.display_name}</h3>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className={cn("text-[10px] px-1.5 py-0.5 rounded", kindBadge[detail.kind])}>
-                        {detail.kind}
+                      <span className={cn("text-[10px] px-1.5 py-0.5 rounded", kindBadge[detail.principal.kind])}>
+                        {detail.principal.kind}
                       </span>
                       <span
-                        className={cn("text-[10px] px-1.5 py-0.5 rounded", statusBadge[detail.status])}
+                        className={cn("text-[10px] px-1.5 py-0.5 rounded", statusBadge[detail.principal.status])}
                       >
-                        {detail.status}
+                        {detail.principal.status}
                       </span>
                     </div>
                   </div>
@@ -421,11 +422,11 @@ export default function IdentityPage() {
                 <div className="bg-zinc-950 border border-zinc-800 rounded-md p-2.5 mb-4">
                   <p className="text-[10px] text-zinc-600 mb-0.5">Principal ID (opaque, un-spoofable)</p>
                   <code className="text-xs font-mono text-zinc-300 select-all break-all">
-                    {detail.principal_id}
+                    {detail.principal.principal_id}
                   </code>
                 </div>
 
-                {/* Bound credentials (G7: mixed session + api_key) */}
+                {/* Bound credentials (api_keys bound to this principal) */}
                 <p className="text-[10px] uppercase tracking-wide text-zinc-600 mb-2">
                   Bound credentials ({detail.credentials?.length ?? 0})
                 </p>
@@ -435,16 +436,14 @@ export default function IdentityPage() {
                   ) : (
                     detail.credentials.map((c) => (
                       <div
-                        key={c.credential_id}
+                        key={c.key_id}
                         className="flex items-center justify-between bg-zinc-950 border border-zinc-800 rounded-md px-3 py-2"
                       >
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-zinc-300 truncate">
-                              {c.name ?? (c.credential_type === "session" ? "Browser session" : "API key")}
-                            </span>
+                            <span className="text-xs text-zinc-300 truncate">{c.name}</span>
                             <span className="text-[9px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-500">
-                              {c.credential_type}
+                              {c.role}
                             </span>
                           </div>
                           {c.key_prefix && (
@@ -454,12 +453,12 @@ export default function IdentityPage() {
                         <span
                           className={cn(
                             "text-[10px] px-1.5 py-0.5 rounded shrink-0",
-                            c.status === "active"
-                              ? "bg-emerald-500/10 text-emerald-400"
-                              : "bg-red-500/10 text-red-400",
+                            c.revoked
+                              ? "bg-red-500/10 text-red-400"
+                              : "bg-emerald-500/10 text-emerald-400",
                           )}
                         >
-                          {c.status}
+                          {c.revoked ? "revoked" : "active"}
                         </span>
                       </div>
                     ))
@@ -488,7 +487,7 @@ export default function IdentityPage() {
                           {g.scope_id ? `:${g.scope_id}` : ""}
                         </span>
                         <span className="text-[10px] text-zinc-600 ml-auto shrink-0">
-                          by {g.granted_by_display_name ?? "—"}
+                          by {principalName(g.granted_by)}
                         </span>
                       </div>
                     ))
@@ -496,7 +495,7 @@ export default function IdentityPage() {
                 </div>
 
                 {/* Status control */}
-                {!detail.is_root && (
+                {!detail.principal.is_root && (
                   <div className="space-y-2 border-t border-zinc-800 pt-3">
                     <div className="flex items-center justify-between py-1.5">
                       <div>
@@ -504,10 +503,10 @@ export default function IdentityPage() {
                         <div className="text-[10px] text-zinc-600">suspended ⇒ every check denies</div>
                       </div>
                       <select
-                        value={detail.status}
+                        value={detail.principal.status}
                         disabled={controlsDisabled}
                         onChange={(e) =>
-                          handleStatusChange(detail.principal_id, e.target.value as PrincipalStatus)
+                          handleStatusChange(detail.principal.principal_id, e.target.value as PrincipalStatus)
                         }
                         className="px-2.5 py-1 bg-zinc-950 border border-zinc-800 rounded-md text-xs text-zinc-300 outline-none appearance-none cursor-pointer disabled:opacity-40"
                       >
