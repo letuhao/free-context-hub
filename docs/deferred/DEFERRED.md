@@ -1,7 +1,29 @@
 # Deferred Items
 
 <!-- Managed by Scribe. Do not edit manually. -->
-<!-- Next ID: 058 -->
+<!-- Next ID: 059 -->
+
+## DEFERRED-058
+
+- **Title:** Actor-data-boundary HUMAN-FACING half — governance GUI + F-AUTH + NHI hardening (the untracked gap)
+- **Status:** PLANNED (2026-06-21). The branch built the agent-facing half (principals/grants/authorize/decision-log/
+  api-keys/MCP/the hardened flip) but the human-facing half was designed (HTML drafts + backend services) and never
+  built — and never tracked. A full draft-vs-GUI audit (6 parallel comparators) confirmed: the knowledge/project GUI
+  is complete (exceeds drafts), but **three tracks are missing entirely**.
+- **The three tracks:** (A) **Governance GUI** — identity/authorization/delegation/bootstrap pages + the governance
+  sidebar + ~13 REST endpoints over existing services (incl. the net-new `authz_decisions` read API — nothing reads
+  that table today). (B) **F-AUTH** (DEFERRED-041) — human login/register/sessions, `human_credentials`/`mfa_factors`/
+  `sessions`/`invites` tables, `/api/auth/*`, password/MFA/lockout/session-cookie; the shipped gateway-token GUI shim
+  is a stopgap that VIOLATES the design and must be retired. (C) **NHI** — key rotation/ephemeral/access-review +
+  GUI access page (expiry default + principal picker). Plus a small polish track.
+- **Plan (authoritative tracker):** `docs/plans/2026-06-21-actor-data-boundary-COMPLETION-plan.md` — full gap matrix,
+  sized work units with file paths, and a 6-stream file-disjoint parallel fan-out with reconcile nodes.
+- **Safety-sensitive:** Track A (decision-log exposure) + Track B (new authentication/session/lockout primitive)
+  each require a cold-start hostile-actor adversary pass.
+- **Correction:** the `MCP_AUTH_ENABLED` flip shipped AHEAD of F-AUTH, which `standards-gap.md` §3 defines as the
+  precondition ("auth ON = human login enforced"). Until Track B lands, the hardened stack has no human login (only
+  the shared-admin shim) — run dev posture or localhost-bind the GUI.
+- **Trigger:** next session (user directive 2026-06-21: "build every missing… include fan out for parallel work").
 
 ## DEFERRED-057
 

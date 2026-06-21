@@ -1,3 +1,35 @@
+# CHECKPOINT — Architecture correction: the human-facing half was never built/tracked → COMPLETION plan (2026-06-21, session 13)
+
+**Branch:** `feature/actor-data-boundary` (not yet PR'd). **Triggered by the user:** "why does the GUI not require
+login — no login/register screen? … did we never write the plan to file?" — a correct, load-bearing catch.
+
+**The failure:** the branch built the **agent-facing** half of the actor-data-boundary (principals, grants,
+`authorize()`, decision log, api-keys, MCP tools, the hardened flip) but the **human-facing** half — designed in
+`docs/specs/2026-06-19-actor-data-boundary-standards-gap.md` (F-AUTH human login + sessions + MFA, per NIST 800-63B /
+OWASP ASVS V6) and `…-mcp-fe-design.md` (governance GUI), **with HTML drafts already in `docs/gui-drafts/`** — was
+**never built and never tracked.** Worse, the `MCP_AUTH_ENABLED` flip shipped AHEAD of F-AUTH (which §3 defines as the
+flip's precondition), and the GUI-lockout was papered over with a **shared-admin gateway-token shim** (`gui/src/proxy.ts`
++ `CONTEXTHUB_GATEWAY_TOKEN`) — the exact single-super-credential anti-pattern the whole branch exists to eliminate.
+
+**The audit (6 parallel comparators, draft-vs-GUI, all 39 pages + 21 components):** the knowledge/project GUI is
+**complete and exceeds its drafts** (no work). **Three tracks are missing entirely:**
+- **A — Governance GUI:** identity / authorization / delegation / bootstrap pages + governance sidebar + ~13 REST
+  endpoints over existing services (incl. the **net-new `authz_decisions` read API** — nothing reads that table).
+- **B — F-AUTH (DEFERRED-041):** login / register / sessions; `human_credentials`/`mfa_factors`/`sessions`/`invites`
+  tables; `/api/auth/*`; password(argon2)/MFA/lockout/session-cookie. Retire the gateway-token shim when this lands.
+- **C — NHI:** key rotation / ephemeral / access-review + GUI access page (expiry default + principal picker). (Note:
+  `api_keys.expires_at` IS already enforced — spec row was stale.)
+
+**Deliverable:** `docs/plans/2026-06-21-actor-data-boundary-COMPLETION-plan.md` — the durable tracker: full gap matrix,
+sized work units with file paths, and a **6-stream file-disjoint parallel fan-out** (with the 3 hub-file reconcile
+points called out: `src/api/index.ts`, `gui/src/components/sidebar.tsx`, `package.json`). Recorded as **DEFERRED-058**.
+Safety-sensitive: Tracks A + B each need a cold-start adversary pass. Build is **next session** (user directive).
+
+**Interim posture:** the running stack is hardened but login-less (shim only, GUI on 0.0.0.0:3002). Revert to dev
+(`-f docker-compose.dev.yml`) or localhost-bind until Track B lands; re-flip only once human login is enforced.
+
+---
+
 # CHECKPOINT — F2g: the MCP_AUTH_ENABLED flip — hardened deployment posture + boot guard (2026-06-21, session 13)
 
 **Branch:** `feature/actor-data-boundary`. This is THE flip — the final F2g step. The **code default stays
