@@ -42,7 +42,7 @@ import { grantsRouter } from './routes/grants.js';                  // S1 — ad
 import { authorizationRouter } from './routes/authorization.js';    // S1 — admin@global
 import { authRouter } from './routes/auth.js';                      // S3 — pre-auth (human login)
 import { invitesRouter } from './routes/invites.js';                // S3 — admin
-import { sessionAuth } from './middleware/sessionAuth.js';          // S3 — cooperative cookie auth
+import { sessionAuth, csrfGuard } from './middleware/sessionAuth.js'; // S3 — cooperative cookie auth + CSRF
 
 /**
  * Creates the REST API Express app.
@@ -117,6 +117,10 @@ export function createApiApp() {
   // S3 — cooperative session-cookie auth, IMMEDIATELY after bearerAuth. No-ops if a
   // Bearer principal is already attached; else resolves the cookie. Never rejects on its own.
   app.use('/api', sessionAuth);
+  // S3 — double-submit CSRF guard for cookie-authenticated state changes (adversary A2: was
+  // exported but never mounted). Skips safe methods AND Bearer/agent requests, so agents are
+  // unaffected; only cookie-authed mutations must present X-CSRF-Token == session.csrf_token.
+  app.use('/api', csrfGuard);
 
   // System info (model names, feature flags) — behind auth (MED-1: recon).
   app.use('/api/system', systemRouter);

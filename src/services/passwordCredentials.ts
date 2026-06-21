@@ -110,6 +110,28 @@ export async function verifyPassword(storedHash: string, password: string): Prom
   }
 }
 
+/** Anti-enumeration helper (adversary A3): spend argon2 work equivalent to a real verify against a
+ *  decoy hash, so the login "no such account" path takes comparable KDF time to the "wrong password"
+ *  path — the latency difference is otherwise a reliable account-existence oracle. The decoy is hashed
+ *  once with the live params. Never throws; the boolean result is discarded. */
+let decoyHashPromise: Promise<string> | null = null;
+export async function dummyVerifyPassword(password: string): Promise<void> {
+  try {
+    if (!decoyHashPromise) {
+      const p = getArgon2Params();
+      decoyHashPromise = argon2.hash('decoy-not-a-real-credential', {
+        type: p.type,
+        memoryCost: p.memoryCost,
+        timeCost: p.timeCost,
+        parallelism: p.parallelism,
+      });
+    }
+    await argon2.verify(await decoyHashPromise, typeof password === 'string' ? password : '');
+  } catch {
+    /* timing-only; result intentionally discarded */
+  }
+}
+
 /** True iff a stored hash was produced with weaker params than current policy (rehash-on-login seam). */
 export function needsRehash(storedHash: string): boolean {
   const p = getArgon2Params();

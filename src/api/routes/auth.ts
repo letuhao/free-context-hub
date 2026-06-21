@@ -25,6 +25,7 @@ import { ContextHubError } from '../../core/errors.js';
 import {
   getCredential,
   verifyPassword,
+  dummyVerifyPassword,
   rehashIfNeeded,
   resolvePrincipalByEmail,
   issueAuthToken,
@@ -71,8 +72,10 @@ router.post('/login', async (req, res, next) => {
       return;
     }
     const principalId = await resolvePrincipalByEmail(email);
-    // No such account: do the SAME work shape as a real failure (still no enumeration) and return generic.
+    // No such account: spend equivalent argon2 KDF time before the generic 401 so the latency cannot
+    // be used as an account-existence oracle (adversary A3) — the prior version returned immediately.
     if (!principalId) {
+      await dummyVerifyPassword(password);
       res.status(401).json({ error: 'Invalid email or password' });
       return;
     }
@@ -163,9 +166,13 @@ router.post('/password/forgot', async (req, res, next) => {
     let devToken: string | undefined;
     if (principalId) {
       const token = await issueAuthToken(principalId, 'password_reset');
-      // In a real deployment this token is emailed. We surface it ONLY in non-production so the GUI /
-      // E2E can complete the flow without a mail server. (Recorded: DEPLOYMENT_PROFILE gate.)
-      try { const { getEnv } = await import('../../core/index.js'); if (getEnv().DEPLOYMENT_PROFILE !== 'production') devToken = token; } catch { /* dev */ }
+      // In a real deployment this token is emailed. Exposing it in the HTTP response is gated behind an
+      // EXPLICIT opt-in flag (default off) — NOT the deployment profile — because returning it whenever
+      // the account exists is an account-enumeration + takeover oracle on any non-prod gateway
+      // (adversary A5). E2E harnesses set AUTH_EXPOSE_DEV_RESET_TOKEN=true; otherwise the token is only
+      // retrievable server-side (auth_tokens row), and the response is identical whether or not the
+      // account exists.
+      if (process.env.AUTH_EXPOSE_DEV_RESET_TOKEN === 'true') devToken = token;
     }
     res.json({ status: 'ok', message: 'If an account exists, a reset link has been sent.', ...(devToken ? { dev_reset_token: devToken } : {}) });
   } catch (e) { next(e); }

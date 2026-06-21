@@ -33,6 +33,18 @@ async function main() {
       process.exit(1);
     }
     if (posture.kind === 'enforce-ready-required') {
+      // F-AUTH hardening (adversary A6): in a hardened production boot, the session-signing secret must
+      // be set EXPLICITLY. Otherwise sessions.ts falls back to ROOT_BOOTSTRAP_TOKEN (conflating the
+      // root-minting secret with the cookie-signing key) or, worse, a public dev constant in this
+      // source tree (forgeable cookies). Fail closed.
+      if (!process.env.AUTH_SESSION_SIGNING_SECRET || process.env.AUTH_SESSION_SIGNING_SECRET.trim() === '') {
+        logger.fatal(
+          'DEPLOYMENT_PROFILE=production + auth-ON but AUTH_SESSION_SIGNING_SECRET is unset — refusing '
+            + 'to boot. Session cookies would be signed with a fallback secret (the bootstrap token or a '
+            + 'public dev constant). Set AUTH_SESSION_SIGNING_SECRET to a unique high-entropy value.',
+        );
+        process.exit(1);
+      }
       try {
         const { assertEnforceReady } = await import('./services/bootstrap.js');
         const root = await assertEnforceReady();
