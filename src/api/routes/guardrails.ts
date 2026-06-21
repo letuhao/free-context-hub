@@ -43,7 +43,7 @@ router.post('/check', async (req, res, next) => {
     const projectId = resolveProjectIdOrThrow(req.body.project_id);
 
     if (req.body.include_groups) {
-      const allIds = await resolveProjectIds(projectId, true);
+      const allIds = await resolveProjectIds(projectId, true, callerPrincipalOf(req));
       let totalChecked = 0;
       const allMatched: Array<{ rule_id: string; verification_method: string; requirement: string }> = [];
       let anyFailed = false;

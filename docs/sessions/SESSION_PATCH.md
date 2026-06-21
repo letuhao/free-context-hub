@@ -1,3 +1,63 @@
+# CHECKPOINT — DEFERRED-049: `group` becomes a real scope level (namespace split) + resolveProjectIds self-defense (2026-06-21, session 13)
+
+**Branch:** `feature/actor-data-boundary`. Auth stays **OFF** (`MCP_AUTH_ENABLED=false`, inert) — the flip and
+Domain 8 remain **separately human-gated**, NOT touched. Full unit suite **1251 / 1232 pass / 0 fail / 19 skip**,
+backend + GUI `tsc` clean. POST-REVIEW human gate honored. DEFERRED-049 closed; no new deferrals.
+
+**The problem:** a group is a `projects`-table row, so it authorized via a `project`-scope grant by pure string
+equality — a grant on project `acme` covered a group `acme` (and vice-versa), and `createGroup`'s
+`ON CONFLICT DO UPDATE` could silently take over a colliding project row. Also `resolveProjectIds` folded a
+project's group ids into a `= ANY()` scope array with NO authz (the defense lived only in the N callers).
+
+**Decision (user, at CLARIFY):** **A2** (resolver self-defends) + **B2** (formal `group` scope in the lattice) +
+redact `member_count`. B2 = an authorization-primitive change → size XL, safety-sensitive review policy engaged.
+
+**B2 — `group` is a parallel leaf** (`global ⊃ {project⊃topic⊃task, group}`):
+- `authorize.ts` — `ResourceScope` gains `{kind:'group',group_id}`; `scopeCovers` adds a `group` case + an
+  explicit project-case kind-guard (a group resource carries `group_id`, not `project_id`, so the namespaces
+  never string-match); `resolveResourceScope` resolves a group with NO existence check (so createGroup can
+  pre-authorize). `grants.ts` — `ScopeType`/`SCOPE_TYPES` gain `group`.
+- Migration **0070** — `grants_scope_type_check` accepts `group`; **additive mirror-backfill** (project grant on
+  a group id → parallel group grant; `delegate` EXCLUDED so re-grant authority isn't inherited; `granted_by`
+  re-attributed to the active root so a retired granter doesn't fabricate a fresh edge; `EXISTS project_groups`
+  predicate; `ON CONFLICT DO NOTHING`). Matched **0 rows** here (logged no-op).
+- `projectGroups.ts` — every group TOPOLOGY op authorizes strict `{kind:'group'}`; `createGroup` **collision-rejects**
+  an id that already names a non-group project (no silent `DO UPDATE` takeover); `createProject` on a group id
+  rejects (23505). The 3 grant MCP tools (`grant_capability`/`list_grants`/`explain_authorization`) accept `group`.
+
+**A2 — `resolveProjectIds(projectId, includeGroups, actingPrincipalId)`:** authorizes the entry project
+(throws on deny → an unplumbed principal under auth-ON fails LOUD) + keeps only caller-readable groups, so the
+result is safe to feed a raw `= ANY()`. The 4 call sites (REST lessons/guardrails, MCP search/guardrails) + the
+2 `listGroups` callers thread the acting principal.
+
+**Lessons-read UNION (the A2×B2 seam):** a group_id doubles as a `lessons.project_id` partition, so
+`searchLessonsMulti` reads an id if `read@project OR read@group` (`canReadLessonsPartition`) — but the group arm
+fires ONLY for a real `project_groups` row, so a `read@group:<plain-project>` can't leak that project's lessons.
+Group TOPOLOGY stays strict group. **Redact:** `listGroups` nulls `member_count` for non-grant callers.
+
+**Reviews (safety-sensitive — authz primitive):**
+- Cold-start adversary @ DESIGN (3): exact backfill SQL + root-attribution; the both-namespace union (classify-
+  as-group-only would strip project-readers); fail-loud plumbing contract. Folded before BUILD.
+- Cold-start adversary @ CODE (3): **HIGH** `read@group` on a plain project leaked its lessons (existence-check-free
+  union) → group arm gated on a real group row + regression test; **MED** backfill mirrored `delegate` → excluded;
+  **LOW** `member_count:null` crashed the MCP `z.number()` schema → `.nullable()`.
+- `/review-impl` (4): **MED** the 3 grant MCP tool enums omitted `group` → group was UNPROVISIONABLE via API
+  (added); **LOW** GUI rendered null `member_count` literally (type + 3 null-guards); **LOW** mirror + group
+  grant/revoke untested (+2 tests); **LOW** resolveProjectIds false-path docstring overclaimed (scoped).
+
+**New files:** `migrations/0070_group_scope_type.sql`, `src/services/groups-namespace-authz.test.ts` (12),
+DEFERRED-049 CLARIFY/DESIGN/PLAN docs. **Modified:** authorize.ts, grants.ts, projectGroups.ts, lessons.ts,
+mcp/index.ts, api/routes/{lessons,guardrails,projectGroups}.ts, authorize.pure.test.ts(+5), groups-authz.test.ts
+(grant→group), package.json, gui/src/app/projects/{groups,settings}/page.tsx + projects/page.tsx. Migration
+applied live (`npx tsx src/db/migrate.ts`).
+
+**What's next (all human-gated):** the remaining F2g flip prerequisites — DEFERRED-050 (user-scoped notification
+identity) + the least-privilege items DEFERRED-051/052/053/054 — then Domain 8 (retire legacy REST
+`requireScope`/role middleware), then the `MCP_AUTH_ENABLED` default flip itself (own checkpoint + cold-start
+security adversary + live auth-ON verification).
+
+---
+
 # CHECKPOINT — DEFERRED-048: close the arbitrary-filesystem-path capability across ALL vectors (2026-06-20, session 13)
 
 **Branch:** `feature/actor-data-boundary`. Auth stays **OFF** (`MCP_AUTH_ENABLED=false`, inert) — the flip

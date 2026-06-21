@@ -78,7 +78,7 @@ router.post('/search', async (req, res, next) => {
     } else {
       const projectId = resolveProjectIdOrThrow(project_id);
       if (include_groups) {
-        resolvedIds = await resolveProjectIds(projectId, true);
+        resolvedIds = await resolveProjectIds(projectId, true, callerPrincipalOf(req));
       } else {
         const result = await searchLessons({ projectId, actingPrincipalId: callerPrincipalOf(req), query, filters, limit, rerank: rerankFlag });
         res.json(result);

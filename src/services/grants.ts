@@ -17,10 +17,13 @@ import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
 import { getPrincipal } from './principals.js';
 
-export type ScopeType = 'global' | 'project' | 'topic' | 'task';
+// [DEFERRED-049 B2] `group` is a parallel leaf under global (global ⊃ {project⊃topic⊃task, group}). A
+// group is a projects-table row whose authority is now its OWN namespace, so a `project` grant no longer
+// covers a same-named group (and vice-versa). See docs/specs/2026-06-20-…-DEFERRED-049-DESIGN.md.
+export type ScopeType = 'global' | 'project' | 'topic' | 'task' | 'group';
 export type Capability = 'read' | 'write' | 'admin' | 'delegate';
 
-export const SCOPE_TYPES: readonly ScopeType[] = ['global', 'project', 'topic', 'task'];
+export const SCOPE_TYPES: readonly ScopeType[] = ['global', 'project', 'topic', 'task', 'group'];
 export const CAPABILITIES: readonly Capability[] = ['read', 'write', 'admin', 'delegate'];
 
 export interface Grant {

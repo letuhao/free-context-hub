@@ -907,8 +907,8 @@ function createMcpToolsServer() {
       inputSchema: z.object({
         workspace_token: z.string().optional(),
         grantee_principal: z.string().min(1).describe('The principal UUID receiving the grant.'),
-        scope_type: z.enum(['global', 'project', 'topic', 'task']),
-        scope_id: z.string().optional().describe('Required for project/topic/task; omit for global.'),
+        scope_type: z.enum(['global', 'project', 'topic', 'task', 'group']),
+        scope_id: z.string().optional().describe('Required for project/topic/task/group; omit for global.'),
         capability: z.enum(['read', 'write', 'admin', 'delegate']),
         output_format: OutputFormatSchema.default('auto_both'),
       }),
@@ -971,7 +971,7 @@ function createMcpToolsServer() {
       inputSchema: z.object({
         workspace_token: z.string().optional(),
         principal_id: z.string().optional().describe('Filter by grantee; defaults to the caller.'),
-        scope_type: z.enum(['global', 'project', 'topic', 'task']).optional(),
+        scope_type: z.enum(['global', 'project', 'topic', 'task', 'group']).optional(),
         scope_id: z.string().optional(),
         include_revoked: z.boolean().default(false),
         output_format: OutputFormatSchema.default('auto_both'),
@@ -1016,7 +1016,7 @@ function createMcpToolsServer() {
       inputSchema: z.object({
         workspace_token: z.string().optional(),
         action: z.enum(['read', 'write', 'admin', 'delegate']),
-        resource_kind: z.enum(['global', 'project', 'topic', 'task']),
+        resource_kind: z.enum(['global', 'project', 'topic', 'task', 'group']),
         resource_id: z.string().optional(),
         principal_id: z.string().optional().describe('Whose authority to explain; defaults to the caller.'),
         output_format: OutputFormatSchema.default('auto_both'),
@@ -1469,7 +1469,7 @@ function createMcpToolsServer() {
         const projectId = resolveProjectIdOrThrow(project_id);
         if (include_groups) {
           // Expand to include all groups this project belongs to.
-          resolvedIds = await resolveProjectIds(projectId, true);
+          resolvedIds = await resolveProjectIds(projectId, true, actingPrincipalId);
         } else {
           // Single project search (backwards compat — identical to previous behavior).
           const result = await searchLessons({ projectId, actingPrincipalId, query, limit, rerank, filters: filtersTyped });
@@ -1810,7 +1810,7 @@ function createMcpToolsServer() {
         // (NOT_FOUND). Graceful-skip preserves the security contract while
         // not breaking the include_groups feature — the root projectId was
         // already scope-asserted via the resolver above.
-        const allIds = await resolveProjectIds(projectId, true);
+        const allIds = await resolveProjectIds(projectId, true, actingPrincipalId);
         let totalChecked = 0;
         const allMatched: Array<{ rule_id: string; verification_method: string; requirement: string }> = [];
         let anyFailed = false;
@@ -2981,15 +2981,18 @@ function createMcpToolsServer() {
           group_id: z.string(),
           name: z.string(),
           description: z.string().nullable(),
-          member_count: z.number(),
+          // [DEFERRED-049 adv #3] nullable: listGroups REDACTS member_count to null for groups the caller
+          // has no read@group grant on (the name stays for the dropdown). A non-nullable schema would
+          // crash the tool for exactly the scoped callers the redaction serves.
+          member_count: z.number().nullable(),
         })),
       }),
     },
     async ({ workspace_token, output_format }) => {
-      // list_groups: admin op (global listing, no project scope to enforce).
-      // Token validated via resolver so deprecation/disable gates fire consistently.
-      await resolveMcpCallerScopeOrThrow(workspace_token);
-      const groups = await listGroups();
+      // list_groups: global name catalog. [DEFERRED-049] resolve the acting principal so listGroups can
+      // REDACT member_count for groups the caller has no read@group grant on (names stay visible).
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const groups = await listGroups(actingPrincipalId);
       const summary = `list_groups: count=${groups.length}`;
       return formatToolResponse({ groups }, summary, output_format);
     },

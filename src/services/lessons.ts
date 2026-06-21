@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { getEnv } from '../env.js';
 import { ContextHubError } from '../core/index.js';
 import { assertAuthorized } from './authorize.js';
+import { canReadLessonsPartition } from './projectGroups.js';
 import { getDbPool } from '../db/client.js';
 import { linkLessonToSymbols, upsertLessonNode } from '../kg/linker.js';
 import { deleteProjectGraph } from '../kg/projectGraph.js';
@@ -1340,17 +1341,27 @@ export type SearchLessonsMultiParams = {
  * Single embedding computation, single SQL query, single rerank pass.
  */
 export async function searchLessonsMulti(params: SearchLessonsMultiParams): Promise<SearchLessonsResult> {
-  // F2f: authorize read on EACH requested project (replaces strict-reject; a multi-project-granted
-  // caller may legitimately span them, one scoped outside its grants gets NOT_FOUND per project).
-  for (const id of [...new Set(params.projectIds.filter(Boolean))]) {
-    await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id });
-  }
   const pool = getDbPool();
   const projectIds = [...new Set(params.projectIds.filter(Boolean))];
 
-  // If only one project, delegate to single-project search (same perf path).
+  // [DEFERRED-049] lessons-read UNION (canReadLessonsPartition): each id's lessons are a data partition
+  // that may be a project, a group, or (legacy) both. Readable if read@project OR read@group — the group
+  // arm fires ONLY for a real group id (adv REVIEW-CODE #1). Neither → NOT_FOUND (no existence oracle;
+  // include_groups callers graceful-skip NOT_FOUND). Group TOPOLOGY stays strict `group`. auth-off → ALLOW.
+  for (const id of projectIds) {
+    if (!(await canReadLessonsPartition(params.actingPrincipalId, id))) {
+      throw new ContextHubError('NOT_FOUND', `No readable lessons partition "${id}".`);
+    }
+  }
+
+  // Single-id fast path — ONLY for a non-group id. searchLessons() re-authorizes its id strictly as
+  // `{kind:'project'}`, which would reject a group-only reader, so a single GROUP id falls through to
+  // the ANY() path below (already authorized via the union above).
   if (projectIds.length === 1) {
-    return searchLessons({ projectId: projectIds[0], actingPrincipalId: params.actingPrincipalId, query: params.query, limit: params.limit, rerank: params.rerank, filters: params.filters, snippetMaxChars: params.snippetMaxChars });
+    const isGroup = ((await pool.query(`SELECT 1 FROM project_groups WHERE group_id = $1`, [projectIds[0]])).rowCount ?? 0) > 0;
+    if (!isGroup) {
+      return searchLessons({ projectId: projectIds[0], actingPrincipalId: params.actingPrincipalId, query: params.query, limit: params.limit, rerank: params.rerank, filters: params.filters, snippetMaxChars: params.snippetMaxChars });
+    }
   }
   if (projectIds.length === 0) {
     return { matches: [], explanations: ['no project_ids provided'] };

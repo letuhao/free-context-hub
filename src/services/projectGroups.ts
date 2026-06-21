@@ -1,6 +1,6 @@
 import { getDbPool } from '../db/client.js';
 import { ContextHubError } from '../core/errors.js';
-import { assertAuthorized } from './authorize.js';
+import { assertAuthorized, authorize } from './authorize.js';
 
 const MAX_GROUP_MEMBERS = 50;
 
@@ -13,9 +13,30 @@ export type ProjectGroup = {
 };
 
 export type ProjectGroupWithMembers = ProjectGroup & {
-  member_count: number;
+  // [DEFERRED-049] member_count is group TOPOLOGY — nullable so listGroups can REDACT it (null) for a
+  // caller without a covering read@group grant while still listing the group name for the dropdown.
+  member_count: number | null;
   members?: string[];
 };
+
+/**
+ * [DEFERRED-049] The lessons-read UNION. Reading lesson rows stored under `id` (a data partition that may
+ * be a project, a group, or — for legacy rows — both) is allowed if the caller can read it in EITHER
+ * namespace. This is deliberate and scoped to the lessons-search surface ONLY (group TOPOLOGY ops stay
+ * strict `group`). Preserves legacy project-read access AND enables group-shared reads. Auth-off →
+ * authorize short-circuits ALLOW on the first check, so it returns true with no extra query.
+ *
+ * [adv REVIEW-CODE #1] The `read@group` arm is consulted ONLY when `id` is ACTUALLY a group. resolveResourceScope
+ * trusts a group id WITHOUT an existence check (so createGroup can pre-authorize a not-yet-created group), so a
+ * `read@group:<plain-project-id>` grant would otherwise resolve and leak that project's lessons — collapsing the
+ * very namespaces B2 separates. Requiring a real `project_groups` row closes that.
+ */
+export async function canReadLessonsPartition(actingPrincipalId: string | null | undefined, id: string): Promise<boolean> {
+  if ((await authorize(actingPrincipalId, 'read', { kind: 'project', id })).allow) return true;
+  const isGroup = ((await getDbPool().query(`SELECT 1 FROM project_groups WHERE group_id = $1`, [id])).rowCount ?? 0) > 0;
+  if (!isGroup) return false;
+  return (await authorize(actingPrincipalId, 'read', { kind: 'group', id })).allow;
+}
 
 // ── CRUD ──
 
@@ -26,10 +47,28 @@ export async function createGroup(params: {
   name: string;
   description?: string;
 }): Promise<ProjectGroup> {
-  // A group IS a projects-table row, so it authorizes via the `project` kind (resolver trusts the id
-  // without an existence check, so a not-yet-existent group works). [DEFERRED-046]
-  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'project', id: params.group_id });
+  // [DEFERRED-049 B2] A group authorizes in its OWN namespace (`group`), NOT `project` — so a project
+  // grant on a same-named id no longer covers group creation. resolveResourceScope trusts a group id
+  // with no existence check, so authorizing a not-yet-existent group works (as before).
+  await assertAuthorized(params.actingPrincipalId, 'write', { kind: 'group', id: params.group_id });
   const pool = getDbPool();
+
+  // [DEFERRED-049 B1] Collision-reject: do NOT silently `ON CONFLICT DO UPDATE` over an existing NON-group
+  // project row (that would rename/take over a real project). If the id already names a projects row that
+  // is not already a group, refuse. If it IS already a group, the upsert is a legitimate idempotent
+  // rename. (TOCTOU between this check and the INSERT is accepted — group creation is a single-writer
+  // admin path; the worst case is a benign rename the unique constraints still bound.)
+  const collide = await pool.query<{ is_project: boolean; is_group: boolean }>(
+    `SELECT EXISTS(SELECT 1 FROM projects WHERE project_id = $1) AS is_project,
+            EXISTS(SELECT 1 FROM project_groups WHERE group_id = $1) AS is_group`,
+    [params.group_id],
+  );
+  if (collide.rows[0]?.is_project && !collide.rows[0]?.is_group) {
+    throw new ContextHubError(
+      'BAD_REQUEST',
+      `id "${params.group_id}" already names a project; choose a different group id.`,
+    );
+  }
 
   // Ensure the projects table has a row for this group_id so lessons can be stored there.
   await pool.query(
@@ -54,7 +93,8 @@ export async function deleteGroup(
   opts?: { actingPrincipalId?: string | null },
 ): Promise<{ deleted: boolean }> {
   // Destructive whole-resource delete → admin on the group (mirrors deleteWorkspace=admin). [DEFERRED-046]
-  await assertAuthorized(opts?.actingPrincipalId, 'admin', { kind: 'project', id: groupId });
+  // [DEFERRED-049 B2] strict `group` namespace.
+  await assertAuthorized(opts?.actingPrincipalId, 'admin', { kind: 'group', id: groupId });
   const pool = getDbPool();
   // Members cascade-deleted via FK.
   const res = await pool.query(
@@ -65,13 +105,13 @@ export async function deleteGroup(
 }
 
 /**
- * [DEFERRED-049] NOT authz-gated: returns the cross-tenant group CATALOG (names + member_count) for the
- * GUI group dropdown / `list_project_groups`. Gating it to `hasGlobalGrant` would blank the dropdown for
- * every project-scoped user, so it is left open as shared-pool metadata. Whether `member_count` is
- * sensitive enough to filter per-caller is the open group-read-model question tracked in DEFERRED-049
- * (the per-group reads `listGroupMembers`/`getGroup` ARE gated on read@group).
+ * [DEFERRED-049] The group NAME catalog stays shared-pool (the GUI dropdown needs every name), but
+ * `member_count` is group TOPOLOGY: it is REDACTED to `null` for any group the caller lacks a covering
+ * `read@group` grant on. So a scoped caller still sees the dropdown but learns nothing about group
+ * composition they aren't entitled to. auth-off → authorize short-circuits ALLOW → all counts visible
+ * (unchanged). The per-group reads `getGroup`/`listGroupMembers` remain strictly gated on read@group.
  */
-export async function listGroups(): Promise<ProjectGroupWithMembers[]> {
+export async function listGroups(actingPrincipalId?: string | null): Promise<ProjectGroupWithMembers[]> {
   const pool = getDbPool();
   const res = await pool.query(
     `SELECT g.*, COUNT(m.project_id)::int AS member_count
@@ -80,7 +120,15 @@ export async function listGroups(): Promise<ProjectGroupWithMembers[]> {
      GROUP BY g.group_id
      ORDER BY g.created_at DESC`,
   );
-  return (res.rows ?? []).map(mapGroupWithMembersRow);
+  const rows = (res.rows ?? []).map(mapGroupWithMembersRow);
+  // Redact member_count where the caller has no read@group (strict group namespace — member_count is
+  // topology, not lessons data, so the lessons-read UNION does NOT apply here).
+  for (const row of rows) {
+    if (!(await authorize(actingPrincipalId, 'read', { kind: 'group', id: row.group_id })).allow) {
+      row.member_count = null;
+    }
+  }
+  return rows;
 }
 
 export async function getGroup(
@@ -88,8 +136,8 @@ export async function getGroup(
   opts?: { actingPrincipalId?: string | null },
 ): Promise<ProjectGroupWithMembers | null> {
   // [DEFERRED-046/adv] group composition (member_count, membership) is the cross-project knowledge-flow
-  // topology — read it only with read on the group (a projects-table row).
-  await assertAuthorized(opts?.actingPrincipalId, 'read', { kind: 'project', id: groupId });
+  // topology — read it only with read on the group. [DEFERRED-049 B2] strict `group` namespace.
+  await assertAuthorized(opts?.actingPrincipalId, 'read', { kind: 'group', id: groupId });
   const pool = getDbPool();
   const res = await pool.query(
     `SELECT g.*, COUNT(m.project_id)::int AS member_count
@@ -110,7 +158,8 @@ export async function listGroupMembers(
   opts?: { actingPrincipalId?: string | null },
 ): Promise<string[]> {
   // [DEFERRED-046/adv] member project_ids are sensitive group topology — gate on read@group.
-  await assertAuthorized(opts?.actingPrincipalId, 'read', { kind: 'project', id: groupId });
+  // [DEFERRED-049 B2] strict `group` namespace.
+  await assertAuthorized(opts?.actingPrincipalId, 'read', { kind: 'group', id: groupId });
   const pool = getDbPool();
   const res = await pool.query(
     `SELECT project_id FROM project_group_members WHERE group_id = $1 ORDER BY added_at`,
@@ -129,8 +178,9 @@ export async function addProjectToGroup(
   // into search scope via resolveProjectIds), so require write on BOTH the member project AND the group
   // (strict-reject — first deny throws). Authorizing the group BEFORE the existence check below also
   // closes the old "Group X not found" existence oracle to anyone holding write on some other project.
+  // [DEFERRED-049 B2] the member is a `project`; the group is the strict `group` namespace.
   await assertAuthorized(opts?.actingPrincipalId, 'write', { kind: 'project', id: projectId });
-  await assertAuthorized(opts?.actingPrincipalId, 'write', { kind: 'project', id: groupId });
+  await assertAuthorized(opts?.actingPrincipalId, 'write', { kind: 'group', id: groupId });
   const pool = getDbPool();
 
   // Guard: group must exist.
@@ -169,8 +219,9 @@ export async function removeProjectFromGroup(
   opts?: { actingPrincipalId?: string | null },
 ): Promise<{ removed: boolean }> {
   // [DEFERRED-046] write on BOTH the member project AND the group (strict-reject).
+  // [DEFERRED-049 B2] the member is a `project`; the group is the strict `group` namespace.
   await assertAuthorized(opts?.actingPrincipalId, 'write', { kind: 'project', id: projectId });
-  await assertAuthorized(opts?.actingPrincipalId, 'write', { kind: 'project', id: groupId });
+  await assertAuthorized(opts?.actingPrincipalId, 'write', { kind: 'group', id: groupId });
   const pool = getDbPool();
   const res = await pool.query(
     `DELETE FROM project_group_members WHERE group_id = $1 AND project_id = $2 RETURNING project_id`,
@@ -364,19 +415,42 @@ export async function updateProject(
 // ── Resolver ──
 
 /**
- * Given a project_id, returns that project_id plus all group_ids it belongs to.
- * Used to expand search queries across shared group knowledge.
+ * Given a project_id, returns that project_id plus all group_ids it belongs to — used to expand search
+ * queries across shared group knowledge.
+ *
+ * [DEFERRED-049 A2] Self-defending: the resolver now authorizes so its RESULT is safe to feed straight
+ * into a `= ANY($1)` query (closing the structural risk that the defense lived only in N callers).
+ *  - It throws if the caller cannot read the ENTRY project (their own project — a real error, surfaced
+ *    by every existing consumer as its `projectIds[0]` / first loop iteration). An unplumbed
+ *    `actingPrincipalId === undefined` under auth-ON → NO_PRINCIPAL deny → throw, i.e. a missing-plumbing
+ *    bug fails LOUD (fail-closed), never a silent broaden. [adv REVIEW-DESIGN #3]
+ *  - It KEEPS only the groups the caller may read at the lessons boundary (read@project OR read@group),
+ *    silently dropping foreign/unreadable groups (best-effort enrichment, matching the consumers' current
+ *    graceful-skip). auth-off → authorize short-circuits ALLOW → returns [project, ...allGroups] (unchanged).
  */
-export async function resolveProjectIds(projectId: string, includeGroups: boolean): Promise<string[]> {
+export async function resolveProjectIds(
+  projectId: string,
+  includeGroups: boolean,
+  actingPrincipalId?: string | null,
+): Promise<string[]> {
+  // [review-impl #4] The self-defense applies to the EXPANSION path only. With includeGroups=false this is
+  // a pure pass-through (`[projectId]`, no authz) — the caller authorizes the single id downstream exactly
+  // as before; the "safe to feed = ANY()" guarantee covers the includeGroups=true result.
   if (!includeGroups) return [projectId];
+  // First-line authz on the entry project itself (throws on deny). Under auth-off this short-circuits.
+  await assertAuthorized(actingPrincipalId, 'read', { kind: 'project', id: projectId });
   const pool = getDbPool();
   const res = await pool.query(
     `SELECT group_id FROM project_group_members WHERE project_id = $1`,
     [projectId],
   );
   const groupIds = (res.rows ?? []).map((r: any) => String(r.group_id));
-  // Deduplicate: project first, then its groups.
-  return [projectId, ...groupIds];
+  const readable: string[] = [];
+  for (const gid of groupIds) {
+    if (await canReadLessonsPartition(actingPrincipalId, gid)) readable.push(gid);
+  }
+  // Deduplicate: project first, then its readable groups.
+  return [projectId, ...readable];
 }
 
 // ── Row mappers ──

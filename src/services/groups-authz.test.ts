@@ -52,7 +52,9 @@ before(async () => {
   pwriter = (await createPrincipal({ kind: 'agent', display_name: `${PREFIX}pwriter` })).principal_id;
   grantor = (await createPrincipal({ kind: 'agent', display_name: `${PREFIX}grantor` })).principal_id;
   await createGrant({ grantee_principal: gadmin, scope_type: 'project', scope_id: P, capability: 'write', granted_by: grantor });
-  await createGrant({ grantee_principal: gadmin, scope_type: 'project', scope_id: G, capability: 'admin', granted_by: grantor });
+  // [DEFERRED-049 B2] group topology authorizes in the strict `group` namespace now (a project grant on
+  // G no longer covers the group). admin@group covers write+read+admin on the group lifecycle.
+  await createGrant({ grantee_principal: gadmin, scope_type: 'group', scope_id: G, capability: 'admin', granted_by: grantor });
   await createGrant({ grantee_principal: pwriter, scope_type: 'project', scope_id: P, capability: 'write', granted_by: grantor });
   await setAuth(true);
 });

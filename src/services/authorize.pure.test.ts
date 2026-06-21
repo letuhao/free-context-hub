@@ -42,9 +42,32 @@ const proj: ResourceScope = { kind: 'project', project_id: 'P' };
 const topic: ResourceScope = { kind: 'topic', project_id: 'P', topic_id: 'T' };
 const task: ResourceScope = { kind: 'task', project_id: 'P', topic_id: 'T', task_id: 'K' };
 const glob: ResourceScope = { kind: 'global' };
+const group: ResourceScope = { kind: 'group', group_id: 'GRP' };
 
 test('scopeCovers: global grant covers everything', () => {
-  for (const r of [glob, proj, topic, task]) assert.equal(scopeCovers(G('global', null), r), true);
+  for (const r of [glob, proj, topic, task, group]) assert.equal(scopeCovers(G('global', null), r), true);
+});
+
+// ── [DEFERRED-049 B2] group is a PARALLEL leaf under global: global ⊃ {project⊃topic⊃task, group}.
+//    A group grant covers ONLY its own group; project/topic/task grants never cross into the group
+//    namespace and vice-versa (discriminated-union field shapes: group has group_id, no project_id).
+test('scopeCovers: group grant covers its group only — by id, not a different group', () => {
+  assert.equal(scopeCovers(G('group', 'GRP'), group), true);
+  assert.equal(scopeCovers(G('group', 'OTHER'), group), false);
+});
+
+test('scopeCovers: a group grant does NOT cover a project/topic/task/global resource', () => {
+  assert.equal(scopeCovers(G('group', 'GRP'), proj), false);
+  assert.equal(scopeCovers(G('group', 'GRP'), topic), false);
+  assert.equal(scopeCovers(G('group', 'GRP'), task), false);
+  assert.equal(scopeCovers(G('group', 'GRP'), glob), false);
+});
+
+test('scopeCovers: a project/topic/task grant does NOT cover a group resource (no namespace conflation)', () => {
+  // The pre-B2 bug: a project grant named like the group would have matched. It must not.
+  assert.equal(scopeCovers(G('project', 'GRP'), group), false);
+  assert.equal(scopeCovers(G('topic', 'GRP'), group), false);
+  assert.equal(scopeCovers(G('task', 'GRP'), group), false);
 });
 
 test('scopeCovers: project grant covers its project/topic/task, not global, not a sibling project', () => {
@@ -139,10 +162,11 @@ test('SSOT: every scope_type has a real covering case in scopeCovers (not the de
     project: () => scopeCovers(G('project', 'P'), proj),
     topic: () => scopeCovers(G('topic', 'T'), topic),
     task: () => scopeCovers(G('task', 'K'), task),
+    group: () => scopeCovers(G('group', 'GRP'), group),
   };
   for (const st of SCOPE_TYPES) {
     assert.equal(typeof selfCover[st], 'function', `scope_type "${st}" has no scopeCovers guard — add a case + update this test`);
     assert.equal(selfCover[st](), true, `scope_type "${st}" must cover its own resource`);
   }
-  assert.equal(SCOPE_TYPES.length, 4, 'a new scope_type needs a scopeCovers case, a resolveResourceScope branch, and this guard updated');
+  assert.equal(SCOPE_TYPES.length, 5, 'a new scope_type needs a scopeCovers case, a resolveResourceScope branch, and this guard updated');
 });

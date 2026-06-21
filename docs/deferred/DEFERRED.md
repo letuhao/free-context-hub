@@ -77,7 +77,23 @@
 ## DEFERRED-049
 
 - **Title:** F2f-groups (residual) — resolveProjectIds resolver-level authz + project/group id-namespace conflation
-- **Status:** OPEN (2026-06-20). MED (design). Split from DEFERRED-046. NOT live-exploitable today.
+- **Status:** **RESOLVED (2026-06-21)** — closed via A2 + B2 + redact (user chose the formal namespace split).
+  **B2:** `group` is now its own scope level in the grant lattice (`global ⊃ {project⊃topic⊃task, group}`) —
+  added to `ScopeType`/`scopeCovers`/`resolveResourceScope` (a project grant no longer covers a same-named
+  group, and vice-versa, by discriminated-union shape), migration **0070** (scope_type CHECK + additive
+  mirror-backfill: project-grants-on-a-group-id → parallel group grants, delegate EXCLUDED, granted_by→root,
+  no-op on this DB). Group TOPOLOGY ops (`createGroup`/`delete`/`getGroup`/`listGroupMembers`/add/remove)
+  authorize strict `{kind:'group'}`; `createGroup` collision-rejects a non-group project id (no silent
+  takeover); the 3 grant MCP tools (`grant_capability`/`list_grants`/`explain_authorization`) accept `group`.
+  **A2:** `resolveProjectIds(projectId, includeGroups, actingPrincipalId)` authorizes the entry project
+  (fail-loud) + filters group ids to caller-readable — result is safe to feed a raw `= ANY()`. The
+  lessons-read surface is a deliberate **union** (`read@project OR read@group`, group arm gated on a real
+  `project_groups` row so a `read@group:<plain-project>` can't leak it). **Sub-issue 0:** `listGroups`
+  REDACTS `member_count` to null for non-grant callers (names stay for the dropdown). Reviews: 2 cold-start
+  adversary passes (DESIGN + CODE) + a `/review-impl` coverage-gap pass — all findings fixed (notably the
+  union existence-gate HIGH, the delegate-mirror MED, the unprovisionable-group MED). Tests:
+  `groups-namespace-authz.test.ts` (12) + 5 pure lattice cases. Migration `0070`. Original write-up:
+- ~~OPEN~~ MED (design). Split from DEFERRED-046. NOT live-exploitable today.
 - **Context (related group read-model + modeling gaps from the adversary + `/review-impl` passes):**
   0. **`listGroups` is unguarded** (live `GET /api/groups` + MCP `list_project_groups`) and returns
      `member_count` for ALL groups cross-tenant — documented in-code as accepted shared-pool catalog

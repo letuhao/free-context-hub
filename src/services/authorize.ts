@@ -25,12 +25,15 @@ const logger = createModuleLogger('authorize');
 /** What a handler is trying to do. read⊂write⊂admin are resource verbs; delegate = re-grant. */
 export type Action = 'read' | 'write' | 'admin' | 'delegate';
 
-/** A resource expressed as its FULLY-RESOLVED scope chain (project→topic→task ancestry filled in). */
+/** A resource expressed as its FULLY-RESOLVED scope chain (project→topic→task ancestry filled in).
+ *  [DEFERRED-049 B2] `group` is a parallel leaf — it carries group_id and NO project_id, so the
+ *  discriminated-union shape itself keeps a project grant from matching a group resource. */
 export type ResourceScope =
   | { kind: 'global' }
   | { kind: 'project'; project_id: string }
   | { kind: 'topic'; project_id: string; topic_id: string }
-  | { kind: 'task'; project_id: string; topic_id: string; task_id: string };
+  | { kind: 'task'; project_id: string; topic_id: string; task_id: string }
+  | { kind: 'group'; group_id: string };
 
 /** The fields of a grant the decision needs (a subset of services/grants.ts Grant). */
 export interface GrantLike {
@@ -87,11 +90,19 @@ export function scopeCovers(grant: GrantLike, resource: ResourceScope): boolean 
     case 'global':
       return true;
     case 'project':
-      return resource.kind !== 'global' && grant.scope_id === resource.project_id;
+      // [DEFERRED-049 B2] explicit kind guard: a project grant covers project/topic/task only — NOT a
+      // group resource (which carries group_id, not project_id, so the equality would be `=== undefined`
+      // anyway; the guard makes the namespace split unmistakable to a future reader).
+      return (resource.kind === 'project' || resource.kind === 'topic' || resource.kind === 'task')
+        && grant.scope_id === resource.project_id;
     case 'topic':
       return (resource.kind === 'topic' || resource.kind === 'task') && grant.scope_id === resource.topic_id;
     case 'task':
       return resource.kind === 'task' && grant.scope_id === resource.task_id;
+    case 'group':
+      // [DEFERRED-049 B2] a group grant covers ONLY its own group (leaf under global). It never reaches
+      // into the project subtree (group membership is knowledge-sharing, not scope nesting).
+      return resource.kind === 'group' && grant.scope_id === resource.group_id;
     default:
       return false;
   }
@@ -145,6 +156,11 @@ export async function resolveResourceScope(
   if (!id) return { unresolvable: 'NOT_FOUND' };
 
   if (ref.kind === 'project') return { ok: { kind: 'project', project_id: id } };
+
+  // [DEFERRED-049 B2] a group authorizes in its OWN namespace. Like `project`, trust the id with NO
+  // existence check so createGroup can authorize a not-yet-created group id (createGroup gates write@group
+  // BEFORE inserting the row). A group is a leaf — no ancestry to walk.
+  if (ref.kind === 'group') return { ok: { kind: 'group', group_id: id } };
 
   if (ref.kind === 'topic') {
     const r = await runner.query<{ project_id: string }>(

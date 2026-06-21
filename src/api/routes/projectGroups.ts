@@ -17,7 +17,7 @@ const router = Router();
 /** GET /api/groups — list all groups with member counts */
 router.get('/', async (req, res, next) => {
   try {
-    const groups = await listGroups();
+    const groups = await listGroups(callerPrincipalOf(req));
     res.json({ groups });
   } catch (e) { next(e); }
 });

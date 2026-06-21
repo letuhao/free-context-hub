@@ -199,7 +199,7 @@ export default function ProjectSettingsPage() {
                   <Users size={16} className="text-zinc-500" strokeWidth={1.5} />
                   <div>
                     <div className="text-xs text-zinc-300 font-medium">{g.name}</div>
-                    {g.member_count !== undefined && (
+                    {g.member_count != null && (
                       <div className="text-[10px] text-zinc-600">{g.member_count} projects</div>
                     )}
                   </div>
