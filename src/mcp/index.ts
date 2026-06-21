@@ -4927,7 +4927,9 @@ function createMcpToolsServer() {
         project_scope,
         principal_id,
         ttlMs: ttl_minutes !== undefined ? ttl_minutes * 60_000 : undefined,
-        created_by: actingPrincipalId ?? undefined,
+        // created_by is the minting KEY NAME (per-creator-limit grouping), not a principal id — the MCP
+        // registry doesn't thread the caller's key name here, so leave it unset rather than mis-key the
+        // limit with a principal UUID. Ephemeral keys are short-TTL; the per-creator cap is non-critical.
       });
       const summary = `mint_ephemeral_key: created name=${name} expires_at=${result.expires_at}`;
       return formatToolResponse(

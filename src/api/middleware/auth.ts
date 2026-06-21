@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { getEnv } from '../../core/index.js';
 import { validateApiKey } from '../../services/apiKeys.js';
-import { SESSION_COOKIE_NAME } from '../../services/sessions.js';
+import { SESSION_COOKIE_NAME, parseCookies } from '../../services/sessions.js';
 import { createModuleLogger } from '../../utils/logger.js';
 
 const logger = createModuleLogger('rest-auth');
@@ -33,7 +33,8 @@ export function bearerAuth(req: Request, res: Response, next: NextFunction) {
   // F-AUTH (warp S3): a browser session-cookie request carries no Authorization header —
   // defer to sessionAuth (mounted immediately after bearerAuth) instead of 401-ing it.
   // A Bearer header still takes precedence (agent path); only header-less cookie requests defer.
-  if (!header && req.headers.cookie?.includes(`${SESSION_COOKIE_NAME}=`)) return next();
+  // Exact cookie lookup (not a substring match) so a suffix-collision cookie name can't trigger the defer.
+  if (!header && parseCookies(req.headers.cookie)[SESSION_COOKIE_NAME]) return next();
   if (!header || !header.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Unauthorized: missing Bearer token' });
     return;
