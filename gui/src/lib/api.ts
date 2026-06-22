@@ -860,6 +860,56 @@ export const api = {
 
   baselineArtifact: (artifactId: string, body: { claim_id: string; fencing_token: number; actor_id: string }) =>
     request<{ status: string; data: { status: string } }>("POST", `/api/artifacts/${encodeURIComponent(artifactId)}/baseline`, body),
+
+  // ── Governance: Decision Bodies (FIX-2 / Sprint G4) ──
+  listBodies: (projectId: string) =>
+    request<{ status: string; data: { bodies: BodyRecord[] } }>(
+      "GET",
+      `/api/decision-bodies?project_id=${encodeURIComponent(projectId)}`,
+    ),
+
+  getBody: (bodyId: string) =>
+    request<{ status: string; data: BodyRecord }>("GET", `/api/decision-bodies/${encodeURIComponent(bodyId)}`),
+
+  createBody: (body: { project_id: string; name: string; quorum: number; threshold: number; veto_holders?: string[]; created_by: string }) =>
+    request<{ status: string; data: BodyRecord }>("POST", "/api/decision-bodies", body),
+
+  addBodyMember: (bodyId: string, body: { actor_id: string; vote_weight: number }) =>
+    request<{ status: string; data: { status: string } }>("POST", `/api/decision-bodies/${encodeURIComponent(bodyId)}/members`, body),
+
+  listProxies: (bodyId: string) =>
+    request<{ status: string; data: { proxies: ProxyGrant[] } }>("GET", `/api/decision-bodies/${encodeURIComponent(bodyId)}/proxies`),
+
+  grantProxy: (bodyId: string, body: { principal: string; proxy: string; granted_by: string }) =>
+    request<{ status: string; data: { status: string } }>("POST", `/api/decision-bodies/${encodeURIComponent(bodyId)}/proxies`, body),
+
+  revokeProxy: (bodyId: string, body: { principal: string; proxy: string }) =>
+    request<{ status: string; data: { status: string } }>("DELETE", `/api/decision-bodies/${encodeURIComponent(bodyId)}/proxies`, body),
+
+  // ── Governance: Motions (topic-scoped) ──
+  listMotions: (topicId: string, status?: string) =>
+    request<{ status: string; data: { motions: MotionRecord[] } }>(
+      "GET",
+      `/api/topics/${encodeURIComponent(topicId)}/motions${status ? `?status=${encodeURIComponent(status)}` : ""}`,
+    ),
+
+  proposeMotion: (topicId: string, body: { body_id: string; subject_ref: string; proposed_by: string; deadline_minutes?: number }) =>
+    request<{ status: string; data: { status: string; motion_id?: string } }>("POST", `/api/topics/${encodeURIComponent(topicId)}/motions`, body),
+
+  getMotion: (motionId: string) =>
+    request<{ status: string; data: MotionRecord }>("GET", `/api/motions/${encodeURIComponent(motionId)}`),
+
+  secondMotion: (motionId: string, body: { actor_id: string }) =>
+    request<{ status: string; data: { status: string } }>("POST", `/api/motions/${encodeURIComponent(motionId)}/second`, body),
+
+  castVote: (motionId: string, body: { actor_id: string; choice: "for" | "against" | "abstain"; proxy_for?: string }) =>
+    request<{ status: string; data: { status: string } }>("POST", `/api/motions/${encodeURIComponent(motionId)}/votes`, body),
+
+  vetoMotion: (motionId: string, body: { actor_id: string }) =>
+    request<{ status: string; data: { status: string } }>("POST", `/api/motions/${encodeURIComponent(motionId)}/veto`, body),
+
+  tallyMotion: (motionId: string) =>
+    request<{ status: string; data: { status: string; outcome?: string } }>("POST", `/api/motions/${encodeURIComponent(motionId)}/tally`, {}),
 };
 
 // ── Coordination types (mirror src/services/topics.ts) ──
@@ -917,6 +967,64 @@ export type ClaimOutcome =
   | { status: "topic_closed" }
   | { status: "unmet_dependencies"; missing: string[] }
   | { status: "upstream_not_baselined"; not_baselined: Array<{ task_id: string; state: string }> };
+
+// ── Governance types (mirror src/services/decisionBodies.ts + motions.ts) ──
+export interface BodyMember {
+  actor_id: string;
+  vote_weight: number;
+  added_at: string;
+}
+
+export interface BodyRecord {
+  body_id: string;
+  project_id: string;
+  name: string;
+  quorum: number;
+  threshold: number;
+  veto_holders: string[];
+  created_by: string;
+  created_at: string;
+  members: BodyMember[];
+}
+
+export interface ProxyGrant {
+  principal: string;
+  proxy: string;
+  granted_by: string;
+}
+
+export interface MotionTally {
+  for: number;
+  against: number;
+  abstain: number;
+  participating: number;
+  base: number;
+  quorum: number;
+  threshold: number;
+  quorum_met: boolean;
+}
+
+export interface MotionVote {
+  actor_id: string;
+  choice: string;
+  weight: number;
+  proxy_for: string | null;
+  cast_at: string;
+}
+
+export interface MotionRecord {
+  motion_id: string;
+  body_id: string;
+  topic_id: string;
+  subject_ref: string;
+  status: string;
+  proposed_by: string;
+  seconded_by: string | null;
+  deadline: string;
+  tally: MotionTally | null;
+  created_at: string;
+  votes: MotionVote[];
+}
 
 // ── Phase 13 Sprint 13.2 types ──
 export interface LeaseSummary {

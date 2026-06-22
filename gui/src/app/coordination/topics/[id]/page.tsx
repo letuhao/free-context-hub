@@ -3,12 +3,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { api, type TopicWithRoster, type CoordinationEventRecord, type TaskSummary } from "@/lib/api";
+import { api, type TopicWithRoster, type CoordinationEventRecord, type TaskSummary, type MotionRecord, type BodyRecord } from "@/lib/api";
+import { useProject } from "@/contexts/project-context";
 import { Breadcrumb, PageHeader, Button } from "@/components/ui";
 import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
 import { TopicStatusPill } from "../../page";
-import { Users, ScrollText, UserPlus, Lock, ClipboardList, Plus } from "lucide-react";
+import { Users, ScrollText, UserPlus, Lock, ClipboardList, Plus, Vote } from "lucide-react";
 
 type ClaimHandle = { claim_id: string; fencing_token: number };
 
@@ -18,6 +19,7 @@ const POLL_MS = 3000;
 export default function TopicDetailPage() {
   const params = useParams<{ id: string }>();
   const topicId = typeof params?.id === "string" ? params.id : Array.isArray(params?.id) ? params.id[0] : "";
+  const { projectId } = useProject();
   const { toast } = useToast();
   const toastRef = useRef(toast);
   toastRef.current = toast;
@@ -47,6 +49,14 @@ export default function TopicDetailPage() {
   const [taskTitle, setTaskTitle] = useState("");
   const [taskKind, setTaskKind] = useState("");
   const [posting, setPosting] = useState(false);
+
+  // Motions (topic-scoped)
+  const [motions, setMotions] = useState<MotionRecord[]>([]);
+  const [bodies, setBodies] = useState<BodyRecord[]>([]);
+  const [motionBody, setMotionBody] = useState("");
+  const [motionSubject, setMotionSubject] = useState("");
+  const [motionDeadline, setMotionDeadline] = useState("60");
+  const [proposingMotion, setProposingMotion] = useState(false);
 
   const fetchTopic = useCallback(async () => {
     if (!topicId) return;
@@ -85,10 +95,28 @@ export default function TopicDetailPage() {
     }
   }, [topicId]);
 
+  const fetchMotions = useCallback(async () => {
+    if (!topicId) return;
+    try {
+      const res = await api.listMotions(topicId);
+      setMotions(res.data?.motions ?? []);
+    } catch { /* none yet */ }
+  }, [topicId]);
+
+  const fetchBodies = useCallback(async () => {
+    if (!projectId) return;
+    try {
+      const res = await api.listBodies(projectId);
+      setBodies(res.data?.bodies ?? []);
+    } catch { /* none yet */ }
+  }, [projectId]);
+
   useEffect(() => {
     fetchTopic();
     fetchBoard();
-  }, [fetchTopic, fetchBoard]);
+    fetchMotions();
+    fetchBodies();
+  }, [fetchTopic, fetchBoard, fetchMotions, fetchBodies]);
 
   useEffect(() => {
     pollEvents();
@@ -216,6 +244,38 @@ export default function TopicDetailPage() {
       fetchBoard();
     } catch (e) {
       toastRef.current("error", e instanceof Error ? e.message : "Baseline failed");
+    }
+  };
+
+  const proposeMotion = async () => {
+    const actor = requireActor();
+    if (!actor || !motionBody || !motionSubject.trim()) return;
+    setProposingMotion(true);
+    try {
+      const res = await api.proposeMotion(topicId, { body_id: motionBody, subject_ref: motionSubject.trim(), proposed_by: actor, deadline_minutes: Number(motionDeadline) || 60 });
+      toastRef.current(res.data.status === "proposed" || res.data.motion_id ? "success" : "error", `Motion: ${res.data.status}`);
+      setMotionSubject("");
+      fetchMotions();
+    } catch (e) {
+      toastRef.current("error", e instanceof Error ? e.message : "Propose failed");
+    } finally {
+      setProposingMotion(false);
+    }
+  };
+
+  const motionAction = async (m: MotionRecord, action: "second" | "veto" | "tally" | "for" | "against" | "abstain") => {
+    const actor = requireActor();
+    if (!actor) return;
+    try {
+      let label = action as string;
+      if (action === "second") await api.secondMotion(m.motion_id, { actor_id: actor });
+      else if (action === "veto") await api.vetoMotion(m.motion_id, { actor_id: actor });
+      else if (action === "tally") await api.tallyMotion(m.motion_id);
+      else { await api.castVote(m.motion_id, { actor_id: actor, choice: action }); label = `vote ${action}`; }
+      toastRef.current("success", `${label} ok`);
+      fetchMotions();
+    } catch (e) {
+      toastRef.current("error", e instanceof Error ? e.message : `${action} failed`);
     }
   };
 
@@ -372,6 +432,68 @@ export default function TopicDetailPage() {
                 </div>
               );
             })}
+          </div>
+        )}
+      </section>
+
+      {/* Motions */}
+      <section className="mt-8">
+        <div className="flex items-center gap-2 mb-3 text-zinc-300">
+          <Vote size={16} strokeWidth={1.5} />
+          <h2 className="text-sm font-semibold">Motions ({motions.length})</h2>
+        </div>
+
+        {!isClosed && (
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <select value={motionBody} onChange={(e) => setMotionBody(e.target.value)}
+              className="rounded-md bg-zinc-900 border border-zinc-800 px-2 py-1.5 text-sm text-zinc-200 outline-none">
+              <option value="">decision body…</option>
+              {bodies.map((b) => <option key={b.body_id} value={b.body_id}>{b.name}</option>)}
+            </select>
+            <input value={motionSubject} onChange={(e) => setMotionSubject(e.target.value)} placeholder="subject (what is being decided)"
+              className="flex-1 min-w-[12rem] rounded-md bg-zinc-900 border border-zinc-800 px-3 py-1.5 text-sm text-zinc-200 outline-none focus:border-zinc-600" />
+            <input value={motionDeadline} onChange={(e) => setMotionDeadline(e.target.value)} type="number" min="1" title="deadline minutes"
+              className="w-20 rounded-md bg-zinc-900 border border-zinc-800 px-2 py-1.5 text-sm text-zinc-200 outline-none" />
+            <Button onClick={proposeMotion} disabled={proposingMotion || !motionBody || !motionSubject.trim()}>
+              <Plus size={16} /> {proposingMotion ? "Proposing…" : "Propose"}
+            </Button>
+          </div>
+        )}
+        {bodies.length === 0 && !isClosed && (
+          <p className="text-[11px] text-amber-400/80 mb-2">No decision bodies yet — create one under Governance → Decision Bodies to propose a motion.</p>
+        )}
+
+        {motions.length === 0 ? (
+          <p className="text-xs text-zinc-600">No motions.</p>
+        ) : (
+          <div className="space-y-2">
+            {motions.map((m) => (
+              <div key={m.motion_id} className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-sm text-zinc-100 truncate">{m.subject_ref}</div>
+                    <div className="text-[11px] text-zinc-600">by {m.proposed_by}{m.seconded_by ? ` · seconded by ${m.seconded_by}` : ""} · {m.votes.length} votes</div>
+                  </div>
+                  <span className="text-[10px] rounded bg-zinc-800 text-zinc-300 px-1.5 py-0.5 shrink-0">{m.status}</span>
+                </div>
+                {m.tally && (
+                  <div className="mt-1.5 text-[11px] text-zinc-500">
+                    for {m.tally.for} · against {m.tally.against} · abstain {m.tally.abstain} ·{" "}
+                    quorum {m.tally.quorum_met ? "met" : "not met"} ({m.tally.participating}/{m.tally.base})
+                  </div>
+                )}
+                {!isClosed && (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <button onClick={() => motionAction(m, "second")} className="text-[11px] rounded bg-zinc-700/40 text-zinc-300 px-2 py-0.5 hover:bg-zinc-700/60">second</button>
+                    <button onClick={() => motionAction(m, "for")} className="text-[11px] rounded bg-emerald-500/10 text-emerald-300 px-2 py-0.5 hover:bg-emerald-500/20">vote for</button>
+                    <button onClick={() => motionAction(m, "against")} className="text-[11px] rounded bg-red-500/10 text-red-300 px-2 py-0.5 hover:bg-red-500/20">against</button>
+                    <button onClick={() => motionAction(m, "abstain")} className="text-[11px] rounded bg-zinc-700/40 text-zinc-300 px-2 py-0.5 hover:bg-zinc-700/60">abstain</button>
+                    <button onClick={() => motionAction(m, "veto")} className="text-[11px] rounded bg-red-500/10 text-red-300 px-2 py-0.5 hover:bg-red-500/20">veto</button>
+                    <button onClick={() => motionAction(m, "tally")} className="text-[11px] rounded bg-blue-500/10 text-blue-300 px-2 py-0.5 hover:bg-blue-500/20">tally</button>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </section>
