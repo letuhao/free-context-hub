@@ -10,8 +10,8 @@ Legend: ✅ pass · 🐛 bug (logged) · 🔧 fixed · ⏭️ blocked/skipped (r
 | 01 | Review Inbox — approve | ✅ | approve → pending 16→15, lesson removed, 0 console errors |
 | 02 | Review Inbox — reject w/ reason | ✅ | dialog: lesson title + Reason dropdown (defaults "Inaccurate", not empty) + optional note + Cancel/Reject; cancelled to preserve real lesson |
 | 03 | Capture lesson manually | 🐛→🔧 | **Cross-confirmed the P0 add_lesson bug**: GUI "Add Lesson" (session-cookie auth) also got `POST /api/lessons → 404` under auth-ON. Root-caused + fixed (commit `075ce4d`); now 201. Library renders fine (list, Type/Status/Tags, Add/Import/Export, filters). |
-| 04 | Semantic lesson search | — | |
-| 05 | Edit lesson + version history | — | |
+| 04 | Semantic lesson search | 🐛→🔧 | **Found BUG-GUI-SEARCH (P1): semantic search dead in GUI.** GUI read `results??items` but `/api/lessons/search` returns `matches` → always 0 results + misleading "requires embeddings service" message (backend was fine; MCP search returned 3). Same wrong-key at 3 sites (lessons list, related-lessons, reflect grounding). Fixed (`b418a2a`); live-verified 0→12 results. |
+| 05 | Edit lesson + version history | — | (related-lessons key fix folded into b418a2a) |
 | 06 | Bulk approve/archive + import CSV/MD | — | |
 | 07 | Guardrail simulate / what-would-block | — | |
 | 08 | Browse + add guardrail | — | |
