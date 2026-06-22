@@ -8,6 +8,7 @@ import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
 import { NoProjectGuard } from "@/components/no-project-guard";
 import { ProjectBadge } from "@/components/project-badge";
+import { useActorNames } from "@/lib/useActorNames";
 import { RefreshCw } from "lucide-react";
 
 function fmtRemaining(sec: number): string {
@@ -23,6 +24,7 @@ function LeasesInner() {
   const toastRef = useRef(toast);
   toastRef.current = toast;
 
+  const nameOf = useActorNames();
   const [leases, setLeases] = useState<LeaseSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [releasing, setReleasing] = useState<string | null>(null);
@@ -81,7 +83,7 @@ function LeasesInner() {
               <div className="min-w-0 flex-1">
                 <div className="text-sm text-zinc-100 font-mono truncate">{l.artifact_id}</div>
                 <div className="text-[11px] text-zinc-600 truncate">
-                  {l.artifact_type} · held by {l.agent_id}{l.task_description ? ` · ${l.task_description}` : ""}
+                  {l.artifact_type} · held by {nameOf(l.agent_id)}{l.task_description ? ` · ${l.task_description}` : ""}
                 </div>
               </div>
               <span className={`text-[11px] shrink-0 ${l.seconds_remaining <= 0 ? "text-red-400" : "text-zinc-400"}`}>

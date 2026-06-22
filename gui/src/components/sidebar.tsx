@@ -90,9 +90,25 @@ function isGroup(item: NavItem | NavGroup): item is NavGroup {
   return "title" in item;
 }
 
-function isActive(href: string, pathname: string): boolean {
-  if (href === "/" || href === "/projects" || href === "/settings") return pathname === href;
+/** Does `href` cover `pathname` (exact, or as a path-segment prefix)? "/" matches only "/". */
+function hrefMatches(href: string, pathname: string): boolean {
+  if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(href + "/");
+}
+
+/**
+ * W3.2 — longest-prefix-wins active selection. Among all nav hrefs that cover the current
+ * path, the most specific (longest) one is the active item. This makes `/coordination/leases`
+ * highlight "Artifact Leases" (not its `/coordination` parent "Topics"), while
+ * `/coordination/topics/<id>` — which has no dedicated nav item — still highlights "Topics".
+ * Replaces the old per-item prefix check that needed a hand-maintained exact-match allowlist.
+ */
+function bestActiveHref(pathname: string, hrefs: string[]): string | null {
+  let best: string | null = null;
+  for (const h of hrefs) {
+    if (hrefMatches(h, pathname) && (best === null || h.length > best.length)) best = h;
+  }
+  return best;
 }
 
 export function Sidebar() {
@@ -206,8 +222,15 @@ export function Sidebar() {
     return () => document.removeEventListener("keydown", handler);
   }, [isMobile]);
 
+  // Build the nav once so both active-selection and rendering use the same href set.
+  const navEntries = buildNavGroups(reviewCount, notifCount).filter(
+    (entry) => isGlobalAdmin || !(isGroup(entry) && entry.title === "Governance"),
+  );
+  const allHrefs = navEntries.flatMap((e) => (isGroup(e) ? e.items.map((i) => i.href) : [e.href]));
+  const activeHref = bestActiveHref(pathname, allHrefs);
+
   const renderItem = (item: NavItem) => {
-    const active = isActive(item.href, pathname);
+    const active = item.href === activeHref;
     const showLabel = isMobile || !collapsed;
     return (
       <Link
@@ -260,8 +283,7 @@ export function Sidebar() {
       )}
 
       <nav className="flex-1 px-2 py-1 space-y-0.5 overflow-y-auto">
-        {buildNavGroups(reviewCount, notifCount)
-          .filter((entry) => isGlobalAdmin || !(isGroup(entry) && entry.title === "Governance"))
+        {navEntries
           .map((entry, i) => {
           if (isGroup(entry)) {
             return (

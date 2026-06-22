@@ -9,6 +9,8 @@ import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
 import { NoProjectGuard } from "@/components/no-project-guard";
 import { ProjectBadge } from "@/components/project-badge";
+import { useActingActor } from "@/contexts/auth-context";
+import { useActorNames } from "@/lib/useActorNames";
 import { Plus, ArrowRight } from "lucide-react";
 
 const TOPIC_STATUS_STYLES: Record<string, string> = {
@@ -35,10 +37,11 @@ function CoordinationInner() {
   const [topics, setTopics] = useState<TopicRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const nameOf = useActorNames();
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
   const [charter, setCharter] = useState("");
-  const [createdBy, setCreatedBy] = useState("");
+  const [createdBy, setCreatedBy] = useActingActor();
   const [creating, setCreating] = useState(false);
 
   const fetchTopics = useCallback(async () => {
@@ -112,7 +115,7 @@ function CoordinationInner() {
                 <p className="text-xs text-zinc-500 truncate mt-0.5">{t.charter}</p>
               </div>
               <div className="text-[11px] text-zinc-600 shrink-0 text-right">
-                <div>by {t.created_by}</div>
+                <div>by {nameOf(t.created_by)}</div>
                 <div>{new Date(t.created_at).toLocaleDateString()}</div>
               </div>
               <ArrowRight size={16} className="text-zinc-600 shrink-0" />
@@ -138,8 +141,8 @@ function CoordinationInner() {
                   className="mt-1 w-full rounded-md bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-zinc-600 resize-none" />
               </label>
               <label className="block">
-                <span className="text-xs text-zinc-500">Created by (your actor id)</span>
-                <input value={createdBy} onChange={(e) => setCreatedBy(e.target.value)} placeholder="e.g. alice or agent-1"
+                <span className="text-xs text-zinc-500">Acting as (defaults to you)</span>
+                <input value={createdBy} onChange={(e) => setCreatedBy(e.target.value)} placeholder="your principal id"
                   className="mt-1 w-full rounded-md bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-zinc-600" />
               </label>
             </div>

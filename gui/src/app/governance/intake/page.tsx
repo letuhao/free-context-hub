@@ -8,6 +8,8 @@ import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
 import { NoProjectGuard } from "@/components/no-project-guard";
 import { ProjectBadge } from "@/components/project-badge";
+import { useActingActor } from "@/contexts/auth-context";
+import { useActorNames } from "@/lib/useActorNames";
 import { Plus, Inbox } from "lucide-react";
 
 const KINDS = ["suggestion", "request", "violation_report"] as const;
@@ -23,6 +25,7 @@ function IntakeInner() {
   const toastRef = useRef(toast);
   toastRef.current = toast;
 
+  const nameOf = useActorNames();
   const [items, setItems] = useState<IntakeItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("");
@@ -30,13 +33,13 @@ function IntakeInner() {
   // Submit
   const [kind, setKind] = useState<string>("suggestion");
   const [body, setBody] = useState("");
-  const [submittedBy, setSubmittedBy] = useState("");
+  const [submittedBy, setSubmittedBy] = useActingActor();
   const [submitting, setSubmitting] = useState(false);
 
   // Triage
   const [triageItem, setTriageItem] = useState<IntakeItem | null>(null);
   const [routeKind, setRouteKind] = useState("task");
-  const [tActor, setTActor] = useState("");
+  const [tActor, setTActor] = useActingActor();
   const [tTopic, setTTopic] = useState("");
   const [tRoutedTo, setTRoutedTo] = useState("");
   const [tSubject, setTSubject] = useState("");
@@ -155,7 +158,7 @@ function IntakeInner() {
                     <span className={`text-[10px] rounded-full px-2 py-0.5 ${STATUS_STYLES[it.status] ?? "bg-zinc-700 text-zinc-300"}`}>{it.status}</span>
                   </div>
                   <p className="text-sm text-zinc-200 mt-1">{it.body}</p>
-                  <div className="text-[11px] text-zinc-600 mt-0.5">by {it.submitted_by} · {new Date(it.created_at).toLocaleString()}</div>
+                  <div className="text-[11px] text-zinc-600 mt-0.5" title={it.submitted_by}>by {nameOf(it.submitted_by)} · {new Date(it.created_at).toLocaleString()}</div>
                 </div>
                 {it.status === "received" && (
                   <div className="flex items-center gap-1.5 shrink-0">

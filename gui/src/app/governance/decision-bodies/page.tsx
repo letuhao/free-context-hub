@@ -8,17 +8,20 @@ import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
 import { NoProjectGuard } from "@/components/no-project-guard";
 import { ProjectBadge } from "@/components/project-badge";
+import { useActingActor } from "@/contexts/auth-context";
+import { useActorNames } from "@/lib/useActorNames";
 import { Plus, ChevronDown, ChevronRight, UserPlus, X } from "lucide-react";
 
 function BodyDetail({ bodyId, onChanged }: { bodyId: string; onChanged: () => void }) {
   const { toast } = useToast();
   const toastRef = useRef(toast);
   toastRef.current = toast;
+  const nameOf = useActorNames();
   const [body, setBody] = useState<BodyRecord | null>(null);
   const [proxies, setProxies] = useState<ProxyGrant[]>([]);
   const [memberId, setMemberId] = useState("");
   const [weight, setWeight] = useState("1");
-  const [pPrincipal, setPPrincipal] = useState("");
+  const [pPrincipal, setPPrincipal] = useActingActor();
   const [pProxy, setPProxy] = useState("");
 
   const load = useCallback(async () => {
@@ -75,7 +78,7 @@ function BodyDetail({ bodyId, onChanged }: { bodyId: string; onChanged: () => vo
         <div className="space-y-1">
           {body.members.map((m) => (
             <div key={m.actor_id} className="flex items-center justify-between text-xs rounded bg-zinc-900/50 px-2 py-1">
-              <span className="text-zinc-200">{m.actor_id}</span>
+              <span className="text-zinc-200" title={m.actor_id}>{nameOf(m.actor_id)}</span>
               <span className="text-zinc-500">weight {m.vote_weight}</span>
             </div>
           ))}
@@ -95,7 +98,7 @@ function BodyDetail({ bodyId, onChanged }: { bodyId: string; onChanged: () => vo
         <div className="space-y-1">
           {proxies.map((g, i) => (
             <div key={`${g.principal}-${g.proxy}-${i}`} className="flex items-center justify-between text-xs rounded bg-zinc-900/50 px-2 py-1">
-              <span className="text-zinc-300">{g.principal} → {g.proxy}</span>
+              <span className="text-zinc-300" title={`${g.principal} → ${g.proxy}`}>{nameOf(g.principal)} → {nameOf(g.proxy)}</span>
               <button onClick={() => revoke(g)} className="text-zinc-500 hover:text-red-400"><X size={12} /></button>
             </div>
           ))}
@@ -127,7 +130,7 @@ function DecisionBodiesInner() {
   const [name, setName] = useState("");
   const [quorum, setQuorum] = useState("1");
   const [threshold, setThreshold] = useState("0.5");
-  const [createdBy, setCreatedBy] = useState("");
+  const [createdBy, setCreatedBy] = useActingActor();
   const [creating, setCreating] = useState(false);
 
   const fetchBodies = useCallback(async () => {

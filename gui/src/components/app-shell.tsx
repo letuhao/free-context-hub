@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { KeyboardShortcutsTrigger } from "@/components/keyboard-shortcuts-trigger";
 import { CommandPalette } from "@/components/ui/command-palette";
+import { AuthGate } from "@/contexts/auth-context";
 
 // Actor Data Boundary completion (warp §2.10). A child page cannot remove a parent
 // layout's chrome in the App Router, so the pre-auth shell gate lives here: routes in
@@ -23,12 +24,14 @@ export function AppShell({ children }: { children: ReactNode }) {
     return <main className="flex-1 flex flex-col min-h-0">{children}</main>;
   }
 
+  // Full app chrome — gated. AuthGate resolves identity once (GET /api/me): renders when
+  // signed-in or auth-OFF, bounces to /login under enforced auth, retries on transient error.
   return (
-    <>
+    <AuthGate>
       <Sidebar />
       <main className="flex-1 flex flex-col min-h-0 pt-12 md:pt-0">{children}</main>
       <KeyboardShortcutsTrigger />
       <CommandPalette />
-    </>
+    </AuthGate>
   );
 }

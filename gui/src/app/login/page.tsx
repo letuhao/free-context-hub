@@ -22,6 +22,18 @@ import { PreAuthShell, PreAuthCard } from "@/components/pre-auth-shell";
 
 type Stage = "login" | "mfa" | "forgot";
 
+/**
+ * Where to land after a successful sign-in. Honors `?next=` (set by the AuthGate when it
+ * bounces an unauthenticated visitor here) but ONLY for same-origin relative paths — a
+ * leading-single-`/` guard rejects `//evil.com` and absolute URLs (open-redirect defense).
+ */
+function resolveNext(): string {
+  if (typeof window === "undefined") return "/";
+  const next = new URLSearchParams(window.location.search).get("next");
+  if (next && next.startsWith("/") && !next.startsWith("//")) return next;
+  return "/";
+}
+
 export default function LoginPage() {
   const [stage, setStage] = useState<Stage>("login");
 
@@ -55,8 +67,8 @@ export default function LoginPage() {
       .then((me) => {
         if (!active) return;
         if (me && me.auth_enabled === false) setAuthOff(true);
-        // If already authenticated, bounce to the console root.
-        if (me?.authenticated) window.location.assign("/");
+        // If already authenticated, bounce to the intended destination (or root).
+        if (me?.authenticated) window.location.assign(resolveNext());
       })
       .catch(() => {
         /* /api/auth/me absent (S3 not merged) or 401 — stay on the login form */
@@ -76,8 +88,8 @@ export default function LoginPage() {
         if (res.status === "mfa_required") {
           setStage("mfa");
         } else {
-          // Session cookie is set; go to the console.
-          window.location.assign("/");
+          // Session cookie is set; go to the intended destination (or console root).
+          window.location.assign(resolveNext());
         }
       } catch (err) {
         if (err instanceof AuthApiError) {
@@ -104,7 +116,7 @@ export default function LoginPage() {
           password,
           code: code.trim(),
         });
-        window.location.assign("/");
+        window.location.assign(resolveNext());
       } catch (err) {
         setError(
           err instanceof AuthApiError

@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { api, type TopicWithRoster, type CoordinationEventRecord, type TaskSummary, type MotionRecord, type BodyRecord, type RequestRecord, type Dispute } from "@/lib/api";
 import { useProject } from "@/contexts/project-context";
+import { useActingActor } from "@/contexts/auth-context";
+import { useActorNames, shortActor } from "@/lib/useActorNames";
 import { Breadcrumb, PageHeader, Button } from "@/components/ui";
 import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
@@ -15,6 +17,10 @@ type ClaimHandle = { claim_id: string; fencing_token: number };
 
 const LEVELS = ["authority", "coordination", "execution"] as const;
 const POLL_MS = 3000;
+// W3.1 — motion states where no further action is possible. Action buttons (second/vote/
+// veto/tally) are hidden once a motion reaches one of these, so the GUI never offers an
+// action the backend will reject. Active states: 'proposed', 'seconded'.
+const MOTION_TERMINAL = new Set(["carried", "failed", "vetoed", "closed"]);
 
 export default function TopicDetailPage() {
   const params = useParams<{ id: string }>();
@@ -29,9 +35,11 @@ export default function TopicDetailPage() {
   const [events, setEvents] = useState<CoordinationEventRecord[]>([]);
   const cursorRef = useRef(0);
 
-  // Join form
+  const nameOf = useActorNames();
+
+  // Join form (actor defaults to the logged-in principal)
   const [joinOpen, setJoinOpen] = useState(false);
-  const [actorId, setActorId] = useState("");
+  const [actorId, setActorId] = useActingActor();
   const [actorType, setActorType] = useState("ai");
   const [displayName, setDisplayName] = useState("");
   const [level, setLevel] = useState<string>("execution");
@@ -40,11 +48,11 @@ export default function TopicDetailPage() {
   // Close
   const [closeTarget, setCloseTarget] = useState(false);
   const [closing, setClosing] = useState(false);
-  const [closeActor, setCloseActor] = useState("");
+  const [closeActor, setCloseActor] = useActingActor();
 
-  // Board
+  // Board ("Acting as" defaults to the logged-in principal; still editable)
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
-  const [boardActor, setBoardActor] = useState("");
+  const [boardActor, setBoardActor] = useActingActor();
   const [claims, setClaims] = useState<Record<string, ClaimHandle>>({}); // task_id → claim
   const [taskTitle, setTaskTitle] = useState("");
   const [taskKind, setTaskKind] = useState("");
@@ -418,7 +426,7 @@ export default function TopicDetailPage() {
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <div className="text-sm text-zinc-100 truncate">{p.display_name}</div>
-                      <div className="text-[11px] text-zinc-600">{p.actor_id} · {p.type}</div>
+                      <div className="text-[11px] text-zinc-600">{shortActor(p.actor_id)} · {p.type}</div>
                     </div>
                     <span className="text-[11px] rounded bg-zinc-800 text-zinc-300 px-1.5 py-0.5">{p.level}</span>
                   </div>
@@ -456,9 +464,9 @@ export default function TopicDetailPage() {
                 <div key={e.seq} className="rounded border border-zinc-800/70 bg-zinc-900/30 px-2.5 py-1.5 text-xs">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-mono text-zinc-300">#{e.seq} {e.type}</span>
-                    <span className="text-[10px] text-zinc-600">{new Date(e.created_at).toLocaleTimeString()}</span>
+                    <span className="text-[10px] text-zinc-600">{new Date(e.ts).toLocaleTimeString()}</span>
                   </div>
-                  {e.actor_id && <div className="text-[10px] text-zinc-600">by {e.actor_id}</div>}
+                  {e.actor_id && <div className="text-[10px] text-zinc-600">by {nameOf(e.actor_id)}</div>}
                 </div>
               ))}
             </div>
@@ -542,8 +550,11 @@ export default function TopicDetailPage() {
             </select>
             <input value={motionSubject} onChange={(e) => setMotionSubject(e.target.value)} placeholder="subject (what is being decided)"
               className="flex-1 min-w-[12rem] rounded-md bg-zinc-900 border border-zinc-800 px-3 py-1.5 text-sm text-zinc-200 outline-none focus:border-zinc-600" />
-            <input value={motionDeadline} onChange={(e) => setMotionDeadline(e.target.value)} type="number" min="1" title="deadline minutes"
-              className="w-20 rounded-md bg-zinc-900 border border-zinc-800 px-2 py-1.5 text-sm text-zinc-200 outline-none" />
+            <label className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+              <span className="whitespace-nowrap">voting window (min)</span>
+              <input value={motionDeadline} onChange={(e) => setMotionDeadline(e.target.value)} type="number" min="1" title="voting window in minutes"
+                className="w-16 rounded-md bg-zinc-900 border border-zinc-800 px-2 py-1.5 text-sm text-zinc-200 outline-none" />
+            </label>
             <Button onClick={proposeMotion} disabled={proposingMotion || !motionBody || !motionSubject.trim()}>
               <Plus size={16} /> {proposingMotion ? "Proposing…" : "Propose"}
             </Button>
@@ -562,7 +573,7 @@ export default function TopicDetailPage() {
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
                     <div className="text-sm text-zinc-100 truncate">{m.subject_ref}</div>
-                    <div className="text-[11px] text-zinc-600">by {m.proposed_by}{m.seconded_by ? ` · seconded by ${m.seconded_by}` : ""} · {m.votes.length} votes</div>
+                    <div className="text-[11px] text-zinc-600">by {nameOf(m.proposed_by)}{m.seconded_by ? ` · seconded by ${nameOf(m.seconded_by)}` : ""} · {m.votes.length} votes</div>
                   </div>
                   <span className="text-[10px] rounded bg-zinc-800 text-zinc-300 px-1.5 py-0.5 shrink-0">{m.status}</span>
                 </div>
@@ -572,7 +583,7 @@ export default function TopicDetailPage() {
                     quorum {m.tally.quorum_met ? "met" : "not met"} ({m.tally.participating}/{m.tally.base})
                   </div>
                 )}
-                {!isClosed && (
+                {!isClosed && !MOTION_TERMINAL.has(m.status) && (
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">
                     <button onClick={() => motionAction(m, "second")} className="text-[11px] rounded bg-zinc-700/40 text-zinc-300 px-2 py-0.5 hover:bg-zinc-700/60">second</button>
                     <button onClick={() => motionAction(m, "for")} className="text-[11px] rounded bg-emerald-500/10 text-emerald-300 px-2 py-0.5 hover:bg-emerald-500/20">vote for</button>

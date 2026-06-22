@@ -29,6 +29,7 @@ update this file as work lands.
 | FIX-2 | No human GUI for governance primitives (motions/voting, requests/DoA, intake, disputes, decision bodies/proxies) | **Full CRUD** (decided) | ✅ DONE — G4 (bodies+motions 14f4ba0), G5 (requests d366d00), G6 (intake+disputes 0cb47be) |
 | FIX-3 | No MCP tool for document upload/ingest (REST/GUI only) | `ingest_document` MCP tool (URL) | ✅ DONE (M1) — shared `ingestUrlAsDocument` service (authz-before-fetch hardening), REST route delegates, tool registered (104→105); 4 unit tests incl. cross-tenant reject |
 | FIX-4 | `reflect`/`compress_context` have no dedicated GUI | reflect GUI added (compress stays MCP-only — no REST endpoint) | ✅ DONE (M2) — `/knowledge/reflect`: topic → top-lessons → synthesis + sources |
+| FIX-5 | **GUI cannot authenticate on the hardened (auth-ON) default** — every `/api/*` 401s, project-list silently degrades to "create your first project". Root cause: login stack (`/login`, `authApi`, session cookie) already existed but **nothing redirected an unauthenticated visitor to `/login`**. | ✅ DONE (W1) — `AuthGate` (gui `contexts/auth-context.tsx`) resolves `/api/me` once → renders / redirects `/login?next=` / retries; login honors `?next=`. **Verified live tokenless:** unauth → `/login` → sign-in → page loads, 0 console errors, no baked client token. + W2 actor UX, W3 fixes, W4 runbook (`docs/ops/auth-bring-up.md`). |
 
 > **FIX-1/FIX-2 need a scope decision** (viewer vs full CRUD) before building — they are
 > L/XL each. See "Open scope decisions" below.

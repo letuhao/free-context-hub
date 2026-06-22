@@ -91,8 +91,22 @@ function qs(params: Record<string, string | number | undefined>): string {
   return sp.toString();
 }
 
+// ── Principals (actor identity resolution — W2) ──
+export interface PrincipalSummary {
+  principal_id: string;
+  display_name: string;
+  kind?: "human" | "agent" | "system";
+  status?: string;
+  is_root?: boolean;
+}
+
 // ── Lessons ──
 export const api = {
+  // GET /api/principals — admin-gated; used to resolve actor UUIDs → display names.
+  // Callers must tolerate a 403/401 (non-admin operator) by falling back to the raw id.
+  listPrincipals: () =>
+    request<{ principals: PrincipalSummary[] }>("GET", "/api/principals"),
+
   listLessons: (params: Record<string, string | number | undefined> = {}) =>
     request<any>("GET", `/api/lessons?${qs(params)}`),
 
@@ -999,7 +1013,8 @@ export interface CoordinationEventRecord {
   type: string;
   payload: unknown;
   actor_id: string | null;
-  created_at: string;
+  // Backend (coordinationEvents.ts) emits the event time as `ts` (ISO string), not `created_at`.
+  ts: string;
 }
 
 export interface TaskSummary {

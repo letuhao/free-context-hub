@@ -209,3 +209,8 @@ backups/
 
 # Phase 17 audit probe — docker-mount scratch (canonical inputs live in docs/qc/baselines/)
 services/ragas-judge/_*.json
+
+# QC walkthrough artifacts (transient)
+.playwright-mcp/
+/walkthrough-*.png
+/verify-*.png
