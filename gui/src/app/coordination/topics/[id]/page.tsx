@@ -3,12 +3,14 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { api, type TopicWithRoster, type CoordinationEventRecord } from "@/lib/api";
+import { api, type TopicWithRoster, type CoordinationEventRecord, type TaskSummary } from "@/lib/api";
 import { Breadcrumb, PageHeader, Button } from "@/components/ui";
 import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
 import { TopicStatusPill } from "../../page";
-import { Users, ScrollText, UserPlus, Lock } from "lucide-react";
+import { Users, ScrollText, UserPlus, Lock, ClipboardList, Plus } from "lucide-react";
+
+type ClaimHandle = { claim_id: string; fencing_token: number };
 
 const LEVELS = ["authority", "coordination", "execution"] as const;
 const POLL_MS = 3000;
@@ -38,6 +40,14 @@ export default function TopicDetailPage() {
   const [closing, setClosing] = useState(false);
   const [closeActor, setCloseActor] = useState("");
 
+  // Board
+  const [tasks, setTasks] = useState<TaskSummary[]>([]);
+  const [boardActor, setBoardActor] = useState("");
+  const [claims, setClaims] = useState<Record<string, ClaimHandle>>({}); // task_id → claim
+  const [taskTitle, setTaskTitle] = useState("");
+  const [taskKind, setTaskKind] = useState("");
+  const [posting, setPosting] = useState(false);
+
   const fetchTopic = useCallback(async () => {
     if (!topicId) return;
     try {
@@ -65,9 +75,20 @@ export default function TopicDetailPage() {
     }
   }, [topicId]);
 
+  const fetchBoard = useCallback(async () => {
+    if (!topicId) return;
+    try {
+      const res = await api.listBoard(topicId);
+      setTasks(res.data?.tasks ?? []);
+    } catch {
+      /* board may be empty / transient */
+    }
+  }, [topicId]);
+
   useEffect(() => {
     fetchTopic();
-  }, [fetchTopic]);
+    fetchBoard();
+  }, [fetchTopic, fetchBoard]);
 
   useEffect(() => {
     pollEvents();
@@ -113,6 +134,88 @@ export default function TopicDetailPage() {
       toastRef.current("error", e instanceof Error ? e.message : "Close failed");
     } finally {
       setClosing(false);
+    }
+  };
+
+  const requireActor = (): string | null => {
+    if (!boardActor.trim()) {
+      toastRef.current("error", "Set 'Acting as (actor id)' first");
+      return null;
+    }
+    return boardActor.trim();
+  };
+
+  const submitTask = async () => {
+    if (!taskTitle.trim() || !taskKind.trim()) return;
+    const actor = requireActor();
+    if (!actor) return;
+    setPosting(true);
+    try {
+      await api.postTask(topicId, { title: taskTitle.trim(), kind: taskKind.trim(), created_by: actor });
+      toastRef.current("success", "Task posted");
+      setTaskTitle(""); setTaskKind("");
+      fetchBoard();
+    } catch (e) {
+      toastRef.current("error", e instanceof Error ? e.message : "Failed to post task");
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  const onClaim = async (task: TaskSummary) => {
+    const actor = requireActor();
+    if (!actor) return;
+    try {
+      const res = await api.claimTask(task.task_id, { actor_id: actor });
+      const d = res.data;
+      if (d.status === "claimed") {
+        setClaims((prev) => ({ ...prev, [task.task_id]: { claim_id: d.claim_id, fencing_token: d.fencing_token } }));
+        toastRef.current("success", `Claimed (token ${d.fencing_token})`);
+      } else {
+        toastRef.current("error", `Claim ${d.status}${"incumbent_actor_id" in d && d.incumbent_actor_id ? ` (held by ${d.incumbent_actor_id})` : ""}`);
+      }
+      fetchBoard();
+    } catch (e) {
+      toastRef.current("error", e instanceof Error ? e.message : "Claim failed");
+    }
+  };
+
+  const onRelease = async (task: TaskSummary) => {
+    const actor = requireActor();
+    if (!actor) return;
+    try {
+      const res = await api.releaseTask(task.task_id, { actor_id: actor });
+      toastRef.current(res.data.status === "released" ? "success" : "error", `Release: ${res.data.status}`);
+      setClaims((prev) => { const n = { ...prev }; delete n[task.task_id]; return n; });
+      fetchBoard();
+    } catch (e) {
+      toastRef.current("error", e instanceof Error ? e.message : "Release failed");
+    }
+  };
+
+  const onComplete = async (task: TaskSummary) => {
+    const actor = requireActor();
+    if (!actor) return;
+    try {
+      const res = await api.completeTask(task.task_id, { actor_id: actor });
+      toastRef.current(res.data.status === "completed" ? "success" : "error", `Complete: ${res.data.status}`);
+      fetchBoard();
+    } catch (e) {
+      toastRef.current("error", e instanceof Error ? e.message : "Complete failed");
+    }
+  };
+
+  const onBaseline = async (task: TaskSummary) => {
+    const actor = requireActor();
+    if (!actor) return;
+    const handle = claims[task.task_id];
+    if (!handle) { toastRef.current("error", "Claim the task first to get a fencing token"); return; }
+    try {
+      const res = await api.baselineArtifact(task.artifact_id, { claim_id: handle.claim_id, fencing_token: handle.fencing_token, actor_id: actor });
+      toastRef.current(res.data.status?.includes("baselin") ? "success" : "error", `Baseline: ${res.data.status}`);
+      fetchBoard();
+    } catch (e) {
+      toastRef.current("error", e instanceof Error ? e.message : "Baseline failed");
     }
   };
 
@@ -212,6 +315,66 @@ export default function TopicDetailPage() {
           )}
         </section>
       </div>
+
+      {/* Board */}
+      <section className="mt-8">
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2 text-zinc-300">
+            <ClipboardList size={16} strokeWidth={1.5} />
+            <h2 className="text-sm font-semibold">Board — tasks ({tasks.length})</h2>
+          </div>
+          <label className="flex items-center gap-2">
+            <span className="text-[11px] text-zinc-600">Acting as</span>
+            <input value={boardActor} onChange={(e) => setBoardActor(e.target.value)} placeholder="actor id"
+              className="rounded-md bg-zinc-900 border border-zinc-800 px-2 py-1 text-xs text-zinc-200 outline-none focus:border-zinc-600 w-32" />
+          </label>
+        </div>
+
+        {!isClosed && (
+          <div className="flex items-center gap-2 mb-3">
+            <input value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="Task title"
+              className="flex-1 rounded-md bg-zinc-900 border border-zinc-800 px-3 py-1.5 text-sm text-zinc-200 outline-none focus:border-zinc-600" />
+            <input value={taskKind} onChange={(e) => setTaskKind(e.target.value)} placeholder="kind (e.g. build)"
+              className="w-40 rounded-md bg-zinc-900 border border-zinc-800 px-3 py-1.5 text-sm text-zinc-200 outline-none focus:border-zinc-600" />
+            <Button onClick={submitTask} disabled={posting || !taskTitle.trim() || !taskKind.trim()}>
+              <Plus size={16} /> {posting ? "Posting…" : "Post task"}
+            </Button>
+          </div>
+        )}
+
+        {tasks.length === 0 ? (
+          <p className="text-xs text-zinc-600">No tasks on the board.</p>
+        ) : (
+          <div className="space-y-2">
+            {tasks.map((t) => {
+              const held = claims[t.task_id];
+              return (
+                <div key={t.task_id} className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-sm text-zinc-100 truncate">{t.title}</div>
+                      <div className="text-[11px] text-zinc-600 font-mono truncate">{t.artifact_id}</div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-[10px] rounded bg-zinc-800 text-zinc-300 px-1.5 py-0.5">{t.status}</span>
+                      <span className="text-[10px] rounded bg-zinc-800/60 text-zinc-400 px-1.5 py-0.5">art: {t.artifact_state}</span>
+                    </div>
+                  </div>
+                  {!isClosed && (
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <button onClick={() => onClaim(t)} className="text-[11px] rounded bg-blue-500/10 text-blue-300 px-2 py-0.5 hover:bg-blue-500/20">claim</button>
+                      <button onClick={() => onRelease(t)} className="text-[11px] rounded bg-zinc-700/40 text-zinc-300 px-2 py-0.5 hover:bg-zinc-700/60">release</button>
+                      <button onClick={() => onComplete(t)} className="text-[11px] rounded bg-emerald-500/10 text-emerald-300 px-2 py-0.5 hover:bg-emerald-500/20">complete</button>
+                      <button onClick={() => onBaseline(t)} className="text-[11px] rounded bg-amber-500/10 text-amber-300 px-2 py-0.5 hover:bg-amber-500/20">baseline</button>
+                      {held && <span className="text-[10px] text-zinc-600">claimed · token {held.fencing_token}</span>}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       {/* Join dialog */}
       {joinOpen && (

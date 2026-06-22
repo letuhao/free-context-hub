@@ -835,6 +835,31 @@ export const api = {
       "GET",
       `/api/topics/${encodeURIComponent(topicId)}/events?${qs(params)}`,
     ),
+
+  // ── Coordination: Board (FIX-1 / Sprint G3) ──
+  listBoard: (topicId: string, status?: string) =>
+    request<{ status: string; data: { tasks: TaskSummary[] } }>(
+      "GET",
+      `/api/topics/${encodeURIComponent(topicId)}/board${status ? `?status=${encodeURIComponent(status)}` : ""}`,
+    ),
+
+  postTask: (topicId: string, body: { title: string; kind: string; created_by: string; topology?: string; slot?: string; depends_on?: string[] }) =>
+    request<{ status: string; data: TaskSummary }>("POST", `/api/topics/${encodeURIComponent(topicId)}/tasks`, body),
+
+  claimTask: (taskId: string, body: { actor_id: string; ttl_minutes?: number }) =>
+    request<{ status: string; data: ClaimOutcome }>("POST", `/api/tasks/${encodeURIComponent(taskId)}/claim`, body),
+
+  releaseTask: (taskId: string, body: { actor_id: string }) =>
+    request<{ status: string; data: { status: string } }>("POST", `/api/tasks/${encodeURIComponent(taskId)}/release`, body),
+
+  completeTask: (taskId: string, body: { actor_id: string }) =>
+    request<{ status: string; data: { status: string } }>("POST", `/api/tasks/${encodeURIComponent(taskId)}/complete`, body),
+
+  writeArtifact: (artifactId: string, body: { claim_id: string; fencing_token: number; content_ref: string; actor_id: string }) =>
+    request<{ status: string; data: { status: string } }>("PUT", `/api/artifacts/${encodeURIComponent(artifactId)}`, body),
+
+  baselineArtifact: (artifactId: string, body: { claim_id: string; fencing_token: number; actor_id: string }) =>
+    request<{ status: string; data: { status: string } }>("POST", `/api/artifacts/${encodeURIComponent(artifactId)}/baseline`, body),
 };
 
 // ── Coordination types (mirror src/services/topics.ts) ──
@@ -869,6 +894,29 @@ export interface CoordinationEventRecord {
   actor_id: string | null;
   created_at: string;
 }
+
+export interface TaskSummary {
+  task_id: string;
+  topic_id: string;
+  title: string;
+  topology: string;
+  depends_on: string[];
+  raci: Record<string, unknown>;
+  status: string;
+  created_by: string;
+  created_at: string;
+  artifact_id: string;
+  artifact_state: string;
+}
+
+/** Discriminated outcome of a claim attempt (mirrors board.ts ClaimResult). */
+export type ClaimOutcome =
+  | { status: "claimed"; claim_id: string; fencing_token: number; expires_at: string; artifact_id: string }
+  | { status: "conflict"; reason?: string; incumbent_actor_id?: string; expires_at?: string }
+  | { status: "not_found" }
+  | { status: "topic_closed" }
+  | { status: "unmet_dependencies"; missing: string[] }
+  | { status: "upstream_not_baselined"; not_baselined: Array<{ task_id: string; state: string }> };
 
 // ── Phase 13 Sprint 13.2 types ──
 export interface LeaseSummary {
