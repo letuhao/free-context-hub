@@ -203,7 +203,7 @@ export async function addLesson(payload: LessonPayload): Promise<AddLessonResult
   // Runs at the SERVICE layer so REST POST /api/lessons, REST /import, MCP
   // add_lesson, and any future caller all hit the same gate. Built-ins always
   // accepted; active taxonomy profile types additively accepted.
-  await validateLessonType(payload.project_id, payload.lesson_type);
+  await validateLessonType(payload.project_id, payload.lesson_type, { actingPrincipalId: payload.actingPrincipalId });
 
   const pool = getDbPool();
   const lessonId = randomUUID();

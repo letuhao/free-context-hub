@@ -4900,7 +4900,7 @@ function createMcpToolsServer() {
       const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
       const projectId = resolveProjectIdOrThrow(project_id);
       const profile = await getActiveProfile(projectId, { actingPrincipalId });
-      const valid_lesson_types = await getValidLessonTypes(projectId);
+      const valid_lesson_types = await getValidLessonTypes(projectId, { actingPrincipalId });
       const summary = `get_active_taxonomy_profile: ${profile ? profile.slug : 'none'} (valid_types=${valid_lesson_types.length})`;
       return formatToolResponse({ profile, valid_lesson_types }, summary, output_format);
     },

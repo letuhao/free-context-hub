@@ -380,23 +380,35 @@ export async function deactivateProfile(
  * Single source of truth for lesson_type validation in add_lesson + REST
  * POST /api/lessons + the import path.
  */
-export async function getValidLessonTypes(projectId: string): Promise<string[]> {
+export async function getValidLessonTypes(
+  projectId: string,
+  opts?: { actingPrincipalId?: string | null },
+): Promise<string[]> {
   const pool = getDbPool();
   const globals = await pool.query<{ type_key: string }>(
     `SELECT type_key FROM lesson_types WHERE scope = 'global'`,
   );
   // BUILTIN_LESSON_TYPES is a defensive floor in case the registry seed is incomplete.
   const valid = new Set<string>([...BUILTIN_LESSON_TYPES, ...globals.rows.map((r) => r.type_key)]);
-  const active = await getActiveProfile(projectId);
+  // Thread the acting principal: getActiveProfile runs a read-authz check, and under auth-ON an
+  // undefined principal denies (NOT_FOUND) — which previously broke addLesson's write-time
+  // validateLessonType call. The caller (addLesson) has already authorized write on the project,
+  // so the same principal's read check passes (write ⊃ read).
+  const active = await getActiveProfile(projectId, { actingPrincipalId: opts?.actingPrincipalId });
   if (active) for (const t of active.lesson_types) valid.add(t.type);
   return [...valid];
 }
 
 /**
  * Validate a lesson_type for a project. Throws ContextHubError('BAD_REQUEST') if invalid.
+ * `actingPrincipalId` is threaded to the nested getActiveProfile read-authz check (auth-ON).
  */
-export async function validateLessonType(projectId: string, lessonType: string): Promise<void> {
-  const valid = await getValidLessonTypes(projectId);
+export async function validateLessonType(
+  projectId: string,
+  lessonType: string,
+  opts?: { actingPrincipalId?: string | null },
+): Promise<void> {
+  const valid = await getValidLessonTypes(projectId, { actingPrincipalId: opts?.actingPrincipalId });
   if (!valid.includes(lessonType)) {
     throw new ContextHubError(
       'BAD_REQUEST',
