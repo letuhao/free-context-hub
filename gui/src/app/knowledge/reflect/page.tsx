@@ -33,9 +33,11 @@ function ReflectInner() {
       let used: SourceLesson[] = [];
       try {
         const res = await api.searchLessons({ project_id: projectId, query: topic.trim(), limit: 8 });
-        const items: any[] = res.items ?? res.results ?? res.lessons ?? [];
-        used = items.map((l) => ({ lesson_id: l.lesson_id, title: l.title, content: l.content }));
-        bullets = items.map((l) => (l.content ? `${l.title}: ${l.content}` : l.title)).filter(Boolean);
+        // searchLessons responds with `matches`; without it reflect lost all grounding
+        // bullets and the Sources panel was always empty. (QC GUI-04.)
+        const items: any[] = res.matches ?? res.items ?? res.results ?? res.lessons ?? [];
+        used = items.map((l) => ({ lesson_id: l.lesson_id, title: l.title, content: l.content ?? l.content_snippet }));
+        bullets = items.map((l) => { const body = l.content ?? l.content_snippet; return body ? `${l.title}: ${body}` : l.title; }).filter(Boolean);
       } catch {
         /* no lessons / search unavailable — reflect on the topic alone */
       }

@@ -77,7 +77,8 @@ export default function LessonDeepLinkPage() {
         query: lesson.title,
         limit: 6,
       });
-      const hits: RelatedLesson[] = res.results ?? res.items ?? [];
+      // searchLessons responds with `matches` (not results/items) — QC GUI-04/05.
+      const hits: RelatedLesson[] = res.matches ?? res.results ?? res.items ?? [];
       // Drop the lesson itself; cap at 5.
       setRelated(hits.filter((l) => l.lesson_id !== lesson.lesson_id).slice(0, 5));
     } catch {

@@ -98,8 +98,12 @@ export default function LessonsPage() {
           query: debouncedQuery,
           limit: PAGE_SIZE,
         });
-        setLessons(result.results ?? result.items ?? []);
-        setTotalCount(result.results?.length ?? result.items?.length ?? 0);
+        // /api/lessons/search (searchLessons/searchLessonsMulti) responds with `matches`.
+        // Reading only results/items silently dropped every hit → "No semantic results"
+        // misfired on a working backend. (QC GUI-04.)
+        const hits = result.matches ?? result.results ?? result.items ?? [];
+        setLessons(hits);
+        setTotalCount(hits.length);
         setTotalPages(1);
       } else if (useMulti) {
         const effectiveStatus = showAllStatuses ? undefined : (filterStatus ?? "active");
