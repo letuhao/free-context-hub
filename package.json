@@ -1,7 +1,7 @@
 {
   "name": "free-context-hub",
-  "version": "1.0.0",
-  "description": "",
+  "version": "0.1.0",
+  "description": "Self-hosted persistent memory, semantic search, and guardrails for MCP AI coding agents, with a human-in-the-loop GUI.",
   "main": "index.js",
   "type": "module",
   "directories": {
@@ -56,9 +56,20 @@
     "type": "git",
     "url": "git+https://github.com/letuhao/free-context-hub.git"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ai-agents",
+    "persistent-memory",
+    "semantic-search",
+    "pgvector",
+    "guardrails",
+    "self-hosted",
+    "claude-code",
+    "rag"
+  ],
+  "author": "Lê Tú Hào",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/letuhao/free-context-hub/issues"
   },

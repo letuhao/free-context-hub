@@ -1,0 +1,97 @@
+name: Bug Report
+description: Report something that is broken or behaves incorrectly
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please fill out the sections below.
+        **Do not use this form for security vulnerabilities** — see [SECURITY.md](https://github.com/letuhao/free-context-hub/blob/main/SECURITY.md).
+
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: A short, clear description of the bug
+      placeholder: e.g. MCP search_lessons returns 500 when project_id is omitted
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps that consistently trigger the issue
+      placeholder: |
+        1. Start stack with `docker compose up -d`
+        2. Call `search_lessons` with ...
+        3. Observe error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What you expected to happen
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened (include error messages verbatim when possible)
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Release tag, package version, or git commit SHA
+      placeholder: e.g. v0.1.0 or abc1234
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment
+      description: How you are running free-context-hub
+      options:
+        - Docker Compose (recommended)
+        - Local dev (`npm run dev` + optional GUI)
+        - Custom / other
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Container logs, API/MCP responses, browser console output, or stack traces
+      render: shell
+      placeholder: Paste redacted logs here (remove secrets and API keys)
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Node version, browser (for GUI issues), and notable `.env` flags (no secrets)
+      placeholder: |
+        - OS: Windows 11 / Ubuntu 24.04 / macOS 15
+        - Node: 20.x
+        - Browser: Chrome 137 (if GUI)
+        - MCP_AUTH_ENABLED=true, KG_ENABLED=false, etc.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched [existing issues](https://github.com/letuhao/free-context-hub/issues) and did not find a duplicate
+          required: true
+        - label: I redacted secrets, tokens, and personal data from logs and screenshots
+          required: true

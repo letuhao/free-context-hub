@@ -14,7 +14,7 @@ import {
   FileText, Search, Network, FolderOpen, Users, Files,
   GitBranch, Link2, Zap, Settings, Bot, BarChart3, CheckCircle2,
   PanelLeftClose, PanelLeftOpen, ClipboardCheck, Activity, Menu, X, Fingerprint,
-  ShieldCheck, GitFork, KeyRound, UserCog,
+  ShieldCheck, GitFork, KeyRound, UserCog, Compass,
 } from "lucide-react";
 
 type NavItem = { href: string; label: string; icon: ReactNode; badge?: number };
@@ -34,6 +34,7 @@ const buildNavGroups = (reviewCount: number, notifCount: number): (NavItem | Nav
       { href: "/guardrails", label: "Guardrails", icon: <Shield size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/documents", label: "Documents", icon: <Files size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/getting-started", label: "Getting Started", icon: <CheckCircle2 size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
+      { href: "/guide", label: "Feature Guide", icon: <Compass size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/knowledge/docs", label: "Generated Docs", icon: <FileText size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/knowledge/search", label: "Code Search", icon: <Search size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/knowledge/graph", label: "Graph Explorer", icon: <Network size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },

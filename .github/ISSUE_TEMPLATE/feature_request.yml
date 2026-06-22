@@ -1,0 +1,57 @@
+name: Feature Request
+description: Suggest an enhancement or new capability
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement. A clear problem statement helps us evaluate
+        scope and fit with the project roadmap.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What pain point or use case does this address? Who benefits?
+      placeholder: |
+        As a self-hosted operator, I want ... so that ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior you would like to see
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches, workarounds, or tools you evaluated
+      placeholder: e.g. scripting against the REST API, external vector DB, fork-only change
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope
+      description: Which parts of the project would this touch?
+      options:
+        - label: Backend (MCP server, REST API, worker, services)
+        - label: GUI (Next.js web app)
+        - label: MCP tools / agent integration
+        - label: Documentation / deployment
+        - label: Database / migrations
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched [existing issues](https://github.com/letuhao/free-context-hub/issues) and did not find a duplicate request
+          required: true
+        - label: I am willing to help implement or test this if maintainers agree on direction
+          required: false

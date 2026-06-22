@@ -203,7 +203,7 @@ Symbol-level code structure for advanced queries. Requires Neo4j.
 
 ```bash
 # 1. Clone and install
-git clone https://github.com/your-username/free-context-hub.git
+git clone https://github.com/letuhao/free-context-hub.git
 cd free-context-hub
 npm install
 

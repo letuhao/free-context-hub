@@ -1,0 +1,56 @@
+# Pull-request gate: typecheck the backend and build the GUI on every push/PR.
+# These jobs have no external-service dependency, so they are fast and stable.
+#
+# The full unit suite (npm test) and the e2e suites (npm run test:e2e) require a
+# live stack with a real embeddings endpoint; they run against docker compose
+# locally and via the scheduled `phase5-worker-validation.yml` workflow, not here.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: TypeScript build
+        run: npm run build
+
+  gui:
+    name: GUI build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: gui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: gui/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Next.js build
+        # Set the internal API base so the build doesn't warn about an unreachable default.
+        env:
+          CONTEXTHUB_INTERNAL_API_URL: http://localhost:3001
+        run: npm run build
