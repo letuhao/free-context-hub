@@ -151,8 +151,8 @@ export const CATALOG: Area[] = [
       },
       {
         name: "Ingest from URL",
-        description: "SSRF-hardened URL ingestion with DNS-rebinding pinning.",
-        surface: { rest: "POST /api/documents/ingest-url", gui: { label: "Documents", href: "/documents" } },
+        description: "SSRF-hardened URL ingestion with DNS-rebinding pinning. Agents can ingest over MCP.",
+        surface: { mcp: ["ingest_document"], rest: "POST /api/documents/ingest-url", gui: { label: "Documents", href: "/documents" } },
       },
       {
         name: "Generated docs",
@@ -322,4 +322,4 @@ export const CATALOG: Area[] = [
   },
 ];
 
-export const TOTALS = { mcpTools: 104, restEndpoints: 95, guiPages: 32 };
+export const TOTALS = { mcpTools: 105, restEndpoints: 95, guiPages: 32 };

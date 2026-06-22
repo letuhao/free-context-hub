@@ -26,6 +26,7 @@ lessons from it.
 
 | Tool | Purpose |
 |------|---------|
+| `ingest_document` | Ingest a document **by URL** (SSRF-hardened fetch + dedup). Stores the doc; extraction is a separate step. |
 | `search_document_chunks` | Hybrid search over extracted chunks |
 | `list_generated_documents` | List generated FAQ/RAPTOR/QC/benchmark docs |
 | `get_generated_document` | Fetch one generated doc |

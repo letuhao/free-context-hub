@@ -488,7 +488,7 @@ free-context-hub/
 │   ├── index.ts            # Main entry — MCP :3000 + REST API :3001
 │   ├── worker.ts           # Background job worker
 │   ├── api/routes/         # REST endpoints (37 route files, ~95 endpoints)
-│   ├── mcp/                # MCP tools (104 tools)
+│   ├── mcp/                # MCP tools (105 tools)
 │   ├── services/           # Business logic
 │   ├── db/                 # Database utilities
 │   ├── core/               # Logger, migrations, KG bootstrap

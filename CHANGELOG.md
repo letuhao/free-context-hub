@@ -21,7 +21,7 @@ guardrails for MCP AI coding agents, with a human-in-the-loop GUI.
 - **Persistent lessons** — store decisions, preferences, workarounds, and guardrails
   with semantic search backed by PostgreSQL 16 and pgvector
 - **Guardrails** — pre-action policy checks for agents via MCP and REST, with audit logging
-- **MCP server** — 104 tools for lessons, search, guardrails, code navigation, git
+- **MCP server** — 105 tools for lessons, search, guardrails, code navigation, git
   intelligence, knowledge graph, coordination, governance, jobs, and project context (port 3000)
 - **REST API** — ~95 endpoints across 37 route files for the GUI and integrations (port 3001)
 - **Human-in-the-loop GUI** — Next.js 16 web app (port 3002) with 20 pages: dashboard,

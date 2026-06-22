@@ -2,7 +2,7 @@
   Canonical feature map for free-context-hub.
   This file is the single index of what the product does. Each area links to a
   detailed doc under docs/features/. Keep counts and groupings in sync with the
-  code: 104 MCP tools (src/mcp/index.ts), ~95 REST endpoints (src/api/routes/),
+  code: 105 MCP tools (src/mcp/index.ts), ~95 REST endpoints (src/api/routes/),
   32 GUI pages (gui/src/app/).
 -->
 
@@ -12,7 +12,7 @@ A map of everything **free-context-hub** does, grouped by capability area. Each
 feature lists how you reach it — **MCP** tool (for agents), **REST** path (for
 integrations), and **GUI** page (for humans) — and links to a detailed guide.
 
-> **Surface at a glance:** 104 MCP tools · ~95 REST endpoints · 32 GUI pages ·
+> **Surface at a glance:** 105 MCP tools · ~95 REST endpoints · 32 GUI pages ·
 > PostgreSQL + pgvector core, optional Neo4j / Redis / RabbitMQ.
 
 For an end-to-end walkthrough, see the [User Guide](docs/USER_GUIDE.md). For the
@@ -97,7 +97,7 @@ retrieve them forever.
 | Feature | MCP | REST | GUI |
 |---------|-----|------|-----|
 | Upload & extract (PDF/DOCX/image) | — | `POST /api/documents/upload` | `/documents` |
-| Ingest from URL (SSRF-hardened) | — | `POST /api/documents/ingest-url` | `/documents` |
+| Ingest from URL (SSRF-hardened) | `ingest_document` | `POST /api/documents/ingest-url` | `/documents` |
 | Chunk + embed + search | `search_document_chunks` | `GET /api/documents/:id/chunks` | `/documents` |
 | Generated docs (FAQ/RAPTOR/QC) | `list_generated_documents`, `get_generated_document`, `promote_generated_document` | `/api/generated-docs` | `/knowledge/docs` |
 

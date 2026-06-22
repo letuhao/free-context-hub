@@ -14,7 +14,8 @@ import {
 import { runExtraction, listDocumentChunks, updateChunk, deleteChunk } from '../../services/extraction/pipeline.js';
 import { searchChunks } from '../../services/documentChunks.js';
 import type { ChunkTypeFilter } from '../../services/documentChunks.js';
-import { fetchUrlAsDocument, UrlFetchError } from '../../services/urlFetch.js';
+import { UrlFetchError } from '../../services/urlFetch.js';
+import { ingestUrlAsDocument, sanitizeFilename } from '../../services/documentIngest.js';
 import { getPdfPageCount } from '../../services/extraction/pdfRender.js';
 import { estimateVisionCost } from '../../services/extraction/vision.js';
 import { enqueueJob, cancelJob } from '../../services/jobQueue.js';
@@ -31,16 +32,6 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
  * Sanitize a filename: strip path traversal sequences, null bytes, control
  * characters. Limit length to avoid abuse. (Issue #12)
  */
-function sanitizeFilename(name: string): string {
-  return name
-    .replace(/[\x00-\x1f\x7f]/g, '') // control chars
-    .replace(/\.\.+/g, '_')           // .. → _
-    .replace(/[\\\/]/g, '_')           // path separators → _
-    .replace(/^\.+/, '')               // leading dots
-    .slice(0, 255)
-    .trim() || 'unnamed';
-}
-
 /** POST /api/documents/upload — multipart file upload */
 router.post('/upload', upload.single('file'), async (req, res, next) => {
   try {
@@ -163,9 +154,26 @@ router.post('/ingest-url', async (req, res, next) => {
       return;
     }
 
-    let fetched;
+    let tags: string[] | undefined;
+    if (req.body.tags) {
+      if (Array.isArray(req.body.tags)) tags = req.body.tags.filter((t: unknown): t is string => typeof t === 'string');
+      else if (typeof req.body.tags === 'string') {
+        try { tags = JSON.parse(req.body.tags); } catch { tags = undefined; }
+      }
+    }
+
+    // Delegate the SSRF-hardened fetch + dedup + store to the shared service
+    // (M1 — ingestUrlAsDocument; asserts project-write authz BEFORE fetching).
+    let result;
     try {
-      fetched = await fetchUrlAsDocument(sourceUrl);
+      result = await ingestUrlAsDocument({
+        projectId,
+        actingPrincipalId: callerPrincipalOf(req),
+        sourceUrl,
+        name: typeof req.body.name === 'string' && req.body.name.trim() ? req.body.name.trim() : undefined,
+        description: req.body.description ?? undefined,
+        tags,
+      });
     } catch (err) {
       if (err instanceof UrlFetchError) {
         res.status(err.httpStatus).json({ status: 'error', error: err.message, code: err.code });
@@ -174,80 +182,17 @@ router.post('/ingest-url', async (req, res, next) => {
       throw err;
     }
 
-    // Reuse the same sanitization + content_hash + storage flow as /upload
-    const name = sanitizeFilename(
-      typeof req.body.name === 'string' && req.body.name.trim() ? req.body.name.trim() : fetched.filename,
-    );
-    const contentHash = createHash('sha256').update(fetched.buffer).digest('hex');
-
-    const pool = getDbPool();
-    const dupRes = await pool.query(
-      `SELECT doc_id, name, created_at FROM documents
-       WHERE project_id = $1 AND content_hash = $2
-       LIMIT 1`,
-      [projectId, contentHash],
-    );
-    if (dupRes.rows.length > 0) {
-      const existing = dupRes.rows[0];
+    if (result.status === 'duplicate') {
       res.status(409).json({
         status: 'duplicate',
         error: 'Document already uploaded',
-        existing_doc_id: existing.doc_id,
-        existing_name: existing.name,
-        existing_uploaded_at: existing.created_at,
+        existing_doc_id: result.existing_doc_id,
+        existing_name: result.existing_name,
+        existing_uploaded_at: result.existing_uploaded_at,
       });
       return;
     }
-
-    // Binary formats: base64; text formats: utf-8 (matches /upload)
-    const isBinary = ['pdf', 'docx', 'image', 'epub', 'odt', 'rtf'].includes(fetched.docType);
-    const content = isBinary
-      ? `data:base64;${fetched.buffer.toString('base64')}`
-      : fetched.buffer.toString('utf-8');
-
-    let tags: string[] | undefined;
-    if (req.body.tags) {
-      if (Array.isArray(req.body.tags)) tags = req.body.tags.filter((t: any) => typeof t === 'string');
-      else if (typeof req.body.tags === 'string') {
-        try { tags = JSON.parse(req.body.tags); } catch { tags = undefined; }
-      }
-    }
-
-    try {
-      const result = await createDocument({
-        projectId,
-        actingPrincipalId: callerPrincipalOf(req),
-        name,
-        docType: fetched.docType as any,
-        // Store the originating URL in the url column so users can see where
-        // this doc came from, without it being a pure url-type stub.
-        url: fetched.finalUrl,
-        content,
-        contentHash,
-        fileSizeBytes: fetched.buffer.length,
-        description: req.body.description ?? undefined,
-        tags,
-      });
-      res.status(201).json(result);
-    } catch (insErr: any) {
-      if (insErr?.code === '23505' && insErr?.constraint === 'idx_documents_project_hash') {
-        const existing = await pool.query(
-          `SELECT doc_id, name, created_at FROM documents
-           WHERE project_id = $1 AND content_hash = $2 LIMIT 1`,
-          [projectId, contentHash],
-        );
-        const ex = existing.rows[0];
-        res.status(409).json({
-          status: 'duplicate',
-          error: 'Document already uploaded',
-          existing_doc_id: ex?.doc_id,
-          existing_name: ex?.name,
-          existing_uploaded_at: ex?.created_at,
-        });
-        return;
-      }
-      throw insErr;
-    }
+    res.status(201).json(result.document);
   } catch (e) { next(e); }
 });
 

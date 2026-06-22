@@ -125,6 +125,8 @@ import { LESSON_STATUS_ALL, LESSON_STATUS_WRITABLE } from '../constants/lessonSt
 import { formatToolResponse, OutputFormatSchema } from './formatters.js';
 import { isFeatureEnabled } from '../services/featureToggles.js';
 import { searchChunks } from '../services/documentChunks.js';
+import { ingestUrlAsDocument } from '../services/documentIngest.js';
+import { UrlFetchError } from '../services/urlFetch.js';
 import { logLessonAccess, isSalienceDisabled, type AccessLogEntry } from '../services/salience.js';
 import { getDbPool } from '../db/client.js';
 import { resolveMcpCallerScope, resolveMcpCaller, resolveActingActor, resolveTargetActor, resolveTargetActors, type McpCaller } from './auth.js';
@@ -1134,6 +1136,60 @@ function createMcpToolsServer() {
       });
       const summary = `index_project: status=${result.status}, files_indexed=${result.files_indexed}, duration_ms=${result.duration_ms}`;
       return formatToolResponse(result, summary, output_format);
+    },
+  );
+
+  server.registerTool(
+    'ingest_document',
+    {
+      description:
+        'Ingest a document into project knowledge by URL (SSRF-hardened server-side fetch + content_hash dedup). ' +
+        'Stores PDF/DOCX/image/markdown/text/etc. Becomes searchable via search_document_chunks once extraction runs ' +
+        '(extraction is a separate step — this tool only stores the document).',
+      inputSchema: z.object({
+        workspace_token: z.string().optional().describe('Workspace token (required only if MCP_AUTH_ENABLED=true).'),
+        project_id: z
+          .string()
+          .min(1)
+          .optional()
+          .describe('Project to ingest into. Optional if DEFAULT_PROJECT_ID is set on the server.'),
+        source_url: z
+          .string()
+          .min(1)
+          .url()
+          .describe('HTTP(S) URL of the document to fetch. Private/loopback/link-local/metadata addresses are rejected (SSRF-hardened); redirects are re-checked per hop.'),
+        name: z.string().min(1).optional().describe('Optional document name (defaults to the URL filename).'),
+        description: z.string().optional().describe('Optional description.'),
+        tags: z.array(z.string()).optional().describe('Optional tags.'),
+        output_format: OutputFormatSchema.default('auto_both').describe('Response format: auto_both | json_only | json_pretty | summary_only.'),
+      }),
+      outputSchema: z.object({
+        status: z.enum(['created', 'duplicate']),
+        doc_id: z.string(),
+        name: z.string(),
+        doc_type: z.string().optional(),
+        source_url: z.string(),
+        duplicate: z.boolean(),
+      }),
+    },
+    async ({ workspace_token, project_id, source_url, name, description, tags, output_format }) => {
+      const { actingPrincipalId } = await resolveActingActorOrThrow(workspace_token);
+      const projectId = resolveProjectIdOrThrow(project_id);
+      let result;
+      try {
+        result = await ingestUrlAsDocument({ projectId, actingPrincipalId, sourceUrl: source_url, name, description, tags });
+      } catch (e) {
+        // SSRF / fetch-format rejection → InvalidParams (agent-facing message).
+        if (e instanceof UrlFetchError) throw new McpError(ErrorCode.InvalidParams, e.message);
+        if (e instanceof ContextHubError) throw new McpError(CONTEXT_HUB_TO_MCP_CODE[e.code] ?? ErrorCode.InternalError, e.message);
+        throw e;
+      }
+      const out =
+        result.status === 'created'
+          ? { status: 'created' as const, doc_id: result.document.doc_id, name: result.document.name, doc_type: result.document.doc_type, source_url, duplicate: false }
+          : { status: 'duplicate' as const, doc_id: result.existing_doc_id, name: result.existing_name, source_url, duplicate: true };
+      const summary = `ingest_document: ${out.status} doc_id=${out.doc_id} name=${out.name}`;
+      return formatToolResponse(out, summary, output_format);
     },
   );
 

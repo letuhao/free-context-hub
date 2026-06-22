@@ -26,9 +26,9 @@ update this file as work lands.
 | ID | Gap | Scope (proposed) | Status |
 |----|-----|------------------|--------|
 | FIX-1 | No human GUI for coordination primitives (topics, board, tasks, leases) | **Full CRUD** (decided) — see [GUI design](../specs/2026-06-22-coordination-governance-gui-design.md) | ✅ DONE — G1 (list endpoint), G2 (topics list+detail), G3 (board+leases). Commits e1de2f9, db0f3c7, 9373319 |
-| FIX-2 | No human GUI for governance primitives (motions/voting, requests/DoA, intake, disputes, decision bodies/proxies) | **Full CRUD** (decided) — sprints G4–G6 | 🔧 building (next: G4) |
-| FIX-3 | No MCP tool for document upload/ingest (REST/GUI only) | Add `ingest_document` MCP tool (URL + maybe base64) | ☐ |
-| FIX-4 | `reflect`/`compress_context` have no dedicated GUI | Minor — surface in a tool/panel | ☐ |
+| FIX-2 | No human GUI for governance primitives (motions/voting, requests/DoA, intake, disputes, decision bodies/proxies) | **Full CRUD** (decided) | ✅ DONE — G4 (bodies+motions 14f4ba0), G5 (requests d366d00), G6 (intake+disputes 0cb47be) |
+| FIX-3 | No MCP tool for document upload/ingest (REST/GUI only) | `ingest_document` MCP tool (URL) | ✅ DONE (M1) — shared `ingestUrlAsDocument` service (authz-before-fetch hardening), REST route delegates, tool registered (104→105); 4 unit tests incl. cross-tenant reject |
+| FIX-4 | `reflect`/`compress_context` have no dedicated GUI | Minor — surface in a tool/panel | 🔧 next (M2) |
 
 > **FIX-1/FIX-2 need a scope decision** (viewer vs full CRUD) before building — they are
 > L/XL each. See "Open scope decisions" below.
