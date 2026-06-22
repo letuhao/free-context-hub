@@ -18,6 +18,7 @@ import {
   joinTopic,
   grantLevel,
   getTopic,
+  listTopics,
   closeTopic,
   replayEvents,
   resolveProjectIdOrThrow,
@@ -61,6 +62,17 @@ router.post('/', async (req, res, next) => {
       created_by: String(body.created_by ?? ''),
     });
     res.status(201).json({ status: 'ok', data: result });
+  } catch (e) { next(e); }
+});
+
+// GET /api/topics?project_id=:id — list topics for a project (FIX-1, GUI Topics list)
+router.get('/', async (req, res, next) => {
+  try {
+    const projectId = resolveProjectIdOrThrow(
+      typeof req.query.project_id === 'string' && req.query.project_id ? req.query.project_id : undefined,
+    );
+    const result = await listTopics({ project_id: projectId, actingPrincipalId: callerPrincipalOf(req) });
+    res.json({ status: 'ok', data: result });
   } catch (e) { next(e); }
 });
 

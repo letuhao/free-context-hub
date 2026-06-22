@@ -17,7 +17,7 @@
 
 import assert from 'node:assert/strict';
 import test, { before, after, beforeEach } from 'node:test';
-import { charterTopic, joinTopic, grantLevel, getTopic, closeTopic } from './topics.js';
+import { charterTopic, joinTopic, grantLevel, getTopic, listTopics, closeTopic } from './topics.js';
 import { replayEvents } from './coordinationEvents.js';
 import { getDbPool } from '../db/client.js';
 
@@ -145,6 +145,29 @@ test('getTopic returns the topic + full roster; NOT_FOUND for an unknown topic',
   assert.equal(got.roster.length, 1);
   assert.equal(got.roster[0].level, 'coordination');
   await assert.rejects(getTopic({ topic_id: 'no-such-topic' }), /not found/);
+});
+
+test('listTopics returns a project\'s topics newest-first and is project-scoped', async () => {
+  // Two topics in project A (created in order), one in project B.
+  const a1 = await charterTopic({ project_id: TEST_PROJECT, name: 'A-one', charter: 'c', created_by: 'creator-1' });
+  const a2 = await charterTopic({ project_id: TEST_PROJECT, name: 'A-two', charter: 'c', created_by: 'creator-1' });
+  await charterTopic({ project_id: TEST_PROJECT_B, name: 'B-one', charter: 'c', created_by: 'creator-1' });
+
+  const listed = await listTopics({ project_id: TEST_PROJECT });
+  const names = listed.topics.map((t) => t.name);
+  assert.equal(listed.topics.length, 2, 'only project A topics');
+  // newest-first: a2 (created after a1) comes first
+  assert.equal(listed.topics[0].topic_id, a2.topic_id, 'newest first');
+  assert.equal(listed.topics[1].topic_id, a1.topic_id);
+  // project scope: B's topic is not present
+  assert.ok(!names.includes('B-one'), 'project B topic must not leak into A');
+
+  const listedB = await listTopics({ project_id: TEST_PROJECT_B });
+  assert.equal(listedB.topics.length, 1);
+  assert.equal(listedB.topics[0].name, 'B-one');
+
+  // empty project_id is rejected
+  await assert.rejects(listTopics({ project_id: '' }), /project_id is required/);
 });
 
 test('closeTopic emits topic.closed last, seals the log, and is idempotent', async () => {

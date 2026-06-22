@@ -791,7 +791,84 @@ export const api = {
       auth_enabled: boolean;
       key_source: "no_auth" | "env_token" | "db_key";
     }>("GET", "/api/me"),
+
+  // ── Coordination: Topics (FIX-1 / Sprint G2) ──
+  // Coordination routes use the Phase 15 envelope { status:'ok', data }.
+  listTopics: (params: { project_id: string }) =>
+    request<{ status: string; data: { topics: TopicRecord[] } }>(
+      "GET",
+      `/api/topics?${qs(params)}`,
+    ),
+
+  getTopic: (topicId: string) =>
+    request<{ status: string; data: TopicWithRoster }>(
+      "GET",
+      `/api/topics/${encodeURIComponent(topicId)}`,
+    ),
+
+  charterTopic: (body: { project_id: string; name: string; charter: string; created_by: string }) =>
+    request<{ status: string; data: TopicRecord }>("POST", "/api/topics", body),
+
+  joinTopic: (topicId: string, body: { actor_id: string; actor_type: string; display_name: string; level: string; since_seq?: number }) =>
+    request<{ status: string; data: unknown }>(
+      "POST",
+      `/api/topics/${encodeURIComponent(topicId)}/join`,
+      body,
+    ),
+
+  grantTopicLevel: (topicId: string, body: { actor_id: string; level: string; granted_by: string }) =>
+    request<{ status: string; data: unknown }>(
+      "POST",
+      `/api/topics/${encodeURIComponent(topicId)}/grant-level`,
+      body,
+    ),
+
+  closeTopic: (topicId: string, body: { actor_id: string }) =>
+    request<{ status: string; data: unknown }>(
+      "POST",
+      `/api/topics/${encodeURIComponent(topicId)}/close`,
+      body,
+    ),
+
+  topicEvents: (topicId: string, params: { since?: number } = {}) =>
+    request<{ status: string; data: { events: CoordinationEventRecord[]; next_cursor: number } }>(
+      "GET",
+      `/api/topics/${encodeURIComponent(topicId)}/events?${qs(params)}`,
+    ),
 };
+
+// ── Coordination types (mirror src/services/topics.ts) ──
+export interface TopicRecord {
+  topic_id: string;
+  project_id: string;
+  name: string;
+  charter: string;
+  status: "chartered" | "active" | "closing" | "closed";
+  created_by: string;
+  created_at: string;
+}
+
+export interface TopicParticipant {
+  actor_id: string;
+  type: string;
+  display_name: string;
+  level: "authority" | "coordination" | "execution";
+  joined_at: string;
+}
+
+export interface TopicWithRoster {
+  topic: TopicRecord;
+  roster: TopicParticipant[];
+}
+
+export interface CoordinationEventRecord {
+  seq: number;
+  topic_id: string;
+  type: string;
+  payload: unknown;
+  actor_id: string | null;
+  created_at: string;
+}
 
 // ── Phase 13 Sprint 13.2 types ──
 export interface LeaseSummary {

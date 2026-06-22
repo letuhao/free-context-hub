@@ -107,7 +107,7 @@ export type {
   ReplayResult,
   AppendResult,
 } from '../services/coordinationEvents.js';
-export { charterTopic, joinTopic, grantLevel, getTopic, closeTopic } from '../services/topics.js';
+export { charterTopic, joinTopic, grantLevel, getTopic, listTopics, closeTopic } from '../services/topics.js';
 export type {
   TopicRecord,
   Participant,

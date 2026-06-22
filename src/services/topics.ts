@@ -460,6 +460,29 @@ export async function getTopic(params: { topic_id: string; actingPrincipalId?: s
 }
 
 /**
+ * List topics for a project, newest first. Project-scoped read — the caller must
+ * be authorized to read the project (mirrors charterTopic's project-kind check,
+ * but for 'read'). Powers the GUI Topics list (FIX-1). Returns bare records (no
+ * roster) — the detail page fetches the roster via getTopic.
+ */
+export async function listTopics(params: {
+  project_id: string;
+  actingPrincipalId?: string | null;
+}): Promise<{ topics: TopicRecord[] }> {
+  const projectId = (params.project_id ?? '').trim();
+  if (!projectId) throw new ContextHubError('BAD_REQUEST', 'project_id is required');
+  await assertAuthorized(params.actingPrincipalId, 'read', { kind: 'project', id: projectId });
+  const res = await getDbPool().query<TopicRecord>(
+    `SELECT topic_id, project_id, name, charter, status, created_by, created_at
+       FROM topics
+      WHERE project_id = $1
+      ORDER BY created_at DESC`,
+    [projectId],
+  );
+  return { topics: res.rows };
+}
+
+/**
  * Close a topic — three-phase drain (DEFERRED-012, Sprint 15.6).
  *
  * Phase 1: `active|chartered → closing` (freeze Board — no new items can be posted).
