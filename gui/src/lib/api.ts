@@ -959,6 +959,14 @@ export const api = {
 
   resolveDispute: (disputeId: string) =>
     request<{ status: string; data: { status: string } }>("POST", `/api/disputes/${encodeURIComponent(disputeId)}/resolve`, {}),
+
+  // ── Reflect (FIX-4 / Sprint M2) — LLM synthesis over lessons ──
+  reflect: (projectId: string, body: { topic: string; bullets?: string[] }) =>
+    request<{ project_id: string; answer: string; warning?: string }>(
+      "POST",
+      `/api/projects/${encodeURIComponent(projectId)}/reflect`,
+      body,
+    ),
 };
 
 // ── Coordination types (mirror src/services/topics.ts) ──

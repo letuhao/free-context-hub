@@ -14,7 +14,7 @@ import {
   FileText, Search, Network, FolderOpen, Users, Files,
   GitBranch, Link2, Zap, Settings, Bot, BarChart3, CheckCircle2,
   PanelLeftClose, PanelLeftOpen, ClipboardCheck, Activity, Menu, X, Fingerprint,
-  ShieldCheck, GitFork, KeyRound, UserCog, Compass, Lock, Vote, Inbox,
+  ShieldCheck, GitFork, KeyRound, UserCog, Compass, Lock, Vote, Inbox, Sparkles,
 } from "lucide-react";
 
 type NavItem = { href: string; label: string; icon: ReactNode; badge?: number };
@@ -38,6 +38,7 @@ const buildNavGroups = (reviewCount: number, notifCount: number): (NavItem | Nav
       { href: "/knowledge/docs", label: "Generated Docs", icon: <FileText size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/knowledge/search", label: "Code Search", icon: <Search size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/knowledge/graph", label: "Graph Explorer", icon: <Network size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
+      { href: "/knowledge/reflect", label: "Reflect", icon: <Sparkles size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
     ],
   },
   {

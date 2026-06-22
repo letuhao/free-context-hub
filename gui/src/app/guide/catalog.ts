@@ -51,7 +51,7 @@ export const CATALOG: Area[] = [
       {
         name: "Synthesize across lessons",
         description: "LLM-synthesized answer drawn from multiple retrieved lessons.",
-        surface: { mcp: ["reflect", "compress_context"], rest: "POST /api/projects/:id/reflect", gui: { label: "Chat", href: "/chat" } },
+        surface: { mcp: ["reflect", "compress_context"], rest: "POST /api/projects/:id/reflect", gui: { label: "Reflect", href: "/knowledge/reflect" } },
       },
       {
         name: "Custom lesson types & taxonomies",

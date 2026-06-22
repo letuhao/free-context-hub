@@ -49,7 +49,7 @@ retrieve them forever.
 | List / filter lessons | `list_lessons` | `GET /api/lessons` | `/lessons` |
 | Update content / status | `update_lesson`, `update_lesson_status` | `PUT/PATCH /api/lessons/:id` | `/lessons/[id]` |
 | Version history | `list_lesson_versions` | `GET /api/lessons/:id/versions` | `/lessons/[id]` |
-| LLM synthesis across lessons | `reflect` | `POST /api/projects/:id/reflect` | `/chat` |
+| LLM synthesis across lessons | `reflect` | `POST /api/projects/:id/reflect` | `/knowledge/reflect` |
 | Compress context | `compress_context` | — | — |
 | Project briefing | `get_project_summary`, `get_context` | `GET /api/projects/:id/summary` | `/` |
 | Custom lesson types / taxonomies | `*_taxonomy_profile` | `/api/lesson-types`, `/api/taxonomy-profiles` | `/settings/lesson-types` |
