@@ -3,13 +3,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { api, type TopicWithRoster, type CoordinationEventRecord, type TaskSummary, type MotionRecord, type BodyRecord } from "@/lib/api";
+import { api, type TopicWithRoster, type CoordinationEventRecord, type TaskSummary, type MotionRecord, type BodyRecord, type RequestRecord } from "@/lib/api";
 import { useProject } from "@/contexts/project-context";
 import { Breadcrumb, PageHeader, Button } from "@/components/ui";
 import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
 import { TopicStatusPill } from "../../page";
-import { Users, ScrollText, UserPlus, Lock, ClipboardList, Plus, Vote } from "lucide-react";
+import { Users, ScrollText, UserPlus, Lock, ClipboardList, Plus, Vote, FileCheck } from "lucide-react";
 
 type ClaimHandle = { claim_id: string; fencing_token: number };
 
@@ -57,6 +57,13 @@ export default function TopicDetailPage() {
   const [motionSubject, setMotionSubject] = useState("");
   const [motionDeadline, setMotionDeadline] = useState("60");
   const [proposingMotion, setProposingMotion] = useState(false);
+
+  // Requests (DoA approval routing, topic-scoped)
+  const [requests, setRequests] = useState<RequestRecord[]>([]);
+  const [reqSubject, setReqSubject] = useState("");
+  const [reqKind, setReqKind] = useState("");
+  const [reqWeight, setReqWeight] = useState("1");
+  const [submittingReq, setSubmittingReq] = useState(false);
 
   const fetchTopic = useCallback(async () => {
     if (!topicId) return;
@@ -111,12 +118,21 @@ export default function TopicDetailPage() {
     } catch { /* none yet */ }
   }, [projectId]);
 
+  const fetchRequests = useCallback(async () => {
+    if (!topicId) return;
+    try {
+      const res = await api.listRequests(topicId);
+      setRequests(res.data?.requests ?? []);
+    } catch { /* none yet */ }
+  }, [topicId]);
+
   useEffect(() => {
     fetchTopic();
     fetchBoard();
     fetchMotions();
     fetchBodies();
-  }, [fetchTopic, fetchBoard, fetchMotions, fetchBodies]);
+    fetchRequests();
+  }, [fetchTopic, fetchBoard, fetchMotions, fetchBodies, fetchRequests]);
 
   useEffect(() => {
     pollEvents();
@@ -276,6 +292,34 @@ export default function TopicDetailPage() {
       fetchMotions();
     } catch (e) {
       toastRef.current("error", e instanceof Error ? e.message : `${action} failed`);
+    }
+  };
+
+  const submitRequest = async () => {
+    const actor = requireActor();
+    if (!actor || !reqSubject.trim() || !reqKind.trim()) return;
+    setSubmittingReq(true);
+    try {
+      const res = await api.submitRequest(topicId, { subject_id: reqSubject.trim(), kind: reqKind.trim(), weight: Number(reqWeight) || 1, submitted_by: actor });
+      toastRef.current(res.data.status === "submitted" || res.data.request_id ? "success" : "error", `Request: ${res.data.status}`);
+      setReqSubject(""); setReqKind("");
+      fetchRequests();
+    } catch (e) {
+      toastRef.current("error", e instanceof Error ? e.message : "Submit failed");
+    } finally {
+      setSubmittingReq(false);
+    }
+  };
+
+  const decideStep = async (r: RequestRecord, decision: string) => {
+    const actor = requireActor();
+    if (!actor) return;
+    try {
+      const res = await api.decideRequestStep(r.request_id, r.current_step, { actor_id: actor, decision });
+      toastRef.current("success", `Step ${r.current_step}: ${res.data.status}`);
+      fetchRequests();
+    } catch (e) {
+      toastRef.current("error", e instanceof Error ? e.message : "Decide failed");
     }
   };
 
@@ -490,6 +534,63 @@ export default function TopicDetailPage() {
                     <button onClick={() => motionAction(m, "abstain")} className="text-[11px] rounded bg-zinc-700/40 text-zinc-300 px-2 py-0.5 hover:bg-zinc-700/60">abstain</button>
                     <button onClick={() => motionAction(m, "veto")} className="text-[11px] rounded bg-red-500/10 text-red-300 px-2 py-0.5 hover:bg-red-500/20">veto</button>
                     <button onClick={() => motionAction(m, "tally")} className="text-[11px] rounded bg-blue-500/10 text-blue-300 px-2 py-0.5 hover:bg-blue-500/20">tally</button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Requests (DoA approval routing) */}
+      <section className="mt-8">
+        <div className="flex items-center gap-2 mb-3 text-zinc-300">
+          <FileCheck size={16} strokeWidth={1.5} />
+          <h2 className="text-sm font-semibold">Approval requests ({requests.length})</h2>
+        </div>
+
+        {!isClosed && (
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <input value={reqSubject} onChange={(e) => setReqSubject(e.target.value)} placeholder="subject (artifact id)"
+              className="flex-1 min-w-[12rem] rounded-md bg-zinc-900 border border-zinc-800 px-3 py-1.5 text-sm text-zinc-200 outline-none focus:border-zinc-600" />
+            <input value={reqKind} onChange={(e) => setReqKind(e.target.value)} placeholder="kind (e.g. merge)"
+              className="w-40 rounded-md bg-zinc-900 border border-zinc-800 px-3 py-1.5 text-sm text-zinc-200 outline-none focus:border-zinc-600" />
+            <input value={reqWeight} onChange={(e) => setReqWeight(e.target.value)} type="number" min="0" step="0.5" title="weight"
+              className="w-20 rounded-md bg-zinc-900 border border-zinc-800 px-2 py-1.5 text-sm text-zinc-200 outline-none" />
+            <Button onClick={submitRequest} disabled={submittingReq || !reqSubject.trim() || !reqKind.trim()}>
+              <Plus size={16} /> {submittingReq ? "Submitting…" : "Submit"}
+            </Button>
+          </div>
+        )}
+
+        {requests.length === 0 ? (
+          <p className="text-xs text-zinc-600">No approval requests.</p>
+        ) : (
+          <div className="space-y-2">
+            {requests.map((r) => (
+              <div key={r.request_id} className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-sm text-zinc-100 truncate">{r.kind} · <span className="font-mono text-zinc-400">{r.subject_id}</span></div>
+                    <div className="text-[11px] text-zinc-600">by {r.submitted_by} · route {r.route_shape} · step {r.current_step}/{r.steps.length}</div>
+                  </div>
+                  <span className="text-[10px] rounded bg-zinc-800 text-zinc-300 px-1.5 py-0.5 shrink-0">{r.status}</span>
+                </div>
+                {/* Steps */}
+                <div className="mt-2 space-y-1">
+                  {r.steps.map((s) => (
+                    <div key={s.step_index} className={`flex items-center justify-between text-[11px] rounded px-2 py-1 ${s.step_index === r.current_step ? "bg-blue-500/10" : "bg-zinc-900/50"}`}>
+                      <span className="text-zinc-400">#{s.step_index} {s.target_office} <span className="text-zinc-600">({s.procedure})</span></span>
+                      <span className="text-zinc-500">{s.status}{s.decided_by ? ` · ${s.decided_by}` : ""}</span>
+                    </div>
+                  ))}
+                </div>
+                {!isClosed && (r.status === "open" || r.status === "in_review" || r.status === "pending") && (
+                  <div className="mt-2 flex items-center gap-1.5">
+                    <button onClick={() => decideStep(r, "endorse")} className="text-[11px] rounded bg-emerald-500/10 text-emerald-300 px-2 py-0.5 hover:bg-emerald-500/20">endorse</button>
+                    <button onClick={() => decideStep(r, "return")} className="text-[11px] rounded bg-amber-500/10 text-amber-300 px-2 py-0.5 hover:bg-amber-500/20">return</button>
+                    <button onClick={() => decideStep(r, "reject")} className="text-[11px] rounded bg-red-500/10 text-red-300 px-2 py-0.5 hover:bg-red-500/20">reject</button>
+                    <span className="text-[10px] text-zinc-600">decides current step</span>
                   </div>
                 )}
               </div>

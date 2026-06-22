@@ -910,6 +910,26 @@ export const api = {
 
   tallyMotion: (motionId: string) =>
     request<{ status: string; data: { status: string; outcome?: string } }>("POST", `/api/motions/${encodeURIComponent(motionId)}/tally`, {}),
+
+  // ── Governance: Requests / DoA approval routing (topic-scoped) ──
+  listRequests: (topicId: string, status?: string) =>
+    request<{ status: string; data: { requests: RequestRecord[] } }>(
+      "GET",
+      `/api/topics/${encodeURIComponent(topicId)}/requests${status ? `?status=${encodeURIComponent(status)}` : ""}`,
+    ),
+
+  submitRequest: (topicId: string, body: { subject_id: string; kind: string; weight: number; procedure?: string; submitted_by: string }) =>
+    request<{ status: string; data: { status: string; request_id?: string } }>("POST", `/api/topics/${encodeURIComponent(topicId)}/requests`, body),
+
+  getRequest: (requestId: string) =>
+    request<{ status: string; data: RequestRecord }>("GET", `/api/requests/${encodeURIComponent(requestId)}`),
+
+  decideRequestStep: (requestId: string, stepIndex: number, body: { actor_id: string; decision: string }) =>
+    request<{ status: string; data: { status: string } }>(
+      "POST",
+      `/api/requests/${encodeURIComponent(requestId)}/steps/${stepIndex}/decide`,
+      body,
+    ),
 };
 
 // ── Coordination types (mirror src/services/topics.ts) ──
@@ -1024,6 +1044,33 @@ export interface MotionRecord {
   tally: MotionTally | null;
   created_at: string;
   votes: MotionVote[];
+}
+
+export interface RequestStep {
+  step_index: number;
+  target_office: string;
+  doa_snapshot: string;
+  procedure: string;
+  deadline: string;
+  status: string;
+  decided_by: string | null;
+  decided_at: string | null;
+}
+
+export interface RequestRecord {
+  request_id: string;
+  topic_id: string;
+  subject_type: string;
+  subject_id: string;
+  kind: string;
+  weight: number;
+  procedure: string;
+  route_shape: string;
+  status: string;
+  current_step: number;
+  submitted_by: string;
+  created_at: string;
+  steps: RequestStep[];
 }
 
 // ── Phase 13 Sprint 13.2 types ──
