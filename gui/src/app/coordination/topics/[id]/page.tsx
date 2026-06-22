@@ -3,13 +3,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { api, type TopicWithRoster, type CoordinationEventRecord, type TaskSummary, type MotionRecord, type BodyRecord, type RequestRecord } from "@/lib/api";
+import { api, type TopicWithRoster, type CoordinationEventRecord, type TaskSummary, type MotionRecord, type BodyRecord, type RequestRecord, type Dispute } from "@/lib/api";
 import { useProject } from "@/contexts/project-context";
 import { Breadcrumb, PageHeader, Button } from "@/components/ui";
 import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
 import { TopicStatusPill } from "../../page";
-import { Users, ScrollText, UserPlus, Lock, ClipboardList, Plus, Vote, FileCheck } from "lucide-react";
+import { Users, ScrollText, UserPlus, Lock, ClipboardList, Plus, Vote, FileCheck, Gavel } from "lucide-react";
 
 type ClaimHandle = { claim_id: string; fencing_token: number };
 
@@ -64,6 +64,13 @@ export default function TopicDetailPage() {
   const [reqKind, setReqKind] = useState("");
   const [reqWeight, setReqWeight] = useState("1");
   const [submittingReq, setSubmittingReq] = useState(false);
+
+  // Disputes (topic-scoped)
+  const [disputes, setDisputes] = useState<Dispute[]>([]);
+  const [dispSubject, setDispSubject] = useState("");
+  const [dispParties, setDispParties] = useState("");
+  const [dispProcedure, setDispProcedure] = useState("unilateral");
+  const [openingDispute, setOpeningDispute] = useState(false);
 
   const fetchTopic = useCallback(async () => {
     if (!topicId) return;
@@ -126,13 +133,22 @@ export default function TopicDetailPage() {
     } catch { /* none yet */ }
   }, [topicId]);
 
+  const fetchDisputes = useCallback(async () => {
+    if (!topicId) return;
+    try {
+      const res = await api.listDisputes(topicId);
+      setDisputes(res.data?.disputes ?? []);
+    } catch { /* none yet */ }
+  }, [topicId]);
+
   useEffect(() => {
     fetchTopic();
     fetchBoard();
     fetchMotions();
     fetchBodies();
     fetchRequests();
-  }, [fetchTopic, fetchBoard, fetchMotions, fetchBodies, fetchRequests]);
+    fetchDisputes();
+  }, [fetchTopic, fetchBoard, fetchMotions, fetchBodies, fetchRequests, fetchDisputes]);
 
   useEffect(() => {
     pollEvents();
@@ -320,6 +336,36 @@ export default function TopicDetailPage() {
       fetchRequests();
     } catch (e) {
       toastRef.current("error", e instanceof Error ? e.message : "Decide failed");
+    }
+  };
+
+  const openDispute = async () => {
+    const actor = requireActor();
+    if (!actor || !dispSubject.trim()) return;
+    setOpeningDispute(true);
+    try {
+      const res = await api.openDispute({
+        topic_id: topicId, subject_ref: dispSubject.trim(),
+        parties: dispParties.split(",").map((p) => p.trim()).filter(Boolean),
+        procedure: dispProcedure, submitted_by: actor,
+      });
+      toastRef.current(res.data.dispute_id || res.data.status ? "success" : "error", `Dispute: ${res.data.status ?? "opened"}`);
+      setDispSubject(""); setDispParties("");
+      fetchDisputes();
+    } catch (e) {
+      toastRef.current("error", e instanceof Error ? e.message : "Open dispute failed");
+    } finally {
+      setOpeningDispute(false);
+    }
+  };
+
+  const resolveDispute = async (d: Dispute) => {
+    try {
+      const res = await api.resolveDispute(d.dispute_id);
+      toastRef.current("success", `Resolve: ${res.data.status}`);
+      fetchDisputes();
+    } catch (e) {
+      toastRef.current("error", e instanceof Error ? e.message : "Resolve failed");
     }
   };
 
@@ -593,6 +639,54 @@ export default function TopicDetailPage() {
                     <span className="text-[10px] text-zinc-600">decides current step</span>
                   </div>
                 )}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Disputes */}
+      <section className="mt-8">
+        <div className="flex items-center gap-2 mb-3 text-zinc-300">
+          <Gavel size={16} strokeWidth={1.5} />
+          <h2 className="text-sm font-semibold">Disputes ({disputes.length})</h2>
+        </div>
+
+        {!isClosed && (
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <input value={dispSubject} onChange={(e) => setDispSubject(e.target.value)} placeholder="subject (artifact id)"
+              className="flex-1 min-w-[12rem] rounded-md bg-zinc-900 border border-zinc-800 px-3 py-1.5 text-sm text-zinc-200 outline-none focus:border-zinc-600" />
+            <input value={dispParties} onChange={(e) => setDispParties(e.target.value)} placeholder="parties (comma)"
+              className="w-44 rounded-md bg-zinc-900 border border-zinc-800 px-3 py-1.5 text-sm text-zinc-200 outline-none focus:border-zinc-600" />
+            <select value={dispProcedure} onChange={(e) => setDispProcedure(e.target.value)}
+              className="rounded-md bg-zinc-900 border border-zinc-800 px-2 py-1.5 text-sm text-zinc-200 outline-none">
+              <option value="unilateral">unilateral</option>
+              <option value="collective">collective</option>
+            </select>
+            <Button onClick={openDispute} disabled={openingDispute || !dispSubject.trim()}>
+              <Plus size={16} /> {openingDispute ? "Opening…" : "Open dispute"}
+            </Button>
+          </div>
+        )}
+
+        {disputes.length === 0 ? (
+          <p className="text-xs text-zinc-600">No disputes.</p>
+        ) : (
+          <div className="space-y-2">
+            {disputes.map((d) => (
+              <div key={d.dispute_id} className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-sm text-zinc-100 font-mono truncate">{d.subject_ref}</div>
+                    <div className="text-[11px] text-zinc-600">parties: {d.parties.join(", ") || "—"}{d.resolution_request_id ? ` · resolution req ${d.resolution_request_id}` : ""}</div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-[10px] rounded bg-zinc-800 text-zinc-300 px-1.5 py-0.5">{d.status}</span>
+                    {!isClosed && d.status !== "resolved" && (
+                      <button onClick={() => resolveDispute(d)} className="text-[11px] rounded bg-emerald-500/10 text-emerald-300 px-2 py-0.5 hover:bg-emerald-500/20">resolve</button>
+                    )}
+                  </div>
+                </div>
               </div>
             ))}
           </div>

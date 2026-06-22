@@ -14,7 +14,7 @@ import {
   FileText, Search, Network, FolderOpen, Users, Files,
   GitBranch, Link2, Zap, Settings, Bot, BarChart3, CheckCircle2,
   PanelLeftClose, PanelLeftOpen, ClipboardCheck, Activity, Menu, X, Fingerprint,
-  ShieldCheck, GitFork, KeyRound, UserCog, Compass, Lock, Vote,
+  ShieldCheck, GitFork, KeyRound, UserCog, Compass, Lock, Vote, Inbox,
 } from "lucide-react";
 
 type NavItem = { href: string; label: string; icon: ReactNode; badge?: number };
@@ -55,6 +55,7 @@ const buildNavGroups = (reviewCount: number, notifCount: number): (NavItem | Nav
       { href: "/coordination", label: "Topics", icon: <Network size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/coordination/leases", label: "Artifact Leases", icon: <Lock size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
       { href: "/governance/decision-bodies", label: "Decision Bodies", icon: <Vote size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
+      { href: "/governance/intake", label: "Intake", icon: <Inbox size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
     ],
   },
   {

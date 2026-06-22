@@ -930,6 +930,35 @@ export const api = {
       `/api/requests/${encodeURIComponent(requestId)}/steps/${stepIndex}/decide`,
       body,
     ),
+
+  // ── Governance: Intake mailbox (project-scoped) — FIX-2 part 3 ──
+  listIntake: (projectId: string, params: { kind?: string; status?: string } = {}) =>
+    request<{ status: string; data: { items: IntakeItem[]; total: number } }>(
+      "GET",
+      `/api/projects/${encodeURIComponent(projectId)}/intake?${qs(params)}`,
+    ),
+
+  submitIntake: (body: { project_id: string; topic_id?: string; kind: string; body: string; submitted_by: string }) =>
+    request<{ status: string; data: IntakeItem }>("POST", "/api/intake", body),
+
+  dismissIntake: (intakeId: string) =>
+    request<{ status: string; data: IntakeItem }>("POST", `/api/intake/${encodeURIComponent(intakeId)}/dismiss`, {}),
+
+  triageIntake: (intakeId: string, route: Record<string, unknown>) =>
+    request<{ status: string; data: { status: string } }>("POST", `/api/intake/${encodeURIComponent(intakeId)}/triage`, route),
+
+  // ── Governance: Disputes (topic-scoped) ──
+  listDisputes: (topicId: string) =>
+    request<{ status: string; data: { disputes: Dispute[]; total: number } }>(
+      "GET",
+      `/api/topics/${encodeURIComponent(topicId)}/disputes`,
+    ),
+
+  openDispute: (body: { topic_id: string; subject_ref: string; parties: string[]; procedure: string; submitted_by: string; kind?: string; weight?: number }) =>
+    request<{ status: string; data: { dispute_id?: string; status?: string } }>("POST", "/api/disputes", body),
+
+  resolveDispute: (disputeId: string) =>
+    request<{ status: string; data: { status: string } }>("POST", `/api/disputes/${encodeURIComponent(disputeId)}/resolve`, {}),
 };
 
 // ── Coordination types (mirror src/services/topics.ts) ──
@@ -1071,6 +1100,27 @@ export interface RequestRecord {
   submitted_by: string;
   created_at: string;
   steps: RequestStep[];
+}
+
+export interface IntakeItem {
+  intake_id: string;
+  project_id?: string;
+  topic_id?: string | null;
+  kind: "violation_report" | "suggestion" | "request";
+  body: string;
+  submitted_by: string;
+  status: "received" | "triaged" | "dismissed";
+  created_at: string;
+}
+
+export interface Dispute {
+  dispute_id: string;
+  topic_id: string;
+  subject_ref: string;
+  parties: string[];
+  status: "open" | "under_resolution" | "resolved";
+  resolution_request_id: string | null;
+  created_at: string;
 }
 
 // ── Phase 13 Sprint 13.2 types ──
