@@ -1047,7 +1047,12 @@ export async function searchLessons(params: SearchLessonsParams): Promise<Search
   const whereParts: string[] = ['l.project_id = $1'];
 
   if (!includeAll) {
-    whereParts.push(`l.status NOT IN ('superseded', 'archived')`);
+    // Review gate (QC FINDING-GOV, owner decision 2026-06-22): default semantic retrieval
+    // serves ONLY approved knowledge. draft + pending-review are withheld until a lesson is
+    // active, so unreviewed / under-review AI content never surfaces as agent knowledge.
+    // include_all_statuses=true opts back in to every status. The human browse (listLessons)
+    // is intentionally NOT changed — its "All" tab still shows draft/pending for review.
+    whereParts.push(`l.status = 'active'`);
   }
 
   if (lessonType) {
@@ -1400,7 +1405,12 @@ export async function searchLessonsMulti(params: SearchLessonsMultiParams): Prom
   const whereParts: string[] = ['l.project_id = ANY($1::text[])'];
 
   if (!includeAll) {
-    whereParts.push(`l.status NOT IN ('superseded', 'archived')`);
+    // Review gate (QC FINDING-GOV, owner decision 2026-06-22): default semantic retrieval
+    // serves ONLY approved knowledge. draft + pending-review are withheld until a lesson is
+    // active, so unreviewed / under-review AI content never surfaces as agent knowledge.
+    // include_all_statuses=true opts back in to every status. The human browse (listLessons)
+    // is intentionally NOT changed — its "All" tab still shows draft/pending for review.
+    whereParts.push(`l.status = 'active'`);
   }
 
   if (lessonType) {

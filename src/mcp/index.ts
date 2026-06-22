@@ -410,7 +410,7 @@ function createMcpToolsServer() {
             { path: 'query', required: true, notes: 'Natural language query.' },
             { path: 'filters.lesson_type', required: false, notes: 'Optional lesson type filter.' },
             { path: 'filters.tags_any', required: false, notes: 'Optional tags filter.' },
-            { path: 'filters.include_all_statuses', required: false, notes: 'Include superseded/archived when true.' },
+            { path: 'filters.include_all_statuses', required: false, notes: 'Default false → only active (approved) lessons; true → all statuses incl. draft/pending-review/superseded/archived.' },
             { path: 'limit', required: false, notes: 'Top-k results (default 10, max 50).' },
           ],
         },
@@ -1482,7 +1482,7 @@ function createMcpToolsServer() {
             include_all_statuses: z
               .boolean()
               .optional()
-              .describe('When true, include superseded/archived lessons. Default: false (Phase 3).'),
+              .describe('When true, include all statuses (draft, pending-review, superseded, archived). Default false: semantic search returns ONLY active (approved) lessons — draft/pending-review are withheld by the review gate.'),
           })
           .optional(),
         limit: z.number().int().positive().optional().describe('Max number of matches to return (default: 10; max: 50).'),
