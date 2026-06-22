@@ -1,3 +1,40 @@
+# CHECKPOINT — v0.1.0 release prep: auth-ON GUI walkthrough + FIX-5 batch (2026-06-22, session 16)
+
+**Branch:** `release/v0.1.0-prep`. Release-prep QC continued: deployed the branch to the hardened
+(auth-ON) Docker stack and drove a live Playwright walkthrough of the 6 new coordination/governance
+GUI pages, then fixed everything it surfaced.
+
+**Walkthrough (all 6 pages render + operate):** Coordination Topics, Topic detail (roster + live
+event log + board + motions + requests + disputes), Artifact Leases, Decision Bodies, Intake
+(submit→adaptive-triage→dismiss round-trip verified), Reflect. Findings in
+`docs/qc/walkthrough-findings.md`; plan in `docs/plans/2026-06-22-walkthrough-fix-plan.md`.
+
+**Bring-up gotcha (now documented):** the rebuilt backend FATAL-refuses to boot auth-ON until
+`npm run migrate:coordination-actors` reconciles legacy free-text actor_ids → principals (imported 2,
+rewrote 20 scalar + 2 array cols). Runbook: `docs/ops/auth-bring-up.md`.
+
+**FIX-5 + fix batch (commit `852b914`), all verified live tokenless (operator login, 0 console errors):**
+- **W1 — FIX-5 (the blocker).** The login stack (`/login`, `authApi`, session cookie) already existed
+  but nothing redirected an unauthenticated visitor to it → every `/api/*` 401'd, dashboard degraded to
+  a misleading "create your first project". New `AuthGate` (`gui/src/contexts/auth-context.tsx`) resolves
+  `/api/me` once → render / redirect `/login?next=` / retry-on-error; login honors `?next=` with an
+  open-redirect guard. The GUI now works via the session cookie with **no client token baked into the bundle**.
+- **W2 — actor UX.** `useActorNames` (UUID→display_name, cached, 403-tolerant) + `useActingActor` (prefill
+  logged-in principal) across topics/topic-detail/leases/decision-bodies/intake.
+- **W3 — polish.** Motion action buttons hidden on terminal status (carried/failed/vetoed/closed); sidebar
+  active-state → longest-prefix-wins; motion deadline labelled "voting window (min)"; fixed event-log
+  "Invalid Date" (GUI read `created_at`; backend emits `ts`).
+- **W4.** Runbook written; QC throwaway Bearer key revoked; gui rebuilt tokenless (0 token chunks); throwaway
+  scripts deleted. A `qc-operator@local.test` login (global admin) remains for continued QC.
+
+**Evidence:** gui `tsc`/build clean (40/40 pages) ×3 · live Playwright verify of every fix (screenshots
+`verify-0*.png`, gitignored) · stack hardened auth-ON, tokenless GUI. RELEASE_READINESS FIX-5 → DONE.
+
+**Next:** Gates 4–6 (author + run the 94 QC scenarios via Playwright/MCP, fix bugs) → authenticated e2e
+green → tag v0.1.0.
+
+---
+
 # CHECKPOINT — cleared the deferred backlog: 062 · 063 · 060-A4 · 061 (2026-06-21, session 15)
 
 **Branch:** `feature/actor-data-boundary`. Four tracked items closed, each a focused, separately-committed, live-verified unit.
