@@ -50,6 +50,12 @@ const buildNavGroups = (reviewCount: number, notifCount: number): (NavItem | Nav
     ],
   },
   {
+    title: "Coordination",
+    items: [
+      { href: "/coordination", label: "Topics", icon: <Network size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
+    ],
+  },
+  {
     title: "System",
     items: [
       { href: "/jobs", label: "Jobs", icon: <Zap size={ICON_SIZE} strokeWidth={ICON_STROKE} /> },
