@@ -1757,9 +1757,18 @@ export async function listLessonVersions(params: {
     [params.lessonId],
   );
 
+  // Normalize timestamptz → ISO string. pg returns `changed_at` as a JS Date; REST hides
+  // this behind JSON.stringify, but the MCP tool validates the raw object against an output
+  // schema of `changed_at: z.string()` and would reject a Date. Coerce here so every caller
+  // (REST + MCP) sees the same string contract. [QC MCP-06]
+  const versions = result.rows.map((v) => ({
+    ...v,
+    changed_at: v.changed_at instanceof Date ? v.changed_at.toISOString() : v.changed_at,
+  }));
+
   return {
     status: 'ok',
-    versions: result.rows,
+    versions,
     total_count: result.rowCount ?? 0,
   };
 }

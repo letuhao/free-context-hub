@@ -50,11 +50,16 @@ Driven via MCP tools with a minted global-admin key as `workspace_token`.
 | MCP-03 | guardrail pass (benign) | ✅ | "run unit tests locally" → `pass:true`, no false-positive block. |
 | MCP-09 | tiered code search (test) | ✅ | kind=test → 33 test files, tier badges (exact/convention), semantic skipped when deterministic. |
 | MCP-20 | whoami | ✅ | returns bound principal (qc-mcp-agent, agent, active, is_root=false); no secret leak. |
-| MCP-04 | add_lesson (decision) | 🐛→🔧 | **Found P0: add_lesson returns NOT_FOUND under auth-ON.** Fixed (commit `075ce4d`). |
-| MCP-05 | add guardrail + fire | 🐛→🔧 | same root cause (add_lesson write path). Fixed; re-verify post-rebuild. |
-| MCP-06/07/08 | update/lifecycle/reflect | ⏳ | depend on add_lesson + chat model; re-run after fix + with chat model loaded. |
-| MCP-21/22/24 | artifact lease / renew / topic replay | ⏳ | coordination — exercised via GUI walkthrough; MCP-level run pending. |
-| MCP-23 | submit_for_review | ⏳ | pending. |
+| MCP-04 | add_lesson (decision) | ✅ | re-verified post-fix: created `47b523fd`, distillation ok. P0 fix (`075ce4d`) holds. |
+| MCP-05 | add guardrail + fire | ✅ | re-verified earlier post-rebuild. |
+| MCP-06 | update + version + re-embed | 🐛→🔧 ✅ | update re-embeds (top hit 0.697 for new text), version snapshot created. **Found BUG-2: `list_lesson_versions` MCP tool threw output-validation error (`changed_at` Date vs `z.string()`).** Fixed in `listLessonVersions` (ISO-coerce); re-verified over MCP. |
+| MCP-07 | lifecycle (supersede) | ✅ | supersede → absent from `active` filter → deprioritized in search. **Clarification:** service guards ONLY `pending-review` (managed state); other transitions free by design (master design L275-281) — scenario's "strict linear lifecycle" expectation is stricter than policy, not a bug. |
+| MCP-08 | reflect (LLM synthesis) | ✅ | grounded answer from 12 retrieved lessons; drew only from stored content (items-key, dedup project_id+lesson_type), no hallucination, project-scoped. |
+| MCP-21 | artifact lease (claim/check/list/release) | ✅ | claim→leased; 2nd agent → `conflict` (mutual exclusion); non-owner release → `not_owner`; release → `available:true`, claims list empty (no ghost). |
+| MCP-22 | renew lease | ✅ | holder renews (+30m, expiry extended); impostor → `not_owner` (no lease theft). |
+| MCP-23 | submit_for_review | ✅ happy-path; ⚠️ FINDING | draft→submit→`pending` queue with full metadata; lesson → `pending-review`. **FINDING-GOV (design decision):** `search_lessons` returned the pending-review lesson as the **#1 hit** — draft+pending-review are retrievable by default (all 3 retrieval paths filter only `status NOT IN ('superseded','archived')`). Contradicts the convention "pending-review ≠ active knowledge until approved." Also: `add_lesson` mints `active` directly (review is opt-in). Batched for owner decision (design-first). |
+| MCP-24 | topic replay (join/replay/board) | ✅ | replay = strict append-only ordered log (seq 1→6, ISO ts, full motion lifecycle), cursor+has_more correct; join auto-registers + induction pack (replay-from-cursor); **double-join idempotent** (no dup roster/event); **actor_id spoof blocked** (identity derived from credential — security positive). |
+| MCP-10..19 | doc-search/vector/chunk/generated-docs/git/index/jobs | ⏳ | remaining MCP-agent sub-batch (several P2/feature-gated: 16/17 KG-off skip). |
 
 ### 🐛→🔧 P0 BUG FOUND + FIXED — add_lesson broken under auth-ON (commit `075ce4d`)
 

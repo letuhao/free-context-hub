@@ -39,9 +39,11 @@ update this file as work lands.
 | ID | Finding | Status |
 |----|---------|--------|
 | BUG-ADDLESSON | **P0 — `add_lesson` broken under auth-ON.** `POST /api/lessons` / MCP `add_lesson` / GUI "Add Lesson" all returned `404 NOT_FOUND` for every authenticated caller on the hardened stack. Root: `validateLessonType → getValidLessonTypes → getActiveProfile` ran a nested read-authz check without the threaded principal → `undefined` denies under `MCP_AUTH_ENABLED=true`. Only manifested auth-ON (auth-OFF short-circuits) → missed by prior tests. | ✅ FIXED (`075ce4d`) — thread `actingPrincipalId`; live-verified 201 on REST + MCP. |
+| BUG-VERSIONS | **P1 — `list_lesson_versions` MCP tool unusable.** Returned MCP output-validation error (`changed_at`: expected string, received Date) for every call → an agent cannot read lesson version history over MCP. Root: service returned raw pg rows (Date); REST hides it via `res.json()` but the MCP SDK validates the raw object against `z.string()`. Same pg-Date-vs-MCP-string class. **NOTE:** ~40 other MCP output schemas declare `*_at: z.string()`; coordination scenarios exercised many (`list_active_claims`, `replay_topic_events`, `get_topic`, review queue) — all returned ISO strings, no sibling failures observed. | ✅ FIXED — ISO-coerce in `listLessonVersions`; re-verified over MCP. |
+| FINDING-GOV | **Governance-semantics decision (NOT auto-fixed).** `search_lessons` + all retrieval return `draft`+`pending-review` lessons by default (filter = `status NOT IN ('superseded','archived')`); a just-submitted pending-review lesson came back as the #1 hit. Contradicts the convention "pending-review ≠ active knowledge until approved." Also `add_lesson` mints `active` directly (review opt-in). Surfaced by MCP-23. | ⏳ AWAITING OWNER DECISION (design-first) — see checkpoint. |
 
 Gate 4–6 scenario results: `docs/qc/gate4-gui-results.md`, `docs/qc/gate56-mcp-adversary-results.md`.
-Live-passed so far: GUI-01/02/03, MCP-01/02/03/04/05/09/20, ADV-01/05/06/17.
+Live-passed so far: GUI-01/02/03, MCP-01–09/20–24, ADV-01/05/06/17. Bugs fixed this pass: BUG-ADDLESSON (P0), BUG-VERSIONS (P1).
 
 ## C. Security verifications — confirm before release (P0)
 
