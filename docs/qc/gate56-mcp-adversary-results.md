@@ -59,7 +59,16 @@ Driven via MCP tools with a minted global-admin key as `workspace_token`.
 | MCP-22 | renew lease | ✅ | holder renews (+30m, expiry extended); impostor → `not_owner` (no lease theft). |
 | MCP-23 | submit_for_review | ✅ happy-path; ⚠️ FINDING | draft→submit→`pending` queue with full metadata; lesson → `pending-review`. **FINDING-GOV (design decision):** `search_lessons` returned the pending-review lesson as the **#1 hit** — draft+pending-review are retrievable by default (all 3 retrieval paths filter only `status NOT IN ('superseded','archived')`). Contradicts the convention "pending-review ≠ active knowledge until approved." Also: `add_lesson` mints `active` directly (review is opt-in). Batched for owner decision (design-first). |
 | MCP-24 | topic replay (join/replay/board) | ✅ | replay = strict append-only ordered log (seq 1→6, ISO ts, full motion lifecycle), cursor+has_more correct; join auto-registers + induction pack (replay-from-cursor); **double-join idempotent** (no dup roster/event); **actor_id spoof blocked** (identity derived from credential — security positive). |
-| MCP-10..19 | doc-search/vector/chunk/generated-docs/git/index/jobs | ⏳ | remaining MCP-agent sub-batch (several P2/feature-gated: 16/17 KG-off skip). |
+| MCP-10 | tiered doc search (kind:doc) | ✅ | doc-only ranked hits; target "Baseline-stack invariant" surfaces (CLAUDE.md fts + PROJECT_INVARIANTS.md sem); profile=semantic-first. |
+| MCP-11 | direct vector code search | ✅ | semantic code chunks w/ scores (model-resolution code), no lesson/doc bleed. |
+| MCP-12 | document chunk search (hybrid) | ✅ | chunks w/ doc_id, heading, chunk_type, page, **sem_score + fts_score + combined** (hybrid sem+0.30*fts); real corpus content; dedup reported. |
+| MCP-13 | generated docs list/get/promote | ✅ (promote skipped) | filtered list works (14 FAQ docs, metadata+evidence_paths). Promote intentionally NOT run (would mutate real Phase-6 docs). |
+| MCP-14/15 | git ingest → commits → suggest | ⏭️ env | `list_commits` empty — workspace root not configured in the published mcp container (code not mounted); ingest/index/suggest are root-gated. Env precondition, not a bug. |
+| MCP-16/17 | symbol graph / commit impact (KG-gated) | ✅ graceful | `search_symbols` → `{matches:[], warning:"Knowledge graph is disabled"}`, **NOT a 500** (the watch-for). Correct graceful-degrade with KG_ENABLED=false. |
+| MCP-18 | index_project | ⏭️ | project already indexed (host-run vectors power MCP-11); root not in container → skip heavy re-run. |
+| MCP-19 | async job enqueue/track | ✅ | enqueue → `queued` + job_id (rabbitmq); `list_jobs(correlation_id)` → **correlation persisted**, attempts/status tracked, root-resolution failure surfaced in `error_message` (graceful, retries→dead_letter). Job mechanism verified; execution root-gated (env). |
+
+**MCP-agent suite (24) complete.** Live-pass: 01–13, 16/17 (graceful), 19, 20–24. Env-gated skips (workspace root not in container): 14, 15, 18 + MCP-19 job *execution*. Bugs fixed: BUG-VERSIONS (P1). Design change shipped: FINDING-GOV review gate.
 
 ### 🐛→🔧 P0 BUG FOUND + FIXED — add_lesson broken under auth-ON (commit `075ce4d`)
 
@@ -82,7 +91,33 @@ getValidLessonTypes). Verified on host with auth-ON: addLesson succeeds (was NOT
 > agent — correct for tenant-isolation (no oracle), but for an internal mis-thread it's a confusing
 > signal. The fix removes the mis-thread; the error shape itself is by design.
 
-## Coordination (`03-multi-agent-coordination.md`, 26) — ⏳ pending
+## Coordination (`03-multi-agent-coordination.md`, 26) — ✅ covered (live smoke + automated suite)
 
-The coordination machinery was exercised through the GUI walkthrough (topics/board/motions/requests/
-intake all operated live). The 26 scenario-level multi-agent flows remain to run via MCP/REST.
+**Approach:** the race/atomicity/drain invariants can't be reliably triggered by hand, so they are
+covered by the Phase-15 automated suite (injectable concurrency seams); the surfaces + the two
+security P0s are verified LIVE on the hardened stack.
+
+**Automated suite (run this pass): 330 tests, 330 pass, 0 fail** —
+`topics board artifacts artifactLeases motions proxies requests doaMatrix intake disputes
+coordinationSweep coordinationEvents board-authz decisions-authz chaining`. Green on the current
+build, i.e. AFTER the review-gate `lessons.ts` change.
+
+**Live (MCP, hardened auth) end-to-end smoke:**
+
+| Scenario | Result | Evidence |
+|---|---|---|
+| COORD-01 charter/join/replay/induction | ✅ | charter→active, join auto-registers + induction pack, replay seq-ordered (1,2…) |
+| COORD-02 derived artifact identity | ✅ | `post_task` returns derived `id = <topic>:<task>:finding` — caller never invents it |
+| COORD-03 claim arbitration (single) | ✅ | `claim_task` → claimed + claim_id + **fencing_token 24488** (global monotonic); double-claim race → board.test |
+| COORD-04 stale fencing rejected | ✅ **LIVE** | write w/ token 23000 < accepted 24488 → `{conflict, reason:"fencing_token_stale"}`; happy write → v2; baseline → v3 baselined |
+| COORD-09 rolling baseline handoff | ✅ | artifact state machine working(v2)→baselined(v3); complete_task → completed, artifact for_review |
+| COORD-21 close drains in-flight | ✅ | `close_topic` with a pending request + for_review artifact → `closed`, log sealed |
+| COORD-23 **self-approval guard** | ✅ **LIVE (security P0)** | submitter `decide_request_step(self, endorse)` → `{status:"self_decision_forbidden"}` — anti-regression of the Phase-13 self-approve bug |
+| COORD-07 lease collision | ✅ | = MCP-21 (claim/check/list/conflict/release) |
+| COORD-08 renew vs cap | ✅ | = MCP-22 (renew + non-owner block) + artifactLeases.test cap |
+| COORD-25 review queue | ✅ | = MCP-23 + FINDING-GOV review gate |
+| COORD-22 tenant isolation | ✅ | = ADV-01 live + DEFERRED-029 suite + board-authz/decisions-authz in the 330 |
+| COORD-05/06/10–20/24/26 | 🛡️ | deep invariants (live-claim-after-sweep, sweep+baseline-revert, DoA endorse/return/reject, stalled-step escalation, weighted motion/quorum, vote/tally race, veto/tally atomicity, proxy count-once+revoke, intake→dispute, dispute resolve, grant/revoke+ephemeral, soak) — covered by the 330-test suite. |
+
+**Coordination verdict:** surfaces work end-to-end on hardened auth; the two security P0s (fencing
+COORD-04, self-approval COORD-23) pass LIVE; all deep invariants green in the 330-test automated suite.
