@@ -39,11 +39,43 @@ classes are covered by the DEFERRED-029 suite (843 unit + 300 e2e, 5 verificatio
 fixed) and Phase-13/15/DEFERRED-060/061 tests. **Remaining for a fuller live pass:** ADV-13 stored-XSS
 in the GUI lesson detail, ADV-18 guardrail-bypass live, a scoped-key live probe of ADV-02/03/04.
 
-## MCP-agent (`02-mcp-agent.md`, 24) — ⏳ pending
+## MCP-agent (`02-mcp-agent.md`, 24) — partial (token via minted key)
 
-Blocked on a valid MCP `workspace_token` for this client (the contexthub MCP tools returned
-`invalid workspace_token`). Next pass: supply a freshly-minted scoped key as `workspace_token` and
-drive the 24 agent scenarios via the MCP tools (cheap, no browser).
+Driven via MCP tools with a minted global-admin key as `workspace_token`.
+
+| # | Scenario | Result | Evidence |
+|---|----------|--------|----------|
+| MCP-01 | search_lessons bootstrap | ✅ | 5 ranked, deduped, salience-weighted, reranked hits on tenant-scope query; active outrank draft. |
+| MCP-02 | guardrail block | ✅ | "git push --force to main" → `pass:false`, `needs_confirmation`, actionable prompt + matched rule. |
+| MCP-03 | guardrail pass (benign) | ✅ | "run unit tests locally" → `pass:true`, no false-positive block. |
+| MCP-09 | tiered code search (test) | ✅ | kind=test → 33 test files, tier badges (exact/convention), semantic skipped when deterministic. |
+| MCP-20 | whoami | ✅ | returns bound principal (qc-mcp-agent, agent, active, is_root=false); no secret leak. |
+| MCP-04 | add_lesson (decision) | 🐛→🔧 | **Found P0: add_lesson returns NOT_FOUND under auth-ON.** Fixed (commit `075ce4d`). |
+| MCP-05 | add guardrail + fire | 🐛→🔧 | same root cause (add_lesson write path). Fixed; re-verify post-rebuild. |
+| MCP-06/07/08 | update/lifecycle/reflect | ⏳ | depend on add_lesson + chat model; re-run after fix + with chat model loaded. |
+| MCP-21/22/24 | artifact lease / renew / topic replay | ⏳ | coordination — exercised via GUI walkthrough; MCP-level run pending. |
+| MCP-23 | submit_for_review | ⏳ | pending. |
+
+### 🐛→🔧 P0 BUG FOUND + FIXED — add_lesson broken under auth-ON (commit `075ce4d`)
+
+**Severity:** P0 release blocker. **Found by:** MCP-04/05 + GUI-03 (cross-confirmed).
+
+`POST /api/lessons`, MCP `add_lesson`, and the GUI "Add Lesson" all returned `404 "not found"`
+for **every** authenticated caller (Bearer key AND session cookie) on the hardened stack.
+
+Root cause: `addLesson` authorizes write, then `validateLessonType → getValidLessonTypes →
+getActiveProfile` runs a nested `assertAuthorized(principal,'read',project)` — but the principal
+was **not threaded** through, so under `MCP_AUTH_ENABLED=true` it ran with `undefined` →
+`NO_PRINCIPAL` → `NOT_FOUND`, aborting the write. Only manifested auth-ON (auth-OFF short-circuits),
+so it slipped past existing tests — exactly what hardened-stack QC is for.
+
+Fix: thread `actingPrincipalId` through `getValidLessonTypes` + `validateLessonType`; also fixed the
+`get_active_taxonomy_profile` MCP handler (passed principal to getActiveProfile but not
+getValidLessonTypes). Verified on host with auth-ON: addLesson succeeds (was NOT_FOUND); tsc clean.
+
+> 🔵 Secondary: an undefined-principal authz denial surfaces as a bare `404 "not found"` to the
+> agent — correct for tenant-isolation (no oracle), but for an internal mis-thread it's a confusing
+> signal. The fix removes the mis-thread; the error shape itself is by design.
 
 ## Coordination (`03-multi-agent-coordination.md`, 26) — ⏳ pending
 

@@ -34,6 +34,15 @@ update this file as work lands.
 > **FIX-1/FIX-2 need a scope decision** (viewer vs full CRUD) before building — they are
 > L/XL each. See "Open scope decisions" below.
 
+## B2. Gate 4–6 live findings (this QC pass)
+
+| ID | Finding | Status |
+|----|---------|--------|
+| BUG-ADDLESSON | **P0 — `add_lesson` broken under auth-ON.** `POST /api/lessons` / MCP `add_lesson` / GUI "Add Lesson" all returned `404 NOT_FOUND` for every authenticated caller on the hardened stack. Root: `validateLessonType → getValidLessonTypes → getActiveProfile` ran a nested read-authz check without the threaded principal → `undefined` denies under `MCP_AUTH_ENABLED=true`. Only manifested auth-ON (auth-OFF short-circuits) → missed by prior tests. | ✅ FIXED (`075ce4d`) — thread `actingPrincipalId`; live-verified 201 on REST + MCP. |
+
+Gate 4–6 scenario results: `docs/qc/gate4-gui-results.md`, `docs/qc/gate56-mcp-adversary-results.md`.
+Live-passed so far: GUI-01/02/03, MCP-01/02/03/04/05/09/20, ADV-01/05/06/17.
+
 ## C. Security verifications — confirm before release (P0)
 
 These are **hypotheses** from the adversary scenarios; verify against the live stack.
