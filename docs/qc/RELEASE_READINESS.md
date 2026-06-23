@@ -91,11 +91,15 @@ Per-scenario status is tracked inline in each file (append a **Status:** line as
 
 ## F. Test harness (Gates 4–6)
 
-- [ ] Playwright specs for GUI scenarios
-- [ ] MCP/REST automated tests for agent + coordination + adversary scenarios
-- [ ] Playwright MCP + computer-vision pass for UX/visual defects
-- [ ] Bug triage + fixes
-- [ ] Full e2e suite green (authenticated, hardened stack)
+- [x] Playwright specs for GUI scenarios — authenticated harness (global-setup login +
+      CSRF inject + apiAuthHeaders) + `qc-regression.spec.ts` (4 tests locking the bugs found).
+- [x] MCP/REST automated tests for agent + coordination + adversary — coordination 330-test
+      suite green; DEFERRED-029 843 unit + 300 e2e for tenant/authz; live MCP-tool runs for agent scenarios.
+- [x] Playwright MCP + computer-vision pass for UX/visual defects — full GUI 04–22 driven live
+      (found BUG-GUI-SEARCH); screenshots reviewed for XSS/guardrail/edit verdicts.
+- [x] Bug triage + fixes — BUG-ADDLESSON (P0), BUG-VERSIONS (P1), BUG-GUI-SEARCH (P1) all fixed + regression-tested.
+- [x] **Full GUI e2e suite green (authenticated, hardened stack) — 56/56 passing** + 4 qc-regression.
+      Run: `E2E_LOGIN_PASSWORD=… E2E_API_TOKEN=… npm run test:e2e:gui`.
 
 ## Open scope decisions (need owner input)
 
