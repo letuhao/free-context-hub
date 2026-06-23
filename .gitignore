@@ -214,3 +214,6 @@ services/ragas-judge/_*.json
 .playwright-mcp/
 /walkthrough-*.png
 /verify-*.png
+
+# Playwright auth storageState (session cookies — never commit)
+test/e2e/gui/.auth/
