@@ -74,16 +74,18 @@ Status legend: ☐ pending · 🔎 testing · 🐛 bug found · ✅ pass · 🔧
 
 | Suite | File | Count | Pass | Bugs | Pending |
 |-------|------|-------|------|------|---------|
-| GUI user | `scenarios/01-gui-user.md` | 22 | 3 | 1🔧 | 19 |
+| GUI user | `scenarios/01-gui-user.md` | 22 | 22 | 1🔧 | 0 (GUI-17 minor: rotate/ephemeral not in GUI) |
 | MCP agent | `scenarios/02-mcp-agent.md` | 24 | 24 | 2🔧 | 0 (14/15/18 env-gated) |
 | Multi-agent coord | `scenarios/03-multi-agent-coordination.md` | 26 | 26 | 0 | 0 (live smoke + 330-test suite) |
 | Adversary/abuse | `scenarios/04-adversary-abuse.md` | 22 | 22 | 0 | 0 (4 live + DEFERRED-029 suite) |
-| **Total** | | **94** | **75** | **3🔧** | **19 (GUI 04–22)** |
+| **Total** | | **94** | **94** | **3🔧** | **0** |
 
-> MCP-agent + coordination + adversary suites cleared (live smoke for surfaces/security P0s,
-> automated 330-test coordination suite for deep invariants). Bugs found+fixed: BUG-ADDLESSON (P0),
-> BUG-VERSIONS (P1), FINDING-GOV review-gate (design). Remaining: GUI 04–22 (19) + a few adversary
-> live spot-checks (ADV-13 stored-XSS, ADV-18 guardrail) + test-data cleanup before tag.
+> **All 94 scenarios cleared.** MCP-agent (24) + coordination (26, live smoke + 330-test suite) +
+> adversary (22, incl. ADV-13 stored-XSS DEFENDED + ADV-18 guardrail server-eval) + GUI (22, render
+> + affordances + 0 console errors on hardened auth). Bugs found+fixed this program: BUG-ADDLESSON
+> (P0), BUG-VERSIONS (P1), BUG-GUI-SEARCH (P1), FINDING-GOV review-gate (design). Minor: GUI-17
+> rotate/ephemeral not surfaced in GUI (MCP-covered). Pre-ship: corpus-junk cleanup decision + final
+> authenticated e2e green + tag.
 
 Per-scenario status is tracked inline in each file (append a **Status:** line as verified).
 
