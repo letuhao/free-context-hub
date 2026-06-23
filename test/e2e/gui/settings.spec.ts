@@ -115,12 +115,11 @@ test.describe('Settings Pages', () => {
       await expect(keyReveal.first()).toBeVisible();
     }
 
-    // Close the reveal dialog if present
-    const closeBtn = page.locator('.fixed button:has-text("Close")').or(page.locator('.fixed button:has-text("Done")'));
-    if (await closeBtn.count() > 0) {
-      await closeBtn.first().click();
-      await page.waitForTimeout(500);
-    }
+    // The one-time reveal modal's close affordance varies and can leave a backdrop that
+    // intercepts clicks. A fresh page load reliably clears any modal before we revoke —
+    // and proves the created key persisted in the list across reload.
+    await page.goto('/settings/access', { waitUntil: 'networkidle' });
+    await expect(page.locator('text=Access Control').first()).toBeVisible({ timeout: 10_000 });
 
     // Verify key appears in the list — look for "Revoke" button
     const revokeBtn = page.locator('button:has-text("Revoke")');

@@ -4,7 +4,7 @@
  * Tests lesson listing, creation, filtering, searching, editing, archiving.
  */
 
-import { test, expect } from './fixtures.js';
+import { test, expect, apiAuthHeaders } from './fixtures.js';
 
 const API_BASE = process.env.API_BASE_URL ?? 'http://localhost:3001';
 const PROJECT_ID = 'free-context-hub';
@@ -19,7 +19,7 @@ const PROJECT_ID = 'free-context-hub';
 async function seedLesson(opts: { title: string; type?: string; tags?: string[] }): Promise<string> {
   const res = await fetch(`${API_BASE}/api/lessons`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...apiAuthHeaders() },
     body: JSON.stringify({
       project_id: PROJECT_ID,
       lesson_type: opts.type ?? 'decision',
@@ -32,7 +32,7 @@ async function seedLesson(opts: { title: string; type?: string; tags?: string[] 
   const lessonId: string = body.lesson_id;
   await fetch(`${API_BASE}/api/lessons/${lessonId}/status`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...apiAuthHeaders() },
     body: JSON.stringify({ project_id: PROJECT_ID, status: 'active' }),
   }).catch(() => {});
   return lessonId;
@@ -42,7 +42,7 @@ async function seedLesson(opts: { title: string; type?: string; tags?: string[] 
 async function archiveLesson(lessonId: string) {
   await fetch(`${API_BASE}/api/lessons/${lessonId}/status`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...apiAuthHeaders() },
     body: JSON.stringify({ project_id: PROJECT_ID, status: 'archived' }),
   }).catch(() => {});
 }
@@ -88,7 +88,7 @@ test.describe('Lessons Page', () => {
 
     // Cleanup: find and archive via API
     const searchRes = await fetch(`${API_BASE}/api/lessons?project_id=${PROJECT_ID}&q=${encodeURIComponent(marker)}&limit=1`, {
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...apiAuthHeaders() },
     });
     const searchData = await searchRes.json();
     const lessonId = searchData.items?.[0]?.lesson_id;

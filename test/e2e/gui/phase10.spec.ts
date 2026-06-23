@@ -19,7 +19,7 @@
  * idempotent and fast. Cleanup deletes any docs the test created.
  */
 
-import { test, expect } from './fixtures.js';
+import { test, expect, apiAuthHeaders } from './fixtures.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -31,7 +31,7 @@ const FIXTURE_DIR = path.resolve('test-data');
 async function deleteDoc(docId: string) {
   await fetch(
     `${API_BASE}/api/documents/${docId}?project_id=${encodeURIComponent(PROJECT_ID)}`,
-    { method: 'DELETE' },
+    { method: 'DELETE', headers: apiAuthHeaders() },
   ).catch(() => {});
 }
 
@@ -68,7 +68,7 @@ async function seedDoc(marker: string): Promise<string> {
   form.append('file', new Blob([buf], { type: 'text/markdown' }), `${marker}.md`);
   form.append('project_id', PROJECT_ID);
   form.append('name', `${marker}.md`);
-  const res = await fetch(`${API_BASE}/api/documents/upload`, { method: 'POST', body: form });
+  const res = await fetch(`${API_BASE}/api/documents/upload`, { method: 'POST', body: form, headers: apiAuthHeaders() });
   const body = await res.json();
   if (!body?.doc_id) throw new Error(`seedDoc failed: ${res.status} ${JSON.stringify(body)}`);
   return body.doc_id;
@@ -79,7 +79,7 @@ async function seedExtractedDoc(marker: string): Promise<string> {
   const docId = await seedDoc(marker);
   await fetch(`${API_BASE}/api/documents/${docId}/extract`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...apiAuthHeaders() },
     body: JSON.stringify({ project_id: PROJECT_ID, mode: 'fast' }),
   });
   return docId;
@@ -123,6 +123,7 @@ test.describe('Phase 10 — Documents GUI', () => {
       // Fetch doc id for cleanup
       const list = await fetch(
         `${API_BASE}/api/documents?project_id=${PROJECT_ID}&limit=50`,
+        { headers: apiAuthHeaders() },
       ).then((r) => r.json());
       createdDocId = list.items?.find((d: any) => d.name === `${marker}.md`)?.doc_id ?? null;
     } finally {
@@ -158,6 +159,7 @@ test.describe('Phase 10 — Documents GUI', () => {
 
       const list = await fetch(
         `${API_BASE}/api/documents?project_id=${PROJECT_ID}&limit=100`,
+        { headers: apiAuthHeaders() },
       ).then((r) => r.json());
       const doc = list.items?.find(
         (d: any) => d.name === marker || d.url?.includes('/test-static/sample.md'),

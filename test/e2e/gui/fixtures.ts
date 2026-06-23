@@ -66,7 +66,10 @@ export const test = base.extend<{
  * token). On an auth-OFF stack leave it unset — helpers send no Authorization header.
  */
 export function apiAuthHeaders(): Record<string, string> {
-  const token = process.env.E2E_API_TOKEN;
+  // Prefer the api_keys Bearer token. NOTE: the legacy single-shared
+  // CONTEXT_HUB_WORKSPACE_TOKEN is intentionally NOT used — it is disabled on the
+  // hardened stack (MCP_LEGACY_TOKEN_DISABLED=true) and would 401.
+  const token = process.env.E2E_API_TOKEN ?? process.env.CONTEXTHUB_ADMIN_TOKEN;
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 

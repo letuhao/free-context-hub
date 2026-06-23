@@ -34,9 +34,12 @@ import path from 'node:path';
 import os from 'node:os';
 
 const API_BASE = process.env.API_BASE_URL ?? 'http://localhost:3001';
+// Prefer the api_keys Bearer (E2E_API_TOKEN). The legacy CONTEXT_HUB_WORKSPACE_TOKEN
+// is disabled on the hardened stack, so it must not be the first choice.
 const ADMIN_TOKEN =
-  process.env.CONTEXT_HUB_WORKSPACE_TOKEN ??
+  process.env.E2E_API_TOKEN ??
   process.env.CONTEXTHUB_ADMIN_TOKEN ??
+  process.env.CONTEXT_HUB_WORKSPACE_TOKEN ??
   'dev-token';
 
 function authHeaders(): Record<string, string> {
